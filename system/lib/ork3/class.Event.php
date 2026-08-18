@@ -7,6 +7,523 @@ class Event extends Ork3
         parent::__construct();
         $this->event = new yapo($this->db, DB_PREFIX . 'event');
         $this->detail = new yapo($this->db, DB_PREFIX . 'event_calendardetail');
+        $this->rsvp = new yapo($this->db, DB_PREFIX . 'event_rsvp');
+    }
+
+    public static function IsAllowedRsvpStatus($status)
+    {
+        return in_array($status, ['going', 'interested'], true);
+    }
+
+    private function _normalizeRsvpStatus($status, $coerceInvalid = false)
+    {
+        $status = (string)$status;
+        if (self::IsAllowedRsvpStatus($status)) {
+            return $status;
+        }
+        return $coerceInvalid ? 'going' : null;
+    }
+
+    private function _isDetailEnded($detailId, $gateMode = 'datetime')
+    {
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = (int)$detailId;
+        if (!$this->detail->find()) {
+            return null;
+        }
+        $refDate = $this->detail->event_end ?: $this->detail->event_start;
+        if (!$refDate) {
+            return false;
+        }
+        if ($gateMode === 'date_only') {
+            return strtotime(date('Y-m-d', strtotime((string)$refDate))) < strtotime(date('Y-m-d'));
+        }
+        if ($gateMode === 'datetime') {
+            $endTs = strtotime((string)$this->detail->event_end);
+            return $endTs && $endTs < time();
+        }
+        return false;
+    }
+
+    private function _getRsvpCountsInternal($detailId)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet("
+			SELECT
+				SUM(CASE WHEN status = 'going' THEN 1 ELSE 0 END) AS going_count,
+				SUM(CASE WHEN status = 'interested' THEN 1 ELSE 0 END) AS interested_count
+			FROM " . DB_PREFIX . "event_rsvp
+			WHERE event_calendardetail_id = " . (int)$detailId);
+        $going = 0;
+        $interested = 0;
+        if ($rs && $rs->Next()) {
+            $going = (int)$rs->going_count;
+            $interested = (int)$rs->interested_count;
+        }
+        return [
+            'Going' => $going,
+            'Interested' => $interested,
+            'Total' => $going + $interested,
+        ];
+    }
+
+    private function _rsvpOkResponse(array $fields)
+    {
+        $response = $fields;
+        $response['Status'] = Success();
+        return $response;
+    }
+
+    public function GetRsvpStatus($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!valid_id($detailId) || !valid_id($mundaneId)) {
+            return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
+        }
+        $this->rsvp->clear();
+        $this->rsvp->event_calendardetail_id = $detailId;
+        $this->rsvp->mundane_id = $mundaneId;
+        $status = '';
+        if ($this->rsvp->find()) {
+            $status = (string)$this->rsvp->status;
+        }
+        return $this->_rsvpOkResponse(['RsvpStatus' => $status]);
+    }
+
+    public function SetRsvp($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $coerceInvalid = !empty($request['CoerceInvalidStatus']);
+        $status = $this->_normalizeRsvpStatus($request['Status'] ?? '', $coerceInvalid);
+        if ($status === null) {
+            return InvalidParameter('Invalid RSVP status.');
+        }
+        if (!valid_id($detailId) || !valid_id($mundaneId)) {
+            return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
+        }
+
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+
+        $gateMode = (string)($request['EndDateGate'] ?? 'none');
+        if ($gateMode !== 'none') {
+            $ended = $this->_isDetailEnded($detailId, $gateMode);
+            if ($ended === null) {
+                return InvalidParameter('Event not found.');
+            }
+            if ($ended) {
+                return InvalidParameter('Event has ended.');
+            }
+        }
+
+        $allowToggleOff = !empty($request['AllowToggleOff']);
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+        $existing = $this->db->DataSet(
+            "SELECT rsvp_id, status FROM " . DB_PREFIX . "event_rsvp
+			 WHERE event_calendardetail_id = " . (int)$detailId . " AND mundane_id = " . (int)$mundaneId . " LIMIT 1"
+        );
+        $myStatus = $status;
+        $toggledOff = false;
+        if ($existing && $existing->Next()) {
+            if ((string)$existing->status === $status) {
+                if ($allowToggleOff) {
+                    $this->db->Clear();
+                    $ok = $this->db->Execute("DELETE FROM " . DB_PREFIX . "event_rsvp WHERE rsvp_id = " . (int)$existing->rsvp_id);
+                    if ($ok === false) {
+                        $this->db->Execute('ROLLBACK');
+                        return InvalidParameter('Could not update RSVP.');
+                    }
+                    $myStatus = '';
+                    $toggledOff = true;
+                } else {
+                    $this->db->Clear();
+                    $ok = $this->db->Execute(
+                        "UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW()
+						 WHERE rsvp_id = " . (int)$existing->rsvp_id
+                    );
+                    if ($ok === false) {
+                        $this->db->Execute('ROLLBACK');
+                        return InvalidParameter('Could not update RSVP.');
+                    }
+                }
+            } else {
+                $this->db->Clear();
+                $ok = $this->db->Execute(
+                    "UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW()
+					 WHERE rsvp_id = " . (int)$existing->rsvp_id
+                );
+                if ($ok === false) {
+                    $this->db->Execute('ROLLBACK');
+                    return InvalidParameter('Could not update RSVP.');
+                }
+            }
+        } else {
+            $this->db->Clear();
+            $ok = $this->db->Execute(
+                "INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status, modified)
+				 VALUES (" . (int)$detailId . ", " . (int)$mundaneId . ", '" . $status . "', NOW())"
+            );
+            if ($ok === false) {
+                $this->db->Execute('ROLLBACK');
+                return InvalidParameter('Could not create RSVP.');
+            }
+        }
+        $this->db->Execute('COMMIT');
+
+        $counts = $this->_getRsvpCountsInternal($detailId);
+        return $this->_rsvpOkResponse([
+            'MyStatus' => $myStatus,
+            'ToggledOff' => $toggledOff,
+            'Going' => $counts['Going'],
+            'Interested' => $counts['Interested'],
+            'Total' => $counts['Total'],
+        ]);
+    }
+
+    public function WithdrawRsvp($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!valid_id($detailId) || !valid_id($mundaneId)) {
+            return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
+        }
+
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+
+        $this->rsvp->clear();
+        $this->rsvp->event_calendardetail_id = $detailId;
+        $this->rsvp->mundane_id = $mundaneId;
+        if ($this->rsvp->find()) {
+            $this->rsvp->delete();
+        }
+
+        $counts = $this->_getRsvpCountsInternal($detailId);
+        return $this->_rsvpOkResponse([
+            'MyStatus' => '',
+            'Going' => $counts['Going'],
+            'Interested' => $counts['Interested'],
+            'Total' => $counts['Total'],
+        ]);
+    }
+
+    /**
+     * Token required. Own RSVP always OK; other MundaneId needs RemoveRsvp-equivalent authority.
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeRsvpActor(array $request, int $detailId, int $targetMundaneId): ?array
+    {
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        if ((int) $actorId === (int) $targetMundaneId) {
+            return null;
+        }
+
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = $detailId;
+        if (!$this->detail->find()) {
+            return InvalidParameter('Event occurrence not found.');
+        }
+        $eventId = (int) $this->detail->event_id;
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+            return null;
+        }
+        $this->db->Clear();
+        $staffRow = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . 'event_staff
+			 WHERE event_calendardetail_id = ' . (int) $detailId . '
+			   AND mundane_id = ' . (int) $actorId . '
+			   AND can_attendance = 1 LIMIT 1'
+        );
+        if ($staffRow && $staffRow->Next()) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
+    /**
+     * Token required; manage or attendance authority on the occurrence.
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeRsvpListViewer(array $request, int $detailId): ?array
+    {
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = $detailId;
+        if (!$this->detail->find()) {
+            return InvalidParameter('Event occurrence not found.');
+        }
+        $eventId = (int) $this->detail->event_id;
+        $planning = new EventPlanning();
+        if ($planning->CanManageEventDetail((int) $actorId, $eventId, $detailId, 'manage')
+            || $planning->CanManageEventDetail((int) $actorId, $eventId, $detailId, 'attendance')) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
+    public function RemoveRsvp($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        $targetMundaneId = (int)($request['TargetMundaneId'] ?? $request['MundaneId'] ?? 0);
+        if (!valid_id($detailId) || !valid_id($targetMundaneId)) {
+            return InvalidParameter('EventCalendarDetailId and TargetMundaneId are required.');
+        }
+
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $targetMundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+
+        $this->rsvp->clear();
+        $this->rsvp->event_calendardetail_id = $detailId;
+        $this->rsvp->mundane_id = $targetMundaneId;
+        if ($this->rsvp->find()) {
+            $this->rsvp->delete();
+        }
+        return Success();
+    }
+
+    public function GetRsvpCounts($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($detailId)) {
+            return InvalidParameter('EventCalendarDetailId is required.');
+        }
+        $counts = $this->_getRsvpCountsInternal($detailId);
+        return $this->_rsvpOkResponse($counts);
+    }
+
+    public function GetRsvpCountsBatch($request)
+    {
+        $detailIds = $request['EventCalendarDetailIds'] ?? [];
+        if (!is_array($detailIds) || empty($detailIds)) {
+            return $this->_rsvpOkResponse(['Items' => []]);
+        }
+        $idList = implode(',', array_map('intval', $detailIds));
+        $this->db->Clear();
+        $countResult = $this->db->DataSet(
+            "SELECT event_calendardetail_id, status, COUNT(*) AS cnt
+			 FROM " . DB_PREFIX . "event_rsvp
+			 WHERE event_calendardetail_id IN ({$idList})
+			 GROUP BY event_calendardetail_id, status"
+        );
+        $rsvpCounts = [];
+        if ($countResult) {
+            while ($countResult->Next()) {
+                $did = (int)$countResult->event_calendardetail_id;
+                if (!isset($rsvpCounts[$did])) {
+                    $rsvpCounts[$did] = ['Going' => 0, 'Interested' => 0, 'Total' => 0];
+                }
+                $key = $countResult->status === 'interested' ? 'Interested' : 'Going';
+                $rsvpCounts[$did][$key] = (int)$countResult->cnt;
+                $rsvpCounts[$did]['Total'] += (int)$countResult->cnt;
+            }
+        }
+        $items = [];
+        foreach ($detailIds as $rawId) {
+            $did = (int)$rawId;
+            $counts = $rsvpCounts[$did] ?? ['Going' => 0, 'Interested' => 0, 'Total' => 0];
+            $items[] = array_merge(['EventCalendarDetailId' => $did], $counts);
+        }
+        return $this->_rsvpOkResponse(['Items' => $items]);
+    }
+
+    public function GetUserRsvpStatusesBatch($request)
+    {
+        $detailIds = $request['EventCalendarDetailIds'] ?? [];
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!is_array($detailIds) || empty($detailIds) || !valid_id($mundaneId)) {
+            return $this->_rsvpOkResponse(['Items' => []]);
+        }
+        $idList = implode(',', array_map('intval', $detailIds));
+        $this->db->Clear();
+        $userResult = $this->db->DataSet(
+            "SELECT event_calendardetail_id, status FROM " . DB_PREFIX . "event_rsvp
+			 WHERE event_calendardetail_id IN ({$idList}) AND mundane_id = " . (int)$mundaneId
+        );
+        $userRsvp = [];
+        if ($userResult) {
+            while ($userResult->Next()) {
+                $userRsvp[(int)$userResult->event_calendardetail_id] = (string)$userResult->status;
+            }
+        }
+        $items = [];
+        foreach ($detailIds as $rawId) {
+            $did = (int)$rawId;
+            $items[] = [
+                'EventCalendarDetailId' => $did,
+                'RsvpStatus' => $userRsvp[$did] ?? '',
+            ];
+        }
+        return $this->_rsvpOkResponse(['Items' => $items]);
+    }
+
+    public function GetRsvpSummaryBatch($request)
+    {
+        $detailIds = $request['EventCalendarDetailIds'] ?? [];
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $countsResponse = $this->GetRsvpCountsBatch(['EventCalendarDetailIds' => $detailIds]);
+        if ($countsResponse['Status']['Status'] != 0) {
+            return $countsResponse;
+        }
+        $userStatuses = [];
+        if (valid_id($mundaneId) && !empty($detailIds)) {
+            $userResponse = $this->GetUserRsvpStatusesBatch([
+                'EventCalendarDetailIds' => $detailIds,
+                'MundaneId' => $mundaneId,
+            ]);
+            if ($userResponse['Status']['Status'] == 0) {
+                foreach ($userResponse['Items'] as $item) {
+                    $userStatuses[(int)$item['EventCalendarDetailId']] = $item['RsvpStatus'];
+                }
+            }
+        }
+        $items = [];
+        foreach ($countsResponse['Items'] as $item) {
+            $did = (int)$item['EventCalendarDetailId'];
+            $items[] = [
+                'EventCalendarDetailId' => $did,
+                'Going' => (int)$item['Going'],
+                'Interested' => (int)$item['Interested'],
+                'Total' => (int)$item['Total'],
+                'RsvpStatus' => $userStatuses[$did] ?? '',
+            ];
+        }
+        return $this->_rsvpOkResponse(['Items' => $items]);
+    }
+
+    public function GetRsvpList($request)
+    {
+        $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($detailId)) {
+            return InvalidParameter('EventCalendarDetailId is required.');
+        }
+        $auth = $this->_authorizeRsvpListViewer($request, $detailId);
+        if ($auth !== null) {
+            return $auth;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            "SELECT m.mundane_id, m.persona, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr,
+			        k.kingdom_id, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name
+			 FROM " . DB_PREFIX . "event_rsvp er
+			 JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id
+			 LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+			 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			 LEFT JOIN (
+			   SELECT mundane_id, MAX(attendance_id) AS last_aid FROM " . DB_PREFIX . "attendance GROUP BY mundane_id
+			 ) la_max ON la_max.mundane_id = m.mundane_id
+			 LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = la_max.last_aid
+			 LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id
+			 WHERE er.event_calendardetail_id = " . (int)$detailId . "
+			 ORDER BY er.status, m.persona"
+        );
+        $list = [];
+        if ($r) {
+            while ($r->Next()) {
+                $list[] = [
+                    'MundaneId' => (int)$r->mundane_id,
+                    'Persona' => $r->persona,
+                    'Status' => $r->status,
+                    'Waivered' => (bool)$r->waivered,
+                    'KingdomId' => $r->kingdom_id,
+                    'KingdomAbbr' => $r->kingdom_abbr,
+                    'ParkId' => $r->park_id,
+                    'ParkAbbr' => $r->park_abbr,
+                    'LastClassId' => $r->last_class_id,
+                    'LastClassName' => $r->last_class_name,
+                ];
+            }
+        }
+        return $this->_rsvpOkResponse(['RsvpPlayers' => $list]);
+    }
+
+    public function GetUpcomingRsvps($request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            "SELECT er.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end
+			 FROM " . DB_PREFIX . "event_rsvp er
+			 JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_calendardetail_id = er.event_calendardetail_id
+			 JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id
+			 WHERE er.mundane_id = " . (int)$mundaneId . "
+			   AND cd.event_start > NOW()
+			 ORDER BY cd.event_start ASC"
+        );
+        $list = [];
+        if ($r) {
+            while ($r->Next()) {
+                $list[] = [
+                    'EventCalendarDetailId' => (int)$r->event_calendardetail_id,
+                    'EventId' => (int)$r->event_id,
+                    'EventName' => $r->event_name,
+                    'EventStart' => $r->event_start,
+                    'EventEnd' => $r->event_end,
+                ];
+            }
+        }
+        return $this->_rsvpOkResponse(['UpcomingRsvps' => $list]);
+    }
+
+    public function GetKingdomUpcomingEventsWithoutRsvp($request)
+    {
+        $kingdomId = (int)($request['KingdomId'] ?? 0);
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $limit = (int)($request['Limit'] ?? 6);
+        if (!valid_id($kingdomId) || !valid_id($mundaneId)) {
+            return InvalidParameter('KingdomId and MundaneId are required.');
+        }
+        if ($limit <= 0) {
+            $limit = 6;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            "SELECT DISTINCT cd.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end,
+			        p.abbreviation AS park_abbreviation
+			 FROM " . DB_PREFIX . "event_calendardetail cd
+			 JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id
+			 LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+			 WHERE e.kingdom_id = " . (int)$kingdomId . "
+			   AND (e.status IS NULL OR e.status = 'published')
+			   AND cd.event_start > NOW()
+			   AND cd.event_calendardetail_id NOT IN (
+			     SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp WHERE mundane_id = " . (int)$mundaneId . "
+			   )
+			 ORDER BY cd.event_start ASC LIMIT " . (int)$limit
+        );
+        $list = [];
+        if ($r) {
+            while ($r->Next()) {
+                $list[] = [
+                    'EventCalendarDetailId' => (int)$r->event_calendardetail_id,
+                    'EventId' => (int)$r->event_id,
+                    'EventName' => $r->event_name,
+                    'EventStart' => $r->event_start,
+                    'EventEnd' => $r->event_end,
+                    'ParkAbbreviation' => $r->park_abbreviation,
+                ];
+            }
+        }
+        return $this->_rsvpOkResponse(['KingdomEvents' => $list]);
     }
 
     // GhettoCache-backed wrapper around Common::Geocode. Saves of the same address
@@ -78,6 +595,13 @@ class Event extends Ork3
             // Bailout without committing
             return NoAuthorization();
         }
+
+        $eventStatus = (string)($request['Status'] ?? 'published');
+        if ($eventStatus === 'draft') {
+            $this->event->status = 'draft';
+            $this->event->save();
+        }
+
         Ork3::$Lib->heraldry->SetEventHeraldry($request);
 
         return Success($this->event->event_id);
@@ -119,6 +643,62 @@ class Event extends Ork3
             } while ($this->event->next());
         }
         return $events;
+    }
+
+    /**
+     * Slim event lookup for legacy Event/index redirect (T-INF-02).
+     *
+     * @return array{Name: string, KingdomId: int}
+     */
+    public function GetEventSummaryForRedirect(int $eventId): array
+    {
+        if (!valid_id($eventId)) {
+            return ['Name' => '', 'KingdomId' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->query(
+            'SELECT name, kingdom_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int) $eventId . ' LIMIT 1'
+        );
+        if ($rs && $rs->size() > 0 && $rs->next()) {
+            return [
+                'Name' => (string) $rs->name,
+                'KingdomId' => (int) $rs->kingdom_id,
+            ];
+        }
+
+        return ['Name' => '', 'KingdomId' => 0];
+    }
+
+    /**
+     * Kingdom-scoped event templates for tournament creation UI (R-18).
+     *
+     * @return list<array{EventId: int, Name: string, ParkId: int, ParkName: string}>
+     */
+    public function GetEventTemplatesForKingdom(int $kingdomId): array
+    {
+        if (!valid_id($kingdomId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT e.event_id, e.name, p.park_id, p.name AS park_name
+             FROM ' . DB_PREFIX . 'event e
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = e.park_id
+             WHERE e.kingdom_id = ' . (int) $kingdomId . ' ORDER BY e.name'
+        );
+        $templates = [];
+        if ($rs && $rs->Size() > 0) {
+            while ($rs->Next()) {
+                $templates[] = [
+                    'EventId' => (int) $rs->event_id,
+                    'Name' => (string) $rs->name,
+                    'ParkId' => (int) $rs->park_id,
+                    'ParkName' => (string) ($rs->park_name ?? ''),
+                ];
+            }
+        }
+
+        return $templates;
     }
 
     public function GetEvent($request)
@@ -287,6 +867,7 @@ class Event extends Ork3
             $newDetail->latitude       = $latitude;
             $newDetail->longitude      = $longitude;
             $newDetail->save();
+            Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
             return Success($newDetail->event_calendardetail_id);
         } else {
             return NoAuthorization();
@@ -591,6 +1172,7 @@ class Event extends Ork3
                     $this->SetCurrent(array( 'Token' => $request['Token'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
                 }
                 logtrace('SetEventDetails', $request);
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter('');
@@ -666,6 +1248,7 @@ class Event extends Ork3
                 $this->event->save();
                 Ork3::$Lib->heraldry->SetEventHeraldry($request);
                 logtrace("SetEvent", array($request, $this->event));
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter('Event Id is not a valid id.');

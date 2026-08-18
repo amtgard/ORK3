@@ -189,6 +189,41 @@ $rfu_fmt_date = static function ($d) {
 }
 .rfu-chart-empty i { font-size: 24px; opacity: .4; }
 
+/* ── Link tiles ── */
+.rfu-links {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 12px;
+	margin-top: 18px;
+}
+.rfu-link-tile {
+	background: var(--rp-bg-light);
+	border: 1px solid var(--rp-border);
+	border-radius: 10px;
+	padding: 13px 14px 12px;
+	min-width: 0;
+}
+.rfu-link-title {
+	font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+	color: var(--rp-text-muted);
+	margin: 0 0 8px;
+	line-height: 1.35;
+}
+.rfu-link-item { padding: 5px 0; min-width: 0; }
+.rfu-link-item + .rfu-link-item { border-top: 1px solid var(--rp-border); }
+.rfu-link-a {
+	display: inline-flex; align-items: baseline; gap: 6px;
+	font-size: 13px; font-weight: 600; line-height: 1.4;
+	color: var(--rp-accent); text-decoration: none;
+	max-width: 100%;
+}
+.rfu-link-a:hover { color: var(--rp-accent-mid); text-decoration: underline; }
+.rfu-link-a i { font-size: 10px; opacity: .55; flex: 0 0 auto; }
+.rfu-link-sub {
+	font-size: 11.5px; color: var(--rp-text-muted); line-height: 1.35; margin-top: 1px;
+	overflow-wrap: anywhere;
+}
+
 .rfu-empty-state { padding: 48px 16px; text-align: center; color: var(--rp-text-muted); font-size: 14px; }
 .rfu-empty-state i { font-size: 30px; display: block; margin-bottom: 12px; opacity: .4; }
 
@@ -289,6 +324,11 @@ $rfu_fmt_date = static function ($d) {
 <?php
 	$_kpis   = (isset($_feat['kpis'])   && is_array($_feat['kpis']))   ? $_feat['kpis']   : [];
 	$_charts = (isset($_feat['charts']) && is_array($_feat['charts'])) ? $_feat['charts'] : [];
+	$_links  = (isset($_feat['links'])  && is_array($_feat['links']))  ? $_feat['links']  : [];
+	/* Drop tiles with no items so the grid never renders empty. */
+	$_links  = array_values(array_filter($_links, static function ($_l) {
+		return is_array($_l) && !empty($_l['items']) && is_array($_l['items']);
+	}));
 ?>
 				<div class="rfu-card">
 					<h3 class="rfu-card-title"><?=htmlspecialchars($_feat['title'] ?? ($_feat['key'] ?? 'Feature'))?></h3>
@@ -309,9 +349,11 @@ $rfu_fmt_date = static function ($d) {
 	$_ddir  = $_kpi['deltaDir'] ?? null;
 	$_dcls  = ($_ddir === 'up' || $_ddir === 'down') ? $_ddir : 'flat';
 	$_dicon = $_ddir === 'up' ? 'fa-arrow-up' : ($_ddir === 'down' ? 'fa-arrow-down' : 'fa-minus');
+	/* Rates/averages opt into a decimal place; counts stay whole. */
+	$_vdec  = (int)($_kpi['decimals'] ?? 0);
 ?>
 						<div class="rfu-kpi">
-							<div class="rfu-kpi-value"><?=(is_numeric($_val) ? number_format((float)$_val) : htmlspecialchars((string)$_val)) . htmlspecialchars($_sfx)?></div>
+							<div class="rfu-kpi-value"><?=(is_numeric($_val) ? number_format((float)$_val, $_vdec) : htmlspecialchars((string)$_val)) . htmlspecialchars($_sfx)?></div>
 							<div class="rfu-kpi-label">
 								<span><?=htmlspecialchars($_kpi['label'] ?? '')?></span>
 <?php if ($_hint !== null && $_hint !== ''): ?>
@@ -362,6 +404,37 @@ $rfu_fmt_date = static function ($d) {
 						</div>
 <?php endforeach; ?>
 					</div>
+<?php endif; ?>
+
+<?php if (!empty($_links)): ?>
+						<div class="rfu-links">
+<?php foreach ($_links as $_link): ?>
+<?php
+	$_items = (isset($_link['items']) && is_array($_link['items'])) ? $_link['items'] : [];
+?>
+							<div class="rfu-link-tile">
+<?php if (!empty($_link['title'])): ?>
+								<div class="rfu-link-title"><?=htmlspecialchars($_link['title'])?></div>
+<?php endif; ?>
+<?php foreach ($_items as $_item): ?>
+<?php
+	$_route = (string)($_item['route'] ?? '');
+	$_lbl   = (string)($_item['label'] ?? '');
+	$_sub   = isset($_item['sub']) ? trim((string)$_item['sub']) : '';
+?>
+								<div class="rfu-link-item">
+									<a class="rfu-link-a" href="<?=htmlspecialchars(UIR . $_route)?>" target="_blank" rel="noopener">
+										<span><?=htmlspecialchars($_lbl)?></span>
+										<i class="fas fa-external-link-alt"></i>
+									</a>
+<?php if ($_sub !== ''): ?>
+									<div class="rfu-link-sub"><?=htmlspecialchars($_sub)?></div>
+<?php endif; ?>
+								</div>
+<?php endforeach; ?>
+							</div>
+<?php endforeach; ?>
+						</div>
 <?php endif; ?>
 				</div>
 <?php endforeach; ?>

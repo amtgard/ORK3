@@ -86,13 +86,35 @@ define('DIR_TEMPLATE', DIR_UI . 'template/');
 define('DIR_VIEW', DIR_UI . 'view/');
 define('DIR_MODEL', DIR_UI . 'model/');
 
-// DB
+// DB — profile switching via bin/ork-db use prod|dev (.ork3-db.local)
+$ork3DbProfileFile = dirname(__FILE__) . '/.ork3-db.local';
+if (is_readable($ork3DbProfileFile)) {
+    foreach (file($ork3DbProfileFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+        if (str_contains($line, '=')) {
+            [$name, $value] = explode('=', $line, 2);
+            putenv(trim($name) . '=' . trim($value));
+        }
+    }
+}
+
+$ork3DbProfile = getenv('ORK3_DB_PROFILE') ?: 'prod';
+
 define('DB_DRIVER', 'mysql');
-define('DB_HOSTNAME', 'ork3-php8-db');
 define('DB_USERNAME', 'ork');
 define('DB_PASSWORD', 'secret');
-define('DB_DATABASE', 'ork');
 define('DB_PREFIX', 'ork_');
+
+if ($ork3DbProfile === 'dev') {
+    define('DB_HOSTNAME', 'ork3-php8-test-db');
+    define('DB_DATABASE', 'ork_test');
+} else {
+    define('DB_HOSTNAME', 'ork3-php8-db');
+    define('DB_DATABASE', 'ork');
+}
 define('CACHE_HOST', 'ork-dev');
 define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');
 

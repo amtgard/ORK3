@@ -32,19 +32,11 @@ class Controller_SignIn extends Controller
 
         $link = $link_result['Detail'];
 
-        // Resolve scope name + type. scope_type drives the page header so an
-        // event link doesn't read "Park Sign-in" with just the event name as
-        // the subtitle.
+        // Resolve scope name + type from enriched link info.
         $scope_name = 'your group';
-        $scope_type = 'park';
-        if (valid_id($link['EventId'] ?? 0)) {
-            $scope_type = 'event';
-            global $DB;
-            $DB->Clear();
-            $row = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$link['EventId'] . ' LIMIT 1');
-            if ($row && $row->Next()) {
-                $scope_name = $row->name ?: $scope_name;
-            }
+        $scope_type = (string)($link['ScopeType'] ?? 'park');
+        if ($scope_type === 'event') {
+            $scope_name = (string)($link['EventName'] ?? $scope_name);
         } elseif (valid_id($link['ParkId'])) {
             $scope_type = 'park';
             $this->load_model('Park');
@@ -95,15 +87,9 @@ class Controller_SignIn extends Controller
             }
         }
 
-        // Get player's last class.
-        // YapoMysql::DataSet() does NOT pre-call Next() — must call it manually to advance to the first row.
-        $last_class_id   = 0;
+        $last_class_id = (int)$this->Attendance->get_player_last_class((int)$this->session->user_id);
         $last_class_name = '';
-        global $DB;
-        $DB->Clear();
-        $last_row = $DB->DataSet('SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . (int)$this->session->user_id . ' ORDER BY date DESC, attendance_id DESC LIMIT 1');
-        if ($last_row && $last_row->Next() && (int)$last_row->class_id > 0) {
-            $last_class_id = (int)$last_row->class_id;
+        if ($last_class_id > 0) {
             foreach (array_values($classes) as $c) {
                 if ((int)$c['ClassId'] === $last_class_id) {
                     $last_class_name = $c['Name'];
@@ -112,11 +98,13 @@ class Controller_SignIn extends Controller
             }
         }
 
+        $classes = $this->Attendance->enrich_classes_with_progress((int)$this->session->user_id, array_values($classes));
+
         $this->data['link']            = $link;
         $this->data['scope_name']      = $scope_name;
         $this->data['scope_type']      = $scope_type;
         $this->data['link_token']      = $link_token;
-        $this->data['classes']         = array_values($classes);
+        $this->data['classes']         = $classes;
         $this->data['last_class_id']   = $last_class_id;
         $this->data['last_class_name'] = $last_class_name;
         $this->data['existing']        = $existing; // null, or ['AttendanceId','ClassId','ClassName']

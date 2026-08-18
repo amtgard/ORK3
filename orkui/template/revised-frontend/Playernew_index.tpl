@@ -5,19 +5,7 @@
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
 	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
-	$can_delete_recommendation = false;
-	if($this->__session->user_id) {
-		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-	}
+	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
 	$isSuspended = ($Player['Suspended'] == 1);
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
@@ -40,7 +28,9 @@
 	}
 
 
-	$knightAwardIds = array(17, 18, 19, 20, 245);
+	// Knight AwardIds from domain (Award::GetKnightAwardMap via controller).
+	// Belt IMAGE URLs stay presentation-local (host/path); AwardIds come from domain.
+	$knightAwardIds = array_map('intval', array_keys(is_array($KnightAwardMap ?? null) ? $KnightAwardMap : []));
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
 		17  => $_beltImgHost . 'belt-flame.png',
@@ -79,23 +69,11 @@
 	$_pnBeltDisplay = $Player['BeltDisplay'] ?? 'white';
 	if (!in_array($_pnBeltDisplay, array('white','own','none'))) { $_pnBeltDisplay = 'white'; }
 
-	// Auth helpers
-	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
-	$pnCanManageBanner =
-		   $isOwnProfile
-		|| $canEditAdmin
-		|| (
-			   !empty($Player['KingdomId'])
-			&& isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT)
-		   )
-		|| (
-			   isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)
-		   );
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	// Auth helpers (precomputed in Controller_Player::profile)
+	$isOwnProfile  = !empty($IsOwnProfile);
+	$canEditAdmin  = !empty($canEditAdmin);
+	$pnCanManageBanner = !empty($pnCanManageBanner);
+	$canManageAwards = !empty($canManageAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
@@ -111,31 +89,9 @@
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
 	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
-	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
-	$hasHistorical = false;
-	if ($canManageAwards && is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistorical = true;
-					break;
-				}
-			}
-		}
-	}
-
-	// Same check, visible to anyone viewing the profile
-	$hasHistoricalTip = false;
-	if (is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistoricalTip = true;
-					break;
-				}
-			}
-		}
-	}
+	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
+	$hasHistorical = !empty($HasHistorical);
+	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
@@ -153,11 +109,13 @@
 		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
 	}
 
-	// Class → Paragon award map (used by My Amtgard + Class Levels tabs)
-	$pnClassToParagon = [
-		1=>37, 2=>38, 3=>39, 4=>40, 5=>41, 6=>241, 7=>42, 8=>43,
-		9=>44, 10=>45, 11=>46, 12=>47, 14=>242, 15=>49, 16=>50, 17=>51,
-	];
+	// Class → Paragon award map from domain (controller-assigned ClassParagonMap)
+	if (!isset($ClassParagonMap) || !is_array($ClassParagonMap)) {
+		$ClassParagonMap = [];
+	}
+	if (!isset($ClassLevelThresholds) || !is_array($ClassLevelThresholds)) {
+		$ClassLevelThresholds = [];
+	}
 	$pnHeldAwardIds = [];
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_pa) {
@@ -215,22 +173,7 @@
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
-		// Level helpers
-		function _ma_level($credits) {
-			if ($credits >= 53) return 6;
-			if ($credits >= 34) return 5;
-			if ($credits >= 21) return 4;
-			if ($credits >= 12) return 3;
-			if ($credits >= 5)  return 2;
-			return 1;
-		}
-		function _ma_progress($credits) {
-			$t = [0,5,12,21,34,53];
-			if ($credits >= 53) return 100;
-			for ($i = count($t)-1; $i >= 0; $i--)
-				if ($credits >= $t[$i]) return round(($credits-$t[$i])/($t[$i+1]-$t[$i])*100);
-			return 0;
-		}
+		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
 
@@ -501,9 +444,6 @@ html[data-theme="dark"] .pn-ac-item { color: var(--ork-text); border-bottom-colo
 html[data-theme="dark"] .pn-ac-item:hover,
 html[data-theme="dark"] .pn-ac-item:focus,
 html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-tertiary); color: var(--ork-link-bright); }
-html[data-theme="dark"] .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-page-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-html[data-theme="dark"] .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
@@ -1064,6 +1004,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
@@ -1196,9 +1137,14 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= htmlspecialchars($Player['SuspendedAt'] ?? '') ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
-					<?php if (!empty($Player['Suspension'])): ?>
-						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
+					Suspended <?php $_susAt = $Player['SuspendedAt'] ?? ''; $_until = $Player['SuspendedUntil'] ?? ''; if (!$_until || $_until === '0000-00-00') { echo 'Indefinitely' . ($_susAt ? ' as of ' . htmlspecialchars($_susAt) : ''); } else { echo htmlspecialchars($_susAt) . ' &mdash; Until ' . htmlspecialchars($_until); } ?>
+					<?php
+						$_susReason = trim($Player['Suspension'] ?? '');
+						// Skip reason text that only restates the "Suspended Indefinitely" status (no added detail).
+						$_susRedundant = in_array(strtolower(rtrim($_susReason, " .;,")), ['suspended indefinitely', 'indefinitely', 'indefinite', 'indefinite suspension', 'suspended indefinite'], true);
+					?>
+					<?php if ($_susReason !== '' && !$_susRedundant): ?>
+						&mdash; <?= htmlspecialchars($_susReason) ?>
 					<?php endif; ?>
 				</div>
 			<?php endif; ?>
@@ -1322,7 +1268,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-reeve-val">
 					<?php if ($Player['ReeveQualified'] != 0): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
@@ -1340,7 +1286,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Corpora</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-corpora-val">
 					<?php if ($Player['CorporaQualified'] != 0): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
@@ -1356,6 +1302,25 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<?php endif; ?>
 				</span>
 			</div>
+			<?php
+			  // Offer this ONLY when there is something to do. The button used to appear whenever
+			  // the kingdom had a test switched on, so a player could press it, pick a test, and be
+			  // told "Not enough active questions available" — invited to do the impossible.
+			  // A player with past attempts still gets in, because the same modal is where they
+			  // review them.
+			  $_qtTakeable = !empty($QualTakeable['reeve']) || !empty($QualTakeable['corpora']);
+			  $_qtHasHistory = false;
+			  foreach ((array)($QualResults ?? []) as $_qr) {
+				  if (!empty($_qr)) { $_qtHasHistory = true; break; }
+			  }
+			?>
+			<?php if ($isOwnProfile && ($_qtTakeable || $_qtHasHistory)): ?>
+			<div style="margin-top:10px;display:flex;justify-content:flex-end;">
+				<button type="button" class="pn-btn pn-btn-sm pn-btn-primary" onclick="pnOpenTestChooser();return false;">
+					<i class="fas fa-play-circle"></i> <?= $_qtTakeable ? 'Take Tests' : 'Test History' ?>
+				</button>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Dues -->
@@ -2131,114 +2096,16 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						}
 					}
 
-					// Build ladder progress: AwardId -> {Name, Short, MaxRank, HasMaster}
-					// Static map: Order award_id => Master award_id(s)
-					$pnOrderToMaster = [
-						21  => [1],       // Order of the Rose      → Master Rose
-						22  => [2],       // Order of the Smith      → Master Smith
-						23  => [3],       // Order of the Lion       → Master Lion
-						24  => [4],       // Order of the Owl        → Master Owl
-						25  => [5],       // Order of the Dragon     → Master Dragon
-						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [12],      // Order of the Warrior    → Warlord
-						28  => [7],       // Order of the Jovius     → Master Jovius
-						29  => [9],       // Order of the Mask       → Master Mask
-						30  => [8],       // Order of the Zodiac     → Master Zodiac
-						32  => [10],      // Order of the Hydra      → Master Hydra
-						33  => [11],      // Order of the Griffin    → Master Griffin
-						239 => [240],     // Order of the Crown      → Master Crown
-						243 => [244],     // Order of Battle         → Battlemaster
-					];
-					$pnOrderNames = [
-						21  => ['Order of the Rose',    'Rose'],
-						22  => ['Order of the Smith',   'Smith'],
-						23  => ['Order of the Lion',    'Lion'],
-						24  => ['Order of the Owl',     'Owl'],
-						25  => ['Order of the Dragon',  'Dragon'],
-						26  => ['Order of the Garber',  'Garber'],
-						27  => ['Order of the Warrior', 'Warrior'],
-						28  => ['Order of the Jovius',  'Jovius'],
-						29  => ['Order of the Mask',    'Mask'],
-						30  => ['Order of the Zodiac',  'Zodiac'],
-						32  => ['Order of the Hydra',   'Hydra'],
-						33  => ['Order of the Griffin', 'Griffin'],
-						239 => ['Order of the Crown',   'Crown'],
-						243 => ['Order of Battle',      'Battle'],
-					];
-					// Index all award_ids the player holds (including titles)
-					$pnHeldAwardIds = [];
-					foreach ($awardsList as $a) {
-						$aid = (int)$a['AwardId'];
-						if ($aid > 0) $pnHeldAwardIds[$aid] = true;
+					// Ladder progress tiles from domain (Player::GetLadderProgress via controller)
+					if (!isset($LadderProgress) || !is_array($LadderProgress)) {
+						$LadderProgress = [];
 					}
-					$pnLadderProgress = [];
-					foreach ($awardsList as $a) {
-						if ((int)$a['IsLadder'] !== 1) continue;
-						$aid  = (int)$a['AwardId'];
-						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
-						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
-							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
-						// Strip "Order of the " / "Order of " prefix to save space
-						$shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
-						// Check if player holds the corresponding Master title
-						$hasMaster = false;
-						if (isset($pnOrderToMaster[$aid])) {
-							foreach ($pnOrderToMaster[$aid] as $masterId) {
-								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-							}
-						}
-						// Dedup key is rank only — two awards at the same rank from different
-						// parks or dates are still the same rank, not two separate levels.
-						$rankKey = $rank;
-						if (!isset($pnLadderProgress[$aid])) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
-								'RankSet' => $rank > 0 ? [$rankKey => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
-						} else {
-							if ($rank > $pnLadderProgress[$aid]['Rank']) {
-								$pnLadderProgress[$aid]['Rank'] = $rank;
-							}
-							if ($rank > 0) {
-								$pnLadderProgress[$aid]['RankSet'][$rankKey] = true;
-							} else {
-								$pnLadderProgress[$aid]['UnrankedCount']++;
-							}
-						}
-					}
-					// Use max(highest_rank, effective_count) to account for unreconciled historical awards.
-					// Effective count = distinct ranked entries + unranked entries (deduplicates duplicate ranks).
-					// Cap at maxRank per award (10 for most, 12 for Zodiac)
-					// Mark as approximate when effective count exceeds highest actual rank
-					foreach ($pnLadderProgress as $_lpAid => &$lp) {
-						$_lpMax = ($_lpAid === 30) ? 12 : 10;
-						$_effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-						// Suppress the "approximate" marker when the player already holds the
-						// corresponding Master title — the M badge is the authoritative signal,
-						// no need to second-guess the breakdown that got them there.
-						$lp['Approx'] = ($_effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
-						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $_effectiveCount));
-					}
-					unset($lp);
-					// Add a complete tile for any masterhood held with no corresponding ladder progress
-					foreach ($pnOrderToMaster as $orderId => $masterIds) {
-						if (isset($pnLadderProgress[$orderId])) continue;
-						$hasMaster = false;
-						foreach ($masterIds as $masterId) {
-							if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-						}
-						if (!$hasMaster) continue;
-						$maxRank = ($orderId === 30) ? 12 : 10;
-						$name  = $pnOrderNames[$orderId][0] ?? 'Unknown Order';
-						$short = $pnOrderNames[$orderId][1] ?? $name;
-						$pnLadderProgress[$orderId] = ['Name' => $name, 'Short' => $short, 'Rank' => $maxRank, 'Count' => 0, 'HasMaster' => true, 'Approx' => false];
-					}
-					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
-				<?php if (!empty($pnLadderProgress)): ?>
+				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
 						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
-							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
-								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+							<?php foreach ($LadderProgress as $lp): ?>
+								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
 								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
@@ -2268,26 +2135,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
-				<div class="pn-table-toolbar">
-					<?php if (count($filteredAwards) > 10): ?>
-					<div class="pn-pagesize-bar" style="margin-bottom:0">
-						<label for="pn-awards-pagesize">Show</label>
-						<select id="pn-awards-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-awards-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-							<option value="all">All</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<div class="pn-award-search-bar" style="margin-bottom:0">
-						<i class="fas fa-search pn-award-search-icon"></i>
-						<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
-					</div>
-				</div>
-				<table class="pn-table pn-sortable" id="pn-awards-table">
+				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
 							<th data-sorttype="text">Award</th>
@@ -2297,7 +2145,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -2357,12 +2205,11 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
-				<?php endif; ?>
+								<?php endif; ?>
 				<?php if ($canManageAwards && !empty($RevokedAwards)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
+					<table class="pn-table display" id="pn-revoked-awards-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Award</th>
@@ -2410,19 +2257,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					}
 				?>
 				<?php if (count($filteredTitles) > 0): ?>
-					<?php if (count($filteredTitles) > 10): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-titles-pagesize">Show</label>
-						<select id="pn-titles-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-titles-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<table class="pn-table pn-sortable" id="pn-titles-table">
+					<table class="pn-table display" id="pn-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2432,7 +2267,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2526,7 +2361,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<?php if ($canManageAwards && !empty($RevokedTitles)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
+					<table class="pn-table display" id="pn-revoked-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2602,8 +2437,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<div class="pn-tab-panel" id="pn-tab-classes" style="display:none">
 				<?php
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
-					// class_id → Paragon award_id
-					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
+					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
 				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
@@ -2611,7 +2445,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				</div>
 				<?php endif; ?>
 				<?php if (count($classList) > 0): ?>
-					<table class="pn-table" id="pn-classes-table">
+					<table class="pn-table display" id="pn-classes-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Class</th>
@@ -2623,7 +2457,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<?php foreach ($classList as $detail): ?>
 								<?php
 									$totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']);
-									$paragonAwardId = $pnClassToParagon[$detail['ClassId']] ?? null;
+									$paragonAwardId = $ClassParagonMap[$detail['ClassId']] ?? null;
 									$hasParagon = $paragonAwardId && isset($pnHeldAwardIds[$paragonAwardId]);
 								?>
 								<tr>
@@ -3304,7 +3138,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 		<div class="pn-design-tabs-wrap">
 			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-left" id="pn-design-tabs-chev-left" aria-label="Scroll tabs left" tabindex="-1"><i class="fas fa-chevron-left"></i></button>
 			<div class="pn-design-tabs" id="pn-design-tabs">
-				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
+				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-smile-beam"></i> Welcome</button>
 				<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
 				<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
 				<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
@@ -3946,7 +3780,7 @@ if (is_array($Details['Awards'])) {
 }
 $playerHeldAwardIds        = array_keys($playerHeldAwardIds);
 $playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
-$ladderMasterMap           = Award::GetLadderMasterMap();
+$ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterMap : [];
 ?>
 
 <!-- =============================================
@@ -4010,7 +3844,8 @@ var PnConfig = {
 	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
 	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
-	classToParagon:   <?= json_encode($pnClassToParagon) ?>,
+	classToParagon:   <?= json_encode($ClassParagonMap) ?>,
+	classLevelThresholds: <?= json_encode(array_values($ClassLevelThresholds ?? [])) ?>,
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
@@ -4227,6 +4062,7 @@ var PnBannerConfig = {
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 // ---- Markdown rendering for About tab ----
 (function() {
@@ -5263,9 +5099,6 @@ var PnBannerConfig = {
 	};
 })();
 
-pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
-pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
-pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
 // 26-week sparkline (called on load and again after attendance AJAX)
 function pnRenderSparkline() {
 	var el = document.getElementById('pna-sparkline');
@@ -5571,6 +5404,1170 @@ pnRenderSparkline();
 })();
 <?php endif; ?>
 </script>
+
+<!-- =============================================
+     Qualification Test Quiz Modal
+     ============================================= -->
+<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
+<style>
+.pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
+@media (max-width: 600px) { .pn-qt-cards { flex-direction: column; } .pn-qt-card { flex: unset; min-width: 0; } }
+.pn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 8px; }
+.pn-qt-status { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+.pn-qt-status-pass   { color: #276749; }
+.pn-qt-status-expired{ color: #b7791f; }
+.pn-qt-status-none   { color: #718096; }
+.pn-qt-detail { font-size: 0.8rem; color: #718096; margin-bottom: 10px; }
+.pn-qt-meta { font-size: 0.78rem; color: #718096; line-height: 1.5; margin-bottom: 10px; }
+.pn-qt-meta strong { color: #2d3748; font-weight: 600; }
+.pn-qt-take-btn { margin-top: 4px; }
+.pn-qt-retake-warning { margin-top: 6px; padding: 7px 10px; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 5px; font-size: 0.8rem; color: #9b2c2c; line-height: 1.4; }
+.pn-qt-retake-warning i { margin-right: 5px; }
+.pn-qt-reset-retakes-btn { margin-top: 4px; }
+/* Past-attempts history (player + manager view) */
+.pn-qt-history { font-size: 0.8rem; }
+/* Full-width review panel below the cards (uses the whole modal width). */
+.pn-qt-history-panel { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc; overflow: hidden; font-size: 0.85rem; }
+.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2f7; }
+.pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
+.pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
+.pn-qt-history-panel-close:hover { color: #2d3748; }
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
+.pn-qt-hist-empty { color: #718096; padding: 4px 2px; }
+.pn-qt-hist-row { border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
+.pn-qt-hist-row.pass { border-left: 3px solid #48bb78; }
+.pn-qt-hist-row.fail { border-left: 3px solid #f56565; }
+.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: #fff; border: 0; cursor: pointer; font: inherit; text-align: left; }
+.pn-qt-hist-toggle:hover { background: #f7fafc; }
+.pn-qt-hist-badge { font-weight: 700; font-size: 0.8rem; }
+.pn-qt-hist-row.pass .pn-qt-hist-badge { color: #276749; }
+.pn-qt-hist-row.fail .pn-qt-hist-badge { color: #9b2c2c; }
+.pn-qt-hist-score { font-weight: 600; color: #2d3748; }
+.pn-qt-hist-when { margin-left: auto; font-size: 0.76rem; color: #718096; }
+.pn-qt-hist-detail { padding: 8px 11px 10px; background: #fafbfc; border-top: 1px solid #edf2f7; }
+.pn-qt-rev-q { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #276749; }
+.pn-qt-rev-q.bad .pn-qt-rev-qh { color: #9b2c2c; }
+.pn-qt-rev-qh { font-weight: 600; margin-bottom: 5px; }
+.pn-qt-rev-opt { padding: 3px 7px; border-radius: 4px; color: #4a5568; margin: 2px 0; font-size: 0.78rem; }
+.pn-qt-rev-opt.correct { background: #f0fff4; color: #276749; }
+.pn-qt-rev-opt.wrong   { background: #fff5f5; color: #9b2c2c; }
+.pn-qt-rev-opt em { font-style: normal; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
+html[data-theme="dark"] .pn-qt-hist-toggle, html[data-theme="dark"] .pn-qt-rev-q { background: #2d3748; }
+html[data-theme="dark"] .pn-qt-hist-row, html[data-theme="dark"] .pn-qt-rev-q { border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-hist-detail { background: #252d3a; }
+html[data-theme="dark"] .pn-qt-hist-score { color: #e2e8f0; }
+/* Attempt-row meta: dim #718096 timestamp and light-mode pass/fail badges are
+   too faint on the navy row — lift to readable brights. */
+html[data-theme="dark"] .pn-qt-hist-when { color: #a0aec0; }
+html[data-theme="dark"] .pn-qt-hist-row.pass .pn-qt-hist-badge { color: #68d391; }
+html[data-theme="dark"] .pn-qt-hist-row.fail .pn-qt-hist-badge { color: #fc8181; }
+/* Dark: clearly-filled pills with near-white text + left accent, matching the
+   reeve/corpora results report — high contrast for both answer and label. */
+html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+html[data-theme="dark"] .pn-qt-rev-opt em { opacity: 1; color: #cbd5e0; }
+/* Un-picked options (neither correct nor the player's pick): the base #4a5568 is
+   near-invisible on the navy card — lift to a readable muted grey. */
+html[data-theme="dark"] .pn-qt-rev-opt { color: #a0aec0; }
+/* Question headers: the light-mode green/red are too dark on the navy card. */
+html[data-theme="dark"] .pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #68d391; }
+html[data-theme="dark"] .pn-qt-rev-q.bad .pn-qt-rev-qh { color: #fc8181; }
+/* Chooser modal */
+#pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
+.pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
+.pn-qt-chooser-empty { padding: 18px; text-align: center; color: #718096; font-size: 0.9rem; }
+
+/* Dark mode — chooser cards */
+html[data-theme="dark"] .pn-qt-card {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-qt-card-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-status-pass    { color: #9ae6b4; }
+html[data-theme="dark"] .pn-qt-status-expired { color: #fbd38d; }
+html[data-theme="dark"] .pn-qt-status-none    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-detail,
+html[data-theme="dark"] .pn-qt-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-meta strong { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-retake-warning {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-qt-reset-retakes-btn {
+	background: #44337a !important;
+	border-color: #553c9a !important;
+	color: #d6bcfa !important;
+}
+html[data-theme="dark"] .pn-qt-chooser-prompt { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0aec0); }
+/* Quiz modal */
+#pn-quiz-overlay .pn-modal-box { width: 640px; max-width: calc(100vw - 40px); }
+
+/* Segmented progress bar */
+.pn-quiz-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pn-quiz-progress { font-size: 0.8rem; font-weight: 600; color: #718096; }
+.pn-quiz-progress-score { font-size: 0.78rem; color: #a0aec0; }
+.pn-quiz-progress-segments { display: flex; gap: 3px; margin-bottom: 20px; }
+.pn-quiz-progress-seg { flex: 1; height: 7px; border-radius: 4px; background: #e2e8f0; transition: background 0.3s; }
+.pn-quiz-progress-seg-done { background: #38a169; }
+.pn-quiz-progress-seg-current { background: #2b6cb0; box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2); }
+
+/* Question text */
+.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+
+/* Answer labels — card style with radio indicator */
+.pn-quiz-answers { list-style: none; padding: 0; margin: 0 0 16px; }
+.pn-quiz-answer-item { margin-bottom: 8px; }
+.pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+                         border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
+.pn-quiz-answer-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e0; flex-shrink: 0; margin-top: 1px;
+                         display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+.pn-quiz-answer-radio-inner { width: 9px; height: 9px; border-radius: 50%; background: transparent; transition: background 0.15s; }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+    background: #f7fafc; border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) { border-color: #2b6cb0; background: #ebf8ff; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-correct  { background: #f0fff4; border-color: #38a169; color: #276749; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio { border-color: #38a169; background: #38a169; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-wrong    { background: #fff5f5; border-color: #e53e3e; color: #9b2c2c; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio { border-color: #e53e3e; background: #e53e3e; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-disabled { pointer-events: none; opacity: 0.55; }
+.pn-quiz-answer-label.pn-quiz-correct, .pn-quiz-answer-label.pn-quiz-wrong { opacity: 1; }
+
+/* Feedback bar with slide animation */
+.pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
+                     overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
+.pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
+.pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
+.pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+
+/* Result view */
+.pn-quiz-result { text-align: center; padding: 28px 0 20px; }
+.pn-quiz-result-icon { font-size: 3.5rem; margin-bottom: 12px; }
+.pn-quiz-result-pass { color: #276749; }
+.pn-quiz-result-fail { color: #9b2c2c; }
+.pn-quiz-result-heading { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
+.pn-quiz-result-heading-pass { color: #276749; }
+.pn-quiz-result-heading-fail { color: #9b2c2c; }
+.pn-quiz-result-score { font-size: 2.4rem; font-weight: 800; margin-bottom: 6px; line-height: 1.1; }
+.pn-quiz-result-breakdown { font-size: 0.88rem; color: #4a5568; margin-bottom: 4px; }
+.pn-quiz-result-detail { font-size: 0.85rem; color: #718096; margin-bottom: 12px; }
+.pn-quiz-result-expiry-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: #c6f6d5; color: #276749; margin-bottom: 16px; }
+
+/* Loading / error / instructions */
+.pn-quiz-loading { text-align: center; padding: 40px 0; color: #718096; }
+.pn-quiz-error-msg { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c;
+                     padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 12px; display: none; }
+.pn-quiz-instructions { padding: 20px 0; }
+.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 14px; }
+.pn-quiz-instructions-body { padding: 12px 16px; background: #ebf4ff; border: 1px solid #bee3f8; border-left: 4px solid #2b6cb0;
+    border-radius: 0 6px 6px 0; font-size: 0.92rem; color: #2c5282; line-height: 1.65; margin-bottom: 18px; white-space: pre-line; }
+.pn-quiz-instructions-meta { font-size: 0.85rem; color: #718096; margin-bottom: 20px; text-align: center; }
+.pn-quiz-instructions-meta strong { color: #2d3748; }
+.pn-quiz-begin-row { text-align: center; }
+
+/* ── Dark mode — quiz modal contents ──────────────────── */
+html[data-theme="dark"] .pn-quiz-progress         { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-score   { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
+/* Done/current need brighter fills on the dark modal — the light-mode green/blue
+   and the faint current-glow wash out against #2d3748, so you can't tell which
+   question you're on. */
+html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* "Select all that apply" hint — color moved off the inline style so dark mode
+   can lift it off the too-dark #4a5568 it used to hard-code. */
+.pn-quiz-multi-hint { color: #4a5568; }
+html[data-theme="dark"] .pn-quiz-multi-hint { color: #cbd5e0; }
+html[data-theme="dark"] .pn-quiz-q-text {
+	color: var(--ork-text, #e2e8f0);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-quiz-answer-label {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .pn-quiz-answer-radio { border-color: #718096; }
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #4a5568;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #2a4365;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-correct {
+	background: #22543d;
+	border-color: #38a169;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-wrong {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-fb-correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-fb-wrong   { background: #742a2a; color: #feb2b2; }
+/* Result view */
+html[data-theme="dark"] .pn-quiz-result-pass,
+html[data-theme="dark"] .pn-quiz-result-heading-pass { color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-result-fail,
+html[data-theme="dark"] .pn-quiz-result-heading-fail { color: #feb2b2; }
+html[data-theme="dark"] .pn-quiz-result-score     { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-quiz-result-breakdown { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-quiz-result-detail    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-result-expiry-badge { background: #22543d; color: #9ae6b4; }
+/* Instructions / loading / error */
+html[data-theme="dark"] .pn-quiz-loading { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-error-msg {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-instructions-icon { color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-instructions-body {
+	background: #2a4365;
+	border-color: #4299e1;
+	border-left-color: #63b3ed;
+	color: #ebf8ff;
+}
+html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
+/* Report-question form inside the quiz modal */
+html[data-theme="dark"] #pn-quiz-report-reason {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+</style>
+
+<!-- Test chooser modal -->
+<?php
+	$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) {
+		return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled);
+	}, ARRAY_FILTER_USE_KEY);
+	$_qualResults   = is_array($QualResults ?? null) ? $QualResults : [];
+	$_qualKingdomId = $QualKingdomId ?? 0;
+	$_qualCanManage = $QualCanManage ?? false;
+	// Most kingdoms enable only ONE test, and asking "which would you like?" above a lone
+	// card reads as a choice the player doesn't actually have. The modal still earns its
+	// place (it carries the status, past attempts and retakes), so soften the wording
+	// rather than skip it.
+	$_qualOnlyOne   = (count($_qualTypes) === 1);
+?>
+<div class="pn-overlay" id="pn-qt-chooser-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
+			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<?php if (empty($_qualTypes)): ?>
+			<div class="pn-qt-chooser-empty">No tests are currently enabled for your kingdom.</div>
+			<?php else: ?>
+			<div class="pn-qt-chooser-prompt"><?= $_qualOnlyOne
+				? 'Your current status, score, and remaining retakes are shown below.'
+				: 'Pick a test to begin. Your current status, score, and remaining retakes are listed below.' ?></div>
+			<div class="pn-qt-cards">
+				<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
+				<?php
+					$_qr           = $_qualResults[$_qtType] ?? null;
+					// A record with QualResultId == 0 is a retake/attempt-only entry:
+					// the player has TAKEN the test but never PASSED (ork_qual_result
+					// is written only on a pass). Only a genuine passing result can be
+					// "Passed" or "Expired"; otherwise they simply haven't passed yet.
+					$_qtHasPass    = $_qr && !empty($_qr['QualResultId']);
+					$_qtPassed     = $_qtHasPass && empty($_qr['Expired']);
+					$_qtExpired    = $_qtHasPass && !empty($_qr['Expired']);
+					$_qtAttempted  = $_qr && !$_qtHasPass; // taken, never passed
+					$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
+					$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
+					$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
+					$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
+					// Score/expiry only mean something for a real passing result;
+					// the synthesized attempt-only entry carries a fake 0%.
+					$_qtScore      = $_qtHasPass ? (int)$_qr['ScorePercent'] : null;
+					$_qtExpires    = $_qtHasPass && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
+				?>
+				<div class="pn-qt-card" data-type="<?= $_qtType ?>">
+					<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
+					<?php if ($_qtPassed): ?>
+						<div class="pn-qt-status pn-qt-status-pass"><i class="fas fa-check-circle"></i> Passed</div>
+						<div class="pn-qt-detail">Score: <?= $_qtScore ?>% &mdash; Expires <?= $_qtExpires ?></div>
+					<?php elseif ($_qtExpired): ?>
+						<div class="pn-qt-status pn-qt-status-expired"><i class="fas fa-clock"></i> Expired<?= $_qtExpires ? ' ' . $_qtExpires : '' ?></div>
+						<?php if ($_qtScore !== null): ?>
+						<div class="pn-qt-detail">Last passing score: <?= $_qtScore ?>%</div>
+						<?php endif; ?>
+					<?php elseif ($_qtAttempted): ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not passed yet</div>
+					<?php else: ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not yet taken</div>
+					<?php endif; ?>
+					<div class="pn-qt-meta">
+						<?php if ($_qtMaxRetakes > 0): ?>
+							Retakes used: <strong><?= $_qtRetakes ?> of <?= $_qtMaxRetakes ?></strong>
+						<?php else: ?>
+							Retakes used: <strong><?= $_qtRetakes ?></strong> <span style="color:#a0aec0">(no limit)</span>
+						<?php endif; ?>
+					</div>
+					<?php
+					  // Switched on, but nothing published (or too few questions to fill a test).
+					  // Starting it would fail with "Not enough active questions available", so do
+					  // not offer it — say why, and let them see their history.
+					  $_qtTakeableNow = !empty($QualTakeable[$_qtType]);
+					?>
+					<?php if (!$_qtTakeableNow): ?>
+					<div class="pn-qt-retake-warning" style="background:#edf2f7;border-color:#cbd5e0;color:#4a5568;">
+						<i class="fas fa-hourglass-half"></i> This test isn't ready yet &mdash; your kingdom is still putting the questions together. Check back soon.
+					</div>
+					<?php elseif ($_qtBlocked): ?>
+					<div class="pn-qt-retake-warning">
+						<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
+					</div>
+					<?php else: ?>
+					<button class="pn-btn pn-btn-sm pn-btn-primary pn-qt-take-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>">
+						<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
+					</button>
+					<?php endif; ?>
+					<?php // Officer-only, and only when a retake LIMIT exists. With no limit the count never
+				      // blocks anyone, so resetting it changes nothing a player can feel — offering it
+				      // there just invites "did that actually do something?". ?>
+					<?php if ($_qualCanManage && $_qtMaxRetakes > 0): ?>
+					<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= $QualPlayerId ?? 0 ?>"
+					        style="color:#553c9a;border-color:#d6bcfa;font-size:0.75rem;">
+						<i class="fas fa-undo-alt"></i> Reset Retakes
+					</button>
+					<?php endif; ?>
+					<?php if ($isOwnProfile || $_qualCanManage): ?>
+					<button type="button" class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-history-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= (int)($QualPlayerId ?? 0) ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>"
+					        style="margin-top:4px;font-size:0.78rem;" aria-expanded="false">
+						<i class="fas fa-history"></i> View past attempts
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php endforeach; ?>
+			</div>
+			<!-- Full-width review panel: "View past attempts" renders here, using the whole modal. -->
+			<div class="pn-qt-history-panel" id="pn-qt-history-panel" style="display:none;">
+				<div class="pn-qt-history-panel-head">
+					<span class="pn-qt-history-panel-title" id="pn-qt-history-panel-title"></span>
+					<button type="button" class="pn-qt-history-panel-close" id="pn-qt-history-panel-close" aria-label="Close">&times;</button>
+				</div>
+				<div id="pn-qt-history-panel-body"></div>
+			</div>
+			<?php endif; ?>
+		</div>
+	</div>
+</div>
+<script>
+function pnOpenTestChooser() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	// Open cleanly: collapse and clear the shared "past attempts" panel so stale
+	// state from a previous open doesn't linger, and so reopening re-fetches
+	// (picking up attempts taken since the modal was last opened).
+	if (typeof window._pnResetQualHistory === 'function') {
+		window._pnResetQualHistory();
+	}
+	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+		btn.setAttribute('aria-expanded', 'false');
+	});
+	ov.classList.add('pn-open');
+}
+(function() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
+	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	// Escape closes the chooser — but if the full-width history panel is open, close
+	// that first (one layer at a time).
+	document.addEventListener('keydown', function(e) {
+		if ((e.key !== 'Escape' && e.keyCode !== 27) || !ov.classList.contains('pn-open')) return;
+		var panel = document.getElementById('pn-qt-history-panel');
+		if (panel && panel.style.display !== 'none') {
+			if (typeof window._pnResetQualHistory === 'function') window._pnResetQualHistory();
+			else panel.style.display = 'none';
+			return;
+		}
+		ov.classList.remove('pn-open');
+	});
+	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
+	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	});
+})();
+</script>
+
+<div class="pn-overlay" id="pn-quiz-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title" id="pn-quiz-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
+			<button class="pn-modal-close-btn" id="pn-quiz-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body" id="pn-quiz-body">
+			<div class="pn-quiz-loading" id="pn-quiz-loading"><i class="fas fa-spinner fa-spin"></i> Loading questions&hellip;</div>
+			<div class="pn-quiz-error-msg" id="pn-quiz-error"></div>
+
+			<!-- Instructions view -->
+			<div id="pn-quiz-instructions-view" style="display:none">
+				<div class="pn-quiz-instructions">
+					<div class="pn-quiz-instructions-icon"><i class="fas fa-info-circle"></i></div>
+					<div class="pn-quiz-instructions-body" id="pn-quiz-instructions-text"></div>
+					<div class="pn-quiz-instructions-meta" id="pn-quiz-instructions-meta"></div>
+					<div class="pn-quiz-begin-row">
+						<button class="pn-btn pn-btn-primary" id="pn-quiz-begin-btn"><i class="fas fa-play-circle" style="margin-right:6px;"></i>Begin Test</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Question view -->
+			<div id="pn-quiz-question-view" style="display:none">
+				<div class="pn-quiz-progress-header">
+					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
+					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
+				</div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
+				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
+				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
+				<!-- Multi-correct affordances: hidden for single-answer questions. -->
+				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
+				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
+				</div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
+				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
+					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
+					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
+						<select id="pn-quiz-report-reason" style="padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.85rem;">
+							<option value="">— Select a reason —</option>
+							<option value="wording">Question is worded poorly</option>
+							<option value="correct">My answer was correct</option>
+							<option value="outdated">This has not been updated for recent changes</option>
+							<option value="other">Other</option>
+						</select>
+						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit" style="margin-left:6px;font-size:0.82rem;">Submit</button>
+						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel" style="margin-left:4px;font-size:0.82rem;">Cancel</button>
+						<span id="pn-quiz-report-thanks" style="display:none;font-size:0.82rem;color:#276749;margin-left:8px;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
+					</div>
+				</div>
+				<div class="pn-quiz-nav">
+					<span></span>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-next" style="display:none"><i class="fas fa-chevron-right"></i> Next</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-submit" style="display:none"><i class="fas fa-check"></i> Submit Test</button>
+				</div>
+			</div>
+
+			<!-- Result view -->
+			<div id="pn-quiz-result-view" style="display:none">
+				<div class="pn-quiz-result">
+					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
+					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
+					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
+					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
+					<div id="pn-quiz-result-expiry-wrap" style="display:none">
+						<div class="pn-quiz-result-expiry-badge" id="pn-quiz-result-expiry">
+							<i class="fas fa-calendar-check"></i>
+							<span id="pn-quiz-result-expiry-text"></span>
+						</div>
+					</div>
+				</div>
+				<div class="pn-modal-footer">
+					<button class="pn-btn pn-btn-secondary" id="pn-quiz-done">Close</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-retake" style="display:none"><i class="fas fa-redo"></i> Retake</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay        = document.getElementById('pn-quiz-overlay');
+	var closeBtn       = document.getElementById('pn-quiz-close-btn');
+	var modalTitle     = document.getElementById('pn-quiz-modal-title');
+	var loading        = document.getElementById('pn-quiz-loading');
+	var errorMsg       = document.getElementById('pn-quiz-error');
+	var questionView   = document.getElementById('pn-quiz-question-view');
+	var resultView     = document.getElementById('pn-quiz-result-view');
+	var progressTxt    = document.getElementById('pn-quiz-progress-text');
+	var progressScore  = document.getElementById('pn-quiz-progress-score');
+	var progressSegs   = document.getElementById('pn-quiz-progress-segments');
+	var qText          = document.getElementById('pn-quiz-q-text');
+	var answersList    = document.getElementById('pn-quiz-answers');
+	var multiHintEl    = document.getElementById('pn-quiz-multi-hint');
+	var multiSubmitRow = document.getElementById('pn-quiz-multi-submit-row');
+	var multiSubmitBtn = document.getElementById('pn-quiz-multi-submit-btn');
+	var feedbackEl     = document.getElementById('pn-quiz-feedback');
+	var nextBtn        = document.getElementById('pn-quiz-next');
+	var submitBtn      = document.getElementById('pn-quiz-submit');
+	var doneBtn        = document.getElementById('pn-quiz-done');
+	var retakeBtn      = document.getElementById('pn-quiz-retake');
+	var reportArea     = document.getElementById('pn-quiz-report-area');
+	var reportBtn      = document.getElementById('pn-quiz-report-btn');
+	var reportForm     = document.getElementById('pn-quiz-report-form');
+	var reportReason   = document.getElementById('pn-quiz-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
+	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
+	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
+	var resultIcon     = document.getElementById('pn-quiz-result-icon');
+	var resultHeading  = document.getElementById('pn-quiz-result-heading');
+	var resultScore    = document.getElementById('pn-quiz-result-score');
+	var resultBreakdown= document.getElementById('pn-quiz-result-breakdown');
+	var resultDetail   = document.getElementById('pn-quiz-result-detail');
+	var resultExpiryWrap = document.getElementById('pn-quiz-result-expiry-wrap');
+	var resultExpiryText = document.getElementById('pn-quiz-result-expiry-text');
+	var instrView      = document.getElementById('pn-quiz-instructions-view');
+	var instrText      = document.getElementById('pn-quiz-instructions-text');
+	var instrMeta      = document.getElementById('pn-quiz-instructions-meta');
+	var beginBtn       = document.getElementById('pn-quiz-begin-btn');
+
+	var questions      = [];
+	var answers        = {};
+	var correctCount   = 0;
+	var currentIdx     = 0;
+	var passPercent    = 70;
+	// Set of checked answer ids for the multi-select question in view (null for single).
+	var multiSelected  = null;
+	// Pending answer id for a SINGLE-select question — chosen on click but not
+	// submitted until "Submit Answer", so a fat-fingered pick can be changed.
+	var singleSelected = null;
+	// True while the player is mid-test (questions in view, not yet finished) — used
+	// to confirm before an accidental close throws away in-progress answers.
+	var quizInProgress = false;
+	var currentType    = '';
+	var currentKingdom = 0;
+	var currentLabel   = '';
+	var isChecking     = false;
+
+	function openModal(type, kingdom, label) {
+		currentType    = type;
+		currentKingdom = kingdom;
+		currentLabel   = label;
+		questions      = [];
+		answers        = {};
+		correctCount   = 0;
+		currentIdx     = 0;
+		isChecking     = false;
+		quizInProgress = false;
+
+		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
+		overlay.classList.add('pn-open');
+		showLoading(true);
+		errorMsg.style.display = 'none';
+		instrView.style.display = 'none';
+		questionView.style.display = 'none';
+		resultView.style.display = 'none';
+
+		var fd = new FormData();
+		fd.append('KingdomId', kingdom);
+		fd.append('TestType',  type);
+		fetch(PnConfig.uir + 'QualTestAjax/gettest', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				showLoading(false);
+				if (j.status !== 0) { showError(j.error || 'Unable to load test questions.'); return; }
+				questions   = j.questions;
+				passPercent = j.pass_percent;
+				buildProgressSegments();
+				if (j.instructions) {
+					showInstructions(j.instructions);
+				} else {
+					renderQuestion(0);
+				}
+			})
+			.catch(function() { showLoading(false); showError('Network error. Please try again.'); });
+	}
+
+	function showInstructions(text) {
+		instrText.innerHTML = escHtml(text);
+		instrMeta.innerHTML = '<strong>' + questions.length + '</strong> question' + (questions.length !== 1 ? 's' : '') + ' &middot; <strong>' + passPercent + '%</strong> required to pass';
+		instrView.style.display = 'block';
+	}
+
+	beginBtn.addEventListener('click', function() {
+		instrView.style.display = 'none';
+		renderQuestion(0);
+	});
+
+	function buildProgressSegments() {
+		progressSegs.innerHTML = '';
+		for (var i = 0; i < questions.length; i++) {
+			var seg = document.createElement('div');
+			seg.className = 'pn-quiz-progress-seg';
+			progressSegs.appendChild(seg);
+		}
+	}
+
+	function updateProgressSegments() {
+		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		for (var i = 0; i < segs.length; i++) {
+			segs[i].className = 'pn-quiz-progress-seg';
+			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-done');
+			}
+			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-current');
+			}
+		}
+	}
+
+	function renderQuestion(idx) {
+		var q     = questions[idx];
+		var total = questions.length;
+		currentIdx = idx;
+		quizInProgress = true; // answering questions — guard against accidental close
+
+		progressTxt.textContent = 'Question ' + (idx + 1) + ' of ' + total;
+		progressScore.textContent = correctCount + ' correct so far';
+		updateProgressSegments();
+		qText.textContent = q.QuestionText;
+
+		feedbackEl.classList.remove('pn-quiz-feedback-show', 'pn-quiz-fb-correct', 'pn-quiz-fb-wrong');
+		feedbackEl.className = 'pn-quiz-feedback';
+		nextBtn.style.display   = 'none';
+		submitBtn.style.display = 'none';
+		reportArea.style.display = 'none';
+		reportForm.style.display = 'none';
+		reportReason.value = '';
+		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
+		reportThanks.style.display = 'none';
+
+		var isMulti = (q.AnswerMode === 'multi');
+		multiHintEl.style.display    = isMulti ? '' : 'none';
+		// Both single and multi now confirm with the Submit button, so a mis-click
+		// can be corrected before it counts.
+		multiSubmitRow.style.display = '';
+		multiSubmitBtn.disabled      = true;
+		multiSelected  = isMulti ? Object.create(null) : null;
+		singleSelected = null;
+
+		answersList.innerHTML = '';
+		q.Answers.forEach(function(a) {
+			var li    = document.createElement('li');
+			li.className = 'pn-quiz-answer-item';
+			var label = document.createElement('label');
+			label.className = 'pn-quiz-answer-label';
+			label.dataset.answerId = a.QualAnswerId;
+			label.setAttribute('tabindex', '0');
+			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
+			label.setAttribute('aria-checked', 'false');
+
+			var radio = document.createElement('span');
+			radio.className = 'pn-quiz-answer-radio';
+			var inner = document.createElement('span');
+			inner.className = 'pn-quiz-answer-radio-inner';
+			radio.appendChild(inner);
+			label.appendChild(radio);
+
+			var text = document.createElement('span');
+			text.textContent = a.AnswerText;
+			label.appendChild(text);
+
+			if (isMulti) {
+				// Multi: clicking toggles selection; scoring waits for Submit Answer.
+				var toggle = function() {
+					if (isChecking) return;
+					if (multiSelected[a.QualAnswerId]) {
+						delete multiSelected[a.QualAnswerId];
+						label.classList.remove('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'false');
+					} else {
+						multiSelected[a.QualAnswerId] = true;
+						label.classList.add('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'true');
+					}
+					multiSubmitBtn.disabled = (Object.keys(multiSelected).length === 0);
+				};
+				label.addEventListener('click', toggle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+				});
+			} else {
+				// Single: clicking selects; scoring waits for Submit Answer so a
+				// mis-tap can be changed.
+				var selectSingle = function() {
+					if (isChecking) return;
+					// Radio behaviour: clear any prior pick, then select this one.
+					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
+						l.classList.remove('pn-quiz-selected');
+						l.setAttribute('aria-checked', 'false');
+					});
+					label.classList.add('pn-quiz-selected');
+					label.setAttribute('aria-checked', 'true');
+					singleSelected = a.QualAnswerId;
+					multiSubmitBtn.disabled = false;
+				};
+				label.addEventListener('click', selectSingle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+				});
+			}
+			li.appendChild(label);
+			answersList.appendChild(li);
+		});
+
+		questionView.style.display = 'block';
+	}
+
+	// `selected` is a number for single-select, or an array of ids for multi.
+	function checkAnswer(q, selected) {
+		if (isChecking) return;
+		var isMulti = Array.isArray(selected);
+		if (isMulti && selected.length === 0) return;
+		isChecking = true;
+
+		var allLabels = answersList.querySelectorAll('.pn-quiz-answer-label');
+		if (isMulti) {
+			allLabels.forEach(function(l) {
+				var picked = selected.indexOf(parseInt(l.dataset.answerId, 10)) !== -1;
+				l.classList.toggle('pn-quiz-selected', picked);
+				l.setAttribute('aria-checked', picked ? 'true' : 'false');
+			});
+			multiSubmitBtn.disabled = true;
+		} else {
+			allLabels.forEach(function(l) {
+				l.classList.remove('pn-quiz-selected');
+				l.setAttribute('aria-checked', 'false');
+			});
+			var sel0 = answersList.querySelector('[data-answer-id="' + selected + '"]');
+			if (sel0) { sel0.classList.add('pn-quiz-selected'); sel0.setAttribute('aria-checked', 'true'); }
+		}
+		allLabels.forEach(function(l) { l.classList.add('pn-quiz-disabled'); });
+
+		var fd = new FormData();
+		fd.append('KingdomId',  currentKingdom);
+		fd.append('TestType',   currentType);
+		fd.append('QuestionId', q.QualQuestionId);
+		if (isMulti) {
+			selected.forEach(function(id) { fd.append('AnswerIds[]', id); });
+		} else {
+			fd.append('AnswerId', selected);
+			fd.append('AnswerIds[]', selected); // dual-post for forward compat
+		}
+		fetch(PnConfig.uir + 'QualTestAjax/checkanswer', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j.status !== 0) {
+					allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+					showError(j.error || 'Error checking answer.');
+					isChecking = false;
+					return;
+				}
+				answers[q.QualQuestionId] = selected;
+
+				// Server returns the full correct set (correct_answer_ids); the
+				// scalar correct_answer_id stays for single back-compat.
+				var correctIds = Array.isArray(j.correct_answer_ids)
+					? j.correct_answer_ids.map(function(x) { return parseInt(x, 10); })
+					: (j.correct_answer_id ? [parseInt(j.correct_answer_id, 10)] : []);
+				var pickedIds = isMulti ? selected : [selected];
+
+				if (j.is_correct) {
+					correctCount++;
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
+					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
+				} else {
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (!l) return;
+						l.classList.remove('pn-quiz-selected');
+						// A picked id that's also correct = partially right; show green.
+						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
+						else                               l.classList.add('pn-quiz-wrong');
+					});
+					// Reveal correct answers the player missed.
+					correctIds.forEach(function(id) {
+						if (pickedIds.indexOf(id) !== -1) return;
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
+					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
+				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
+
+				isChecking = false;
+				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				progressScore.textContent = correctCount + ' correct so far';
+				updateProgressSegments();
+
+				// Answer locked in — retire the multi affordances.
+				multiSubmitRow.style.display = 'none';
+				multiHintEl.style.display    = 'none';
+
+				if (currentIdx < questions.length - 1) {
+					nextBtn.style.display = 'inline-block';
+				} else {
+					submitBtn.style.display = 'inline-block';
+				}
+			})
+			.catch(function() {
+				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+				showError('Network error. Please try again.');
+				isChecking = false;
+			});
+	}
+
+	// "Submit Answer" grades the current question — the whole selected set for
+	// multi, or the single pending pick.
+	if (multiSubmitBtn) {
+		multiSubmitBtn.addEventListener('click', function() {
+			if (multiSubmitBtn.disabled) return;
+			var q = questions[currentIdx];
+			if (q.AnswerMode === 'multi') {
+				var ids = Object.keys(multiSelected || {}).map(function(x) { return parseInt(x, 10); });
+				if (ids.length === 0) return;
+				checkAnswer(q, ids);
+			} else {
+				if (singleSelected == null) return;
+				checkAnswer(q, singleSelected);
+			}
+		});
+	}
+
+	function showLoading(show) { loading.style.display = show ? 'block' : 'none'; }
+	function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+	function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
+
+	reportBtn.addEventListener('click', function() {
+		reportForm.style.display = 'block';
+		reportBtn.style.display  = 'none';
+	});
+	reportCancel.addEventListener('click', function() {
+		reportForm.style.display = 'none';
+		reportBtn.style.display  = 'inline-block';
+	});
+	reportSubmit.addEventListener('click', function() {
+		var reason = reportReason.value;
+		if (!reason) { showError('Please select a reason.'); return; }
+		var fd = new FormData();
+		fd.append('QuestionId', reportBtn.dataset.questionId);
+		fd.append('Reason', reason);
+		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j && j.status !== 0) {
+					reportForm.style.display = 'none';
+					reportBtn.style.display  = 'inline-block';
+					showError(j.error || 'Failed to submit report.');
+					return;
+				}
+				reportForm.style.display   = 'none';
+				reportThanks.style.display = 'inline';
+			})
+			.catch(function() {
+				reportForm.style.display = 'none';
+				reportBtn.style.display = 'inline-block';
+				showError('Failed to submit report. Please try again.');
+			});
+	});
+
+	nextBtn.addEventListener('click', function() {
+		if (currentIdx < questions.length - 1) renderQuestion(currentIdx + 1);
+	});
+
+	submitBtn.addEventListener('click', function() {
+		pnConfirm({ title: 'Submit Test', message: 'Submit your test? This cannot be undone.', confirmText: 'Submit', danger: false }, function() {
+			questionView.style.display = 'none';
+			showLoading(true);
+			var fd = new FormData();
+			fd.append('KingdomId', currentKingdom);
+			fd.append('TestType',  currentType);
+			fd.append('Answers',   JSON.stringify(answers));
+			fetch(PnConfig.uir + 'QualTestAjax/submittest', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(j) {
+					showLoading(false);
+					if (j.status !== 0) { showError(j.error || 'Error submitting test.'); questionView.style.display = 'block'; return; }
+					showResult(j);
+				})
+				.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
+		});
+	});
+
+	function animateScore(target, duration) {
+		var start = null;
+		function step(ts) {
+			if (!start) start = ts;
+			var p = Math.min((ts - start) / duration, 1);
+			var eased = 1 - Math.pow(1 - p, 3);
+			resultScore.textContent = Math.round(eased * target) + '%';
+			if (p < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+
+	function fireConfetti() {
+		if (typeof window.confetti !== 'function') return;
+		var end = Date.now() + 2000;
+		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
+		(function frame() {
+			window.confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0, y: 0.7 }, colors: colors, zIndex: 2000 });
+			window.confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: colors, zIndex: 2000 });
+			if (Date.now() < end) requestAnimationFrame(frame);
+		})();
+	}
+
+	function showResult(j) {
+		quizInProgress = false; // test finished — closing is safe now
+		if (j.passed) {
+			fireConfetti();
+			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-pass';
+			resultHeading.textContent = 'Congratulations!';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-pass';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '% to pass. You scored ' + j.score_percent + '%. Well done!';
+			if (j.expires_at) {
+				var d = new Date(j.expires_at.replace(' ', 'T'));
+				resultExpiryText.textContent = 'Valid until ' + d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				resultExpiryWrap.style.display = 'block';
+			} else {
+				resultExpiryWrap.style.display = 'none';
+			}
+			retakeBtn.style.display = 'none';
+		} else {
+			resultIcon.innerHTML    = '<i class="fas fa-times-circle pn-quiz-result-fail" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-fail';
+			resultHeading.textContent = 'Not Quite';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-fail';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '%, you scored ' + j.score_percent + '%. Keep studying and try again!';
+			resultExpiryWrap.style.display = 'none';
+			retakeBtn.style.display = 'inline-block';
+		}
+		resultView.style.display = 'block';
+		resultScore.textContent = '0%';
+		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
+
+		if (j.passed) {
+			var card = document.querySelector('.pn-qt-card[data-type="' + currentType + '"]');
+			if (card) {
+				var statusEl = card.querySelector('.pn-qt-status');
+				var detailEl = card.querySelector('.pn-qt-detail');
+				if (statusEl) { statusEl.className = 'pn-qt-status pn-qt-status-pass'; statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Passed'; }
+				if (detailEl && j.expires_at) {
+					var d2 = new Date(j.expires_at.replace(' ', 'T'));
+					detailEl.textContent = 'Score: ' + j.score_percent + '% \u2014 Expires ' + d2.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				}
+				var takeBtn = card.querySelector('.pn-qt-take-btn');
+				if (takeBtn) takeBtn.innerHTML = '<i class="fas fa-play-circle"></i> Retake Test';
+			}
+			var valId = currentType === 'reeve' ? 'pn-qual-reeve-val' : 'pn-qual-corpora-val';
+			var sideVal = document.getElementById(valId);
+			if (sideVal && j.expires_at) {
+				var dSide = new Date(j.expires_at.replace(' ', 'T'));
+				var until = dSide.toISOString().slice(0,10);
+				sideVal.innerHTML = '<span class="pn-badge pn-badge-green">Until ' + until + '</span>';
+			}
+		}
+	}
+
+	// Guarded close: if a test is mid-progress, confirm (via the in-app dialog,
+	// matching Submit Test etc.) before discarding answers.
+	function requestCloseQuiz() {
+		if (!quizInProgress) {
+			overlay.classList.remove('pn-open');
+			return;
+		}
+		pnConfirm({
+			title: 'Leave the test?',
+			message: 'Your progress on this attempt will be lost and it won\'t be recorded.',
+			confirmText: 'Leave Test',
+			danger: true
+		}, function() {
+			quizInProgress = false;
+			overlay.classList.remove('pn-open');
+		});
+	}
+	closeBtn.addEventListener('click', requestCloseQuiz);
+	// The result-view "Close" is a finished test — no guard needed.
+	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
+	retakeBtn.addEventListener('click', function() {
+		resultView.style.display = 'none';
+		openModal(currentType, currentKingdom, currentLabel);
+	});
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) requestCloseQuiz(); });
+	// Escape closes the quiz too — via the same guard, so a mid-test Escape prompts
+	// before discarding progress.
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) requestCloseQuiz();
+	});
+
+	document.querySelectorAll('.pn-qt-reset-retakes-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			pnConfirm({ title: 'Reset Retake Count', message: 'Reset retake count for this player on this test?', confirmText: 'Reset', danger: true }, function() {
+				var fd = new FormData();
+				fd.append('KingdomId', btn.dataset.kingdom);
+				fd.append('PlayerId',  btn.dataset.player);
+				fd.append('TestType',  btn.dataset.type);
+				fetch(PnConfig.uir + 'QualTestAjax/resetplayerretakes', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status === 0) {
+							// Swap warning back to take button if present
+							var card = btn.closest('.pn-qt-card');
+							var warn = card && card.querySelector('.pn-qt-retake-warning');
+							if (warn) warn.style.display = 'none';
+							btn.textContent = '\u2713 Done';
+							setTimeout(function() { location.reload(); }, 1200);
+						} else { showError(j.error || 'Error resetting retakes.'); }
+					});
+			});
+		});
+	});
+
+	document.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			openModal(btn.dataset.type, btn.dataset.kingdom, btn.dataset.label);
+		});
+	});
+
+	// Past-attempts history: lazy-load the player's attempt list + per-attempt
+	// answer review. Reuses the shared attempts/attemptdetail endpoints, which
+	// authorize owner-or-manager; the button only renders for those viewers.
+	(function() {
+		function esc(s) {
+			return String(s == null ? '' : s)
+				.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+				.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+		}
+		function renderReview(attempt) {
+			if (!attempt || !attempt.Questions || !attempt.Questions.length) {
+				return '<div class="pn-qt-hist-empty">No answer detail was recorded for this attempt.</div>';
+			}
+			var html = '';
+			attempt.Questions.forEach(function(q, i) {
+				var archived = (q.Archived ? ' <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Archived</span>' : '') + (q.NotInLiveSet ? ' <span style="font-size:0.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:0 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Not in current test</span>' : '');
+				html += '<div class="pn-qt-rev-q ' + (q.Correct ? 'ok' : 'bad') + '">';
+				html += '<div class="pn-qt-rev-qh">' + (q.Correct ? '✓' : '✗') + ' ' + (i + 1) + '. ' + esc(q.QuestionText) + archived + '</div>';
+				(q.Options || []).forEach(function(o) {
+					var cls = o.IsCorrect ? 'correct' : (o.WasSelected ? 'wrong' : '');
+					var tag = o.WasSelected ? ' <em>(your pick)</em>' : (o.IsCorrect ? ' <em>(correct)</em>' : '');
+					html += '<div class="pn-qt-rev-opt ' + cls + '">' + esc(o.AnswerText) + tag + '</div>';
+				});
+				html += '</div>';
+			});
+			return html;
+		}
+		function post(endpoint, params, cb) {
+			var fd = new FormData();
+			Object.keys(params).forEach(function(k) { fd.append(k, params[k]); });
+			fetch(PnConfig.uir + endpoint, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); }).then(cb).catch(function() { cb(null); });
+		}
+		// Shared full-width panel below the cards — one at a time, uses the whole modal.
+		var panel      = document.getElementById('pn-qt-history-panel');
+		var panelBody  = document.getElementById('pn-qt-history-panel-body');
+		var panelTitle = document.getElementById('pn-qt-history-panel-title');
+		var panelClose = document.getElementById('pn-qt-history-panel-close');
+		var activeBtn  = null;
+
+		function closePanel() {
+			if (panel) panel.style.display = 'none';
+			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+			activeBtn = null;
+		}
+		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
+		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
+		if (panelClose) panelClose.addEventListener('click', closePanel);
+
+		// Per-attempt review expansion (delegated within the shared panel body).
+		if (panelBody) panelBody.addEventListener('click', function(e) {
+			var t = e.target && e.target.closest ? e.target.closest('.pn-qt-hist-toggle') : null;
+			if (!t) return;
+			var detail = t.nextElementSibling;
+			if (detail.style.display !== 'none') { detail.style.display = 'none'; return; }
+			detail.style.display = 'block';
+			if (detail.dataset.loaded) return;
+			detail.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+			post('QualTestAjax/attemptdetail', { AttemptId: t.dataset.attemptId }, function(j) {
+				detail.dataset.loaded = '1';
+				detail.innerHTML = renderReview(j && j.status === 0 ? j.attempt : null);
+			});
+		});
+
+		document.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!panel) return;
+				// Same button already open → toggle closed.
+				if (activeBtn === btn && panel.style.display !== 'none') { closePanel(); return; }
+				if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+				activeBtn = btn;
+				btn.setAttribute('aria-expanded', 'true');
+				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
+				panel.style.display = 'block';
+				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				post('QualTestAjax/attempts', {
+					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
+				}, function(j) {
+					if (activeBtn !== btn) return; // switched away before this load returned
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					panelBody.innerHTML = '';
+					j.attempts.forEach(function(a) {
+						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
+						var row = document.createElement('div');
+						row.className = 'pn-qt-hist-row ' + (a.Passed ? 'pass' : 'fail');
+						row.innerHTML =
+							'<button type="button" class="pn-qt-hist-toggle" data-attempt-id="' + a.QualAttemptId + '">' +
+								'<span class="pn-qt-hist-badge">' + (a.Passed ? '✓ Passed' : '✗ Not passed') + '</span>' +
+								'<span class="pn-qt-hist-score">' + a.ScorePercent + '%</span>' +
+								'<span class="pn-qt-hist-when">' + esc(when) + (a.RulesVersion ? ' · ' + esc(a.RulesVersion) : '') + '</span>' +
+							'</button>' +
+							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
+						panelBody.appendChild(row);
+					});
+				});
+			});
+		});
+	})();
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($canManageAwards): ?>
 <!-- Revoke Award Modal -->
@@ -5915,6 +6912,9 @@ pnRenderSparkline();
 <?php endif; ?>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script>
 $(function() {
 	// Voting eligibility badge — loaded async so it doesn't block page render
@@ -5995,6 +6995,8 @@ $(function() {
 				});
 
 				var newMilestones = [];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var maxClassCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				Object.keys(classData).forEach(function(cid) {
 					var cd = classData[cid];
 					if (!cd.history.length) return;
@@ -6002,7 +7004,7 @@ $(function() {
 					var cum = cd.reconciled;
 					for (var i = 0; i < cd.history.length; i++) {
 						cum += cd.history[i].credits;
-						if (cum >= 53) {
+						if (maxClassCredits !== null && cum >= maxClassCredits) {
 							newMilestones.push({ date: cd.history[i].date, name: cd.name });
 							break;
 						}
@@ -6105,16 +7107,12 @@ $(function() {
 				if (!att.length) {
 					body.innerHTML = '<div class="pn-empty">No attendance records</div>';
 				} else {
-					var html = '<div class="pn-pagesize-bar"><label for="pn-attendance-pagesize">Show</label>'
-						+ '<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize(\'pn-attendance-table\', this.value)">'
-						+ '<option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>'
-						+ '</select><span>per page</span></div>'
-						+ '<table class="pn-table pn-sortable" id="pn-attendance-table"><thead><tr>'
+					var html = '<table class="pn-table display" id="pn-attendance-table"><thead><tr>'
 						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
 						+ '<th data-sorttype="text">By</th>'
-						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
+						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
 						var pid = parseInt(d.ParkId) || 0;
@@ -6167,8 +7165,7 @@ $(function() {
 						html += '</tr>';
 					});
 					body.innerHTML = html + '</tbody></table>';
-					pnSortDesc($('#pn-attendance-table'), 0, 'date');
-					pnPaginate($('#pn-attendance-table'), 1);
+					pnInitDataTable('#pn-attendance-table', { order: [[0, 'desc']], filename: 'Attendance' });
 				}
 			}
 
@@ -6195,13 +7192,18 @@ $(function() {
 				});
 				if (!maClasses.length) { cpBody.innerHTML = ''; return; }
 				var maHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab(\'classes\');return false;">All &rarr;</a></div><div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>';
-				var thresholds = [0,5,12,21,34,53];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var thresholds = [0].concat(levelThresholds);
+				var maxCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				maClasses.forEach(function(mc) {
 					var total = parseInt(mc.Credits||0) + parseInt(mc.Reconciled||0);
-					var lvl = total>=53?6:total>=34?5:total>=21?4:total>=12?3:total>=5?2:1;
-					var pct = total>=53?100:Math.round((total/thresholds[lvl])*100);
-					var isMax = total >= 53;
-					var next = thresholds[lvl] || 53;
+					var lvl = 1;
+					for (var ti = levelThresholds.length - 1; ti >= 0; ti--) {
+						if (total >= levelThresholds[ti]) { lvl = ti + 2; break; }
+					}
+					var isMax = maxCredits !== null && total >= maxCredits;
+					var pct = isMax ? 100 : Math.round((total / (thresholds[lvl] || 1)) * 100);
+					var next = thresholds[lvl] || maxCredits;
 					var parId = classToParagon[parseInt(mc.ClassId)] || 0;
 					var hasPar = parId > 0 && !!heldAwardIds[parId];
 					maHtml += '<div class="pna-class-row">'
@@ -6302,8 +7304,8 @@ $(function() {
 			if (_inone) _inone.style.display = notes.length > 0 ? 'none' : '';
 			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
-			var html = '<table class="pn-table" id="pn-history-table"><thead><tr><th>Note</th><th>Description</th><th>Date</th>'
-				+ (PnConfig.canEditAdmin ? '<th style="width:60px"></th>' : '') + '</tr></thead><tbody>';
+			var html = '<table class="pn-table display" id="pn-history-table"><thead><tr><th data-sorttype="text">Note</th><th data-sorttype="text">Description</th><th data-sorttype="date">Date</th>'
+				+ (PnConfig.canEditAdmin ? '<th class="pn-nosort" style="width:60px"></th>' : '') + '</tr></thead><tbody>';
 			notes.forEach(function(n) {
 				var nid = parseInt(n.NoteId) || 0;
 				var dt = esc(n.Date || '');
@@ -6311,7 +7313,7 @@ $(function() {
 				html += '<tr data-notes-id="' + nid + '">'
 					+ '<td>' + esc(n.Note) + '</td>'
 					+ '<td>' + esc(n.Description) + '</td>'
-					+ '<td class="pn-col-nowrap">' + dt + dc + '</td>';
+					+ '<td class="pn-col-nowrap" data-order="' + esc(n.Date || '') + '">' + dt + dc + '</td>';
 				if (PnConfig.canEditAdmin) {
 					html += '<td class="pn-award-actions-cell">'
 						+ '<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"'
@@ -6327,6 +7329,7 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
+			pnInitDataTable('#pn-history-table', { order: [[2, 'desc']], filename: 'Notes' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load notes.</div>'; });
 	}
 
@@ -6357,8 +7360,8 @@ $(function() {
 					+ '</span>';
 			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
-				+ '<th>Award</th><th>Rank</th><th>Date</th><th>Sent By</th><th>Reason</th>'
-				+ (hasActions ? '<th style="white-space:nowrap;width:1%">Actions</th>' : '')
+				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
+				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
 				+ '</tr></thead><tbody>';
 			recList.forEach(function(rec) {
 				var kaid  = parseInt(rec.KingdomAwardId) || 0;
@@ -6424,19 +7427,13 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
-			if ($.fn.DataTable) {
-				$('#pn-rec-table').DataTable({
-					order: [[2, 'desc']],
-					columnDefs: [{ targets: [2], type: 'date' }].concat(hasActions ? [{ targets: [-1], orderable: false, searchable: false }] : []),
-					pageLength: 25,
-					scrollX: true
-				});
-			}
+			pnInitDataTable('#pn-rec-table', { order: [[2, 'desc']], filename: 'Recommendations' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
 	}
 
 	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
 	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
+	window.pnReloadNotes = function() { pnNotesLoaded = false; pnLoadNotes(); };
 
 	// Hook tab clicks to trigger lazy loading
 	$(document).on('click', '.pn-tab-nav li', function() {

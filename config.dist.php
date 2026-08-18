@@ -89,7 +89,10 @@ define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');
 
 // DB
 define('DB_DRIVER', 'mysql');
+// DB_HOSTNAME must be a bare hostname — declare a non-default port via DB_PORT,
+// never as a ';port=NNNN' suffix on the hostname (legacy format; see YapoMysql).
 define('DB_HOSTNAME', 'mysql.amtgard.com');
+define('DB_PORT', 3306);
 define('DB_USERNAME', 'DB_USERNAME');
 define('DB_PASSWORD', 'DB_PASSWORD');
 define('DB_DATABASE', 'DB_DATABASE');

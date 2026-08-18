@@ -329,6 +329,38 @@ class Heraldry extends Ork3
         }
     }
 
+    public function RemoveEventHeraldry($request)
+    {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int)($request['EventId'] ?? 0);
+        if ($mundane_id <= 0) {
+            return BadToken();
+        }
+        if (!valid_id($eventId)) {
+            return InvalidParameter();
+        }
+
+        $planning = new EventPlanning();
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $eventId, AUTH_EDIT)
+                && !$planning->CanManageEventDetail($mundane_id, $eventId, 0, 'manage')) {
+            return NoAuthorization();
+        }
+
+        $this->event->clear();
+        $this->event->event_id = $eventId;
+        if (!$this->event->find()) {
+            return InvalidParameter();
+        }
+
+        $base = DIR_EVENT_HERALDRY . sprintf('%05d', $eventId);
+        Common::unlink_image_set($base);
+        $this->event->has_heraldry = 0;
+        $this->event->save();
+        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+
+        return Success();
+    }
+
     public function SetEventHeraldry($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -341,6 +373,7 @@ class Heraldry extends Ork3
                     return InvalidParameter('Image is too large even after resizing; please upload a smaller image.');
                 }
                 $this->event->save();
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter();

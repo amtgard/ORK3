@@ -55,6 +55,23 @@ class Model_Kingdom extends Model
         return false;
     }
 
+    public function get_officers_bundle($kingdom_id, $token)
+    {
+        $_officers = $this->get_officers($kingdom_id, $token);
+
+        return array('Officers' => is_array($_officers) ? $_officers : array());
+    }
+
+    public function get_parks($kingdom_id)
+    {
+        return $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+    }
+
+    public function stats_includes_principalities($kingdom_id)
+    {
+        return $this->_kingdom()->StatsIncludesPrincipalities($kingdom_id);
+    }
+
     public function set_officers($token, $kingdom_id, $request)
     {
         $r = array();
@@ -99,6 +116,34 @@ class Model_Kingdom extends Model
     {
         $r = $this->Kingdom->SetKingdomAwards($request);
         return $r;
+    }
+
+    public function list_kingdoms()
+    {
+        $r = $this->Kingdom->GetKingdoms(array());
+        if (($r['Status']['Status'] ?? 1) == 0) {
+            return $r['Kingdoms'] ?? array();
+        }
+        return array();
+    }
+
+    public function get_family_parks($kingdom_id)
+    {
+        $kingdom = $this->_kingdom();
+
+        return $kingdom->GetParks(array(
+            'KingdomIds' => $kingdom->GetFamilyKingdomIds($kingdom_id),
+        ));
+    }
+
+    public function get_kingdom_park_titles($kingdom_id)
+    {
+        return $this->_kingdom()->GetKingdomParkTitles(array('KingdomId' => $kingdom_id));
+    }
+
+    public function get_kingdoms_response()
+    {
+        return $this->_kingdom()->GetKingdoms(array());
     }
 
     public function get_kingdom_name($kingdom_id)
@@ -150,6 +195,11 @@ class Model_Kingdom extends Model
     public function remove_kingdom_heraldry($request)
     {
         return $this->Heraldry->RemoveKingdomHeraldry($request);
+    }
+
+    private function _kingdom(): Kingdom
+    {
+        return new Kingdom();
     }
 
 }
