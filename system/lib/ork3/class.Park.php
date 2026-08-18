@@ -832,8 +832,9 @@ class Park extends Ork3
             // Auths for a pricipality's officers travel with the mundane record, so we have to handle that @ the SetOfficer level
             $c->create_officers($request[ 'KingdomId' ], $new_park_id, 0);
             $c->create_events($request[ 'KingdomId' ], $new_park_id);
+            $heraldry_result = null;
             if (strlen($request[ 'Heraldry' ])) {
-                Ork3::$Lib->heraldry->SetParkHeraldry($request);
+                $heraldry_result = Ork3::$Lib->heraldry->SetParkHeraldry($request);
             }
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Park', $new_park_id, null, [
                 'park_id'      => $new_park_id,
@@ -844,6 +845,13 @@ class Park extends Ork3
             ]);
             Ork3::$Lib->report->bustKingdomParkAverageCaches((int) $request['KingdomId']);
             $response = Success($new_park_id);
+            // A too-large heraldry upload is non-fatal here: the park and every
+            // other field saved. SetParkHeraldry returns a non-Success Status only
+            // when it rejects the image, so surface that as a warning on the
+            // otherwise-successful result instead of silently discarding it.
+            if (is_array($heraldry_result) && ! empty($heraldry_result[ 'Status' ])) {
+                $response[ 'Warning' ] = 'Heraldry was not saved: ' . ($heraldry_result[ 'Detail' ] ?: 'image too large.');
+            }
         } else {
             $response = NoAuthorization();
         }

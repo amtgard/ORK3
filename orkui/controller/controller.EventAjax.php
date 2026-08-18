@@ -649,9 +649,12 @@ class Controller_EventAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
                 exit;
             }
-            // A7: server-side file size check (max 1 MB).
-            if (($_FILES['Heraldry']['size'] ?? 0) > 1024 * 1024) {
-                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+            // A7: server-side transport backstop against the raw upload size.
+            // The raw file is smaller than its base64 length, so this is a
+            // generous gate above the transport limit; store_heraldry's ~6 MB
+            // post-encode master check is the authoritative ceiling.
+            if (($_FILES['Heraldry']['size'] ?? 0) > IMAGE_UPLOAD_MAX_BYTES) {
+                echo json_encode(['status' => 1, 'error' => 'File too large.']);
                 exit;
             }
             $tmp  = $_FILES['Heraldry']['tmp_name'];

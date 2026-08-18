@@ -156,14 +156,14 @@ class Model_Kingdom extends Model
     {
         return array(
             'Info' => $this->Kingdom->GetKingdomShortInfo(array('KingdomId' => $kingdom_id)),
-            'HeraldryUrl' => $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ))
+            'HeraldryUrl' => $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id, 'Size' => 'thumb' ))
         );
     }
 
     public function get_kingdom_details($kingdom_id)
     {
         $r = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));
-        $r['Heraldry'] = $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ));
+        $r['Heraldry'] = $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id, 'Size' => 'display' ));
         return $r;
     }
 

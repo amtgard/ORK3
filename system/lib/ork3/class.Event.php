@@ -712,7 +712,7 @@ class Event extends Ork3
             $response['MundaneId'] = $this->event->mundane_id;
             $response['Name'] = $this->event->name;
             $response['HasHeraldry'] = $this->event->has_heraldry;
-            $response['HeraldryUrl'] = $this->event->has_heraldry ? Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Event','Id' => $request['EventId'])) : Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Event','Id' => 0));
+            $response['HeraldryUrl'] = $this->event->has_heraldry ? Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Event','Id' => $request['EventId'],'Size' => 'display')) : Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Event','Id' => 0,'Size' => 'display'));
             // Banner image fields — read via raw SQL to sidestep any stale Yapo
             // schema cache (these columns were added late in the event-planning
             // expansion).

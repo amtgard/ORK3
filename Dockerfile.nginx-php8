@@ -12,6 +12,8 @@ RUN echo "pm.status_path = /fpm-status" >> /etc/php/8.1/fpm/pool.d/www.conf
 RUN sed -i 's/^pm\s*=.*/pm = static/'                             /etc/php/8.1/fpm/pool.d/www.conf
 RUN sed -i 's/^pm\.max_children\s*=.*/pm.max_children = 20/'     /etc/php/8.1/fpm/pool.d/www.conf
 RUN sed -i 's/memory_limit = 128M/memory_limit = 512M/g' /etc/php/8.1/fpm/php.ini
+RUN sed -i 's/upload_max_filesize\s*=\s*2M/upload_max_filesize = 8M/g' /etc/php/8.1/fpm/php.ini
+RUN sed -i 's/post_max_size\s*=\s*8M/post_max_size = 8M/g' /etc/php/8.1/fpm/php.ini
 RUN sed -i 's/;max_input_vars = 1000/max_input_vars = 2000/g' /etc/php/8.1/fpm/php.ini
 RUN sed -i 's/-m 64/-m 1024/g' /etc/memcached.conf
 

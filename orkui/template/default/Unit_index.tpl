@@ -15,7 +15,19 @@ $page_title = $_name;
 $_desc     = $_unit['Description'] ?? '';
 $_history  = $_unit['History'] ?? '';
 $_url      = $_unit['Url'] ?? '';
-$_hero_src = !empty($_unit['HasHeraldry']) ? ($Unit_heraldryurl['Url'] ?? '') : (HTTP_UNIT_HERALDRY . '00000.jpg');
+// Hero heraldry uses the larger 'display' (1024) rendition. Hand-rolled here so
+// the display size is requested regardless of the controller-supplied master URL
+// in $Unit_heraldryurl; resolve_media_ext falls back to the master for images not
+// yet backfilled. Mirrors the banner resolution below.
+if (!empty($_unit['HasHeraldry'])) {
+	$_heraldryFile = Common::resolve_media_ext(DIR_UNIT_HERALDRY, sprintf('%05d', $_unit_id), 'display');
+	$_heraldryFs   = DIR_UNIT_HERALDRY . $_heraldryFile;
+	$_hero_src     = file_exists($_heraldryFs)
+		? (HTTP_UNIT_HERALDRY . $_heraldryFile . '?v=' . filemtime($_heraldryFs))
+		: ($Unit_heraldryurl['Url'] ?? '');
+} else {
+	$_hero_src = HTTP_UNIT_HERALDRY . '00000.jpg';
+}
 
 $_total    = count($_members);
 $_cutoff   = date('Y-m-d', strtotime('-1 year'));

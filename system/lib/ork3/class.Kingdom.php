@@ -406,7 +406,7 @@ class Kingdom extends Ork3
             Ork3::$Lib->treasury->create_accounts($mundane_id, 'kingdom', $this->kingdom->kingdom_id, $this->kingdom->kingdom_id);
 
             $request['KingdomId'] = $this->kingdom->kingdom_id;
-            Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
+            $heraldry_result = Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Kingdom', (int)$this->kingdom->kingdom_id, null, [
                 'kingdom_id'        => (int)$this->kingdom->kingdom_id,
                 'name'              => $request['Name'],
@@ -414,6 +414,13 @@ class Kingdom extends Ork3
                 'parent_kingdom_id' => (int)$request['ParentKingdomId'],
             ]);
             $response = Success($this->kingdom->kingdom_id);
+            // A too-large heraldry upload is non-fatal here: the kingdom and every
+            // other field saved. SetKingdomHeraldry returns a non-Success Status
+            // only when it rejects the image, so surface that as a warning on the
+            // otherwise-successful result instead of silently discarding it.
+            if (is_array($heraldry_result) && !empty($heraldry_result['Status'])) {
+                $response['Warning'] = 'Heraldry was not saved: ' . ($heraldry_result['Detail'] ?: 'image too large.');
+            }
             $this->_flushPrincipalityCaches();
         } else {
             $response = NoAuthorization();
@@ -576,7 +583,7 @@ class Kingdom extends Ork3
                 $this->kingdom->modified = date("Y-m-d H:i:s", time());
                 $this->kingdom->save();
 
-                Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
+                $heraldry_result = Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
 
                 $c = new Common();
                 if (is_array($request['KingdomConfiguration'])) {
@@ -599,6 +606,12 @@ class Kingdom extends Ork3
                     }
                 }
                 $response = Success();
+                // Heraldry rejection (too large) is non-fatal: the kingdom edits
+                // all saved. Surface it as a warning rather than discarding the
+                // signal and reporting an unqualified success.
+                if (is_array($heraldry_result) && !empty($heraldry_result['Status'])) {
+                    $response['Warning'] = 'Heraldry was not saved: ' . ($heraldry_result['Detail'] ?: 'image too large.');
+                }
             } else {
                 $response = InvalidParameter(null, 'Problem processing request');
             }

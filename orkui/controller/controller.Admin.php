@@ -921,7 +921,7 @@ class Controller_Admin extends Controller
                         }
                         if ($this->request->Update == 'Update Media') {
                             if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
-                                if ((int) $_FILES['Heraldry']['size'] / 1.333 > 465000) {
+                                if ((int) $_FILES['Heraldry']['size'] > IMAGE_UPLOAD_MAX_BYTES) {
                                     $this->data['Error'] = 'Image Error: File size is too large.';
                                     $r['Status'] = null;
                                 } else {
@@ -929,7 +929,7 @@ class Controller_Admin extends Controller
                                         if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
                                             $h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
                                             $h_imdata = base64_encode($h_im);
-                                            $this->Player->SetHeraldry(array(
+                                            $r = $this->Player->SetHeraldry(array(
                                                 'MundaneId' => $id,
                                                 'Heraldry' => strlen($h_imdata) > 0 ? $h_imdata : null,
                                                 'HeraldryMimeType' => strlen($h_imdata) > 0 ? $_FILES['Heraldry']['type'] : '',
@@ -956,14 +956,14 @@ class Controller_Admin extends Controller
                                 }
                             }
                             if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
-                                if ((int) $_FILES['PlayerImage']['size'] * 1.333 > 465000) {
+                                if ((int) $_FILES['PlayerImage']['size'] > IMAGE_UPLOAD_MAX_BYTES) {
                                     $this->data['Error'] = 'Image Error: File size is too large.';
                                     $r['Status'] = null;
                                 } else {
                                     if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
                                         $pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
                                         $pi_imdata = base64_encode($pi_im);
-                                        $this->Player->SetImage(array(
+                                        $r = $this->Player->SetImage(array(
                                             'MundaneId' => $id,
                                             'HasImage' => strlen($pi_imdata),
                                             'Image' => strlen($pi_imdata) > 0 ? $pi_imdata : null,
@@ -1438,6 +1438,9 @@ class Controller_Admin extends Controller
                     ));
                 if ($r['Status'] == 0) {
                     $this->data['Message'] = "Player created. <a href='".UIR."Player/profile/$r[Detail]'>View your spawn here.</a>";
+                    if (!empty($r['Value'])) {
+                        $this->data['Message'] .= "<br>" . htmlspecialchars($r['Value']);
+                    }
                     $this->request->clear('Admin_createplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
@@ -1661,6 +1664,9 @@ class Controller_Admin extends Controller
                     }
                 }
                 if ($r['Status'] == 0) {
+                    if (!empty($r['Warning'])) {
+                        $this->data['Message'] = $r['Warning'];
+                    }
                     $this->request->clear('Admin_editkingdom');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login/login/Admin/editkingdom/' . $id);
@@ -1719,6 +1725,9 @@ class Controller_Admin extends Controller
                         'ParkTitleId' => $this->request->Admin_createpark->ParkTitleId
                     ));
                 if ($r['Status'] == 0) {
+                    if (!empty($r['Warning'])) {
+                        $this->data['Message'] = $r['Warning'];
+                    }
                     $this->request->clear('Admin_createpark');
                     //header( 'Location: '.UIR.'Park/profile/'.$r['Detail'] );
                 } elseif ($r['Status'] == 5) {

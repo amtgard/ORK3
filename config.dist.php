@@ -60,6 +60,19 @@ define('DIR_UNIT_BANNER', DIR_HERALDRY . "unit-banner/");
 define('DIR_UNIT_HERALDRY', DIR_HERALDRY . "unit/");
 define('DIR_CACHE', DIR_BASENAME . 'cache/');
 
+// Image upload input gate — max length (in bytes) of the base64-encoded image
+// payload accepted before GD ever decodes it. Sized against the ~8 MB transport
+// limit: a ~6 MB image base64-encodes to ~8 MB (4/3 expansion), which passes,
+// while tens-of-MB payloads are rejected up front. Replaces the old scattered
+// 465000 / 1365334 magic caps (call sites migrated separately).
+define('IMAGE_UPLOAD_MAX_BYTES', 8_400_000);
+
+// Authoritative master-image ceiling: max size (in bytes) of a processed master
+// AFTER downscale to <=3000px and GD re-encode. Uploads whose master would exceed
+// this are rejected with a message rather than silently shrunk further. This is
+// the real gate; IMAGE_UPLOAD_MAX_BYTES above is only a cheap pre-decode guard.
+define('IMAGE_MASTER_MAX_BYTES', 6_000_000);
+
 // System
 define('DIR_LIB', DIR_SYSTEM . 'lib/');
 define('DIR_ORK3', DIR_LIB . 'ork3/');

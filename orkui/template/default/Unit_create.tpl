@@ -19,7 +19,12 @@ html[data-theme="dark"] .info-container > div[style*="background:#ebf8ff"] { bac
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Unit['Details']['Unit']['HasHeraldry']?$Unit_heraldryurl['Url']:(HTTP_UNIT_HERALDRY.'00000.jpg') ?>' />
+<?php
+				// Small creation preview uses the 256px 'thumb' rendition (master fallback for un-backfilled images).
+				$_ucHerFile = Common::resolve_media_ext(DIR_UNIT_HERALDRY, sprintf('%05d', $Unit['Details']['Unit']['UnitId'] ?? 0), 'thumb');
+				$_ucHerSrc  = !empty($Unit['Details']['Unit']['HasHeraldry']) ? (HTTP_UNIT_HERALDRY . $_ucHerFile) : (HTTP_UNIT_HERALDRY . '00000.jpg');
+?>
+				<img class='heraldry-img' src='<?=$_ucHerSrc ?>' />
 				<input type='file' name='Heraldry' class='restricted-image-type' id='Heraldry' />
 			</span>
 		</div>

@@ -33,7 +33,7 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 		'city'     => $city,
 		'province' => $province,
 		'heraldry' => $details['HasHeraldry']
-			? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $details['ParkId']))
+			? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf('%05d', $details['ParkId']), 'thumb')
 			: '',
 		'dir'      => $dirText,
 		'desc'     => $descText,
