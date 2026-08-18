@@ -9,12 +9,15 @@
     --rp-accent-dark : #1e1b4b;   /* indigo-950 — header bg      */
     --rp-accent      : #4338ca;   /* indigo-700 — numbers/links  */
     --rp-accent-mid  : #6366f1;   /* indigo-500 — hover tint     */
-    --rp-border      : #e2e8f0;
-    --rp-bg-light    : #f7fafc;
-    --rp-text        : #2d3748;
-    --rp-text-body   : #4a5568;
-    --rp-text-muted  : #718096;
-    --rp-text-hint   : #a0aec0;
+    --rp-border        : #e2e8f0;   /* hairline — card + table rules   */
+    --rp-border-mid    : #cbd5e0;   /* resting border on controls      */
+    --rp-border-strong : #a0aec0;   /* hover border on controls        */
+    --rp-bg-light      : #f7fafc;
+    --rp-bg-tertiary   : #e2e8f0;   /* filled chip/badge surface       */
+    --rp-text          : #2d3748;
+    --rp-text-body     : #4a5568;
+    --rp-text-muted    : #718096;
+    --rp-text-hint     : #a0aec0;
 }
 
 
@@ -184,8 +187,8 @@
     width          : 15px;
     height         : 15px;
     border-radius  : 50%;
-    background     : #e2e8f0;
-    color          : #718096;
+    background     : var(--rp-bg-tertiary);
+    color          : var(--rp-text-muted);
     font-size      : 9px;
     font-weight    : 700;
     cursor         : default;
@@ -257,7 +260,7 @@
     padding: 4px 14px;
     font-size: 12px;
     font-weight: 600;
-    border: 1px solid #cbd5e0;
+    border: 1px solid var(--rp-border-mid);
     border-radius: 20px;
     background: #fff;
     color: #4a5568;
@@ -265,7 +268,7 @@
     white-space: nowrap;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.rp-view-btn:hover { border-color: #a0aec0; background: #f7fafc; }
+.rp-view-btn:hover { border-color: var(--rp-border-strong); background: var(--rp-bg-light); }
 .rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }
 .rp-view-btn-active:hover { background: #3730a3; border-color: #3730a3; }
 
@@ -371,7 +374,7 @@
 
 .rp-filter-pill {
     padding       : 4px 11px;
-    border        : 1px solid #cbd5e0;
+    border        : 1px solid var(--rp-border-mid);
     border-radius : 20px;
     background    : #fff;
     font-size     : 11px;
@@ -390,7 +393,7 @@
 
 .rp-filter-pill:hover:not(.active) {
     background  : var(--rp-bg-light);
-    border-color: #a0aec0;
+    border-color: var(--rp-border-strong);
     color       : var(--rp-text-body);
 }
 
@@ -711,7 +714,10 @@ html[data-theme="dark"] .rp-root {
   --rp-accent      : #818cf8;
   --rp-accent-mid  : #a5b4fc;
   --rp-border      : #4a5568;
+  --rp-border-mid  : #4a5568;
+  --rp-border-strong: #718096;
   --rp-bg-light    : #2d3748;
+  --rp-bg-tertiary : #374151;
   --rp-text        : #e2e8f0;
   --rp-text-body   : #cbd5e0;
   --rp-text-muted  : #a0aec0;

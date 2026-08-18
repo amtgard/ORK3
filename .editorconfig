@@ -1,6 +1,7 @@
 # EditorConfig — https://editorconfig.org
 # Declares the repo's indentation style so editors stop emitting hard tabs.
 # Enforced on commit for PHP (php-cs-fixer) and CSS/JS (bin/normalize-leading-tabs.sh).
+# .tpl is an editor hint only — nothing rewrites templates at commit time (see below).
 root = true
 
 [*]
@@ -11,9 +12,18 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-# Source we actively normalize. 4-space matches PSR-12 (PHP) and the existing
-# revised.css / revised.js indentation.
-[*.{php,css,js,tpl}]
+# Source we actively normalize at commit time. 4-space matches PSR-12 (PHP) and
+# the existing revised.css / revised.js indentation.
+[*.{php,css,js}]
+indent_style = space
+indent_size = 4
+
+# Templates: same style for new work, but NOT rewritten by the pre-commit hook.
+# Converting leading tabs in a .tpl would edit string CONTENT, not just layout —
+# templates embed multi-line JS template literals (e.g. Live_index.tpl,
+# Admin_player.tpl) whose continuation lines begin with a tab that is part of the
+# emitted markup. Left to the author; many .tpl files are still tab-indented.
+[*.tpl]
 indent_style = space
 indent_size = 4
 

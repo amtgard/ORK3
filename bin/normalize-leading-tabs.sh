@@ -2,8 +2,17 @@
 #
 # Normalize LEADING tab indentation to spaces (4 spaces per tab level) in the
 # given files, in place. Only *leading* tabs are converted — tabs that appear
-# after any non-tab character (e.g. inside a JS template literal or a CSS
-# string) are left untouched, so this is safe to run on .css / .js / .tpl.
+# after any non-tab character (e.g. mid-line inside a string) are left untouched.
+#
+# SCOPE: .css and .js only. That is what the pre-commit hook passes, and the
+# limit is deliberate. "Leading" is a line-position test, not a syntactic one:
+# a continuation line inside a multi-line string that happens to start with a
+# tab IS rewritten, because this script cannot tell indentation from content.
+# For .css/.js in this repo that is safe (no multi-line template literal or
+# data: URI carries a tab-led line). It is NOT safe in general for .tpl, where
+# templates embed JS template literals whose tab-led lines are emitted markup —
+# see Live_index.tpl and Admin_player.tpl. Do not widen the hook's pathspec to
+# .tpl without re-checking that.
 #
 # Idempotent: running it twice produces no further changes. Trailing newline
 # is preserved.
