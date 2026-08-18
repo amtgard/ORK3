@@ -1000,7 +1000,17 @@ class Controller_Reports extends Controller
         $this->data['OfficerDirectory']    = $result['Rows'];
         $this->data['OfficerDirectoryMode'] = $result['Mode'];
         $this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
-        $this->data['OfficerDirectoryPrincipalities'] = $result['Principalities'] ?? [];
+        $principalities = $result['Principalities'] ?? [];
+        // Each entry is ONE principality (its own KingdomId) rendered in its own
+        // section; label it with that org's singular org-unit term.
+        if (is_array($principalities) && count($principalities)) {
+            $this->load_model('Kingdom');
+            foreach ($principalities as &$_pr) {
+                $_pr['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label((int)$_pr['KingdomId'], false);
+            }
+            unset($_pr);
+        }
+        $this->data['OfficerDirectoryPrincipalities'] = $principalities;
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->data['IsOrkAdmin'] = $uid && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
     }

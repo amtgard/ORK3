@@ -680,6 +680,17 @@ class Controller_Admin extends Controller
         if ($this->request->exists('Admin_manageevent')) {
             $this->data['Admin_manageevent'] = $this->request->Admin_manageevent->Request;
         }
+        // Org-unit terminology for the event admin copy (e.g. "Grand Duchy" event).
+        $eventKingdomId = (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id))
+            ? (int)$this->session->kingdom_id
+            : (int)($this->request->Admin_manageevent->KingdomId ?? 0);
+        if (valid_id($eventKingdomId)) {
+            $this->load_model('Kingdom');
+            $kdetails = $this->Kingdom->get_kingdom_details($eventKingdomId);
+            $this->data['IsPrinz'] = $kdetails['KingdomInfo']['IsPrincipality'] ?? false;
+            $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($eventKingdomId, false);
+            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($eventKingdomId, true);
+        }
     }
 
     public function createevent($post = null)
@@ -1675,6 +1686,9 @@ class Controller_Admin extends Controller
         $kingdom_info = $this->Kingdom->get_kingdom_details($id);
         $this->data['Kingdom_data'] = $kingdom_info['KingdomInfo'];
         $this->data['IsPrinz'] = $kingdom_info['KingdomInfo']['IsPrincipality'];
+        $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
+        $this->data['OrgUnitTerms'] = $this->Kingdom->org_unit_terms();
         $this->data['Kingdom_config'] = $kingdom_info['KingdomConfiguration'];
         $this->data['Kingdom_parktitles'] = $kingdom_info['ParkTitles'];
         $this->data['Kingdom_awards'] = $kingdom_info['Awards']['Awards'];
@@ -1755,6 +1769,8 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
         $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
+        $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
@@ -1985,6 +2001,8 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
             $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
+            $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
             $r = $this->Kingdom->get_park_summary($id);
             $this->data['park_summary'] = $r;
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

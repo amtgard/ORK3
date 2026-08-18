@@ -9583,7 +9583,7 @@ html[data-theme="dark"] .pn-notes-infobox-icon { color: #63b3ed; }
 }
 #kn-prinz-tile-sections::before,
 #kn-prinz-tables::before {
-	content: 'Principalities';
+	content: var(--prinz-group-label, 'Principalities');
 	display: block;
 	margin-bottom: 14px;
 	font-size: 11px;

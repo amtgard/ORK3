@@ -72,6 +72,27 @@ class Model_Kingdom extends Model
         return $this->_kingdom()->StatsIncludesPrincipalities($kingdom_id);
     }
 
+    // Per-org organizational-unit terminology ("Principality" vs "Grand Duchy").
+    // Routed through the APIModel instance (not _kingdom()) so the domain class's
+    // per-request memo caches survive across calls within a request.
+    public function get_org_unit_label($kingdom_id, $plural = false)
+    {
+        return $this->Kingdom->GetOrgUnitLabel($kingdom_id, $plural);
+    }
+
+    // Combined label for a PARENT kingdom, derived from its child principalities'
+    // terms (e.g. "Principalities / Grand Duchies").
+    public function get_child_org_unit_label($kingdom_id, $plural = true)
+    {
+        return $this->Kingdom->GetChildOrgUnitLabel($kingdom_id, $plural);
+    }
+
+    // Term registry for the admin dropdown JS.
+    public function org_unit_terms()
+    {
+        return Kingdom::ORG_UNIT_TERMS;
+    }
+
     public function set_officers($token, $kingdom_id, $request)
     {
         $r = array();

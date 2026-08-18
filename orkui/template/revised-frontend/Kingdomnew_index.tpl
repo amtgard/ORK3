@@ -23,7 +23,7 @@
 	$heraldryUrl = $hasHeraldry
 		? $kingdom_info['HeraldryUrl']['Url']
 		: HTTP_KINGDOM_HERALDRY . '0000.jpg';
-	$entityLabel = $IsPrinz ? 'Principality' : 'Kingdom';
+	$entityLabel = $IsPrinz ? ($OrgUnitLabel ?? 'Principality') : 'Kingdom';
 
 	$_knInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
 	$hasBanner       = !empty($_knInfo['HasBanner']);
@@ -82,6 +82,7 @@
 	foreach ($prinzMapParks as $prinz) {
 		$prName = (string)($prinz['Name'] ?? '');
 		$prId   = (int)($prinz['KingdomId'] ?? 0);
+		$prTerm = (string)($prinz['prTerm'] ?? 'Principality');
 		foreach ((array)($prinz['parks'] ?? []) as $p) {
 			$loc = @json_decode(stripslashes((string)$p['Location']));
 			if (!$loc) continue;
@@ -100,6 +101,7 @@
 				'prinz'    => true,
 				'prName'   => $prName,
 				'prId'     => $prId,
+				'prTerm'   => $prTerm,
 			];
 		}
 	}
@@ -483,7 +485,7 @@
 				<?php if (count($prinzParks) > 0): ?>
 
 					<!-- Principality tile sections (tile view) -->
-					<div id="kn-prinz-tile-sections">
+					<div id="kn-prinz-tile-sections" style="--prinz-group-label:'<?= htmlspecialchars($ChildOrgUnitLabelPlural ?? 'Principalities', ENT_QUOTES) ?>'">
 						<?php foreach ($prinzParks as $prinz): ?>
 							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
@@ -526,7 +528,7 @@
 					</div>
 
 					<!-- Principality tables (list view) -->
-					<div id="kn-prinz-tables" style="display:none">
+					<div id="kn-prinz-tables" style="--prinz-group-label:'<?= htmlspecialchars($ChildOrgUnitLabelPlural ?? 'Principalities', ENT_QUOTES) ?>';display:none">
 						<?php foreach ($prinzParks as $prinz): ?>
 							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
@@ -1031,6 +1033,8 @@ var KnConfig = {
 	isOrkAdmin:      <?= !empty($IsOrkAdmin) ? 'true' : 'false' ?>,
 	adminInfo:       <?= json_encode($AdminInfo       ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	orgUnitTerms:    <?= json_encode($OrgUnitTerms ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	childOrgTermPlural: <?= json_encode($ChildOrgUnitLabelPlural ?? 'Principalities', JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	systemAwards:    <?= json_encode($SystemAwards    ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1610,13 +1614,13 @@ var KnBannerConfig = {
 		<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
 		<div class="kn-admin-panel" id="kn-admin-panel-prinz">
 			<button class="kn-admin-panel-hdr" id="kn-admin-hdr-prinz" aria-expanded="false">
-				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i>Principality Status</span>
+				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i><?= htmlspecialchars($OrgUnitLabel ?? "Principality") ?> Status</span>
 				<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-prinz"></i>
 			</button>
 			<div class="kn-admin-panel-body" id="kn-admin-body-prinz" style="display:none">
 				<div id="kn-admin-prinz-feedback" class="kn-admin-feedback" style="display:none"></div>
 				<p style="margin:0 0 12px;font-size:13px;color:#4a5568">
-					This is a <strong>Principality</strong> sponsored by
+					This is a <strong><?= htmlspecialchars($OrgUnitLabel ?? "Principality") ?></strong> sponsored by
 					<strong><?= htmlspecialchars($AdminInfo['ParentKingdomName']) ?></strong>.
 				</p>
 				<div class="kn-admin-field cp-field-ac" id="kn-admin-prinz-sponsor-row">
@@ -1949,7 +1953,7 @@ var KnBannerConfig = {
 					<div class="kn-admin-ops-row">
 						<div class="kn-admin-ops-info">
 							<strong>Reset Waivers</strong>
-							<p>Clears all waiver records for this <?= $IsPrinz ? 'principality' : 'kingdom' ?>. This action cannot be undone.</p>
+							<p>Clears all waiver records for this <?= $IsPrinz ? strtolower($OrgUnitLabel ?? 'Principality') : 'kingdom' ?>. This action cannot be undone.</p>
 						</div>
 						<button class="kn-admin-ops-btn kn-admin-ops-btn-danger" id="kn-admin-reset-waivers-btn">
 							<i class="fas fa-eraser"></i> Reset Waivers
@@ -1960,7 +1964,7 @@ var KnBannerConfig = {
 					<div class="kn-admin-ops-row">
 						<div class="kn-admin-ops-info">
 							<strong>Active Status</strong>
-							<p>This <?= $IsPrinz ? 'principality' : 'kingdom' ?> is currently <strong id="kn-admin-status-label"><?= $isActive ? 'Active' : 'Inactive' ?></strong>.</p>
+							<p>This <?= $IsPrinz ? strtolower($OrgUnitLabel ?? 'Principality') : 'kingdom' ?> is currently <strong id="kn-admin-status-label"><?= $isActive ? 'Active' : 'Inactive' ?></strong>.</p>
 						</div>
 						<button class="kn-admin-ops-btn<?= $isActive ? ' kn-admin-ops-btn-danger' : '' ?>"
 							id="kn-admin-status-toggle" data-active="<?= $isActive ? '1' : '0' ?>">

@@ -2470,7 +2470,7 @@ function knRenderMapSidebar(loc) {
     var heroHtml = heraldryHtml
         + '<a href="' + profileUrl + '" class="kn-park-hero-name" style="text-decoration:none">' + escHtml(loc.name) + '</a>'
         + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '')
-        + (loc.prinz && loc.prName ? '<div class="kn-park-hero-location"><i class="fas fa-crown" style="font-size:10px"></i>Principality: ' + escHtml(loc.prName) + '</div>' : '');
+        + (loc.prinz && loc.prName ? '<div class="kn-park-hero-location"><i class="fas fa-crown" style="font-size:10px"></i>' + escHtml((loc.prTerm) || 'Principality') + ': ' + escHtml(loc.prName) + '</div>' : '');
 
     var bodyHtml = '';
     if (loc.dir) {
@@ -2542,7 +2542,7 @@ window.knInitMap = async function() {
         if (knHasPrinz) {
             legendHtml += '<span style="display:inline-flex;align-items:center;gap:6px">'
                 + '<span style="width:12px;height:12px;border-radius:2px;background:#2C5F8B;border:1px solid #B8860B;display:inline-block"></span>'
-                + 'Principality</span>';
+                + escHtml((KnConfig.childOrgTermPlural) || 'Principalities') + '</span>';
         }
         legendEl.innerHTML = legendHtml;
         legendCard.appendChild(legendEl);
@@ -4938,9 +4938,11 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
+            var childTermPlural = (KnConfig.childOrgTermPlural) || 'Principalities';
             var keyLabels = {
                 'AwardRecsPublic': 'Award Recommendations Visibility',
-                'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'IncludePrincipalityInStatistics': 'Include ' + childTermPlural + ' in Statistics',
+                'OrgUnitTerm': 'Display Organizational Unit As…',
                 'QualTestReeveEnabled': "Reeve's Test",
                 'QualTestCorporaEnabled': 'Corpora Test'
             };
@@ -4950,7 +4952,8 @@ $(document).ready(function() {
                 'AttendanceDailyMinimum':  'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
-                'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
+                'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from ' + childTermPlural + ' such as attendance and player counts.',
+                'OrgUnitTerm': 'Choose how this organizational unit is labeled throughout the ORK — e.g. “Principality” or “Grand Duchy”.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -5017,6 +5020,18 @@ $(document).ready(function() {
                     // wireConfig collector + setconfig POST persist it unchanged.
                     Object.defineProperty(inp, 'value', {
                         get: function() { return this.checked ? '1' : '0'; }
+                    });
+                } else if (cfg.Key === 'OrgUnitTerm') {
+                    inp = document.createElement('select');
+                    inp.className = 'kn-admin-config-input kn-admin-tselect';
+                    // Native <select>.value is read directly by wireConfig — no defineProperty needed.
+                    var terms = (KnConfig.orgUnitTerms) || {};
+                    Object.keys(terms).forEach(function(termKey) {
+                        var o = document.createElement('option');
+                        o.value = termKey;
+                        o.textContent = terms[termKey].singular;
+                        if (String(val) === termKey) o.selected = true;
+                        inp.appendChild(o);
                     });
                 } else if (cfg.Key === 'QualTestReeveEnabled' || cfg.Key === 'QualTestCorporaEnabled') {
                     // Yes/No toggle button

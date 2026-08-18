@@ -216,6 +216,14 @@ class Controller_Kingdom extends Controller
         $this->data['ParentKingdomId']   = $parentKingdomId;
         $this->data['ParentKingdomName'] = $parentKingdomId > 0 ? $this->Kingdom->get_kingdom_name($parentKingdomId) : '';
 
+        // Per-org organizational-unit terminology (e.g. "Principality" vs "Grand Duchy").
+        $this->data['OrgUnitLabel']            = $this->Kingdom->get_org_unit_label($kingdom_id, false);
+        $this->data['OrgUnitLabelPlural']      = $this->Kingdom->get_org_unit_label($kingdom_id, true);
+        // Distinct child terms (for the Parks-tab grouping of THIS kingdom's child principalities).
+        $this->data['ChildOrgUnitLabelPlural'] = $this->Kingdom->get_child_org_unit_label($kingdom_id, true);
+        // Term map for the admin dropdown JS.
+        $this->data['OrgUnitTerms']            = $this->Kingdom->org_unit_terms();
+
         $this->data['AwardOptions']        = $this->Award->fetch_award_option_list($kingdom_id, 'Awards');
         $this->data['OfficerOptions']      = $this->Award->fetch_award_option_list($kingdom_id, 'Officers');
         $this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
@@ -275,6 +283,7 @@ class Controller_Kingdom extends Controller
                     $this->data['prinz_map_parks'][] = [
                         'KingdomId' => $prId,
                         'Name'      => $prName,
+                        'prTerm'    => $this->Kingdom->get_org_unit_label($prId, false),
                         'parks'     => $prMapParks,
                     ];
                 }
@@ -435,6 +444,10 @@ class Controller_Kingdom extends Controller
                 }
                 // Only surface the principality-stats toggle for kingdoms that have principalities.
                 if (($cfg['Key'] ?? '') === 'IncludePrincipalityInStatistics' && !$hasChildPrinz) {
+                    continue;
+                }
+                // Only surface the org-unit terminology config when the viewed org IS a principality.
+                if (($cfg['Key'] ?? '') === 'OrgUnitTerm' && empty($this->data['IsPrinz'])) {
                     continue;
                 }
                 $adminConfig[] = $cfg;

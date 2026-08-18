@@ -2,12 +2,21 @@
 
 class Kingdom extends Ork3
 {
+    // Per-principality "organizational unit" terminology. The key is the stored
+    // config value (OrgUnitTerm); each entry supplies the human-readable singular
+    // and plural labels. Defaults to 'principality'.
+    public const ORG_UNIT_TERMS = [
+        'principality' => ['singular' => 'Principality', 'plural' => 'Principalities'],
+        'grand_duchy'  => ['singular' => 'Grand Duchy',  'plural' => 'Grand Duchies'],
+    ];
+
     // Per-request memo caches for the principality-rollup helpers. These are read
     // dozens of times per kingdom-scoped report page; the Kingdom lib is a single
     // instance per request (see startup.php), so caching here is safe and avoids
     // redundant DB hits — most notably for ordinary kingdoms that have no children.
     private $childPrincipalityCache = array();
     private $statsIncludesPrincipalityCache = array();
+    private $orgUnitTermCache = array();
 
     public function __construct()
     {
@@ -394,6 +403,15 @@ class Kingdom extends Ork3
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestReeveEnabled', '0');
             $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'QualTestCorporaEnabled', '0');
+            // allowed_values left null on purpose: update_config()'s array-validation
+            // path is buggy for scalar 'fixed' configs (it foreach()es the scalar value).
+            // The stats toggle uses the same null pattern; the dropdown sources its
+            // options from ORG_UNIT_TERMS and GetOrgUnitTermKey() guards invalid reads.
+            // Only principalities (parent_kingdom_id > 0) carry this config — mirrors the
+            // migration, which backfills principalities only.
+            if ((int)$this->kingdom->parent_kingdom_id > 0) {
+                $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'OrgUnitTerm', 'principality', 1, null);
+            }
 
             $c->create_officers($this->kingdom->kingdom_id, 0);
 
@@ -429,6 +447,11 @@ class Kingdom extends Ork3
     // is acceptable.
     private function _flushPrincipalityCaches()
     {
+        // Reset every per-request memo together so this "flush" seam stays honest —
+        // a future read-after-mutate in the same request must not see stale structure.
+        $this->childPrincipalityCache = array();
+        $this->statsIncludesPrincipalityCache = array();
+        $this->orgUnitTermCache = array();
         if (isset(Ork3::$Lib->ghettocache) && isset(Ork3::$Lib->ghettocache->memcache)) {
             Ork3::$Lib->ghettocache->memcache->flush();
         }
@@ -580,7 +603,30 @@ class Kingdom extends Ork3
 
                 $c = new Common();
                 if (is_array($request['KingdomConfiguration'])) {
+                    // Web callers post 'Key' => null and dispatch purely on ConfigurationId
+                    // (controller.Admin.php 'config', KingdomAjax 'setconfig'), so the real
+                    // key has to be recovered from the stored rows before we can do any
+                    // key-specific normalization below.
+                    $keyById = array();
+                    foreach (Common::get_configs($this->kingdom->kingdom_id, CFG_KINGDOM) as $ek => $ev) {
+                        $keyById[(int)$ev['ConfigurationId']] = $ek;
+                    }
                     foreach ($request['KingdomConfiguration'] as $k => $config) {
+                        $cfgKey = strlen((string)($config['Key'] ?? '')) > 0
+                            ? $config['Key']
+                            : ($keyById[(int)($config['ConfigurationId'] ?? 0)] ?? '');
+                        // OrgUnitTerm is stored with allowed_values = null on purpose (the
+                        // array-validation path in update_config() is buggy for scalar
+                        // 'fixed' configs), so nothing validates the posted value there.
+                        // Coerce it on the way in to the same fallback the read path uses,
+                        // otherwise an unrecognized key is saved and then silently ignored
+                        // by GetOrgUnitTermKey() forever. The is_string() guard matters: the
+                        // kingdom config form can post array values (Config[<id>][<sub>]),
+                        // and isset($arr[$arrayKey]) is a TypeError, not false.
+                        if ($cfgKey === 'OrgUnitTerm'
+                                && (!is_string($config['Value'] ?? null) || !isset(self::ORG_UNIT_TERMS[$config['Value']]))) {
+                            $config['Value'] = 'principality';
+                        }
                         switch ($config['Action']) {
                             case CFG_REMOVE:
                                 $c->remove_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key']);
@@ -658,6 +704,19 @@ class Kingdom extends Ork3
             $this->kingdom->parent_kingdom_id = $parent_id;
             $this->kingdom->modified = date('Y-m-d H:i:s', time());
             $this->kingdom->save();
+            // A kingdom can become a principality long after it was created (CreateKingdom
+            // only provisions this row when the kingdom is born with a parent), and the
+            // admin control for the term is config-driven — it only renders when the row
+            // already exists. Provision it here so newly designated principalities can
+            // actually use the setting. Guarded because add_config() is a blind insert and
+            // re-parenting would otherwise duplicate the row.
+            if ($parent_id > 0) {
+                $configs = Common::get_configs($kingdom_id, CFG_KINGDOM);
+                if (!isset($configs['OrgUnitTerm'])) {
+                    $c = new Common();
+                    $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $kingdom_id, 'OrgUnitTerm', 'principality', 1, null);
+                }
+            }
             $this->_flushPrincipalityCaches();
             return Success();
         }
@@ -722,6 +781,81 @@ class Kingdom extends Ork3
             return array_merge(array($kingdomId), $children);
         }
         return array($kingdomId);
+    }
+
+    /**
+     * Stored OrgUnitTerm config key for $kingdomId, or 'principality' if absent/invalid.
+     * The value is only honored when it is a recognized key in ORG_UNIT_TERMS.
+     *
+     * @param int $kingdomId
+     * @return string one of array_keys(self::ORG_UNIT_TERMS)
+     */
+    public function GetOrgUnitTermKey($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        if (isset($this->orgUnitTermCache[$kingdomId])) {
+            return $this->orgUnitTermCache[$kingdomId];
+        }
+        $configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+        if (isset($configs['OrgUnitTerm']['Value'])) {
+            $key = $configs['OrgUnitTerm']['Value'];
+            if (isset(self::ORG_UNIT_TERMS[$key])) {
+                return $this->orgUnitTermCache[$kingdomId] = $key;
+            }
+        }
+        return $this->orgUnitTermCache[$kingdomId] = 'principality';
+    }
+
+    /**
+     * Human-readable org-unit label for a single (principality) kingdom row.
+     *
+     * @param int  $kingdomId
+     * @param bool $plural     true → plural form, false → singular (default)
+     * @return string e.g. 'Grand Duchy' / 'Grand Duchies'
+     */
+    public function GetOrgUnitLabel($kingdomId, $plural = false)
+    {
+        $key = $this->GetOrgUnitTermKey($kingdomId);
+        $form = $plural ? 'plural' : 'singular';
+        if (isset(self::ORG_UNIT_TERMS[$key][$form])) {
+            return self::ORG_UNIT_TERMS[$key][$form];
+        }
+        return self::ORG_UNIT_TERMS['principality'][$form];
+    }
+
+    /**
+     * Combined org-unit label for a PARENT kingdom, derived from the terms used by
+     * its active child principalities. Distinct terms are emitted in the canonical
+     * ORG_UNIT_TERMS order and joined with ' / ' (e.g. "Principalities / Grand
+     * Duchies"). Falls back to the default 'principality' label when there are no
+     * children.
+     *
+     * @param int  $parentKingdomId
+     * @param bool $plural           true → plural form (default), false → singular
+     * @return string
+     */
+    public function GetChildOrgUnitLabel($parentKingdomId, $plural = true)
+    {
+        $parentKingdomId = (int)$parentKingdomId;
+        $form = $plural ? 'plural' : 'singular';
+        $children = $this->GetChildPrincipalityIds($parentKingdomId);
+        if (count($children) === 0) {
+            return self::ORG_UNIT_TERMS['principality'][$form];
+        }
+        $present = array();
+        foreach ($children as $childId) {
+            $present[$this->GetOrgUnitTermKey($childId)] = true;
+        }
+        $labels = array();
+        foreach (array_keys(self::ORG_UNIT_TERMS) as $key) {
+            if (isset($present[$key])) {
+                $labels[] = self::ORG_UNIT_TERMS[$key][$form];
+            }
+        }
+        if (count($labels) === 0) {
+            return self::ORG_UNIT_TERMS['principality'][$form];
+        }
+        return implode(' / ', $labels);
     }
 
     public function GetOfficers($request)
