@@ -1688,6 +1688,7 @@ class Controller_Admin extends Controller
         $this->data['IsPrinz'] = $kingdom_info['KingdomInfo']['IsPrincipality'];
         $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
         $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
+        $this->data['OrgUnitTerms'] = $this->Kingdom->org_unit_terms();
         $this->data['Kingdom_config'] = $kingdom_info['KingdomConfiguration'];
         $this->data['Kingdom_parktitles'] = $kingdom_info['ParkTitles'];
         $this->data['Kingdom_awards'] = $kingdom_info['Awards']['Awards'];

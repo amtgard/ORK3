@@ -603,7 +603,30 @@ class Kingdom extends Ork3
 
                 $c = new Common();
                 if (is_array($request['KingdomConfiguration'])) {
+                    // Web callers post 'Key' => null and dispatch purely on ConfigurationId
+                    // (controller.Admin.php 'config', KingdomAjax 'setconfig'), so the real
+                    // key has to be recovered from the stored rows before we can do any
+                    // key-specific normalization below.
+                    $keyById = array();
+                    foreach (Common::get_configs($this->kingdom->kingdom_id, CFG_KINGDOM) as $ek => $ev) {
+                        $keyById[(int)$ev['ConfigurationId']] = $ek;
+                    }
                     foreach ($request['KingdomConfiguration'] as $k => $config) {
+                        $cfgKey = strlen((string)($config['Key'] ?? '')) > 0
+                            ? $config['Key']
+                            : ($keyById[(int)($config['ConfigurationId'] ?? 0)] ?? '');
+                        // OrgUnitTerm is stored with allowed_values = null on purpose (the
+                        // array-validation path in update_config() is buggy for scalar
+                        // 'fixed' configs), so nothing validates the posted value there.
+                        // Coerce it on the way in to the same fallback the read path uses,
+                        // otherwise an unrecognized key is saved and then silently ignored
+                        // by GetOrgUnitTermKey() forever. The is_string() guard matters: the
+                        // kingdom config form can post array values (Config[<id>][<sub>]),
+                        // and isset($arr[$arrayKey]) is a TypeError, not false.
+                        if ($cfgKey === 'OrgUnitTerm'
+                                && (!is_string($config['Value'] ?? null) || !isset(self::ORG_UNIT_TERMS[$config['Value']]))) {
+                            $config['Value'] = 'principality';
+                        }
                         switch ($config['Action']) {
                             case CFG_REMOVE:
                                 $c->remove_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key']);
@@ -681,6 +704,19 @@ class Kingdom extends Ork3
             $this->kingdom->parent_kingdom_id = $parent_id;
             $this->kingdom->modified = date('Y-m-d H:i:s', time());
             $this->kingdom->save();
+            // A kingdom can become a principality long after it was created (CreateKingdom
+            // only provisions this row when the kingdom is born with a parent), and the
+            // admin control for the term is config-driven — it only renders when the row
+            // already exists. Provision it here so newly designated principalities can
+            // actually use the setting. Guarded because add_config() is a blind insert and
+            // re-parenting would otherwise duplicate the row.
+            if ($parent_id > 0) {
+                $configs = Common::get_configs($kingdom_id, CFG_KINGDOM);
+                if (!isset($configs['OrgUnitTerm'])) {
+                    $c = new Common();
+                    $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $kingdom_id, 'OrgUnitTerm', 'principality', 1, null);
+                }
+            }
             $this->_flushPrincipalityCaches();
             return Success();
         }
