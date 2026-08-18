@@ -2,13 +2,17 @@
 #
 # ORK3 shared pre-commit hook (versioned; activated via core.hooksPath=.githooks).
 #
-# Does two things:
+# Does three things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
-#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar,
+#   2. Blocks commits that break the ORK3 layer separation (no $DB / Ork3::$Lib / domain
+#      instantiation in orkui/) via bin/check-layering.sh. This one CAN stop a commit —
+#      override a deliberate exception with ORK3_ALLOW_LAYER_VIOLATION=1 git commit …
+#   3. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar,
 #      then re-stages them. Only files that are FULLY staged are touched — a file with both
 #      staged and unstaged changes is skipped, so unstaged hunks are never swept into the commit.
 #
-# It never blocks a commit because of the formatter (missing php / fixer errors only warn).
+# It never blocks a commit because of the formatter (missing php / fixer errors only warn) —
+# the layering gate is the one check that does block.
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT" || exit 0
@@ -28,7 +32,30 @@ if git diff --cached --name-only | grep -q "$AUTH_FILE"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
+# 2. Architectural layering gate — BLOCKS the commit.
+#    Runs before the formatter so a rejected commit leaves your files untouched.
+# ---------------------------------------------------------------------------
+if [ -x bin/check-layering.sh ]; then
+    if ! bin/check-layering.sh --staged; then
+        if [ "${ORK3_ALLOW_LAYER_VIOLATION:-}" = "1" ]; then
+            echo ""
+            echo "⚠️  ORK3_ALLOW_LAYER_VIOLATION=1 — committing despite the layering violations above."
+        else
+            echo ""
+            echo "❌ Commit blocked: staged changes break the ORK3 layer separation."
+            echo "   Domain logic and SQL live in system/lib/ork3/; orkui/ reaches it only"
+            echo "   through orkui/model/ wrappers. Fix the sites above, or if this is a"
+            echo "   deliberate exception:"
+            echo ""
+            echo "       ORK3_ALLOW_LAYER_VIOLATION=1 git commit …"
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
 PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
 CONFIG=".php-cs-fixer.dist.php"
