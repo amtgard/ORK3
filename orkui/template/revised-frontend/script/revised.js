@@ -8315,7 +8315,6 @@ $(document).ready(function() {
     // ---- Staff Modal ----
     if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
-        var evStaffAcTimer = null;
         // 0 = adding a new staffer. Nonzero = editing an existing row —
         // evSubmitStaff() reads this to decide whether to REPLACE the row
         // in the table or APPEND. The upsert endpoint handles both cases,
@@ -8339,7 +8338,6 @@ $(document).ready(function() {
             if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
             if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
             gid('ev-staff-error').style.display = 'none';
-            gid('ev-staff-ac').classList.remove('kn-ac-open');
             // Title + submit-button copy switch on mode.
             var titleEl = modal.querySelector('.ev-modal-header h3');
             if (titleEl) titleEl.innerHTML = '<i class="fas fa-id-badge" style="margin-right:8px"></i>' + (editing ? 'Edit Staff Member' : 'Add Staff Member');
@@ -8390,126 +8388,25 @@ $(document).ready(function() {
             }
         });
 
-        // Player autocomplete in staff modal
-        var staffAcEl  = gid('ev-staff-ac');
+        // Player search in the staff modal — shared OrkPlayerSearch component.
+        // Ring centre is this event's park/kingdom, matching the attendance field
+        // above: park members rank first, then kingdom, then everyone else. No hard
+        // scope, so an out-of-kingdom staffer is still reachable (as before).
         var staffNameEl = gid('ev-staff-player-name');
         var staffIdEl   = gid('ev-staff-player-id');
-        var OPEN_CLASS  = 'kn-ac-open';
-        var ITEM_SEL    = '.kn-ac-item[data-id]';
 
         function escHtmlSt(s) {
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
-        function evStaffPositionAc() {
-            if (!staffNameEl || !staffAcEl) return;
-            tnPositionAcFixed(staffNameEl, staffAcEl);
-        }
-
-        function evStaffRenderAc(results) {
-            if (!staffAcEl) return;
-            if (!results || !results.length) {
-                staffAcEl.classList.remove(OPEN_CLASS);
-                return;
-            }
-            staffAcEl.innerHTML = results.map(function(pl) {
-                var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
-                return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">'
-                    + escHtmlSt(pl.Persona) + abbr + '</div>';
-            }).join('');
-            evStaffPositionAc();
-            staffAcEl.classList.add(OPEN_CLASS);
-        }
-
-        if (staffNameEl && staffAcEl) {
-            // Override CSS positioning so the dropdown escapes the modal's overflow-y:auto
-            staffAcEl.style.position = 'fixed';
-            staffAcEl.style.zIndex   = '9999';
-            staffAcEl.style.width    = '300px';
-            // Apply kn-ac-results styling class
-            staffAcEl.className = 'kn-ac-results';
-            staffAcEl.style.display = ''; // clear inline display:none so CSS class controls visibility
-
-            staffNameEl.addEventListener('input', function() {
-                var term = this.value.trim();
-                staffIdEl.value = '';
-                if (term.length < 2) { staffAcEl.classList.remove(OPEN_CLASS); return; }
-                clearTimeout(evStaffAcTimer);
-                evStaffAcTimer = setTimeout(function() {
-                    var kid = EvConfig.kingdomId || 0;
-                    if (!kid) {
-                        // No kingdom on this event — search all players via SearchService
-                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
-                            .then(function(r) { return r.json(); })
-                            .then(function(d) {
-                                var res = (d || []).map(function(pl) {
-                                    return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' };
-                                });
-                                evStaffRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
-                                var ph = staffAcEl.querySelector('[data-id="-1"]');
-                                if (ph) ph.removeAttribute('data-id');
-                            });
-                        return;
-                    }
-                    // Kingdom-scoped first
-                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
-                        .then(function(r) { return r.json(); })
-                        .then(function(own) {
-                            own = own || [];
-                            if (own.length >= 5) {
-                                evStaffRenderAc(own);
-                            } else {
-                                // Fewer than 5 kingdom results — also fetch outside kingdom and append
-                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
-                                    .then(function(r2) { return r2.json(); })
-                                    .then(function(other) {
-                                        // Dedup by MundaneId. With an abbreviation
-                                        // prefix like "nb:ff alt", the backend
-                                        // ignores scope entirely so both fetches
-                                        // return the same rows — same player would
-                                        // otherwise render twice in the dropdown.
-                                        var seen = {};
-                                        own.forEach(function(pl) { seen[pl.MundaneId] = true; });
-                                        other = (other || []).filter(function(pl) { return !seen[pl.MundaneId]; }).slice(0, 10 - own.length);
-                                        var combined = own.concat(other);
-                                        evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
-                                        // Remove no-results placeholder from being selectable
-                                        if (!combined.length) staffAcEl.querySelector('[data-id="0"]') && (staffAcEl.querySelector('[data-id="0"]').removeAttribute('data-id'));
-                                    });
-                            }
-                        });
-                }, 220);
+        if (staffNameEl && staffIdEl) {
+            OrkPlayerSearch.attach(staffNameEl, {
+                parkId:    parseInt(EvConfig.parkId, 10)    || 0,
+                kingdomId: parseInt(EvConfig.kingdomId, 10) || 0,
+                uir:       EvConfig.uir,
+                onSelect: function(player) { staffIdEl.value = player.MundaneId; },
+                onClear:  function() { staffIdEl.value = ''; }
             });
-
-            staffAcEl.addEventListener('click', function(e) {
-                var item = e.target.closest(ITEM_SEL);
-                if (!item) return;
-                staffNameEl.value = decodeURIComponent(item.dataset.name);
-                staffIdEl.value   = item.dataset.id;
-                staffAcEl.classList.remove(OPEN_CLASS);
-            });
-
-            staffNameEl.addEventListener('blur', function() {
-                setTimeout(function() {
-                    // Keep the dropdown open when focus moves INTO it — otherwise
-                    // arrow-key navigation (which focuses the first item) fires
-                    // this blur handler and hides the list mid-navigation.
-                    if (staffAcEl.contains(document.activeElement)) return;
-                    staffAcEl.classList.remove(OPEN_CLASS);
-                }, 160);
-            });
-
-            // Close only once focus leaves the whole widget (item→elsewhere),
-            // not on item→item/input transitions during arrow-key nav.
-            staffAcEl.addEventListener('focusout', function() {
-                setTimeout(function() {
-                    var a = document.activeElement;
-                    if (a === staffNameEl || staffAcEl.contains(a)) return;
-                    staffAcEl.classList.remove(OPEN_CLASS);
-                }, 160);
-            });
-
-            acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
         }
 
         window.evSubmitStaff = function() {
@@ -8678,7 +8575,6 @@ $(document).ready(function() {
 
         // --- Schedule leads state & helpers ---
         var evSchedLeads = [];
-        var evSchedLeadAcTimer = null;
 
         function evSchedLeadsCell(leads) {
             if (!leads || !leads.length) return '';
@@ -8753,99 +8649,27 @@ $(document).ready(function() {
             }
         };
 
-        // Lead player autocomplete
-        var leadAcEl    = gid('ev-sched-lead-ac');
+        // Lead player search — shared OrkPlayerSearch component, same ring centre as
+        // the staff field. Already-chosen leads are excluded from results so the same
+        // player can't be added twice.
         var leadInputEl = gid('ev-sched-lead-input');
-        if (leadInputEl && leadAcEl) {
-            leadAcEl.style.position = 'fixed';
-            leadAcEl.style.zIndex   = '9999';
-            leadAcEl.style.display  = '';
-            leadAcEl.className      = 'kn-ac-results';
-
-            function evLeadPositionAc() {
-                tnPositionAcFixed(leadInputEl, leadAcEl);
-            }
-
-            function evLeadRenderAc(results) {
-                if (!results || !results.length) { leadAcEl.classList.remove(OPEN_CLASS); return; }
-                leadAcEl.innerHTML = results.map(function(pl) {
-                    var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
-                    return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">' + escHtmlSt(pl.Persona) + abbr + '</div>';
-                }).join('');
-                evLeadPositionAc();
-                leadAcEl.classList.add(OPEN_CLASS);
-            }
-
-            leadInputEl.addEventListener('input', function() {
-                var term = this.value.trim();
-                if (term.length < 2) { leadAcEl.classList.remove(OPEN_CLASS); return; }
-                clearTimeout(evSchedLeadAcTimer);
-                evSchedLeadAcTimer = setTimeout(function() {
-                    var kid = EvConfig.kingdomId || 0;
-                    if (!kid) {
-                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
-                            .then(function(r) { return r.json(); })
-                            .then(function(d) {
-                                var res = (d || []).map(function(pl) { return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' }; });
-                                evLeadRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
-                                var ph = leadAcEl.querySelector('[data-id="-1"]');
-                                if (ph) ph.removeAttribute('data-id');
-                            });
-                        return;
-                    }
-                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
-                        .then(function(r) { return r.json(); })
-                        .then(function(own) {
-                            own = own || [];
-                            if (own.length >= 5) {
-                                evLeadRenderAc(own);
-                            } else {
-                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
-                                    .then(function(r2) { return r2.json(); })
-                                    .then(function(other) {
-                                        other = (other || []).slice(0, 10 - own.length);
-                                        var combined = own.concat(other);
-                                        evLeadRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found' }]);
-                                        if (!combined.length && leadAcEl.querySelector('[data-id="0"]')) leadAcEl.querySelector('[data-id="0"]').removeAttribute('data-id');
-                                    });
-                            }
-                        });
-                }, 220);
+        if (leadInputEl) {
+            OrkPlayerSearch.attach(leadInputEl, {
+                parkId:    parseInt(EvConfig.parkId, 10)    || 0,
+                kingdomId: parseInt(EvConfig.kingdomId, 10) || 0,
+                uir:       EvConfig.uir,
+                excludeIds: function() {
+                    return evSchedLeads.map(function(l) { return l.MundaneId; });
+                },
+                onSelect: function(player) {
+                    var mid = parseInt(player.MundaneId, 10);
+                    leadInputEl.value = '';
+                    if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
+                    evSchedLeads.push({ MundaneId: mid, Persona: player.Persona });
+                    evRenderSchedLeads();
+                    evRefreshStaffQuickAdd();
+                }
             });
-
-            leadAcEl.addEventListener('click', function(e) {
-                var item = e.target.closest(ITEM_SEL);
-                if (!item) return;
-                var mid  = parseInt(item.dataset.id);
-                var name = decodeURIComponent(item.dataset.name);
-                leadAcEl.classList.remove(OPEN_CLASS);
-                leadInputEl.value = '';
-                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
-                evSchedLeads.push({ MundaneId: mid, Persona: name });
-                evRenderSchedLeads();
-            });
-
-            leadInputEl.addEventListener('blur', function() {
-                setTimeout(function() {
-                    // Keep the dropdown open if focus moved into it — acKeyNav focuses
-                    // an item on ArrowDown (which blurs the input), and clicks land on
-                    // items too. Only close when focus truly left the widget.
-                    if (leadAcEl.contains(document.activeElement)) return;
-                    leadAcEl.classList.remove(OPEN_CLASS);
-                }, 160);
-            });
-
-            // When keyboard nav has focus on a dropdown item, close only once focus
-            // leaves the whole widget (item -> elsewhere), not on item -> item/input.
-            leadAcEl.addEventListener('focusout', function() {
-                setTimeout(function() {
-                    var a = document.activeElement;
-                    if (a === leadInputEl || leadAcEl.contains(a)) return;
-                    leadAcEl.classList.remove(OPEN_CLASS);
-                }, 160);
-            });
-
-            acKeyNav(leadInputEl, leadAcEl, OPEN_CLASS, ITEM_SEL);
         }
 
 

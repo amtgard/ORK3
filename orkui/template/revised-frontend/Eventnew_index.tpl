@@ -2515,7 +2515,6 @@ var EvConfig = {
 					<label>Player</label>
 					<input type="text" id="ev-staff-player-name" placeholder="Search players..." autocomplete="off" style="width:100%">
 					<input type="hidden" id="ev-staff-player-id">
-					<div id="ev-staff-ac" class="kn-ac-results" style="display:none"></div>
 				</div>
 			</div>
 			<div class="ev-modal-row" style="margin-top:12px">
@@ -2856,7 +2855,6 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 					<div id="ev-sched-leads-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:26px;margin-bottom:8px;align-items:center"></div>
 					<div style="position:relative">
 						<input type="text" id="ev-sched-lead-input" placeholder="Search players to add as lead..." autocomplete="off" style="width:100%">
-						<div id="ev-sched-lead-ac" class="kn-ac-results" style="display:none"></div>
 					</div>
 				</div>
 			</div>
