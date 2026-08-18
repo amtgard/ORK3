@@ -348,6 +348,28 @@
 	background: transparent;
 	transition: background 0.15s;
 }
+/* "Select all that apply" questions get a square checkbox instead of the round
+   radio, so the affordance itself says more-than-one is allowed. Multi options
+   carry their own tick element, so none of the radio-inner fill rules apply. */
+.qt-answer-radio.qt-answer-check {
+	border-radius: 4px;
+}
+.qt-answer-check-tick {
+	width: 10px;
+	height: 6px;
+	border: 2px solid transparent;
+	border-top: 0;
+	border-right: 0;
+	transform: translateY(-2px) rotate(-45deg);
+	transition: border-color 0.15s;
+}
+.qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-check-tick {
+	border-color: #2b6cb0;
+}
+.qt-answer-label.qt-ans-correct .qt-answer-check-tick,
+.qt-answer-label.qt-ans-wrong .qt-answer-check-tick {
+	border-color: #fff;
+}
 .qt-answer-label:hover:not(.qt-ans-disabled):not(.qt-ans-correct):not(.qt-ans-wrong) {
 	background: #f7fafc;
 	border-color: #bee3f8;
@@ -897,6 +919,7 @@ html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):no
 }
 html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-radio { border-color: #63b3ed; }
 html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-check-tick { border-color: #63b3ed; }
 html[data-theme="dark"] .qt-answer-label.qt-ans-correct {
 	background: #22543d;
 	border-color: #38a169;
@@ -1600,12 +1623,13 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				label.setAttribute('aria-setsize', q.Answers.length);
 				label.setAttribute('aria-posinset', ansIdx + 1);
 
-				// Selection indicator — same visual pill, filled per aria-checked
-				// so single (radio) and multi (checkbox) look consistent.
+				// Selection indicator — a round radio for one-of-N, a square
+				// checkbox (with a tick) for "select all that apply", so the shape
+				// matches the ARIA role the option already announces.
 				var radio = document.createElement('span');
-				radio.className = 'qt-answer-radio';
+				radio.className = 'qt-answer-radio' + (isMulti ? ' qt-answer-check' : '');
 				var inner = document.createElement('span');
-				inner.className = 'qt-answer-radio-inner';
+				inner.className = isMulti ? 'qt-answer-check-tick' : 'qt-answer-radio-inner';
 				radio.appendChild(inner);
 				label.appendChild(radio);
 
