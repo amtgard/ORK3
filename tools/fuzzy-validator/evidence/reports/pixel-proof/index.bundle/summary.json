@@ -1,0 +1,45 @@
+{
+  "runId": "pixel-inzone",
+  "phase": "visual",
+  "exitCode": 0,
+  "pass": true,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "player-profile",
+      "pass": true,
+      "scores": {
+        "visual": 1.0
+      },
+      "pageScore": 1.0,
+      "reportPath": "pages/player-profile.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:41:44Z",
+  "pagesDetailed": [
+    {
+      "pageId": "player-profile",
+      "passed": true,
+      "layers": [
+        {
+          "layer": "visual",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "outsideDiffPx": 0,
+            "comparablePx": 1251856,
+            "visualScore": 1.0,
+            "failureBoxCount": 0
+          }
+        }
+      ]
+    }
+  ]
+}

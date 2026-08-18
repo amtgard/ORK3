@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-ladder-grid-3",
+  "calibratedAt": "2026-08-01T21:25:38Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:49:13Z",
+  "refuzzedFromCommit": "05389516"
+}

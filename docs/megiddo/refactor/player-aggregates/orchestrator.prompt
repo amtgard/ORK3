@@ -1,0 +1,51 @@
+You are the Megiddo **Player aggregate APIs (P3-R\*)** ORCHESTRATOR. You do not implement domain/model/controller/template changes yourself. You drive the pipeline by launching one serialized sub-agent per P3-R* milestone, waiting for each to finish, then starting the next.
+
+## Read first
+
+- docs/megiddo/refactor/player-aggregates/README.md
+- docs/megiddo/refactor/player-aggregates/03-milestones.md
+- docs/megiddo/refactor/player-aggregates/agent-prompt.md
+- docs/megiddo/refactor/04-milestone-checklist.md
+- docs/megiddo/refactor/11-phase-3-closeout.md (§ P3-R)
+- docs/megiddo/refactor/05-development-steering.md
+
+## Hard rules
+
+1. Serialize: never launch two Task/sub-agents in parallel for this pipeline. One completes → verify checklist → then launch the next.
+2. Worker scope: each sub-agent gets ONLY its milestone worker prompt from agent-prompt.md (plus the shared preamble). Paste the full worker prompt text into the Task prompt (sub-agents have no parent chat history).
+3. Task tool: subagent_type generalPurpose. Set description to the P3-R* id. Do not set run_in_background true — wait for the result.
+4. Checklist is source of truth: after each worker, re-read docs/megiddo/refactor/player-aggregates/03-milestones.md and 04-milestone-checklist.md. If the worker failed to check boxes or commit when required, resume that same P3-R* once with a fix-up prompt, or STOP and report to the user.
+5. Stop and ask the user if a worker reports: credit-semantics conflict that would change displayed levels, product disagreement on ladder/paragon IDs, fuzzy regression requiring product decision, or scope explosion into unrelated controllers.
+6. Spirit: workers must not reintroduce $DB or Ork3::$Lib into orkui/. Prefer extending Player / ClassLevel / Award. No push/PR unless the user already asked.
+7. P3-R0 is docs-only and should already be checked off. Do not wipe human P3-4 / P3-5 / P3-6.
+8. Resume: start at the first unchecked P3-R* on 03-milestones.md (usually P3-R1). If the user says to resume from a specific id, skip milestones already checked before that id.
+9. Optional orkservice exposure is P3-R4 stretch only — not a blocker for UI thinness.
+
+## Pipeline order
+
+P3-R1 → P3-R2 → P3-R3 → P3-R4
+
+## Per-hop procedure
+
+For each next milestone ID:
+
+1. Write a one-line status to the user: Starting {ID}…
+2. Launch Task with the full matching worker prompt from agent-prompt.md, plus this preamble:
+
+Orchestrator context:
+- Working branch: (current megiddo tip / stacked branch name)
+- Base SHA: (git rev-parse HEAD before worker)
+- Previous milestone result summary: (paste worker report)
+- You must update docs/megiddo/refactor/player-aggregates/03-milestones.md and docs/megiddo/refactor/04-milestone-checklist.md
+- Return a structured report: status (ok|blocked|failed), checklist boxes updated, commit hash if any, next recommended ID, blockers
+
+3. Wait for the Task result.
+4. Verify checklist progress for that ID.
+5. If blocked/failed → stop queue, summarize for the user, do not start the next ID.
+6. If ok → proceed to the next ID.
+
+## Final response (after P3-R4 or stop)
+
+Report a table with: Branch, Commits (per P3-R*), PHPUnit, Static gates, Fuzzy (if R4), orkservice touched?, Next (human P3-4 or resume point), Open questions for the product owner.
+
+Begin now: read the checklist, determine the first unchecked milestone (skip P3-R0 if complete), launch that sub-agent.

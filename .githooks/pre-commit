@@ -4,7 +4,7 @@
 #
 # Does three things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
-#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer.phar.
+#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
 #   3. Normalizes leading-tab indentation to spaces in the CSS/JS files you are committing,
 #      via bin/normalize-leading-tabs.sh (POSIX awk only — no npm/node dependency).
 #
@@ -61,7 +61,7 @@ $f"
 # 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
 format_php() {
-    PHAR="tools/php-cs-fixer.phar"
+    PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
     CONFIG=".php-cs-fixer.dist.php"
 
     PHP_BIN=$(command -v php 2>/dev/null)
