@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Committable HasAuthority facade (class.Authorization.php is local-only per pre-commit hook).
+ * Committable HasAuthority / RBAC facade (class.Authorization.php is local-only
+ * per pre-commit hook, so any auth logic that needs to be maintainable lives here).
  */
 class AuthorizationGate extends Ork3
 {
@@ -13,24 +14,51 @@ class AuthorizationGate extends Ork3
     }
 
     /**
-     * RBAC facade: permission-key check only (no legacy authority fallback).
+     * Check if a user has a specific RBAC permission at a scope.
+     * Sole implementation of the RBAC permission check — delegates to
+     * RBACService::HasPermission(). Lives here (and not on Authorization)
+     * because class.Authorization.php is excluded from every commit by the
+     * pre-commit hook, so edits made there can never ship.
+     *
+     * Parameters are intentionally untyped: the ~90 lib call sites pass
+     * whatever their local $mundane_id / scope id happens to be.
+     *
+     * @param int|string $mundaneId     User ID
+     * @param string     $permissionKey Permission key, e.g. 'kingdom.award.create'
+     * @param string     $scopeType     One of: 'kingdom', 'park', 'event', 'unit'
+     * @param int|string $scopeId       The ID of the scoped entity
+     * @return bool
      */
-    public function checkPermission(int $mundaneId, string $permissionKey, string $scopeType, $scopeId): bool
+    public function checkPermission($mundaneId, $permissionKey, $scopeType, $scopeId): bool
     {
-        $auth = new Authorization();
-
-        return (bool) $auth->HasPermission($mundaneId, $permissionKey, $scopeType, $scopeId);
+        return (bool) Ork3::$Lib->rbacservice->HasPermission($mundaneId, $permissionKey, $scopeType, $scopeId);
     }
 
     /**
-     * RBAC bridge facade: true when the actor holds the RBAC permission OR passes
-     * the legacy HasAuthority check. Mirrors Authorization::HasPermissionOrAuthority.
+     * Bridge check for the RBAC migration: true when the actor holds the RBAC
+     * permission OR the legacy HasAuthority check passes. Both old auth records
+     * and new RBAC role assignments grant access during the transition.
+     *
+     * @param int|string  $mundaneId     User ID
+     * @param string      $permissionKey RBAC permission key
+     * @param string      $scopeType     Scope type for the RBAC check
+     * @param int|string  $scopeId       Scope entity ID
+     * @param string|null $legacyRole    Legacy auth role for HasAuthority (AUTH_CREATE or AUTH_EDIT)
+     * @return bool
      */
-    public function checkPermissionOrAuthority(int $mundaneId, string $permissionKey, string $scopeType, $scopeId, ?string $legacyRole): bool
+    public function checkPermissionOrAuthority($mundaneId, $permissionKey, $scopeType, $scopeId, $legacyRole): bool
     {
-        $auth = new Authorization();
+        // Map RBAC scope_type to legacy AUTH_* type constant (park is the default).
+        $legacyTypes = [
+            'kingdom' => AUTH_KINGDOM,
+            'park' => AUTH_PARK,
+            'event' => AUTH_EVENT,
+            'unit' => AUTH_UNIT,
+        ];
+        $legacyType = $legacyTypes[$scopeType] ?? AUTH_PARK;
 
-        return (bool) $auth->HasPermissionOrAuthority($mundaneId, $permissionKey, $scopeType, $scopeId, $legacyRole);
+        return $this->checkPermission($mundaneId, $permissionKey, $scopeType, $scopeId)
+            || (bool) Ork3::$Lib->authorization->HasAuthority($mundaneId, $legacyType, $scopeId, $legacyRole);
     }
 
     /**

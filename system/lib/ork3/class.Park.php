@@ -143,7 +143,7 @@ class Park extends Ork3
     public function AddParkDay($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $this->parkday->clear();
             $this->parkday->park_id = $request[ 'ParkId' ];
@@ -231,7 +231,7 @@ class Park extends Ork3
         }
         $park_id = $this->parkday->park_id;
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
         ) {
             // Snapshot the parkday before mutations so the audit log can show a diff.
             $_audit_prior = [
@@ -330,7 +330,7 @@ class Park extends Ork3
             return InvalidParameter();
         }
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
         ) {
             $_audit_prior = [
                 'parkday_id'         => (int)$this->parkday->parkday_id,
@@ -388,7 +388,7 @@ class Park extends Ork3
     {
         $park_id = mysql_real_escape_string($request['ParkId']);
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $park_id, AUTH_EDIT);
+        $is_authorized = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $park_id, AUTH_EDIT);
 
         // Park-level officers: scope to this park within a real kingdom, and
         // resolve title aliases against each row's own kingdom (al.kingdom_id = o.kingdom_id).
@@ -825,7 +825,7 @@ class Park extends Ork3
         $this->park->park_id = $request[ 'ParkId' ];
         if ($this->park->find()) {
             if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.details.edit', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.details.edit', 'park', $request[ 'ParkId' ], AUTH_EDIT)
             ) {
                 // Snapshot prior park state for the audit log before any field changes.
                 $_audit_prior = [
@@ -846,7 +846,7 @@ class Park extends Ork3
                 $this->log->Write('Park', $mundane_id, LOG_EDIT, $request);
                 $this->park->modified = date("Y-m-d H:i:s", time());
 
-                if (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.details.edit', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.details.edit', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)) {
                     $this->park->name = trimlen($request[ 'Name' ]) == 0 ? $this->park->name : $request[ 'Name' ];
                     $this->park->abbreviation = trimlen($request[ 'Abbreviation' ]) == 0 ? strtoupper($this->park->abbreviation) : strtoupper($request[ 'Abbreviation' ]);
                     $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
@@ -960,7 +960,7 @@ class Park extends Ork3
         // Check for Principality Details, and create auths for Principality concurrently
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             if (!isset($request['KingdomId'])) {
                 if (!isset($request['ParkId'])) {
@@ -1016,7 +1016,7 @@ class Park extends Ork3
     {
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer.vacate', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.vacate', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $kingdomId = $this->GetParkKingdomId($request[ 'ParkId' ]);
             $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
@@ -1100,7 +1100,7 @@ class Park extends Ork3
     {
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $pid       = (int)$request[ 'ParkId' ];
             $kid       = (int)$this->GetParkKingdomId($pid);
@@ -1135,7 +1135,7 @@ class Park extends Ork3
     {
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $ohid      = (int)$request[ 'OfficerHistoryId' ];
             $pid       = (int)$request[ 'ParkId' ];
@@ -1170,7 +1170,7 @@ class Park extends Ork3
     {
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $ohid = (int)$request[ 'OfficerHistoryId' ];
             $pid  = (int)$request[ 'ParkId' ];
@@ -1210,7 +1210,7 @@ class Park extends Ork3
         $this->park->park_id = $request[ 'ParkId' ];
         if ($this->park->find()) {
             if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)
             ) {
                 $_prior_active = $this->park->active;
                 $this->log->Write('Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);

@@ -58,7 +58,7 @@ class Controller_OfficerAdminAjax extends Controller {
 			exit;
 		}
 
-		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, $gate[$action], 'kingdom', $kingdom_id, AUTH_EDIT)) {
+		if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, $gate[$action], 'kingdom', $kingdom_id, AUTH_EDIT)) {
 			echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
 			exit;
 		}

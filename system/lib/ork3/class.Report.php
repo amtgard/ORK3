@@ -3657,8 +3657,8 @@ class Report extends Ork3
         }
 
         // Auth check: requester must have AUTH_PARK + AUTH_CREATE on the player's park
-        if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane->park_id, AUTH_CREATE)
-            && !Ork3::$Lib->authorization->HasPermissionOrAuthority($requester_id, 'player.active_status.set', 'kingdom', $mundane->kingdom_id, AUTH_EDIT)
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane->park_id, AUTH_CREATE)
+            && !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'kingdom', $mundane->kingdom_id, AUTH_EDIT)
             && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
             return NoAuthorization();
         }

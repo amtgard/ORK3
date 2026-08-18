@@ -67,7 +67,7 @@ class Kingdom extends Ork3
         public function SetKingdomAwards($request) {
             $response = array();
             if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                    && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.award.edit', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+                    && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.award.edit', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
                 $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
                 if (is_array($request['KingdomAwards'])) {
                         $this->kingdomaward->clear();
@@ -198,7 +198,7 @@ class Kingdom extends Ork3
     public function CreateAward($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.award.create', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.award.create', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
             $this->log->Write('Award', $mundane_id, LOG_ADD, $request);
             $this->kingdomaward->clear();
             $this->kingdomaward->kingdom_id = $request['KingdomId'];
@@ -218,7 +218,7 @@ class Kingdom extends Ork3
     public function EditAward($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.award.edit', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.award.edit', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
             $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
             $this->kingdomaward->clear();
             $this->kingdomaward->kingdom_id = $request['KingdomId'];
@@ -241,7 +241,7 @@ class Kingdom extends Ork3
     public function RemoveAward($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.award.remove', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.award.remove', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
             $this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
             $this->kingdomaward->kingdom_id = $request['KingdomId'];
             $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
@@ -501,7 +501,7 @@ class Kingdom extends Ork3
     {
         $response = array();
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.parktitle.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.parktitle.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
             $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
             if (is_array($request['ParkTitles'])) {
                 $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
@@ -560,7 +560,7 @@ class Kingdom extends Ork3
     {
         $response = array();
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.details.edit', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.details.edit', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
             $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
             $this->kingdom->clear();
             $this->kingdom->kingdom_id = $request['KingdomId'];
@@ -728,7 +728,7 @@ class Kingdom extends Ork3
     {
         $kingdom_id = mysql_real_escape_string($request['KingdomId']);
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $kingdom_id, AUTH_EDIT);
+        $is_authorized = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $kingdom_id, AUTH_EDIT);
 
         // Kingdom-level officers: scope to this kingdom with no park, and resolve
         // title aliases against this kingdom's own alias rows.
@@ -819,7 +819,7 @@ class Kingdom extends Ork3
         $response = array();
         $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
             if ($mundane['KingdomId'] == $request['KingdomId']) {
                 // Look up prior holder so the audit can show before/after,
                 // and so we can suppress no-op re-saves of the same assignment.
@@ -871,7 +871,7 @@ class Kingdom extends Ork3
         $response = array();
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if ($mundane_id > 0) {
-            if (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer.vacate', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer.vacate', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
                 $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
                 $_priorOfficer->clear();
                 $_priorOfficer->kingdom_id = (int)$request['KingdomId'];
@@ -954,7 +954,7 @@ class Kingdom extends Ork3
         $response = [];
         if (
             ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
         ) {
             $kid       = (int)$request['KingdomId'];
             $mid       = (int)$request['MundaneId'];
@@ -989,7 +989,7 @@ class Kingdom extends Ork3
         $response = [];
         if (
             ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
         ) {
             $ohid      = (int)$request['OfficerHistoryId'];
             $kid       = (int)$request['KingdomId'];
@@ -1026,7 +1026,7 @@ class Kingdom extends Ork3
         $response = [];
         if (
             ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer_history.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)
         ) {
             $ohid = (int)$request['OfficerHistoryId'];
             $kid  = (int)$request['KingdomId'];
