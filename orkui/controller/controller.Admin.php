@@ -21,7 +21,7 @@ class Controller_Admin extends Controller
     public function index($duh = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR);
             exit;
         }
@@ -35,75 +35,11 @@ class Controller_Admin extends Controller
         $this->data['ActiveKingdomSummary'] = $this->Report->GetActiveKingdomsSummary();
         $this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
 
-        // Year-over-year trend stats
-        $thisYearStart = date('Y') . '-01-01';
-        $lastYearStart = (date('Y') - 1) . '-01-01';
-        $lastYearEnd   = date('Y-m-d', strtotime('-1 year')); // same day last year
-        $now1yr        = date('Y-m-d');
-        $prev1yrStart  = date('Y-m-d', strtotime('-2 years'));
-        $prev1yrEnd    = date('Y-m-d', strtotime('-1 year'));
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            "SELECT
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$thisYearStart' AND entered_at < '$now1yr') AS awards_cur,
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$lastYearStart' AND entered_at < '$lastYearEnd') AS awards_prev,
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$thisYearStart' AND date < '$now1yr' AND mundane_id > 0) AS att_cur,
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$lastYearStart' AND date < '$lastYearEnd' AND mundane_id > 0) AS att_prev,
-			  (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrEnd' AND date < '$now1yr' AND mundane_id > 0) AS players_cur,
-			  (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrStart' AND date < '$prev1yrEnd' AND mundane_id > 0) AS players_prev,
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$thisYearStart' AND date_recommended < '$now1yr' AND deleted_at IS NULL) AS recs_cur,
-			  (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$lastYearStart' AND date_recommended < '$lastYearEnd' AND deleted_at IS NULL) AS recs_prev"
-        );
-        $trendStats = ['awards_cur' => 0,'awards_prev' => 0,'att_cur' => 0,'att_prev' => 0,'players_cur' => 0,'players_prev' => 0,'recs_cur' => 0,'recs_prev' => 0];
-        if ($rs && $rs->Next()) {
-            foreach ($trendStats as $k => $_) {
-                $trendStats[$k] = (int)$rs->$k;
-            }
-        }
-        $this->data['TrendStats'] = $trendStats;
-
-        // Previous-period kingdom attendance for trend indicators
-        $DB->Clear();
-        $prevWkRs = $DB->DataSet(
-            "SELECT COUNT(mw.mundane_id) AS att, mw.kingdom_id
-			 FROM (
-			     SELECT mundane_id, date_year, date_week3, kingdom_id
-			     FROM " . DB_PREFIX . "attendance
-			     WHERE date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
-			       AND date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
-			       AND mundane_id > 0
-			     GROUP BY date_year, date_week3, mundane_id, kingdom_id
-			 ) mw
-			 GROUP BY mw.kingdom_id"
-        );
-        $prevWeekly = [];
-        if ($prevWkRs) {
-            while ($prevWkRs->Next()) {
-                $prevWeekly[(int)$prevWkRs->kingdom_id] = (int)$prevWkRs->att;
-            }
-        }
-        $DB->Clear();
-        $prevMoRs = $DB->DataSet(
-            "SELECT COUNT(mm.mundane_id) AS mo, mm.kingdom_id
-			 FROM (
-			     SELECT mundane_id, date_year, date_month, kingdom_id
-			     FROM " . DB_PREFIX . "attendance
-			     WHERE date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
-			       AND date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-			       AND mundane_id > 0
-			     GROUP BY date_year, date_month, mundane_id, kingdom_id
-			 ) mm
-			 GROUP BY mm.kingdom_id"
-        );
-        $prevMonthly = [];
-        if ($prevMoRs) {
-            while ($prevMoRs->Next()) {
-                $prevMonthly[(int)$prevMoRs->kingdom_id] = (int)$prevMoRs->mo;
-            }
-        }
-        $this->data['PrevWeekly']  = $prevWeekly;
-        $this->data['PrevMonthly'] = $prevMonthly;
+        $this->load_model('AdminDashboard');
+        $dashboard = $this->AdminDashboard->dashboard_stats();
+        $this->data['TrendStats'] = $dashboard['TrendStats'];
+        $this->data['PrevWeekly'] = $dashboard['PrevWeekly'];
+        $this->data['PrevMonthly'] = $dashboard['PrevMonthly'];
 
         $this->template = '../revised-frontend/Admin_index.tpl';
     }
@@ -744,6 +680,7 @@ class Controller_Admin extends Controller
         if ($this->request->exists('Admin_manageevent')) {
             $this->data['Admin_manageevent'] = $this->request->Admin_manageevent->Request;
         }
+        // Org-unit terminology for the event admin copy (e.g. "Grand Duchy" event).
         $eventKingdomId = (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id))
             ? (int)$this->session->kingdom_id
             : (int)($this->request->Admin_manageevent->KingdomId ?? 0);
@@ -751,8 +688,8 @@ class Controller_Admin extends Controller
             $this->load_model('Kingdom');
             $kdetails = $this->Kingdom->get_kingdom_details($eventKingdomId);
             $this->data['IsPrinz'] = $kdetails['KingdomInfo']['IsPrincipality'] ?? false;
-            $this->data['OrgUnitLabel'] = $this->Kingdom->GetOrgUnitLabel($eventKingdomId, false);
-            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->GetOrgUnitLabel($eventKingdomId, true);
+            $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($eventKingdomId, false);
+            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($eventKingdomId, true);
         }
     }
 
@@ -847,60 +784,19 @@ class Controller_Admin extends Controller
 
         // Global ORK view — no type/id provided
         if (!$type || !$id) {
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 header('Location: ' . UIR . 'Admin');
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet(
-                "SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
-				        m.persona, m.username, m.given_name, m.surname,
-				        DATE_SUB(m.token_expires, INTERVAL 72 HOUR) AS last_login,
-				        lc.last_credit
-				 FROM " . DB_PREFIX . "authorization a
-				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
-				 LEFT JOIN (SELECT mundane_id, MAX(date) AS last_credit FROM " . DB_PREFIX . "attendance WHERE credits > 0 GROUP BY mundane_id) lc ON lc.mundane_id = a.mundane_id
-				 WHERE a.role = 'admin' AND a.kingdom_id = 0 AND a.park_id = 0 AND a.event_id = 0 AND a.unit_id = 0
-				 ORDER BY m.persona"
-            );
-            $adminAuths = [];
-            if ($rs) {
-                while ($rs->Next()) {
-                    $adminAuths[] = [
-                        'AuthorizationId' => (int)$rs->authorization_id,
-                        'MundaneId'       => (int)$rs->mundane_id,
-                        'Modified'        => $rs->modified,
-                        'Persona'         => $rs->persona,
-                        'UserName'        => $rs->username,
-                        'GivenName'       => $rs->given_name,
-                        'Surname'         => $rs->surname,
-                        'LastLogin'       => $rs->last_login,
-                        'LastCredit'      => $rs->last_credit,
-                    ];
-                }
-            }
-            $DB->Clear();
-            $rs2 = $DB->DataSet(
-                "SELECT k.kingdom_id, k.name AS kingdom_name
-				 FROM " . DB_PREFIX . "kingdom k
-				 WHERE k.active = 'Active' AND k.parent_kingdom_id = 0
-				 ORDER BY k.name"
-            );
-            $kingdoms = [];
-            if ($rs2) {
-                while ($rs2->Next()) {
-                    $kingdoms[] = ['KingdomId' => (int)$rs2->kingdom_id, 'KingdomName' => $rs2->kingdom_name];
-                }
-            }
-            $this->data['AdminAuths'] = $adminAuths;
-            $this->data['Kingdoms']   = $kingdoms;
+            $this->load_model('AdminDashboard');
+            $this->data['AdminAuths'] = $this->AdminDashboard->global_admin_grants((string) ($this->session->token ?? ''));
+            $this->data['Kingdoms'] = $this->AdminDashboard->active_kingdoms_for_permissions();
             $this->template = 'Admin_permissions_global.tpl';
             return;
         }
         $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
         $authType = $authTypeMap[$type];
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
+        if (!$this->Authorization->has_authority($uid, $authType, $id, AUTH_CREATE)) {
             $backUrl = $type === 'Event'
                 ? UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '')
                 : UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id;
@@ -929,72 +825,14 @@ class Controller_Admin extends Controller
         }
 
         // All grants at this type+id level (officers + non-officers), including modified timestamp
-        global $DB;
-        $eid = (int)$id;
-        $scopeColMap = ['Kingdom' => 'a.kingdom_id', 'Park' => 'a.park_id', 'Event' => 'a.event_id'];
-        $scopeCol    = $scopeColMap[$type];
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            "SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
-			        m.persona, m.username, m.given_name, m.surname, m.restricted,
-			        o.role AS officer_role, o.officer_id
-			 FROM " . DB_PREFIX . "authorization a
-			 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
-			 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
-			 WHERE $scopeCol = $eid
-			 ORDER BY m.persona"
-        );
-        $auths = [];
-        if ($rs) {
-            while ($rs->Next()) {
-                $auths[] = [
-                    'AuthorizationId' => (int)$rs->authorization_id,
-                    'MundaneId'       => (int)$rs->mundane_id,
-                    'Role'            => $rs->role,
-                    'Modified'        => $rs->modified,
-                    'Persona'         => $rs->persona,
-                    'UserName'        => $rs->username,
-                    'GivenName'       => $rs->given_name,
-                    'Surname'         => $rs->surname,
-                    'OfficerRole'     => $rs->officer_role,
-                    'OfficerId'       => $rs->officer_id,
-                ];
-            }
-        }
+        $this->load_model('AdminDashboard');
+        $sessionToken = (string) ($this->session->token ?? '');
+        $auths = $this->AdminDashboard->scoped_auths($type, $id, $sessionToken);
 
         // For kingdom pages: all park-level grants for every park in the kingdom
         $parkAuths = [];
         if ($type === 'Kingdom') {
-            $DB->Clear();
-            $rs = $DB->DataSet(
-                "SELECT a.authorization_id, a.mundane_id, a.park_id, a.role, a.modified,
-				        p.name AS park_name, m.persona, m.username, m.given_name, m.surname, m.restricted,
-				        o.role AS officer_role, o.officer_id
-				 FROM " . DB_PREFIX . "authorization a
-				 JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id
-				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
-				 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
-				 WHERE p.kingdom_id = $eid
-				 ORDER BY p.name, m.persona"
-            );
-            if ($rs) {
-                while ($rs->Next()) {
-                    $parkAuths[] = [
-                        'AuthorizationId' => (int)$rs->authorization_id,
-                        'MundaneId'       => (int)$rs->mundane_id,
-                        'ParkId'          => (int)$rs->park_id,
-                        'ParkName'        => $rs->park_name,
-                        'Role'            => $rs->role,
-                        'Modified'        => $rs->modified,
-                        'Persona'         => $rs->persona,
-                        'UserName'        => $rs->username,
-                        'GivenName'       => $rs->given_name,
-                        'Surname'         => $rs->surname,
-                        'OfficerRole'     => $rs->officer_role,
-                        'OfficerId'       => $rs->officer_id,
-                    ];
-                }
-            }
+            $parkAuths = $this->AdminDashboard->kingdom_park_auths($id, $sessionToken);
         }
 
         // For event pages: show inherited access (creator + park/kingdom grant holders)
@@ -1004,87 +842,14 @@ class Controller_Admin extends Controller
         $inheritedParkName      = '';
         $inheritedKingdomName   = '';
         if ($type === 'Event') {
-            $DB->Clear();
-            $evRow = $DB->DataSet(
-                "SELECT e.mundane_id AS creator_id, e.park_id AS ev_park_id, e.kingdom_id AS ev_kingdom_id,
-				        m.persona AS creator_persona, m.given_name, m.surname,
-				        p.name AS park_name, k.name AS kingdom_name
-				 FROM " . DB_PREFIX . "event e
-				 LEFT JOIN " . DB_PREFIX . "mundane m  ON m.mundane_id = e.mundane_id
-				 LEFT JOIN " . DB_PREFIX . "park p     ON p.park_id    = e.park_id
-				 LEFT JOIN " . DB_PREFIX . "kingdom k  ON k.kingdom_id = e.kingdom_id
-				 WHERE e.event_id = $eid LIMIT 1"
-            );
-            $evParkId = 0;
-            $evKingdomId = 0;
-            if ($evRow && $evRow->Next()) {
-                $evParkId    = (int)$evRow->ev_park_id;
-                $evKingdomId = (int)$evRow->ev_kingdom_id;
-                $inheritedParkName    = $evRow->park_name    ?? '';
-                $inheritedKingdomName = $evRow->kingdom_name ?? '';
-                if ((int)$evRow->creator_id > 0) {
-                    $eventCreator = [
-                        'MundaneId' => (int)$evRow->creator_id,
-                        'Persona'   => $evRow->creator_persona,
-                        'GivenName' => $evRow->given_name,
-                        'Surname'   => $evRow->surname,
-                    ];
-                }
-            }
-
-            // Park-level grant holders for the event's host park
-            if ($evParkId) {
-                $DB->Clear();
-                $rs = $DB->DataSet(
-                    "SELECT a.authorization_id, a.mundane_id, a.role,
-					        m.persona, m.given_name, m.surname,
-					        o.role AS officer_role
-					 FROM " . DB_PREFIX . "authorization a
-					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
-					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
-					 WHERE a.park_id = $evParkId
-					 ORDER BY a.role DESC, m.persona"
-                );
-                if ($rs) {
-                    while ($rs->Next()) {
-                        $inheritedParkAuths[] = [
-                            'MundaneId'   => (int)$rs->mundane_id,
-                            'Role'        => $rs->role,
-                            'Persona'     => $rs->persona,
-                            'GivenName'   => $rs->given_name,
-                            'Surname'     => $rs->surname,
-                            'OfficerRole' => $rs->officer_role,
-                        ];
-                    }
-                }
-            }
-
-            // Kingdom-level grant holders for the event's kingdom
-            if ($evKingdomId) {
-                $DB->Clear();
-                $rs = $DB->DataSet(
-                    "SELECT a.authorization_id, a.mundane_id, a.role,
-					        m.persona, m.given_name, m.surname,
-					        o.role AS officer_role
-					 FROM " . DB_PREFIX . "authorization a
-					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
-					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
-					 WHERE a.kingdom_id = $evKingdomId
-					 ORDER BY a.role DESC, m.persona"
-                );
-                if ($rs) {
-                    while ($rs->Next()) {
-                        $inheritedKingdomAuths[] = [
-                            'MundaneId'   => (int)$rs->mundane_id,
-                            'Role'        => $rs->role,
-                            'Persona'     => $rs->persona,
-                            'GivenName'   => $rs->given_name,
-                            'Surname'     => $rs->surname,
-                            'OfficerRole' => $rs->officer_role,
-                        ];
-                    }
-                }
-            }
+            $inherited = $this->AdminDashboard->event_inherited_permissions($id, $sessionToken);
+            $eventCreator = $inherited['creator'];
+            $inheritedParkAuths = $inherited['parkAuths'];
+            $inheritedKingdomAuths = $inherited['kingdomAuths'];
+            $inheritedParkName = $inherited['parkName'];
+            $inheritedKingdomName = $inherited['kingdomName'];
+            $evParkId = (int) ($inherited['parkId'] ?? 0);
+            $evKingdomId = (int) ($inherited['kingdomId'] ?? 0);
         }
 
         // Set breadcrumbs from the actual entity, not the logged-in user's session kingdom/park
@@ -1109,7 +874,7 @@ class Controller_Admin extends Controller
         $this->data['PermUrl']          = $url;
         $this->data['PermAuths']        = $auths;
         $this->data['PermParkAuths']    = $parkAuths;
-        $this->data['PermCanGrantAdmin']      = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['PermCanGrantAdmin']      = $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['PermEventCreator']       = $eventCreator;
         $this->data['PermInheritedParkAuths']    = $inheritedParkAuths;
         $this->data['PermInheritedKingdomAuths'] = $inheritedKingdomAuths;
@@ -1459,6 +1224,12 @@ class Controller_Admin extends Controller
         }
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
         $this->data[ 'page_title' ] = "Admin: " . $this->data['Player']['Persona'];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $_parkId = (int)($this->data['Player']['ParkId'] ?? 0);
+        $this->data['CanEditPlayerMedia'] = $_uid > 0 && (
+            $_uid === (int)$id
+            || $this->Authorization->has_authority($_uid, AUTH_PARK, $_parkId, AUTH_EDIT)
+        );
     }
 
     public function player_bak($mundane_id)
@@ -1915,8 +1686,8 @@ class Controller_Admin extends Controller
         $kingdom_info = $this->Kingdom->get_kingdom_details($id);
         $this->data['Kingdom_data'] = $kingdom_info['KingdomInfo'];
         $this->data['IsPrinz'] = $kingdom_info['KingdomInfo']['IsPrincipality'];
-        $this->data['OrgUnitLabel'] = $this->Kingdom->GetOrgUnitLabel($id, false);
-        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->GetOrgUnitLabel($id, true);
+        $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
         $this->data['Kingdom_config'] = $kingdom_info['KingdomConfiguration'];
         $this->data['Kingdom_parktitles'] = $kingdom_info['ParkTitles'];
         $this->data['Kingdom_awards'] = $kingdom_info['Awards']['Awards'];
@@ -1997,10 +1768,12 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
         $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
-        $this->data['OrgUnitLabel'] = $this->Kingdom->GetOrgUnitLabel($id, false);
-        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->GetOrgUnitLabel($id, true);
+        $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+        $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
     }
 
     public function park($id = null)
@@ -2019,6 +1792,8 @@ class Controller_Admin extends Controller
             $this->data[$key] = $detail;
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
     }
 
     public function new_player_attendance()
@@ -2051,7 +1826,7 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactivekingdoms.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2066,7 +1841,7 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactiveparks.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2077,16 +1852,22 @@ class Controller_Admin extends Controller
         $this->data['Parks']      = $result['Parks'] ?? [];
         $this->data['KingdomId']  = $kingdom_id;
 
-        global $DB;
-        $DB->Clear();
-        $_kr = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom ORDER BY name");
-        $kingdoms = [];
-        if ($_kr && $_kr->Size() > 0) {
-            do {
-                $kingdoms[(int)$_kr->kingdom_id] = $_kr->name;
-            } while ($_kr->Next());
+        $this->load_model('AdminDashboard');
+        $this->data['Kingdoms'] = $this->AdminDashboard->list_all_kingdom_names();
+    }
+
+    /**
+     * Legacy menu target from Tournament worksheets. No admin tournament editor
+     * exists here — send callers to the live Tournament UI instead of 500'ing.
+     */
+    public function tournament($id = null)
+    {
+        if (valid_id($id)) {
+            header('Location: ' . UIR . 'Tournament/worksheet/' . (int)$id);
+        } else {
+            header('Location: ' . UIR . 'Tournament');
         }
-        $this->data['Kingdoms'] = $kingdoms;
+        exit;
     }
 
     public function topparks($limit = null)
@@ -2115,7 +1896,7 @@ class Controller_Admin extends Controller
     public function auditlog()
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2137,74 +1918,20 @@ class Controller_Admin extends Controller
             $entity_type_filter = '';
         }
 
-        global $DB;
-        $where = "da.modified_at >= '" . mysql_real_escape_string($start) . " 00:00:00'"
-               . " AND da.modified_at <= '" . mysql_real_escape_string($end) . " 23:59:59'";
-        if ($method_filter) {
-            $where .= " AND da.method_call = '" . mysql_real_escape_string($method_filter) . "'";
-        }
-        if ($bywhom_filter) {
-            $where .= " AND da.by_whom_id = {$bywhom_filter}";
-        }
-        if ($entity_filter) {
-            $where .= " AND da.entity_id  = {$entity_filter}";
-        }
-        // Only apply entity-type constraint when an entity ID is also set — otherwise
-        // the default EntityType=Player in the URL would silently hide Unit/Park/etc. rows.
-        if ($entity_filter && $entity_type_filter) {
-            $where .= " AND da.entity = '" . mysql_real_escape_string($entity_type_filter) . "'";
-        }
-
-        $DB->Clear();
-        $cr = $DB->DataSet("SELECT COUNT(*) AS cnt FROM ork_danger_audit da WHERE {$where}");
-        $total = 0;
-        if ($cr && $cr->Next()) {
-            $total = (int)$cr->cnt;
-        }
-
-        $DB->Clear();
-        $rs = $DB->DataSet("
-			SELECT da.danger_audit_id, da.method_call, da.parameters,
-			       da.prior_state, da.post_state, da.entity, da.entity_id,
-			       da.by_whom_id, da.modified_at,
-			       m.persona AS by_whom_persona
-			FROM ork_danger_audit da
-			LEFT JOIN ork_mundane m ON m.mundane_id = da.by_whom_id
-			WHERE {$where}
-			ORDER BY da.modified_at DESC
-			LIMIT {$per_page} OFFSET {$offset}");
-        $rows = [];
-        if ($rs && $rs->Size() > 0) {
-            do {
-                if (empty($rs->method_call)) {
-                    continue;
-                }
-                $rows[] = [
-                    'Id'            => (int)$rs->danger_audit_id,
-                    'MethodCall'    => $rs->method_call,
-                    'Parameters'    => $rs->parameters,
-                    'PriorState'    => $rs->prior_state,
-                    'PostState'     => $rs->post_state,
-                    'Entity'        => $rs->entity,
-                    'EntityId'      => (int)$rs->entity_id,
-                    'ByWhomId'      => (int)$rs->by_whom_id,
-                    'ByWhomPersona' => $rs->by_whom_persona,
-                    'ModifiedAt'    => $rs->modified_at,
-                ];
-            } while ($rs->Next());
-        }
-
-        $DB->Clear();
-        $mr = $DB->DataSet("SELECT DISTINCT method_call FROM ork_danger_audit ORDER BY method_call");
-        $methods = [];
-        // Yapo's Next() fetches the NEXT row — the result set isn't pre-positioned.
-        // A `do { push; } while (Next())` pattern pushes one stray null at the front
-        // before the first fetch, which surfaces in the dropdown as a blank option.
-        if ($mr) {
-            while ($mr->Next()) {
-                $methods[] = $mr->method_call;
-            }
-        }
+        $this->load_model('AdminDashboard');
+        $audit = $this->AdminDashboard->audit_log([
+            'Start' => $start,
+            'End' => $end,
+            'MethodCall' => $method_filter,
+            'ByWhomId' => $bywhom_filter,
+            'EntityId' => $entity_filter,
+            'EntityType' => $entity_type_filter,
+            'Page' => $page,
+            'PerPage' => $per_page,
+        ]);
+        $total = $audit['total'];
+        $rows = $audit['rows'];
+        $methods = $this->AdminDashboard->audit_methods();
 
         $this->data['AuditRows']    = $rows;
         $this->data['AuditTotal']   = $total;
@@ -2218,6 +1945,16 @@ class Controller_Admin extends Controller
         $this->data['ByWhomFilter'] = $bywhom_filter;
         $this->data['EntityFilter'] = $entity_filter;
         $this->data['EntityTypeFilter'] = $entity_type_filter;
+        $maps = $this->AdminDashboard->audit_display_maps($rows, $bywhom_filter, $entity_filter, $entity_type_filter);
+        $this->data['AuditParkMap'] = $maps['parkMap'];
+        $this->data['AuditKingdomMap'] = $maps['kingdomMap'];
+        $this->data['AuditMundaneMap'] = $maps['mundaneMap'];
+        $this->data['AuditEventMap'] = $maps['eventMap'];
+        $this->data['AuditKawardMap'] = $maps['kawardMap'];
+        $this->data['AuditUnitMap'] = $maps['unitMap'];
+        $this->data['AuditClassMap'] = $maps['classMap'];
+        $this->data['AuditFilterPlayerNames'] = $maps['filterPlayerNames'];
+        $this->data['AuditEntityFilterName'] = $maps['entityFilterName'];
         $this->data['page_title']   = 'Audit Log';
     }
 
@@ -2263,10 +2000,12 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
             $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
-            $this->data['OrgUnitLabel'] = $this->Kingdom->GetOrgUnitLabel($id, false);
-            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->GetOrgUnitLabel($id, true);
+            $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($id, false);
+            $this->data['OrgUnitLabelPlural'] = $this->Kingdom->get_org_unit_label($id, true);
             $r = $this->Kingdom->get_park_summary($id);
             $this->data['park_summary'] = $r;
+            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+            $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
             $this->template = 'Admin_kingdom.tpl';
         } elseif ($type == 'park') {
             $this->park_route($id);
@@ -2275,6 +2014,8 @@ class Controller_Admin extends Controller
                 $this->data[$key] = $detail;
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
+            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2283,7 +2024,7 @@ class Controller_Admin extends Controller
     {
         $this->template = 'Admin_serverhealth.tpl';
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2292,17 +2033,40 @@ class Controller_Admin extends Controller
 
         $this->data['ShowLoadTest'] = (getenv('ENVIRONMENT') === 'DEV');
         if ($this->data['ShowLoadTest']) {
-            global $DB;
-            $DB->Clear();
-            $kr = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE active='Active' ORDER BY name LIMIT 10");
+            $this->load_model('AdminDashboard');
+            $kingdoms = $this->AdminDashboard->load_test_kingdom_targets(10);
             $targets = [['label' => 'Home Page', 'url' => 'Home/index']];
-            if ($kr && $kr->Size() > 0) {
-                do {
-                    $targets[] = ['label' => 'Kingdom: ' . $kr->name, 'url' => 'Kingdom/profile/' . (int)$kr->kingdom_id];
-                } while ($kr->Next());
+            foreach ($kingdoms as $kr) {
+                $targets[] = ['label' => 'Kingdom: ' . $kr['KingdomName'], 'url' => 'Kingdom/profile/' . $kr['KingdomId']];
             }
             $this->data['LoadTestTargets'] = $targets;
         }
+    }
+
+    /** Direct route for e2e (Route=Admin/serverhealth_weather_stats). */
+    public function serverhealth_weather_stats()
+    {
+        $this->emit_serverhealth_weather_stats(getenv('ENVIRONMENT') === 'DEV');
+    }
+
+    private function emit_serverhealth_weather_stats(bool $loginOnly = false): void
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        if (!$loginOnly) {
+            $uid = (int)($this->session->user_id ?? 0);
+            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+                echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+                exit;
+            }
+        }
+        $this->load_model('AdminDashboard');
+        $stats = $this->AdminDashboard->api_stats(3);
+        echo json_encode(['status' => 0, 'stats' => $stats, 'wx' => $stats]);
+        exit;
     }
 
     public function ajax($action = null)
@@ -2313,7 +2077,7 @@ class Controller_Admin extends Controller
             exit;
         }
         $uid = (int)($this->session->user_id ?? 0);
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }
@@ -2332,18 +2096,8 @@ class Controller_Admin extends Controller
                 exit;
             }
             if (!$byId) {
-                global $DB;
-                $DB->Clear();
-                $rs_sb = $DB->DataSet("SELECT suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
-                $existing_by_id = 0;
-                $is_suspended   = false;
-                if ($rs_sb && $rs_sb->Next()) {
-                    $existing_by_id = (int)$rs_sb->suspended_by_id;
-                    $is_suspended   = (bool)$rs_sb->suspended;
-                }
-                $DB->Clear();
-                // New suspension → use current user; edit → preserve existing (or null if never recorded)
-                $byId = $is_suspended ? ($existing_by_id ?: 0) : (int)$this->session->user_id;
+                $this->load_model('AdminDashboard');
+                $byId = $this->AdminDashboard->infer_suspended_by_id($mid, 0, (int)$this->session->user_id);
             }
             $r = $this->Player->suspend_player([
                 'Token'                => $this->session->token,
@@ -2405,19 +2159,9 @@ class Controller_Admin extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Missing parameters.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
-            if (!$rs || !$rs->Next()) {
-                echo json_encode(['status' => 1, 'error' => 'Park not found.']);
-                exit;
-            }
-            $abbr = strtoupper($rs->abbreviation);
-            $DB->Clear();
-            $abbrEsc = mysql_real_escape_string($abbr);
-            $rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
-            $taken = ($rs2 && $rs2->Next());
-            echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+            $this->load_model('AdminDashboard');
+            $result = $this->AdminDashboard->park_abbr_check($park_id, $kingdom_id);
+            echo json_encode($result);
             exit;
 
         } elseif ($action === 'transferpark') {
@@ -2467,13 +2211,8 @@ class Controller_Admin extends Controller
                 echo json_encode(['status' => 0, 'taken' => false]);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
-            $rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
-            echo ($rs && $rs->Next())
-                ? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
-                : json_encode(['status' => 0, 'taken' => false]);
+            $this->load_model('AdminDashboard');
+            echo json_encode($this->AdminDashboard->kingdom_abbr_check($abbr, $excludeId));
 
         } elseif ($action === 'createkingdom') {
             $this->load_model('Kingdom');
@@ -2537,109 +2276,28 @@ class Controller_Admin extends Controller
                 }
             }
 
-            global $DB;
             $wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys','Innodb_row_lock_current_waits','Innodb_row_lock_waits','Innodb_row_lock_time'];
-            $DB->Clear();
-            $rs = $DB->DataSet("SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wanted) . "')");
-            $db_status = [];
-            if ($rs && $rs->Size() > 0) {
-                do {
-                    $db_status[$rs->Variable_name] = $rs->Value;
-                } while ($rs->Next());
-            }
+            $this->load_model('AdminDashboard');
+            $sessionToken = (string) ($this->session->token ?? '');
+            $db_status = $this->AdminDashboard->server_health_db_status($wanted, $sessionToken);
+            $processes = $this->AdminDashboard->server_health_processes(20, $sessionToken);
 
-            $DB->Clear();
-            $pr = $DB->DataSet("SELECT ID, USER, HOST, COMMAND, TIME, STATE, LEFT(INFO, 300) AS INFO FROM information_schema.PROCESSLIST WHERE COMMAND != 'Sleep' ORDER BY TIME DESC LIMIT 20");
-            $processes = [];
-            if ($pr && $pr->Size() > 0) {
-                do {
-                    $processes[] = [
-                        'id'      => (int)$pr->ID,
-                        'user'    => $pr->USER,
-                        'host'    => $pr->HOST ?? '',
-                        'command' => $pr->COMMAND,
-                        'time'    => (int)$pr->TIME,
-                        'state'   => $pr->STATE ?? '',
-                        'info'    => $pr->INFO ?? '',
-                    ];
-                } while ($pr->Next());
-            }
-
-            // Weather data freshness — one query bucketing active parks by
-            // staleness so the admin can see at a glance whether the cron
-            // (and lazy fallback) are keeping forecasts current. Plus an
-            // upcoming-events count so we can spot if event-venue warming
-            // has fallen behind.
-            //
-            // fetched_at is written by PHP's date() which uses PHP's local
-            // timezone (e.g. America/Chicago on prod), but MySQL's NOW() is
-            // UTC. To avoid a TZ-mismatch where every park appears stale,
-            // compute the cutoffs in PHP and pass them as string literals so
-            // comparisons happen entirely in PHP's local TZ.
             $weather   = null;
-            $now_local      = date('Y-m-d H:i:s');
-            $cutoff_fresh   = date('Y-m-d H:i:s', time() - 90 * 60);
-            $cutoff_aging   = date('Y-m-d H:i:s', time() - 4 * 3600);
-            $DB->Clear();
-            $wsql = "SELECT
-				(SELECT COUNT(*) FROM " . DB_PREFIX . "park p WHERE p.active = 'Active'
-				   AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
-				               WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
-				) AS total_active,
-				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
-				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
-				   WHERE p.active = 'Active'
-				     AND pw.fetched_at >= '$cutoff_fresh'
-				) AS fresh,
-				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
-				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
-				   WHERE p.active = 'Active'
-				     AND pw.fetched_at >= '$cutoff_aging'
-				     AND pw.fetched_at <  '$cutoff_fresh'
-				) AS aging,
-				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
-				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
-				   WHERE p.active = 'Active'
-				     AND pw.fetched_at <  '$cutoff_aging'
-				     AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
-				                 WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
-				) AS stale_row,
-				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), '$now_local')
-				   FROM " . DB_PREFIX . "park_weather pw
-				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
-				   WHERE p.active = 'Active'
-				     AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
-				                 WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
-				) AS oldest_min,
-				(SELECT COUNT(DISTINCT e.event_id)
-				   FROM " . DB_PREFIX . "event e
-				   JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
-				   WHERE DATE(cd.event_start) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
-				) AS events_upcoming,
-				(SELECT COUNT(DISTINCT e.event_id)
-				   FROM " . DB_PREFIX . "event e
-				   JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
-				   WHERE DATE(cd.event_start) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
-				     AND cd.latitude IS NOT NULL AND cd.longitude IS NOT NULL
-				     AND cd.latitude != 0 AND cd.longitude != 0
-				) AS events_with_coords";
-            $wr = $DB->DataSet($wsql);
-            if ($wr && $wr->Size() > 0 && $wr->Next()) {
-                $total     = (int)$wr->total_active;
-                $fresh     = (int)$wr->fresh;
-                $aging     = (int)$wr->aging;
-                $stale_row = (int)$wr->stale_row;
-                $weather = [
-                    'parks_active'        => $total,
-                    'parks_fresh'         => $fresh,
-                    'parks_aging'         => $aging,
-                    'parks_stale'         => $stale_row,
-                    'parks_no_data'       => max(0, $total - $fresh - $aging - $stale_row),
-                    'parks_oldest_min'    => $wr->oldest_min !== null ? (int)$wr->oldest_min : null,
-                    'events_upcoming'     => (int)$wr->events_upcoming,
-                    'events_with_coords'  => (int)$wr->events_with_coords,
-                ];
-            }
+            $wr = $this->AdminDashboard->server_health_weather_summary($sessionToken);
+            $total     = (int)$wr['total_active'];
+            $fresh     = (int)$wr['fresh'];
+            $aging     = (int)$wr['aging'];
+            $stale_row = (int)$wr['stale_row'];
+            $weather = [
+                'parks_active'        => $total,
+                'parks_fresh'         => $fresh,
+                'parks_aging'         => $aging,
+                'parks_stale'         => $stale_row,
+                'parks_no_data'       => max(0, $total - $fresh - $aging - $stale_row),
+                'parks_oldest_min'    => $wr['oldest_min'],
+                'events_upcoming'     => (int)$wr['events_upcoming'],
+                'events_with_coords'  => (int)$wr['events_with_coords'],
+            ];
 
             // Memcache health — cheap (single getStats roundtrip). Surfaced
             // on the live poll so a sudden curr_items drop or cmd_flush bump
@@ -2733,31 +2391,15 @@ class Controller_Admin extends Controller
             echo json_encode($out);
 
         } elseif ($action === 'serverhealth_weather_refresh') {
-            // Capture the previous newest fetched_at so we can show "last
-            // successful refresh was X ago" alongside this run's outcome.
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT MAX(fetched_at) AS prev FROM " . DB_PREFIX . "park_weather");
-            $prev = ($rs && $rs->Size() > 0 && $rs->Next()) ? $rs->prev : null;
-            $prev_age_min = $prev ? round((time() - strtotime($prev)) / 60) : null;
-
-            $start = microtime(true);
-            $count = Ork3::$Lib->weather->refresh_all_active_parks();
-            $elapsed_ms = (int)round((microtime(true) - $start) * 1000);
-
+            $this->load_model('AdminDashboard');
+            $refresh = $this->AdminDashboard->admin_refresh_with_prior();
             echo json_encode([
                 'status'  => 0,
-                'weather' => [
-                    'count'                => $count,
-                    'elapsed_ms'           => $elapsed_ms,
-                    'previous_fetched_at'  => $prev,
-                    'previous_age_min'     => $prev_age_min,
-                ],
+                'weather' => $refresh,
             ]);
 
         } elseif ($action === 'serverhealth_weather_stats') {
-            $stats = Ork3::$Lib->weather->api_stats(3);
-            echo json_encode(['status' => 0, 'wx' => $stats]);
+            $this->emit_serverhealth_weather_stats(false);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -2819,22 +2461,30 @@ class Controller_Admin extends Controller
             header('Location: ' . UIR . 'Home/index/login');
             exit;
         }
-        $this->data['Kingdoms'] = Ork3::$Lib->stateofamtgard->getActiveKingdoms();
-        // Full attendance date range, for the "All Time" quick-range button.
-        global $DB;
-        $DB->Clear();
-        $_rng = $DB->DataSet("SELECT MIN(date) AS mn, MAX(date) AS mx FROM " . DB_PREFIX . "attendance WHERE date BETWEEN '1990-01-01' AND CURDATE()");
-        $this->data['MinDate'] = '';
-        $this->data['MaxDate'] = '';
-        if ($_rng && $_rng->Next()) {
-            $this->data['MinDate'] = (string)$_rng->mn;
-            $this->data['MaxDate'] = (string)$_rng->mx;
-        }
-        // 12-month cap on the reporting window in production (server-crash guard);
-        // 0 = unlimited for local/dev. Mirrors the hard limit in AdminAjax::stateofamtgard.
-        $this->data['RangeLimitMonths'] = (getenv('ENVIRONMENT') === 'DEV') ? 0 : 12;
+        $this->load_model('AdminDashboard');
+        $bootstrap = $this->AdminDashboard->state_of_amtgard_bootstrap();
+        $this->data['Kingdoms'] = $bootstrap['Kingdoms'];
+        $this->data['MinDate'] = $bootstrap['MinDate'];
+        $this->data['MaxDate'] = $bootstrap['MaxDate'];
+        $this->data['RangeLimitMonths'] = $bootstrap['RangeLimitMonths'];
         $this->data['page_title'] = 'State of Amtgard Report';
         $this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
+    }
+
+    private function admin_can_reset_waivers(int $uid): bool
+    {
+        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+    }
+
+    private function admin_can_edit_kingdom_reports(int $uid, int $kingdomId): bool
+    {
+        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT);
+    }
+
+    private function set_admin_kingdom_auth_flags(int $uid, int $kingdomId): void
+    {
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
+        $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
     }
 
 }

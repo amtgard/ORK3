@@ -226,7 +226,8 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			Loading units…
 		</div>
 
-		<table id="ul-table" class="dataTable" style="width:100%;display:none">
+		<div id="ul-table-wrap" style="display:none">
+		<table id="ul-table" class="dataTable" style="width:100%">
 			<thead>
 				<tr>
 					<th></th>
@@ -244,6 +245,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			</thead>
 			<tbody></tbody>
 		</table>
+		</div>
 
 	</div>
 
@@ -384,7 +386,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	function loadData(q) {
 		defaultMode = !q;
 		$('#ul-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
-		$('#ul-table').hide();
+		$('#ul-table-wrap').hide();
 		$('#ul-limit-warn').hide();
 		if (q) $('#ul-default-note').hide();
 
@@ -396,7 +398,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		$.getJSON(url, function (units) {
 			$('#ul-loading').hide();
 			if (!units || !units.length) {
-				$('#ul-table').hide();
+				$('#ul-table-wrap').hide();
 				$('#ul-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>No units found.').show();
 				updateStats([]);
 				return;
@@ -436,13 +438,14 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				table = $('#ul-table').DataTable({
 					data      : rows,
 					dom       : 'lfrtip',
+					scrollX: true,
 					pageLength: 25,
 					order     : [[1, 'asc']],
 					columnDefs: colDefs
 				});
 			}
 
-			$('#ul-table').show();
+			$('#ul-table-wrap').show();
 			table.order(defaultMode ? [[SIZE_COL, 'desc']] : [[1, 'asc']]);
 			table.column(TYPE_COL).search(activeTypeFilter ? '^' + activeTypeFilter + '$' : '', true, false).draw();
 

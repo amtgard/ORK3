@@ -77,24 +77,25 @@
 	display        : inline-flex;
 	align-items    : center;
 	gap            : 5px;
-	background     : rgba(255,255,255,0.1);
+	background     : rgba(255,255,255,0.18);
 	border         : 1px solid rgba(255,255,255,0.2);
 	border-radius  : 20px;
 	padding        : 2px 10px;
 	font-size      : 11px;
 	font-weight    : 600;
-	color          : rgba(255,255,255,0.85);
+	/* 11px is not "large text": needs 4.5:1 on the navy hero. #bee3f8 ≈ 6.9:1. */
+	color          : #bee3f8;
 	text-decoration: none;
 	transition     : background 0.15s, color 0.15s;
 }
 
 .rp-scope-chip:hover {
-	background: rgba(255,255,255,0.2);
+	background: rgba(255,255,255,0.28);
 	color     : #fff;
 }
 
 .rp-scope-chip-label {
-	color      : rgba(255,255,255,0.5);
+	color      : rgba(255,255,255,0.78);
 	font-weight: 400;
 	margin-right: 2px;
 }
@@ -144,7 +145,7 @@
 }
 
 .rp-context-icon {
-	color     : #0891b2;
+	color     : var(--ork-teal-accent);
 	font-size : 14px;
 	flex-shrink: 0;
 	margin-top: 1px;
@@ -223,6 +224,12 @@
 	margin-top    : 3px;
 }
 
+.rp-stat-hint {
+	font-size  : 10px;
+	color      : var(--rp-text-hint);
+	margin-top : 2px;
+}
+
 
 /* ── Charts / graphs placeholder ────────────────────────── */
 /* Hidden by default; show by adding .rp-charts-visible      */
@@ -287,6 +294,8 @@
 	display    : flex;
 	gap        : 16px;
 	align-items: flex-start;
+	min-width  : 0;
+	max-width  : 100%;
 }
 
 
@@ -391,6 +400,7 @@
 .rp-table-area {
 	flex        : 1;
 	min-width   : 0;
+	max-width   : 100%;
 	background  : var(--rp-bg-table, #fff);
 	border      : 1px solid var(--rp-border);
 	border-radius: 8px;
@@ -446,7 +456,7 @@
 }
 
 .rp-table-area table.dataTable thead th:hover {
-	background: #edf2f7;
+	background: var(--ork-surface-hover);
 }
 
 /* DataTables sort arrows */
@@ -540,7 +550,7 @@
 /* Action link (delete, etc.) inside table cells */
 .rp-action-link {
 	font-size   : 0.8rem;
-	color       : #e53e3e;
+	color       : var(--ork-red-danger);
 	text-decoration: none;
 	white-space : nowrap;
 }
@@ -602,6 +612,11 @@
 	.rp-sidebar {
 		width: 100%;
 	}
+	/* Once the body stacks, max-width:100% must clamp the BORDER box or the
+	   padding + border spills past the viewport and can never be scrolled to. */
+	.rp-table-area {
+		box-sizing: border-box;
+	}
 	.rp-filter-card {
 		margin-bottom: 10px;
 	}
@@ -609,6 +624,7 @@
 		flex-wrap: wrap;
 	}
 	.rp-stat-card {
+		box-sizing: border-box;
 		flex    : 1 1 calc(50% - 7px);
 		min-width: 100px;
 	}
@@ -617,6 +633,18 @@
 	}
 	.rp-chart-card {
 		flex: 1 1 100%;
+	}
+	/* Opt-in stacking order. Once .rp-body goes column the sidebar comes FIRST,
+	   burying the page's actual content under a screen of nav links on a phone.
+	   Flipping that for every rp-* consumer is wrong — several of them put filter
+	   controls in the sidebar, where sidebar-first is the intended reading order.
+	   So pages that want content-first add .qt-page to their .rp-root; every page
+	   that does not opt in is untouched by this rule. */
+	.qt-page .rp-body > .rp-table-area {
+		order: 1;
+	}
+	.qt-page .rp-body > .rp-sidebar {
+		order: 2;
 	}
 }
 
@@ -630,14 +658,41 @@
 		border-radius : 6px 6px 0 0;
 	}
 	.rp-header-actions {
-		width: 100%;
+		width    : 100%;
+		flex-wrap: wrap;
 	}
 	.rp-btn-ghost {
 		flex           : 1;
+		/* Without min-width:0 the label is a hard floor and flex:1 cannot shrink. */
+		min-width      : 0;
+		min-height     : 44px;
+		box-sizing     : border-box;
 		justify-content: center;
+	}
+	.rp-scope-chip {
+		font-size: 12px;
 	}
 	.rp-stat-card {
 		flex    : 1 1 calc(50% - 7px);
+	}
+	/* DataTables right-floats the filter into ~half the available width. */
+	.rp-table-area .dataTables_wrapper .dataTables_filter {
+		float     : none;
+		text-align: left;
+		width     : 100%;
+	}
+	.rp-table-area .dataTables_wrapper .dataTables_filter label {
+		display: block;
+		width  : 100%;
+	}
+	.rp-table-area .dataTables_wrapper .dataTables_filter input {
+		width      : 100%;
+		min-height : 44px;
+		margin-left: 0;
+		box-sizing : border-box;
+	}
+	.rp-table-area .dataTables_wrapper .dataTables_length select {
+		min-height: 44px;
 	}
 }
 
@@ -979,8 +1034,14 @@ html[data-theme="dark"] .rp-btn-ghost:hover {
   background: rgba(255,255,255,0.1);
   color: #fff;
 }
-html[data-theme="dark"] .rp-scope-chip {
-  color: rgba(255,255,255,0.7);
+/* Qualified with #theme_container so these outrank default.theme's
+   `html[data-theme="dark"] #theme_container a` (1,1,2) — chips render as
+   anchors on most consumers and would otherwise repaint to #63b3ed. */
+html[data-theme="dark"] #theme_container .rp-scope-chip {
+  color: #bee3f8;
+}
+html[data-theme="dark"] #theme_container .rp-scope-chip:hover {
+  color: #fff;
 }
 
 /* =====================================================
@@ -1140,8 +1201,6 @@ html[data-theme="dark"] .pdm-table th.pdm-corner {
   background: #2d3748;
 }
 
-/* =====================================================
-   
 /* =====================================================
    DARK MODE — Chart container background
    ===================================================== */

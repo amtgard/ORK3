@@ -28,10 +28,10 @@ class Controller_Principality extends Controller
         unset($this->session->park_name);
         $this->data['principality_name'] = $this->session->principality_name;
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
-                    array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => $this->Kingdom->GetOrgUnitLabel($id, false) )
+                    array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => $this->Kingdom->get_org_unit_label($id, false) )
                 );
         }
         $this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
@@ -46,7 +46,7 @@ class Controller_Principality extends Controller
         $this->data['event_summary'] = $this->Principality->get_kingdom_events($principality_id);
         $this->data['principality_info'] = $this->Principality->get_principality_shortinfo($principality_id);
         $this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $principality_id);
-        $this->data['OrgUnitLabel'] = $this->Kingdom->GetOrgUnitLabel($principality_id, false);
+        $this->data['OrgUnitLabel'] = $this->Kingdom->get_org_unit_label($principality_id, false);
         logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
     }
 

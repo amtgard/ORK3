@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-index",
+  "imageWidth": 1280,
+  "imageHeight": 1023,
+  "calibratedAt": "2026-08-01T21:20:31Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 1080,
+      "y": 296,
+      "width": 101,
+      "height": 69,
+      "source": "refuzz"
+    },
+    {
+      "x": 1073,
+      "y": 296,
+      "width": 108,
+      "height": 84,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:53:34Z",
+  "refuzzedFromCommit": "05389516"
+}

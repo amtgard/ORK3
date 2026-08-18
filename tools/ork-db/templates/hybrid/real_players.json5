@@ -1,0 +1,8 @@
+{
+  "players": [
+    { "key": "admin", "assign_park": null, "keep_global_admin": true },
+    { "key": "megiddo", "assign_park": "seed" },
+    { "key": "ken_walker", "assign_park": "seed" },
+    { "key": "avery_krouse", "assign_park": "seed" }
+  ]
+}
