@@ -188,13 +188,7 @@ class Controller_ParkAjax extends Controller
 
             // Resolve this park's kingdom for ring ranking
             $pid        = (int)$park_id;
-            $pkKingdom  = 0;
-            global $DB;
-            $DB->Clear();
-            $pkRow = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1");
-            if ($pkRow && $pkRow->Next()) {
-                $pkKingdom = (int)$pkRow->kingdom_id;
-            }
+            $pkKingdom  = (int)$this->Park->get_park_kingdom_id($pid);
 
             // Map scope -> RankedPlayers params
             $restrictTo      = null;
