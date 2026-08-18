@@ -50,16 +50,8 @@ class Controller_Login extends Controller {
 		$mundaneId = (int)$mundaneId;
 		$display = '';
 		if ($mundaneId > 0) {
-			global $DB;
-			$DB->Clear();
-			$DB->mundane_id = $mundaneId;
-			$rs = $DB->DataSet('SELECT persona, username FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = :mundane_id LIMIT 1');
-			if ($rs && $rs->Next()) {
-				$persona = trim((string)$rs->persona);
-				$userName = trim((string)$rs->username);
-				$display = $persona !== '' ? $persona : $userName;
-			}
-			$DB->Clear();
+			$this->load_model('Player');
+			$display = $this->Player->get_persona_or_username($mundaneId);
 		}
 		$exp = time() + 60 * 60 * 24 * 365;
 		setcookie('ork_idp_autoredirect', '1', $exp, '/');
@@ -396,12 +388,8 @@ class Controller_Login extends Controller {
 			return;
 		}
 		$uid = (int)$this->session->user_id;
-		global $DB;
-		$DB->Clear();
-		$DB->mundane_id = $uid;
-		$rs = $DB->DataSet("SELECT email FROM " . DB_PREFIX . "mundane WHERE mundane_id = :mundane_id LIMIT 1");
-		$email = ($rs && $rs->Size() > 0 && $rs->Next()) ? (string)$rs->email : '';
-		$DB->Clear();
+		$this->load_model('Player');
+		$email = $this->Player->get_email($uid);
 
 		$jwt = Ork3::$Lib->idphandoff->mintLinkToken($uid, $email);
 		$url = IDP_BASE_URL . '/auth/connect?email=' . urlencode($email) . '&link_token=' . urlencode($jwt);
@@ -445,22 +433,7 @@ class Controller_Login extends Controller {
 			header('Location: ' . UIR . 'Login?msg=link_failed');
 			return;
 		}
-		global $DB;
-		$DB->Clear();
-		$DB->idp_user_id = $claims['idp_user_id'];
-		$DB->mundane_id  = $claims['mundane_id'];
-		$existing = $DB->DataSet('SELECT authorization_id FROM ' . DB_PREFIX . 'idp_auth WHERE idp_user_id = :idp_user_id LIMIT 1');
-		$DB->Clear();
-		if (!$existing || $existing->Size() === 0) {
-			$DB->Clear();
-			$DB->idp_user_id          = $claims['idp_user_id'];
-			$DB->mundane_id           = $claims['mundane_id'];
-			$DB->idp_mirror_status    = 'synced';
-			$DB->idp_mirror_last_attempt = date('Y-m-d H:i:s');
-			$DB->created_at           = date('Y-m-d H:i:s');
-			$DB->Execute('INSERT INTO ' . DB_PREFIX . 'idp_auth (idp_user_id, mundane_id, idp_mirror_status, idp_mirror_last_attempt, created_at) VALUES (:idp_user_id, :mundane_id, :idp_mirror_status, :idp_mirror_last_attempt, :created_at)');
-			$DB->Clear();
-		}
+		$this->Authorization->ensure_idp_link($claims['idp_user_id'], $claims['mundane_id']);
 		// F6: session fixation defense — regenerate session id at auth state change.
 		// $this->session is a wrapper; the underlying PHP session is still active,
 		// so the bare php call works here.

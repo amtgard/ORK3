@@ -4722,6 +4722,48 @@ class Player extends Ork3
     }
 
     /**
+     * Greeting name for the IDP "Welcome Back" cookie: persona when set,
+     * otherwise the username. Empty string when the player is not found.
+     */
+    public function GetPersonaOrUsername(int $mundaneId): string
+    {
+        if (!valid_id($mundaneId)) {
+            return '';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT persona, username FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next()) {
+            $persona = trim((string) $rs->persona);
+            $userName = trim((string) $rs->username);
+
+            return $persona !== '' ? $persona : $userName;
+        }
+
+        return '';
+    }
+
+    /**
+     * Email on file for a mundane id. Empty string when unset or not found.
+     */
+    public function GetEmail(int $mundaneId): string
+    {
+        if (!valid_id($mundaneId)) {
+            return '';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT email FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return (string) $rs->email;
+        }
+
+        return '';
+    }
+
+    /**
      * Home kingdom/park quick-link context for nav chrome (T-INF-05 extension).
      *
      * @return array{

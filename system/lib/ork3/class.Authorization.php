@@ -641,6 +641,56 @@ class Authorization extends Ork3
 		Ork3::$Lib->idphandoff->mirrorToIdp($idpUserId, $mundaneId);
 	}
 
+	/**
+	 * Whether an ORK profile already has an ork_idp_auth row. Drives the
+	 * post-login "link your Amtgard account" nudge banner. Read-only —
+	 * grants nothing on its own.
+	 */
+	public function IsIdpLinked($mundaneId)
+	{
+		global $DB;
+		$DB->Clear();
+		$DB->mundane_id = (int)$mundaneId;
+		$rs = $DB->DataSet("SELECT 1 FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = :mundane_id LIMIT 1");
+		$linked = ($rs && $rs->Size() > 0);
+		$DB->Clear();
+
+		return $linked;
+	}
+
+	/**
+	 * Write the ork_idp_auth row for a completed ORK -> IDP /auth/connect
+	 * handoff. Callers MUST have already verified the completion token and
+	 * confirmed $mundaneId is the currently-logged-in user; this method does
+	 * no identity checking of its own.
+	 *
+	 * Idempotent: an existing row for $idpUserId is left untouched (the column
+	 * also carries a UNIQUE key, so a racing insert can never duplicate it).
+	 * Returns true when a row was inserted, false when one already existed.
+	 */
+	public function EnsureIdpLink($idpUserId, $mundaneId)
+	{
+		global $DB;
+		$DB->Clear();
+		$DB->idp_user_id = $idpUserId;
+		$existing = $DB->DataSet('SELECT authorization_id FROM ' . DB_PREFIX . 'idp_auth WHERE idp_user_id = :idp_user_id LIMIT 1');
+		$DB->Clear();
+		if ($existing && $existing->Size() > 0) {
+			return false;
+		}
+
+		$DB->Clear();
+		$DB->idp_user_id             = $idpUserId;
+		$DB->mundane_id              = (int)$mundaneId;
+		$DB->idp_mirror_status       = 'synced';
+		$DB->idp_mirror_last_attempt = date('Y-m-d H:i:s');
+		$DB->created_at              = date('Y-m-d H:i:s');
+		$DB->Execute('INSERT INTO ' . DB_PREFIX . 'idp_auth (idp_user_id, mundane_id, idp_mirror_status, idp_mirror_last_attempt, created_at) VALUES (:idp_user_id, :mundane_id, :idp_mirror_status, :idp_mirror_last_attempt, :created_at)');
+		$DB->Clear();
+
+		return true;
+	}
+
 	private function idpAuthorize($request)
 	{
 		// User is already linked

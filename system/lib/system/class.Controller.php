@@ -157,12 +157,7 @@ class Controller
         $this->data['IdpLinked']        = false;
         $this->data['IdpNudgeDismissed'] = isset($_COOKIE['ork_idp_nudge_dismissed_until']) && (int)$_COOKIE['ork_idp_nudge_dismissed_until'] > time();
         if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
-            global $DB;
-            $DB->Clear();
-            $DB->mundane_id = (int)$this->session->user_id;
-            $_idpRs  = $DB->DataSet("SELECT 1 FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = :mundane_id LIMIT 1");
-            $this->data['IdpLinked'] = ($_idpRs && $_idpRs->Size() > 0);
-            $DB->Clear();
+            $this->data['IdpLinked'] = $this->Authorization->is_idp_linked((int)$this->session->user_id);
 
             // CSRF token for the nudge banner forms. Generated lazily; persists
             // across the session like the auth token.
