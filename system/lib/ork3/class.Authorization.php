@@ -432,23 +432,31 @@ class Authorization extends Ork3
 		}
 
 		// Case-insensitive exact match. ork_mundane.email is varchar(165) MUL.
+		// Yapo's DataSet() takes the SQL only — parameters are bound by assigning
+		// them onto $DB first (named placeholders), and the result is a
+		// YapoResultSet that must be walked with Next(), never an array.
 		$DB->Clear();
-		$rows = $DB->DataSet(
+		$DB->email = $email;
+		$rs = $DB->DataSet(
 			"SELECT m.mundane_id FROM " . DB_PREFIX . "mundane m " .
 			"LEFT JOIN " . DB_PREFIX . "idp_auth ia ON ia.mundane_id = m.mundane_id " .
-			"WHERE LOWER(m.email) = LOWER(?) AND ia.authorization_id IS NULL",
-			array($email)
+			"WHERE LOWER(m.email) = LOWER(:email) AND ia.authorization_id IS NULL"
 		);
+		$matches = array();
+		while ($rs && $rs->Next()) {
+			$matches[] = (int)$rs->mundane_id;
+		}
+		$DB->Clear();
 
-		if (!is_array($rows) || count($rows) !== 1) {
-			$matchCount = is_array($rows) ? count($rows) : 0;
-			error_log("AuthorizeIdp: tryAutoLinkByEmail matched $matchCount rows for $email");
+		// Auto-link only on an unambiguous single match. Zero or 2+ both refuse
+		// and fall through to the manual claim flow.
+		if (count($matches) !== 1) {
 			// Stash the count so the claim form can show a helpful banner.
-			$_SESSION['Session_Vars']['IdpEmailMatchCount'] = $matchCount;
+			$_SESSION['Session_Vars']['IdpEmailMatchCount'] = count($matches);
 			return false;
 		}
 
-		$mundaneId = (int)$rows[0]['mundane_id'];
+		$mundaneId = $matches[0];
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $mundaneId;
 		if (!$this->mundane->find()) {
@@ -567,15 +575,19 @@ class Authorization extends Ork3
 			return ['Status' => NoAuthorization(null, "That link isn't valid.")];
 		}
 
+		// Yapo binds named placeholders assigned onto $DB; DataSet() returns a
+		// YapoResultSet that needs an explicit Next() before any field is readable.
 		$DB->Clear();
-		$rows = $DB->DataSet(
-			"SELECT * FROM " . DB_PREFIX . "idp_claim_token WHERE token = ? LIMIT 1",
-			array($token)
+		$DB->token = $token;
+		$rs = $DB->DataSet(
+			"SELECT * FROM " . DB_PREFIX . "idp_claim_token WHERE token = :token LIMIT 1"
 		);
-		if (!is_array($rows) || count($rows) === 0) {
+		if (!$rs || !$rs->Next()) {
+			$DB->Clear();
 			return ['Status' => NoAuthorization(null, "That link isn't valid.")];
 		}
-		$row = $rows[0];
+		$row = $rs->CurrentFieldSet();
+		$DB->Clear();
 
 		if (!is_null($row['consumed_at'])) {
 			return ['Status' => NoAuthorization(null, "That link has already been used.")];
@@ -594,16 +606,21 @@ class Authorization extends Ork3
 		// Mark consumed BEFORE finalizing so concurrent uses fail fast.
 		// Atomic guard: only one concurrent request will flip consumed_at from NULL.
 		$DB->Clear();
+		$DB->token = $token;
 		$DB->Execute(
-			"UPDATE " . DB_PREFIX . "idp_claim_token SET consumed_at = NOW() WHERE token = ? AND consumed_at IS NULL",
-			array($token)
+			"UPDATE " . DB_PREFIX . "idp_claim_token SET consumed_at = NOW() " .
+			"WHERE token = :token AND consumed_at IS NULL"
 		);
 		$DB->Clear();
+		$DB->token = $token;
 		$check = $DB->DataSet(
-			"SELECT consumed_at FROM " . DB_PREFIX . "idp_claim_token WHERE token = ? LIMIT 1",
-			array($token)
+			"SELECT consumed_at FROM " . DB_PREFIX . "idp_claim_token WHERE token = :token LIMIT 1"
 		);
-		if (!is_array($check) || count($check) === 0 || is_null($check[0]['consumed_at'])) {
+		$consumedAt = ($check && $check->Next()) ? $check->consumed_at : null;
+		$DB->Clear();
+		// No row, or consumed_at still NULL, means this request did not win the
+		// race to flip it — treat the link as already spent.
+		if (is_null($consumedAt)) {
 			return ['Status' => NoAuthorization(null, "That link has already been used.")];
 		}
 
