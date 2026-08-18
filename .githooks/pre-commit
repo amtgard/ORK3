@@ -5,8 +5,13 @@
 # Does three things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
 #   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
+#      --path-mode=intersection makes the fixer honor the excludes in .php-cs-fixer.dist.php
+#      (vendor, tools, import, db-migrations, ...); without it, explicitly-passed paths bypass
+#      the config Finder and third-party code staged with `git add -f` gets reformatted.
 #   3. Normalizes leading-tab indentation to spaces in the CSS/JS files you are committing,
 #      via bin/normalize-leading-tabs.sh (POSIX awk only — no npm/node dependency).
+#      .tpl is deliberately NOT normalized: templates embed multi-line JS template literals
+#      whose leading tabs are string CONTENT, not indentation (see the note in that script).
 #
 # For (2) and (3): only files that are FULLY staged are touched — a file with both staged
 # and unstaged changes is skipped, so unstaged hunks are never swept into the commit. The
@@ -78,13 +83,15 @@ format_php() {
     [ -z "$TO_FIX" ] && return 0
 
     echo "$TO_FIX" | tr '\n' '\0' | \
-        xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --quiet --using-cache=yes
+        xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --path-mode=intersection --quiet --using-cache=yes
     if [ "$?" -ne 0 ]; then
         echo "⚠️  php-cs-fixer exited non-zero — committing your PHP files as-is (no auto-format applied)."
         return 0
     fi
 
-    echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add --
+    # -f because every path here was already staged by the user; without it, a
+    # gitignored-but-force-added file (e.g. vendor/) makes git print "paths are ignored" noise.
+    echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add -f --
     return 0
 }
 

@@ -35,6 +35,10 @@
 .qt-action-btn-reset:hover { background: #d6bcfa; }
 .qt-action-btn-dup { background: #bee3f8; color: #2c5282; border: none; }
 .qt-action-btn-dup:hover { background: #90cdf4; }
+/* "Clear Flags" — was an inline style, so dark mode could never reach it and it stayed a
+   light chip beside its correctly-dark siblings. */
+.qt-action-btn-clear { background: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
+.qt-action-btn-clear:hover { background: #fed7d7; }
 .qt-correct-answer { font-size: 0.78rem; color: #276749; margin-top: 3px; font-style: italic; }
 .qt-success-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
 .qt-success-green  { background: #c6f6d5; color: #276749; }
@@ -93,6 +97,20 @@
 	font-weight:700; text-transform:uppercase; background:#fed7d7; color:#742a2a; }
 html[data-theme="dark"] .qt-ver-warn  { background:#3b2f14; color:#fde68a; }
 html[data-theme="dark"] .qt-ver-short { color:#fbbf24; }
+/* Retired-version rows and the read-only question cards in the Version Contents modal both
+   defaulted to #fff — a wall of white slabs inside a dark card. */
+html[data-theme="dark"] .qt-ver-past { background:var(--ork-bg-tertiary, #374151); border-color:var(--ork-border, #4a5568); color:var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-ver-past:hover { background:#4a5568; border-color:#63b3ed; }
+html[data-theme="dark"] .qt-ver-past-wrap { border-top-color:var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-ver-pasthdr { color:var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-ver-view { color:#63b3ed; }
+html[data-theme="dark"] .qt-ver-meta { color:var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-vq { background:var(--ork-bg-tertiary, #374151); border-color:var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-vq-text { color:var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-vq-ans { color:var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-vq-ans.qt-vq-correct { color:#9ae6b4; }
+html[data-theme="dark"] .qt-vq-ans.qt-vq-correct::before { color:#68d391; }
+html[data-theme="dark"] .qt-vq-archived { background:#742a2a; color:#feb2b2; }
 /* The kingdom hasn't switched the test on — a published version still reaches nobody. */
 .qt-notlive-warning { display:flex; align-items:flex-start; gap:10px; margin:0 0 12px; padding:11px 14px;
 	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:6px;
@@ -180,9 +198,23 @@ html[data-theme="dark"] .qt-unsaved-warning a { color:#fde68a; }
 html[data-theme="dark"] .qt-lib-ver { background:#2d3748; color:#cbd5e0; }
 html[data-theme="dark"] .qt-lib-ver-diff { background:#3b2f14; color:#fde68a; }
 #qt-library-search:focus { border-color:#2b6cb0; box-shadow:0 0 0 3px rgba(43,108,176,0.15); }
+/* Fixed height (not max-height) so the modal does NOT resize as the filter narrows results —
+   the list area stays constant and just scrolls. dvh line is additive: identical on desktop,
+   but it survives mobile Safari's dynamic toolbar instead of overshooting under it. */
+#qt-library-overlay .qt-library-modal { box-sizing:border-box; max-width:720px; width:95%;
+	height:80vh; height:80dvh; max-height:80vh; max-height:80dvh; display:flex; flex-direction:column; }
+/* Shared chrome for the overlay ×s and their "Loading…"/empty states. The colour used to be
+   inline on each one, which no dark rule could reach (#718096 is 2.99:1 on a dark card). */
+.qt-modal-close { background:none; border:none; font-size:1.4rem; cursor:pointer; color:#718096; line-height:1; padding:0 4px; }
+.qt-modal-muted { color:#718096; }
+html[data-theme="dark"] .qt-modal-close,
+html[data-theme="dark"] .qt-modal-muted { color:var(--ork-text-muted, #a0aec0); }
 .qt-report-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000; align-items:center; justify-content:center; }
 .qt-report-overlay.qt-open { display:flex; }
-.qt-report-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:320px; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+/* box-sizing + no min-width floor: padding must live INSIDE the width, or the modal is
+   wider than a 320px phone and the corners shear off both edges. max-width still governs
+   desktop, so nothing above 440px moves. */
+.qt-report-modal { background:#fff; border-radius:8px; padding:24px 26px; box-sizing:border-box; min-width:0; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-report-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
 .qt-report-modal h4 i { color:#e53e3e; margin-right:6px; }
 /* orkui.css styles EVERY h1..h6 as a grey "chip" — background, border, white text-shadow —
@@ -220,12 +252,18 @@ html[data-theme="dark"] .qt-confirm-title {
 .qt-bulk-bar-restore:hover { background:#9ae6b4; }
 .qt-bulk-bar-deselect { color:#a0aec0; text-decoration:underline; cursor:pointer; background:none; border:none; font-size:0.82rem; }
 /* Bulk import modal */
-.qt-bulk-import-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:340px; max-width:680px; width:95%; max-height:90vh; box-sizing:border-box; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+.qt-bulk-import-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:0; max-width:680px; width:95%; max-height:90vh; max-height:90dvh; box-sizing:border-box; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
 .qt-bulk-import-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
 /* The header (above) and the button row (below) are flex-shrink:0 and stay
    pinned; only this middle region scrolls, so the buttons are never pushed off
    screen no matter how short the window. min-height:0 lets it actually shrink. */
 .qt-bulk-import-body { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+.qt-bulk-help { flex-shrink:0; }
+/* Height lives here rather than inline, so the phone/landscape override below can grow it —
+   an inline min-height would beat any stylesheet rule. */
+.qt-bulk-import-modal textarea { min-height:96px; }
+.qt-bulk-help > summary { cursor:pointer; font-size:0.8rem; font-weight:600; color:#4a5568; margin-bottom:6px; list-style-position:inside; }
+html[data-theme="dark"] .qt-bulk-help > summary { color:var(--ork-text-secondary, #cbd5e0); }
 .qt-bulk-import-instructions { background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; font-size:0.78rem; color:#4a5568; font-family:monospace; white-space:pre-line; margin-bottom:12px; line-height:1.6; flex-shrink:0; }
 .qt-bulk-import-preview { flex:0 0 auto; margin:12px 0; }
 .qt-bulk-import-preview-q { border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:8px; }
@@ -237,7 +275,7 @@ html[data-theme="dark"] .qt-confirm-title {
 /* Test preview modal */
 .qt-preview-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9100; align-items:center; justify-content:center; }
 .qt-preview-overlay.qt-open { display:flex; }
-.qt-preview-modal { background:#fff; border-radius:8px; padding:24px 26px; max-width:720px; width:95%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-preview-modal { background:#fff; border-radius:8px; padding:24px 26px; box-sizing:border-box; max-width:720px; width:95%; max-height:85vh; max-height:85dvh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-preview-info { background:#ebf8ff; border:1px solid #bee3f8; border-radius:6px; padding:8px 14px; font-size:0.85rem; color:#2b6cb0; font-weight:600; margin-bottom:14px; flex-shrink:0; }
 /* Which version the preview drew from. A GMR mid-draft must never mistake the running test for
    the one they are building, or vice versa. */
@@ -267,7 +305,7 @@ html[data-theme="dark"] .qt-preview-setnote { color:#d6bcfa; }
 /* ── In-product confirm/alert modal (replaces native confirm/alert) ── */
 .qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
 .qt-confirm-overlay.qt-open { display:flex; }
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 .qt-confirm-body { font-size:0.9rem; color:#4a5568; line-height:1.5; margin-bottom:18px; }
 .qt-confirm-footer { display:flex; gap:10px; justify-content:flex-end; }
@@ -301,6 +339,8 @@ html[data-theme="dark"] .qt-action-btn-reset   { background: #44337a; color: #d6
 html[data-theme="dark"] .qt-action-btn-reset:hover { background: #553c9a; }
 html[data-theme="dark"] .qt-action-btn-dup     { background: #2a4365; color: #90cdf4; }
 html[data-theme="dark"] .qt-action-btn-dup:hover { background: #2c5282; }
+html[data-theme="dark"] .qt-action-btn-clear   { background: #3b1f1f; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .qt-action-btn-clear:hover { background: #742a2a; }
 html[data-theme="dark"] .qt-correct-answer     { color: #9ae6b4; }
 /* Success-rate cells */
 html[data-theme="dark"] .qt-success-green  { background: #22543d; color: #9ae6b4; }
@@ -384,9 +424,150 @@ html[data-theme="dark"] .qt-confirm-title { color: var(--ork-text, #e2e8f0); }
 html[data-theme="dark"] .qt-confirm-body { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .qt-confirm-cancel { background: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
+
+/* ── Report modal: bound its height ───────────────────────
+   One row per reporter, unbounded, inside an overlay that is not a scroll container: with a
+   dozen reports the title cleared the top of the screen and the footer (Close / Clear Flags /
+   Archive / Edit — the whole point of the modal) sat below the bottom fold. Scoped to this
+   overlay so the .qt-report-modal reuse in the bulk-import and library overlays is untouched.
+   Desktop is unaffected: on a 900px-tall window the cap is 868px, which this never reaches. */
+#qt-report-overlay { overflow-y:auto; padding:16px 12px; }
+#qt-report-overlay .qt-report-modal { display:flex; flex-direction:column;
+	max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); }
+#qt-report-overlay #qt-report-body { flex:1 1 auto; min-height:0; overflow-y:auto; }
+#qt-report-overlay .qt-report-modal h4,
+#qt-report-overlay .qt-report-footer { flex-shrink:0; }
+/* Don't chain an inner scroller's overscroll to the page behind the modal — these regions are
+   small (the bulk-import body is ~229px on a landscape phone), so a flick bottoms out at once. */
+.qt-bulk-import-body, .qt-preview-body, #qt-library-body, .qt-ver-pastlist,
+#qt-report-overlay .qt-report-modal { overscroll-behavior: contain; }
+
+/* ── Press + keyboard feedback ────────────────────────────
+   Paired with the existing :hover rules, never swapped for them, so desktop is unchanged.
+   Without these a 33x23 icon button gives no acknowledgement that a tap registered. */
+.qt-action-btn:active, .qt-flag-btn:active, .qt-ver-btn:active, .qt-mem-btn:active,
+.qt-preview-btn:active, .qt-lib-add-btn:active, .qt-confirm-btn:active,
+.qt-bulk-bar-action:active, .qt-ver-rename:active, .qt-ver-editlabel:active,
+.qt-modal-close:active { filter:brightness(0.88); transform:scale(0.97); }
+.qt-action-btn:focus-visible, .qt-flag-btn:focus-visible, .qt-ver-btn:focus-visible,
+.qt-mem-btn:focus-visible, .qt-preview-btn:focus-visible, .qt-lib-add-btn:focus-visible,
+.qt-confirm-btn:focus-visible, .qt-modal-close:focus-visible, .qt-bulk-cb:focus-visible,
+.qt-ver-past:focus-visible { outline:2px solid #2b6cb0; outline-offset:2px; }
+html[data-theme="dark"] .qt-action-btn:focus-visible,
+html[data-theme="dark"] .qt-flag-btn:focus-visible,
+html[data-theme="dark"] .qt-ver-btn:focus-visible,
+html[data-theme="dark"] .qt-mem-btn:focus-visible,
+html[data-theme="dark"] .qt-preview-btn:focus-visible,
+html[data-theme="dark"] .qt-lib-add-btn:focus-visible,
+html[data-theme="dark"] .qt-confirm-btn:focus-visible,
+html[data-theme="dark"] .qt-modal-close:focus-visible,
+html[data-theme="dark"] .qt-bulk-cb:focus-visible,
+html[data-theme="dark"] .qt-ver-past:focus-visible { outline-color:#63b3ed; }
+/* The tooltip is hover-only, which never fires on touch and is unreachable by keyboard. */
+[data-tip]:focus-visible::after, [data-tip]:active::after { opacity:1; }
+@media (hover: none) {
+	/* WebKit synthesises a hover on tap and leaves it applied until the next tap elsewhere,
+	   so a hover-only colour change latches on after a single touch. */
+	.qt-flag-btn:hover { color:#e53e3e; }
+	html[data-theme="dark"] .qt-flag-btn:hover { color:#fc8181; }
+	.qt-ver-past:hover { border-color:#e2e8f0; background:#fff; }
+	html[data-theme="dark"] .qt-ver-past:hover { background:var(--ork-bg-tertiary, #374151); border-color:var(--ork-border, #4a5568); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.qt-nav-link, [data-tip]::after, .qt-ver-caret, #qt-archived-chevron,
+	.qt-action-btn, .qt-preview-btn, .qt-confirm-btn { transition:none !important; animation:none !important; }
+	.qt-action-btn:active, .qt-flag-btn:active, .qt-ver-btn:active, .qt-mem-btn:active,
+	.qt-preview-btn:active, .qt-lib-add-btn:active, .qt-confirm-btn:active,
+	.qt-bulk-bar-action:active, .qt-modal-close:active { transform:none !important; }
+}
+
+/* ── Bulk-import cheat-sheet ──────────────────────────────
+   ~20 lines of format documentation with flex-shrink:0 filled the entire first screen of the
+   modal and pushed the paste box 54-102px BELOW the fold. Collapse it instead of shrinking it;
+   the JS closes the <details> on a small screen and leaves it open on a desktop one. */
+@media (max-width: 600px), (max-height: 520px) {
+	.qt-bulk-help > summary { padding:10px 0; font-weight:600; cursor:pointer; }
+	.qt-bulk-import-instructions { max-height:112px; overflow-y:auto; flex-shrink:1; min-height:0; }
+	.qt-bulk-import-modal textarea { min-height:220px; }
+}
+
+@media (max-width: 768px) {
+	/* The Answers column is ~95px wide but holds the whole correct-answer sentence, wrapping to
+	   ~5 characters a line and inflating every row to 195px. Clamp the preview, not the column. */
+	.qt-correct-answer { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+	#qt-active-table td:nth-child(2), #qt-archived-table td:nth-child(2) { font-size:0.9rem; line-height:1.45; }
+}
+
+@media (max-width: 600px) {
+	/* Leave a backdrop strip either side of every modal — with padding:0 the modal is pinned
+	   edge to edge and there is nothing left to tap to dismiss it. */
+	.qt-confirm-overlay, .qt-report-overlay, .qt-preview-overlay { padding:12px; }
+	#qt-library-overlay .qt-library-modal { height:calc(100vh - 24px); height:calc(100dvh - 24px);
+		max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); }
+
+	/* Three ghost buttons in the header card. Full-width rows keep the multi-word labels on one
+	   line and give each a real touch target; min-width:0 is what lets them shrink at all. */
+	.rp-header-actions { flex-wrap:wrap; gap:8px; }
+	.rp-header-actions > .rp-btn-ghost { flex:1 1 100%; min-width:0; min-height:44px;
+		justify-content:center; box-sizing:border-box; }
+
+	/* Questions tables: freeze the identity column so it stays on screen while you scroll out to
+	   Actions (at full scroll the Question text was entirely off-screen), and drop the two
+	   lowest-value columns to halve the scroll distance. A sticky cell must be opaque. */
+	#qt-active-table th:nth-child(2), #qt-archived-table th:nth-child(2) {
+		position:sticky; left:0; z-index:2; background:var(--rp-bg-light, #f7fafc);
+		min-width:130px; max-width:130px; white-space:normal;
+	}
+	#qt-active-table td:nth-child(2), #qt-archived-table td:nth-child(2) {
+		position:sticky; left:0; z-index:2; background:var(--rp-bg-table, #fff);
+		min-width:130px; max-width:130px; white-space:normal;
+	}
+	html[data-theme="dark"] #qt-active-table th:nth-child(2),
+	html[data-theme="dark"] #qt-archived-table th:nth-child(2) { background:var(--rp-bg-light, #2d3748); }
+	html[data-theme="dark"] #qt-active-table td:nth-child(2),
+	html[data-theme="dark"] #qt-archived-table td:nth-child(2) { background:var(--rp-bg-table, #1e2433); }
+	#qt-active-table th:nth-child(4), #qt-active-table td:nth-child(4),
+	#qt-active-table th:nth-child(5), #qt-active-table td:nth-child(5),
+	#qt-archived-table th:nth-child(4), #qt-archived-table td:nth-child(4),
+	#qt-archived-table th:nth-child(5), #qt-archived-table td:nth-child(5) { display:none; }
+
+	/* Row actions: 44px targets, and the icon-only buttons carry their label inline — the
+	   [data-tip] tooltip is a :hover::after, which touch never fires. */
+	/* max-width is what makes flex-wrap bite: without a ceiling the cell just grows. */
+	.qt-actions-cell { flex-wrap:wrap; gap:10px; max-width:150px; }
+	.rp-table-area .qt-action-btn { display:inline-flex; align-items:center; min-height:44px; padding:6px 10px; }
+	.qt-actions-cell .qt-action-btn[data-tip]::after {
+		position:static; opacity:1; transform:none; background:none; color:inherit; box-shadow:none;
+		width:auto; max-width:none; padding:0; margin-left:6px; font-size:0.72rem;
+	}
+	/* Its own row, so the destructive action is not one mis-tap from Duplicate. */
+	.qt-action-btn-archive, .qt-action-btn-restore { flex-basis:100%; }
+	.qt-flag-btn { min-width:44px; min-height:44px; }
+	.qt-bulk-cb { width:22px; height:22px; }
+
+	/* Touch targets: height is the failing axis nearly everywhere in this module. */
+	.qt-ver-btn, .qt-mem-btn, .qt-lib-add-btn, .qt-preview-btn, .qt-bulk-bar-action,
+	.qt-bulk-bar-deselect, .qt-modal-close, .qt-ver-rename, .qt-ver-editlabel {
+		min-height:44px; min-width:44px; box-sizing:border-box;
+	}
+	.qt-ver-input { min-height:44px; min-width:0; width:100%; box-sizing:border-box; }
+	.qt-modal-close { display:inline-flex; align-items:center; justify-content:center; }
+	.qt-report-footer { flex-direction:column; gap:10px; }
+	/* The JS re-shows these with an inline display, which beats a stylesheet display — so
+	   centre them with text-align, which survives either box type. */
+	.qt-report-footer > * { width:100%; min-height:44px; box-sizing:border-box;
+		padding:10px 12px; text-align:center; }
+	#qt-report-archive { order:99; }
+	/* column-reverse puts the destructive OK furthest from the resting thumb. */
+	.qt-confirm-footer { flex-direction:column-reverse; gap:12px; }
+	.qt-confirm-btn { width:100%; min-height:44px; }
+	.qt-bulk-bar { left:8px; right:8px; transform:none; flex-wrap:wrap; justify-content:center;
+		bottom:max(20px, env(safe-area-inset-bottom, 20px)); }
+	.qt-bulk-bar button { min-height:44px; }
+}
 </style>
 
-<div class="rp-root">
+<div class="rp-root qt-page">
 
 	<!-- Header -->
 	<div class="rp-header">
@@ -498,7 +679,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 
 			<?php if ($_live): ?>
 				<strong class="qt-ver-name" data-set="<?= (int)$_live['SetId'] ?>"><?= htmlspecialchars($_live['Name']) ?></strong>
-				<button type="button" class="qt-ver-rename" data-set="<?= (int)$_live['SetId'] ?>" title="Rename this version"><i class="fas fa-pen"></i></button>
+				<button type="button" class="qt-ver-rename" data-set="<?= (int)$_live['SetId'] ?>" data-tip="Rename this version" aria-label="Rename this version"><i class="fas fa-pen"></i></button>
 				<?php // The rules/corpora label is editable on the LIVE version too, not just on a draft.
 				      // Publishing REQUIRES it, so a typo used to be unfixable — the only remedy was
 				      // publishing a whole new version to correct a string. Safe to change in place:
@@ -507,7 +688,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<span class="qt-ver-label<?= ($_live['RulesVersion'] ?? '') === '' ? ' qt-ver-nolabel' : '' ?>"
 				      data-set="<?= (int)$_live['SetId'] ?>"><?= ($_live['RulesVersion'] ?? '') !== '' ? htmlspecialchars($_live['RulesVersion']) : 'no version label' ?></span>
 				<button type="button" class="qt-ver-editlabel" data-set="<?= (int)$_live['SetId'] ?>"
-				        title="Edit the rules/corpora version. Players see it as a footer on every test card. Past attempts keep the version they were sat under."><i class="fas fa-pen"></i></button>
+				        aria-label="Edit the rules or corpora version"
+				        data-tip="Edit the rules/corpora version. Players see it as a footer on every test card. Past attempts keep the version they were sat under."><i class="fas fa-pen"></i></button>
 				<span class="qt-ver-meta"><?= $_liveCount ?> question<?= $_liveCount !== 1 ? 's' : '' ?></span>
 				<?php if (!$_ready): ?>
 					<span class="qt-ver-short"><i class="fas fa-exclamation-triangle"></i>
@@ -543,7 +725,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		<div class="qt-ver-row qt-ver-draftrow">
 			<span class="qt-ver-chip qt-ver-draft"><i class="fas fa-pen"></i> Draft</span>
 			<strong class="qt-ver-name" data-set="<?= (int)$_draft['SetId'] ?>"><?= htmlspecialchars($_draft['Name']) ?></strong>
-			<button type="button" class="qt-ver-rename" data-set="<?= (int)$_draft['SetId'] ?>" title="Rename this version"><i class="fas fa-pen"></i></button>
+			<button type="button" class="qt-ver-rename" data-set="<?= (int)$_draft['SetId'] ?>" data-tip="Rename this version" aria-label="Rename this version"><i class="fas fa-pen"></i></button>
 			<input type="text" id="qt-draft-version" class="qt-ver-input" placeholder="Rules / Corpora version (required)"
 			       value="<?= htmlspecialchars($_draft['RulesVersion']) ?>" data-set="<?= (int)$_draft['SetId'] ?>">
 			<span class="qt-ver-meta"><?= $_draftCount ?> question<?= $_draftCount !== 1 ? 's' : '' ?><?= $_need > 0 ? ' of ' . $_need : '' ?></span>
@@ -708,7 +890,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<table id="qt-active-table" class="dataTable" style="width:100%">
 				<thead>
 					<tr>
-						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-active-select-all" data-tip="Select all on this page"></th>
+						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-active-select-all" data-tip="Select all on this page" aria-label="Select all questions on this page"></th>
 						<th>Question</th>
 						<th>Answers</th>
 						<th>% Success</th>
@@ -719,7 +901,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<tbody>
 				<?php foreach ($activeQs as $q): ?>
 					<tr id="qrow-<?= $q['QualQuestionId'] ?>">
-						<td class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb qt-active-cb" data-id="<?= $q['QualQuestionId'] ?>"></td>
+						<td class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb qt-active-cb" data-id="<?= $q['QualQuestionId'] ?>" aria-label="Select this question"></td>
 						<td>
 							<?= htmlspecialchars($q['QuestionText']) ?>
 							<?php if (($q['AnswerMode'] ?? 'single') === 'multi'): ?>
@@ -774,24 +956,25 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 								   href="<?= UIR ?>QualTest/question/edit/<?= $q['QualQuestionId'] ?>">
 									<i class="fas fa-edit"></i> Edit
 								</a>
-								<button class="qt-action-btn qt-action-btn-archive qt-status-btn" data-tip="Archive"
+								<button class="qt-action-btn qt-action-btn-archive qt-status-btn" data-tip="Archive" aria-label="Archive this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>"
 								        data-status="archived">
 									<i class="fas fa-archive"></i>
 								</button>
-								<button class="qt-action-btn qt-action-btn-reset qt-reset-btn" data-tip="Reset Stats"
+								<button class="qt-action-btn qt-action-btn-reset qt-reset-btn" data-tip="Reset Stats" aria-label="Reset statistics for this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>">
 									<i class="fas fa-sync-alt"></i>
 								</button>
-								<button class="qt-action-btn qt-action-btn-dup qt-dup-btn" data-tip="Duplicate"
+								<button class="qt-action-btn qt-action-btn-dup qt-dup-btn" data-tip="Duplicate" aria-label="Duplicate this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>">
 									<i class="fas fa-copy"></i>
 								</button>
 								<?php if ($q['ReportCount'] > 0): ?>
 								<button class="qt-flag-btn qt-report-flag-btn" data-tip="<?= $q['ReportCount'] ?> report<?= $q['ReportCount'] !== 1 ? 's' : '' ?>"
+								        aria-label="View <?= $q['ReportCount'] ?> report<?= $q['ReportCount'] !== 1 ? 's' : '' ?> for this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>">
 									<i class="fas fa-flag"></i>
@@ -822,7 +1005,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<table id="qt-archived-table" class="dataTable" style="width:100%">
 				<thead>
 					<tr>
-						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-archived-select-all" data-tip="Select all on this page"></th>
+						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-archived-select-all" data-tip="Select all on this page" aria-label="Select all archived questions on this page"></th>
 						<th>Question</th>
 						<th>Answers</th>
 						<th>% Success</th>
@@ -833,7 +1016,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<tbody>
 				<?php foreach ($archivedQs as $q): ?>
 					<tr id="qrow-<?= $q['QualQuestionId'] ?>">
-						<td class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb qt-archived-cb" data-id="<?= $q['QualQuestionId'] ?>"></td>
+						<td class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb qt-archived-cb" data-id="<?= $q['QualQuestionId'] ?>" aria-label="Select this question"></td>
 						<td style="color:var(--rp-text-muted)"><?= htmlspecialchars($q['QuestionText']) ?></td>
 						<td>
 							<span class="qt-badge qt-badge-gray"><?= $q['AnswerCount'] ?> answers</span>
@@ -859,18 +1042,18 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 								   href="<?= UIR ?>QualTest/question/edit/<?= $q['QualQuestionId'] ?>">
 									<i class="fas fa-edit"></i> Edit
 								</a>
-								<button class="qt-action-btn qt-action-btn-restore qt-status-btn" data-tip="Restore"
+								<button class="qt-action-btn qt-action-btn-restore qt-status-btn" data-tip="Restore" aria-label="Restore this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>"
 								        data-status="active">
 									<i class="fas fa-check-circle"></i>
 								</button>
-								<button class="qt-action-btn qt-action-btn-reset qt-reset-btn" data-tip="Reset Stats"
+								<button class="qt-action-btn qt-action-btn-reset qt-reset-btn" data-tip="Reset Stats" aria-label="Reset statistics for this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>">
 									<i class="fas fa-sync-alt"></i>
 								</button>
-								<button class="qt-action-btn qt-action-btn-dup qt-dup-btn" data-tip="Duplicate"
+								<button class="qt-action-btn qt-action-btn-dup qt-dup-btn" data-tip="Duplicate" aria-label="Duplicate this question"
 								        data-id="<?= $q['QualQuestionId'] ?>"
 								        data-kingdom="<?= $KingdomId ?>">
 									<i class="fas fa-copy"></i>
@@ -903,15 +1086,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </div>
 
 <!-- Version contents modal (read-only; used for previous versions) -->
-<div class="qt-preview-overlay" id="qt-verview-overlay">
+<div class="qt-preview-overlay" id="qt-verview-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-verview-heading">
 	<div class="qt-preview-modal">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
-			<h4 style="margin:0;"><i class="fas fa-history" style="color:#2b6cb0;margin-right:6px;"></i> <span id="qt-verview-title">Version</span></h4>
-			<button id="qt-verview-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
+			<h4 id="qt-verview-heading" style="margin:0;"><i class="fas fa-history" style="color:#2b6cb0;margin-right:6px;"></i> <span id="qt-verview-title">Version</span></h4>
+			<button id="qt-verview-close" class="qt-modal-close" aria-label="Close">&times;</button>
 		</div>
 		<div class="qt-preview-info" id="qt-verview-info"></div>
 		<div class="qt-preview-body" id="qt-verview-body">
-			<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+			<div class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
 		</div>
 		<div style="display:flex;gap:8px;margin-top:14px;flex-shrink:0;">
 			<?php // Retired versions are exportable too — this is the one place an old bank can be
@@ -924,15 +1107,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </div>
 
 <!-- Test Preview modal -->
-<div class="qt-preview-overlay" id="qt-preview-overlay">
+<div class="qt-preview-overlay" id="qt-preview-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-preview-heading">
 	<div class="qt-preview-modal">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
-			<h4 style="margin:0;"><i class="fas fa-eye" style="color:#2b6cb0;margin-right:6px;"></i> Test Preview &mdash; <?= $typeLabel ?></h4>
-			<button id="qt-preview-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
+			<h4 id="qt-preview-heading" style="margin:0;"><i class="fas fa-eye" style="color:#2b6cb0;margin-right:6px;"></i> Test Preview &mdash; <?= $typeLabel ?></h4>
+			<button id="qt-preview-close" class="qt-modal-close" aria-label="Close">&times;</button>
 		</div>
 		<div class="qt-preview-info" id="qt-preview-info"></div>
 		<div class="qt-preview-body" id="qt-preview-body">
-			<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading preview&hellip;</div>
+			<div class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading preview&hellip;</div>
 		</div>
 		<div style="display:flex;gap:8px;margin-top:14px;flex-shrink:0;">
 			<button class="qt-preview-btn qt-preview-btn-draw" id="qt-preview-draw" style="display:none;"><i class="fas fa-random"></i> Draw Again</button>
@@ -942,13 +1125,18 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </div>
 
 <!-- Bulk Import modal -->
-<div class="qt-report-overlay" id="qt-bulkimport-overlay">
+<div class="qt-report-overlay" id="qt-bulkimport-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-bulkimport-heading">
 	<div class="qt-bulk-import-modal">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
-			<h4 style="margin:0;"><i class="fas fa-file-import" style="color:#2b6cb0;margin-right:6px;"></i> Bulk Import Questions</h4>
-			<button id="qt-bulkimport-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
+			<h4 id="qt-bulkimport-heading" style="margin:0;"><i class="fas fa-file-import" style="color:#2b6cb0;margin-right:6px;"></i> Bulk Import Questions</h4>
+			<button id="qt-bulkimport-close" class="qt-modal-close" aria-label="Close">&times;</button>
 		</div>
 		<div class="qt-bulk-import-body">
+		<?php // The cheat-sheet is ~20 lines of format documentation. Left expanded it fills the whole
+		      // first screen on a phone and pushes the paste box below the fold, so it collapses on a
+		      // small viewport (see the JS at the bottom) and stays open on a desktop one. ?>
+		<details class="qt-bulk-help" id="qt-bulk-help" open>
+		<summary>Paste format &amp; example</summary>
 		<div class="qt-bulk-import-instructions">Paste questions separated by a blank line.
 First line = question text.
 Subsequent lines = answers (prefix with * for correct).
@@ -967,7 +1155,8 @@ Which of these is a primary color?
 *A) Blue
 B) Green
 C) Orange</div>
-		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;min-height:96px;"></textarea>
+		</details>
+		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;"></textarea>
 		<div class="qt-bulk-import-preview" id="qt-bulkimport-preview"></div>
 		</div><!-- /.qt-bulk-import-body -->
 		<div style="display:flex;gap:8px;margin-top:10px;flex-shrink:0;">
@@ -985,20 +1174,21 @@ C) Orange</div>
 
 <!-- Global Question Library modal -->
 <?php if ($TestType === 'reeve' && !empty($Config['ShareQuestions'])): ?>
-<div class="qt-report-overlay" id="qt-library-overlay">
-	<?php // Fixed height (not max-height) so the modal does NOT resize as the filter
-	      // narrows results — the list area stays constant and just scrolls. ?>
-	<div class="qt-report-modal" style="max-width:720px;width:95%;height:80vh;max-height:80vh;box-sizing:border-box;display:flex;flex-direction:column;">
+<div class="qt-report-overlay" id="qt-library-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-library-heading">
+	<?php // Sizing moved off the inline style and onto .qt-library-modal so it can carry a dvh
+	      // fallback and a phone-sized override. Still a fixed height (not max-height) so the
+	      // modal does NOT resize as the filter narrows results. ?>
+	<div class="qt-report-modal qt-library-modal">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
-			<h4 style="margin:0;"><i class="fas fa-globe" style="color:#2b6cb0;margin-right:6px;"></i> Global Question Library</h4>
-			<button id="qt-library-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
+			<h4 id="qt-library-heading" style="margin:0;"><i class="fas fa-globe" style="color:#2b6cb0;margin-right:6px;"></i> Global Question Library</h4>
+			<button id="qt-library-close" class="qt-modal-close" aria-label="Close">&times;</button>
 		</div>
 		<div id="qt-library-search-wrap" style="display:none;flex-shrink:0;margin-bottom:12px;">
 			<input type="text" id="qt-library-search" placeholder="Filter by question text or kingdom&hellip;" autocomplete="off"
 			       style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:0.88rem;outline:none;">
 		</div>
-		<div id="qt-library-loading" style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading library&hellip;</div>
-		<div id="qt-library-empty" style="display:none;text-align:center;padding:32px;color:#718096;">No questions available from other kingdoms yet.</div>
+		<div id="qt-library-loading" class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading library&hellip;</div>
+		<div id="qt-library-empty" class="qt-modal-muted" style="display:none;text-align:center;padding:32px;">No questions available from other kingdoms yet.</div>
 		<?php // The modal now has a fixed height, so the list fills the remaining space
 		      // and scrolls. min-height:0 lets it shrink below its content (without it,
 		      // a flex item won't shrink past its content and would push the modal). ?>
@@ -1010,10 +1200,10 @@ C) Orange</div>
 <?php endif; ?>
 
 <!-- Report popup -->
-<div class="qt-report-overlay" id="qt-report-overlay">
+<div class="qt-report-overlay" id="qt-report-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-report-heading">
 	<div class="qt-report-modal">
-		<h4><i class="fas fa-flag"></i> Question Reports</h4>
-		<div id="qt-report-loading" style="font-size:0.88rem;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+		<h4 id="qt-report-heading"><i class="fas fa-flag"></i> Question Reports</h4>
+		<div id="qt-report-loading" class="qt-modal-muted" style="font-size:0.88rem;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
 		<div id="qt-report-body" style="display:none;">
 			<div class="qt-report-reason-row"><span>Question is worded poorly</span><span class="qt-report-count" id="qr-wording">0</span></div>
 			<div class="qt-report-reason-row"><span>My answer was correct</span><span class="qt-report-count" id="qr-correct">0</span></div>
@@ -1022,8 +1212,8 @@ C) Orange</div>
 			<div id="qt-report-reporters"></div>
 		</div>
 		<div class="qt-report-footer">
-			<button class="qt-action-btn" id="qt-report-close" style="background:#e2e8f0;color:#2d3748;">Close</button>
-			<button class="qt-action-btn" id="qt-report-clear" style="display:none;background:#fff5f5;color:#c53030;border:1px solid #feb2b2;"><i class="fas fa-times"></i> Clear Flags</button>
+			<button class="qt-action-btn qt-action-btn-edit" id="qt-report-close">Close</button>
+			<button class="qt-action-btn qt-action-btn-clear" id="qt-report-clear" style="display:none;"><i class="fas fa-times"></i> Clear Flags</button>
 			<button class="qt-action-btn qt-action-btn-archive" id="qt-report-archive" style="display:none;"><i class="fas fa-archive"></i> Archive Question</button>
 			<a class="qt-action-btn qt-action-btn-edit" id="qt-report-edit" href="#" style="display:none;"><i class="fas fa-edit"></i> Edit Question</a>
 		</div>
@@ -1031,7 +1221,7 @@ C) Orange</div>
 </div>
 
 <!-- In-product confirm/alert modal -->
-<div class="qt-confirm-overlay" id="qt-confirm-overlay">
+<div class="qt-confirm-overlay" id="qt-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-confirm-title">
 	<div class="qt-confirm-modal">
 		<h4 class="qt-confirm-title" id="qt-confirm-title"></h4>
 		<div class="qt-confirm-body" id="qt-confirm-body"></div>
@@ -1044,6 +1234,40 @@ C) Orange</div>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+// ── Shared overlay bookkeeping ──────────────────────────────────────────────
+// Every overlay on this page opens and closes by toggling .qt-open, so the two things that
+// have to happen either side of that live here rather than in six copies.
+//
+// The lock is derived from the DOM rather than counted, because these overlays STACK:
+// #qt-confirm-overlay opens on top of #qt-report-overlay, and a boolean (or a miscounted
+// depth) would unlock the page behind while the outer modal was still open.
+function qtSyncScrollLock() {
+	var open = document.querySelector('.qt-confirm-overlay.qt-open, .qt-report-overlay.qt-open, .qt-preview-overlay.qt-open');
+	// orkui.css:733 sets html,body{height:100%;overflow-x:hidden}. The ROOT element's overflow is
+	// not `visible`, so body's overflow is never propagated to the viewport — and with body at
+	// height:100%, body{overflow:hidden} collapses <html>'s scroll range to zero and snaps the page
+	// behind the modal to the top. Lock the actual scroller; <html> keeps its scrollTop while
+	// hidden, so the position survives the round trip and no save/restore is needed.
+	// Clearing to '' restores the stylesheet's overflow-x:hidden / computed overflow-y:auto.
+	document.documentElement.style.overflow = open ? 'hidden' : '';
+}
+var qtFocusStack = [];
+function qtOverlayOpened(overlay, focusSel) {
+	qtFocusStack.push(document.activeElement);
+	qtSyncScrollLock();
+	var el = focusSel ? overlay.querySelector(focusSel) : null;
+	if (el) { try { el.focus(); } catch (e) {} }
+}
+function qtOverlayClosed() {
+	qtSyncScrollLock();
+	var prev = qtFocusStack.pop();
+	// Hand focus back to whatever opened the modal; without this it is dumped on <body>,
+	// which on a phone leaves a screen-reader user behind the scrim.
+	if (prev && typeof prev.focus === 'function' && document.contains(prev)) {
+		try { prev.focus(); } catch (e) {}
+	}
+}
+
 // In-product replacement for native confirm()/alert().
 // qtConfirm({title, body, confirmLabel, danger, okOnly, onConfirm})
 var qtConfirm = (function() {
@@ -1053,10 +1277,14 @@ var qtConfirm = (function() {
 	var cancelEl = document.getElementById('qt-confirm-cancel');
 	var okEl     = document.getElementById('qt-confirm-ok');
 	var pending  = null;
-	function close() { overlay.classList.remove('qt-open'); pending = null; }
+	function close() { overlay.classList.remove('qt-open'); pending = null; qtOverlayClosed(); }
 	okEl.addEventListener('click', function() { var cb = pending; close(); if (cb) cb(); });
 	cancelEl.addEventListener('click', close);
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+	// Escape cancels, like every other overlay on this page.
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) close();
+	});
 	return function(opts) {
 		opts = opts || {};
 		titleEl.textContent = opts.title || 'Please Confirm';
@@ -1066,6 +1294,8 @@ var qtConfirm = (function() {
 		cancelEl.style.display = opts.okOnly ? 'none' : '';
 		pending = typeof opts.onConfirm === 'function' ? opts.onConfirm : null;
 		overlay.classList.add('qt-open');
+		// Focus the least destructive button, so Enter/Space cannot confirm by accident.
+		qtOverlayOpened(overlay, opts.okOnly ? '#qt-confirm-ok' : '#qt-confirm-cancel');
 	};
 })();
 // Convenience inline error (replaces native alert in fetch error paths)
@@ -1288,7 +1518,7 @@ $(function() {
 	var previewSet = 0;
 
 	function fetchPreview() {
-		bodyEl.innerHTML = '<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading preview&hellip;</div>';
+		bodyEl.innerHTML = '<div class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading preview&hellip;</div>';
 		drawBtn.style.display = 'none';
 		var fd = new FormData();
 		fd.append('KingdomId', '<?= (int)$KingdomId ?>');
@@ -1333,11 +1563,16 @@ $(function() {
 		b.addEventListener('click', function() {
 			previewSet = parseInt(b.dataset.set || '0', 10);
 			overlay.classList.add('qt-open');
+			qtOverlayOpened(overlay, '#qt-preview-close');
 			fetchPreview();
 		});
 	});
 	drawBtn.addEventListener('click', fetchPreview);   // re-draws from previewSet
-	function closePreview() { overlay.classList.remove('qt-open'); }
+	function closePreview() {
+		if (!overlay.classList.contains('qt-open')) return;
+		overlay.classList.remove('qt-open');
+		qtOverlayClosed();
+	}
 	closeBtn.addEventListener('click', closePreview);
 	closeFooter.addEventListener('click', closePreview);
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) closePreview(); });
@@ -1531,10 +1766,19 @@ $(function() {
 		cancelBtn.className = 'qt-preview-btn qt-preview-btn-secondary';
 		cancelBtn.innerHTML = 'Close';
 		overlay.classList.add('qt-open');
+		// The cheat-sheet is the whole first screen on a phone (and in landscape), so collapse
+		// it there and leave the paste box at the top where it belongs.
+		var help = document.getElementById('qt-bulk-help');
+		if (help) { help.open = !(window.innerWidth <= 600 || window.innerHeight <= 520); }
+		// Focus the dialog itself (its close button) rather than the textarea — focusing an
+		// input on open throws up the on-screen keyboard before the user has asked for it.
+		qtOverlayOpened(overlay, '#qt-bulkimport-close');
 	});
 
 	function closeModal() {
+		if (!overlay.classList.contains('qt-open')) return;
 		overlay.classList.remove('qt-open');
+		qtOverlayClosed();
 		if (importedCount > 0) window.location.reload();
 	}
 	closeBtn.addEventListener('click', closeModal);
@@ -1572,7 +1816,7 @@ $(function() {
 	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 	function renderList(questions) {
-		if (!questions.length) { listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#718096;">No matches.</div>'; return; }
+		if (!questions.length) { listEl.innerHTML = '<div class="qt-modal-muted" style="text-align:center;padding:16px;">No matches.</div>'; return; }
 		listEl.innerHTML = questions.map(function(q) {
 			// The shared library never exposes which answer is correct — list texts only.
 			var answers = q.Answers.map(function(a) {
@@ -1636,6 +1880,7 @@ $(function() {
 
 	libBtn.addEventListener('click', function() {
 		overlay.classList.add('qt-open');
+		qtOverlayOpened(overlay, '#qt-library-close');
 		if (loaded) return;
 		var fd = new FormData();
 		fd.append('KingdomId', '<?= (int)$KingdomId ?>');
@@ -1698,7 +1943,9 @@ $(function() {
 	});
 
 	function closeLibrary() {
+		if (!overlay.classList.contains('qt-open')) return;
 		overlay.classList.remove('qt-open');
+		qtOverlayClosed();
 		if (addedCount > 0) { window.location.reload(); }
 	}
 	closeBtn.addEventListener('click', closeLibrary);
@@ -1762,6 +2009,7 @@ $(function() {
 		clearBtn.style.display   = 'inline-block';
 		editLink.href = '<?= UIR ?>QualTest/question/edit/' + qid;
 		overlay.classList.add('qt-open');
+		qtOverlayOpened(overlay, '#qt-report-close');
 
 		var fd = new FormData();
 		fd.append('KingdomId',  kid);
@@ -1786,10 +2034,15 @@ $(function() {
 		});
 	});
 
-	closeBtn.addEventListener('click', function() { overlay.classList.remove('qt-open'); });
-	overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.classList.remove('qt-open'); });
+	function closeReport() {
+		if (!overlay.classList.contains('qt-open')) return;
+		overlay.classList.remove('qt-open');
+		qtOverlayClosed();
+	}
+	closeBtn.addEventListener('click', closeReport);
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) closeReport(); });
 	document.addEventListener('keydown', function(e) {
-		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) overlay.classList.remove('qt-open');
+		if (e.key === 'Escape') closeReport();
 	});
 
 	clearBtn.addEventListener('click', function() {
@@ -1992,7 +2245,11 @@ var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
 	}
 
 	var verviewOverlay = document.getElementById('qt-verview-overlay');
-	function qtVerviewClose() { if (verviewOverlay) verviewOverlay.classList.remove('qt-open'); }
+	function qtVerviewClose() {
+		if (!verviewOverlay || !verviewOverlay.classList.contains('qt-open')) return;
+		verviewOverlay.classList.remove('qt-open');
+		qtOverlayClosed();
+	}
 
 	function qtVerviewOpen(setId) {
 		if (!verviewOverlay) return;
@@ -2004,8 +2261,9 @@ var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
 		if (expEl) expEl.href = '<?= UIR ?>QualTest/export/' + encodeURIComponent(setId);
 		titleEl.textContent = 'Version';
 		infoEl.textContent  = '';
-		bodyEl.innerHTML    = '<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
+		bodyEl.innerHTML    = '<div class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
 		verviewOverlay.classList.add('qt-open');
+		qtOverlayOpened(verviewOverlay, '#qt-verview-close');
 
 		post('setquestions', { SetId: setId }, function(j) {
 			if (!j || j.status !== 0) {
@@ -2025,13 +2283,13 @@ var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
 			// it reads TODAY. Only a player's attempt keeps the wording they actually saw. Say so
 			// rather than let this list be mistaken for a snapshot.
 			infoEl.innerHTML = bits.join(' &middot; ') +
-				'<div style="margin-top:6px;font-size:0.8rem;color:#718096;">' +
+				'<div class="qt-modal-muted" style="margin-top:6px;font-size:0.8rem;">' +
 				'This version is retired and cannot be edited. Questions are shown as they read now &mdash; ' +
 				'if one was edited since, the change shows here. What a player was actually asked is kept ' +
 				'on their attempt.</div>';
 
 			if (!qs.length) {
-				bodyEl.innerHTML = '<div style="padding:24px;color:#718096;">This version has no questions.</div>';
+				bodyEl.innerHTML = '<div class="qt-modal-muted" style="padding:24px;">This version has no questions.</div>';
 				return;
 			}
 			var html = '';
