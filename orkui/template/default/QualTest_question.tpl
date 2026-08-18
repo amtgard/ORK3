@@ -30,7 +30,7 @@
 	font-size: 0.9rem; font-family: inherit; box-sizing: border-box; color: var(--rp-text);
 }
 .qt-field textarea { min-height: 80px; resize: vertical; }
-.qt-field textarea:focus, .qt-field input[type=text]:focus { outline: none; border-color: #6366f1; }
+.qt-field textarea:focus, .qt-field input[type=text]:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
 .qt-answers-list { list-style: none; padding: 0; margin: 0; }
 .qt-answer-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .qt-answer-row input[type=radio] { width: 16px; height: 16px; accent-color: #2b6cb0; flex-shrink: 0; }
@@ -70,7 +70,15 @@ html[data-theme="dark"] .qt-draft-target-note { background:#322659; border-color
 /* ── Tooltips (data-tip; replaces native title=) ── */
 [data-tip] { position: relative; }
 [data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #2d3748; color: #fff; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: normal; width: max-content; max-width: 240px; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 100; }
-[data-tip]:hover::after { opacity: 1; }
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after,
+[data-tip]:active::after { opacity: 1; }
+
+/* ── Press / focus feedback (touch gets no hover, so pair — never swap) ── */
+.qt-submit-btn:active, .qt-cancel-btn:active, .qt-remove-btn:active,
+.qt-add-answer-btn:active, .qt-quick-pill:active { filter: brightness(0.88); transform: scale(0.97); }
+.qt-submit-btn:focus-visible, .qt-cancel-btn:focus-visible, .qt-remove-btn:focus-visible,
+.qt-add-answer-btn:focus-visible, .qt-quick-pill:focus-visible { outline: 2px solid #2b6cb0; outline-offset: 2px; }
 
 /* ── Dark mode ────────────────────────────────────────── */
 html[data-theme="dark"] .qt-nav-link {
@@ -94,7 +102,7 @@ html[data-theme="dark"] .qt-field textarea {
 html[data-theme="dark"] .qt-field input[type=text]::placeholder,
 html[data-theme="dark"] .qt-field textarea::placeholder { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-field textarea:focus,
-html[data-theme="dark"] .qt-field input[type=text]:focus { border-color: #818cf8; }
+html[data-theme="dark"] .qt-field input[type=text]:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.4); }
 html[data-theme="dark"] .qt-remove-btn { color: #fbd38d; }
 html[data-theme="dark"] .qt-remove-btn:hover { color: #f6ad55; }
 html[data-theme="dark"] .qt-add-answer-btn { color: #63b3ed; }
@@ -112,9 +120,68 @@ html[data-theme="dark"] .qt-quick-pill {
 html[data-theme="dark"] .qt-quick-pill:hover { background: #2a4365; border-color: #63b3ed; color: #90cdf4; }
 html[data-theme="dark"] label[for="qt-question-text"] span[style*="color:#e53e3e"],
 html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 !important; }
+/* Native radios/checkboxes otherwise render as light widgets on the dark card. */
+html[data-theme="dark"] .qt-form-card { color-scheme: dark; }
+html[data-theme="dark"] .qt-form-card input[type=radio],
+html[data-theme="dark"] .qt-form-card input[type=checkbox] { accent-color: #63b3ed; }
+/* #2b6cb0 is only 2.17:1 on the dark card (and invisible on the blue Save button). */
+html[data-theme="dark"] .qt-submit-btn:focus-visible,
+html[data-theme="dark"] .qt-cancel-btn:focus-visible,
+html[data-theme="dark"] .qt-remove-btn:focus-visible,
+html[data-theme="dark"] .qt-add-answer-btn:focus-visible,
+html[data-theme="dark"] .qt-quick-pill:focus-visible { outline-color: #63b3ed; }
+
+/* ── Touch: no hover, so WebKit latches the hover state until the next tap ── */
+@media (hover: none) {
+	.qt-nav-link:hover { background: #f7fafc; border-color: #e2e8f0; color: #2b6cb0; }
+	.qt-submit-btn:hover { background: #2b6cb0; }
+	.qt-submit-btn-ghost:hover { background: transparent; color: #2b6cb0; }
+	.qt-cancel-btn:hover { background: #e2e8f0; }
+	.qt-remove-btn:hover { color: #c05621; }
+	.qt-quick-pill:hover { background: #f7fafc; border-color: #cbd5e0; color: #4a5568; }
+	html[data-theme="dark"] .qt-nav-link:hover {
+		background: var(--ork-bg-secondary, #2d3748);
+		border-color: var(--ork-border, #4a5568);
+		color: #63b3ed;
+	}
+	html[data-theme="dark"] .qt-submit-btn-ghost:hover { background: transparent; color: #63b3ed; }
+	html[data-theme="dark"] .qt-cancel-btn:hover { background: #4a5568; }
+	html[data-theme="dark"] .qt-remove-btn:hover { color: #fbd38d; }
+	html[data-theme="dark"] .qt-quick-pill:hover {
+		background: var(--ork-bg-tertiary, #374151);
+		border-color: var(--ork-border, #4a5568);
+		color: var(--ork-text-secondary, #cbd5e0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.qt-nav-link, .qt-quick-pill, [data-tip]::after { transition: none !important; }
+	.qt-submit-btn:active, .qt-cancel-btn:active, .qt-remove-btn:active,
+	.qt-add-answer-btn:active, .qt-quick-pill:active { transform: none !important; }
+}
+
+@media (max-width: 600px) {
+	/* Nowrap action row clipped Cancel off-screen at 320px and forced 3-line buttons. */
+	.qt-form-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+	.qt-form-actions > .qt-submit-btn,
+	.qt-form-actions > .qt-cancel-btn {
+		display: flex; align-items: center; justify-content: center; gap: 6px;
+		width: 100%; box-sizing: border-box; min-height: 48px;
+		text-align: center; white-space: nowrap;
+	}
+	.qt-add-answer-btn { width: 100%; min-height: 44px; }
+	.qt-answer-row { gap: 10px; }
+	.qt-answer-row input[type=radio],
+	.qt-answer-row input[type=checkbox] { width: 22px; height: 22px; flex-shrink: 0; }
+	/* min-width:0 — without it the input's intrinsic size=20 width is a hard
+	   floor and flex:1 cannot shrink, spilling the row past the card. */
+	.qt-answer-row input[type=text] { min-height: 44px; min-width: 0; }
+	.qt-field input[type=text] { min-height: 44px; }
+	.qt-remove-btn { min-width: 44px; min-height: 44px; }
+}
 </style>
 
-<div class="rp-root">
+<div class="rp-root qt-page">
 
 	<!-- Header -->
 	<div class="rp-header">
@@ -235,11 +302,11 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 							<?php foreach ($answers as $i => $a): $checked = in_array($i, $correctIdxs, true); ?>
 							<li class="qt-answer-row">
 								<input type="<?= $answerMode === 'multi' ? 'checkbox' : 'radio' ?>" name="IsCorrect<?= $answerMode === 'multi' ? '[]' : '' ?>" value="<?= $i ?>"
-								       <?= $checked ? 'checked' : '' ?> data-tip="Correct answer">
+								       <?= $checked ? 'checked' : '' ?> data-tip="Correct answer" aria-label="Mark answer <?= $i + 1 ?> as correct">
 								<input type="text" name="AnswerText[]"
 								       value="<?= htmlspecialchars($a['AnswerText']) ?>"
 								       placeholder="Answer <?= $i + 1 ?>">
-								<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>
+								<button type="button" class="qt-remove-btn" data-tip="Remove" aria-label="Remove answer <?= $i + 1 ?>">&times;</button>
 							</li>
 							<?php endforeach; ?>
 						</ul>
@@ -282,8 +349,9 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 
 	function reindex() {
 		list.querySelectorAll('.qt-answer-row input[type=radio], .qt-answer-row input[type=checkbox]')
-			.forEach(function(r, i) { r.value = i; });
+			.forEach(function(r, i) { r.value = i; r.setAttribute('aria-label', 'Mark answer ' + (i + 1) + ' as correct'); });
 		list.querySelectorAll('input[type=text]').forEach(function(t, i) { t.placeholder = 'Answer ' + (i + 1); });
+		list.querySelectorAll('.qt-remove-btn').forEach(function(b, i) { b.setAttribute('aria-label', 'Remove answer ' + (i + 1)); });
 	}
 
 	// Swap every correct-answer input between radio (single) and checkbox
@@ -305,6 +373,7 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 			next.value   = old.value;
 			next.checked = checkedVals.indexOf(old.value) !== -1;
 			next.setAttribute('data-tip', 'Correct answer');
+			next.setAttribute('aria-label', 'Mark answer ' + (i + 1) + ' as correct');
 			old.parentNode.replaceChild(next, old);
 		});
 
@@ -332,7 +401,8 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 		var mode = currentMode();
 		var t    = mode === 'multi' ? 'checkbox' : 'radio';
 		var n    = mode === 'multi' ? 'IsCorrect[]' : 'IsCorrect';
-		return '<input type="' + t + '" name="' + n + '" value="' + idx + '" data-tip="Correct answer">';
+		return '<input type="' + t + '" name="' + n + '" value="' + idx + '" data-tip="Correct answer"'
+		     + ' aria-label="Mark answer ' + (idx + 1) + ' as correct">';
 	}
 
 	addBtn.addEventListener('click', function() {
@@ -341,7 +411,7 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 		li.className = 'qt-answer-row';
 		li.innerHTML = correctInputHtml(idx)
 		             + '<input type="text" name="AnswerText[]" placeholder="Answer ' + (idx + 1) + '">'
-		             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
+		             + '<button type="button" class="qt-remove-btn" data-tip="Remove" aria-label="Remove answer ' + (idx + 1) + '">&times;</button>';
 		attachRemove(li.querySelector('.qt-remove-btn'));
 		list.appendChild(li);
 	});
@@ -356,7 +426,7 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 				li.className = 'qt-answer-row';
 				li.innerHTML = correctInputHtml(i)
 				             + '<input type="text" name="AnswerText[]" value="' + text + '" placeholder="Answer ' + (i + 1) + '">'
-				             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
+				             + '<button type="button" class="qt-remove-btn" data-tip="Remove" aria-label="Remove answer ' + (i + 1) + '">&times;</button>';
 				attachRemove(li.querySelector('.qt-remove-btn'));
 				list.appendChild(li);
 			});

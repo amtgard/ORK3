@@ -1265,7 +1265,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 
 		<!-- Qualifications -->
 		<div class="pn-card">
-			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn pn-qual-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications" aria-label="Edit qualifications"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button><?php endif; ?></h4>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
 				<span class="pn-detail-value" id="pn-qual-reeve-val">
@@ -2791,6 +2791,30 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
      Qualifications Modal
      ============================================= -->
 <?php if ($canEditAdmin): ?>
+<style>
+/* Dark mode renders the native date picker and its radios as light widgets on
+   the navy form; color-scheme is scoped to this modal rather than set globally. */
+html[data-theme="dark"] #pn-qual-overlay { color-scheme: dark; }
+html[data-theme="dark"] #pn-qual-overlay input[type="radio"],
+html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b3ed; }
+@media (max-width: 600px) {
+	/* Yes/No were 19px tall and 15px apart — the control that grants or revokes
+	   a qualification. Box them so each is a 44px target. */
+	#pn-qual-overlay .pn-acct-radio-group { flex-wrap: wrap; gap: 10px; }
+	#pn-qual-overlay .pn-acct-radio-group label {
+		min-height: 44px; padding: 0 12px; gap: 8px;
+		border: 1px solid var(--ork-border, #e2e8f0); border-radius: 6px;
+	}
+	#pn-qual-overlay .pn-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+	/* Sole route to editing a qualification on a phone; it measured 17x14. Grow the
+	   hit area with a pseudo-element so the card heading's layout is untouched. */
+	.pn-qual-edit-btn { position: relative; }
+	.pn-qual-edit-btn::after {
+		content: ''; position: absolute; top: 50%; left: 50%;
+		transform: translate(-50%, -50%); width: 44px; height: 44px;
+	}
+}
+</style>
 <div class="pn-overlay" id="pn-qual-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -5412,7 +5436,17 @@ pnRenderSparkline();
 <style>
 .pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
 .pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
-@media (max-width: 600px) { .pn-qt-cards { flex-direction: column; } .pn-qt-card { flex: unset; min-width: 0; } }
+@media (max-width: 600px) {
+.pn-qt-cards { flex-direction: column; }
+.pn-qt-card { flex: unset; min-width: 0; }
+/* Touch targets — every control in this module measured 19-30px tall on a phone. */
+#pn-qt-chooser-overlay .pn-btn,
+#pn-quiz-overlay .pn-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+#pn-qt-chooser-overlay .pn-qt-card .pn-btn-sm { display: flex; width: 100%; min-height: 48px; }
+#pn-quiz-close-btn,
+#pn-qt-chooser-close-btn,
+.pn-qt-history-panel-close { min-width: 44px; min-height: 44px; }
+}
 .pn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 8px; }
 .pn-qt-status { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
 .pn-qt-status-pass   { color: #276749; }
@@ -5433,7 +5467,9 @@ pnRenderSparkline();
 .pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
 .pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
 .pn-qt-history-panel-close:hover { color: #2d3748; }
-#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+/* Third nested scroller inside the modal body — give it a floor so it doesn't
+   collapse to 179px in landscape, and a dvh pass for mobile browser chrome. */
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: max(220px, 46vh); max-height: max(220px, 46dvh); overflow-y: auto; overscroll-behavior: contain; }
 html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
 html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
 html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
@@ -5548,10 +5584,13 @@ html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0
 /* Feedback bar with slide animation */
 .pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
                      overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
-.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
+/* Cap in em, not px — at 200% text zoom a 70px cap clipped 52px of the message. */
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 8em; opacity: 1; padding: 10px 14px; margin-top: 12px; }
 .pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
 .pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
 .pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+/* Spacing moved off the inline style so the sticky rule below can override it. */
+#pn-quiz-multi-submit-row { margin: 0 0 12px; }
 
 /* Result view */
 .pn-quiz-result { text-align: center; padding: 28px 0 20px; }
@@ -5589,6 +5628,16 @@ html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
    question you're on. */
 html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
 html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* Answered segments also carry a hatch, so progress isn't signalled by colour alone.
+   This has to sit after every `background:` shorthand above (light and dark), or the
+   shorthand resets background-image back to none. */
+@media (max-width: 600px) {
+	.pn-quiz-progress-seg-done,
+	html[data-theme="dark"] .pn-quiz-progress-seg-done {
+		background-image: linear-gradient(45deg, rgba(255,255,255,.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.35) 75%, transparent 75%);
+		background-size: 6px 6px;
+	}
+}
 /* "Select all that apply" hint — color moved off the inline style so dark mode
    can lift it off the too-dark #4a5568 it used to hard-code. */
 .pn-quiz-multi-hint { color: #4a5568; }
@@ -5651,11 +5700,63 @@ html[data-theme="dark"] .pn-quiz-instructions-body {
 }
 html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
-/* Report-question form inside the quiz modal */
+/* Report-question form inside the quiz modal. Styling lives here rather than
+   inline so the mobile block immediately below can override it — same specificity,
+   so it only wins by coming later in this stylesheet. */
+#pn-quiz-report-reason { padding: 5px 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.85rem;
+                         max-width: 100%; min-width: 0; box-sizing: border-box; }
+#pn-quiz-report-submit { margin-left: 6px; font-size: 0.82rem; }
+#pn-quiz-report-cancel { margin-left: 4px; font-size: 0.82rem; }
+#pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; margin-left: 8px; }
 html[data-theme="dark"] #pn-quiz-report-reason {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
+}
+/* #276749 on the dark card is 1.80:1 — the only success signal for a report. */
+html[data-theme="dark"] #pn-quiz-report-thanks { color: #68d391; }
+@media (max-width: 600px) {
+	/* Report form — a native select takes its width from its longest option, which
+	   ran 105px past the modal on a 320px viewport; 16px also stops iOS zooming on focus. */
+	#pn-quiz-report-reason { width: 100%; font-size: 16px; min-height: 44px; }
+	#pn-quiz-report-submit,
+	#pn-quiz-report-cancel { margin: 8px 6px 0 0; min-height: 44px; }
+	#pn-quiz-report-thanks { margin-left: 0; }
+}
+
+/* Non-visual answer markers (item 18) — correct/incorrect must not be colour-only. */
+.pn-quiz-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+                   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pn-quiz-answer-mark { margin-left: auto; padding-left: 10px; flex-shrink: 0; }
+
+/* The quiz action rows lived inside the scroller, so Submit/Next sat 63-149px
+   below the modal fold on a phone and in landscape. Pin them to the bottom of
+   the scroller on those viewports only — at the 640px desktop width the modal
+   body doesn't scroll and nothing moves. */
+@media (max-width: 600px), (max-height: 600px) {
+	#pn-quiz-overlay #pn-quiz-multi-submit-row {
+		position: sticky; bottom: 0; z-index: 3;
+		margin: 0 -20px; padding: 10px 20px 12px;
+		background: #fff; box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+	}
+	#pn-quiz-overlay .pn-quiz-nav.pn-quiz-nav-pinned {
+		position: sticky; bottom: 0; z-index: 3;
+		margin: 12px -20px -20px; padding: 10px 20px 20px;
+		background: #fff; box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+	}
+	html[data-theme="dark"] #pn-quiz-overlay #pn-quiz-multi-submit-row,
+	html[data-theme="dark"] #pn-quiz-overlay .pn-quiz-nav.pn-quiz-nav-pinned { background: var(--ork-card-bg, #2d3748); }
+	/* Don't nest a third scroll region inside a 291px modal body. */
+	#pn-qt-history-panel-body { max-height: none; overflow-y: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pn-quiz-feedback,
+	.pn-quiz-answer-label,
+	.pn-quiz-answer-radio,
+	.pn-quiz-answer-radio-inner,
+	.pn-quiz-progress-seg { transition: none !important; animation: none !important; }
+	.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) { transform: none !important; }
 }
 </style>
 
@@ -5673,10 +5774,10 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 	// rather than skip it.
 	$_qualOnlyOne   = (count($_qualTypes) === 1);
 ?>
-<div class="pn-overlay" id="pn-qt-chooser-overlay">
+<div class="pn-overlay" id="pn-qt-chooser-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-qt-chooser-title" aria-hidden="true" inert>
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
+			<h3 class="pn-modal-title" id="pn-qt-chooser-title" tabindex="-1"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -5789,6 +5890,73 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 	</div>
 </div>
 <script>
+/* Shared modal plumbing for the two qualification-test overlays: background
+   scroll lock (matching pnOpenDesignModal's pattern, but depth-counted because
+   pnConfirm stacks over these), focus capture/restore and a Tab trap. Nothing
+   here is width-dependent. */
+window.PnQtModal = window.PnQtModal || (function() {
+	var depth = 0, prevOverflow = null;
+	function lock() {
+		if (depth === 0) { prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; }
+		depth++;
+	}
+	function unlock() {
+		depth = Math.max(0, depth - 1);
+		if (depth === 0) { document.body.style.overflow = prevOverflow || ''; prevOverflow = null; }
+	}
+	var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+	function visibleFocusable(ov) {
+		var out = [];
+		ov.querySelectorAll(FOCUSABLE).forEach(function(el) {
+			if (el.offsetWidth || el.offsetHeight || el === document.activeElement) out.push(el);
+		});
+		return out;
+	}
+	function trap(ov, e) {
+		if (e.key !== 'Tab' && e.keyCode !== 9) return;
+		if (!ov.classList.contains('pn-open')) return;
+		var f = visibleFocusable(ov);
+		if (!f.length) return;
+		var first = f[0], last = f[f.length - 1];
+		if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+		else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+	}
+	return {
+		open: function(ov, focusTarget) {
+			if (!ov || ov.classList.contains('pn-open')) return;
+			ov._pnReturnFocus = document.activeElement;
+			ov.classList.add('pn-open');
+			ov.setAttribute('aria-hidden', 'false');
+			// A closed .pn-overlay is only opacity:0/pointer-events:none — its buttons
+			// stay in the tab order. inert takes them out while it's shut.
+			ov.removeAttribute('inert');
+			lock();
+			if (!ov._pnTrapBound) {
+				ov._pnTrapBound = true;
+				ov.addEventListener('keydown', function(e) { trap(ov, e); });
+			}
+			var t = focusTarget || ov.querySelector('.pn-modal-title') || ov.querySelector('.pn-modal-close-btn');
+			if (t && t.focus) { try { t.focus({ preventScroll: true }); } catch (err) { t.focus(); } }
+		},
+		close: function(ov) {
+			if (!ov || !ov.classList.contains('pn-open')) return;
+			ov.classList.remove('pn-open');
+			ov.setAttribute('aria-hidden', 'true');
+			ov.setAttribute('inert', '');
+			unlock();
+			var back = ov._pnReturnFocus;
+			ov._pnReturnFocus = null;
+			if (back && back.focus && document.contains(back)) { try { back.focus({ preventScroll: true }); } catch (err) { back.focus(); } }
+		},
+		// Move focus to an element that isn't normally focusable (a heading, the
+		// feedback bar) after a view swap that would otherwise dump focus on <body>.
+		focusRegion: function(el) {
+			if (!el) return;
+			if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+			try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+		}
+	};
+})();
 function pnOpenTestChooser() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
 	if (!ov) return;
@@ -5801,14 +5969,15 @@ function pnOpenTestChooser() {
 	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
 		btn.setAttribute('aria-expanded', 'false');
 	});
-	ov.classList.add('pn-open');
+	window.PnQtModal.open(ov, document.getElementById('pn-qt-chooser-title'));
 }
 (function() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
 	if (!ov) return;
+	function closeChooser() { window.PnQtModal.close(ov); }
 	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
-	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
-	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	if (closeBtn) closeBtn.addEventListener('click', closeChooser);
+	ov.addEventListener('click', function(e) { if (e.target === ov) closeChooser(); });
 	// Escape closes the chooser — but if the full-width history panel is open, close
 	// that first (one layer at a time).
 	document.addEventListener('keydown', function(e) {
@@ -5819,19 +5988,19 @@ function pnOpenTestChooser() {
 			else panel.style.display = 'none';
 			return;
 		}
-		ov.classList.remove('pn-open');
+		closeChooser();
 	});
 	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
 	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
-		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+		btn.addEventListener('click', closeChooser);
 	});
 })();
 </script>
 
-<div class="pn-overlay" id="pn-quiz-overlay">
+<div class="pn-overlay" id="pn-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-quiz-modal-title" aria-hidden="true" inert>
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-quiz-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
+			<h3 class="pn-modal-title" id="pn-quiz-modal-title" tabindex="-1"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
 			<button class="pn-modal-close-btn" id="pn-quiz-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body" id="pn-quiz-body">
@@ -5852,32 +6021,33 @@ function pnOpenTestChooser() {
 
 			<!-- Question view -->
 			<div id="pn-quiz-question-view" style="display:none">
-				<div class="pn-quiz-progress-header">
+				<div class="pn-quiz-progress-header" role="status" aria-live="polite" aria-atomic="true">
 					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
 					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
 				</div>
-				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
-				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments" role="img" aria-label=""></div>
+				<div class="pn-quiz-q-text" id="pn-quiz-q-text" tabindex="-1"></div>
 				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
 				<!-- Multi-correct affordances: hidden for single-answer questions. -->
 				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
-				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+				<div id="pn-quiz-multi-submit-row" style="display:none;">
 					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
 				</div>
-				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
 					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
-					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
-						<select id="pn-quiz-report-reason" style="padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.85rem;">
+					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;">
+						<label class="pn-quiz-sr-only" for="pn-quiz-report-reason">Reason for reporting this question</label>
+						<select id="pn-quiz-report-reason">
 							<option value="">— Select a reason —</option>
 							<option value="wording">Question is worded poorly</option>
 							<option value="correct">My answer was correct</option>
 							<option value="outdated">This has not been updated for recent changes</option>
 							<option value="other">Other</option>
 						</select>
-						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit" style="margin-left:6px;font-size:0.82rem;">Submit</button>
-						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel" style="margin-left:4px;font-size:0.82rem;">Cancel</button>
-						<span id="pn-quiz-report-thanks" style="display:none;font-size:0.82rem;color:#276749;margin-left:8px;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
+						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit">Submit</button>
+						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel">Cancel</button>
+						<span id="pn-quiz-report-thanks" style="display:none;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 					</div>
 				</div>
 				<div class="pn-quiz-nav">
@@ -5891,7 +6061,7 @@ function pnOpenTestChooser() {
 			<div id="pn-quiz-result-view" style="display:none">
 				<div class="pn-quiz-result">
 					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
-					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading" tabindex="-1"></h3>
 					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
 					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
 					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
@@ -5913,6 +6083,8 @@ function pnOpenTestChooser() {
 <script>
 (function() {
 	var overlay        = document.getElementById('pn-quiz-overlay');
+	var quizBody       = document.getElementById('pn-quiz-body');
+	var navEl          = overlay ? overlay.querySelector('.pn-quiz-nav') : null;
 	var closeBtn       = document.getElementById('pn-quiz-close-btn');
 	var modalTitle     = document.getElementById('pn-quiz-modal-title');
 	var loading        = document.getElementById('pn-quiz-loading');
@@ -5970,6 +6142,14 @@ function pnOpenTestChooser() {
 	var currentLabel   = '';
 	var isChecking     = false;
 
+	// The modal body is the only scroller, so every view swap has to put it back
+	// at the top — otherwise the new question renders above the visible band.
+	function resetQuizScroll() { if (quizBody) quizBody.scrollTop = 0; }
+
+	function prefersReducedMotion() {
+		return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+	}
+
 	function openModal(type, kingdom, label) {
 		currentType    = type;
 		currentKingdom = kingdom;
@@ -5982,7 +6162,11 @@ function pnOpenTestChooser() {
 		quizInProgress = false;
 
 		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
-		overlay.classList.add('pn-open');
+		window.PnQtModal.open(overlay, modalTitle);
+		// Also covers Retake, which re-enters openModal with the overlay already open
+		// after hiding the button that held focus.
+		window.PnQtModal.focusRegion(modalTitle);
+		resetQuizScroll();
 		showLoading(true);
 		errorMsg.style.display = 'none';
 		instrView.style.display = 'none';
@@ -6031,15 +6215,19 @@ function pnOpenTestChooser() {
 
 	function updateProgressSegments() {
 		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		var done = 0;
 		for (var i = 0; i < segs.length; i++) {
 			segs[i].className = 'pn-quiz-progress-seg';
 			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
 				segs[i].classList.add('pn-quiz-progress-seg-done');
+				done++;
 			}
 			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
 				segs[i].classList.add('pn-quiz-progress-seg-current');
 			}
 		}
+		// The strip is otherwise pure colour — give it a text equivalent.
+		progressSegs.setAttribute('aria-label', done + ' of ' + segs.length + ' answered');
 	}
 
 	function renderQuestion(idx) {
@@ -6057,6 +6245,7 @@ function pnOpenTestChooser() {
 		feedbackEl.className = 'pn-quiz-feedback';
 		nextBtn.style.display   = 'none';
 		submitBtn.style.display = 'none';
+		if (navEl) navEl.classList.remove('pn-quiz-nav-pinned');
 		reportArea.style.display = 'none';
 		reportForm.style.display = 'none';
 		reportReason.value = '';
@@ -6073,15 +6262,22 @@ function pnOpenTestChooser() {
 		singleSelected = null;
 
 		answersList.innerHTML = '';
-		q.Answers.forEach(function(a) {
+		// role=radio is only valid inside a radiogroup; without it a screen reader
+		// gives no group name and no set position.
+		answersList.setAttribute('role', isMulti ? 'group' : 'radiogroup');
+		answersList.setAttribute('aria-labelledby', 'pn-quiz-q-text');
+		q.Answers.forEach(function(a, aIdx) {
 			var li    = document.createElement('li');
 			li.className = 'pn-quiz-answer-item';
 			var label = document.createElement('label');
 			label.className = 'pn-quiz-answer-label';
 			label.dataset.answerId = a.QualAnswerId;
-			label.setAttribute('tabindex', '0');
+			// Roving tabindex for the radio pattern: one tab stop for the group.
+			// Checkboxes are individually tabbable, which is the correct pattern there.
+			label.setAttribute('tabindex', (isMulti || aIdx === 0) ? '0' : '-1');
 			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
 			label.setAttribute('aria-checked', 'false');
+			label.setAttribute('aria-label', (aIdx + 1) + ' of ' + q.Answers.length + ': ' + a.AnswerText);
 
 			var radio = document.createElement('span');
 			radio.className = 'pn-quiz-answer-radio';
@@ -6097,7 +6293,7 @@ function pnOpenTestChooser() {
 			if (isMulti) {
 				// Multi: clicking toggles selection; scoring waits for Submit Answer.
 				var toggle = function() {
-					if (isChecking) return;
+					if (isChecking || answers.hasOwnProperty(q.QualQuestionId)) return;
 					if (multiSelected[a.QualAnswerId]) {
 						delete multiSelected[a.QualAnswerId];
 						label.classList.remove('pn-quiz-selected');
@@ -6117,20 +6313,37 @@ function pnOpenTestChooser() {
 				// Single: clicking selects; scoring waits for Submit Answer so a
 				// mis-tap can be changed.
 				var selectSingle = function() {
-					if (isChecking) return;
+					if (isChecking || answers.hasOwnProperty(q.QualQuestionId)) return;
 					// Radio behaviour: clear any prior pick, then select this one.
 					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
 						l.classList.remove('pn-quiz-selected');
 						l.setAttribute('aria-checked', 'false');
+						l.setAttribute('tabindex', '-1');
 					});
 					label.classList.add('pn-quiz-selected');
 					label.setAttribute('aria-checked', 'true');
+					label.setAttribute('tabindex', '0');
 					singleSelected = a.QualAnswerId;
 					multiSubmitBtn.disabled = false;
 				};
 				label.addEventListener('click', selectSingle);
 				label.addEventListener('keydown', function(e) {
-					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); return; }
+					// Arrow keys move and select, per the ARIA radiogroup pattern.
+					var move = 0, home = false, end = false;
+					if (e.key === 'ArrowDown'  || e.key === 'ArrowRight') move = 1;
+					else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') move = -1;
+					else if (e.key === 'Home') home = true;
+					else if (e.key === 'End')  end  = true;
+					else return;
+					e.preventDefault();
+					if (answers.hasOwnProperty(q.QualQuestionId)) return;
+					var all = Array.prototype.slice.call(answersList.querySelectorAll('.pn-quiz-answer-label'));
+					var at  = all.indexOf(label);
+					var to  = home ? 0 : (end ? all.length - 1 : (at + move + all.length) % all.length);
+					if (!all[to]) return;
+					all[to].focus();
+					all[to].click();
 				});
 			}
 			li.appendChild(label);
@@ -6138,6 +6351,28 @@ function pnOpenTestChooser() {
 		});
 
 		questionView.style.display = 'block';
+		// Next kept the previous question's scroll offset, so the question text and
+		// progress bar rendered above the visible band of the modal body.
+		resetQuizScroll();
+		window.PnQtModal.focusRegion(qText);
+	}
+
+	// Correct/incorrect was signalled by colour alone (and in dark mode by hue
+	// alone, on an identical background) — add an icon and a screen-reader label.
+	function markOption(l, kind) {
+		if (!l || l.querySelector('.pn-quiz-answer-mark')) return;
+		var mark = document.createElement('span');
+		mark.className = 'pn-quiz-answer-mark';
+		mark.innerHTML = (kind === 'correct')
+			? '<i class="fas fa-check" aria-hidden="true"></i><span class="pn-quiz-sr-only">Correct answer</span>'
+			: '<i class="fas fa-times" aria-hidden="true"></i><span class="pn-quiz-sr-only">Your answer &mdash; incorrect</span>';
+		l.appendChild(mark);
+		// The option carries an aria-label, which would suppress the marker text
+		// above — fold the outcome into the label itself.
+		var name = l.getAttribute('aria-label');
+		if (name) {
+			l.setAttribute('aria-label', name + (kind === 'correct' ? ' — correct answer' : ' — your answer, incorrect'));
+		}
 	}
 
 	// `selected` is a number for single-select, or an array of ids for multi.
@@ -6197,7 +6432,7 @@ function pnOpenTestChooser() {
 					correctCount++;
 					pickedIds.forEach(function(id) {
 						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
 					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
 					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
@@ -6207,14 +6442,14 @@ function pnOpenTestChooser() {
 						if (!l) return;
 						l.classList.remove('pn-quiz-selected');
 						// A picked id that's also correct = partially right; show green.
-						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
-						else                               l.classList.add('pn-quiz-wrong');
+						if (correctIds.indexOf(id) !== -1) { l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
+						else                               { l.classList.add('pn-quiz-wrong');   markOption(l, 'wrong'); }
 					});
 					// Reveal correct answers the player missed.
 					correctIds.forEach(function(id) {
 						if (pickedIds.indexOf(id) !== -1) return;
 						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
 					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
@@ -6229,7 +6464,15 @@ function pnOpenTestChooser() {
 				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
 
 				isChecking = false;
-				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				requestAnimationFrame(function() {
+					feedbackEl.classList.add('pn-quiz-feedback-show');
+					// Submitting hides the button that held focus, so focus fell to
+					// <body> and nothing scrolled — the result was off-screen.
+					if (feedbackEl.scrollIntoView) {
+						feedbackEl.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+					}
+					window.PnQtModal.focusRegion(feedbackEl);
+				});
 				progressScore.textContent = correctCount + ' correct so far';
 				updateProgressSegments();
 
@@ -6242,6 +6485,7 @@ function pnOpenTestChooser() {
 				} else {
 					submitBtn.style.display = 'inline-block';
 				}
+				if (navEl) navEl.classList.add('pn-quiz-nav-pinned');
 			})
 			.catch(function() {
 				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
@@ -6328,6 +6572,7 @@ function pnOpenTestChooser() {
 	});
 
 	function animateScore(target, duration) {
+		if (prefersReducedMotion()) { resultScore.textContent = target + '%'; return; }
 		var start = null;
 		function step(ts) {
 			if (!start) start = ts;
@@ -6341,6 +6586,8 @@ function pnOpenTestChooser() {
 
 	function fireConfetti() {
 		if (typeof window.confetti !== 'function') return;
+		// A 2s full-viewport particle burst is exactly what reduced-motion asks to skip.
+		if (prefersReducedMotion()) return;
 		var end = Date.now() + 2000;
 		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
 		(function frame() {
@@ -6379,7 +6626,12 @@ function pnOpenTestChooser() {
 			retakeBtn.style.display = 'inline-block';
 		}
 		resultView.style.display = 'block';
+		if (navEl) navEl.classList.remove('pn-quiz-nav-pinned');
 		resultScore.textContent = '0%';
+		// The result renders at the top of the scroller the question view left
+		// mid-scroll, and focus was on a button that has just been hidden.
+		resetQuizScroll();
+		window.PnQtModal.focusRegion(resultHeading);
 		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
 
 		if (j.passed) {
@@ -6409,7 +6661,7 @@ function pnOpenTestChooser() {
 	// matching Submit Test etc.) before discarding answers.
 	function requestCloseQuiz() {
 		if (!quizInProgress) {
-			overlay.classList.remove('pn-open');
+			window.PnQtModal.close(overlay);
 			return;
 		}
 		pnConfirm({
@@ -6419,12 +6671,12 @@ function pnOpenTestChooser() {
 			danger: true
 		}, function() {
 			quizInProgress = false;
-			overlay.classList.remove('pn-open');
+			window.PnQtModal.close(overlay);
 		});
 	}
 	closeBtn.addEventListener('click', requestCloseQuiz);
 	// The result-view "Close" is a finished test — no guard needed.
-	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
+	doneBtn.addEventListener('click',  function() { window.PnQtModal.close(overlay); });
 	retakeBtn.addEventListener('click', function() {
 		resultView.style.display = 'none';
 		openModal(currentType, currentKingdom, currentLabel);
@@ -6510,6 +6762,12 @@ function pnOpenTestChooser() {
 			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
 			activeBtn = null;
 		}
+		// Called once the panel actually has content — scrolling the "Loading…" stub
+		// moved the modal body 23px and left the real panel 114-137px below the fold.
+		function revealPanel() {
+			if (!panel || !panel.scrollIntoView) return;
+			panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+		}
 		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
 		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
 		if (panelClose) panelClose.addEventListener('click', closePanel);
@@ -6540,13 +6798,15 @@ function pnOpenTestChooser() {
 				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
 				panel.style.display = 'block';
 				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
-				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				// Scrolling here would scroll the ~60px "Loading…" stub, which is
+				// already on screen — the filled panel then lands below the fold.
+				// revealPanel() runs once the content is in.
 				post('QualTestAjax/attempts', {
 					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
 				}, function(j) {
 					if (activeBtn !== btn) return; // switched away before this load returned
-					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
-					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; revealPanel(); return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; revealPanel(); return; }
 					panelBody.innerHTML = '';
 					j.attempts.forEach(function(a) {
 						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
@@ -6561,6 +6821,7 @@ function pnOpenTestChooser() {
 							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
 						panelBody.appendChild(row);
 					});
+					revealPanel();
 				});
 			});
 		});
