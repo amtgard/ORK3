@@ -870,23 +870,18 @@ class Park extends Ork3
 
     public function CreatePark($request)
     {
-        // A kingdom's monarchy may create a park inside their own kingdom. That is
-        // what the Add Park card on the kingdom page, Controller_Kingdom's
-        // CanAddPark flag and the ParkAjax 'create' gate have all offered all
-        // along -- only this function disagreed, demanding an unscoped global
-        // AUTH_ADMIN grant, so the modal always failed with a bare "You do not
-        // have privileges to perform this action.:" and created nothing.
+        // Park creation is GLOBAL ADMIN ONLY, by design. Kingdom monarchy does not
+        // create parks; neither do park-level officers. Cross-kingdom park
+        // operations (TransferPark, MergeParks) are likewise admin-only.
         //
-        // Note the previous check passed KingdomId as the AUTH_ADMIN scope id,
-        // which HasAuthority ignores: only all-zero-scope admin grants ever match
-        // AUTH_ADMIN. So it was never a per-kingdom check, just a global-admin one.
-        // Genuinely cross-kingdom park operations (TransferPark, MergeParks) stay
-        // admin-only.
+        // The scope id is passed as 0 deliberately. HasAuthority ignores the id for
+        // AUTH_ADMIN -- only all-zero-scope admin grants ever match it -- so passing
+        // a KingdomId here (as this call previously did) reads as a per-kingdom
+        // check that does not exist. The explicit 0 states the actual semantics.
         $kingdom_id = (int)($request['KingdomId'] ?? 0);
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if ($mundane_id > 0 && valid_id($kingdom_id)
-            && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)
-                || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE))
+            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)
         ) {
             $this->log->Write('Park', $mundane_id, LOG_ADD, $request);
             $request[ 'Name' ] = $this->unique_username(trim($request[ 'Name' ]));
