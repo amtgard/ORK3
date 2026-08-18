@@ -1,0 +1,34 @@
+{
+  // Source for bin/ork-db extract — hardcoded mirror in wiring.json5
+  "source": "mirror",
+
+  "fixed_extract": [
+    "award",
+    "class",
+    "parktitle",
+    "pronoun"
+  ],
+
+  "fixed_embedded": [
+    "day_convert"
+  ],
+
+  "configuration_sample": {
+    "kingdom_ids": [1],
+    "include_park_keys": true
+  },
+
+  "mundane_real": {
+    "by_username": ["admin", "megiddo"],
+    "by_mundane_id": {
+      "ken_walker": 43232,
+      "avery_krouse": 46193
+    }
+  },
+
+  "events_by_name_like": [
+    "%Gathering of Kingdoms%",
+    "%Spring War%",
+    "%Olympiad%"
+  ]
+}

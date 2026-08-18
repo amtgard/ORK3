@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "pageId": "live-recent",
+  "calibratedAt": "2026-08-01T20:40:25Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/pre[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:52:53Z",
+  "refuzzedFromCommit": "05389516"
+}

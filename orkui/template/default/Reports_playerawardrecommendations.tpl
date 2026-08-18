@@ -1,19 +1,6 @@
 <?php
 /* ── Auth check ──────────────────────────────────────────── */
-$can_delete = false;
-if ($this->__session->user_id) {
-	if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-		$can_delete = true;
-	} else if (isset($this->__session->park_id)) {
-		if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.recommendation.manage', 'park', $this->__session->park_id, AUTH_EDIT)) {
-			$can_delete = true;
-		}
-	} else if (isset($this->__session->kingdom_id)) {
-		if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.recommendation.manage', 'kingdom', $this->__session->kingdom_id, AUTH_EDIT)) {
-			$can_delete = true;
-		}
-	}
-}
+$can_delete = !empty($CanDeleteRecommendation);
 
 /* ── Pre-compute stats & scope ────────────────────────────── */
 $total               = 0;
@@ -76,6 +63,30 @@ if (is_array($AwardRecommendations) && count($AwardRecommendations) > 1) {
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
+<style>
+/* ── Recommendation status filter (mirrors Kingdom/Park recs tab) ── */
+.rp-rec-filter-list { display:flex; flex-direction:column; gap:6px; }
+.rp-rec-filter-btn {
+	display:block; width:100%; text-align:left; padding:8px 12px;
+	border:1px solid #d6dbe4; border-radius:7px; background:#f7f9fc;
+	color:#2d3748; font-size:13px; font-weight:600; cursor:pointer;
+	transition:background .12s, border-color .12s, color .12s;
+}
+.rp-rec-filter-btn:hover { background:#eef2f8; border-color:#b9c2d0; }
+.rp-rec-filter-btn.rp-rec-filter-active { background:#1a365d; border-color:#1a365d; color:#fff; }
+.rp-rec-filter-help { margin:14px 0 0; padding:12px 0 0; border-top:1px solid #e2e8f0; }
+.rp-rec-filter-help dt { font-size:12px; font-weight:700; color:#2d3748; margin-top:8px; }
+.rp-rec-filter-help dt:first-child { margin-top:0; }
+.rp-rec-filter-help dd { margin:2px 0 0; font-size:11.5px; line-height:1.45; color:#718096; }
+.rp-rec-filter-help-default { font-weight:400; color:#a0aec0; }
+html[data-theme="dark"] .rp-rec-filter-btn { background:#2a2f3a; border-color:#3a4150; color:#e2e8f0; }
+html[data-theme="dark"] .rp-rec-filter-btn:hover { background:#323844; border-color:#4a5262; }
+html[data-theme="dark"] .rp-rec-filter-btn.rp-rec-filter-active { background:#3b6db3; border-color:#3b6db3; color:#fff; }
+html[data-theme="dark"] .rp-rec-filter-help { border-top-color:#3a4150; }
+html[data-theme="dark"] .rp-rec-filter-help dt { color:#e2e8f0; }
+html[data-theme="dark"] .rp-rec-filter-help dd { color:#a0aec0; }
+html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
+</style>
 
 <div class="rp-root">
 
@@ -140,7 +151,25 @@ if (is_array($AwardRecommendations) && count($AwardRecommendations) > 1) {
 					<i class="fas fa-filter"></i> Filters
 				</div>
 				<div class="rp-filter-card-body">
-					<p class="rp-no-filters">This report has no filter options.</p>
+					<div class="rp-rec-filter-list" role="group" aria-label="Recommendation status filter">
+						<button type="button" class="rp-rec-filter-btn rp-rec-filter-active" data-filter="open">Open Recs</button>
+						<button type="button" class="rp-rec-filter-btn" data-filter="below">Below Rec'd</button>
+						<button type="button" class="rp-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
+						<button type="button" class="rp-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
+						<button type="button" class="rp-rec-filter-btn" data-filter="all">All</button>
+					</div>
+					<dl class="rp-rec-filter-help">
+						<dt>Open Recs <span class="rp-rec-filter-help-default">(default)</span></dt>
+						<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
+						<dt>Below Rec'd</dt>
+						<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
+						<dt>Non-Ladder</dt>
+						<dd>Titles such as Master, Noble, or Knight, custom awards, and other non-ranked options.</dd>
+						<dt>At or Above Rec'd</dt>
+						<dd>Players who already hold this award at or above the recommended rank &mdash; the rec has been fulfilled.</dd>
+						<dt>All</dt>
+						<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+					</dl>
 				</div>
 			</div>
 
@@ -226,7 +255,7 @@ if (is_array($AwardRecommendations) && count($AwardRecommendations) > 1) {
 				<tbody>
 <?php if (is_array($AwardRecommendations)) : ?>
 <?php 	foreach ($AwardRecommendations as $rec) : ?>
-				<tr>
+				<tr data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 <?php if ($_showKingdom) : ?>
 					<td><a href="<?=UIR.'Kingdom/profile/'.(int)$rec['KingdomId']?>"><?=htmlspecialchars($rec['KingdomName'])?></a></td>
 <?php endif; ?>
@@ -312,9 +341,21 @@ if (is_array($AwardRecommendations) && count($AwardRecommendations) > 1) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
+	window.recActiveFilter = 'open';
+	$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+		if (settings.nTable.id !== 'rec-report-table') return true;
+		var f = window.recActiveFilter || 'all';
+		if (f === 'all') return true;
+		var tr = settings.aoData[dataIndex].nTr;
+		var rf = tr ? tr.getAttribute('data-filter') : '';
+		if (f === 'open') return rf !== 'already';
+		return rf === f;
+	});
+
 	var table = $('#rec-report-table').DataTable({
 		dom: 'lfrtip',
 		buttons: [
@@ -347,7 +388,14 @@ $(function() {
 	$('#rec-table-wrap').css('opacity', '1');
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
+
+	$('.rp-rec-filter-btn').on('click', function() {
+		$('.rp-rec-filter-btn').removeClass('rp-rec-filter-active');
+		$(this).addClass('rp-rec-filter-active');
+		window.recActiveFilter = $(this).attr('data-filter');
+		table.draw();
+	});
 
 <?php if ($this->__session->user_id) : ?>
 	var _delRecUrl = null;

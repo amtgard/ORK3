@@ -1,0 +1,642 @@
+{
+  "schemaVersion": 1,
+  "pageId": "park-index",
+  "calibratedAt": "2026-08-01T20:43:50Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[45]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[46]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[53]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[54]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[140]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[141]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[169]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[170]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[215]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[216]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[235]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[236]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[237]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[271]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[271]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[272]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[272]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[330]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[331]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[335]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[336]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[640]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[641]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[697]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[698]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[705]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[706]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[744]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[745]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[758]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[759]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[769]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[770]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[777]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[778]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[785]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[786]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[830]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[831]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[917]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[918]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[935]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[936]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[937]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[977]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[978]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[985]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[985]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[986]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[987]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[987]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[988]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[989]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[990]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1076]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1076]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1077]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1077]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1081]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1082]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1096]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1097]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1114]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1115]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1131]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1132]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1185]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1186]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1306]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1307]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1311]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1313]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1441]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1442]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1462]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1463]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1659]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1660]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1663]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1664]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1665]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1666]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1667]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1668]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1674]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1675]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1676]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1679]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1680]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1750]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1752]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1753]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1761]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1762]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1764]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1765]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1769]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1770]/td[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1816]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1817]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1870]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1871]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[140]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[141]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[215]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[216]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[640]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[641]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[977]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[978]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1076]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1077]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1081]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1082]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1659]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1660]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1664]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1665]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1667]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1668]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1674]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1675]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1764]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1765]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1769]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1770]/td[0]/div[0]/img[0]",
+      "mode": "subtree",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:55:28Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -25,6 +25,22 @@
 		: HTTP_KINGDOM_HERALDRY . '0000.jpg';
 	$entityLabel = $IsPrinz ? 'Principality' : 'Kingdom';
 
+	$_knInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
+	$hasBanner       = !empty($_knInfo['HasBanner']);
+	$bannerShowLogo  = !isset($_knInfo['BannerShowLogo']) || (int)$_knInfo['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($_knInfo['BannerVignette']) || (int)$_knInfo['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($_knInfo['BannerOffsetX']) ? max(0, min(100, (int)$_knInfo['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($_knInfo['BannerOffsetY']) ? max(0, min(100, (int)$_knInfo['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_KINGDOM_BANNER, sprintf('%04d', (int)($_knInfo['KingdomId'] ?? 0)));
+		$bannerFs   = DIR_KINGDOM_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+	$knCanManageBanner = !empty($knCanManageBanner);
+
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
@@ -92,14 +108,40 @@
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="kn-hero">
-	<div class="kn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses  = 'kn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' kn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' kn-hero-vignette';
+	if ($knCanManageBanner)            $_heroClasses .= ' kn-hero-editable';
+	$_knShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="kn-hero">
+	<div class="kn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+	<?php if ($knCanManageBanner): ?>
+	<button type="button" class="kn-banner-edit-btn"
+			onclick="knOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="kn-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt kn-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="kn-hero-content">
 
+		<?php if ($_knShowLogo): ?>
 		<div class="kn-heraldry-wrap">
 			<div class="kn-heraldry-frame<?= !empty($CanManageKingdom) ? ' kn-heraldry-editable' : '' ?>">
 				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
@@ -108,11 +150,12 @@
 				     onload="typeof knApplyHeroColor==='function'&&knApplyHeroColor(this)">
 			</div>
 			<?php if (!empty($CanManageKingdom)): ?>
-			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" title="Change heraldry">
+			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" data-tip="Change heraldry">
 				<i class="fas fa-camera"></i>
 			</button>
 			<?php endif; ?>
 		</div>
+		<?php endif; ?>
 
 		<div class="kn-hero-info">
 			<?php if ($IsPrinz && !empty($ParentKingdomId)): ?>
@@ -207,7 +250,7 @@
 			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if ($CanManageKingdom ?? false): ?>
-				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" title="Edit officers">
+				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
 					<i class="fas fa-pencil-alt"></i>
 				</button>
 				<?php endif; ?>
@@ -310,7 +353,7 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if ($CanManageKingdom ?? false): ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
@@ -388,7 +431,7 @@
 
 					<!-- List view -->
 					<div id="kn-parks-list-view" style="display:none">
-						<table class="kn-table kn-sortable" id="kn-parks-table">
+						<table class="kn-table kn-parks-dt" id="kn-parks-table">
 							<thead>
 								<tr>
 									<th data-sorttype="text">Park</th>
@@ -397,7 +440,7 @@
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
-									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" style="width:32px"></th><?php endif; ?>
+									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" class="no-export" style="width:32px"></th><?php endif; ?>
 								</tr>
 							</thead>
 							<tbody>
@@ -496,7 +539,7 @@
 									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
 									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
 								</a>
-								<table class="kn-table kn-sortable">
+								<table class="kn-table kn-parks-dt" data-csvname="<?= htmlspecialchars($prinz['Name']) ?> Parks">
 									<thead>
 										<tr>
 											<th data-sorttype="text">Park</th>
@@ -550,13 +593,13 @@
 			<style>
 			.kn-sub-pop-title{font-weight:700;color:#2d3748;margin-bottom:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
 			.kn-sub-pop-row{display:flex;gap:4px;margin-bottom:8px}
-			.kn-sub-url-input{flex:1;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;color:#4a5568;background:#f7fafc;min-width:0}
-			.kn-sub-copy-btn{padding:4px 8px;border:1px solid #e2e8f0;border-radius:4px;background:#edf2f7;cursor:pointer;color:#4a5568;font-size:12px}
-			.kn-sub-copy-btn:hover{background:#e2e8f0}
+			.kn-sub-url-input{flex:1;font-size:11px;padding:4px 6px;border:1px solid var(--ork-border);border-radius:4px;color:var(--ork-text-body);background:var(--ork-surface-light);min-width:0}
+			.kn-sub-copy-btn{padding:4px 8px;border:1px solid var(--ork-border);border-radius:4px;background:var(--ork-surface-hover);cursor:pointer;color:var(--ork-text-body);font-size:12px}
+			.kn-sub-copy-btn:hover{background:var(--ork-border)}
 			.kn-sub-gcal-btn{display:block;text-align:center;background:#4285f4;color:#fff;border-radius:5px;padding:7px 10px;font-size:12px;font-weight:600;text-decoration:none;margin-bottom:2px}
 			.kn-sub-gcal-btn:hover{background:#3367d6;color:#fff}
-			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:#718096;text-align:center;text-decoration:none}
-			.kn-sub-webcal-btn:hover{color:#4a5568}
+			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:var(--ork-text-muted);text-align:center;text-decoration:none}
+			.kn-sub-webcal-btn:hover{color:var(--ork-text-body)}
 			html[data-theme="dark"] .kn-sub-pop-title{color:var(--ork-text)}
 			html[data-theme="dark"] .kn-sub-url-input{background:var(--ork-input-bg);border-color:var(--ork-input-border);color:var(--ork-text)}
 			html[data-theme="dark"] .kn-sub-copy-btn{background:var(--ork-bg-tertiary);border-color:var(--ork-border);color:var(--ork-text-secondary)}
@@ -571,10 +614,12 @@
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
+							<button class="kn-view-btn" id="kn-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
 						<div id="kn-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="kn-filter-toggle kn-filter-on" data-filter="kingdom-event">Kingdom Events</button>
 							<button class="kn-filter-toggle kn-filter-on" data-filter="park-event">Park Events</button>
+							<button class="kn-filter-toggle kn-filter-on" data-filter="calendar-item">Calendar Items</button>
 							<button class="kn-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
 						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
@@ -617,56 +662,95 @@
 					<div id="kn-events-cal"></div>
 				</div>
 
+				<!-- Map view (lazy-loaded Google Maps) -->
+				<div id="kn-events-map-wrap" style="position:relative;display:none">
+					<div id="kn-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="kn-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
+				</div>
+
 				<!-- List view -->
 				<div id="kn-events-list-view">
 				<?php $hasParkDays = count($kingdom_park_days ?? []) > 0; ?>
 				<?php $eventCount = count($eventList); ?>
 				<?php $hasAnyRows = ($eventCount > 0) || $hasParkDays; ?>
-				<table class="kn-table kn-sortable" id="kn-events-table"<?= $hasAnyRows ? '' : ' style="display:none"' ?>>
-					<thead>
-						<tr>
-							<th data-sorttype="text">Event</th>
-							<th data-sorttype="date">Next Date</th>
-							<th data-sorttype="text">Park</th>
-							<th data-sorttype="numeric">Going</th>
-						<th data-sorttype="numeric">Interested</th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($eventList as $event): ?>
-							<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+					<table class="kn-table kn-sortable" id="kn-events-table"<?= $hasAnyRows ? '' : ' style="display:none"' ?>>
+						<thead>
+							<tr>
+								<th data-sorttype="date">Next Date</th>
+								<th data-sorttype="text">Event</th>
+								<th data-sorttype="text">Park</th>
+								<th colspan="2" style="text-align:right;padding-right:8px;">RSVP</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($eventList as $event): ?>
+								<?php if (!empty($event['_IsCalendarItem'])): ?>
+									<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+									<tr class="kn-row-link <?= $ciOff ? 'kn-officer-only' : '' ?> <?= $ciLoc ? 'kn-locals-only' : '' ?>" data-type="calendar-item" onclick="knShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+										<td class="kn-col-nowrap">
+											<?= ($event['NextDate'] && $event['NextDate'] != '0000-00-00')
+												? date("M j, Y", strtotime($event['NextDate']))
+												: '<span style="color:#a0aec0">—</span>' ?>
+										</td>
+										<td class="kn-col-nowrap">
+											<?php $ciColor = $event['Color'] ?? '#64748b'; $ciColorText = $event['ColorText'] ?? '#fff'; ?>
+											<span class="kn-ci-pill" style="background:<?= htmlspecialchars($ciColor) ?>;border-color:<?= htmlspecialchars($ciColor) ?>;color:<?= htmlspecialchars($ciColorText) ?>"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+											<?php if ($ciOff): ?><span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
+											<?= htmlspecialchars($event['Name']) ?>
+										</td>
+										<td><?= htmlspecialchars($event['ParkName'] ?? '') ?></td>
+										<td colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>
+									</tr>
+								<?php else: ?>
+									<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
+									<tr class="kn-row-link <?= $isDraft ? 'kn-row-draft' : '' ?>" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="if(event.target.closest(\'.kn-rsvp-wrap\'))return; window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+										<td class="kn-col-nowrap">
+											<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
+												<?= date("M j, Y", strtotime($event['NextDate'])) ?>
+												<?php
+													// Compare date-to-date so an event happening *today*
+													// (NextDate = today at 00:00) isn't flagged Past at 00:01.
+													$_evDate   = date('Y-m-d', strtotime($event['NextDate']));
+													$_isEvPast = strtotime($_evDate) < strtotime(date('Y-m-d'));
+												?>
+												<?php if ($_isEvPast): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+											<?php else: ?>
+												<span style="color:#a0aec0">—</span>
+											<?php endif; ?>
+										</td>
+										<td class="kn-col-nowrap">
+											<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
+												loading="lazy"
+												src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
+												onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
+												alt="">
+											<?php if ($isDraft): ?><span class="kn-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?>
+											<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+											<?php if (!empty($event['MonarchRsvp'])): ?><span class="kn-royal-badge kn-royal-monarch" data-tip="Kingdom Monarch in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
+											<?php if (!empty($event['RegentRsvp'])): ?><span class="kn-royal-badge kn-royal-regent" data-tip="Kingdom Regent in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
+										</td>
+										<td><?= htmlspecialchars($event['ParkName']) ?></td>
+										<td colspan="2" style="text-align:right;padding:6px 8px;">
+											<?php if ((int)$event['NextDetailId'] > 0): ?>
+												<span class="kn-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
+											<?php else: ?>
+												<span style="color:#a0aec0">—</span>
+											<?php endif; ?>
+										</td>
+									</tr>
+								<?php endif; ?>
+							<?php endforeach; ?>
+						<?php foreach ($kingdom_park_days ?? [] as $day): ?>
+							<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
+								<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
 								<td class="kn-col-nowrap">
-									<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
-										loading="lazy"
-										src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
-										onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-										alt="">
-									<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+									<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
+									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
+									<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
 								</td>
-								<td class="kn-col-nowrap">
-									<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
-										<?= date("M j, Y", strtotime($event['NextDate'])) ?>
-										<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
-									<?php else: ?>
-										<span style="color:#a0aec0">—</span>
-									<?php endif; ?>
-								</td>
-								<td><?= htmlspecialchars($event['ParkName']) ?></td>
-								<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-							<td style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
+								<td><?= htmlspecialchars($day['ParkName']) ?></td>
 							</tr>
 						<?php endforeach; ?>
-					<?php foreach ($kingdom_park_days ?? [] as $day): ?>
-						<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
-							<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
-							<td class="kn-col-nowrap">
-								<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
-								<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
-								<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
-							</td>
-							<td><?= htmlspecialchars($day['ParkName']) ?></td>
-						</tr>
-					<?php endforeach; ?>
 					</tbody>
 				</table>
 				<div class="kn-empty" id="kn-events-empty"<?= $hasAnyRows ? ' style="display:none"' : '' ?>>No upcoming events</div>
@@ -743,7 +827,7 @@
 							<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspended</a></li>
 							<li><a href="<?= UIR ?>Reports/active_duespaid/Kingdom&id=<?= $kingdom_id ?>">Player Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
-							<?php if (in_array((int)$kingdom_id, [3, 4, 6, 10, 12, 14, 17, 19, 20, 24, 25, 27, 31, 36, 38])): ?><li><a href="<?= UIR ?>Reports/voting_eligible/Kingdom&id=<?= $kingdom_id ?>">Voting Eligible</a></li><?php endif; ?>
+							<?php if ($ShowVotingEligibleLink ?? false): ?><li><a href="<?= UIR ?>Reports/voting_eligible/Kingdom&id=<?= $kingdom_id ?>">Voting Eligible</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
@@ -800,6 +884,9 @@
 							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
+							<?php // Test Results now live under Admin Tasks -> Tests, with the rest of the test
+							      // workspace (configure, questions, results). They are officer-only, so they were
+							      // the only gated entries in this otherwise-public group. ?>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -862,9 +949,10 @@
 
 
 		<!-- Admin Tab -->
-		<?php if ($CanManageKingdom ?? false): ?>
+		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
 			<div class="kn-report-cols">
+				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
 					<h5><i class="fas fa-users-cog"></i> Players</h5>
 					<ul>
@@ -881,6 +969,35 @@
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
 					</ul>
 				</div>
+				<?php endif; ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+				<div class="kn-report-group">
+					<h5>
+						<i class="fas fa-clipboard-check"></i> Tests
+						<button type="button" class="kn-help-btn" data-doc="qualtests"
+						        title="How the Reeve's and Corpora tests work" aria-label="Help: qualification tests">
+							<i class="fas fa-question-circle"></i>
+						</button>
+					</h5>
+					<ul>
+						<li><a href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">Configure Tests</a></li>
+						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/reeve">Reeve's Test Questions</a></li>
+						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/corpora">Corpora Test Questions</a></li>
+						<?php // Results belong with the rest of the test workspace: whoever configures a
+						      // test and writes its questions is the same person who reads who passed it,
+						      // and they were a tab away in Reports. Same audience as this whole group
+						      // (the enclosing check is CanManageKingdom || CanManageTests), so only the
+						      // per-test "is it switched on" condition is needed here. Still listed under
+						      // Reports too, for anyone who goes looking for a report where reports live. ?>
+						<?php if (!empty($QualTestReeveEnabled)): ?>
+						<li><a href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kingdom_id ?>">Reeve's Test Results</a></li>
+						<?php endif; ?>
+						<?php if (!empty($QualTestCorporaEnabled)): ?>
+						<li><a href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kingdom_id ?>">Corpora Test Results</a></li>
+						<?php endif; ?>
+					</ul>
+				</div>
+				<?php endif; ?>
 			</div>
 		</div>
 		<?php endif; ?>
@@ -918,8 +1035,8 @@
 						<div class="plr-gear-wrap">
 							<button class="plr-gear-btn" id="kn-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 							<div class="plr-gear-menu" id="kn-plr-gear-menu">
-								<button class="plr-gear-item" onclick="knOpenMovePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
-								<button class="plr-gear-item" onclick="knOpenMergePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+								<button class="plr-gear-item" onclick="knOpenMovePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-exchange-alt"></i> Move Player</button>
+								<button class="plr-gear-item" onclick="knOpenMergePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 							</div>
 						</div>
 					</div>
@@ -1083,6 +1200,20 @@ var KnConfig = {
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	systemAwards:    <?= json_encode($SystemAwards    ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminRecsPublic: <?= !empty($AwardRecsPublic) ? 'true' : 'false' ?>,
+};
+window.knEventMapLocations  = <?= json_encode(array_values($knEventMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+window.knEventMapNoLocCount = <?= (int)($knEventMapNoLocCount ?? 0) ?>;
+
+var KnBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $knCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)($kingdom_id ?? 0) ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
 };
 </script>
 <?php if ($IsLoggedIn): ?>
@@ -1275,33 +1406,176 @@ var KnConfig = {
 </div>
 <?php endif; ?>
 
-<?php if ($CanManageKingdom ?? false): ?>
+<?php if (($CanManageKingdom ?? false) || ($CanManageAnyParkInKingdom ?? false)): ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <div class="kn-emod-overlay" id="kn-event-modal">
 	<div class="kn-emod-box">
 		<div class="kn-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 id="kn-emod-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="kn-emod-close" onclick="knCloseEventModal()">&times;</button>
 		</div>
 		<div class="kn-emod-body">
+
+			<!-- Type selector -->
+			<div class="kn-emod-typesel">
+				<label class="kn-emod-typeopt">
+					<input type="radio" name="kn-emod-type" value="event" checked>
+					<span><i class="fas fa-flag"></i> Amtgard Event</span>
+				</label>
+				<label class="kn-emod-typeopt">
+					<input type="radio" name="kn-emod-type" value="calendar-item">
+					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
+				</label>
+			</div>
+
+			<!-- Shared: Name -->
 			<div class="kn-emod-field">
-				<label class="kn-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<label class="kn-emod-label">Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="kn-emod-input" id="kn-event-name" autocomplete="off" placeholder="e.g. Summer Midreign">
 			</div>
 			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="kn-emod-date-text"></span>
 			</div>
-			<div class="kn-emod-field" style="margin-top:12px">
+
+			<!-- Event-only: Host Park -->
+			<div class="kn-emod-field kn-emod-event-only" style="margin-top:12px">
 				<label class="kn-emod-label">Host Park <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(optional — leave blank for a kingdom-level event)</span></label>
 				<input type="text" class="kn-emod-input" id="kn-event-park-name" autocomplete="off" placeholder="Search parks…">
 				<input type="hidden" id="kn-event-park-id">
 			</div>
+
+			<!-- Copy from past event (collapsible, event-mode only) -->
+			<div class="kn-cfe-wrap kn-emod-event-only" id="kn-cfe-wrap" style="margin-top:14px">
+				<button type="button" class="kn-cfe-toggle" id="kn-cfe-toggle" onclick="knCfeToggleExpander()" aria-expanded="false">
+					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
+					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
+					<i class="fas fa-chevron-down kn-cfe-chev" id="kn-cfe-chev" style="margin-left:auto"></i>
+				</button>
+				<div class="kn-cfe-body" id="kn-cfe-body" style="display:none">
+					<div class="kn-cfe-field" id="kn-cfe-picker-wrap">
+						<label class="kn-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(kingdom-level)</span></label>
+						<div class="kn-ac-wrap">
+							<input type="text" class="kn-emod-input" id="kn-cfe-search" autocomplete="off" placeholder="Search past events…">
+							<div class="kn-ac-results" id="kn-cfe-results"></div>
+						</div>
+						<input type="hidden" id="kn-cfe-source-id" value="">
+						<input type="hidden" id="kn-cfe-source-start" value="">
+						<input type="hidden" id="kn-cfe-source-end" value="">
+					</div>
+					<div class="kn-cfe-chip" id="kn-cfe-chip" style="display:none">
+						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
+						<span id="kn-cfe-chip-label"></span>
+						<button type="button" class="kn-cfe-chip-clear" onclick="knCfeClear()" aria-label="Clear source">&times;</button>
+					</div>
+					<div class="kn-cfe-detail" id="kn-cfe-detail" style="display:none">
+						<div class="kn-emod-row" style="display:flex;gap:10px;margin-top:12px">
+							<div class="kn-emod-field" style="flex:1">
+								<label class="kn-emod-label">Start <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="kn-emod-input" id="kn-cfe-start" autocomplete="off" placeholder="Select start…">
+							</div>
+							<div class="kn-emod-field" style="flex:1">
+								<label class="kn-emod-label">End <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="kn-emod-input" id="kn-cfe-end" autocomplete="off" placeholder="Select end…">
+							</div>
+						</div>
+						<div class="kn-cfe-modules" style="margin-top:12px">
+							<div class="kn-cfe-mod-title">What to copy</div>
+							<label class="kn-cfe-mod-row kn-cfe-mod-all">
+								<input type="checkbox" id="kn-cfe-mod-all" checked onchange="knCfeToggleAll(this)">
+								<span><strong>Select all</strong></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-details" checked onchange="knCfeSyncAll()">
+								<span>Event Details <span class="kn-cfe-mod-hint">description, address, fees, links</span></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-schedule" checked onchange="knCfeSyncAll()">
+								<span>Schedule</span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-staff" checked onchange="knCfeSyncAll()">
+								<span>Staff <span class="kn-cfe-mod-hint">banned/deactivated people are skipped</span></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-feast" checked onchange="knCfeSyncAll()">
+								<span>Feast</span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-banner" onchange="knCfeSyncAll()">
+								<span>Banner <span class="kn-cfe-mod-hint">image + framing config</span></span>
+							</label>
+						</div>
+					</div>
+				</div>
+			</div>
+
+						<!-- Calendar-item-only fields -->
+			<div class="kn-emod-ci-only" style="display:none">
+				<div class="kn-emod-field" style="margin-top:12px">
+					<label class="kn-emod-label">Host Park <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(optional — leave blank for a kingdom-level item)</span></label>
+					<input type="text" class="kn-emod-input" id="kn-ci-park-name" autocomplete="off" placeholder="Search parks…">
+					<input type="hidden" id="kn-ci-park-id">
+				</div>
+				<div class="kn-emod-field" style="margin-top:12px">
+					<label class="kn-emod-check-label">
+						<input type="checkbox" id="kn-ci-allday"> All day
+					</label>
+				</div>
+				<div class="kn-emod-field" style="margin-top:6px">
+					<label class="kn-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
+						<input type="checkbox" id="kn-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
+					</label>
+				</div>
+				<div class="kn-emod-field" style="margin-top:6px">
+					<label class="kn-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
+						<input type="checkbox" id="kn-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
+					</label>
+				</div>
+				<div class="kn-emod-row" style="display:flex;gap:10px;margin-top:8px">
+					<div class="kn-emod-field" style="flex:1">
+						<label class="kn-emod-label">Start <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="kn-emod-input" id="kn-ci-start" autocomplete="off" placeholder="Select start…">
+					</div>
+					<div class="kn-emod-field" style="flex:1">
+						<label class="kn-emod-label">End <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="kn-emod-input" id="kn-ci-end" autocomplete="off" placeholder="Select end…">
+					</div>
+				</div>
+				<div class="kn-emod-field" style="margin-top:10px">
+					<label class="kn-emod-label">Color</label>
+					<div class="ci-swatches" id="kn-ci-swatches">
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+					</div>
+					<input type="hidden" id="kn-ci-color" value="#64748b">
+				</div>
+				<div class="kn-emod-field" style="margin-top:10px">
+					<label class="kn-emod-label">Description</label>
+					<textarea class="kn-emod-input" id="kn-ci-description" rows="3" placeholder="Optional details…"></textarea>
+				</div>
+				<div class="kn-emod-ci-note">
+					<i class="fas fa-info-circle" style="margin-right:6px"></i>
+					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
+				</div>
+			</div>
+
 			<div class="kn-emod-feedback" id="kn-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="kn-emod-footer">
 			<button class="kn-emod-btn-cancel" onclick="knCloseEventModal()">Cancel</button>
+			<button class="kn-emod-btn-cancel kn-emod-draft-btn" id="kn-emod-draft-btn" onclick="knCreateEvent('draft')" disabled style="display:none;font-size:12px;">
+				<i class="fas fa-eye-slash"></i> Save as Draft
+			</button>
 			<button class="kn-emod-btn-go" id="kn-emod-go-btn" onclick="knCreateEvent()" disabled>
-				Create Event <i class="fas fa-arrow-right"></i>
+				<span id="kn-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>
@@ -1758,6 +2032,78 @@ var KnConfig = {
 
 			<?php if (!empty($CanAddPark)): ?>
 			<!-- ── Panel: Operations ── -->
+			<?php if ($CanEditKingdom ?? false): ?>
+			<div class="kn-admin-panel" id="kn-admin-panel-signinlink">
+				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-signinlink" aria-expanded="false">
+					<span><i class="fas fa-link" style="margin-right:6px;color:#a0aec0"></i>Sign-in Link</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-signinlink"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="kn-admin-body-signinlink" style="display:none">
+					<div class="kn-form-error" id="kn-signinlink-error" style="display:none"></div>
+					<!-- Park selector (optional) -->
+					<div class="kn-admin-field" style="margin-bottom:12px;position:relative">
+						<label>Park <span style="font-weight:400;color:#a0aec0">(optional — leave blank for kingdom-wide)</span></label>
+						<input type="text" id="kn-signinlink-park-name" autocomplete="off"
+							placeholder="Search parks in this kingdom&hellip;"
+							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;color:#2d3748">
+						<input type="hidden" id="kn-signinlink-park-id" value="">
+						<div class="kn-ac-results" id="kn-signinlink-park-results"></div>
+					</div>
+					<div class="pk-att-search-row" style="margin-bottom:12px">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="kn-signinlink-hours" min="1" max="120" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="kn-signinlink-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="kn-btn kn-btn-primary" id="kn-signinlink-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="kn-signinlink-result" style="display:none;margin-bottom:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="kn-signinlink-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:7px 10px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="kn-signinlink-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<p style="margin:0 0 12px;font-size:12px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</p>
+					<!-- Active links (always visible — typically 0-3 at any time) -->
+					<div id="kn-signinlink-links-wrap" style="border-top:1px solid #e2e8f0;padding-top:10px">
+						<div style="font-size:12px;color:#4a5568;font-weight:600">
+							Active Links <span id="kn-signinlink-links-count" style="color:#a0aec0;font-weight:400"></span>
+						</div>
+						<div id="kn-signinlink-links-body" style="margin-top:8px">
+							<div id="kn-signinlink-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="kn-signinlink-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="kn-signinlink-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Scope</th>
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="kn-signinlink-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<div class="kn-admin-panel">
 				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-ops" aria-expanded="false">
 					<span><i class="fas fa-tools" style="margin-right:6px;color:#a0aec0"></i>Operations</span>
@@ -1806,6 +2152,70 @@ var KnConfig = {
 
 <?php endif; ?>
 
+<!-- Event Preview Overlay (calendar quick-look) -->
+<div class="evpv-overlay" id="evpv-overlay">
+	<div class="evpv-box">
+		<div class="evpv-header">
+			<div class="evpv-header-meta">
+				<span class="evpv-kind-pill" id="evpv-kind-pill"><i class="fas fa-flag"></i> <span id="evpv-kind-label">Amtgard Event</span></span>
+				<span class="kn-draft-pill" id="evpv-draft-pill" style="display:none">DRAFT</span>
+			</div>
+			<button class="evpv-close" onclick="evpvClose()" aria-label="Close">&times;</button>
+		</div>
+		<div class="evpv-body">
+			<div class="evpv-hero">
+				<img class="evpv-heraldry" id="evpv-heraldry" alt="" loading="lazy">
+				<div class="evpv-hero-text">
+					<a class="evpv-name" id="evpv-name" href="#"></a>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-date"><i class="far fa-calendar-alt"></i> <span id="evpv-date"></span></span>
+					</div>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-time" id="evpv-time-row"><i class="far fa-clock"></i> <span id="evpv-time"></span></span>
+						<span class="evpv-meta-park" id="evpv-park-row" style="display:none"><i class="fas fa-tree"></i> <span id="evpv-park"></span></span>
+					</div>
+				</div>
+			</div>
+			<div class="evpv-description" id="evpv-description" style="display:none"></div>
+			<div class="evpv-rsvp-row">
+				<span class="kn-rsvp-wrap" id="evpv-rsvp"></span>
+			</div>
+		</div>
+		<div class="evpv-footer">
+			<button class="kn-emod-btn-cancel" onclick="evpvClose()">Close</button>
+			<a class="evpv-cta" id="evpv-cta" href="#"><i class="fas fa-arrow-right"></i> See Full Details</a>
+		</div>
+	</div>
+</div>
+
+<!-- Calendar Item Detail Overlay (read/edit/delete) — available to all viewers -->
+<div class="kn-ci-overlay" id="kn-ci-overlay">
+	<div class="kn-ci-box">
+		<div class="kn-ci-header">
+			<h3 id="kn-ci-view-title"><i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>Calendar Item</h3>
+			<button class="kn-emod-close" onclick="knCloseCalendarItemOverlay()">&times;</button>
+		</div>
+		<div class="kn-ci-body">
+			<div class="kn-ci-name" id="kn-ci-view-name"></div>
+			<div class="kn-ci-meta">
+				<i class="fas fa-clock" style="margin-right:6px;color:#a0aec0"></i>
+				<span id="kn-ci-view-when"></span>
+			</div>
+			<div class="kn-ci-scope" id="kn-ci-view-scope"></div>
+			<div class="kn-ci-description" id="kn-ci-view-desc"></div>
+		</div>
+		<div class="kn-ci-footer">
+			<button class="kn-emod-btn-cancel" onclick="knCloseCalendarItemOverlay()">Close</button>
+			<button class="kn-emod-btn-cancel" id="kn-ci-edit-btn" style="display:none" onclick="knEditCalendarItem()">
+				<i class="fas fa-pencil-alt"></i> Edit
+			</button>
+			<button class="kn-emod-btn-cancel" id="kn-ci-delete-btn" style="display:none;color:#c53030;border-color:#fc8181" onclick="knDeleteCalendarItem()">
+				<i class="fas fa-trash"></i> Delete
+			</button>
+		</div>
+	</div>
+</div>
+
 <!-- Markdown Help Modal -->
 <div id="kn-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
 	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
@@ -1836,6 +2246,20 @@ var KnConfig = {
 </div>
 
 <!-- Confirmation Modal (shared) -->
+<!-- In-app help. Body is rendered server-side from docs/*.md (Parsedown), so the guide in the
+     repo and the guide in the app are the same document and cannot drift apart. -->
+<div id="kn-help-overlay">
+	<div class="kn-modal-box kn-help-box">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-help-title"><i class="fas fa-question-circle" style="margin-right:8px;color:#2b6cb0"></i>Help</h3>
+			<button class="kn-modal-close-btn" id="kn-help-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body kn-help-body" id="kn-help-body">
+			<div style="text-align:center;padding:32px;color:#718096"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+		</div>
+	</div>
+</div>
+
 <div id="kn-confirm-overlay">
 	<div class="kn-modal-box kn-confirm-box">
 		<div class="kn-modal-header">
@@ -1843,7 +2267,7 @@ var KnConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6;white-space:pre-line"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
@@ -1902,6 +2326,7 @@ var KnConfig = {
 				<div class="plr-field">
 					<label>Username <span class="plr-req">*</span></label>
 					<input type="text" id="kn-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+					<div class="plr-field-hint" id="kn-addplayer-username-status" style="display:none;font-size:12px;margin-top:4px"></div>
 				</div>
 				<div class="plr-field">
 					<label>Password</label>
@@ -1941,12 +2366,75 @@ var KnConfig = {
 	</div>
 </div>
 
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Royal Progress crowns ---- */
+.kn-royal-badge {
+	display: inline-flex; align-items: center;
+	margin-left: 4px; font-size: 11px; cursor: default;
+	position: relative; top: -1px;
+}
+.kn-royal-monarch { color: #b7791f; }
+.kn-royal-regent  { color: #718096; }
+
+/* Calendar royal-presence crowns — distinct per level (kingdom vs principality) and role */
+.kn-cal-royal-crown { font-size: 0.85em; }
+.kn-cal-royal-crown.kn-crown-km { color: #b7791f; }  /* kingdom monarch — gold */
+.kn-cal-royal-crown.kn-crown-kr { color: #a0aec0; }  /* kingdom regent — silver */
+.kn-cal-royal-crown.kn-crown-pm { color: #2c5f8b; }  /* principality monarch — steel blue (matches Pr map pins) */
+.kn-cal-royal-crown.kn-crown-pr { color: #7ba0c4; }  /* principality regent — light steel */
+
+/* ---- Copy-link icon ---- */
+.kn-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .kn-copy-link { opacity: 1; }
+.kn-copy-link:hover { color: #4299e1; }
+.kn-copy-link.kn-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: knCopiedFade 1.4s forwards;
+}
+@keyframes knCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
 <!-- Move Player Modal -->
 <style>
+.kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
+.kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
+.kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
+.kn-qt-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; font-size: 0.82rem; color: #4a5568; }
+.kn-qt-stat strong { color: #2b6cb0; }
+.kn-qt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kn-qt-card-disabled { opacity: 0.55; border-style: dashed; }
+.kn-qt-badge-disabled { display: inline-block; font-size: 0.7rem; font-weight: 600; color: #a0aec0; background: #edf2f7; border-radius: 4px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.03em; }
+.kn-btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+.kn-tab-toolbar { margin-bottom: 14px; }
 .kn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .kn-mp-toggle-btn {
-	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600;
-	cursor:pointer; background:#fff; color:#4a5568; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
+	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);
+	cursor:pointer; background:#fff; color:var(--ork-text-body); transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
 }
 .kn-mp-toggle-btn:hover { border-color:#a0aec0; }
 .kn-mp-toggle-btn.kn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
@@ -1961,7 +2449,7 @@ var KnConfig = {
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
 	display:none !important; position:fixed; z-index:9000;
-	background:var(--ork-card-bg); border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
 }
 .kn-sub-pop.kn-sub-open { display:block !important; }
@@ -1971,23 +2459,23 @@ var KnConfig = {
 }
 .kn-sub-pop-row { display:flex; gap:4px; margin-bottom:8px; }
 .kn-sub-url-input {
-	flex:1; font-size:11px; padding:4px 6px; border:1px solid #e2e8f0;
-	border-radius:4px; color:#4a5568; background:#f7fafc; min-width:0;
+	flex:1; font-size:11px; padding:4px 6px; border:1px solid var(--ork-border);
+	border-radius:4px; color:var(--ork-text-body); background:var(--ork-surface-light); min-width:0;
 }
 .kn-sub-copy-btn {
-	padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px;
-	background:#edf2f7; cursor:pointer; color:#4a5568; font-size:12px;
+	padding:4px 8px; border:1px solid var(--ork-border); border-radius:4px;
+	background:var(--ork-surface-hover); cursor:pointer; color:var(--ork-text-body); font-size:12px;
 }
-.kn-sub-copy-btn:hover { background:#e2e8f0; }
+.kn-sub-copy-btn:hover { background:var(--ork-border); }
 .kn-sub-gcal-btn {
 	display:block; text-align:center; background:#4285f4; color:#fff;
 	border-radius:5px; padding:7px 10px; font-size:12px; font-weight:600; text-decoration:none;
 }
 .kn-sub-gcal-btn:hover { background:#3367d6; color:#fff; }
 .kn-sub-webcal-btn {
-	display:block; margin-top:6px; font-size:11px; color:#718096; text-align:center; text-decoration:none;
+	display:block; margin-top:6px; font-size:11px; color:var(--ork-text-muted); text-align:center; text-decoration:none;
 }
-.kn-sub-webcal-btn:hover { color:#4a5568; }
+.kn-sub-webcal-btn:hover { color:var(--ork-text-body); }
 
 /* ===================================================================
    DARK MODE OVERRIDES — Kingdomnew profile
@@ -2173,12 +2661,68 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
 	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
 }
+/* Royal crowns / copy-link / data-tip — dark mode */
+html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
+html[data-theme="dark"] .kn-royal-monarch { color: #f6ad55; }
+html[data-theme="dark"] .kn-royal-regent  { color: #cbd5e0; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-km { color: #f6ad55; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-kr { color: #cbd5e0; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-pm { color: #63b3ed; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-pr { color: #90cdf4; }
+html[data-theme="dark"] .kn-copy-link { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-copy-link:hover { color: #63b3ed; }
+html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
+/* ============================================================
+
+/* ---- Copy from past event (kn-cfe-*) ---- */
+.kn-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.kn-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
+.kn-cfe-toggle:hover { background: #edf2f7; }
+.kn-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
+.kn-cfe-toggle[aria-expanded="true"] .kn-cfe-chev { transform: rotate(180deg); }
+.kn-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.kn-cfe-field { position: relative; }
+.kn-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
+.kn-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
+.kn-cfe-chip-clear:hover { color: #1a365d; }
+.kn-cfe-modules .kn-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.kn-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
+.kn-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
+.kn-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.kn-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
+
+#kn-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+#kn-cfe-results .kn-ac-row:hover, #kn-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
+#kn-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
+#kn-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
+#kn-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
+#kn-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+
+html[data-theme="dark"] .kn-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-cfe-toggle { color: var(--ork-text); }
+html[data-theme="dark"] .kn-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-cfe-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .kn-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
+html[data-theme="dark"] .kn-cfe-chip-clear { color: #90cdf4; }
+html[data-theme="dark"] .kn-cfe-chip-clear:hover { color: #ebf8ff; }
+html[data-theme="dark"] .kn-cfe-mod-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-cfe-mod-row { color: var(--ork-text); }
+html[data-theme="dark"] .kn-cfe-mod-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-cfe-mod-all { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #kn-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row-title { color: var(--ork-text); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
 
 </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="kn-modal-close-btn" id="kn-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2225,7 +2769,7 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 <div id="kn-mergeplayer-overlay">
 	<div class="kn-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="kn-modal-close-btn" id="kn-mergeplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2263,7 +2807,7 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-mergeplayer-cancel">Cancel</button>
-			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -2290,11 +2834,36 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 
 
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+
+<!-- QR Code Modal -->
+<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200)" onclick="if(event.target===this)knCloseQrModal()">
+	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button onclick="knCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="kn-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="kn-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="kn-qr-download" href="" download="signin-qr.png" class="kn-btn kn-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
+	</div>
+</div>
+
 <?php endif; ?>
+
 <script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
 	if (!kingdomId) return;
+
+	function knCopyEventLink(el) {
+		var url = el.getAttribute('data-url');
+		navigator.clipboard.writeText(url).then(function() {
+			el.classList.add('kn-copied');
+			setTimeout(function() { el.classList.remove('kn-copied'); }, 1500);
+		});
+	}
 
 	// ---- Park averages + player counts (AJAX) ----
 	// Fill tile/row averages for a given park_averages_json payload.
@@ -2508,7 +3077,7 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 					listHtml.push(
 						'<details class="kn-year-section"' + openAttr + ' data-year="' + yk + '">'
 						+ summary
-						+ '<table class="kn-table kn-year-table"><thead><tr>'
+						+ '<table class="kn-table kn-year-table kn-sortable"><thead><tr>'
 						+ '<th data-sorttype="text">Persona</th>'
 						+ '<th data-sorttype="text">Park</th>'
 						+ '<th data-sorttype="numeric">6mo Sign-ins</th>'
@@ -2735,6 +3304,178 @@ function knEscapeAttr(s) {
 }
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<?php if ($knCanManageBanner): ?>
+<!-- kn-banner-modal -->
+<div class="kn-img-overlay kn-banner-modal" id="kn-banner-overlay">
+	<div class="kn-img-modal" style="width:min(680px, 96vw)">
+		<div class="kn-img-modal-header">
+			<span class="kn-img-modal-title" id="kn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<button class="kn-img-close-btn" id="kn-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="kn-img-modal-body" id="kn-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the kingdom header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
+
+			<div class="kn-banner-wireframes">
+				<figure class="kn-banner-wireframe kn-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#kn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#kn-wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="kn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="kn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="kn-banner-wireframe kn-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#kn-wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="kn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="kn-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="kn-banner-config">
+				<label class="kn-banner-toggle">
+					<input type="checkbox" id="kn-banner-show-logo" checked>
+					<span>Show Kingdom Heraldry on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="kn-banner-toggle">
+					<input type="checkbox" id="kn-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="kn-upload-area" for="kn-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt kn-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="kn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="kn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
+			<div class="kn-img-form-error" id="kn-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="kn-btn kn-btn-outline" id="kn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="kn-btn kn-btn-outline" id="kn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="kn-btn kn-btn-outline kn-btn-danger" id="kn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="kn-field-hint">Upload an image to enable banner display settings.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="kn-img-modal-body" id="kn-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="kn-banner-position-wrap">
+				<canvas id="kn-banner-position-canvas" class="kn-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="kn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .kn-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#kn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#kn-posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Kingdom Name goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="kn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="kn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="kn-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="kn-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="kn-img-form-error" id="kn-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="kn-btn kn-btn-outline" id="kn-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="kn-btn kn-btn-white" id="kn-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="kn-img-modal-body" id="kn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;">Uploading…</p>
+		</div>
+		<div class="kn-img-modal-body" id="kn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -2772,6 +3513,9 @@ window.knInitRecsTab = function() {
 			{ targets: [-1], orderable: false, searchable: false },
 			<?php endif; ?>
 		],
+		dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+		lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+		language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' },
 		pageLength: 25,
 		scrollX: true
 	});
@@ -3088,6 +3832,22 @@ $(document).on('click', '.kn-tab-nav li[data-kntab="officerhistory"]', function(
         knLoadOfficerHistory();
     }
 });
+window.knUsernameCheck = initUsernameAvailabilityCheck({
+	inputId:     'kn-addplayer-username',
+	statusId:    'kn-addplayer-username-status',
+	submitBtnId: 'kn-addplayer-submit',
+	endpointUrl: '<?= UIR ?>PlayerAjax/check_username',
+	gateMode:    'soft'
+});
+(function() {
+	var _origOpen = window.knOpenAddPlayerModal;
+	if (typeof _origOpen !== 'function') return;
+	window.knOpenAddPlayerModal = function() {
+		var r = _origOpen.apply(this, arguments);
+		if (window.knUsernameCheck && window.knUsernameCheck.reset) window.knUsernameCheck.reset();
+		return r;
+	};
+})();
 </script>
 
 

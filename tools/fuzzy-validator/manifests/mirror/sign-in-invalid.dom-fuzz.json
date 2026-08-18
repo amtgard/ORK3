@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "sign-in-invalid",
+  "calibratedAt": "2026-08-01T19:52:50Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}
