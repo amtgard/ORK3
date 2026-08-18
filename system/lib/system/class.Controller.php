@@ -152,6 +152,21 @@ class Controller
             $this->data['UserKingdomId'] = 0;
         }
 
+        // IDP-link nudge banner state for the post-login home page.
+        // Banner renders when: logged in, no ork_idp_auth row, no dismiss cookie.
+        $this->data['IdpLinked']        = false;
+        $this->data['IdpNudgeDismissed'] = isset($_COOKIE['ork_idp_nudge_dismissed_until']) && (int)$_COOKIE['ork_idp_nudge_dismissed_until'] > time();
+        if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
+            $this->data['IdpLinked'] = $this->Authorization->is_idp_linked((int)$this->session->user_id);
+
+            // CSRF token for the nudge banner forms. Generated lazily; persists
+            // across the session like the auth token.
+            if (!isset($this->session->csrf_token) || strlen((string)$this->session->csrf_token) < 32) {
+                $this->session->csrf_token = bin2hex(random_bytes(16));
+            }
+            $this->data['CsrfToken'] = $this->session->csrf_token;
+        }
+
         unset($this->session->kingdom_id);
         unset($this->session->park_id);
         unset($this->session->kingdom_name);

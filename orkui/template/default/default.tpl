@@ -525,6 +525,8 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 	<h1 class="hm-welcome-title">Welcome to the Amtgard Online Record Keeper</h1>
 </div>
 
+<?php include __DIR__ . '/Home_idp_nudge.tpl'; ?>
+
 <!-- =============================================
      Downtime Info Box
      ============================================= -->

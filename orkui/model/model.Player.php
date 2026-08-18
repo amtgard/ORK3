@@ -487,6 +487,16 @@ class Model_Player extends Model
         return $this->_player()->GetHomeKingdom($mundane_id);
     }
 
+    public function get_persona_or_username(int $mundane_id): string
+    {
+        return $this->_player()->GetPersonaOrUsername($mundane_id);
+    }
+
+    public function get_email(int $mundane_id): string
+    {
+        return $this->_player()->GetEmail($mundane_id);
+    }
+
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
         return $this->_player()->CheckUsernameAvailable($username, $exclude_mundane_id);
