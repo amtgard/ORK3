@@ -68,7 +68,7 @@
 			<img id="en-heraldry-img"
 				src="<?= $heraldryUrl ?: (HTTP_EVENT_HERALDRY . '00000.jpg') ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-				alt="<?= $eventName ?> heraldry"
+				alt="<?= $eventName ?> logo"
 				crossorigin="anonymous">
 		</div>
 

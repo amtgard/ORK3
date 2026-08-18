@@ -541,10 +541,10 @@ if ($Type !== 'Event') {
 		dom          : 'lfrtip',
 		fixedHeader  : { headerOffset: 48 },
 		columnDefs   : dtCols,
-		order        : [[0, 'desc']]
+		order        : [[0, 'desc']],
+		scrollX      : true
 	};
 <?php if ($Type === 'All'): ?>
-	dtOpts.scrollX      = true;
 	dtOpts.fixedColumns = { left: 1 };
 <?php endif; ?>
 	$('#attendance-table').DataTable(dtOpts);
@@ -572,6 +572,7 @@ if ($Type !== 'Event') {
 			paging       : false,
 			info         : false,
 			searching    : false,
+			scrollX      : true,
 			columnDefs   : [
 				{ targets: [0], type: 'html' },
 				{ targets: [1, 2], type: 'num', className: 'dt-right' }

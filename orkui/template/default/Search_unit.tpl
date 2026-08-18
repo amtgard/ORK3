@@ -204,7 +204,8 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			Type a name to search companies &amp; households.
 		</div>
 
-		<table id="su-table" class="dataTable" style="width:100%;display:none">
+		<div id="su-table-wrap" style="display:none">
+		<table id="su-table" class="dataTable" style="width:100%">
 			<thead>
 				<tr>
 					<th></th>
@@ -219,10 +220,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			</thead>
 			<tbody></tbody>
 		</table>
+		</div>
 
 		<!-- Retired (Inactive) Units — separate section -->
 		<div id="su-retired-section" style="display:none;margin-top:28px;">
-			<div class="su-retired-header"><i class="fas fa-box-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
+			<div class="su-retired-header"><i class="fas fa-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
 			<p class="su-retired-note">These companies &amp; households have been retired and are hidden from the main results. A member of monarchy can reactivate one from its profile.</p>
 			<table id="su-retired-table">
 				<thead><tr><th></th><th>Name</th><th>Total</th><th class="su-col-leaders">Leaders</th><th class="su-col-web" style="text-align:center">Web</th></tr></thead>
@@ -323,7 +325,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	function loadData(q) {
 		$('#su-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
-		$('#su-table').hide();
+		$('#su-table-wrap').hide();
 		$('#su-retired-section').hide();
 		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '') + AJAX_PARAMS;
 		$.getJSON(url, function (units) {
@@ -334,7 +336,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			var live    = units.filter(function (u) { return u.Active !== 'Retired'; });
 			renderRetired(retired);
 			if (!live.length) {
-				$('#su-table').hide();
+				$('#su-table-wrap').hide();
 				updateStats([]);
 				if (!retired.length) {
 					$('#su-loading').text('No units found.').show();
@@ -356,6 +358,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				table = $('#su-table').DataTable({
 					data      : rows,
 					dom       : 'lfrtip',
+					scrollX: true,
 					pageLength: 25,
 					order     : [[1, 'asc']],
 					columnDefs: [
@@ -366,7 +369,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 					]
 				});
 			}
-			$('#su-table').show();
+			$('#su-table-wrap').show();
 
 			if (activeTypeFilter) {
 				table.column(TYPE_COL).search('^' + activeTypeFilter + '$', true, false).draw();
@@ -407,7 +410,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	function clearSearch() {
 		if (table) { table.destroy(); table = null; }
-		$('#su-table').hide();
+		$('#su-table-wrap').hide();
 		$('#su-stats-row').hide();
 		$('#su-retired-section').hide();
 		$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();

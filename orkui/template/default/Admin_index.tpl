@@ -32,5 +32,6 @@
 		<li><a href='<?=UIR ?>Unit/unitlist'>Companies and Households</a></li>
 		<li><a href='<?=UIR ?>Admin/topparks'>Top Parks by Attendance</a></li>
 		<li><a href='<?=UIR ?>Admin/new_player_attendance'>New Player Attendance</a></li>
+		<li><a href='<?=UIR ?>Reports/release_utilization'>Release Feature Utilization</a></li>
 	</ul>
 </div>
