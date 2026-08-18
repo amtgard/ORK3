@@ -130,7 +130,8 @@ class KingdomProfile extends Ork3
      * Per-park active player counts used to weight the kingdom map heatmap.
      * "participation" = distinct players who signed in AT the park in the past
      * 365 days; "residents" = distinct players whose home park IS the park and
-     * who signed in there in the same window.
+     * who signed in ANYWHERE in the same window (a resident who only ever plays
+     * at a neighbouring park still counts toward their home park).
      *
      * @return array<int, array{participation: int, residents: int}>
      */
@@ -159,7 +160,7 @@ class KingdomProfile extends Ork3
         $resResult = $this->db->DataSet(
             'SELECT m.park_id, COUNT(DISTINCT a.mundane_id) AS cnt
              FROM ' . DB_PREFIX . 'attendance a
-             INNER JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id AND m.park_id = a.park_id
+             INNER JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id
              INNER JOIN ' . DB_PREFIX . "park p ON p.park_id = m.park_id AND p.kingdom_id = {$kid}
              WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY) AND a.mundane_id > 0
              GROUP BY m.park_id"
