@@ -19,7 +19,7 @@ if ($_npa_has_summary) {
 	$chart_returning = array_map('intval', array_column($summary, 'ReturningPlayers'));
 }
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 
@@ -216,16 +216,19 @@ details > summary::-webkit-details-marker { display: none; }
 	$('.datepicker').datepicker({ dateFormat: 'yy-mm-dd' });
 
 <?php if ($_npa_has_summary): ?>
+	$.fn.dataTable.ext.type.order['pct-pre'] = function (d) {
+		return parseFloat(d) || 0;
+	};
 	var table = $('#npa-table').DataTable({
 		dom        : 't',
-		scrollX    : true,
-		fixedHeader: { headerOffset: 48 },
+		scrollX: true,
 		paging     : false,
 		order      : [[1, 'desc']],
 		columnDefs : [
-			{ targets: [0], type: 'string' },
+			{ targets: [0],       type: 'html' },
 			{ targets: [1, 2, 4], type: 'num', className: 'dt-right' },
-			{ targets: [3, 5],    type: 'num', className: 'dt-right' }
+			{ targets: [5],       type: 'num', className: 'dt-right' },
+			{ targets: [3],       type: 'pct', className: 'dt-right' }
 		]
 	});
 
@@ -247,21 +250,35 @@ details > summary::-webkit-details-marker { display: none; }
 		a.click();
 	});
 
-	new Highcharts.Chart({
-		chart  : { renderTo: 'npa-chart', type: 'column', style: { fontFamily: 'inherit' } },
-		title  : { text: 'New vs Returning Players by Kingdom' },
-		xAxis  : {
-			categories: <?=json_encode($chart_kingdoms)?>,
-			labels    : { rotation: -30, style: { fontSize: '11px' } }
-		},
-		yAxis  : { title: { text: 'Players' }, allowDecimals: false, min: 0 },
-		series : [
-			{ name: 'New Players',       data: <?=json_encode($chart_new)?>,       color: '#4338ca' },
-			{ name: 'Returning Players', data: <?=json_encode($chart_returning)?>,  color: '#10b981' }
-		],
-		credits: { enabled: false },
-		legend : { enabled: true }
-	});
+	function _npaIsDark() {
+		var a = document.documentElement.getAttribute('data-theme');
+		return a === 'dark' || (!a && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	}
+	function _npaTooltipTheme() {
+		var dk = _npaIsDark();
+		return { backgroundColor: dk ? '#1a2035' : '#fff', borderColor: dk ? '#818cf8' : '#ccc', style: { color: dk ? '#f1f5f9' : '#333' } };
+	}
+	function _buildNpaChart() {
+		var dk = _npaIsDark();
+		return new Highcharts.Chart({
+			chart  : { renderTo: 'npa-chart', type: 'column', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
+			title  : { text: 'New vs Returning Players by Kingdom', style: { color: dk ? '#e2e8f0' : '#333' } },
+			xAxis  : { categories: <?=json_encode($chart_kingdoms)?>, labels: { rotation: -30, style: { fontSize: '11px', color: dk ? '#cbd5e0' : '#333' } }, lineColor: dk ? '#4a5568' : '#ccd6eb', tickColor: dk ? '#4a5568' : '#ccd6eb' },
+			yAxis  : { title: { text: 'Players', style: { color: dk ? '#a0aec0' : '#666' } }, allowDecimals: false, min: 0, labels: { style: { color: dk ? '#a0aec0' : '#666' } }, gridLineColor: dk ? '#2d3748' : '#e6e6e6' },
+			series : [
+				{ name: 'New Players',       data: <?=json_encode($chart_new)?>,       color: '#4338ca' },
+				{ name: 'Returning Players', data: <?=json_encode($chart_returning)?>,  color: '#10b981' }
+			],
+			tooltip: _npaTooltipTheme(),
+			credits: { enabled: false },
+			legend : { enabled: true, itemStyle: { color: dk ? '#cbd5e0' : '#333' } }
+		});
+	}
+	var _npaChart = _buildNpaChart();
+	new MutationObserver(function() {
+		_npaChart.destroy();
+		_npaChart = _buildNpaChart();
+	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 }());
 </script>

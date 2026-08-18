@@ -25,14 +25,14 @@
 }
 .fp-logo-icon {
 	font-size: 26px;
-	color: #2c5282;
+	color: var(--ork-blue-primary);
 }
 .fp-logo-text {
 	font-size: 18px;
 	font-weight: 700;
 	color: #1a202c;
 }
-.fp-logo-text span { color: #2c5282; }
+.fp-logo-text span { color: var(--ork-blue-primary); }
 .fp-heading {
 	font-size: 21px;
 	font-weight: 700;
@@ -46,7 +46,7 @@
 }
 .fp-subheading {
 	font-size: 13px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	margin: 0 0 24px 0;
 	line-height: 1.5;
 }
@@ -57,7 +57,7 @@
 	display: block;
 	font-size: 12px;
 	font-weight: 600;
-	color: #4a5568;
+	color: var(--ork-text-body);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 	margin-bottom: 6px;
@@ -69,7 +69,7 @@
 	border-radius: 6px;
 	font-size: 14px;
 	color: #2d3748;
-	background: #f7fafc;
+	background: var(--ork-surface-light);
 	transition: border-color 0.15s, box-shadow 0.15s;
 	box-sizing: border-box;
 }
@@ -84,7 +84,7 @@
 	align-items: center;
 	gap: 10px;
 	margin: 14px 0;
-	color: #a0aec0;
+	color: var(--ork-text-hint);
 	font-size: 12px;
 }
 .fp-divider::before,
@@ -92,12 +92,12 @@
 	content: '';
 	flex: 1;
 	height: 1px;
-	background: #e2e8f0;
+	background: var(--ork-border);
 }
 .fp-btn {
 	width: 100%;
 	padding: 11px;
-	background: #2c5282;
+	background: var(--ork-blue-primary);
 	color: #fff;
 	border: none;
 	border-radius: 6px;
@@ -113,7 +113,7 @@
 	margin-top: 16px;
 	text-align: center;
 	font-size: 13px;
-	color: #3182ce;
+	color: var(--ork-blue-link);
 	text-decoration: none;
 }
 .fp-back:hover { text-decoration: underline; }
@@ -137,6 +137,68 @@
 .fp-message-detail {
 	font-weight: 600;
 	margin-top: 4px;
+}
+
+/* ===========================
+   Dark Mode
+   =========================== */
+html[data-theme="dark"] .fp-wrap {
+	background: var(--ork-card-bg);
+	box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .fp-logo-icon {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-logo-text {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-logo-text span {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-heading {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-subheading {
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .fp-label {
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .fp-input {
+	background: var(--ork-bg-secondary);
+	border-color: var(--ork-border);
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-input:focus {
+	background: var(--ork-bg-tertiary);
+	border-color: #63b3ed;
+	box-shadow: 0 0 0 3px rgba(99,179,237,0.2);
+}
+html[data-theme="dark"] .fp-divider {
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .fp-divider::before,
+html[data-theme="dark"] .fp-divider::after {
+	background: var(--ork-border);
+}
+html[data-theme="dark"] .fp-btn {
+	background: #2b4c7e;
+}
+html[data-theme="dark"] .fp-btn:hover {
+	background: #3a5f96;
+}
+html[data-theme="dark"] .fp-back {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-message-success {
+	background: #1c4532;
+	border-color: #276749;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .fp-message-error {
+	background: #742a2a;
+	border-color: #c53030;
+	color: #fed7d7;
 }
 </style>
 

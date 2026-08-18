@@ -5,19 +5,7 @@
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
 	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
-	$can_delete_recommendation = false;
-	if($this->__session->user_id) {
-		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-	}
+	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
 	$isSuspended = ($Player['Suspended'] == 1);
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
@@ -25,50 +13,85 @@
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
-	$knightAwardIds = array(17, 18, 19, 20, 245);
-	$isKnight = false;
-	if (is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $a) {
-			if (in_array((int)$a['AwardId'], $knightAwardIds)) {
-				$isKnight = true;
-				break;
-			}
+	$hasBanner       = !empty($Player['HasBanner']);
+	$bannerShowLogo  = !isset($Player['BannerShowLogo']) || (int)$Player['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($Player['BannerVignette']) || (int)$Player['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($Player['BannerOffsetX']) ? max(0, min(100, (int)$Player['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($Player['BannerOffsetY']) ? max(0, min(100, (int)$Player['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PLAYER_BANNER, sprintf('%06d', (int)$Player['MundaneId']));
+		$bannerFs   = DIR_PLAYER_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
 		}
 	}
-	$beltIconUrl = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
 
-	// Auth helpers
-	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+
+	// Knight AwardIds from domain (Award::GetKnightAwardMap via controller).
+	// Belt IMAGE URLs stay presentation-local (host/path); AwardIds come from domain.
+	$knightAwardIds = array_map('intval', array_keys(is_array($KnightAwardMap ?? null) ? $KnightAwardMap : []));
+	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
+	$beltImageMap = array(
+		17  => $_beltImgHost . 'belt-flame.png',
+		18  => $_beltImgHost . 'belt-crown.png',
+		19  => $_beltImgHost . 'belt-serpent.png',
+		20  => $_beltImgHost . 'belt-sword.png',
+		245 => $_beltImgHost . 'belt-battle.png',
+	);
+	$isKnight = false;
+	$ownBelts = array(); // de-duped earned knighthood belts, sorted by award date ascending
+	if (is_array($Details['Awards'])) {
+		$_seenBeltAwardIds = array();
+		foreach ($Details['Awards'] as $a) {
+			$_aid = (int)$a['AwardId'];
+			// Custom Titles aliased to a Knight-of-X count as that knighthood for
+			// belt purposes — use the alias's award_id for the icon mapping and
+			// fall back to the player's custom_name for the display label.
+			$_aliasId = (int)($a['AliasAwardId'] ?? 0);
+			$_effectiveId = in_array($_aliasId, $knightAwardIds) ? $_aliasId : $_aid;
+			if (in_array($_effectiveId, $knightAwardIds)) {
+				$isKnight = true;
+				if (!in_array($_effectiveId, $_seenBeltAwardIds)) {
+					$_seenBeltAwardIds[] = $_effectiveId;
+					$ownBelts[] = array(
+						'Id'   => $_effectiveId,
+						'Date' => $a['Date'] ?? '',
+						'Src'  => $beltImageMap[$_effectiveId],
+						'Name' => !empty($a['CustomAwardName']) ? $a['CustomAwardName'] : ($a['Name'] ?? ''),
+					);
+				}
+			}
+		}
+		usort($ownBelts, function($x, $y) { return strcmp($x['Date'], $y['Date']); });
+	}
+	$beltIconUrl = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
+	$_pnBeltDisplay = $Player['BeltDisplay'] ?? 'white';
+	if (!in_array($_pnBeltDisplay, array('white','own','none'))) { $_pnBeltDisplay = 'white'; }
+
+	// Auth helpers (precomputed in Controller_Player::profile)
+	$isOwnProfile  = !empty($IsOwnProfile);
+	$canEditAdmin  = !empty($canEditAdmin);
+	$pnCanManageBanner = !empty($pnCanManageBanner);
+	$canManageAwards = !empty($canManageAwards);
+	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
-	// Check if player has any reconcilable historical awards
-	$hasHistorical = false;
-	if ($canManageAwards && is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistorical = true;
-					break;
-				}
-			}
-		}
-	}
+	// Display privacy: monarchy/admin always see; others see if player opted in
+	$isLoggedIn = isset($this->__session->user_id) && (int)$this->__session->user_id > 0;
+	$canSeePrivate = $isOwnProfile || $canEditAdmin;
+	// "Restrict Mundane Name Visibility" hard-overrides the per-field toggles —
+	// if the player flipped that, none of the per-field opt-ins should leak info
+	// to ordinary logged-in viewers (only admins / the player themselves see it).
+	$_isRestricted = (int)($Player['Restricted'] ?? 0) === 1;
+	$showFirstName = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 0));
+	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
+	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
-	// Same check, visible to anyone viewing the profile
-	$hasHistoricalTip = false;
-	if (is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistoricalTip = true;
-					break;
-				}
-			}
-		}
-	}
+	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
+	$hasHistorical = !empty($HasHistorical);
+	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
@@ -86,11 +109,13 @@
 		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
 	}
 
-	// Class → Paragon award map (used by My Amtgard + Class Levels tabs)
-	$pnClassToParagon = [
-		1=>37, 2=>38, 3=>39, 4=>40, 5=>41, 6=>241, 7=>42, 8=>43,
-		9=>44, 10=>45, 11=>46, 12=>47, 14=>242, 15=>49, 16=>50, 17=>51,
-	];
+	// Class → Paragon award map from domain (controller-assigned ClassParagonMap)
+	if (!isset($ClassParagonMap) || !is_array($ClassParagonMap)) {
+		$ClassParagonMap = [];
+	}
+	if (!isset($ClassLevelThresholds) || !is_array($ClassLevelThresholds)) {
+		$ClassLevelThresholds = [];
+	}
 	$pnHeldAwardIds = [];
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_pa) {
@@ -106,10 +131,10 @@
 		$_maDash_cls = is_array($Details['Classes'])    ? $Details['Classes']    : [];
 		usort($_maDash_att, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
 		usort($_maDash_awd, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
-		// First credit date (oldest attendance)
+		// First credit date (oldest non-zero attendance)
 		$_maFirstDate = null;
 		foreach ($_maDash_att as $_fa) {
-			if (!empty($_fa['Date']) && $_fa['Date'] !== '1970-01-01') {
+			if (!empty($_fa['Date']) && $_fa['Date'] !== '0000-00-00' && $_fa['Date'] !== '1970-01-01') {
 				if ($_maFirstDate === null || strtotime($_fa['Date']) < strtotime($_maFirstDate))
 					$_maFirstDate = $_fa['Date'];
 			}
@@ -143,52 +168,94 @@
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
 		if ($passwordExpired)
-			$_maAlerts[] = ['type'=>'danger','icon'=>'fa-key','msg'=>'Your password has expired.'];
+			$_maAlerts[] = ['type'=>'danger','icon'=>'fa-key','msg'=>'Your password has expired.','actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		elseif ($passwordSoon) {
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
-			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . "."];
+			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
-		// Level helpers
-		function _ma_level($credits) {
-			if ($credits >= 53) return 6;
-			if ($credits >= 34) return 5;
-			if ($credits >= 21) return 4;
-			if ($credits >= 12) return 3;
-			if ($credits >= 5)  return 2;
-			return 1;
-		}
-		function _ma_progress($credits) {
-			$t = [0,5,12,21,34,53];
-			if ($credits >= 53) return 100;
-			for ($i = count($t)-1; $i >= 0; $i--)
-				if ($credits >= $t[$i]) return round(($credits-$t[$i])/($t[$i+1]-$t[$i])*100);
-			return 0;
-		}
+		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
 
-<style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
+<?php
+	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
+	$_pnIsCustomPrimary = false;
+	if (!$isSuspended && !empty($Player['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorPrimary'])) {
+		$_pnHeroBg = $Player['ColorPrimary'];
+		$_pnIsCustomPrimary = true;
+	}
+	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
+	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
+	// Amtpride Nameplate: when set, this preset key takes precedence over
+	// color_primary/color_secondary on the hero background. Suspended state
+	// still wins (red signal), as does dark mode for the rest of the page.
+	$_pnPrideGradients = require __DIR__ . '/../../../system/lib/ork3/pride_gradients.php';
+	$_pnHeroGradientKey = (!$isSuspended && !empty($Player['HeroGradient']) && isset($_pnPrideGradients[$Player['HeroGradient']])) ? $Player['HeroGradient'] : '';
+	$_pnHeroGradientCss = $_pnHeroGradientKey ? ('linear-gradient(90deg, ' . implode(', ', $_pnPrideGradients[$_pnHeroGradientKey]['colors']) . ')') : '';
+	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high','vignette']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
+	// Opacity for the flat-blur layer. Unused in vignette mode (which renders
+	// its own two-layer composition with per-layer opacities).
+	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22', 'vignette' => '0.12'][$_pnOverlay];
+	$_pnOverlayIsVignette = ($_pnOverlay === 'vignette');
+	// Single `background` shorthand value (color OR gradient). Pride gradient
+	// wins over the legacy 135deg two-color gradient when active.
+	$_pnHeroBgValue = $_pnHeroGradientCss
+		?: (!empty($_pnColorSecondary)
+			? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
+			: $_pnHeroBg);
+	// In dark mode, respect user customization (primary color and/or gradient) so
+	// the value the player picked in the design modal preview is what they see on
+	// the rendered hero. Fall back to --ork-bg-secondary only when the player has
+	// not customized, so default uncustomized heroes still auto-darken. Suspended
+	// state forces the red signal in both modes. Amtpride flags render as-is in
+	// both themes — the colors are identity-bearing and shouldn't be tinted.
+	$_pnHeroBgValueDark = ($isSuspended || $_pnIsCustomPrimary || !empty($_pnColorSecondary) || $_pnHeroGradientCss)
+		? $_pnHeroBgValue
+		: 'var(--ork-bg-secondary)';
+	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
+	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
+	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+	$_pnShowLogo = !$bannerUrl || $bannerShowLogo;
+
+?>
+<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
+<?php
+$_pnNameFont = (!empty($Player['NameFont']) && empty($ViewerBasicFonts) && empty($ViewerDyslexiaFonts)) ? $Player['NameFont'] : '';
+$_pnFontAllowed = ['Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'];
+if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
+?>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<?php if ($_pnNameFont): ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=<?= str_replace(' ', '+', htmlspecialchars($_pnNameFont)) ?>&display=swap">
+<style>#pn-hero-persona,.pn-hero-preview-name,#pn-name-preview{font-family:'<?= htmlspecialchars($_pnNameFont) ?>',serif!important}</style>
+<?php endif; ?>
+<?php if (!empty($isOwnProfile)): ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel&family=Cinzel+Decorative&family=IM+Fell+English&family=UnifrakturMaguntia&family=Metamorphous&family=Uncial+Antiqua&family=Pirata+One&family=Almendra&family=Pinyon+Script&family=Great+Vibes&display=swap">
+<?php endif; ?>
 <style>
 /* ===== My Amtgard Dashboard ===== */
 .pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .pna-alert{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-radius:6px;font-size:12.5px;line-height:1.4}
 .pna-alert i{flex-shrink:0;margin-top:2px}
+.pna-alert-action{color:inherit;font-weight:600;text-decoration:underline;cursor:pointer;margin-left:4px}
+.pna-alert-action:hover{text-decoration:none}
 .pna-alert-warning{background:#fffbeb;border:1px solid #f6e05e;color:#744210}
 .pna-alert-danger{background:#fff5f5;border:1px solid #fc8181;color:#742a2a}
 .pna-alert-info{background:#ebf8ff;border:1px solid #90cdf4;color:#2a4365}
 .pna-layout{display:flex;gap:16px;align-items:flex-start}
 .pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
 .pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.pna-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pna-card{background:#fff;border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
+.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
 .pna-card-title a.pna-card-more:hover{text-decoration:underline}
 .pna-tenure{text-align:center;padding:6px 0 2px}
-.pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
-.pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
-.pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+.pna-tenure-years{font-size:44px;font-weight:800;color:var(--ork-blue-primary);line-height:1}
+.pna-tenure-label{font-size:13px;color:var(--ork-text-muted);margin-top:2px}
+.pna-tenure-since{font-size:11px;color:var(--ork-text-hint);margin-top:6px}
 .pna-tenure-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ebf4ff;color:#2b6cb0;font-size:10px;cursor:help;border:1px solid #bee3f8;position:relative;z-index:10;flex-shrink:0;margin-top:8px;vertical-align:middle}
-.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
@@ -197,25 +264,25 @@
 .pna-class-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .pna-class-name{font-size:12px;font-weight:600;color:#2d3748}
 .pna-class-level{font-size:11px;font-weight:700;color:#276749}
-.pna-bar-wrap{height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.pna-bar-wrap{height:6px;background:var(--ork-surface-hover);border-radius:4px;overflow:hidden}
 .pna-bar{height:100%;background:linear-gradient(90deg,#48bb78,#276749);border-radius:4px;transition:width .4s ease}
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
-.pna-class-credits{font-size:10px;color:#a0aec0;margin-top:3px}
+.pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
 .pna-officer-entity:hover{text-decoration:underline}
-.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #edf2f7}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12.5px}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-surface-hover)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-surface-light);font-size:12.5px}
 .pna-feed-row:last-child{border-bottom:none}
-.pna-feed-date{flex-shrink:0;color:#a0aec0;font-size:11px;min-width:46px}
+.pna-feed-date{flex-shrink:0;color:var(--ork-text-hint);font-size:11px;min-width:46px}
 .pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
-.pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
+.pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
-.pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
+.pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
 .pna-welcome-banner-icon{font-size:32px;flex-shrink:0;line-height:1}
@@ -226,22 +293,23 @@
 .pna-welcome-tip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px}
 .pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
 .pna-spark-week{flex:1;border-radius:2px;min-width:0}
-.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
+.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:var(--ork-text-muted);flex-wrap:wrap}
 .pna-spark-swatch{width:12px;height:12px;display:inline-block;border-radius:2px;vertical-align:middle}
 .pna-spark-on{background:#48bb78}
-.pna-spark-off{background:#edf2f7;border:1px solid #e2e8f0}
+.pna-spark-off{background:var(--ork-surface-hover);border:1px solid var(--ork-border)}
 .pna-spark-swatch-on{background:#48bb78}
-.pna-spark-swatch-off{background:#edf2f7;border:1px solid #cbd5e0}
+.pna-spark-swatch-off{background:var(--ork-surface-hover);border:1px solid #cbd5e0}
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
-.pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-border)}
+.pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
-.pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
+.pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
-.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-border)}
 .pna-card{padding:12px 13px}
 .pna-tenure-years{font-size:36px}
 }
@@ -253,18 +321,17 @@
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
 .pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
-.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
-.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn .pn-tip-icon{color:var(--ork-red-danger);font-size:11px;font-weight:700;font-style:normal;border:1px solid var(--ork-red-danger);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:var(--ork-bg-dark);color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .pn-givenby-warn:hover .pn-tip-box{display:block}
 
 /* ===================================================================
    DARK MODE OVERRIDES — Playernew profile
    Activated by: html[data-theme="dark"]
-   Auto-detected by: @media (prefers-color-scheme: dark) when no manual pref
    =================================================================== */
 
 /* Required field indicator */
-.required-indicator { color: #e53e3e; }
+.required-indicator { color: var(--ork-red-danger); }
 
 /* Inline danger buttons — light default, dark override below */
 .btn-danger-confirm { background: #c53030; color: #fff; border: none; cursor: pointer; }
@@ -272,7 +339,6 @@
 /* ============================================================
    html[data-theme="dark"] overrides
    ============================================================ */
-html[data-theme="dark"] .pn-hero { background-color: var(--ork-bg-secondary); }
 html[data-theme="dark"] .pn-avatar { border-color: rgba(255,255,255,0.2); }
 html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
@@ -285,7 +351,7 @@ html[data-theme="dark"] .pn-detail-value { color: var(--ork-text); }
 html[data-theme="dark"] .pn-detail-row { border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-tab-nav li { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--pn-accent, var(--ork-link-bright)); /* keep accent color on active tab + let light rule supply --pn-accent bottom border */ }
 html[data-theme="dark"] .pn-tab-nav li:hover:not(.pn-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-tab-count { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-mini-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
@@ -294,7 +360,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -334,8 +400,8 @@ html[data-theme="dark"] .pna-feed-date { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-feed-label { color: var(--ork-text); }
 html[data-theme="dark"] .pna-feed-label a { color: var(--ork-link); }
 html[data-theme="dark"] .pna-feed-sub { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pna-feed-rank { background: #44337a; color: #d6bcfa; }
 html[data-theme="dark"] .pna-ev-col-hdr { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-ev-park { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-assoc-group { color: var(--ork-text-muted); border-color: var(--ork-border); }
 html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
 html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
@@ -362,9 +428,11 @@ html[data-theme="dark"] .pn-suspended-detail { background: #742a2a; color: #feb2
 html[data-theme="dark"] .pn-revoke-all-warning { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .pn-move-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pn-mp-player-locked { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-mp-toggle { background: var(--ork-bg-secondary); }
-html[data-theme="dark"] .pn-mp-toggle-btn { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .pn-mp-toggle-btn { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-mp-toggle-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-link); color: #fff; border-color: var(--ork-link); }
+html[data-theme="dark"] .pn-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pn-mp-cascade-sel:disabled { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
 html[data-theme="dark"] .btn-danger-confirm { background: #fc8181; color: #1a202c; }
 html[data-theme="dark"] .pn-char-count { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-revoke-award-name { color: var(--ork-text); }
@@ -374,10 +442,8 @@ html[data-theme="dark"] .required-indicator { color: #feb2b2; }
 html[data-theme="dark"] .pn-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
 html[data-theme="dark"] .pn-ac-item { color: var(--ork-text); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-ac-item:hover,
-html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-secondary); color: var(--ork-link-bright); }
-html[data-theme="dark"] .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-page-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-html[data-theme="dark"] .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .pn-ac-item:focus,
+html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-tertiary); color: var(--ork-link-bright); }
 html[data-theme="dark"] .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
@@ -388,108 +454,645 @@ html[data-theme="dark"] .pn-officer-chip.pn-selected { background: var(--ork-bg-
 html[data-theme="dark"] .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
 html[data-theme="dark"] .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 
-/* ============================================================
-   @media prefers-color-scheme: dark (auto-detect fallback)
-   ============================================================ */
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-hero { background-color: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-number { color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-icon { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-label { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card h4 { color: var(--ork-text); background: transparent; border: none; border-bottom: 1px solid var(--ork-border); padding: 0 0 8px 0; border-radius: 0; text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-label { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-value { color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table td { color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="text"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="date"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="number"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="url"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="password"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-tenure-years { color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-class-name { color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-wrap { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-label a { color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-row { border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table td { color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-item { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle { background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .btn-danger-confirm { background: #fc8181; color: #1a202c; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .required-indicator { color: #feb2b2; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item { color: var(--ork-text); border-bottom-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item:hover,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item.pn-ac-focused { background: var(--ork-bg-secondary); color: var(--ork-link-bright); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip.pn-selected { background: var(--ork-bg-tertiary); border-color: var(--ork-link); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip:hover { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip span { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
+/* ===== About Tab ===== */
+.pn-about-section{margin-bottom:24px}
+.pn-about-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-about-content{font-size:14px;line-height:1.7;color:#4a5568}
+.pn-about-content h1,.pn-about-content h2,.pn-about-content h3,.pn-about-content h4,.pn-about-content h5,.pn-about-content h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;color:#2d3748;margin:16px 0 8px}
+.pn-about-content p{margin:0 0 12px}
+.pn-about-content a{color:var(--pn-accent,#4299e1)}
+.pn-about-content blockquote{border-left:3px solid var(--pn-accent,#4299e1);margin:12px 0;padding:8px 16px;color:#718096;background:#f7fafc;border-radius:0 4px 4px 0}
+.pn-about-content code{background:#edf2f7;padding:2px 6px;border-radius:3px;font-size:13px}
+.pn-about-content pre{background:#2d3748;color:#e2e8f0;padding:14px;border-radius:6px;overflow-x:auto;margin:12px 0}
+.pn-about-content pre code{background:transparent;padding:0;color:inherit}
+.pn-about-content img{max-width:100%;height:auto;border-radius:6px}
+.pn-about-content ul,.pn-about-content ol{margin:8px 0;padding-left:24px}
+.pn-hero-subline{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:4px;display:flex;align-items:center;flex-wrap:wrap;gap:0}
+.pn-sub-pronunciation{font-style:italic;color:rgba(255,255,255,0.6);letter-spacing:.02em}
+.pn-sub-pronouns{font-style:italic;color:rgba(255,255,255,0.6)}
+.pn-sub-sep{margin:0 6px;color:rgba(255,255,255,0.4);font-size:10px}
+.pn-tooltip-trigger{position:relative;display:inline-flex;align-items:center}
+.pn-tooltip-trigger .pn-tooltip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-tooltip-trigger:hover .pn-tooltip-text,.pn-tooltip-trigger:focus-within .pn-tooltip-text{display:block}
+html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--ork-bg-tertiary,#1a202c);border:1px solid var(--ork-border)}
+.pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
+.pn-about-layout{display:flex;gap:24px;align-items:flex-start}
+.pn-about-main{flex:1;min-width:0;position:relative}
+.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:background 0.15s,color 0.15s;z-index:5}
+.pn-about-edit-btn:hover,.pn-about-edit-btn:focus{background:#4299e1;color:#fff;border-color:#4299e1;outline:none}
+html[data-theme="dark"] .pn-about-edit-btn{background:var(--ork-card-bg);border-color:var(--ork-border);color:var(--pn-accent,#63b3ed)}
+html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-about-edit-btn:focus{background:var(--pn-accent,#63b3ed);color:var(--ork-card-bg);border-color:var(--pn-accent,#63b3ed)}
+.pn-about-sidebar{flex:0 0 240px}
+.pn-belt-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.pn-belt-card-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pn-belt-card-title i{color:var(--pn-accent,#4299e1);font-size:12px}
+.pn-belt-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #f7fafc}
+.pn-belt-group:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.pn-belt-row{display:flex;align-items:baseline;justify-content:space-between;padding:4px 0;gap:8px}
+.pn-belt-name{font-size:13px;font-weight:600;color:var(--pn-accent,#4299e1);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-belt-name:hover{text-decoration:underline}
+.pn-belt-title{font-size:11px;color:#718096;white-space:nowrap;flex-shrink:0}
+/* Hero belt row (own knighthood belts) — matches the single white belt.svg icon sizing */
+.pn-hero-belts{display:inline-flex;align-items:center;gap:8px;margin-left:10px;vertical-align:middle}
+.pn-hero-belts .pn-belt-icon-own{height:1.2em;width:auto;display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))}
+/* Icons tab — design modal preview strip */
+.pn-icons-preview{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px}
+.pn-icons-preview img{height:32px;width:auto}
+.pn-icons-preview-empty{font-size:12px;color:#a0aec0;font-style:italic}
+.pn-icons-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
+.pn-icons-option:hover{border-color:var(--pn-accent,#4299e1)}
+.pn-icons-option input[type="radio"]{margin-top:3px;accent-color:var(--pn-accent,#4299e1)}
+.pn-icons-option-body{flex:1;min-width:0}
+.pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
+.pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
+@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
+/* ===== Milestones Timeline ===== */
+.pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0}
+.pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
+.pn-timeline-heading i{color:var(--pn-accent,#4299e1);font-size:16px}
+.pn-timeline{position:relative;padding:10px 0 10px;margin:0}
+.pn-timeline::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;background:#e2e8f0;transform:translateX(-50%)}
+.pn-tl-item{position:relative;display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.pn-tl-item:last-child{margin-bottom:0}
+.pn-tl-left{width:calc(50% - 24px);text-align:right;padding-right:16px}
+.pn-tl-right{width:calc(50% - 24px);text-align:left;padding-left:16px}
+.pn-tl-node{position:absolute;left:50%;top:50%;width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid var(--pn-accent,#4299e1);display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);z-index:1;font-size:14px;color:var(--pn-accent,#4299e1)}
+.pn-tl-date{font-size:12px;color:var(--pn-accent,#4299e1);font-weight:600;line-height:1.4}
+.pn-tl-desc{font-size:13px;color:#2d3748;font-weight:500;line-height:1.4}
+.pn-tl-item:nth-child(odd) .pn-tl-left{order:1}
+.pn-tl-item:nth-child(odd) .pn-tl-right{order:3}
+.pn-tl-item:nth-child(odd) .pn-tl-node{order:2}
+.pn-tl-item:nth-child(even) .pn-tl-left{order:3;text-align:left;padding-left:16px;padding-right:0}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:1;text-align:right;padding-right:16px;padding-left:0}
+.pn-tl-item:nth-child(even) .pn-tl-node{order:2}
+.pn-tl-empty{text-align:center;padding:24px 16px;color:#a0aec0;font-size:13px}
+@media(max-width:700px){
+.pn-timeline::before{left:18px}
+.pn-tl-item{flex-wrap:nowrap}
+.pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
+.pn-tl-left{display:none}
+.pn-tl-right{order:2!important;width:auto;flex:1;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-item:nth-child(even) .pn-tl-left{display:none}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
 }
+@media(min-width:701px){.pn-tl-date-mobile{display:none}}
+/* ===== Milestones Config (Design Modal) ===== */
+.pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
+.pn-ms-toggle input[type=checkbox]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
+.pn-ms-toggle i{width:20px;text-align:center;color:#718096;font-size:14px}
+.pn-ms-custom-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.pn-ms-custom-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px}
+.pn-ms-custom-row i{color:var(--pn-accent,#4299e1);font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.pn-ms-custom-desc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2d3748;font-weight:500}
+.pn-ms-custom-date{color:#718096;font-size:11px;flex-shrink:0}
+.pn-ms-custom-actions{display:flex;gap:4px;flex-shrink:0}
+.pn-ms-custom-actions button{background:none;border:none;cursor:pointer;font-size:12px;color:#718096;padding:2px 4px;border-radius:3px}
+.pn-ms-custom-actions button:hover{background:#e2e8f0;color:#2d3748}
+.pn-ms-add-form{margin-top:16px;padding:14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px}
+.pn-ms-add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pn-ms-add-row .pn-ms-field{display:flex;flex-direction:column;gap:3px}
+.pn-ms-add-row .pn-ms-field label{font-size:11px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+.pn-ms-add-row .pn-ms-field input,.pn-ms-add-row .pn-ms-field select{font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#fff}
+.pn-ms-add-row .pn-ms-field input[type=text]{width:180px}
+.pn-ms-add-row .pn-ms-field input[type=date]{width:130px}
+.pn-ms-add-btn{padding:6px 12px;font-size:12px;font-weight:600;background:var(--pn-accent,#4299e1);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap}
+.pn-ms-add-btn:hover{opacity:.9}
+.pn-ms-error{color:#e53e3e;font-size:12px;margin-top:6px;display:none}
+.pn-ms-icon-grid{display:flex;flex-wrap:wrap;gap:4px}
+.pn-ms-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:14px;color:#718096;background:#fff;transition:all .15s}
+.pn-ms-icon-opt:hover{border-color:#a0aec0;color:#4a5568;background:#f7fafc}
+.pn-ms-icon-opt.pn-ms-icon-active{border-color:var(--pn-accent,#4299e1);color:var(--pn-accent,#4299e1);background:#ebf8ff}
+/* ===== Compact Milestones Sidebar ===== */
+.pn-cms-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-top:12px}
+.pn-cms-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:8px;display:flex;align-items:center;gap:6px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-cms-title i{color:var(--pn-accent,#4299e1);font-size:12px}
+.pn-cms-item{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid #f0f4f8;font-size:12px}
+.pn-cms-item:last-child{border-bottom:none;padding-bottom:0}
+.pn-cms-icon{color:var(--pn-accent,#4299e1);font-size:12px;flex-shrink:0;width:16px;display:inline-flex;align-items:center;justify-content:center}
+.pn-cms-line{flex:1;min-width:0;color:#4a5568;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn-cms-line strong{color:#718096;font-weight:500;margin-right:2px}
+/* ===== Design My Profile Modal ===== */
+.pn-design-tabs-wrap{position:relative}
+.pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0;scrollbar-width:none;-ms-overflow-style:none}
+.pn-design-tabs::-webkit-scrollbar{display:none}
+.pn-design-tabs-chev{display:none;position:absolute;top:0;bottom:2px;width:36px;align-items:center;justify-content:center;border:none;cursor:pointer;color:#4a5568;font-size:13px;padding:0;z-index:2}
+.pn-design-tabs-chev.pn-show{display:flex}
+.pn-design-tabs-chev-left{left:0;background:linear-gradient(to right,#fff 55%,rgba(255,255,255,0))}
+.pn-design-tabs-chev-right{right:0;background:linear-gradient(to left,#fff 55%,rgba(255,255,255,0))}
+.pn-design-tabs-chev:hover{color:var(--pn-accent,#4299e1)}
+.pn-design-tab{padding:10px 18px;font-size:13px;font-weight:600;color:#718096;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
+.pn-design-tab:hover{color:#2d3748}
+.pn-design-tab.pn-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
+.pn-design-panel{display:none}
+.pn-design-panel.pn-active{display:block}
+.pn-design-field{margin-bottom:16px}
+.pn-design-field label{display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:5px}
+.pn-design-field textarea{width:100%;min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box}
+.pn-design-field textarea:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-field input[type="text"],.pn-design-field select{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box}
+.pn-design-field input[type="text"]:focus,.pn-design-field select:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-hint{font-size:11px;color:#a0aec0;margin-top:4px}
+.pn-design-preview-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.pn-color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pn-color-swatch{width:36px;height:36px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:border-color .15s,transform .15s}
+.pn-color-swatch:hover{transform:scale(1.1)}
+.pn-color-swatch.pn-selected{border-color:#2d3748;box-shadow:0 0 0 2px #fff,0 0 0 4px #2d3748}
+.pn-color-row{display:flex;gap:16px;align-items:flex-start;margin-bottom:12px}
+.pn-color-col{flex:1;min-width:0}
+.pn-color-input-wrap{display:flex;align-items:center;gap:8px}
+.pn-color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid #e2e8f0;border-radius:6px;padding:2px;cursor:pointer;background:#fff}
+.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;box-sizing:border-box;background:#fff;color:#2d3748}
+.pn-color-input-wrap input[type="text"]:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
+.pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
+/* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops.
+   Legibility contract: any future hero surface (kn-/pk-) that gains a pride gradient must replicate this
+   crisp-halo text-shadow on its name element, since light flag stops wash out a soft single shadow.
+   A soft directional shadow only blurs the underside of the glyphs; over a near-white flag stop the
+   top/sides of white text still bleed. A tight multi-directional outline wraps every glyph in a dark
+   edge so the title reads on any stop — light or dark — while keeping the flag fully visible (no overlay). */
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name,.pn-hero-name-shadow .pn-persona,.pn-hero-name-shadow .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
+html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)!important}
+/* Amtpride / name-shadow: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
+   The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns,.pn-hero-name-shadow .pn-sub-pronunciation,.pn-hero-name-shadow .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
+.pn-hero-pride .pn-sub-sep,.pn-hero-name-shadow .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
+/* Amtpride / name-shadow: dark translucent backing box behind the subline so it reads over light flag stops.
+   0.22 was too faint over a bright-yellow stop (small text needs a real panel, not a halo); 0.45
+   gives the white subline a reliable dark surface on any flag while staying clearly translucent. */
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
+.pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
+/* Design-modal preview: heraldry-overlay layers mirror the production hero so the
+   Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
+   so the real hero's --pn-overlay-opacity is untouched. */
+.pn-preview-bg{position:absolute;top:-10px;left:-10px;right:-10px;bottom:-10px;background-size:cover;background-position:center}
+.pn-preview-bg-base{filter:blur(6px);opacity:var(--pn-preview-overlay-opacity,0.12)}
+.pn-preview-bg-sharp{filter:blur(1px);opacity:0}
+.pn-preview-vignette .pn-preview-bg-base{-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%)}
+.pn-preview-vignette .pn-preview-bg-sharp{opacity:0.30;-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%)}
+.pn-hero-preview-content{position:relative;z-index:1}
+.pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
+.pn-overlay-btn:hover{border-color:#a0aec0}
+.pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
+.pn-comma-toggle{width:32px;height:32px;border:2px solid #cbd5e0;border-radius:6px;background:#f7fafc;font-size:16px;font-weight:700;color:#a0aec0;cursor:pointer;transition:all .15s;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.pn-comma-toggle:hover{border-color:#a0aec0;background:#edf2f7}
+.pn-comma-toggle.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
+.pn-name-parts{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pn-name-part{flex:1;min-width:120px}
+.pn-name-core{flex:1.8;min-width:160px}
+.pn-name-comma-sep{flex:0 0 auto;padding-bottom:4px;align-self:flex-end}
+.pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
+.pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
+.pn-focus-canvas-wrap canvas{display:block;max-width:100%;cursor:move;border-radius:6px}
+.pn-md-preview-toggle{display:flex;gap:10px;margin-bottom:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.pn-md-toggle-group{display:flex;gap:0}
+.pn-md-toggle-btn{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#718096}
+.pn-md-toggle-group .pn-md-toggle-btn:first-child{border-radius:4px 0 0 4px}
+.pn-md-toggle-group .pn-md-toggle-btn:last-child{border-radius:0 4px 4px 0;border-left:0}
+.pn-md-toggle-btn.pn-active{background:var(--pn-accent,#4299e1);color:#fff;border-color:var(--pn-accent,#4299e1)}
+.pn-md-quick-add{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pn-md-quick-add-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em}
+.pn-md-quick-btn{padding:5px 10px;font-size:11px;font-weight:600;border:1px solid var(--pn-accent,#4299e1);background:#fff;color:var(--pn-accent,#4299e1);border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pn-md-quick-btn:hover{background:var(--pn-accent,#4299e1);color:#fff}
+.pn-md-preview{min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:#fafafa}
+.pn-md-preview h1,.pn-md-preview h2,.pn-md-preview h3,.pn-md-preview h4,.pn-md-preview h5,.pn-md-preview h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+/* ===== Welcome Panel ===== */
+.pn-welcome-hero{display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#ebf8ff,#faf5ff);border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.pn-welcome-icon{flex:0 0 auto;width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#4299e1,#9f7aea);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(102,126,234,0.25)}
+.pn-welcome-hero-text h4{margin:0 0 6px 0;font-size:17px;font-weight:700;color:#2d3748;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-welcome-hero-text p{margin:0;font-size:13px;line-height:1.55;color:#4a5568}
+.pn-welcome-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.pn-welcome-card{border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.pn-welcome-card:hover{border-color:var(--pn-accent,#4299e1);box-shadow:0 4px 14px rgba(66,153,225,0.15);transform:translateY(-1px)}
+.pn-welcome-card-head{display:flex;align-items:center;gap:10px}
+.pn-welcome-card-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0}
+.pn-wc-blue{background:linear-gradient(135deg,#4299e1,#2c5282)}
+.pn-wc-purple{background:linear-gradient(135deg,#9f7aea,#553c9a)}
+.pn-wc-gold{background:linear-gradient(135deg,#ecc94b,#975a16)}
+.pn-wc-teal{background:linear-gradient(135deg,#38b2ac,#234e52)}
+.pn-wc-rose{background:linear-gradient(135deg,#fc8181,#9b2c2c)}
+.pn-welcome-card-title{font-size:14px;font-weight:700;color:#2d3748}
+.pn-welcome-card-body{font-size:12px;line-height:1.5;color:#4a5568;flex:1}
+.pn-welcome-mock{background:#f7fafc;border:1px solid #edf2f7;border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:center;min-height:48px}
+.pn-wm-about{flex-direction:column;align-items:stretch;gap:5px;padding:10px 12px}
+.pn-wm-line{height:6px;border-radius:3px;background:#cbd5e0}
+.pn-wm-line-h{height:8px;width:55%;background:#a0aec0}
+.pn-wm-line-short{width:70%}
+.pn-wm-colors{gap:6px}
+.pn-wm-colors span{width:20px;height:20px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.08)}
+.pn-wm-name{gap:6px;flex-wrap:wrap}
+.pn-wm-pill{font-size:10px;font-weight:600;padding:3px 8px;border-radius:10px;background:#bee3f8;color:#2c5282}
+.pn-wm-name-core{font-family:Georgia,serif;font-size:14px;font-weight:700;color:#2d3748}
+.pn-wm-focus-frame{width:60px;height:40px;border-radius:4px;background:linear-gradient(135deg,#cbd5e0,#a0aec0);position:relative;overflow:hidden}
+.pn-wm-focus-target{position:absolute;top:50%;left:50%;width:18px;height:18px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(0,0,0,0.3)}
+.pn-wm-milestones{position:relative;height:36px;padding:0}
+.pn-wm-ms-line{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#cbd5e0;transform:translateY(-50%)}
+.pn-wm-ms-dot{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--pn-accent,#4299e1);transform:translate(-50%,-50%);box-shadow:0 0 0 2px #fff}
+.pn-welcome-card-cta{margin-top:auto;align-self:flex-start;background:none;border:none;color:var(--pn-accent,#4299e1);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:5px}
+.pn-welcome-card-cta i{font-size:10px;transition:transform .15s}
+.pn-welcome-card:hover .pn-welcome-card-cta i{transform:translateX(3px)}
+.pn-welcome-tips{background:#fffbeb;border:1px solid #fef3c7;border-left:4px solid #f6ad55;border-radius:8px;padding:12px 14px}
+.pn-welcome-tips-title{font-size:12px;font-weight:700;color:#975a16;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.pn-welcome-tips-title i{margin-right:5px}
+.pn-welcome-tips ul{margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:#744210}
+.pn-welcome-tips li{margin-bottom:2px}
+/* ===== Accent color applied to stat cards ===== */
+.pn-stat-card{border-top:3px solid var(--pn-accent,#4299e1)}
+.pn-tab-nav li.pn-tab-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
+.pn-font-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px}
+.pn-font-card{border:2px solid #e2e8f0;border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:border-color .15s,box-shadow .15s;background:#fff;user-select:none}
+.pn-font-card:hover{border-color:#a0aec0;background:#f7fafc}
+.pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
+.pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
+.pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+/* Shared yellow warning banner (about visibility, milestones accuracy, name entitlement, reconcile) */
+.pn-about-visibility-warn,
+.pn-warn-banner{margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5}
+.pn-about-visibility-warn i,
+.pn-warn-banner i{color:#d69e2e;margin-right:8px}
+.pn-name-custom-warn{margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4}
+.pn-name-custom-warn i{color:#d69e2e;margin-right:6px}
+.pn-reconcile-banner{margin-bottom:16px;padding:12px 14px;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px}
+.pn-reconcile-banner > label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;font-weight:600;color:#744210}
+.pn-reconcile-banner > label input[type="checkbox"]{margin-top:3px;flex-shrink:0}
+.pn-reconcile-fields{margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px}
+.pn-ms-custom-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-ms-custom-wrap{border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px}
+/* Colors-tab custom-color field labels + gradient toggle */
+.pn-color-field-label{font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block}
+.pn-gradient-toggle-col{display:flex;flex-direction:column;justify-content:flex-end}
+.pn-gradient-toggle-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568}
+.pn-gradient-toggle-label input[type="checkbox"]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
+/* Amtpride Nameplate subsection */
+.pn-amtpride-section{margin-top:14px;border:1px solid #e2e8f0;border-radius:8px;background:#fafbfc}
+.pn-amtpride-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;background:transparent;border:0;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-toggle{border-radius:7px 7px 0 0}
+.pn-amtpride-toggle:hover{background:rgba(66,153,225,0.06)}
+.pn-amtpride-chev{transition:transform .2s ease;font-size:11px;color:#a0aec0}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-chev{transform:rotate(90deg)}
+.pn-amtpride-active-badge{margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,0.5);letter-spacing:.03em}
+.pn-amtpride-body{display:none;padding:4px 12px 12px}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-body{display:block}
+.pn-amtpride-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.pn-amtpride-swatch{width:42px;height:24px;border-radius:4px;border:2px solid transparent;cursor:pointer;position:relative;transition:transform .15s,border-color .15s;box-shadow:0 1px 2px rgba(0,0,0,0.08)}
+.pn-amtpride-swatch:hover{transform:scale(1.08)}
+.pn-amtpride-swatch.pn-selected{border-color:#2d3748;box-shadow:0 0 0 2px #fff,0 0 0 3px #2d3748}
+.pn-amtpride-swatch[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.2)}
+.pn-amtpride-swatch[data-tip]:hover::before{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#2d3748;pointer-events:none;z-index:10}
+/* Known limit: tooltip uses position:absolute and can clip at the top edge of
+   the modal viewport on very short screens. Acceptable given short flag names
+   and the swatch's visible gradient already identifies the flag. */
+/* Dim primary/secondary inputs while a pride flag is active */
+.pn-design-panel.pn-pride-active .pn-color-presets,
+.pn-design-panel.pn-pride-active .pn-color-row,
+.pn-design-panel.pn-pride-active #pn-color-presets,
+.pn-design-panel.pn-pride-active #pn-gradient-presets{opacity:0.45}
+/* The custom color row (pickers/hex) stays inert while a flag is active — use a preset or Clear to switch off. */
+.pn-design-panel.pn-pride-active .pn-color-row{pointer-events:none}
+/* Presets remain clickable: clicking one removes the pride flag and applies that color/gradient. Brighten on hover to signal it. */
+.pn-design-panel.pn-pride-active #pn-color-presets:hover,
+.pn-design-panel.pn-pride-active #pn-gradient-presets:hover{opacity:1}
+/* Shared section heading + checkbox toggle label inside Design panels */
+.pn-section-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-section-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
+/* Design modal title icon + About → Show Beltline toggle (theme-aware) */
+.pn-modal-title-icon{margin-right:8px;color:var(--pn-accent,#2c5282)}
+.pn-about-beltline-toggle{margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0}
+.pn-about-beltline-toggle > label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
+.pn-about-beltline-toggle input[type="checkbox"]{width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)}
+/* Dark-mode heads-up banner (info tone, used inside Design tabs) */
+.pn-dm-hint{display:flex;gap:10px;align-items:flex-start;background:#ebf8ff;border:1px solid #bee3f8;border-left:4px solid #4299e1;border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;color:#2c5282;margin-bottom:14px}
+.pn-dm-hint i{color:#3182ce;margin-top:2px;flex-shrink:0}
+.pn-dm-hint strong{color:#1a365d}
+@media(max-width:600px){
+.pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pn-name-part{flex:0 0 100%;min-width:0}
+.pn-name-core{flex:1 1 0;min-width:0}
+.pn-color-row{flex-direction:column;gap:8px}
+}
+
+
+/* ============================================================
+   DARK MODE — About tab, Timeline, Design Modal (Welcome, Name,
+   Hero, Colors, Font, Milestones), and related previews.
+   ============================================================ */
+/* About tab */
+html[data-theme="dark"] .pn-about-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-about-content h1,
+html[data-theme="dark"] .pn-about-content h2,
+html[data-theme="dark"] .pn-about-content h3,
+html[data-theme="dark"] .pn-about-content h4,
+html[data-theme="dark"] .pn-about-content h5,
+html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); /* --pn-accent flows through from light rule */ }
+html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
+html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-belt-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
+
+/* Icons tab — design modal preview + option cards */
+html[data-theme="dark"] .pn-icons-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-icons-preview-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-icons-option { border-color: var(--ork-border); background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-icons-option-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-icons-option-desc { color: var(--ork-text-muted); }
+
+/* Award-alias subtitle */
+html[data-theme="dark"] .pn-award-alias-sub { color: var(--ork-text-muted); }
+
+/* Timeline (My Milestones) */
+html[data-theme="dark"] .pn-timeline-section { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-timeline-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-timeline::before { background: var(--ork-border); }
+html[data-theme="dark"] .pn-tl-node { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-tl-desc { color: var(--ork-text); }
+html[data-theme="dark"] .pn-tl-empty { color: var(--ork-text-muted); }
+
+/* Design My Profile — tabs */
+html[data-theme="dark"] .pn-design-tabs { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-design-tab { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-design-tab:hover { color: var(--ork-text); }
+html[data-theme="dark"] .pn-design-tabs-chev { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-design-tabs-chev-left { background: linear-gradient(to right, var(--ork-card-bg) 55%, rgba(0,0,0,0)); }
+html[data-theme="dark"] .pn-design-tabs-chev-right { background: linear-gradient(to left, var(--ork-card-bg) 55%, rgba(0,0,0,0)); }
+html[data-theme="dark"] .pn-design-tabs-chev:hover { color: var(--pn-accent, #4299e1); }
+
+/* Design My Profile — field chrome */
+html[data-theme="dark"] .pn-design-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-design-field textarea,
+html[data-theme="dark"] .pn-design-field input[type="text"],
+html[data-theme="dark"] .pn-design-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-design-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-design-preview-label { color: var(--ork-text-muted); }
+
+/* Colors tab — swatch selection indicator (flip #fff/#2d3748 contrast) */
+html[data-theme="dark"] .pn-color-swatch.pn-selected { border-color: var(--ork-text); box-shadow: 0 0 0 2px var(--ork-card-bg), 0 0 0 4px var(--ork-text); }
+html[data-theme="dark"] .pn-color-input-wrap input[type="color"] { background: var(--ork-input-bg); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pn-color-input-wrap input[type="text"] { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+
+/* Overlay-strength buttons (heraldry + gradient) */
+html[data-theme="dark"] .pn-overlay-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-overlay-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-overlay-btn.pn-active { background: var(--pn-accent, #4299e1); border-color: var(--pn-accent, #4299e1); color: #fff; }
+
+/* Name builder — comma toggle + constructed preview */
+html[data-theme="dark"] .pn-comma-toggle { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-comma-toggle:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-name-constructed { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text); }
+
+/* Markdown preview (About tab split-pane preview) */
+html[data-theme="dark"] .pn-md-toggle-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-md-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-md-quick-add-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-md-quick-btn { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-md-quick-btn:hover { color: var(--ork-text); }
+
+/* Welcome tab */
+html[data-theme="dark"] .pn-welcome-hero { background: linear-gradient(135deg, #2a4365, #44337a); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-welcome-hero-text h4 { color: var(--ork-text); }
+html[data-theme="dark"] .pn-welcome-hero-text p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-welcome-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-welcome-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-welcome-card-body { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-welcome-mock { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-wm-name-core { color: var(--ork-text); }
+html[data-theme="dark"] .pn-wm-pill { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
+html[data-theme="dark"] .pn-wm-colors span { border-color: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-welcome-tips { background: #3d3300; border-color: #744210; border-left-color: #d69e2e; }
+html[data-theme="dark"] .pn-welcome-tips-title { color: #fbd38d; }
+html[data-theme="dark"] .pn-welcome-tips ul { color: #f6d8a6; }
+
+/* Font picker cards */
+html[data-theme="dark"] .pn-font-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-font-card:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-font-card.pn-active { background: var(--ork-bg-tertiary); /* --pn-accent border + ring flow through from light rule */ }
+html[data-theme="dark"] .pn-font-card-sample { color: var(--ork-text); }
+html[data-theme="dark"] .pn-font-card-label { color: var(--ork-text-muted); }
+
+/* Milestones — toggle list, custom list, add form, icon picker */
+html[data-theme="dark"] .pn-ms-toggle { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-ms-toggle i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-row { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ms-custom-desc { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-custom-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-actions button { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-actions button:hover { background: var(--ork-bg-secondary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-add-form { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field input,
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-icon-opt { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-icon-opt:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); border-color: var(--pn-accent, #4299e1); color: var(--pn-accent, #4299e1); }
+
+/* Yellow warning banners share an alert-warning palette in dark mode */
+html[data-theme="dark"] .pn-about-visibility-warn,
+html[data-theme="dark"] .pn-warn-banner,
+html[data-theme="dark"] .pn-name-custom-warn,
+html[data-theme="dark"] .pn-reconcile-banner { background: var(--ork-alert-warning-bg, #3d3300); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
+html[data-theme="dark"] .pn-about-visibility-warn i,
+html[data-theme="dark"] .pn-warn-banner i,
+html[data-theme="dark"] .pn-name-custom-warn i { color: #f6ad55; }
+html[data-theme="dark"] .pn-reconcile-banner > label { color: var(--ork-alert-warning-text, #fbd38d); }
+html[data-theme="dark"] .pn-reconcile-fields { border-top-color: var(--ork-alert-warning-border, #975a16); }
+
+html[data-theme="dark"] .pn-ms-custom-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-custom-wrap { border-top-color: var(--ork-border); }
+
+/* Colors-tab field labels — promote to secondary text so they stay legible */
+html[data-theme="dark"] .pn-color-field-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-gradient-toggle-label { color: var(--ork-text-secondary); }
+/* Amtpride Nameplate — dark mode */
+html[data-theme="dark"] .pn-amtpride-section { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-amtpride-toggle { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-amtpride-toggle:hover { background: rgba(255,255,255,0.04); }
+html[data-theme="dark"] .pn-amtpride-swatch.pn-selected { border-color: var(--ork-text); box-shadow: 0 0 0 2px var(--ork-card-bg), 0 0 0 3px var(--ork-text); }
+html[data-theme="dark"] .pn-amtpride-swatch[data-tip]:hover::after { background: var(--ork-text); color: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-amtpride-swatch[data-tip]:hover::before { border-top-color: var(--ork-text); }
+html[data-theme="dark"] .pn-section-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-section-toggle-label { color: var(--ork-text-secondary); }
+
+/* Design modal title icon + About→Beltline toggle */
+/* .pn-modal-title-icon already uses --pn-accent via the light rule; no dark override needed */
+html[data-theme="dark"] .pn-about-beltline-toggle { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-about-beltline-toggle > label { color: var(--ork-text-secondary); }
+
+/* Dark-mode heads-up hint banner */
+html[data-theme="dark"] .pn-dm-hint { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); border-left-color: var(--ork-link-bright); color: var(--ork-alert-info-text, #90cdf4); }
+html[data-theme="dark"] .pn-dm-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-dm-hint strong { color: var(--ork-text); }
+
+/* Currently-active milestones summary card */
+html[data-theme="dark"] .pn-cms-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
+
+/* ===== Dietary Preferences Card ===== */
+.dp-intro{font-size:11.5px;color:#718096;line-height:1.45;margin:0 0 12px}
+.dp-section-hdr{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096;margin:14px 0 6px;display:flex;align-items:center;gap:5px}
+.dp-section-hdr:first-of-type{margin-top:0}
+.dp-info-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e2e8f0;color:#718096;font-size:9px;font-weight:700;border:none;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1;transition:background .1s}
+.dp-info-btn:hover{background:#cbd5e0}
+#dp-info-pop{position:fixed;z-index:10300;width:290px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
+#dp-info-pop.dp-pop-open{display:block}
+#dp-info-pop .dp-pop-title{font-size:12.5px;font-weight:700;color:#2d3748;margin:0 0 7px}
+#dp-info-pop p{margin:0 0 8px}
+#dp-info-pop p:last-child{margin-bottom:0}
+#dp-info-pop a{color:#4299e1;text-decoration:none}
+#dp-info-pop a:hover{text-decoration:underline}
+.dp-sev-legend{font-size:11px;color:#718096;margin:0 0 10px;line-height:1.8}
+.dp-sl-eg{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.dp-sl-none{background:#e2e8f0;color:#2d3748}
+.dp-sl-mild{background:#fef3c7;color:#92400e}
+.dp-sl-severe{background:#fee2e2;color:#9b1c1c}
+html[data-theme="dark"] .dp-info-btn{background:#4a5568;color:#a0aec0}
+html[data-theme="dark"] .dp-info-btn:hover{background:#718096;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop{background:#2d3748;border-color:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop .dp-pop-title{color:#f7fafc}
+html[data-theme="dark"] #dp-info-pop a{color:#63b3ed}
+html[data-theme="dark"] .dp-sev-legend{color:#a0aec0}
+html[data-theme="dark"] .dp-sl-none{background:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] .dp-sl-mild{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-sl-severe{background:#7f1d1d;color:#fca5a5}
+.dp-toggles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 10px;margin-bottom:2px}
+.dp-toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0}
+.dp-toggle-label{font-size:12.5px;color:var(--ork-text)}
+.dp-toggle-sw{flex-shrink:0;width:34px;height:20px;border-radius:10px;background:#cbd5e0;position:relative;cursor:pointer;transition:background .15s}
+.dp-toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.dp-toggle-sw.dp-on{background:#48bb78}
+.dp-toggle-sw.dp-on::after{left:17px}
+.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-border);margin-bottom:4px}
+.dp-anon-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-anon-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+.dp-allergens{display:flex;flex-direction:column;gap:6px}
+.dp-al-row{display:flex;align-items:center;gap:10px}
+.dp-al-name{font-size:12.5px;color:var(--ork-text);width:80px;flex-shrink:0}
+.dp-al-slider{flex:1;display:flex;border-radius:6px;padding:2px;gap:0}
+.dp-al-seg{flex:1;padding:5px 0;font-size:11.5px;border:none;background:transparent;cursor:pointer;border-radius:4px;color:#718096;font-weight:500;text-align:center;transition:background .15s,color .15s,box-shadow .15s}
+.dp-al-seg.dp-active[data-v="0"]{background:#e2e8f0;color:#2d3748;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.dp-al-seg.dp-active[data-v="1"]{background:#fef3c7;color:#92400e;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.dp-al-seg.dp-active[data-v="2"]{background:#fee2e2;color:#9b1c1c;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+html[data-theme="dark"] .dp-intro{color:var(--ork-text-secondary)}
+html[data-theme="dark"] .dp-section-hdr{color:#a0aec0}
+html[data-theme="dark"] .dp-toggle-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-toggle-sw{background:#4a5568}
+html[data-theme="dark"] .dp-toggle-sw.dp-on{background:#48bb78}
+html[data-theme="dark"] .dp-al-slider{background:#2d3748}
+html[data-theme="dark"] .dp-al-seg{color:#a0aec0}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="0"]{background:#4a5568;color:#e2e8f0;box-shadow:none}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="1"]{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="2"]{background:#7f1d1d;color:#fca5a5}
+html[data-theme="dark"] .dp-anon-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
+.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:#f7fafc;border:1px solid #e2e8f0;margin:8px 0 12px;cursor:pointer;transition:background .15s}
+.dp-no-restrict-row:hover{background:#edf2f7}
+.dp-no-restrict-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+#dp-prefs-body{transition:opacity .15s}
+#dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
+html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero">
+<?php
+	$_heroBgUrl   = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'pn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' pn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
+	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
+	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
+	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pn-hero">
+<?php if ($bannerUrl): ?>
+	<div class="pn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+<?php elseif ($_pnOverlayIsVignette): ?>
+	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php else: ?>
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php endif; ?>
+	<?php if ($pnCanManageBanner): ?>
+	<button type="button" class="pn-banner-edit-btn"
+			onclick="pnOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pn-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pn-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pn-hero-content">
+		<?php if ($_pnShowLogo): ?>
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
-			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 			<button class="pn-img-edit-btn" onclick="pnOpenImgModal('photo')" title="Update player photo"><i class="fas fa-camera"></i></button>
 		</div>
 		<?php else: ?>
 		<div class="pn-avatar">
-			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
 		<?php endif; ?>
+		<?php endif; ?>
 		<div class="pn-hero-info">
-			<h1 class="pn-persona">
-				<?= htmlspecialchars($Player['Persona']) ?>
-				<?php if ($isKnight): ?>
-					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+			<?php
+				$_pnDisplayName = '';
+				if (!empty($Player['NamePrefix'])) $_pnDisplayName .= htmlspecialchars($Player['NamePrefix']) . ' ';
+				$_pnDisplayName .= htmlspecialchars($Player['Persona']);
+				if (!empty($Player['NameSuffix'])) {
+					$_pnDisplayName .= ((int)($Player['SuffixComma'] ?? 0) ? ', ' : ' ') . htmlspecialchars($Player['NameSuffix']);
+				}
+			?>
+			<h1 class="pn-persona" id="pn-hero-persona">
+				<?= $_pnDisplayName ?>
+				<?php if ($isKnight && $_pnBeltDisplay === 'white'): ?>
+					<img class="pn-belt-icon" src="<?= htmlspecialchars($beltIconUrl) ?>" alt="Knight" data-tip="Belted Knight" />
+				<?php elseif ($isKnight && $_pnBeltDisplay === 'own' && !empty($ownBelts)): ?>
+					<span class="pn-hero-belts">
+					<?php foreach ($ownBelts as $_b): ?>
+						<img class="pn-belt-icon pn-belt-icon-own" src="<?= htmlspecialchars($_b['Src']) ?>" alt="<?= htmlspecialchars($_b['Name']) ?>" data-tip="<?= htmlspecialchars($_b['Name']) ?>" />
+					<?php endforeach; ?>
+					</span>
 				<?php endif; ?>
 			</h1>
-			<?php if (strlen($Player['GivenName']) > 0 || strlen($Player['Surname']) > 0): ?>
-				<div class="pn-real-name"><?= htmlspecialchars(trim($Player['GivenName'] . ' ' . $Player['Surname'])) ?></div>
-			<?php endif; ?>
-			<?php if (!empty($pronounDisplay)): ?>
-				<div class="pn-pronouns"><?= htmlspecialchars($pronounDisplay) ?></div>
+			<?php
+				$_heroSubParts = [];
+				if (!empty($Player['PronunciationGuide'])) $_heroSubParts[] = '<span class="pn-sub-pronunciation">(' . htmlspecialchars($Player['PronunciationGuide']) . ')</span>';
+				$_heroRealParts = [];
+				if ($showFirstName && strlen($Player['GivenName']) > 0) $_heroRealParts[] = $Player['GivenName'];
+				if ($showLastName && strlen($Player['Surname']) > 0) $_heroRealParts[] = $Player['Surname'];
+				if (!empty($_heroRealParts)) $_heroSubParts[] = '<span class="pn-sub-name">' . htmlspecialchars(implode(' ', $_heroRealParts)) . '</span>';
+				if (!empty($pronounDisplay)) $_heroSubParts[] = '<span class="pn-sub-pronouns">' . htmlspecialchars($pronounDisplay) . '</span>';
+			?>
+			<?php if (!empty($_heroSubParts)): ?>
+				<div class="pn-hero-subline"><?= implode(' <span class="pn-sub-sep">&bull;</span> ', $_heroSubParts) ?></div>
 			<?php endif; ?>
 			<div class="pn-breadcrumb">
 				<?php if (valid_id($this->__session->kingdom_id)): ?>
-					<a href="<?= UIR ?>Kingdom/profile/<?= $this->__session->kingdom_id ?>"><?= htmlspecialchars($this->__session->kingdom_name) ?></a>
-					<span class="pn-sep"><i class="fas fa-chevron-right" style="font-size:10px"></i></span>
-					<a href="<?= UIR ?>Park/profile/<?= $this->__session->park_id ?>"><?= htmlspecialchars($this->__session->park_name) ?></a>
+					<a class="pn-crumb" href="<?= UIR ?>Kingdom/profile/<?= $this->__session->kingdom_id ?>"><i class="fas fa-crown"></i> <?= htmlspecialchars($this->__session->kingdom_name) ?></a>
+					<a class="pn-crumb" href="<?= UIR ?>Park/profile/<?= $this->__session->park_id ?>"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($this->__session->park_name) ?></a>
 				<?php endif; ?>
 			</div>
 			<div class="pn-badges">
@@ -509,9 +1112,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php else: ?>
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
-				<?php if ($Player['Restricted'] == 1): ?>
-					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
-				<?php endif; ?>
 				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
@@ -519,9 +1119,15 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> No Dues on File</span>
 				<?php endif; ?>
+				<span id="pn-voting-badge" style="display:none;" class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<span id="pn-voting-badge-sub" class="pn-badge-sub" style="display:none;"></span></span>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
 						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
+					<?php endforeach; ?>
+				<?php endif; ?>
+				<?php if (!empty($AdminGrants)): ?>
+					<?php foreach ($AdminGrants as $_g): ?>
+						<span class="pn-badge pn-badge-purple"><i class="fas fa-shield-alt"></i> <?= htmlspecialchars($_g['scope']) ?> Admin: <?= htmlspecialchars($_g['name'] ?: ('#' . $_g['id'])) ?></span>
 					<?php endforeach; ?>
 				<?php endif; ?>
 				<?php if ($IsOrkAdmin): ?>
@@ -531,17 +1137,24 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= htmlspecialchars($Player['SuspendedAt'] ?? '') ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
-					<?php if (!empty($Player['Suspension'])): ?>
-						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
+					Suspended <?php $_susAt = $Player['SuspendedAt'] ?? ''; $_until = $Player['SuspendedUntil'] ?? ''; if (!$_until || $_until === '0000-00-00') { echo 'Indefinitely' . ($_susAt ? ' as of ' . htmlspecialchars($_susAt) : ''); } else { echo htmlspecialchars($_susAt) . ' &mdash; Until ' . htmlspecialchars($_until); } ?>
+					<?php
+						$_susReason = trim($Player['Suspension'] ?? '');
+						// Skip reason text that only restates the "Suspended Indefinitely" status (no added detail).
+						$_susRedundant = in_array(strtolower(rtrim($_susReason, " .;,")), ['suspended indefinitely', 'indefinitely', 'indefinite', 'indefinite suspension', 'suspended indefinite'], true);
+					?>
+					<?php if ($_susReason !== '' && !$_susRedundant): ?>
+						&mdash; <?= htmlspecialchars($_susReason) ?>
 					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 		</div>
 		<div class="pn-hero-actions">
+			<?php if ($isOwnProfile || $ViewerIsOrkAdmin): ?>
+				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> <?= $isOwnProfile ? 'Design My Profile' : 'Edit Profile Design' ?></button>
+			<?php endif; ?>
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
-
 			<?php endif; ?>
 		</div>
 	</div>
@@ -560,7 +1173,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-stats-row">
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('attendance')">
 		<div class="pn-stat-icon"><i class="fas fa-calendar-check"></i></div>
-		<div class="pn-stat-number"><?= $Stats['TotalAttendance'] ?></div>
+		<div class="pn-stat-number" id="pn-att-stat-count">…</div>
 		<div class="pn-stat-label">Attendance</div>
 	</div>
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('awards')">
@@ -575,7 +1188,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 	</div>
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('classes')">
 		<div class="pn-stat-icon"><i class="fas fa-shield-alt"></i></div>
-		<div class="pn-stat-number pn-stat-text"><?= htmlspecialchars($Stats['LastPlayedClass'] ?: '—') ?></div>
+		<div class="pn-stat-number pn-stat-text" id="pn-att-last-class">…</div>
 		<div class="pn-stat-label">Last Played</div>
 	</div>
 </div>
@@ -591,11 +1204,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 		<!-- Player Details -->
 		<div class="pn-card">
 			<h4><i class="fas fa-user"></i> Player Details<?php if ($canEditAccount): ?><button class="pn-card-edit-btn" onclick="pnOpenAccountModal()" title="Edit account details"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
-			<?php if ($canEditAccount): ?>
+			<?php if ($showFirstName && strlen($Player['GivenName']) > 0): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Given Name</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['GivenName']) ?></span>
 			</div>
+			<?php endif; ?>
+			<?php if ($showLastName && strlen($Player['Surname']) > 0): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Surname</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Surname']) ?></span>
@@ -609,13 +1224,23 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
-			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:#fffbe6;border-left:3px solid #f6ad55;padding-left:6px;margin-left:-6px;"' : '' ?>>
+			<?php if ($showEmail && !empty($Player['Email'])): ?>
+			<div class="pn-detail-row">
+				<span class="pn-detail-label">Email</span>
+				<span class="pn-detail-value"><a href="mailto:<?= htmlspecialchars($Player['Email']) ?>"><?= htmlspecialchars($Player['Email']) ?></a></span>
+			</div>
+			<?php endif; ?>
+			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>
 			<div class="pn-detail-row">
-				<span class="pn-detail-label">Member Since</span>
-				<span class="pn-detail-value"><?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?></span>
+				<span class="pn-detail-label">Park Member Since</span>
+				<span class="pn-detail-value"><?= (!empty($Player['ParkMemberSince']) && $Player['ParkMemberSince'] !== '0000-00-00') ? htmlspecialchars($Player['ParkMemberSince']) : 'N/A' ?></span>
+			</div>
+			<div class="pn-detail-row">
+				<span class="pn-detail-label">Player Since</span>
+				<span class="pn-detail-value"><?= $Player['PlayerSinceDate'] ? htmlspecialchars($Player['PlayerSinceDate']) : 'N/A' ?></span>
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Last Sign-In</span>
@@ -643,7 +1268,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-reeve-val">
 					<?php if ($Player['ReeveQualified'] != 0): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
@@ -661,7 +1286,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Corpora</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-corpora-val">
 					<?php if ($Player['CorporaQualified'] != 0): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
@@ -677,6 +1302,25 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<?php endif; ?>
 				</span>
 			</div>
+			<?php
+			  // Offer this ONLY when there is something to do. The button used to appear whenever
+			  // the kingdom had a test switched on, so a player could press it, pick a test, and be
+			  // told "Not enough active questions available" — invited to do the impossible.
+			  // A player with past attempts still gets in, because the same modal is where they
+			  // review them.
+			  $_qtTakeable = !empty($QualTakeable['reeve']) || !empty($QualTakeable['corpora']);
+			  $_qtHasHistory = false;
+			  foreach ((array)($QualResults ?? []) as $_qr) {
+				  if (!empty($_qr)) { $_qtHasHistory = true; break; }
+			  }
+			?>
+			<?php if ($isOwnProfile && ($_qtTakeable || $_qtHasHistory)): ?>
+			<div style="margin-top:10px;display:flex;justify-content:flex-end;">
+				<button type="button" class="pn-btn pn-btn-sm pn-btn-primary" onclick="pnOpenTestChooser();return false;">
+					<i class="fas fa-play-circle"></i> <?= $_qtTakeable ? 'Take Tests' : 'Test History' ?>
+				</button>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Dues -->
@@ -718,8 +1362,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<?php endif; ?>
 		</div>
 
-		<!-- Event RSVPs -->
-		<?php if (!empty($UpcomingRsvps)): ?>
+		<!-- Event RSVPs — hidden from logged-out viewers so a player's
+		     upcoming plans aren't exposed to search engines / anonymous
+		     scrapers. Any logged-in user (including the profile owner
+		     and officers) still sees the list. -->
+		<?php if (!empty($UpcomingRsvps) && isset($this->__session->user_id)): ?>
 		<div class="pn-card">
 			<h4><i class="fas fa-calendar-check"></i> Event RSVPs</h4>
 			<table class="pn-mini-table">
@@ -796,32 +1443,62 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<i class="fas fa-home"></i><span class="pn-tab-label"> My Amtgard</span>
 				</li>
 				<?php endif; ?>
-				<li<?= $isOwnProfile ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
+				<?php
+					$_hasAboutPersona = !empty(trim($Player['AboutPersona'] ?? ''));
+					$_hasAboutStory   = !empty(trim($Player['AboutStory'] ?? ''));
+					$_showBeltline    = (int)($Player['ShowBeltline'] ?? 1);
+					$_hasBeltline     = $_showBeltline && (!empty($BeltlinePeers) || !empty($BeltlineAssociates));
+					$_msConfig = json_decode($Player['MilestoneConfig'] ?? '', true);
+					if (!is_array($_msConfig)) $_msConfig = [];
+					$_msCompact = !empty($_msConfig['compact_milestones']);
+					$_msNewestFirst = !empty($_msConfig['newest_first']);
+					$_hasMilestones = false;
+					$_visibleMilestones = [];
+					if (is_array($Milestones)) {
+						foreach ($Milestones as $_ms) {
+							$_msType = $_ms['type'];
+							if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) {
+								$_hasMilestones = true;
+								$_visibleMilestones[] = $_ms;
+							}
+						}
+					}
+					$_showSidebar = $_hasBeltline || ($_msCompact && !empty($_visibleMilestones));
+					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $_hasMilestones || $isOwnProfile;
+					// On non-own profiles, default to the About tab if the player has actively
+					// filled in their About content (Persona/Story text). Otherwise default to
+					// Awards as before. Auto-derived stuff like milestones/beltline doesn't
+					// count — only deliberate text content from the design modal.
+					$_aboutIsDefault = !$isOwnProfile && ($_hasAboutPersona || $_hasAboutStory);
+				?>
+				<?php if ($_showAboutTab): ?>
+				<li<?= $_aboutIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="about">
+					<i class="fas fa-scroll"></i><span class="pn-tab-label"> About</span>
+				</li>
+				<?php endif; ?>
+				<li<?= ($isOwnProfile || $_aboutIsDefault) ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
 					<i class="fas fa-crown"></i><span class="pn-tab-label"> Titles</span> <span class="pn-tab-count">(<?= $Stats['TotalTitles'] ?>)</span>
 				</li>
 				<li data-tab="attendance">
-					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
+					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count" id="pn-att-tab-count"></span>
 				</li>
-				<?php
-				$_allRecs  = array_values(array_filter(is_array($AwardRecommendations) ? $AwardRecommendations : [], function($r) { return empty($r['AlreadyHas']); }));
-				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return (int)$this->__session->user_id === (int)$r['RecommendedById']; }));
-				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
-				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
-			?>
+				<?php $_showRecs = $ShowRecsTab || !empty($ShowRecsTabLoggedIn); ?>
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
-					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count">(<?= count($_recList) ?>)</span>
+					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
+				<?php if (($canEditAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
 				<li data-tab="history">
-					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
+					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
+				<?php endif; ?>
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : 'Awards' ?></div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
 
 			<!-- My Amtgard Tab (own profile default) -->
 			<?php if ($isOwnProfile): ?>
@@ -850,7 +1527,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pna-alerts">
 					<?php foreach ($_maAlerts as $_al): ?>
 					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
-						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?></span>
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?php endif; ?></span>
 					</div>
 					<?php endforeach; ?>
 				</div>
@@ -862,6 +1539,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div class="pna-sidebar">
 
 						<!-- Tenure -->
+						<?php $_maFirstDate = (!empty($Player['PlayerSinceDate']) && $Player['PlayerSinceDate'] !== '0000-00-00' && $Player['PlayerSinceDate'] !== '1970-01-01') ? $Player['PlayerSinceDate'] : null; ?>
 						<?php if ($_maFirstDate): ?>
 						<?php
 							$_maYears = (int)floor((time() - strtotime($_maFirstDate)) / (365.25 * 86400));
@@ -888,31 +1566,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						</div>
 						<?php endif; ?>
 
-						<!-- Class Progress -->
-						<?php if (!empty($_maClasses)): ?>
-						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab('classes');return false;">All &rarr;</a></div>
-							<div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>
-							<?php foreach ($_maClasses as $_mc):
-								$_mcTotal = (int)($_mc['Credits'] ?? 0) + (int)($_mc['Reconciled'] ?? 0);
-								$_mcLvl   = _ma_level($_mcTotal);
-								$_mcPct   = _ma_progress($_mcTotal);
-								$_mcMax   = $_mcTotal >= 53;
-								$_mcNext  = [0,5,12,21,34,53][$_mcLvl] ?? 53;
-								$_mcPar   = $pnClassToParagon[$_mc['ClassId']] ?? null;
-								$_mcHasPar = $_mcPar && isset($pnHeldAwardIds[$_mcPar]);
-							?>
-							<div class="pna-class-row">
-								<div class="pna-class-header">
-									<span class="pna-class-name"><?= htmlspecialchars($_mc['ClassName']) ?><?= $_mcHasPar ? ' <span class="pna-paragon-dot" title="Paragon"><i class="fas fa-crown"></i></span>' : '' ?></span>
-									<span class="pna-class-level">L<?= $_mcLvl ?><?= $_mcMax ? ' <i class="fas fa-star" style="color:#dd6b20" title="Max level"></i>' : '' ?></span>
-								</div>
-								<div class="pna-bar-wrap"><div class="pna-bar<?= $_mcMax ? ' pna-bar-max' : '' ?>" style="width:<?= $_mcPct ?>%"></div></div>
-								<div class="pna-class-credits"><?= $_mcTotal ?> cr<?= !$_mcMax ? ' &middot; ' . $_mcNext . ' for L' . ($_mcLvl+1) : '' ?></div>
-							</div>
-							<?php endforeach; ?>
-						</div>
-						<?php endif; ?>
+						<!-- Class Progress (populated by attendance AJAX) -->
+						<div id="pna-class-progress-body"></div>
 
 						<!-- Officer Roles -->
 						<?php if (!empty($OfficerRoles)): ?>
@@ -943,38 +1598,20 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 							</div>
 						</div>
 
-						<!-- Recent Sign-ins (60 days) -->
-						<?php
-						$_ma60 = date('Y-m-d', strtotime('-60 days'));
-						$_maRecAtt = array_slice(array_values(array_filter($_maDash_att, function($a) use ($_ma60) {
-							return !empty($a['Date']) && $a['Date'] >= $_ma60;
-						})), 0, 5);
-						?>
-						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-calendar-check"></i> Recent Sign-ins <a class="pna-card-more" href="#" onclick="pnActivateTab('attendance');return false;">All <?= $Stats['TotalAttendance'] ?> &rarr;</a></div>
-							<?php if (!empty($_maRecAtt)): ?>
-							<?php foreach ($_maRecAtt as $_ra): ?>
-							<div class="pna-feed-row">
-								<span class="pna-feed-date"><?= date('M j', strtotime($_ra['Date'])) ?></span>
-								<span class="pna-feed-label"><?= htmlspecialchars($_ra['ClassName'] ?? '—') ?></span>
-								<?php if (!empty($_ra['ParkName'])): ?><span class="pna-feed-sub"><?= htmlspecialchars($_ra['ParkName']) ?></span><?php endif; ?>
-							</div>
-							<?php endforeach; ?>
-							<?php else: ?>
-							<div style="font-size:12px;color:#718096;line-height:1.5;">
-								No recent sign-ins. Check out the next events and park days in your
-								<a href="<?= UIR ?>Kingdom/profile/<?= (int)($KingdomId ?? $this->__session->kingdom_id) ?>" style="color:#4299e1;">kingdom</a>.
-							</div>
-							<?php endif; ?>
-						</div>
+						<!-- Recent Sign-ins (populated by attendance AJAX) -->
+						<div id="pna-recent-att-body"></div>
 
-						<!-- Recent Awards (60 days) -->
+						<!-- Recent Awards (100 days) -->
 						<?php
-						$_ma60awd = date('Y-m-d', strtotime('-60 days'));
+						$_ma60awd = date('Y-m-d', strtotime('-100 days'));
 						$_maRecAwd = array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
 							return !$a['IsTitle'] && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
 						}));
+						// Sort by date desc (most recent first), then name, then rank — this is
+						// a "Recent" feed so date should dominate ordering.
 						usort($_maRecAwd, function($a, $b) {
+							$dateCmp = strcmp($b['Date'] ?? '', $a['Date'] ?? '');
+							if ($dateCmp !== 0) return $dateCmp;
 							$nameA = trimlen($a['CustomAwardName'] ?? '') > 0 ? $a['CustomAwardName'] : (trimlen($a['KingdomAwardName'] ?? '') > 0 ? $a['KingdomAwardName'] : ($a['Name'] ?? ''));
 							$nameB = trimlen($b['CustomAwardName'] ?? '') > 0 ? $b['CustomAwardName'] : (trimlen($b['KingdomAwardName'] ?? '') > 0 ? $b['KingdomAwardName'] : ($b['Name'] ?? ''));
 							$nameCmp = strcmp($nameA, $nameB);
@@ -993,6 +1630,37 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<?php $_awName = trimlen($_aw['CustomAwardName'] ?? '') > 0 ? $_aw['CustomAwardName'] : (trimlen($_aw['KingdomAwardName'] ?? '') > 0 ? $_aw['KingdomAwardName'] : ($_aw['Name'] ?? '—')); ?>
 								<span class="pna-feed-label"><?= htmlspecialchars($_awName) ?><?php if (valid_id($_aw['Rank'] ?? 0)): ?> <span class="pna-feed-rank"><?= (int)$_aw['Rank'] ?></span><?php endif; ?></span>
 								<?php if (!empty($_aw['GivenBy'])): ?><span class="pna-feed-sub">by <?= htmlspecialchars($_aw['GivenBy']) ?></span><?php endif; ?>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
+						<!-- Recent Titles (100 days) -->
+						<?php
+						$_maRecTitle = array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
+							return !empty($a['IsTitle']) && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
+						}));
+						usort($_maRecTitle, function($a, $b) {
+							$dateCmp = strcmp($b['Date'] ?? '', $a['Date'] ?? '');
+							if ($dateCmp !== 0) return $dateCmp;
+							$nameA = trimlen($a['CustomAwardName'] ?? '') > 0 ? $a['CustomAwardName'] : (trimlen($a['KingdomAwardName'] ?? '') > 0 ? $a['KingdomAwardName'] : ($a['Name'] ?? ''));
+							$nameB = trimlen($b['CustomAwardName'] ?? '') > 0 ? $b['CustomAwardName'] : (trimlen($b['KingdomAwardName'] ?? '') > 0 ? $b['KingdomAwardName'] : ($b['Name'] ?? ''));
+							$nameCmp = strcmp($nameA, $nameB);
+							if ($nameCmp !== 0) return $nameCmp;
+							return (int)($b['Rank'] ?? 0) - (int)($a['Rank'] ?? 0);
+						});
+						$_maRecTitle = array_slice($_maRecTitle, 0, 5);
+						?>
+						<?php if (!empty($_maRecTitle)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-crown"></i> Recent Titles <a class="pna-card-more" href="#" onclick="pnActivateTab('titles');return false;">All <?= $Stats['TotalTitles'] ?> &rarr;</a></div>
+							<div class="pna-congrats-banner"><i class="fas fa-trophy"></i> Congratulations on your recent titles!</div>
+							<?php foreach ($_maRecTitle as $_tw): ?>
+							<div class="pna-feed-row">
+								<span class="pna-feed-date"><?= date('M j, Y', strtotime($_tw['Date'])) ?></span>
+								<?php $_twName = trimlen($_tw['CustomAwardName'] ?? '') > 0 ? $_tw['CustomAwardName'] : (trimlen($_tw['KingdomAwardName'] ?? '') > 0 ? $_tw['KingdomAwardName'] : ($_tw['Name'] ?? '—')); ?>
+								<span class="pna-feed-label"><?= htmlspecialchars($_twName) ?><?php if (valid_id($_tw['Rank'] ?? 0)): ?> <span class="pna-feed-rank"><?= (int)$_tw['Rank'] ?></span><?php endif; ?></span>
+								<?php if (!empty($_tw['GivenBy'])): ?><span class="pna-feed-sub">by <?= htmlspecialchars($_tw['GivenBy']) ?></span><?php endif; ?>
 							</div>
 							<?php endforeach; ?>
 						</div>
@@ -1022,7 +1690,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 									<?php foreach (array_slice($KingdomEvents, 0, 4) as $_ke): ?>
 									<div class="pna-feed-row">
 										<span class="pna-feed-date"><?= date('M j', strtotime($_ke['EventStart'])) ?></span>
-										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_ke['EventId'] ?>/<?= $_ke['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_ke['EventName']) ?></a></span>
+										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_ke['EventId'] ?>/<?= $_ke['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_ke['EventName']) ?></a><?php if (!empty($_ke['ParkAbbreviation'])): ?> <span class="pna-ev-park">(<?= htmlspecialchars($_ke['ParkAbbreviation']) ?>)</span><?php endif; ?></span>
 									</div>
 									<?php endforeach; ?>
 									<?php else: ?>
@@ -1037,7 +1705,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						<!-- My Associates -->
 						<?php if (!empty($MyAssociates)): ?>
 						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-user-friends"></i> My Associates</div>
+							<div class="pna-card-title"><i class="fas fa-user-friends"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Associates</div>
 							<?php
 							$_maCurPeerage = null;
 							$_maPeerageLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'Men/Women-at-Arms', 'Lords-Page' => 'Lords-Pages', 'Page' => 'Pages'];
@@ -1054,13 +1722,348 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						</div>
 						<?php endif; ?>
 
-					</div><!-- /.pna-feed -->
+							<!-- Feast Preferences (compact trigger) -->
+							<div class="pna-card" id="pna-dp-card">
+								<div class="pna-card-title"><i class="fas fa-utensils"></i> Feast Preferences</div>
+								<div id="pna-dp-summary" style="font-size:12px;color:#718096;margin:0 0 10px;min-height:16px"></div>
+								<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" onclick="dpOpen()">
+									<i class="fas fa-pencil-alt"></i> Edit Preferences
+								</button>
+							</div><!-- /.pna-dp-card -->
+
+						</div><!-- /.pna-feed -->
 				</div><!-- /.pna-layout -->
 			</div><!-- /#pn-tab-myamtgard -->
 			<?php endif; // isOwnProfile ?>
 
-			<!-- Awards Tab -->
-			<div class="pn-tab-panel" id="pn-tab-awards"<?= $isOwnProfile ? ' style="display:none"' : '' ?>>
+			<?php if ($isOwnProfile): ?>
+			<!-- Feast Preferences Modal -->
+			<div class="pn-overlay" id="pn-dp-overlay">
+				<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px)">
+					<div class="pn-modal-header">
+						<h3 class="pn-modal-title"><i class="fas fa-utensils" style="margin-right:8px;color:#718096"></i>Feast Preferences</h3>
+						<button class="pn-modal-close-btn" id="pn-dp-close-btn" aria-label="Close">&times;</button>
+					</div>
+					<div class="pn-modal-body">
+						<p class="dp-intro">Feast organizers use these when planning meals. Your name is hidden by default&mdash;only totals are shared unless you opt in below. <strong>Remember to RSVP to events</strong>&mdash;your preferences are only included in feast planning for events you&rsquo;ve RSVPed to.</p>
+
+						<!-- Show name toggle -->
+						<div class="dp-anon-row">
+							<div>
+								<div class="dp-anon-label">Show my name to feast organizers</div>
+								<div class="dp-anon-sub">Off = only counts shared; On = organizers see your name &amp; preferences</div>
+							</div>
+							<div class="dp-toggle-sw" data-field="ShowName"></div>
+						</div>
+
+						<!-- No restrictions master toggle -->
+						<div class="dp-no-restrict-row" id="dp-no-restrict-row">
+							<div class="dp-toggle-sw" data-field="NoRestrictions"></div>
+							<div>
+								<div class="dp-no-restrict-label">No dietary restrictions</div>
+								<div class="dp-no-restrict-sub">I have no concerns — clears and disables all options below</div>
+							</div>
+						</div>
+
+						<div id="dp-prefs-body">
+						<!-- Diet -->
+						<div class="dp-section-hdr">Diet <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'DietHalal'      => 'Halal',
+								'DietKeto'       => 'Keto',
+								'DietKosher'     => 'Kosher',
+								'DietPaleo'      => 'Paleo',
+								'DietVegan'      => 'Vegan',
+								'DietVegetarian' => 'Vegetarian',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Restrictions (won't eat) -->
+						<div class="dp-section-hdr">Won't Eat <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'RestrictBeef'      => 'Beef',
+								'RestrictDairy'     => 'Dairy',
+								'RestrictEggs'      => 'Eggs',
+								'RestrictFish'      => 'Fish',
+								'RestrictHoney'     => 'Honey',
+								'RestrictPork'      => 'Pork',
+								'RestrictPoultry'   => 'Poultry',
+								'RestrictShellfish' => 'Shellfish',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Allergens (3-state) -->
+						<div class="dp-section-hdr">Allergens <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-sev-legend">
+							<span class="dp-sl-eg dp-sl-none">None</span> no concern &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-mild">Mild</span> prefer to avoid &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-severe">Severe</span> strict, cross-contamination risk
+						</div>
+						<div class="dp-allergens">
+							<?php foreach ([
+								'AllergenCocoa'       => 'Cocoa',
+								'AllergenCoconut'     => 'Coconut',
+								'AllergenCorn'        => 'Corn',
+								'AllergenEggs'        => 'Eggs',
+								'AllergenFish'        => 'Fish',
+								'AllergenGarlic'      => 'Garlic',
+								'AllergenGluten'      => 'Gluten',
+								'AllergenMilk'        => 'Milk',
+								'AllergenMushroom'    => 'Mushroom',
+								'AllergenNightshades' => 'Nightshades',
+								'AllergenOnion'       => 'Onion',
+								'AllergenPeanuts'   => 'Peanuts',
+								'AllergenSesame'    => 'Sesame',
+								'AllergenShellfish' => 'Shellfish',
+								'AllergenSoy'       => 'Soy',
+								'AllergenTreenuts'  => 'Tree Nuts',
+								'AllergenWheat'     => 'Wheat',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-al-row">
+								<span class="dp-al-name"><?= $_dpLabel ?></span>
+								<div class="dp-al-slider" data-field="<?= $_dpField ?>">
+									<button type="button" class="dp-al-seg dp-active" data-v="0">None</button>
+									<button type="button" class="dp-al-seg" data-v="1">Mild</button>
+									<button type="button" class="dp-al-seg" data-v="2">Severe</button>
+								</div>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						</div><!-- /#dp-prefs-body -->
+					</div><!-- /.pn-modal-body -->
+					<div class="pn-modal-footer" style="align-items:center">
+						<span id="pn-dp-dirty-warn" style="display:none;color:#e53e3e;font-size:12px;margin-right:auto">
+							<i class="fas fa-exclamation-circle"></i> Unsaved changes
+						</span>
+						<button type="button" class="pn-btn pn-btn-secondary" id="pn-dp-cancel-btn">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-primary" id="pn-dp-save-btn" disabled>
+							<i class="fas fa-save"></i> Save
+						</button>
+					</div>
+				</div><!-- /.pn-modal-box -->
+			</div><!-- /#pn-dp-overlay -->
+			<div id="dp-info-pop" role="tooltip">
+				<div class="dp-pop-title">About Dietary Categories</div>
+				<p><strong>Diet</strong> — overall eating styles (Vegan, Kosher, Halal, etc.).<br>
+				<strong>Won't Eat</strong> — ingredients you avoid but aren't allergic to.<br>
+				<strong>Allergens</strong> — substances that may cause a reaction.</p>
+				<p>Allergen severity: <span class="dp-sl-eg dp-sl-none">None</span>&thinsp;=&thinsp;no concern &nbsp; <span class="dp-sl-eg dp-sl-mild">Mild</span>&thinsp;=&thinsp;prefer to avoid, not critical &nbsp; <span class="dp-sl-eg dp-sl-severe">Severe</span>&thinsp;=&thinsp;strict, cross-contamination is a real risk.</p>
+				<p>Allergen list covers all <strong>US FDA Major 9</strong> (FALCPA 2004 + FASTER Act 2023: milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soy, sesame) and key <strong>Health Canada</strong> priority allergens including gluten sources.</p>
+				<p><a href="https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies" target="_blank" rel="noopener">FDA Food Allergens</a> &nbsp;·&nbsp; <a href="https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-allergies-intolerances/food-allergies.html" target="_blank" rel="noopener">Health Canada</a></p>
+			</div>
+			<?php endif; // isOwnProfile (modal) ?>
+
+			<!-- About Tab -->
+				<?php if ($_showAboutTab): ?>
+				<div class="pn-tab-panel" id="pn-tab-about"<?= $_aboutIsDefault ? '' : ' style="display:none"' ?>>
+					<div class="pn-about-layout">
+						<div class="pn-about-main">
+							<?php if ($isOwnProfile): ?>
+							<button type="button" class="pn-about-edit-btn" id="pn-about-edit-btn" aria-label="Edit About section"><i class="fas fa-pencil-alt"></i></button>
+							<?php endif; ?>
+							<?php if ($_hasAboutPersona): ?>
+							<div class="pn-about-section">
+								<h3 class="pn-about-heading">About <?= htmlspecialchars($Player['Persona']) ?></h3>
+								<div class="pn-about-content" id="pn-about-persona-rendered"></div>
+							</div>
+							<?php endif; ?>
+							<?php if ($_hasAboutStory): ?>
+							<div class="pn-about-section">
+								<h3 class="pn-about-heading"><?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Story</h3>
+								<div class="pn-about-content" id="pn-about-story-rendered"></div>
+							</div>
+							<?php endif; ?>
+							<?php if (!$_hasAboutPersona && !$_hasAboutStory && $isOwnProfile && !$_hasBeltline && !$_hasMilestones): ?>
+							<div class="pn-about-empty">
+								<i class="fas fa-scroll" style="font-size:28px;color:#cbd5e0;margin-bottom:10px"></i>
+								<p>Your About section is empty. Click <strong>Design My Profile</strong> above to add a bio and tell your story!</p>
+							</div>
+							<?php endif; ?>
+
+							<?php if (!$_msCompact): ?>
+							<?php
+								// Always emit the timeline skeleton when the About tab is in view.
+								// Even with zero server-side milestones, level6 entries may be
+								// injected client-side after the async attendance fetch lands.
+								// The JS hides the whole section if it ends up empty.
+								$_renderTimeline = !empty($_visibleMilestones)
+									|| ($isOwnProfile && empty($_hasAboutPersona) && empty($_hasAboutStory) && empty($_hasBeltline))
+									|| (!isset($_msConfig['level6']) || $_msConfig['level6']);
+							?>
+							<?php if ($_renderTimeline): ?>
+							<div class="pn-timeline-section" id="pn-timeline-section">
+								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</h3>
+								<?php if (!empty($_visibleMilestones)): ?>
+								<div class="pn-timeline">
+									<?php foreach (($_msNewestFirst ? array_reverse($_visibleMilestones) : $_visibleMilestones) as $_idx => $_ms): ?>
+									<div class="pn-tl-item">
+										<div class="pn-tl-left">
+											<div class="pn-tl-date"><?= date('M j, Y', strtotime($_ms['date'])) ?></div>
+										</div>
+										<div class="pn-tl-node"><i class="fas <?= htmlspecialchars($_ms['icon']) ?>"></i></div>
+										<div class="pn-tl-right">
+											<div class="pn-tl-desc"><?= htmlspecialchars($_ms['description']) ?></div>
+											<span class="pn-tl-date-mobile"><?= date('M j, Y', strtotime($_ms['date'])) ?></span>
+										</div>
+									</div>
+									<?php endforeach; ?>
+								</div>
+								<?php else: ?>
+								<div class="pn-timeline" id="pn-timeline-empty-target"></div>
+								<div class="pn-tl-empty" id="pn-timeline-empty-state">
+									<i class="fas fa-stream" style="font-size:24px;color:#cbd5e0;margin-bottom:8px;display:block"></i>
+									<?= $isOwnProfile ? 'No milestones to display yet. As you play, milestones will appear here automatically!' : 'No milestones to display yet.' ?>
+								</div>
+								<?php endif; ?>
+							</div>
+							<?php endif; ?>
+							<?php endif; // !$_msCompact ?>
+						</div>
+						<?php if ($_showSidebar): ?>
+						<div class="pn-about-sidebar">
+							<?php if ($_hasBeltline): ?>
+							<?php if (!empty($BeltlinePeers)): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-shield-alt"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Peer<?= count($BeltlinePeers) > 1 ? 's' : '' ?></div>
+								<?php
+								$_blCurPeerage = null;
+								$_blPeerLabels = ['Squire' => 'Squire to', 'Man-At-Arms' => 'Person-at-Arms to', 'Lords-Page' => "Lord's Page to", 'Page' => 'Page to'];
+								?>
+								<?php foreach ($BeltlinePeers as $_bp): ?>
+								<?php if ($_bp['Peerage'] !== $_blCurPeerage): ?>
+								<div class="pn-belt-group"><?= htmlspecialchars($_blPeerLabels[$_bp['Peerage']] ?? $_bp['Peerage']) ?></div>
+								<?php $_blCurPeerage = $_bp['Peerage']; endif; ?>
+								<div class="pn-belt-row">
+									<a href="<?= UIR ?>Player/profile/<?= (int)$_bp['PeerId'] ?>" class="pn-belt-name"><?= htmlspecialchars($_bp['Persona']) ?></a>
+									<span class="pn-belt-title"><?= htmlspecialchars($_bp['TitleName']) ?></span>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+							<?php if (!empty($BeltlineAssociates)): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-user-friends"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Associate<?= count($BeltlineAssociates) > 1 ? 's' : '' ?></div>
+								<?php
+								$_blaCurPeerage = null;
+								$_blAssocLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'People-at-Arms', 'Lords-Page' => "Lords-Pages", 'Page' => 'Pages'];
+								?>
+								<?php foreach ($BeltlineAssociates as $_ba): ?>
+								<?php if ($_ba['Peerage'] !== $_blaCurPeerage): ?>
+								<div class="pn-belt-group"><?= htmlspecialchars($_blAssocLabels[$_ba['Peerage']] ?? $_ba['Peerage']) ?></div>
+								<?php $_blaCurPeerage = $_ba['Peerage']; endif; ?>
+								<div class="pn-belt-row">
+									<a href="<?= UIR ?>Player/profile/<?= (int)$_ba['RecipientId'] ?>" class="pn-belt-name"><?= htmlspecialchars($_ba['Persona']) ?></a>
+									<span class="pn-belt-title"><?= htmlspecialchars($_ba['TitleName']) ?></span>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+							<?php endif; // $_hasBeltline ?>
+							<?php
+								// Feast Preferences sidebar card (opt-in via Show My Feast Preferences).
+								// Only rendered when the toggle is on AND the player has meaningful data.
+								// NoRestrictions=1 counts as meaningful — "I have none" is intentional.
+								$_showFeastPrefs = (int)($Player['ShowFeastPrefs'] ?? 0);
+								$_fp = $FeastPrefs ?? null;
+								if ($_showFeastPrefs && is_array($_fp)) {
+									$_fpDiets = array_filter([
+										'Vegetarian' => (int)($_fp['DietVegetarian'] ?? 0),
+										'Vegan'      => (int)($_fp['DietVegan'] ?? 0),
+										'Halal'      => (int)($_fp['DietHalal'] ?? 0),
+										'Kosher'     => (int)($_fp['DietKosher'] ?? 0),
+										'Keto'       => (int)($_fp['DietKeto'] ?? 0),
+										'Paleo'      => (int)($_fp['DietPaleo'] ?? 0),
+									]);
+									$_fpRestricts = array_filter([
+										'Dairy'     => (int)($_fp['RestrictDairy'] ?? 0),
+										'Eggs'      => (int)($_fp['RestrictEggs'] ?? 0),
+										'Fish'      => (int)($_fp['RestrictFish'] ?? 0),
+										'Honey'     => (int)($_fp['RestrictHoney'] ?? 0),
+										'Poultry'   => (int)($_fp['RestrictPoultry'] ?? 0),
+										'Beef'      => (int)($_fp['RestrictBeef'] ?? 0),
+										'Pork'      => (int)($_fp['RestrictPork'] ?? 0),
+										'Shellfish' => (int)($_fp['RestrictShellfish'] ?? 0),
+									]);
+									$_fpAllergenLabels = [
+										'Milk','Eggs','Fish','Shellfish','Treenuts','Peanuts','Wheat','Soy',
+										'Sesame','Garlic','Gluten','Onion','Mushroom','Corn','Coconut','Cocoa','Nightshades',
+									];
+									$_fpAllergens = [];
+									foreach ($_fpAllergenLabels as $_al) {
+										$_v = (int)($_fp['Allergen' . $_al] ?? 0);
+										if ($_v > 0) $_fpAllergens[$_al] = $_v; // 1=Mild, 2=Severe
+									}
+									$_fpHasAny = (int)($_fp['NoRestrictions'] ?? 0) === 1
+										|| !empty($_fpDiets) || !empty($_fpRestricts) || !empty($_fpAllergens);
+							?>
+							<?php if ($_fpHasAny): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-utensils"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Feast Preferences</div>
+								<?php if ((int)$_fp['NoRestrictions'] === 1): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start;color:var(--ork-text-secondary,#4a5568);font-style:italic">No dietary restrictions.</div>
+								<?php else: ?>
+									<?php if (!empty($_fpDiets)): ?>
+									<div class="pn-belt-group">Diet</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpDiets))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpRestricts)): ?>
+									<div class="pn-belt-group">Won't eat</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpRestricts))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpAllergens)): ?>
+									<div class="pn-belt-group">Allergens</div>
+									<?php foreach ($_fpAllergens as $_al => $_sev): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start">
+										<span class="pn-belt-name" style="font-weight:500"><?= htmlspecialchars($_al) ?></span>
+										<span class="pn-belt-title" style="color:<?= $_sev === 2 ? '#e53e3e' : '#dd6b20' ?>;font-weight:600"><?= $_sev === 2 ? 'Severe' : 'Mild' ?></span>
+									</div>
+									<?php endforeach; ?>
+									<?php endif; ?>
+								<?php endif; ?>
+							</div>
+							<?php endif; ?>
+							<?php } // _showFeastPrefs ?>
+							<?php
+								// Compact view skeleton — always emit when in compact mode so
+								// JS can inject level6 items even when zero server-side ones exist.
+								$_renderCompact = $_msCompact && (!empty($_visibleMilestones)
+									|| (!isset($_msConfig['level6']) || $_msConfig['level6']));
+							?>
+							<?php if ($_renderCompact): ?>
+							<div class="pn-cms-card" id="pn-cms-card">
+								<div class="pn-cms-title"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</div>
+								<?php foreach (($_msNewestFirst ? array_reverse($_visibleMilestones) : $_visibleMilestones) as $_cms): ?>
+								<div class="pn-cms-item">
+									<i class="fas <?= htmlspecialchars($_cms['icon']) ?> pn-cms-icon"></i>
+									<div class="pn-cms-line"><strong><?= date('m/y', strtotime($_cms['date'])) ?></strong> &ndash; <?= htmlspecialchars($_cms['description']) ?></div>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+						</div>
+						<?php endif; // $_showSidebar ?>
+					</div>
+				</div>
+				<?php endif; ?>
+
+				<!-- Awards Tab -->
+			<div class="pn-tab-panel" id="pn-tab-awards"<?= ($isOwnProfile || $_aboutIsDefault) ? ' style="display:none"' : '' ?>>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -1074,7 +2077,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</a>
 				<?php endif; ?>
 				<?php if (!empty($awardsList)): ?>
-				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
+				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
 				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
@@ -1093,101 +2096,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						}
 					}
 
-					// Build ladder progress: AwardId -> {Name, Short, MaxRank, HasMaster}
-					// Static map: Order award_id => Master award_id(s)
-					$pnOrderToMaster = [
-						21  => [1],       // Order of the Rose      → Master Rose
-						22  => [2],       // Order of the Smith      → Master Smith
-						23  => [3],       // Order of the Lion       → Master Lion
-						24  => [4],       // Order of the Owl        → Master Owl
-						25  => [5],       // Order of the Dragon     → Master Dragon
-						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [12],      // Order of the Warrior    → Warlord
-						28  => [7],       // Order of the Jovius     → Master Jovius
-						29  => [9],       // Order of the Mask       → Master Mask
-						30  => [8],       // Order of the Zodiac     → Master Zodiac
-						32  => [10],      // Order of the Hydra      → Master Hydra
-						33  => [11],      // Order of the Griffin    → Master Griffin
-						239 => [240],     // Order of the Crown      → Master Crown
-						243 => [244],     // Order of Battle         → Battlemaster
-					];
-					$pnOrderNames = [
-						21  => ['Order of the Rose',    'Rose'],
-						22  => ['Order of the Smith',   'Smith'],
-						23  => ['Order of the Lion',    'Lion'],
-						24  => ['Order of the Owl',     'Owl'],
-						25  => ['Order of the Dragon',  'Dragon'],
-						26  => ['Order of the Garber',  'Garber'],
-						27  => ['Order of the Warrior', 'Warrior'],
-						28  => ['Order of the Jovius',  'Jovius'],
-						29  => ['Order of the Mask',    'Mask'],
-						30  => ['Order of the Zodiac',  'Zodiac'],
-						32  => ['Order of the Hydra',   'Hydra'],
-						33  => ['Order of the Griffin', 'Griffin'],
-						239 => ['Order of the Crown',   'Crown'],
-						243 => ['Order of Battle',      'Battle'],
-					];
-					// Index all award_ids the player holds (including titles)
-					$pnHeldAwardIds = [];
-					foreach ($awardsList as $a) {
-						$aid = (int)$a['AwardId'];
-						if ($aid > 0) $pnHeldAwardIds[$aid] = true;
+					// Ladder progress tiles from domain (Player::GetLadderProgress via controller)
+					if (!isset($LadderProgress) || !is_array($LadderProgress)) {
+						$LadderProgress = [];
 					}
-					$pnLadderProgress = [];
-					foreach ($awardsList as $a) {
-						if ((int)$a['IsLadder'] !== 1) continue;
-						$aid  = (int)$a['AwardId'];
-						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
-						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
-							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
-						// Strip "Order of the " / "Order of " prefix to save space
-						$shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
-						// Check if player holds the corresponding Master title
-						$hasMaster = false;
-						if (isset($pnOrderToMaster[$aid])) {
-							foreach ($pnOrderToMaster[$aid] as $masterId) {
-								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-							}
-						}
-						if (!isset($pnLadderProgress[$aid])) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'Count' => 1, 'HasMaster' => $hasMaster];
-						} else {
-							$pnLadderProgress[$aid]['Count']++;
-							if ($rank > $pnLadderProgress[$aid]['Rank']) {
-								$pnLadderProgress[$aid]['Rank'] = $rank;
-							}
-						}
-					}
-					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
-					// Cap at maxRank per award (10 for most, 12 for Zodiac)
-					// Mark as approximate when count exceeds highest actual rank
-					foreach ($pnLadderProgress as $_lpAid => &$lp) {
-						$_lpMax = ($_lpAid === 30) ? 12 : 10;
-						$lp['Approx'] = $lp['Count'] > $lp['Rank'];
-						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
-					}
-					unset($lp);
-					// Add a complete tile for any masterhood held with no corresponding ladder progress
-					foreach ($pnOrderToMaster as $orderId => $masterIds) {
-						if (isset($pnLadderProgress[$orderId])) continue;
-						$hasMaster = false;
-						foreach ($masterIds as $masterId) {
-							if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-						}
-						if (!$hasMaster) continue;
-						$maxRank = ($orderId === 30) ? 12 : 10;
-						$name  = $pnOrderNames[$orderId][0] ?? 'Unknown Order';
-						$short = $pnOrderNames[$orderId][1] ?? $name;
-						$pnLadderProgress[$orderId] = ['Name' => $name, 'Short' => $short, 'Rank' => $maxRank, 'Count' => 0, 'HasMaster' => true, 'Approx' => false];
-					}
-					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
-				<?php if (!empty($pnLadderProgress)): ?>
+				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
 						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
-							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
-								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+							<?php foreach ($LadderProgress as $lp): ?>
+								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
 								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
@@ -1217,26 +2135,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
-				<div class="pn-table-toolbar">
-					<?php if (count($filteredAwards) > 10): ?>
-					<div class="pn-pagesize-bar" style="margin-bottom:0">
-						<label for="pn-awards-pagesize">Show</label>
-						<select id="pn-awards-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-awards-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-							<option value="all">All</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<div class="pn-award-search-bar" style="margin-bottom:0">
-						<i class="fas fa-search pn-award-search-icon"></i>
-						<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
-					</div>
-				</div>
-				<table class="pn-table pn-sortable" id="pn-awards-table">
+				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
 							<th data-sorttype="text">Award</th>
@@ -1246,7 +2145,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -1256,6 +2155,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
 									<?php if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?><span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span><?php endif; ?>
+									<?php if (!empty($detail['AliasAwardId']) && trimlen($detail['AliasAwardName'] ?? '') > 0): ?><span class="pn-award-alias-sub">aka <?= htmlspecialchars($detail['AliasAwardName']) ?></span><?php endif; ?>
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
@@ -1283,6 +2183,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 										'KingdomName'=> $detail['KingdomName'],
 										'EventId'    => (int)$detail['EventId'],
 										'EventName'  => $detail['EventName'],
+										'AwardId'    => (int)($detail['AwardId'] ?? 0),
+										'CustomName' => $detail['CustomAwardName'] ?? '',
+										'AliasAwardId'   => (int)($detail['AliasAwardId'] ?? 0),
+										'AliasAwardName' => $detail['AliasAwardName'] ?? '',
 									], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
 									<button class="pn-award-action-btn pn-award-edit-btn"
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
@@ -1301,12 +2205,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
-				<?php endif; ?>
+								<?php endif; ?>
 				<?php if ($canManageAwards && !empty($RevokedAwards)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
+					<table class="pn-table display" id="pn-revoked-awards-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Award</th>
@@ -1315,6 +2218,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
+								<th class="pn-nosort"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1326,6 +2230,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<td class="pn-col-nowrap">
+									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this award"><i class="fas fa-undo"></i> Reactivate</button>
+								</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -1350,19 +2257,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					}
 				?>
 				<?php if (count($filteredTitles) > 0): ?>
-					<?php if (count($filteredTitles) > 10): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-titles-pagesize">Show</label>
-						<select id="pn-titles-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-titles-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<table class="pn-table pn-sortable" id="pn-titles-table">
+					<table class="pn-table display" id="pn-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -1372,7 +2267,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -1384,6 +2279,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 										<?php
 											if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?>
 												<span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span>
+										<?php endif; ?>
+										<?php if (!empty($detail['AliasAwardId']) && trimlen($detail['AliasAwardName'] ?? '') > 0): ?>
+											<span class="pn-award-alias-sub">aka <?= htmlspecialchars($detail['AliasAwardName']) ?></span>
 										<?php endif; ?>
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
@@ -1408,7 +2306,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 											if (valid_id($detail['EventId'])) {
 												echo htmlspecialchars($detail['EventName']);
 											} else {
-												echo (trimlen($detail['ParkName']) > 0) ? htmlspecialchars($detail['ParkName']) . ', ' . htmlspecialchars($detail['KingdomName']) : htmlspecialchars($detail['KingdomName']);
+												echo (trimlen($detail['ParkName']) > 0) ? htmlspecialchars($detail['ParkName']) . (trimlen($detail['KingdomName']) > 0 ? ', ' . htmlspecialchars($detail['KingdomName']) : '') : htmlspecialchars($detail['KingdomName']);
 											}
 										?>
 									</td>
@@ -1435,6 +2333,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 											'KingdomName'    => $detail['KingdomName'],
 											'EventId'        => (int)$detail['EventId'],
 											'EventName'      => $detail['EventName'],
+											'AwardId'        => (int)($detail['AwardId'] ?? 0),
+											'CustomName'     => $detail['CustomAwardName'] ?? '',
+											'AliasAwardId'   => (int)($detail['AliasAwardId'] ?? 0),
+											'AliasAwardName' => $detail['AliasAwardName'] ?? '',
 										], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
 										<button class="pn-award-action-btn pn-award-edit-btn"
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
@@ -1459,7 +2361,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php if ($canManageAwards && !empty($RevokedTitles)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
+					<table class="pn-table display" id="pn-revoked-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -1468,6 +2370,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
+								<th class="pn-nosort"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1479,6 +2382,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<td class="pn-col-nowrap">
+									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this title"><i class="fas fa-undo"></i> Reactivate</button>
+								</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -1487,94 +2393,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php endif; ?>
 			</div>
 
-			<!-- Attendance Tab -->
+			<!-- Attendance Tab (populated by attendance AJAX) -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
-				<?php $attendanceList = is_array($Details['Attendance']) ? $Details['Attendance'] : array(); ?>
-				<?php
-				// Build per-park edit authority lookup — one HasAuthority call per unique park
-				$parkEditAuth = [];
-				if (isset($this->__session->user_id)) {
-					$uniqueParkIds = array_unique(array_filter(array_column(
-						array_filter($attendanceList, fn($a) => (int)($a['EventId'] ?? 0) === 0),
-						'ParkId'
-					)));
-					foreach ($uniqueParkIds as $pid) {
-						$parkEditAuth[(int)$pid] = Ork3::$Lib->authorization->HasAuthority(
-							$this->__session->user_id, AUTH_PARK, (int)$pid, AUTH_EDIT
-						);
-					}
-				}
-				$canEditAnyAttendance = !empty(array_filter($parkEditAuth));
-				?>
 				<?php if ($canEditAdmin): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
 					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($attendanceList) > 0): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-attendance-pagesize">Show</label>
-						<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-attendance-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<table class="pn-table pn-sortable" id="pn-attendance-table">
-						<thead>
-							<tr>
-								<th data-sorttype="date">Date</th>
-								<th data-sorttype="text">Kingdom</th>
-								<th data-sorttype="text">Park</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="text">Class</th>
-								<th data-sorttype="numeric">Credits</th>
-								<?php if ($canEditAnyAttendance): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($attendanceList as $detail): ?>
-								<?php $canEditThisAtt = $parkEditAuth[(int)($detail['ParkId'] ?? 0)] ?? false; ?>
-								<tr>
-									<td class="pn-col-nowrap">
-										<?php if ($detail['ParkId'] > 0): ?>
-											<a href="<?= UIR ?>Attendance/park/<?= $detail['ParkId'] ?>&AttendanceDate=<?= $detail['Date'] ?>"><?= $detail['Date'] ?></a>
-										<?php else: ?>
-											<a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['Date'] ?></a>
-										<?php endif; ?>
-									</td>
-									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= htmlspecialchars($detail['KingdomName']) ?></a></td>
-									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= htmlspecialchars($detail['ParkName']) ?></a></td>
-									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= htmlspecialchars($detail['EventName']) ?></a></td>
-									<td><?= trimlen($detail['Flavor']) > 0 ? htmlspecialchars($detail['Flavor']) : htmlspecialchars($detail['ClassName']) ?></td>
-									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
-									<?php if ($canEditAnyAttendance): ?>
-									<td class="pn-award-actions-cell">
-										<?php if ($canEditThisAtt && (int)$detail['EventId'] === 0): ?>
-										<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"
-										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
-										        data-date="<?= htmlspecialchars($detail['Date']) ?>"
-										        data-credits="<?= (float)$detail['Credits'] ?>"
-										        data-class-id="<?= (int)$detail['ClassId'] ?>"
-										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
-										        title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>
-										<button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"
-										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
-										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
-										        title="Delete attendance"><i class="fas fa-trash"></i></button>
-										<?php endif; ?>
-									</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty">No attendance records</div>
-				<?php endif; ?>
+				<div id="pn-attendance-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
+			<?php $canEditAnyAttendance = $canEditAdmin; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
@@ -1583,104 +2411,33 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($_recList) > 0): ?>
-					<table class="pn-table display" id="pn-rec-table">
-						<thead>
-							<tr>
-								<th>Award</th>
-								<th>Rank</th>
-								<th>Date</th>
-								<th>Sent By</th>
-								<th>Reason</th>
-								<?php if ($this->__session->user_id): ?>
-									<th style="white-space:nowrap;width:1%">Actions</th>
-								<?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($_recList as $rec): ?>
-								<tr>
-									<td><?= htmlspecialchars($rec['AwardName']) ?></td>
-									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? (int)$rec['Rank'] : '' ?></td>
-									<td class="pn-col-nowrap"><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a></td>
-									<td><?= htmlspecialchars($rec['Reason']) ?></td>
-									<?php if ($this->__session->user_id): ?>
-										<td class="pk-rec-actions">
-											<?php if ($canManageAwards && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
-												<button class="pk-btn pk-btn-primary pn-rec-grant-btn"
-													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>">
-													<i class="fas fa-medal"></i> Grant
-												</button>
-											<?php endif; ?>
-											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
-												<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn"
-													data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">
-													<i class="fas fa-times"></i> Delete
-												</button>
-											<?php endif; ?>
-										</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player["Persona"]) ?>.</div>
-				<?php endif; ?>
+				<div id="pn-recs-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div><?php endif; ?>
 
 			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
-				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
+				<?php if ($isOwnProfile): ?>
+				<div class="pn-notes-infobox">
+					<i class="fas fa-info-circle pn-notes-infobox-icon"></i>
+					<div>
+						<div id="pn-notes-infobox-has" style="display:<?= !empty($HasNotes) ? '' : 'none' ?>">This tab contains historically imported notes about your profile from previous versions of the ORK. If these notes are still relevant, such as containing a title or award not listed in the other tabs, reach out to your local Monarch or Prime Minister to reconcile those notes. Once all notes have been reconciled, <a href="#" id="pn-clear-notes-link">click here to close out your notes tab</a>. This cannot be undone.</div>
+						<div id="pn-notes-infobox-none" style="display:<?= !empty($HasNotes) ? 'none' : '' ?>">You have no historically imported notes on your profile — there is nothing here to reconcile. This tab is hidden from the public view of your profile and is only visible to you and to your park or kingdom officers.</div>
+					</div>
+				</div>
+				<?php endif; ?>
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-notes-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAddNoteModal()"><i class="fas fa-plus"></i> Add Note</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($notesList) > 0): ?>
-					<table class="pn-table" id="pn-history-table">
-						<thead>
-							<tr>
-								<th>Note</th>
-								<th>Description</th>
-								<th>Date</th>
-								<?php if ($canEditAdmin): ?><th style="width:60px"></th><?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($notesList as $note): ?>
-								<tr data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>">
-									<td><?= htmlspecialchars($note['Note'] ?? '') ?></td>
-									<td><?= htmlspecialchars($note['Description'] ?? '') ?></td>
-									<td class="pn-col-nowrap"><?= htmlspecialchars($note['Date'] ?? '') . (strtotime($note['DateComplete'] ?? '') > 0 ? (' - ' . htmlspecialchars($note['DateComplete'])) : '') ?></td>
-									<?php if ($canEditAdmin): ?>
-									<td class="pn-award-actions-cell">
-										<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"
-											data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>"
-											data-note="<?= htmlspecialchars($note['Note'] ?? '', ENT_QUOTES) ?>"
-											data-desc="<?= htmlspecialchars($note['Description'] ?? '', ENT_QUOTES) ?>"
-											data-date="<?= htmlspecialchars($note['Date'] ?? '', ENT_QUOTES) ?>"
-											data-date-complete="<?= htmlspecialchars($note['DateComplete'] ?? '', ENT_QUOTES) ?>"
-											title="Edit note"><i class="fas fa-pencil-alt"></i></button>
-										<button class="pn-award-action-btn pn-award-del-btn pn-note-del-btn" data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>" title="Delete note"><i class="fas fa-trash"></i></button>
-									</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty" id="pn-history-empty">No notes</div>
-				<?php endif; ?>
+				<div id="pn-notes-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
 			<!-- Class Levels Tab -->
 			<div class="pn-tab-panel" id="pn-tab-classes" style="display:none">
 				<?php
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
-					// class_id → Paragon award_id
-					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
+					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
 				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
@@ -1688,7 +2445,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 				<?php endif; ?>
 				<?php if (count($classList) > 0): ?>
-					<table class="pn-table" id="pn-classes-table">
+					<table class="pn-table display" id="pn-classes-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Class</th>
@@ -1700,7 +2457,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 							<?php foreach ($classList as $detail): ?>
 								<?php
 									$totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']);
-									$paragonAwardId = $pnClassToParagon[$detail['ClassId']] ?? null;
+									$paragonAwardId = $ClassParagonMap[$detail['ClassId']] ?? null;
 									$hasParagon = $paragonAwardId && isset($pnHeldAwardIds[$paragonAwardId]);
 								?>
 								<tr>
@@ -1733,7 +2490,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-img-overlay">
 	<div class="pn-modal-box pn-img-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Image</h3>
+			<h3 class="pn-modal-title" id="pn-img-modal-title"><i class="fas fa-image pn-modal-title-icon"></i>Update Image</h3>
 			<button class="pn-modal-close-btn" id="pn-img-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -1742,7 +2499,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<label class="pn-upload-area" for="pn-img-file-input">
 				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
+				<small>JPG, GIF, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="pn-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
 			<div id="pn-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;"></div>
@@ -1793,7 +2550,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-acct-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-user-edit" style="margin-right:8px;color:#2c5282"></i>Update Account</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-user-edit pn-modal-title-icon"></i>Update Account</h3>
 			<button class="pn-modal-close-btn" id="pn-acct-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -1812,17 +2569,24 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-acct-persona">Persona <span style="color:#e53e3e">*</span></label>
+				<label for="pn-acct-persona">Persona <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-persona" name="Persona" value="<?= htmlspecialchars($Player['Persona']) ?>" />
 			</div>
 			<div class="pn-acct-field">
 				<label for="pn-acct-email">Email</label>
 				<input type="email" id="pn-acct-email" name="Email" value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 				<div id="pn-acct-email-warn" style="display:none;color:#e53e3e;font-size:0.82rem;margin-top:4px;">Double check the format of your email address.</div>
+				<div id="pn-acct-email-suggestion" class="esc-suggestion" role="alert">
+					<i class="fas fa-magic"></i>
+					<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+					<button type="button" class="esc-suggestion-use">Use it</button>
+					<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-acct-username">Username <span style="color:#e53e3e">*</span></label>
+				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
+					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
 			<div class="pn-acct-two-col">
 				<div class="pn-acct-field">
@@ -1886,6 +2650,33 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 			</div>
 
+			<div class="pn-acct-field">
+				<label>
+					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />
+					Restrict Mundane Name Visibility
+				</label>
+				<small style="display:block;color:var(--ork-text-muted);margin-top:4px;padding-left:22px">Hides your real name from searches and public displays.</small>
+			</div>
+
+			<!-- Preferences (own + admin) -->
+			<div class="pn-acct-section-title"><i class="fas fa-sliders-h" style="margin-right:5px"></i>Preferences</div>
+
+			<div class="pn-acct-field">
+				<label style="display:inline-flex;align-items:center;cursor:pointer;">
+					<input type="checkbox" name="BasicFonts" value="BasicFonts" <?= !empty($Player['BasicFonts']) ? 'checked' : '' ?> style="margin-right:6px" />
+					Basic Fonts
+					<span class="pn-acct-help-tip" data-tip="Some parts of the ORK may allow for custom or stylistic fonts. Select this toggle if you want to enforce basic fonts instead to help with legibility or visual accommodation." aria-label="Help">?</span>
+				</label>
+			</div>
+
+			<div class="pn-acct-field">
+				<label style="display:inline-flex;align-items:center;cursor:pointer;">
+					<input type="checkbox" name="DyslexiaFonts" value="DyslexiaFonts" <?= !empty($Player['DyslexiaFonts']) ? 'checked' : '' ?> style="margin-right:6px" />
+					Use Dyslexia-friendly Fonts
+					<span class="pn-acct-help-tip" data-tip="When enabled, the ORK uses Lexend &mdash; a typeface designed to improve reading proficiency for people with reading difficulties such as Dyslexia &mdash; site-wide for your account." aria-label="Help">?</span>
+				</label>
+			</div>
+
 			<?php if ($canEditAdmin): ?>
 			<!-- Admin-only fields -->
 			<div class="pn-acct-section-title"><i class="fas fa-shield-alt" style="margin-right:5px"></i>Administrative</div>
@@ -1905,13 +2696,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						<label><input type="radio" name="Waivered" value="Lawsuit Bait" <?= $Player['Waivered'] != 1 ? 'checked' : '' ?> /> No Waiver</label>
 					</div>
 				</div>
-			</div>
-
-			<div class="pn-acct-field">
-				<label>
-					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />
-					Restricted Account
-				</label>
 			</div>
 
 			<div class="pn-acct-field">
@@ -1937,7 +2721,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-dues-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Add Dues Entry</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Add Dues Entry</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -1947,38 +2731,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<!-- All dues history -->
 			<div class="pn-dues-modal-current">
 				<div class="pn-dues-modal-current-title"><i class="fas fa-history" style="margin-right:5px"></i>Dues History</div>
-				<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
-				<table class="pn-dues-modal-table">
-					<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th><?php if ($canEditAdmin): ?><th></th><?php endif; ?></tr></thead>
-					<tbody>
-					<?php foreach ($AllDues as $d):
-						if ($d['DuesForLife'] == 1) {
-							$status = '<span class="pn-dues-life">Lifetime</span>';
-						} elseif (!empty($d['Revoked'])) {
-							$status = '<span style="color:#e53e3e">Revoked</span>';
-						} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
-							$status = '<span style="color:#999">Expired</span>';
-						} else {
-							$status = '<span style="color:#38a169">Active</span>';
-						}
-					?>
-						<tr>
-							<td><?= htmlspecialchars($d['ParkName']) ?></td>
-							<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
-							<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
-							<td><?= $status ?></td>
-							<?php if ($canEditAdmin): ?><td><?php if (empty($d['Revoked'])): ?><button class="pn-dues-revoke-btn" data-dues-id="<?= (int)$d['DuesId'] ?>">Revoke</button><?php endif; ?></td><?php endif; ?>
-						</tr>
-					<?php endforeach; ?>
-					</tbody>
-				</table>
-				<?php else: ?>
-				<div class="pn-dues-modal-empty">No dues records on file</div>
-				<?php endif; ?>
+				<div id="pn-dues-history-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
 			<div class="pn-acct-field">
-				<label for="pn-dues-from">Date Paid <span style="color:#e53e3e">*</span></label>
+				<label for="pn-dues-from">Date Paid <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-dues-from" name="DuesFrom" value="<?= date('Y-m-d') ?>" />
 			</div>
 
@@ -2017,37 +2774,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-dues-history-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Dues History</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Dues History</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-history-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-acct-modal-body">
-			<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
-			<table class="pn-dues-modal-table">
-				<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th></tr></thead>
-				<tbody>
-				<?php foreach ($AllDues as $d):
-					if ($d['DuesForLife'] == 1) {
-						$status = '<span class="pn-dues-life">Lifetime</span>';
-					} elseif (!empty($d['Revoked'])) {
-						$status = '<span style="color:#e53e3e">Revoked</span>';
-					} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
-						$status = '<span style="color:#999">Expired</span>';
-					} else {
-						$status = '<span style="color:#38a169">Active</span>';
-					}
-				?>
-					<tr>
-						<td><?= htmlspecialchars($d['ParkName']) ?></td>
-						<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
-						<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
-						<td><?= $status ?></td>
-					</tr>
-				<?php endforeach; ?>
-				</tbody>
-			</table>
-			<?php else: ?>
-			<div class="pn-dues-modal-empty">No dues records on file</div>
-			<?php endif; ?>
+			<div id="pn-dues-history-modal-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-dues-history-cancel">Close</button>
@@ -2063,7 +2794,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-qual-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-certificate" style="margin-right:8px;color:#2c5282"></i>Edit Qualifications</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-certificate pn-modal-title-icon"></i>Edit Qualifications</h3>
 			<button class="pn-modal-close-btn" id="pn-qual-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2112,7 +2843,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<input type="hidden" name="Password"       value="" />
 			<input type="hidden" name="PasswordAgain"  value="" />
 			<input type="hidden" name="Active"         value="<?= $Player['Active'] == 1 ? 'Active' : 'Inactive' ?>" />
-			<input type="hidden" name="Restricted"     value="<?= $Player['Restricted'] == 1 ? 'Restricted' : '' ?>" />
 			<input type="hidden" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
 			<input type="hidden" name="Waivered"       value="<?= $Player['Waivered'] == 1 ? 'Waivered' : 'Lawsuit Bait' ?>" />
 		</div>
@@ -2132,7 +2862,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-award-overlay">
 	<div class="pn-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
+			<h3 class="pn-modal-title" id="pn-award-modal-title"><i class="fas fa-trophy pn-modal-title-icon"></i>Add Award</h3>
 			<button class="pn-modal-close-btn" id="pn-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-acct-modal-body">
@@ -2149,11 +2879,17 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<button type="button" class="pn-award-type-btn" id="pn-award-type-officers">
 					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
 				</button>
+				<button type="button" class="pn-award-type-btn" id="pn-award-type-achievements">
+					<i class="fas fa-star" style="margin-right:5px"></i>Achievement Titles
+				</button>
+				<button type="button" class="pn-award-type-btn" id="pn-award-type-associations">
+					<i class="fas fa-handshake" style="margin-right:5px"></i>Associations
+				</button>
 			</div>
 
 			<!-- Award Select -->
 			<div class="pn-acct-field">
-				<label for="pn-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<label for="pn-award-select" id="pn-award-select-label">Award <span class="required-indicator">*</span></label>
 				<select id="pn-award-select" name="KingdomAwardId">
 					<option value="">Select award…</option>
 					<?= $AwardOptions ?>
@@ -2161,28 +2897,51 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pn-award-info-line" id="pn-award-info-line"></div>
 			</div>
 
-			<!-- Custom Award Name (only for "Custom Award") -->
+			<!-- Custom Award Name (shown for "Custom Award" and "Custom Title") -->
 			<div class="pn-acct-field" id="pn-award-custom-row" style="display:none">
-				<label for="pn-award-custom-name">Custom Award Name</label>
+				<label for="pn-award-custom-name" id="pn-award-custom-label">Custom Award Name</label>
 				<input type="text" name="AwardName" id="pn-award-custom-name" maxlength="64" placeholder="Enter custom award name…" />
+			</div>
+
+			<!-- Alias dropdown (shown only for "Custom Title") -->
+			<div class="pn-acct-field" id="pn-award-alias-row" style="display:none">
+				<label for="pn-award-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
+				<select name="AliasAwardId" id="pn-award-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker (only for ladder awards) -->
 			<div class="pn-acct-field" id="pn-award-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; light blue = already held, green border = suggested; dark blue = selected</span></label>
+				<label>Rank <span id="pn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
 				<div class="pn-rank-pills-wrap" id="pn-rank-pills"></div>
 				<input type="hidden" name="Rank" id="pn-award-rank-val" value="" />
 			</div>
 
 			<!-- Date -->
 			<div class="pn-acct-field">
-				<label for="pn-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<label for="pn-award-date">Date <span class="required-indicator">*</span></label>
 				<input type="date" name="Date" id="pn-award-date" />
 			</div>
 
 			<!-- Given By -->
 			<div class="pn-acct-field">
-				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<label>Given By <span class="required-indicator">*</span></label>
 				<?php if (!empty($PreloadOfficers)): ?>
 				<div class="pn-officer-chips" id="pn-award-officer-chips">
 					<?php foreach ($PreloadOfficers as $officer): ?>
@@ -2197,6 +2956,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<input type="text" id="pn-award-givenby-text" placeholder="Or search by persona…" autocomplete="off" />
 				<input type="hidden" name="GivenById" id="pn-award-givenby-id" value="" />
 				<div class="pn-ac-results" id="pn-award-givenby-results"></div>
+				<div id="pn-award-givenby-note" style="display:none;margin-top:6px;padding:8px 12px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;color:#2b6cb0;font-size:12px;line-height:1.5;"><i class="fas fa-info-circle" style="margin-right:5px"></i>This should reflect the person granting the association. For example, if a Knight is taking a Squire, enter the Knight's name here.</div>
 			</div>
 
 			<!-- Given At -->
@@ -2208,7 +2968,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				       value="<?= htmlspecialchars($this->__session->park_name ?? '') ?>" />
 				<div class="pn-ac-results" id="pn-award-givenat-results"></div>
 				<input type="hidden" name="ParkId" id="pn-award-park-id" value="<?= (int)$Player['ParkId'] ?>" />
-				<input type="hidden" name="KingdomId" id="pn-award-kingdom-id" value="0" />
+				<input type="hidden" name="KingdomId" id="pn-award-kingdom-id" value="<?= (int)($KingdomId ?? 0) ?>" />
 				<input type="hidden" name="EventId" id="pn-award-event-id" value="0" />
 			</div>
 
@@ -2239,21 +2999,21 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-award-edit-overlay">
 	<div class="pn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt pn-modal-title-icon"></i>Edit Award</h3>
 			<button class="pn-modal-close-btn" id="pn-edit-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
 			<div id="pn-edit-award-feedback" style="display:none"></div>
 
 			<!-- ── Historical award reconcile banner (shown only for legacy records) ── -->
-			<div id="pn-edit-reconcile-banner" style="display:none;margin-bottom:16px;padding:12px 14px;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px;">
-				<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;font-weight:600;color:#744210;">
-					<input type="checkbox" id="pn-edit-reconcile-check" style="margin-top:3px;flex-shrink:0;">
+			<div id="pn-edit-reconcile-banner" class="pn-reconcile-banner" style="display:none">
+				<label>
+					<input type="checkbox" id="pn-edit-reconcile-check">
 					<span id="pn-edit-reconcile-label">Convert legacy record to current award system</span>
 				</label>
-				<div id="pn-edit-reconcile-fields" style="display:none;margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px;">
+				<div id="pn-edit-reconcile-fields" class="pn-reconcile-fields" style="display:none">
 					<div class="pn-acct-field">
-						<label>Target Award <span style="color:#e53e3e">*</span></label>
+						<label>Target Award <span class="required-indicator">*</span></label>
 						<select id="pn-edit-reconcile-award">
 							<option value="">— select award —</option>
 							<?= $AwardOptions ?>
@@ -2275,6 +3035,44 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pn-edit-award-name-display" id="pn-edit-award-name"></div>
 			</div>
 
+			<!-- Custom Award ↔ Custom Title reclassification (shown only when editing a custom entry) -->
+			<div class="pn-acct-field" id="pn-edit-type-row" style="display:none">
+				<label>Type</label>
+				<div style="display:flex;gap:14px;align-items:center;padding:4px 0">
+					<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:500">
+						<input type="radio" name="pn-edit-type" id="pn-edit-type-award" value="custom_award"> Custom Award
+					</label>
+					<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:500">
+						<input type="radio" name="pn-edit-type" id="pn-edit-type-title" value="custom_title"> Custom Title
+					</label>
+				</div>
+			</div>
+			<div class="pn-acct-field" id="pn-edit-custom-name-row" style="display:none">
+				<label for="pn-edit-custom-name" id="pn-edit-custom-name-label">Custom Name</label>
+				<input type="text" id="pn-edit-custom-name" maxlength="64" />
+			</div>
+			<div class="pn-acct-field" id="pn-edit-alias-row" style="display:none">
+				<label for="pn-edit-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
+				<select id="pn-edit-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+			</div>
+
 			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
 				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
 				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills"></div>
@@ -2282,12 +3080,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			</div>
 
 			<div class="pn-acct-field">
-				<label for="pn-edit-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<label for="pn-edit-award-date">Date <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-edit-award-date" />
 			</div>
 
 			<div class="pn-acct-field">
-				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<label>Given By <span class="required-indicator">*</span></label>
 				<?php if (!empty($PreloadOfficers)): ?>
 				<div class="pn-officer-chips" id="pn-edit-award-officer-chips">
 					<?php foreach ($PreloadOfficers as $officer): ?>
@@ -2328,20 +3126,597 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <?php endif; ?>
 
 <!-- =============================================
+     Design My Profile Modal
+     ============================================= -->
+<?php if ($isOwnProfile || $ViewerIsOrkAdmin): ?>
+<div class="pn-overlay" id="pn-design-overlay">
+	<div class="pn-modal-box" style="width:720px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-palette pn-modal-title-icon"></i>Design My Profile</h3>
+			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-design-tabs-wrap">
+			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-left" id="pn-design-tabs-chev-left" aria-label="Scroll tabs left" tabindex="-1"><i class="fas fa-chevron-left"></i></button>
+			<div class="pn-design-tabs" id="pn-design-tabs">
+				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-smile-beam"></i> Welcome</button>
+				<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
+				<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
+				<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
+				<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
+				<button class="pn-design-tab" data-panel="milestones"><i class="fas fa-stream"></i> Milestones</button>
+				<?php if ($isKnight): ?>
+				<button class="pn-design-tab" data-panel="icons"><i class="fas fa-shield-alt"></i> Icons</button>
+				<?php endif; ?>
+			</div>
+			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-right" id="pn-design-tabs-chev-right" aria-label="Scroll tabs right" tabindex="-1"><i class="fas fa-chevron-right"></i></button>
+		</div>
+		<div class="pn-acct-modal-body" style="height:60vh;overflow-y:auto">
+			<div class="pn-form-error" id="pn-design-error"></div>
+
+			<!-- Welcome Panel -->
+			<div class="pn-design-panel pn-active" id="pn-design-welcome">
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Heads up &mdash; dark mode viewers.</strong> Some viewers use the ORK in dark mode. Your hero background is automatically darkened for them, but <em>accent colors, inline images, and rich formatting</em> in your About section may look different. Preview both themes (toggle with the moon icon in the site header) before you finalize your design.
+					</div>
+				</div>
+				<div class="pn-welcome-hero">
+					<div class="pn-welcome-icon"><i class="fas fa-palette"></i></div>
+					<div class="pn-welcome-hero-text">
+						<h4>Welcome to your Profile Customizer!</h4>
+						<p>This is your space to make your profile feel like <em>you</em>. Tell your story, pick your colors, build your name, and frame your favorite photo &mdash; all from one place. Click any tab below to get started, or read on for a quick tour.</p>
+					</div>
+				</div>
+				<div class="pn-welcome-grid">
+					<div class="pn-welcome-card" data-go="about">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-blue"><i class="fas fa-scroll"></i></div>
+							<div class="pn-welcome-card-title">About</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Write your bio and persona story. Both fields support <strong>Markdown</strong> for headings, lists, and links. Once you add About or Story content, visitors land on your <strong>About</strong> tab by default instead of Awards.
+						</div>
+						<div class="pn-welcome-mock pn-wm-about">
+							<div class="pn-wm-line pn-wm-line-h"></div>
+							<div class="pn-wm-line"></div>
+							<div class="pn-wm-line"></div>
+							<div class="pn-wm-line pn-wm-line-short"></div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open About <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="colors">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-purple"><i class="fas fa-palette"></i></div>
+							<div class="pn-welcome-card-title">Colors</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Pick a preset, build a gradient, or set custom hex colors for your hero, tabs, and stat cards.
+						</div>
+						<div class="pn-welcome-mock pn-wm-colors">
+							<span style="background:#2c5282"></span>
+							<span style="background:#276749"></span>
+							<span style="background:#9b2c2c"></span>
+							<span style="background:#553c9a"></span>
+							<span style="background:#975a16"></span>
+							<span style="background:linear-gradient(135deg,#1a365d,#553c9a)"></span>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Colors <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="name">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-gold"><i class="fas fa-signature"></i></div>
+							<div class="pn-welcome-card-title">Name</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Add a prefix or suffix from your earned titles, set a pronunciation guide, and pick a decorative font.
+						</div>
+						<div class="pn-welcome-mock pn-wm-name">
+							<span class="pn-wm-pill">Syr</span>
+							<span class="pn-wm-name-core">Avery</span>
+							<span class="pn-wm-pill">the Bold</span>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Name <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="focus">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-teal"><i class="fas fa-crosshairs"></i></div>
+							<div class="pn-welcome-card-title">Photo Focus</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Frame your photo so the most important part &mdash; usually your face &mdash; stays centered everywhere it appears.
+						</div>
+						<div class="pn-welcome-mock pn-wm-focus">
+							<div class="pn-wm-focus-frame">
+								<div class="pn-wm-focus-target"></div>
+							</div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Photo Focus <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="milestones">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-rose"><i class="fas fa-stream"></i></div>
+							<div class="pn-welcome-card-title">Milestones</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Curate which awards, titles, and events show up on your <em>My Milestones</em> timeline on the About tab.
+						</div>
+						<div class="pn-welcome-mock pn-wm-milestones">
+							<div class="pn-wm-ms-line"></div>
+							<div class="pn-wm-ms-dot" style="left:10%"></div>
+							<div class="pn-wm-ms-dot" style="left:35%"></div>
+							<div class="pn-wm-ms-dot" style="left:60%"></div>
+							<div class="pn-wm-ms-dot" style="left:85%"></div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Milestones <i class="fas fa-arrow-right"></i></button>
+					</div>
+				</div>
+				<div class="pn-welcome-tips">
+					<div class="pn-welcome-tips-title"><i class="fas fa-lightbulb"></i> Quick tips</div>
+					<ul>
+						<li>Changes save when you click <strong>Save</strong> at the bottom &mdash; nothing is permanent until then.</li>
+						<li>You can come back any time by clicking <strong>Design My Profile</strong> on your profile.</li>
+						<li>Not sure where to start? Try <strong>Colors</strong> first &mdash; the visual change is instant and fun.</li>
+					</ul>
+				</div>
+			</div>
+
+			<!-- About Panel -->
+			<div class="pn-design-panel" id="pn-design-about">
+				<div class="pn-about-visibility-warn"><i class="fas fa-exclamation-triangle"></i>Don't forget, your about section will be visible to the public. Refrain from including inappropriate content in this section. Kingdom and park officers can take action on your profile if impermissible content is added.</div>
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Dark mode rendering.</strong> Text, headings, quotes, and code blocks you write here will automatically re-color for dark-mode viewers. However, any <em>hex-coded colors you embed in Markdown (via inline HTML), images with fixed backgrounds, or custom tables</em> will render as-is and may not be readable on a dark background. If you embed these, preview your About tab with the site's theme toggle before publishing.
+					</div>
+				</div>
+				<div class="pn-design-field">
+					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
+					<div class="pn-md-preview-toggle">
+						<div class="pn-md-toggle-group">
+							<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="persona">Write</button>
+							<button class="pn-md-toggle-btn" data-target="preview" data-field="persona">Preview</button>
+						</div>
+						<div class="pn-md-quick-add">
+							<span class="pn-md-quick-add-label">Quick Add:</span>
+							<button type="button" class="pn-md-quick-btn" data-quickadd="findmelinks" data-target-field="persona"><i class="fas fa-share-alt"></i> Find Me Links</button>
+						</div>
+					</div>
+					<textarea id="pn-design-about-persona" maxlength="10000" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
+					<span class="pn-char-count" id="pn-design-about-persona-charcount" style="display:none"></span>
+					<div class="pn-md-preview" id="pn-design-about-persona-preview" style="display:none"></div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+				</div>
+				<div class="pn-design-field">
+					<label>My Story</label>
+					<div class="pn-md-preview-toggle">
+						<div class="pn-md-toggle-group">
+							<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="story">Write</button>
+							<button class="pn-md-toggle-btn" data-target="preview" data-field="story">Preview</button>
+						</div>
+						<div class="pn-md-quick-add">
+							<span class="pn-md-quick-add-label">Quick Add:</span>
+							<button type="button" class="pn-md-quick-btn" data-quickadd="signaturequote" data-target-field="story"><i class="fas fa-quote-left"></i> Signature Quote</button>
+						</div>
+					</div>
+					<textarea id="pn-design-about-story" maxlength="10000" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
+					<span class="pn-char-count" id="pn-design-about-story-charcount" style="display:none"></span>
+					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+				</div>
+				<div class="pn-design-field pn-about-beltline-toggle">
+					<label>
+						<input type="checkbox" id="pn-design-show-beltline" <?= ((int)($Player['ShowBeltline'] ?? 1)) ? 'checked' : '' ?> />
+						Show My Beltline
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Display your peerage relationships (peers and associates) on your About tab. Others can see who you're belted to and who you've belted.</div>
+				</div>
+				<div class="pn-design-field pn-about-beltline-toggle">
+					<label>
+						<input type="checkbox" id="pn-design-show-feast-prefs" <?= ((int)($Player['ShowFeastPrefs'] ?? 0)) ? 'checked' : '' ?> />
+						Show My Feast Preferences
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Display your saved feast preferences (diet, restrictions, allergens) on your About tab. Off by default &mdash; turn on only if you're comfortable making this public.</div>
+				</div>
+			</div>
+
+			<!-- Colors Panel -->
+			<div class="pn-design-panel" id="pn-design-colors">
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Dark mode &amp; your palette.</strong> Your hero background is automatically shifted to a darker tint for dark-mode viewers, so it will read correctly either way. However, your <em>accent color</em> (used for links, tab indicators, and icons) renders as-is. Very pale or pastel accents may have low contrast against a dark card background &mdash; pick a medium or saturated hue for best readability in both themes.
+					</div>
+				</div>
+				<div class="pn-design-preview-label">Preview</div>
+				<div class="pn-hero-preview" id="pn-color-hero-preview">
+					<div class="pn-preview-bg pn-preview-bg-base" style="background-image:url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+					<div class="pn-preview-bg pn-preview-bg-sharp" style="background-image:url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+					<div class="pn-hero-preview-content">
+						<div class="pn-hero-preview-name ork-font-sample"><?= htmlspecialchars($Player['Persona']) ?></div>
+						<div class="pn-hero-preview-sub">Your profile will look like this</div>
+					</div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Presets</div>
+				<div class="pn-color-presets" id="pn-color-presets">
+					<div class="pn-color-swatch" data-primary="#2c5282" data-accent="#4299e1" style="background:#2c5282" title="Default Blue"></div>
+					<div class="pn-color-swatch" data-primary="#276749" data-accent="#48bb78" style="background:#276749" title="Forest Green"></div>
+					<div class="pn-color-swatch" data-primary="#9b2c2c" data-accent="#fc8181" style="background:#9b2c2c" title="Crimson Red"></div>
+					<div class="pn-color-swatch" data-primary="#553c9a" data-accent="#9f7aea" style="background:#553c9a" title="Royal Purple"></div>
+					<div class="pn-color-swatch" data-primary="#975a16" data-accent="#ecc94b" style="background:#975a16" title="Gold"></div>
+					<div class="pn-color-swatch" data-primary="#2d3748" data-accent="#a0aec0" style="background:#2d3748" title="Dark Gray"></div>
+					<div class="pn-color-swatch" data-primary="#285e61" data-accent="#38b2ac" style="background:#285e61" title="Teal"></div>
+					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ed8936" style="background:#744210" title="Burnt Orange"></div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Gradient Presets</div>
+				<div class="pn-color-presets" id="pn-gradient-presets">
+					<div class="pn-color-swatch" data-primary="#1a365d" data-accent="#4299e1" data-secondary="#553c9a" style="background:linear-gradient(135deg,#1a365d,#553c9a)" title="Midnight Royal"></div>
+					<div class="pn-color-swatch" data-primary="#1a4731" data-accent="#48bb78" data-secondary="#2c5282" style="background:linear-gradient(135deg,#1a4731,#2c5282)" title="Forest Ocean"></div>
+					<div class="pn-color-swatch" data-primary="#742a2a" data-accent="#fc8181" data-secondary="#975a16" style="background:linear-gradient(135deg,#742a2a,#975a16)" title="Ember"></div>
+					<div class="pn-color-swatch" data-primary="#44337a" data-accent="#d6bcfa" data-secondary="#97266d" style="background:linear-gradient(135deg,#44337a,#97266d)" title="Mystic"></div>
+					<div class="pn-color-swatch" data-primary="#234e52" data-accent="#38b2ac" data-secondary="#276749" style="background:linear-gradient(135deg,#234e52,#276749)" title="Deep Forest"></div>
+					<div class="pn-color-swatch" data-primary="#1a202c" data-accent="#a0aec0" data-secondary="#2d3748" style="background:linear-gradient(135deg,#1a202c,#2d3748)" title="Charcoal"></div>
+					<div class="pn-color-swatch" data-primary="#2c5282" data-accent="#4299e1" data-secondary="#285e61" style="background:linear-gradient(135deg,#2c5282,#285e61)" title="Ocean Teal"></div>
+					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ecc94b" data-secondary="#9b2c2c" style="background:linear-gradient(135deg,#744210,#9b2c2c)" title="Autumn"></div>
+				</div>
+				<?php
+					$_pnPrideActiveKey = $_pnHeroGradientKey;
+				?>
+				<div class="pn-amtpride-section<?= $_pnPrideActiveKey ? ' pn-amtpride-open' : '' ?>" id="pn-amtpride-section">
+					<button type="button" class="pn-amtpride-toggle" id="pn-amtpride-toggle" aria-expanded="<?= $_pnPrideActiveKey ? 'true' : 'false' ?>" aria-controls="pn-amtpride-body">
+						<i class="fas fa-chevron-right pn-amtpride-chev"></i>
+						<span>Amtpride Nameplate</span>
+						<span class="pn-amtpride-active-badge" id="pn-amtpride-active-badge"<?= $_pnPrideActiveKey ? '' : ' style="display:none"' ?>>Active</span>
+					</button>
+					<div class="pn-amtpride-body" id="pn-amtpride-body">
+						<div class="pn-design-hint" style="margin-bottom:8px">Display a pride flag as your nameplate background. Overrides the custom colors below while active.</div>
+						<div class="pn-amtpride-presets" id="pn-amtpride-presets">
+							<?php foreach ($_pnPrideGradients as $_pgKey => $_pg):
+								$_pgCss = 'linear-gradient(90deg, ' . implode(', ', $_pg['colors']) . ')';
+							?>
+							<div class="pn-amtpride-swatch<?= $_pnPrideActiveKey === $_pgKey ? ' pn-selected' : '' ?>" data-pride="<?= htmlspecialchars($_pgKey) ?>" data-tip="<?= htmlspecialchars($_pg['name']) ?>" style="background:<?= $_pgCss ?>"></div>
+							<?php endforeach; ?>
+						</div>
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-amtpride-clear" style="margin-top:10px<?= $_pnPrideActiveKey ? '' : ';display:none' ?>"><i class="fas fa-times"></i> Go Back to Previous Color/Gradient</button>
+					</div>
+				</div>
+				<input type="hidden" id="pn-hero-gradient" value="<?= htmlspecialchars($_pnPrideActiveKey) ?>" />
+				<div class="pn-design-preview-label" style="margin-top:14px">Custom Colors</div>
+				<div class="pn-color-row">
+					<div class="pn-color-col">
+						<label class="pn-color-field-label">Primary (Hero Background)</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-primary" value="<?= htmlspecialchars(!empty($Player['ColorPrimary']) ? $Player['ColorPrimary'] : '#2c5282') ?>" />
+							<input type="text" id="pn-color-primary-hex" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" maxlength="7" />
+						</div>
+					</div>
+					<div class="pn-color-col">
+						<label class="pn-color-field-label">Accent (Tabs, Links, Stat Cards)</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-accent" value="<?= htmlspecialchars(!empty($Player['ColorAccent']) ? $Player['ColorAccent'] : '#4299e1') ?>" />
+							<input type="text" id="pn-color-accent-hex" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" maxlength="7" />
+						</div>
+					</div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Gradient (Optional)</div>
+				<div class="pn-color-row">
+					<div class="pn-color-col">
+						<label class="pn-color-field-label">Secondary Color</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-secondary" value="<?= htmlspecialchars(!empty($Player['ColorSecondary']) ? $Player['ColorSecondary'] : '#2c5282') ?>" />
+							<input type="text" id="pn-color-secondary-hex" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '') ?>" maxlength="7" placeholder="None" />
+						</div>
+					</div>
+					<div class="pn-color-col pn-gradient-toggle-col">
+						<label class="pn-gradient-toggle-label">
+							<input type="checkbox" id="pn-gradient-enabled" <?= !empty($Player['ColorSecondary']) ? 'checked' : '' ?> />
+							Enable gradient
+						</label>
+					</div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Heraldry Overlay Strength</div>
+				<div class="pn-design-hint" style="margin-bottom:8px">Controls how much your heraldry shows through the hero background.</div>
+				<div class="pn-overlay-options" style="display:flex;gap:8px">
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'low' ? ' pn-active' : '' ?>" data-overlay="low">Low</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'med' ? ' pn-active' : '' ?>" data-overlay="med">Medium</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'high' ? ' pn-active' : '' ?>" data-overlay="high">High</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'vignette' ? ' pn-active' : '' ?>" data-overlay="vignette">Vignette</button>
+				</div>
+				<input type="hidden" id="pn-hero-overlay" value="<?= $_pnOverlay ?>" />
+				<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-color-reset" style="margin-top:12px"><i class="fas fa-undo"></i> Reset to Default</button>
+			</div>
+
+			<!-- Name Panel -->
+			<div class="pn-design-panel" id="pn-design-name">
+				<div class="pn-design-hint" style="margin-bottom:14px">Add titles or positions you've earned to your display name.</div>
+				<div class="pn-name-parts">
+					<div class="pn-name-part">
+						<div class="pn-design-field">
+							<label>Prefix</label>
+							<select id="pn-name-prefix-select">
+								<option value="">None</option>
+								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
+								<option value="<?= htmlspecialchars($_pt['TitleName']) ?>"<?= ($Player['NamePrefix'] ?? '') === $_pt['TitleName'] ? ' selected' : '' ?>><?= htmlspecialchars($_pt['TitleName']) ?></option>
+								<?php endforeach; endif; ?>
+								<option value="__custom__"<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
+							</select>
+							<input type="text" id="pn-name-prefix-custom" placeholder="Syr, Lady, Archon, Captain, etc..." style="margin-top:6px;<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NamePrefix'] : '') ?>" />
+							<div class="pn-name-custom-warn" id="pn-name-prefix-warn" style="display:<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>"><i class="fas fa-exclamation-triangle"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
+						</div>
+					</div>
+					<div class="pn-name-core">
+						<div class="pn-design-field">
+							<label>Core Name</label>
+							<input type="text" id="pn-name-core" value="<?= htmlspecialchars($Player['Persona']) ?>" />
+						</div>
+					</div>
+					<div class="pn-name-comma-sep">
+						<button type="button" id="pn-suffix-comma-toggle" class="pn-comma-toggle<?= (int)($Player['SuffixComma'] ?? 0) ? ' pn-active' : '' ?>" title="Add comma before suffix">,</button>
+					</div>
+					<div class="pn-name-part">
+						<div class="pn-design-field">
+							<label>Suffix</label>
+							<select id="pn-name-suffix-select">
+								<option value="">None</option>
+								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
+								<option value="<?= htmlspecialchars($_pt['TitleName']) ?>"<?= ($Player['NameSuffix'] ?? '') === $_pt['TitleName'] ? ' selected' : '' ?>><?= htmlspecialchars($_pt['TitleName']) ?></option>
+								<?php endforeach; endif; ?>
+								<option value="__custom__"<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
+							</select>
+							<input type="text" id="pn-name-suffix-custom" placeholder="the Overpowered, the Realmstrider, Esquire" style="margin-top:6px;<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NameSuffix'] : '') ?>" />
+							<div class="pn-name-custom-warn" id="pn-name-suffix-warn" style="display:<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>"><i class="fas fa-exclamation-triangle"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
+						</div>
+					</div>
+				</div>
+				<div class="pn-name-constructed ork-font-sample" id="pn-name-preview">
+					<?php
+						$_npv = '';
+						if (!empty($Player['NamePrefix'])) $_npv .= htmlspecialchars($Player['NamePrefix']) . ' ';
+						$_npv .= htmlspecialchars($Player['Persona']);
+						if (!empty($Player['NameSuffix'])) {
+							$_npv .= ((int)($Player['SuffixComma'] ?? 0) ? ', ' : ' ') . htmlspecialchars($Player['NameSuffix']);
+						}
+						echo $_npv;
+					?>
+				</div>
+				<div class="pn-design-field" style="margin-top:16px">
+					<label>Pronunciation Guide</label>
+					<input type="text" id="pn-design-pronunciation" placeholder="Ex. veh-ree-lah nigh-born" value="<?= htmlspecialchars($Player['PronunciationGuide'] ?? '') ?>" maxlength="200" />
+					<div class="pn-design-hint">Help others pronounce your persona name correctly. Shown in parentheses under your name.</div>
+				</div>
+				<div class="pn-design-field" style="margin-top:16px">
+					<label>Name Font</label>
+					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header. If a user has simple or reading-friendly fonts enabled, this custom font will not be shown.</div>
+					<div class="pn-font-picker" id="pn-font-picker"></div>
+				</div>
+				<div class="pn-design-field" style="margin-top:14px">
+					<label class="pn-section-toggle-label">
+						<input type="checkbox" id="pn-name-shadow" <?= !empty($Player['NameShadow']) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Name shadow / outline
+						<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Adds a dark outline and shadow to your persona name, improving legibility over banner images or light-colored backgrounds. Applied automatically when an AmtPride gradient is active.</span></span>
+					</label>
+				</div>
+				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
+					<div class="pn-section-heading">Persona Display Controls</div>
+					<?php if ($_isRestricted): ?>
+					<div class="pn-design-hint" style="margin-bottom:10px;padding:8px 10px;background:#fef5e7;border:1px solid #f6ad55;border-radius:6px;color:#7b341e">
+						<i class="fas fa-lock" style="margin-right:4px"></i>
+						<strong>Restrict Mundane Name Visibility</strong> is on, so these toggles are disabled. While restricted, only kingdom officers and ORK admins can see your mundane name and email — even if these are checked.
+					</div>
+					<?php endif; ?>
+					<div class="pn-design-field" style="margin-bottom:10px">
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-first" <?= ((int)($Player['ShowMundaneFirst'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Mundane First Name
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user.</span></span>
+						</label>
+					</div>
+					<div class="pn-design-field" style="margin-bottom:10px">
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-last" <?= ((int)($Player['ShowMundaneLast'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Mundane Last Name
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user.</span></span>
+						</label>
+					</div>
+					<div class="pn-design-field">
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-email" <?= ((int)($Player['ShowEmail'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Email Address
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your email address. Set this to yes to show it to any logged-in user.</span></span>
+						</label>
+					</div>
+				</div>
+			</div>
+
+			<!-- Photo Focus Panel -->
+			<div class="pn-design-panel" id="pn-design-focus">
+				<div style="min-height:calc(60vh - 40px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+				<?php if ($Player['HasImage'] > 0): ?>
+				<div class="pn-design-hint" style="margin-bottom:10px">Move and resize the circle to set the focus area for your profile photo thumbnail.</div>
+				<div class="pn-focus-canvas-wrap">
+					<canvas id="pn-focus-canvas"></canvas>
+				</div>
+				<input type="hidden" id="pn-focus-x" value="<?= $_pnFocusX ?>" />
+				<input type="hidden" id="pn-focus-y" value="<?= $_pnFocusY ?>" />
+				<input type="hidden" id="pn-focus-size" value="<?= (int)($Player['PhotoFocusSize'] ?? 100) ?>" />
+				<?php else: ?>
+				<div class="pn-about-empty">
+					<i class="fas fa-camera" style="font-size:28px;color:#cbd5e0;margin-bottom:10px"></i>
+					<p>Upload a player photo first, then come back here to set the focus area.</p>
+				</div>
+				<?php endif; ?>
+				</div>
+			</div>
+
+			<!-- Milestones Panel -->
+			<div class="pn-design-panel" id="pn-design-milestones">
+				<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e2e8f0">
+					<label class="pn-section-toggle-label">
+						<input type="checkbox" id="pn-ms-compact" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Compact Milestones
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Move your milestones to a compact sidebar list (icon + mm/yy &ndash; title) instead of the large timeline at the bottom of About.</div>
+					<label class="pn-section-toggle-label" style="margin-top:12px">
+						<input type="checkbox" id="pn-ms-newest-first" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Show newest first
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Reverse the order so your most recent milestones appear at the top instead of the bottom.</div>
+				</div>
+				<div class="pn-design-hint" style="margin-bottom:14px">Choose which milestone types appear on your timeline. All types are shown by default.</div>
+				<div class="pn-ms-toggle-list" id="pn-ms-toggles">
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="first_signin" checked /><i class="fas fa-door-open"></i> First Sign-In</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="level6" checked /><i class="fas fa-hat-wizard"></i> Reached Level 6</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="master" checked /><i class="fas fa-star"></i> Earned Master</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="paragon" checked /><i class="fas fa-gem"></i> Earned Paragon</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="knight" checked /><i class="fas fa-shield-alt"></i> Earned Knight</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="title" checked /><i class="fas fa-crown"></i> Earned Title</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="became_associate" checked /><i class="fas fa-handshake"></i> Became Associate</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="took_associate" checked /><i class="fas fa-hand-holding-heart"></i> Took Associate</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="officer" checked /><i class="fas fa-landmark"></i> Served as Officer</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="custom" checked /><i class="fas fa-pen"></i> Custom Milestones</label>
+				</div>
+				<div class="pn-ms-custom-wrap">
+					<div class="pn-ms-custom-heading">Custom Milestones</div>
+					<div class="pn-warn-banner"><i class="fas fa-exclamation-triangle"></i>Custom milestones are a great way to celebrate meaningful moments in your Amtgard story. Be sure those milestones are accurate, especially as concerns things like awards, titles, and other recognitions.</div>
+					<div class="pn-ms-custom-list" id="pn-ms-custom-list"></div>
+					<div class="pn-ms-add-form" id="pn-ms-add-form">
+						<div class="pn-ms-add-row">
+							<div class="pn-ms-field">
+								<label>Description</label>
+								<input type="text" id="pn-ms-add-desc" maxlength="500" placeholder="What happened?" />
+							</div>
+							<div class="pn-ms-field">
+								<label>Date</label>
+								<input type="date" id="pn-ms-add-date" />
+							</div>
+							<div class="pn-ms-field" style="flex-basis:100%">
+								<label>Icon</label>
+								<div class="pn-ms-icon-grid" id="pn-ms-icon-grid">
+									<div class="pn-ms-icon-opt pn-ms-icon-active" data-icon="fa-star" title="Star"><i class="fas fa-star"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-trophy" title="Trophy"><i class="fas fa-trophy"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-heart" title="Heart"><i class="fas fa-heart"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-flag" title="Flag"><i class="fas fa-flag"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-bolt" title="Bolt"><i class="fas fa-bolt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-fire" title="Fire"><i class="fas fa-fire"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-book" title="Book"><i class="fas fa-book"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-users" title="Group"><i class="fas fa-users"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-map-marker-alt" title="Map Pin"><i class="fas fa-map-marker-alt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-campground" title="Camp"><i class="fas fa-campground"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-scroll" title="Scroll"><i class="fas fa-scroll"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-hammer" title="Hammer"><i class="fas fa-hammer"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-dragon" title="Dragon"><i class="fas fa-dragon"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-dice-d20" title="D20"><i class="fas fa-dice-d20"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-skull-crossbones" title="Skull"><i class="fas fa-skull-crossbones"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-fist-raised" title="Fist"><i class="fas fa-fist-raised"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-music" title="Music"><i class="fas fa-music"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-paint-brush" title="Paint"><i class="fas fa-paint-brush"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-door-open" title="Door"><i class="fas fa-door-open"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-shield-alt" title="Shield"><i class="fas fa-shield-alt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-gem" title="Gem"><i class="fas fa-gem"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-crown" title="Crown"><i class="fas fa-crown"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-landmark" title="Landmark"><i class="fas fa-landmark"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-handshake" title="Handshake"><i class="fas fa-handshake"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-hand-holding-heart" title="Hand &amp; Heart"><i class="fas fa-hand-holding-heart"></i></div>
+								</div>
+							</div>
+							<button class="pn-ms-add-btn" id="pn-ms-add-btn"><i class="fas fa-plus"></i> Add</button>
+						</div>
+						<div class="pn-ms-error" id="pn-ms-add-error"></div>
+					</div>
+				</div>
+			</div>
+
+			<?php if ($isKnight): ?>
+			<!-- Icons Panel (Knights only) -->
+			<div class="pn-design-panel" id="pn-design-icons">
+				<div class="pn-design-hint" style="margin-bottom:12px">Choose which belt icon appears next to your name in the hero.</div>
+				<div class="pn-dm-hint" style="margin-bottom:16px">
+					<i class="fas fa-info-circle"></i>
+					<div>If one or more of your Knighthoods is recorded as a Note or unreconciled award, the icon will not be able to show. Reach out to your Monarch or Prime Minister to reconcile the record so things can display as expected.</div>
+				</div>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="white" <?= $_pnBeltDisplay === 'white' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">Display White Belt</div>
+						<div class="pn-icons-option-desc">Show the generic white-belt icon that marks you as a belted knight. (Default.)</div>
+					</div>
+				</label>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="own" <?= $_pnBeltDisplay === 'own' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">Display My Belt<?= count($ownBelts) > 1 ? 's' : '' ?></div>
+						<div class="pn-icons-option-desc">Show your earned knighthood belt<?= count($ownBelts) > 1 ? 's' : '' ?>, oldest first.</div>
+					</div>
+				</label>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="none" <?= $_pnBeltDisplay === 'none' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">No Belt</div>
+						<div class="pn-icons-option-desc">Hide the belt icon entirely.</div>
+					</div>
+				</label>
+				<div class="pn-design-preview-label" style="margin-top:18px">Preview</div>
+				<div class="pn-icons-preview" id="pn-icons-preview"></div>
+				<script>
+					window.pnOwnBelts = <?= json_encode(array_map(function($b) { return array('src' => $b['Src'], 'name' => $b['Name']); }, $ownBelts)) ?>;
+					window.pnWhiteBeltUrl = <?= json_encode($beltIconUrl) ?>;
+				</script>
+			</div>
+			<?php endif; ?>
+		</div>
+
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-design-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-design-save"><i class="fas fa-save"></i> Save Changes</button>
+		</div>
+	</div>
+</div>
+
+<!-- Markdown Help Modal (shared by About and My Story fields) -->
+<div id="pn-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('pn-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#" onclick="return false">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>&bull; Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- =============================================
      Recommendation Modal
      ============================================= -->
 <?php if ($LoggedIn): ?>
 <div class="pn-overlay" id="pn-rec-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-award" style="margin-right:8px;color:#2c5282"></i>Recommend an Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i>Recommend an Award</h3>
 			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
 		<div class="pn-modal-body">
 			<div class="pn-form-error" id="pn-rec-error"><?= $recError ?></div>
 			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Player/profile/<?= $Player['MundaneId'] ?>/addrecommendation">
 				<div class="pn-rec-field">
-					<label for="pn-rec-award">Award <span style="color:#e53e3e">*</span></label>
+					<label for="pn-rec-award">Award <span class="required-indicator">*</span></label>
 					<select name="KingdomAwardId" id="pn-rec-award">
 						<option value="">Select award...</option>
 						<?= $AwardOptions ?>
@@ -2349,12 +3724,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div id="pn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 				</div>
 				<div class="pn-rec-field" id="pn-rec-rank-row" style="display:none">
-					<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; light blue = already held, green border = suggested; dark blue = selected</span></label>
+					<label>Rank <span id="pn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
 					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills"></div>
 					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
+				<div class="pn-form-error" id="pn-rec-warn" style="margin-top:4px"></div>
 				<div class="pn-rec-field">
-					<label for="pn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
+					<label for="pn-rec-reason">Reason <span class="required-indicator">*</span></label>
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
 				</div>
@@ -2368,20 +3744,43 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 </div>
 <?php endif; ?>
 
+<?php if ($LoggedIn): ?>
+<script>
+window.OrkRsCfg = {
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { if (typeof window.pnReloadRecs === 'function') window.pnReloadRecs(); else location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+
 <?php
-// Build KingdomAwardId => max rank held by this player (for ladder award pre-fill)
-$playerAwardRanks = array();
+// Build AwardId => max rank held by this player (for ladder award pre-fill),
+// and the set of held base AwardIds and KingdomAwardIds (for duplicate / Master-peerage detection)
+$playerAwardRanks          = array();
+$playerHeldAwardIds        = array();
+$playerHeldKingdomAwardIds = array();
 if (is_array($Details['Awards'])) {
 	foreach ($Details['Awards'] as $a) {
 		$aid  = (int)$a['AwardId'];
 		$rank = (int)$a['Rank'];
-		if ($aid > 0 && $rank > 0) {
-			if (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid]) {
+		if ($aid > 0) {
+			$playerHeldAwardIds[$aid] = true;
+			if ($rank > 0 && (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid])) {
 				$playerAwardRanks[$aid] = $rank;
 			}
 		}
+		$kaid = (int)($a['KingdomAwardId'] ?? 0);
+		if ($kaid > 0) {
+			$playerHeldKingdomAwardIds[$kaid] = true;
+		}
 	}
 }
+$playerHeldAwardIds        = array_keys($playerHeldAwardIds);
+$playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
+$ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterMap : [];
 ?>
 
 <!-- =============================================
@@ -2425,6 +3824,10 @@ var PnConfig = {
 	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
+	heldAwardIds:        <?= json_encode(array_values($playerHeldAwardIds)) ?>,
+	heldKingdomAwardIds: <?= json_encode($playerHeldKingdomAwardIds) ?>,
+	ladderMasterMap:     <?= json_encode($ladderMasterMap) ?>,
+	playerName:          <?= json_encode($Player['Persona'] ?? 'This player') ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
@@ -2434,20 +3837,1270 @@ var PnConfig = {
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
 	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
-	attendanceDates:  <?= json_encode(array_values(array_unique(array_filter(array_map(function($a) { return $a['Date'] ?? ''; }, is_array($Details['Attendance']) ? $Details['Attendance'] : []))))) ?>,
-	canEditAnyAttendance: <?= !empty($canEditAnyAttendance) ? 'true' : 'false' ?>,
+	attendanceDates:  [],  // populated async by PlayerAjax/attendance
+	canEditAnyAttendance: <?= !empty($canEditAdmin) ? 'true' : 'false' ?>,
+	customAwardId:      <?= (int)($CustomAwardId ?? 94) ?>,
+	customTitleAwardId: <?= (int)($CustomTitleAwardId ?? 0) ?>,
+	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
+	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
+	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
+	classToParagon:   <?= json_encode($ClassParagonMap) ?>,
+	classLevelThresholds: <?= json_encode(array_values($ClassLevelThresholds ?? [])) ?>,
+	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
+	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
+	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
+	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
+	aboutStory:     <?= json_encode($Player['AboutStory'] ?? '') ?>,
+	colorPrimary:   <?= json_encode($Player['ColorPrimary'] ?? '') ?>,
+	colorAccent:    <?= json_encode($Player['ColorAccent'] ?? '') ?>,
+	namePrefix:     <?= json_encode($Player['NamePrefix'] ?? '') ?>,
+	nameSuffix:     <?= json_encode($Player['NameSuffix'] ?? '') ?>,
+	photoFocusX:    <?= (int)($Player['PhotoFocusX'] ?? 50) ?>,
+	photoFocusY:    <?= (int)($Player['PhotoFocusY'] ?? 50) ?>,
+	photoFocusSize: <?= (int)($Player['PhotoFocusSize'] ?? 100) ?>,
+	hasImage:       <?= ($Player['HasImage'] > 0) ? 'true' : 'false' ?>,
+	imageUrl:       <?= json_encode($imageUrl) ?>,
+	playerTitles:   <?= json_encode($PlayerTitles ?? []) ?>,
+	milestoneConfig: <?= json_encode(json_decode($Player['MilestoneConfig'] ?? '{}', true) ?: new stdClass()) ?>,
+	customMilestones: <?= json_encode($CustomMilestones ?? []) ?>,
+	nameFont:        <?= json_encode($Player['NameFont'] ?? '') ?>,
+	viewerBasicFonts: <?= !empty($ViewerBasicFonts) ? 'true' : 'false' ?>,
+	viewerDyslexiaFonts: <?= !empty($ViewerDyslexiaFonts) ? 'true' : 'false' ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<?php if ($pnCanManageBanner): ?>
 <script>
-pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
-pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
-pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
-pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
-// 26-week sparkline
+var PnBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pnCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)$Player['MundaneId'] ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
+</script>
+<?php endif; ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<?php if ($pnCanManageBanner): ?>
+<!-- pn-banner-modal -->
+<div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
+	<div class="pn-img-modal" style="width:min(680px, 96vw)">
+		<div class="pn-img-modal-header">
+			<span class="pn-img-modal-title" id="pn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<button class="pn-img-close-btn" id="pn-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the player profile header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
+
+			<div class="pn-banner-wireframes">
+				<figure class="pn-banner-wireframe pn-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pn-wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="pn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pn-banner-wireframe pn-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pn-wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pn-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pn-banner-config">
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-show-logo" checked>
+					<span>Show Persona Avatar on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pn-upload-area" for="pn-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
+			<div class="pn-img-form-error" id="pn-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pn-btn pn-btn-outline" id="pn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pn-btn pn-btn-outline" id="pn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pn-btn pn-btn-outline pn-btn-danger" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="pn-field-hint">Upload an image to enable banner display settings.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pn-banner-position-wrap">
+				<canvas id="pn-banner-position-canvas" class="pn-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pn-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#pn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pn-posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Player Name goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="pn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="pn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pn-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pn-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pn-img-form-error" id="pn-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pn-btn pn-btn-outline" id="pn-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pn-btn pn-btn-white" id="pn-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;">Uploading…</p>
+		</div>
+		<div class="pn-img-modal-body" id="pn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script>
+// ---- Markdown rendering for About tab ----
 (function() {
+	var personaEl = document.getElementById('pn-about-persona-rendered');
+	var storyEl   = document.getElementById('pn-about-story-rendered');
+	function renderMd(raw) {
+		if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+			return DOMPurify.sanitize(marked.parse(raw || ''));
+		}
+		return (raw || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+	}
+	if (personaEl && PnConfig.aboutPersona) personaEl.innerHTML = renderMd(PnConfig.aboutPersona);
+	if (storyEl && PnConfig.aboutStory) storyEl.innerHTML = renderMd(PnConfig.aboutStory);
+})();
+
+// ---- Photo Focus (precise pixel positioning) ----
+// Mirrors the geometry used by the Design modal canvas (drawFocus): the visible
+// circle has diameter = (size/100) * min(imgW, imgH) in image-pixel space, with
+// its centre at (fx%, fy%) of the image. We scale the image so that diameter
+// fills min(boxW, boxH), then translate the focal point to the box centre.
+(function() {
+	var imgs = document.querySelectorAll('.pn-avatar img[data-focus-size]');
+	function applyFocus(img, animate) {
+		var fx = parseFloat(img.dataset.focusX);
+		var fy = parseFloat(img.dataset.focusY);
+		var fs = parseFloat(img.dataset.focusSize);
+		if (isNaN(fx) || isNaN(fy) || isNaN(fs)) return;
+		if (!img.naturalWidth || !img.naturalHeight) return;
+		var box = img.parentElement;
+		// clientWidth/Height exclude the avatar's border; absolutely positioned
+		// children measure from the padding edge, so we want content dimensions.
+		var cw = box.clientWidth || 102, ch = box.clientHeight || 102;
+		var iw = img.naturalWidth, ih = img.naturalHeight;
+		var cropDiameter = (Math.max(15, fs) / 100) * Math.min(iw, ih);
+		var scale = Math.min(cw, ch) / cropDiameter;
+		var rw = iw * scale, rh = ih * scale;
+		var fxPx = (fx / 100) * rw;
+		var fyPx = (fy / 100) * rh;
+		// Set transition BEFORE the geometry changes so resize/rotation eases
+		// into the new size instead of snapping. Initial load passes no flag,
+		// so the photo is placed instantly (no slide-in flash on page load).
+		img.style.transition = animate ? 'width .18s ease, height .18s ease, left .18s ease, top .18s ease' : 'none';
+		img.style.position = 'absolute';
+		img.style.width  = rw + 'px';
+		img.style.height = rh + 'px';
+		img.style.left   = (cw / 2 - fxPx) + 'px';
+		img.style.top    = (ch / 2 - fyPx) + 'px';
+		img.style.objectFit = '';
+		img.style.objectPosition = '';
+		// .heraldry-img in orkui.css sets max-width:179px / max-height:240px,
+		// which would otherwise clamp the zoomed-up image and break the crop.
+		img.style.maxWidth = 'none';
+		img.style.maxHeight = 'none';
+	}
+	imgs.forEach(function(img) {
+		if (img.complete && img.naturalWidth) applyFocus(img);
+		img.addEventListener('load', function() { applyFocus(img); });
+	});
+	// The geometry is computed from the avatar box's pixel size, which changes
+	// across the responsive breakpoint (60px mobile-portrait vs 110px desktop/
+	// landscape). Without recomputing on resize/rotation, the inline sizing
+	// stays pinned to the old box and the photo renders mis-sized/off-center.
+	var _focusTimer;
+	window.addEventListener('resize', function() {
+		clearTimeout(_focusTimer);
+		_focusTimer = setTimeout(function() {
+			imgs.forEach(function(img) { if (img.complete && img.naturalWidth) applyFocus(img, true); });
+		}, 150);
+	});
+})();
+
+// ---- Design My Profile Modal ----
+(function() {
+	if (!PnConfig.canEditDesign) return;
+	function gid(id) { return document.getElementById(id); }
+
+	// Open/Close
+	window.pnOpenDesignModal = function() {
+		gid('pn-design-error').style.display = 'none';
+		gid('pn-design-error').textContent = '';
+		gid('pn-design-overlay').classList.add('pn-open');
+		document.body.style.overflow = 'hidden';
+		initFocusTool();
+		if (typeof window.pnUpdateDesignTabIndicators === 'function') {
+			setTimeout(window.pnUpdateDesignTabIndicators, 50);
+		}
+	};
+	function closeDesign() {
+		gid('pn-design-overlay').classList.remove('pn-open');
+		document.body.style.overflow = '';
+	}
+	gid('pn-design-close-btn').addEventListener('click', closeDesign);
+	gid('pn-design-cancel').addEventListener('click', closeDesign);
+	// Close on overlay click — but only when the press *started* on the overlay.
+	// Otherwise drag-selecting text and releasing outside the modal closes it.
+	(function() {
+		var overlay = gid('pn-design-overlay');
+		var pressOnOverlay = false;
+		overlay.addEventListener('mousedown', function(e) { pressOnOverlay = (e.target === overlay); });
+		overlay.addEventListener('click', function(e) { if (pressOnOverlay && e.target === overlay) closeDesign(); pressOnOverlay = false; });
+	})();
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-design-overlay').classList.contains('pn-open')) closeDesign();
+	});
+
+	// Tab switching
+	function pnSwitchDesignPanel(name) {
+		document.querySelectorAll('.pn-design-tab').forEach(function(t) { t.classList.remove('pn-active'); });
+		document.querySelectorAll('.pn-design-panel').forEach(function(p) { p.classList.remove('pn-active'); });
+		var tabBtn = document.querySelector('.pn-design-tab[data-panel="' + name + '"]');
+		if (tabBtn) tabBtn.classList.add('pn-active');
+		var panel = gid('pn-design-' + name);
+		if (panel) panel.classList.add('pn-active');
+		if (name === 'focus') initFocusTool();
+	}
+	document.querySelectorAll('.pn-design-tab').forEach(function(tab) {
+		tab.addEventListener('click', function() { pnSwitchDesignPanel(tab.dataset.panel); });
+	});
+
+	// Mobile scroll indicators on the tab row
+	(function() {
+		var tabs = gid('pn-design-tabs');
+		var left = gid('pn-design-tabs-chev-left');
+		var right = gid('pn-design-tabs-chev-right');
+		if (!tabs || !left || !right) return;
+		function update() {
+			var mobile = window.matchMedia('(max-width:600px)').matches;
+			if (!mobile) {
+				left.classList.remove('pn-show');
+				right.classList.remove('pn-show');
+				return;
+			}
+			left.classList.toggle('pn-show', tabs.scrollLeft > 0);
+			right.classList.toggle('pn-show', tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 1);
+		}
+		tabs.addEventListener('scroll', update, { passive: true });
+		window.addEventListener('resize', update);
+		left.addEventListener('click', function() { tabs.scrollBy({ left: -Math.round(tabs.clientWidth * 0.7), behavior: 'smooth' }); });
+		right.addEventListener('click', function() { tabs.scrollBy({ left: Math.round(tabs.clientWidth * 0.7), behavior: 'smooth' }); });
+		window.pnUpdateDesignTabIndicators = update;
+		update();
+	})();
+
+	// About-tab edit pencil — open Design modal focused on the About panel
+	var aboutEditBtn = gid('pn-about-edit-btn');
+	if (aboutEditBtn) {
+		aboutEditBtn.addEventListener('click', function() {
+			window.pnOpenDesignModal();
+			pnSwitchDesignPanel('about');
+		});
+	}
+	// Welcome card jump links
+	document.querySelectorAll('.pn-welcome-card').forEach(function(card) {
+		card.addEventListener('click', function() {
+			var target = card.dataset.go;
+			if (target) pnSwitchDesignPanel(target);
+		});
+	});
+
+	// Markdown preview toggles
+	document.querySelectorAll('.pn-md-toggle-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var field = btn.dataset.field;
+			var target = btn.dataset.target;
+			var textareaId = 'pn-design-about-' + field;
+			var previewId  = textareaId + '-preview';
+			var textarea = gid(textareaId);
+			var preview  = gid(previewId);
+			btn.parentElement.querySelectorAll('.pn-md-toggle-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+			btn.classList.add('pn-active');
+			if (target === 'preview') {
+				textarea.style.display = 'none';
+				preview.style.display = '';
+				var raw = textarea.value;
+				if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+					preview.innerHTML = DOMPurify.sanitize(marked.parse(raw || ''));
+				} else {
+					preview.textContent = raw;
+				}
+			} else {
+				textarea.style.display = '';
+				preview.style.display = 'none';
+			}
+		});
+	});
+
+	// Quick Add snippets
+	var PN_QUICK_SNIPPETS = {
+		findmelinks: {
+			position: 'bottom',
+			text: [
+				'Find me on... (edit the following, add or remove links using the same format, then remove this instruction!)',
+				'- [Facebook](https://www.facebook.com/YOURFBHANDLE)',
+				'- [Instagram](https://www.instagram.com/YOURIGHANDLE)',
+				'- [Amtwiki](https://wiki.amtgard.com/YOURPROFILENAME)',
+				'- [Threads](https://www.threads.net/@YOURTHREADSHANDLE)',
+				'- [Bluesky](https://bsky.app/profile/YOURBSKYHANDLE)'
+			].join('\n')
+		},
+		signaturequote: {
+			position: 'top',
+			text: '> "This is my signature quote which I am going to update before saving."\n> -- ' + (PnConfig.playerPersona || 'Your Persona')
+		}
+	};
+	document.querySelectorAll('.pn-md-quick-btn[data-quickadd]').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var key = btn.dataset.quickadd;
+			var field = btn.dataset.targetField;
+			var snippet = PN_QUICK_SNIPPETS[key];
+			var ta = gid('pn-design-about-' + field);
+			if (!ta || !snippet) return;
+			// Make sure we're on the Write tab so the user sees the insertion.
+			var writeBtn = document.querySelector('.pn-md-toggle-btn[data-field="' + field + '"][data-target="edit"]');
+			if (writeBtn && !writeBtn.classList.contains('pn-active')) writeBtn.click();
+			var existing = ta.value;
+			var cursor;
+			if (snippet.position === 'top') {
+				var suffix = existing.length === 0 ? '' : (existing.startsWith('\n\n') ? '' : (existing.startsWith('\n') ? '\n' : '\n\n'));
+				ta.value = snippet.text + suffix + existing;
+				cursor = snippet.text.length;
+			} else {
+				var separator = existing.length === 0 ? '' : (existing.endsWith('\n\n') ? '' : (existing.endsWith('\n') ? '\n' : '\n\n'));
+				ta.value = existing + separator + snippet.text;
+				cursor = ta.value.length;
+			}
+			ta.focus();
+			ta.setSelectionRange(cursor, cursor);
+			ta.dispatchEvent(new Event('input', { bubbles: true }));
+		});
+	});
+
+	// Color presets
+	var allSwatches = document.querySelectorAll('.pn-color-swatch');
+	allSwatches.forEach(function(sw) {
+		sw.addEventListener('click', function() {
+			clearPrideFlag();
+			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
+			sw.classList.add('pn-selected');
+			gid('pn-color-primary').value = sw.dataset.primary;
+			gid('pn-color-primary-hex').value = sw.dataset.primary;
+			gid('pn-color-accent').value = sw.dataset.accent;
+			gid('pn-color-accent-hex').value = sw.dataset.accent;
+			if (sw.dataset.secondary) {
+				gid('pn-color-secondary').value = sw.dataset.secondary;
+				gid('pn-color-secondary-hex').value = sw.dataset.secondary;
+				gid('pn-gradient-enabled').checked = true;
+			} else {
+				gid('pn-color-secondary-hex').value = '';
+				gid('pn-gradient-enabled').checked = false;
+			}
+			updateColorPreview();
+		});
+	});
+
+	// Color picker sync
+	gid('pn-color-primary').addEventListener('input', function() { gid('pn-color-primary-hex').value = this.value; syncPresetSwatch(); updateColorPreview(); });
+	gid('pn-color-accent').addEventListener('input', function() { gid('pn-color-accent-hex').value = this.value; syncPresetSwatch(); updateColorPreview(); });
+	gid('pn-color-primary-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-primary').value = this.value; syncPresetSwatch(); updateColorPreview(); }
+	});
+	gid('pn-color-accent-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-accent').value = this.value; syncPresetSwatch(); updateColorPreview(); }
+	});
+	gid('pn-color-reset').addEventListener('click', function() {
+		clearPrideFlag();
+		gid('pn-color-primary').value = '#2c5282'; gid('pn-color-primary-hex').value = '#2c5282';
+		gid('pn-color-accent').value = '#4299e1'; gid('pn-color-accent-hex').value = '#4299e1';
+		gid('pn-color-secondary-hex').value = ''; gid('pn-color-secondary').value = '#2c5282';
+		gid('pn-gradient-enabled').checked = false;
+		gid('pn-hero-overlay').value = 'med';
+		document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+		document.querySelector('.pn-overlay-btn[data-overlay="med"]').classList.add('pn-active');
+		applyOverlayPreview('med');
+		syncPresetSwatch(); updateColorPreview();
+	});
+	// Secondary color / gradient toggle
+	gid('pn-color-secondary').addEventListener('input', function() { gid('pn-color-secondary-hex').value = this.value; updateColorPreview(); });
+	gid('pn-color-secondary-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-secondary').value = this.value; updateColorPreview(); }
+	});
+	gid('pn-gradient-enabled').addEventListener('change', function() {
+		if (this.checked && !gid('pn-color-secondary-hex').value) {
+			gid('pn-color-secondary-hex').value = gid('pn-color-accent').value;
+			gid('pn-color-secondary').value = gid('pn-color-accent').value;
+		}
+		updateColorPreview();
+	});
+	// Overlay strength buttons
+	document.querySelectorAll('.pn-overlay-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+			btn.classList.add('pn-active');
+			gid('pn-hero-overlay').value = btn.dataset.overlay;
+			applyOverlayPreview(btn.dataset.overlay);
+		});
+	});
+	function syncPresetSwatch() {
+		var p = gid('pn-color-primary').value.toLowerCase();
+		var a = gid('pn-color-accent').value.toLowerCase();
+		var s = (gid('pn-gradient-enabled').checked ? gid('pn-color-secondary').value : '').toLowerCase();
+		allSwatches.forEach(function(sw) {
+			var matchBase = sw.dataset.primary.toLowerCase() === p && sw.dataset.accent.toLowerCase() === a;
+			var swSec = (sw.dataset.secondary || '').toLowerCase();
+			sw.classList.toggle('pn-selected', matchBase && swSec === s);
+		});
+	}
+	var _pnPrideGradients = <?= json_encode($_pnPrideGradients, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+	function applyOverlayPreview(level) {
+		var preview = gid('pn-color-hero-preview');
+		if (!preview) return;
+		var opac = { low: '0.06', med: '0.12', high: '0.22', vignette: '0.12' }[level] || '0.12';
+		preview.style.setProperty('--pn-preview-overlay-opacity', opac);
+		preview.classList.toggle('pn-preview-vignette', level === 'vignette');
+	}
+	function updateColorPreview() {
+		var preview = gid('pn-color-hero-preview');
+		if (!preview) return;
+		var prideKey = gid('pn-hero-gradient') ? gid('pn-hero-gradient').value : '';
+		var prideActive = !!(prideKey && _pnPrideGradients[prideKey]);
+		preview.classList.toggle('pn-hero-pride', prideActive);
+		if (prideActive) {
+			preview.style.background = 'linear-gradient(90deg, ' + _pnPrideGradients[prideKey].colors.join(', ') + ')';
+			return;
+		}
+		var primary = gid('pn-color-primary').value;
+		var gradientOn = gid('pn-gradient-enabled').checked;
+		var secondary = gid('pn-color-secondary').value;
+		if (gradientOn && secondary) {
+			preview.style.background = 'linear-gradient(135deg, ' + primary + ', ' + secondary + ')';
+		} else {
+			preview.style.background = primary;
+		}
+	}
+	updateColorPreview();
+	syncPresetSwatch();
+	applyOverlayPreview(gid('pn-hero-overlay') ? gid('pn-hero-overlay').value : 'med');
+
+	// ---- Amtpride Nameplate ----
+	var prideSection = gid('pn-amtpride-section');
+	var prideToggle  = gid('pn-amtpride-toggle');
+	var prideBadge   = gid('pn-amtpride-active-badge');
+	var prideClear   = gid('pn-amtpride-clear');
+	var prideHidden  = gid('pn-hero-gradient');
+	var prideSwatches = document.querySelectorAll('.pn-amtpride-swatch');
+	var colorPanel   = document.getElementById('pn-design-colors');
+	// Function declarations are hoisted, so the regular swatch/reset handlers
+	// (which call clearPrideFlag) keep working even if the Amtpride DOM is
+	// missing — clearPrideFlag's own !prideHidden guard short-circuits cleanly.
+	function applyPrideFlag(key) {
+		if (!prideHidden || !prideBadge || !prideClear || !prideSection || !prideToggle) return;
+		prideHidden.value = key || '';
+		prideSwatches.forEach(function(sw) {
+			sw.classList.toggle('pn-selected', sw.dataset.pride === key);
+		});
+		if (key) {
+			prideBadge.style.display = '';
+			prideClear.style.display = '';
+			if (colorPanel) colorPanel.classList.add('pn-pride-active');
+			prideSection.classList.add('pn-amtpride-open');
+			prideToggle.setAttribute('aria-expanded', 'true');
+			// Deselect regular presets — they're no longer driving the hero.
+			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
+		} else {
+			prideBadge.style.display = 'none';
+			prideClear.style.display = 'none';
+			if (colorPanel) colorPanel.classList.remove('pn-pride-active');
+			// Going back to the previous color/gradient: the custom color inputs were
+			// never overwritten while the flag was active, so re-light whichever preset
+			// matches them (if any) to make the restored selection visible.
+			syncPresetSwatch();
+		}
+		updateColorPreview();
+	}
+	function clearPrideFlag() {
+		if (!prideHidden || !prideHidden.value) return;
+		// Reset the hidden field directly first — it is the source of truth the save
+		// reads. applyPrideFlag('') refreshes the badge/dim/preview too, but its guard
+		// can bail before clearing the value if any Amtpride sub-element is missing,
+		// which would otherwise let the stale pride key survive into the save.
+		prideHidden.value = '';
+		applyPrideFlag('');
+	}
+	// Listener wiring is gated on the Amtpride DOM existing. If a future feature
+	// flag hides the subsection, this block skips cleanly and the Name builder /
+	// save handler below still run.
+	if (prideSection && prideToggle && prideHidden && prideClear) {
+		prideSwatches.forEach(function(sw) {
+			sw.addEventListener('click', function() {
+				var key = sw.dataset.pride;
+				applyPrideFlag(prideHidden.value === key ? '' : key);
+			});
+		});
+		prideToggle.addEventListener('click', function() {
+			var open = prideSection.classList.toggle('pn-amtpride-open');
+			prideToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+		});
+		prideClear.addEventListener('click', function() { clearPrideFlag(); });
+		// Sync dim-state with the initial server-rendered selection.
+		if (prideHidden.value && colorPanel) colorPanel.classList.add('pn-pride-active');
+	}
+
+	// Name builder
+	var prefixSel = gid('pn-name-prefix-select');
+	var suffixSel = gid('pn-name-suffix-select');
+	var prefixCustom = gid('pn-name-prefix-custom');
+	var suffixCustom = gid('pn-name-suffix-custom');
+	var coreInput = gid('pn-name-core');
+	function updateNamePreview() {
+		var prefix = '';
+		if (prefixSel.value === '__custom__') { prefix = prefixCustom.value.trim(); }
+		else if (prefixSel.value) { prefix = prefixSel.value; }
+		var suffix = '';
+		if (suffixSel.value === '__custom__') { suffix = suffixCustom.value.trim(); }
+		else if (suffixSel.value) { suffix = suffixSel.value; }
+		var core = coreInput.value.trim() || PnConfig.playerPersona;
+		var useComma = gid('pn-suffix-comma-toggle').classList.contains('pn-active');
+		var full = '';
+		if (prefix) full += prefix + ' ';
+		full += core;
+		if (suffix) full += (useComma ? ', ' : ' ') + suffix;
+		gid('pn-name-preview').textContent = full;
+	}
+	gid('pn-suffix-comma-toggle').addEventListener('click', function() {
+		this.classList.toggle('pn-active');
+		updateNamePreview();
+	});
+	prefixSel.addEventListener('change', function() {
+		var isCustom = this.value === '__custom__';
+		prefixCustom.style.display = isCustom ? '' : 'none';
+		var warn = gid('pn-name-prefix-warn');
+		if (warn) warn.style.display = isCustom ? '' : 'none';
+		if (!isCustom) prefixCustom.value = '';
+		updateNamePreview();
+	});
+	suffixSel.addEventListener('change', function() {
+		var isCustom = this.value === '__custom__';
+		suffixCustom.style.display = isCustom ? '' : 'none';
+		var warn = gid('pn-name-suffix-warn');
+		if (warn) warn.style.display = isCustom ? '' : 'none';
+		if (!isCustom) suffixCustom.value = '';
+		updateNamePreview();
+	});
+	prefixCustom.addEventListener('input', updateNamePreview);
+	suffixCustom.addEventListener('input', updateNamePreview);
+	coreInput.addEventListener('input', updateNamePreview);
+
+	// Font picker
+	var PN_FONTS = [
+		{key:'',label:'Default',family:'inherit'},
+		{key:'Cinzel',label:'Cinzel',family:'Cinzel'},
+		{key:'Cinzel Decorative',label:'Cinzel Deco',family:"'Cinzel Decorative'"},
+		{key:'IM Fell English',label:'IM Fell English',family:"'IM Fell English'"},
+		{key:'UnifrakturMaguntia',label:'Unifraktur',family:'UnifrakturMaguntia'},
+		{key:'Metamorphous',label:'Metamorphous',family:'Metamorphous'},
+		{key:'Uncial Antiqua',label:'Uncial Antiqua',family:"'Uncial Antiqua'"},
+		{key:'Pirata One',label:'Pirata One',family:"'Pirata One'"},
+		{key:'Almendra',label:'Almendra',family:'Almendra'},
+		{key:'Pinyon Script',label:'Pinyon Script',family:"'Pinyon Script'"},
+		{key:'Great Vibes',label:'Great Vibes',family:"'Great Vibes'"},
+	];
+	var pnSelectedFont = PnConfig.nameFont || '';
+	var pnLoadedFonts = {};
+	function pnLoadFont(key) {
+		if (!key || pnLoadedFonts[key]) return;
+		var link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = 'https://fonts.googleapis.com/css2?family=' + key.replace(/ /g, '+') + '&display=swap';
+		document.head.appendChild(link);
+		pnLoadedFonts[key] = true;
+	}
+	function pnApplyFont(key) {
+		var f = null;
+		for (var _i = 0; _i < PN_FONTS.length; _i++) { if (PN_FONTS[_i].key === key) { f = PN_FONTS[_i]; break; } }
+		if (!f) f = PN_FONTS[0];
+		// In-modal previews (.ork-font-sample) always show the chosen font so the
+		// designer can see what *other* viewers will experience. The actual hero
+		// honors the viewer's own basic/dyslexia accessibility preferences.
+		var heroFam = (PnConfig.viewerBasicFonts || PnConfig.viewerDyslexiaFonts) ? 'inherit' : f.family;
+		var preview = gid('pn-name-preview');
+		var heroPreview = document.querySelector('.pn-hero-preview-name');
+		var heroName = gid('pn-hero-persona');
+		// setProperty with 'important' is needed so inline styles win over the
+		// server-rendered <style>...!important rule that exists once a name font
+		// has been saved (see template line ~225).
+		if (preview)     preview.style.setProperty('font-family', f.family, 'important');
+		if (heroPreview) heroPreview.style.setProperty('font-family', f.family, 'important');
+		if (heroName)    heroName.style.setProperty('font-family', heroFam, 'important');
+	}
+	function pnRenderFontPicker() {
+		var container = gid('pn-font-picker');
+		if (!container) return;
+		var sample = (PnConfig.namePrefix ? PnConfig.namePrefix + ' ' : '') + PnConfig.playerPersona;
+		var html = '';
+		for (var _j = 0; _j < PN_FONTS.length; _j++) {
+			var _f = PN_FONTS[_j];
+			var _active = _f.key === pnSelectedFont;
+			html += '<div class="pn-font-card' + (_active ? ' pn-active' : '') + '" data-font-key="' + escHtml(_f.key) + '">';
+			html += '<div class="pn-font-card-sample ork-font-sample" style="font-family:' + _f.family + '">' + escHtml(sample) + '</div>';
+			html += '<div class="pn-font-card-label">' + escHtml(_f.label) + '</div>';
+			html += '</div>';
+		}
+		container.innerHTML = html;
+		for (var _k = 1; _k < PN_FONTS.length; _k++) pnLoadFont(PN_FONTS[_k].key);
+		container.addEventListener('click', function(e) {
+			var card = e.target.closest('.pn-font-card');
+			if (!card) return;
+			pnSelectedFont = card.getAttribute('data-font-key');
+			var cards = container.querySelectorAll('.pn-font-card');
+			for (var _m = 0; _m < cards.length; _m++) cards[_m].classList.toggle('pn-active', cards[_m] === card);
+			if (pnSelectedFont) pnLoadFont(pnSelectedFont);
+			pnApplyFont(pnSelectedFont);
+		});
+	}
+	pnRenderFontPicker();
+	var nameShadowCb = gid('pn-name-shadow');
+	var heroEl = document.querySelector('.pn-hero');
+	if (nameShadowCb && heroEl) {
+		nameShadowCb.addEventListener('change', function() {
+			heroEl.classList.toggle('pn-hero-name-shadow', nameShadowCb.checked);
+		});
+	}
+	if (pnSelectedFont) { pnLoadFont(pnSelectedFont); pnApplyFont(pnSelectedFont); }
+	// Re-render after all fonts land — fonts.ready resolves too early (before downloads finish).
+	// fonts.load() per family triggers downloads and resolves only when each is paint-ready.
+	if (document.fonts && document.fonts.load) {
+		Promise.all([
+			document.fonts.load('16px Cinzel'),
+			document.fonts.load('16px "Cinzel Decorative"'),
+			document.fonts.load('16px "IM Fell English"'),
+			document.fonts.load('16px UnifrakturMaguntia'),
+			document.fonts.load('16px Metamorphous'),
+			document.fonts.load('16px "Uncial Antiqua"'),
+			document.fonts.load('16px "Pirata One"'),
+			document.fonts.load('16px Almendra'),
+			document.fonts.load("16px 'Pinyon Script'"),
+			document.fonts.load("16px 'Great Vibes'"),
+		]).then(function() { pnRenderFontPicker(); });
+	}
+
+	// Photo focus tool
+	var focusImg = null, focusCanvas = null, focusCtx = null;
+	var focusCircle = { x: PnConfig.photoFocusX, y: PnConfig.photoFocusY, size: PnConfig.photoFocusSize };
+	var focusScale = 1, focusImgW = 0, focusImgH = 0;
+	var focusInited = false;
+
+	function initFocusTool() {
+		if (focusInited || !PnConfig.hasImage) return;
+		focusCanvas = gid('pn-focus-canvas');
+		if (!focusCanvas) return;
+		focusCtx = focusCanvas.getContext('2d');
+		var img = new Image();
+		img.crossOrigin = 'anonymous';
+		img.onload = function() {
+			focusImg = img;
+			focusImgW = img.width; focusImgH = img.height;
+			var maxW = Math.min(400, window.innerWidth - 120);
+			var maxH = Math.min(320, window.innerHeight - 340);
+			focusScale = Math.min(maxW / img.width, maxH / img.height, 1);
+			focusCanvas.width = Math.round(img.width * focusScale);
+			focusCanvas.height = Math.round(img.height * focusScale);
+			drawFocus();
+			bindFocusEvents();
+			focusInited = true;
+		};
+		img.src = PnConfig.imageUrl;
+	}
+
+	function drawFocus() {
+		if (!focusImg || !focusCtx) return;
+		var cw = focusCanvas.width, ch = focusCanvas.height;
+		focusCtx.clearRect(0, 0, cw, ch);
+		focusCtx.drawImage(focusImg, 0, 0, cw, ch);
+		// Dim everything
+		focusCtx.fillStyle = 'rgba(0,0,0,0.55)';
+		focusCtx.fillRect(0, 0, cw, ch);
+		// Cut out circle
+		var cx = focusCircle.x / 100 * cw;
+		var cy = focusCircle.y / 100 * ch;
+		var radius = focusCircle.size / 100 * Math.min(cw, ch) / 2;
+		radius = Math.max(20, Math.min(radius, Math.min(cw, ch) / 2));
+		focusCtx.save();
+		focusCtx.beginPath();
+		focusCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+		focusCtx.clip();
+		focusCtx.drawImage(focusImg, 0, 0, cw, ch);
+		focusCtx.restore();
+		// Circle border
+		focusCtx.beginPath();
+		focusCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+		focusCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+		focusCtx.lineWidth = 2;
+		focusCtx.stroke();
+		// Resize handle at bottom-right of circle
+		var hx = cx + radius * 0.707, hy = cy + radius * 0.707;
+		focusCtx.fillStyle = '#fff';
+		focusCtx.beginPath();
+		focusCtx.arc(hx, hy, 6, 0, Math.PI * 2);
+		focusCtx.fill();
+		focusCtx.strokeStyle = 'rgba(0,0,0,0.3)';
+		focusCtx.lineWidth = 1;
+		focusCtx.stroke();
+	}
+
+	function bindFocusEvents() {
+		var dragging = null;
+		function getPos(e) {
+			var r = focusCanvas.getBoundingClientRect();
+			var src = e.touches ? e.touches[0] : e;
+			return { x: src.clientX - r.left, y: src.clientY - r.top };
+		}
+		function onDown(e) {
+			e.preventDefault();
+			var pos = getPos(e);
+			var cw = focusCanvas.width, ch = focusCanvas.height;
+			var cx = focusCircle.x / 100 * cw, cy = focusCircle.y / 100 * ch;
+			var radius = focusCircle.size / 100 * Math.min(cw, ch) / 2;
+			// Check resize handle
+			var hx = cx + radius * 0.707, hy = cy + radius * 0.707;
+			if (Math.hypot(pos.x - hx, pos.y - hy) < 12) {
+				dragging = { type: 'resize', startSize: focusCircle.size, startDist: Math.hypot(pos.x - cx, pos.y - cy) };
+				return;
+			}
+			// Check if inside circle (move)
+			if (Math.hypot(pos.x - cx, pos.y - cy) <= radius) {
+				dragging = { type: 'move', ox: focusCircle.x, oy: focusCircle.y, sx: pos.x, sy: pos.y };
+			}
+		}
+		function onMove(e) {
+			if (!dragging) return;
+			var pos = getPos(e);
+			var cw = focusCanvas.width, ch = focusCanvas.height;
+			if (dragging.type === 'move') {
+				var dx = (pos.x - dragging.sx) / cw * 100;
+				var dy = (pos.y - dragging.sy) / ch * 100;
+				focusCircle.x = Math.max(0, Math.min(100, dragging.ox + dx));
+				focusCircle.y = Math.max(0, Math.min(100, dragging.oy + dy));
+			} else if (dragging.type === 'resize') {
+				var cx = focusCircle.x / 100 * cw, cy = focusCircle.y / 100 * ch;
+				var dist = Math.hypot(pos.x - cx, pos.y - cy);
+				var newSize = dragging.startSize * (dist / dragging.startDist);
+				focusCircle.size = Math.max(15, Math.min(100, newSize));
+			}
+			gid('pn-focus-x').value = Math.round(focusCircle.x);
+			gid('pn-focus-y').value = Math.round(focusCircle.y);
+			gid('pn-focus-size').value = Math.round(focusCircle.size);
+			drawFocus();
+		}
+		function onUp() { dragging = null; }
+		focusCanvas.addEventListener('mousedown', onDown);
+		focusCanvas.addEventListener('touchstart', onDown, { passive: false });
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('touchmove', onMove, { passive: false });
+		window.addEventListener('mouseup', onUp);
+		window.addEventListener('touchend', onUp);
+	}
+
+	// About-section character limit + counter (counter only shows at >= 9,000 chars).
+	(function() {
+		var ABOUT_FIELDS = [
+			{ id: 'pn-design-about-persona', cid: 'pn-design-about-persona-charcount' },
+			{ id: 'pn-design-about-story',   cid: 'pn-design-about-story-charcount' }
+		];
+		var ABOUT_LIMIT = 10000;
+		var ABOUT_SHOW_AT = 9000;
+		ABOUT_FIELDS.forEach(function(f) {
+			var ta = gid(f.id);
+			var cc = gid(f.cid);
+			if (!ta || !cc) return;
+			function update() {
+				var n = ta.value.length;
+				if (n < ABOUT_SHOW_AT) {
+					cc.style.display = 'none';
+					cc.classList.remove('pn-char-warn');
+					return;
+				}
+				cc.style.display = '';
+				if (n > ABOUT_LIMIT) {
+					cc.textContent = (n - ABOUT_LIMIT).toLocaleString() + ' characters over the 10,000-character limit';
+					cc.classList.add('pn-char-warn');
+				} else {
+					cc.textContent = (ABOUT_LIMIT - n).toLocaleString() + ' characters remaining';
+					cc.classList.remove('pn-char-warn');
+				}
+			}
+			ta.addEventListener('input', update);
+			update();
+		});
+	})();
+
+	// Save
+	gid('pn-design-save').addEventListener('click', function() {
+		var btn = this;
+		btn.disabled = true;
+		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+		var errEl = gid('pn-design-error');
+		errEl.style.display = 'none';
+		// Clear any inline profanity errors from a prior save attempt.
+		document.querySelectorAll('.pn-profanity-inline-err').forEach(function(el) { el.remove(); });
+
+		var prefix = '';
+		if (prefixSel.value === '__custom__') prefix = prefixCustom.value.trim();
+		else if (prefixSel.value) prefix = prefixSel.value;
+		var suffix = '';
+		if (suffixSel.value === '__custom__') suffix = suffixCustom.value.trim();
+		else if (suffixSel.value) suffix = suffixSel.value;
+		var coreName = coreInput.value.trim();
+		if (!coreName) {
+			errEl.textContent = 'Core name is required.';
+			errEl.style.display = '';
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		var ABOUT_SAVE_LIMIT = 10000;
+		var aboutPersonaVal = gid('pn-design-about-persona').value;
+		var aboutStoryVal   = gid('pn-design-about-story').value;
+		if (aboutPersonaVal.length > ABOUT_SAVE_LIMIT) {
+			pnShowProfanityFieldError('AboutPersona',
+				'Your About section is limited to ' + ABOUT_SAVE_LIMIT.toLocaleString() + ' characters. It is currently ' + aboutPersonaVal.length.toLocaleString() + ' characters — trim it before saving.');
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		if (aboutStoryVal.length > ABOUT_SAVE_LIMIT) {
+			pnShowProfanityFieldError('AboutStory',
+				'Your My Story section is limited to ' + ABOUT_SAVE_LIMIT.toLocaleString() + ' characters. It is currently ' + aboutStoryVal.length.toLocaleString() + ' characters — trim it before saving.');
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		var fd = new FormData();
+		fd.append('AboutPersona', gid('pn-design-about-persona').value);
+		fd.append('AboutStory', gid('pn-design-about-story').value);
+		fd.append('ColorPrimary', gid('pn-color-primary').value);
+		fd.append('ColorAccent', gid('pn-color-accent').value);
+		fd.append('ColorSecondary', gid('pn-gradient-enabled').checked ? gid('pn-color-secondary').value : '');
+		fd.append('HeroGradient', (gid('pn-hero-gradient') && gid('pn-hero-gradient').value) || '');
+		fd.append('HeroOverlay', gid('pn-hero-overlay').value);
+		fd.append('NamePrefix', prefix);
+		fd.append('NameSuffix', suffix);
+		fd.append('SuffixComma', gid('pn-suffix-comma-toggle').classList.contains('pn-active') ? 1 : 0);
+		fd.append('Persona', coreName);
+		fd.append('PhotoFocusX', gid('pn-focus-x') ? gid('pn-focus-x').value : PnConfig.photoFocusX);
+		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);
+		fd.append('PhotoFocusSize', gid('pn-focus-size') ? gid('pn-focus-size').value : PnConfig.photoFocusSize);
+		fd.append('ShowBeltline', gid('pn-design-show-beltline').checked ? 1 : 0);
+		fd.append('ShowFeastPrefs', gid('pn-design-show-feast-prefs') && gid('pn-design-show-feast-prefs').checked ? 1 : 0);
+		fd.append('PronunciationGuide', gid('pn-design-pronunciation').value);
+		fd.append('ShowMundaneFirst', gid('pn-design-show-first').checked ? 1 : 0);
+		fd.append('ShowMundaneLast', gid('pn-design-show-last').checked ? 1 : 0);
+		fd.append('ShowEmail', gid('pn-design-show-email').checked ? 1 : 0);
+
+		// Milestone config
+		var msConfig = {};
+		var msToggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
+		for (var i = 0; i < msToggles.length; i++) {
+			msConfig[msToggles[i].getAttribute('data-ms-type')] = msToggles[i].checked ? 1 : 0;
+		}
+		var compactEl = gid('pn-ms-compact');
+		msConfig['compact_milestones'] = (compactEl && compactEl.checked) ? 1 : 0;
+		var newestFirstEl = gid('pn-ms-newest-first');
+		msConfig['newest_first'] = (newestFirstEl && newestFirstEl.checked) ? 1 : 0;
+		fd.append('MilestoneConfig', JSON.stringify(msConfig));
+			fd.append('NameFont', pnSelectedFont || '');
+
+		fd.append('NameShadow', gid('pn-name-shadow') && gid('pn-name-shadow').checked ? 1 : 0);
+
+		// Belt display (Icons tab — Knights only; radios aren't rendered for non-knights)
+		var beltRadios = document.querySelectorAll('input[name="pn-design-belt-display"]');
+		for (var bi = 0; bi < beltRadios.length; bi++) {
+			if (beltRadios[bi].checked) { fd.append('BeltDisplay', beltRadios[bi].value); break; }
+		}
+
+		// Inline-render a profanity rejection above the offending field, switching
+		// the design modal to that field's tab if needed. Falls back to the
+		// generic top-of-modal error slot for other failure types.
+		function pnShowProfanityFieldError(fieldName, msg) {
+			var fieldMap = {
+				'Persona':            { fieldId: 'pn-name-core',              tabPanel: 'name'  },
+				'AboutPersona':       { fieldId: 'pn-design-about-persona',   tabPanel: 'about' },
+				'AboutStory':         { fieldId: 'pn-design-about-story',     tabPanel: 'about' },
+				'NamePrefix':         { fieldId: 'pn-name-prefix-custom',     tabPanel: 'name'  },
+				'NameSuffix':         { fieldId: 'pn-name-suffix-custom',     tabPanel: 'name'  },
+				'PronunciationGuide': { fieldId: 'pn-design-pronunciation',   tabPanel: 'name'  },
+			};
+			var spec = fieldMap[fieldName];
+			if (!spec) return false;
+			var fieldEl = document.getElementById(spec.fieldId);
+			if (!fieldEl) return false;
+			if (spec.tabPanel) {
+				var tabBtn = document.querySelector('.pn-design-tab[data-panel="' + spec.tabPanel + '"]');
+				if (tabBtn) tabBtn.click();
+			}
+			// Custom prefix/suffix inputs are hidden when the user picked a canonical
+			// dropdown option — but if the server flagged the field, the offending text
+			// is in that hidden input, so reveal it so the inline error has somewhere
+			// visible to attach.
+			if (fieldEl.style && fieldEl.style.display === 'none') {
+				fieldEl.style.display = '';
+			}
+			var errId = spec.fieldId + '-profanity-err';
+			var err = document.getElementById(errId);
+			if (!err) {
+				err = document.createElement('div');
+				err.id = errId;
+				err.className = 'pn-form-error pn-profanity-inline-err';
+				err.style.marginBottom = '8px';
+				fieldEl.parentNode.insertBefore(err, fieldEl);
+			}
+			err.textContent = msg;
+			err.style.display = 'block';
+			setTimeout(function() {
+				err.scrollIntoView({behavior: 'smooth', block: 'start'});
+			}, 50);
+			return true;
+		}
+
+		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					window.location.reload();
+				} else {
+					var msg = (result && result.error) ? result.error : 'Save failed.';
+					var shown = false;
+					if (result && result.field) {
+						shown = pnShowProfanityFieldError(result.field, msg);
+					}
+					if (!shown) {
+						errEl.textContent = msg;
+						errEl.style.display = 'block';
+					}
+					btn.disabled = false;
+					btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+				}
+			})
+			.catch(function(err) {
+				errEl.textContent = 'Request failed: ' + err.message;
+				errEl.style.display = 'block';
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			});
+	});
+})();
+
+// ---- Icons tab (Design My Profile) — live preview ----
+(function() {
+	var preview = document.getElementById('pn-icons-preview');
+	if (!preview) return; // non-knight, panel not rendered
+	var radios = document.querySelectorAll('input[name="pn-design-belt-display"]');
+	function render() {
+		var val = 'white';
+		for (var i = 0; i < radios.length; i++) { if (radios[i].checked) { val = radios[i].value; break; } }
+		preview.innerHTML = '';
+		if (val === 'white') {
+			var img = document.createElement('img');
+			img.src = window.pnWhiteBeltUrl;
+			img.alt = 'White Belt';
+			preview.appendChild(img);
+		} else if (val === 'own') {
+			var belts = window.pnOwnBelts || [];
+			if (!belts.length) {
+				var msg = document.createElement('span');
+				msg.className = 'pn-icons-preview-empty';
+				msg.textContent = 'No reconciled knighthood awards found.';
+				preview.appendChild(msg);
+			} else {
+				for (var j = 0; j < belts.length; j++) {
+					var bi = document.createElement('img');
+					bi.src = belts[j].src;
+					bi.alt = belts[j].name || '';
+					bi.title = belts[j].name || '';
+					preview.appendChild(bi);
+				}
+			}
+		} else {
+			var none = document.createElement('span');
+			none.className = 'pn-icons-preview-empty';
+			none.textContent = 'No belt icon';
+			preview.appendChild(none);
+		}
+	}
+	for (var i = 0; i < radios.length; i++) { radios[i].addEventListener('change', render); }
+	render();
+})();
+
+// ---- Milestones Config (Design My Profile) ----
+(function() {
+	if (!PnConfig.canEditDesign) return;
+
+	// Init toggles from saved config
+	var cfg = PnConfig.milestoneConfig || {};
+	var compactToggle = document.getElementById('pn-ms-compact');
+	if (compactToggle) compactToggle.checked = !!cfg['compact_milestones'];
+	var newestFirstToggle = document.getElementById('pn-ms-newest-first');
+	if (newestFirstToggle) newestFirstToggle.checked = !!cfg['newest_first'];
+	var toggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
+	for (var i = 0; i < toggles.length; i++) {
+		var msType = toggles[i].getAttribute('data-ms-type');
+		// Default ON if not in config
+		if (typeof cfg[msType] !== 'undefined' && !cfg[msType]) {
+			toggles[i].checked = false;
+		}
+	}
+
+	// Render custom milestones list
+	var customList = document.getElementById('pn-ms-custom-list');
+	var customData = PnConfig.customMilestones || [];
+	function renderCustomList() {
+		if (!customList) return;
+		var newestFirst = !!(newestFirstToggle && newestFirstToggle.checked);
+		customData.sort(function(a, b) {
+			var ad = a.MilestoneDate || '', bd = b.MilestoneDate || '';
+			return newestFirst ? bd.localeCompare(ad) : ad.localeCompare(bd);
+		});
+		if (customData.length === 0) {
+			customList.innerHTML = '<div style="font-size:12px;color:#a0aec0;padding:8px 0">No custom milestones yet.</div>';
+			return;
+		}
+		var html = '';
+		for (var i = 0; i < customData.length; i++) {
+			var m = customData[i];
+			var dateStr = m.MilestoneDate || '';
+			if (dateStr && dateStr !== '0000-00-00') {
+				var d = new Date(dateStr + 'T00:00:00');
+				dateStr = d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+			}
+			html += '<div class="pn-ms-custom-row" data-ms-id="' + m.MilestoneId + '">'
+				+ '<i class="fas ' + (m.Icon || 'fa-star').replace(/[^a-z0-9-]/g,'') + '"></i>'
+				+ '<span class="pn-ms-custom-desc">' + (m.Description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>'
+				+ '<span class="pn-ms-custom-date">' + dateStr + '</span>'
+				+ '<span class="pn-ms-custom-actions">'
+				+ '<button title="Delete" onclick="pnDeleteMilestone(' + m.MilestoneId + ')"><i class="fas fa-trash-alt"></i></button>'
+				+ '</span></div>';
+		}
+		customList.innerHTML = html;
+	}
+	renderCustomList();
+	if (newestFirstToggle) newestFirstToggle.addEventListener('change', renderCustomList);
+
+	// Icon grid selection
+	var iconGrid = document.getElementById('pn-ms-icon-grid');
+	var selectedIcon = 'fa-star';
+	if (iconGrid) {
+		iconGrid.addEventListener('click', function(e) {
+			var opt = e.target.closest('.pn-ms-icon-opt');
+			if (!opt) return;
+			var prev = iconGrid.querySelector('.pn-ms-icon-active');
+			if (prev) prev.classList.remove('pn-ms-icon-active');
+			opt.classList.add('pn-ms-icon-active');
+			selectedIcon = opt.getAttribute('data-icon');
+		});
+	}
+
+	// Add custom milestone
+	var addBtn = document.getElementById('pn-ms-add-btn');
+	var addErr = document.getElementById('pn-ms-add-error');
+	if (addBtn) {
+		addBtn.addEventListener('click', function() {
+			var desc = document.getElementById('pn-ms-add-desc').value.trim();
+			var dt   = document.getElementById('pn-ms-add-date').value;
+			var icon = selectedIcon;
+			addErr.style.display = 'none';
+			if (!desc) { addErr.textContent = 'Description is required.'; addErr.style.display = ''; return; }
+			if (!dt)   { addErr.textContent = 'Date is required.'; addErr.style.display = ''; return; }
+			addBtn.disabled = true;
+			addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+			var fd = new FormData();
+			fd.append('Description', desc);
+			fd.append('MilestoneDate', dt);
+			fd.append('Icon', icon);
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addmilestone', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(result) {
+					if (result && result.status === 0) {
+						customData.push({ MilestoneId: result.milestoneId, Icon: icon, Description: desc, MilestoneDate: dt });
+						renderCustomList();
+						document.getElementById('pn-ms-add-desc').value = '';
+						document.getElementById('pn-ms-add-date').value = '';
+						var prevIcon = iconGrid.querySelector('.pn-ms-icon-active');
+						if (prevIcon) prevIcon.classList.remove('pn-ms-icon-active');
+						var defIcon = iconGrid.querySelector('[data-icon="fa-star"]');
+						if (defIcon) defIcon.classList.add('pn-ms-icon-active');
+						selectedIcon = 'fa-star';
+					} else {
+						addErr.textContent = (result && result.error) || 'Failed to add milestone.';
+						addErr.style.display = '';
+					}
+					addBtn.disabled = false;
+					addBtn.innerHTML = '<i class="fas fa-plus"></i> Add';
+				})
+				.catch(function(e) {
+					addErr.textContent = 'Request failed.';
+					addErr.style.display = '';
+					addBtn.disabled = false;
+					addBtn.innerHTML = '<i class="fas fa-plus"></i> Add';
+				});
+		});
+	}
+
+	// Delete custom milestone
+	window.pnDeleteMilestone = function(msId) {
+		var ms = customData.find(function(m) { return m.MilestoneId === msId; });
+		var preview = '';
+		if (ms) {
+			var dateStr = ms.MilestoneDate || '';
+			var humanDate = dateStr;
+			if (dateStr && dateStr !== '0000-00-00') {
+				var d = new Date(dateStr + 'T00:00:00');
+				if (!isNaN(d.getTime())) humanDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+			}
+			preview = humanDate + ' — ' + (ms.Description || '');
+		}
+		pnConfirm({
+			title:       'Delete Milestone',
+			message:     preview ? ('Delete this custom milestone — ' + preview + '?') : 'Delete this custom milestone?',
+			confirmText: 'Delete',
+			danger:      true
+		}, function() {
+			var fd = new FormData();
+			fd.append('MilestoneId', msId);
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletemilestone', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(result) {
+					if (result && result.status === 0) {
+						customData = customData.filter(function(m) { return m.MilestoneId !== msId; });
+						renderCustomList();
+					} else {
+						alert((result && result.error) || 'Failed to delete milestone.');
+					}
+				})
+				.catch(function() { alert('Request failed.'); });
+		});
+	};
+})();
+
+// 26-week sparkline (called on load and again after attendance AJAX)
+function pnRenderSparkline() {
 	var el = document.getElementById('pna-sparkline');
 	if (!el) return;
 	var dates = (typeof PnConfig !== 'undefined' && PnConfig.attendanceDates) ? PnConfig.attendanceDates : [];
@@ -2476,8 +5129,1445 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 	el.innerHTML = html;
 	var mel = document.getElementById('pna-spark-months');
 	if (mel) mel.innerHTML = mhtml;
+}
+pnRenderSparkline();
+
+<?php if ($isOwnProfile): ?>
+// ---- Dietary Preferences Modal ----
+(function() {
+	var DP_LOAD_URL = '<?= UIR ?>PlayerAjax/dietary_preferences/<?= (int)$Player['MundaneId'] ?>';
+	var DP_SAVE_URL = '<?= UIR ?>PlayerAjax/save_dietary_preferences';
+	var dpLoaded = false;
+	var dpDirty  = false;
+	var dpSnap   = null; // modal state at open time; restored on discard
+
+	var ALLERGEN_FIELDS = ['AllergenPeanuts','AllergenTreenuts','AllergenWheat','AllergenMilk','AllergenEggs',
+	                       'AllergenFish','AllergenShellfish','AllergenSoy','AllergenSesame','AllergenGarlic',
+	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa','AllergenNightshades'];
+
+	// ---- DOM helpers (scoped to modal) ----
+	function gInModal(sel) { return document.querySelector('#pn-dp-overlay ' + sel); }
+	function allInModal(sel) { return document.querySelectorAll('#pn-dp-overlay ' + sel); }
+
+	function dpSetToggle(field, val) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		if (sw) sw.classList.toggle('dp-on', !!val);
+	}
+	function dpToggleValue(field) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		return sw ? sw.classList.contains('dp-on') : false;
+	}
+	function dpSetAllergen(grp, v) {
+		v = parseInt(v) || 0;
+		grp.querySelectorAll('.dp-al-seg').forEach(function(btn) {
+			btn.classList.toggle('dp-active', parseInt(btn.dataset.v) === v);
+		});
+	}
+	function dpGetAllergen(field) {
+		var grp = gInModal('.dp-al-slider[data-field="' + field + '"]');
+		if (!grp) return 0;
+		var active = grp.querySelector('.dp-al-seg.dp-active');
+		return active ? parseInt(active.dataset.v) : 0;
+	}
+
+	function dpLockPrefs(lock) {
+		var body = document.getElementById('dp-prefs-body');
+		if (body) body.classList.toggle('dp-locked', !!lock);
+	}
+	function dpRender(p) {
+		dpSetToggle('ShowName',         !p.IsAnonymous);
+		dpSetToggle('NoRestrictions',    p.NoRestrictions);
+		dpLockPrefs(p.NoRestrictions);
+		dpSetToggle('DietVegetarian',    p.DietVegetarian);
+		dpSetToggle('DietVegan',         p.DietVegan);
+		dpSetToggle('DietHalal',         p.DietHalal);
+		dpSetToggle('DietKosher',        p.DietKosher);
+		dpSetToggle('DietKeto',          p.DietKeto);
+		dpSetToggle('DietPaleo',         p.DietPaleo);
+		dpSetToggle('RestrictDairy',     p.RestrictDairy);
+		dpSetToggle('RestrictEggs',      p.RestrictEggs);
+		dpSetToggle('RestrictFish',      p.RestrictFish);
+		dpSetToggle('RestrictHoney',     p.RestrictHoney);
+		dpSetToggle('RestrictPoultry',   p.RestrictPoultry);
+		dpSetToggle('RestrictBeef',      p.RestrictBeef);
+		dpSetToggle('RestrictPork',      p.RestrictPork);
+		dpSetToggle('RestrictShellfish', p.RestrictShellfish);
+		ALLERGEN_FIELDS.forEach(function(f) {
+			var grp = gInModal('.dp-al-slider[data-field="' + f + '"]');
+			if (grp) dpSetAllergen(grp, p[f] || 0);
+		});
+	}
+
+	function dpCollect() {
+		var d = {
+			IsAnonymous:       dpToggleValue('ShowName')        ? 0 : 1,
+			NoRestrictions:    dpToggleValue('NoRestrictions')  ? 1 : 0,
+			DietVegetarian:    dpToggleValue('DietVegetarian')  ? 1 : 0,
+			DietVegan:         dpToggleValue('DietVegan')       ? 1 : 0,
+			DietHalal:         dpToggleValue('DietHalal')       ? 1 : 0,
+			DietKosher:        dpToggleValue('DietKosher')      ? 1 : 0,
+			DietKeto:          dpToggleValue('DietKeto')        ? 1 : 0,
+			DietPaleo:         dpToggleValue('DietPaleo')       ? 1 : 0,
+			RestrictDairy:     dpToggleValue('RestrictDairy')   ? 1 : 0,
+			RestrictEggs:      dpToggleValue('RestrictEggs')    ? 1 : 0,
+			RestrictFish:      dpToggleValue('RestrictFish')    ? 1 : 0,
+			RestrictHoney:     dpToggleValue('RestrictHoney')   ? 1 : 0,
+			RestrictPoultry:   dpToggleValue('RestrictPoultry') ? 1 : 0,
+			RestrictBeef:      dpToggleValue('RestrictBeef') ? 1 : 0,
+			RestrictPork:      dpToggleValue('RestrictPork') ? 1 : 0,
+			RestrictShellfish: dpToggleValue('RestrictShellfish') ? 1 : 0,
+		};
+		ALLERGEN_FIELDS.forEach(function(f) { d[f] = dpGetAllergen(f); });
+		return d;
+	}
+
+	// ---- Summary card ----
+	var DIET_LABELS = {DietVegetarian:'Vegetarian',DietVegan:'Vegan',DietHalal:'Halal',DietKosher:'Kosher',DietKeto:'Keto',DietPaleo:'Paleo'};
+	var RESTRICT_LABELS = {RestrictBeef:'No Beef',RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPork:'No Pork',RestrictPoultry:'No Poultry',RestrictShellfish:'No Shellfish'};
+	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa',AllergenNightshades:'Nightshades'};
+
+	function dpUpdateSummary(p) {
+		var el = document.getElementById('pna-dp-summary');
+		if (!el) return;
+		if (p.NoRestrictions) { el.textContent = 'No dietary restrictions.'; return; }
+		var parts = [];
+		Object.keys(DIET_LABELS).forEach(function(f)     { if (p[f]) parts.push(DIET_LABELS[f]); });
+		Object.keys(RESTRICT_LABELS).forEach(function(f) { if (p[f]) parts.push(RESTRICT_LABELS[f]); });
+		ALLERGEN_FIELDS.forEach(function(f) {
+			if (p[f] >= 2) parts.push(ALLERGEN_LABELS[f] + ' allergy');
+			else if (p[f] >= 1) parts.push(ALLERGEN_LABELS[f] + ' sensitivity');
+		});
+		el.textContent = parts.length ? parts.slice(0,4).join(', ') + (parts.length > 4 ? ' +' + (parts.length - 4) + ' more' : '') : 'No preferences set.';
+	}
+
+	// ---- Dirty tracking ----
+	function dpMarkDirty() {
+		if (!dpDirty) {
+			dpDirty = true;
+			var warn = document.getElementById('pn-dp-dirty-warn');
+			var btn  = document.getElementById('pn-dp-save-btn');
+			if (warn) warn.style.display = 'inline';
+			if (btn)  btn.disabled = false;
+		}
+	}
+	function dpClearDirty() {
+		dpDirty = false;
+		var warn = document.getElementById('pn-dp-dirty-warn');
+		var btn  = document.getElementById('pn-dp-save-btn');
+		if (warn) warn.style.display = 'none';
+		if (btn)  { btn.disabled = true; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+	}
+
+	// ---- Open / close ----
+	window.dpOpen = function() {
+		var ov = document.getElementById('pn-dp-overlay');
+		if (!ov) return;
+		dpClearDirty();
+		if (dpLoaded) {
+			dpSnap = dpCollect();
+		}
+		ov.classList.add('pn-open');
+		if (!dpLoaded) {
+			$.getJSON(DP_LOAD_URL, function(r) {
+				if (r && r.status === 0 && r.prefs) {
+					dpRender(r.prefs);
+					dpUpdateSummary(r.prefs);
+					dpLoaded = true;
+					dpSnap = dpCollect();
+					dpClearDirty();
+				}
+			});
+		}
+	};
+
+	function dpClose(force) {
+		function doClose() {
+			document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+			var pop = document.getElementById('dp-info-pop');
+			if (pop) pop.classList.remove('dp-pop-open');
+			if (dpSnap) { dpRender(dpSnap); dpClearDirty(); }
+		}
+		if (!force && dpDirty) {
+			pnConfirm({ title: 'Unsaved Changes', message: 'Close without saving your feast preferences?', confirmText: 'Discard', danger: true }, doClose);
+		} else {
+			doClose();
+		}
+	}
+
+	// ---- Save ----
+	function dpSave() {
+		var btn = document.getElementById('pn-dp-save-btn');
+		if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+		var data = dpCollect();
+		var fd = new FormData();
+		Object.keys(data).forEach(function(k) { fd.append(k, data[k]); });
+		fetch(DP_SAVE_URL, { method: 'POST', body: fd })
+			.then(function(res) { return res.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					dpSnap = data;
+					dpClearDirty();
+					dpUpdateSummary(data);
+					document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+				} else {
+					if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+				}
+			})
+			.catch(function() {
+				if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+			});
+	}
+
+	// ---- Wire modal controls ----
+	function dpClearNoRestrictions() {
+		if (noRestSw && noRestSw.classList.contains('dp-on')) {
+			noRestSw.classList.remove('dp-on');
+			dpLockPrefs(false);
+		}
+	}
+	allInModal('.dp-toggle-sw').forEach(function(sw) {
+		// Skip NoRestrictions (has its own row-click handler below) AND
+		// ShowName (unrelated to dietary state — clicking it should NOT
+		// clear No dietary restrictions).
+		if (sw.dataset.field === 'NoRestrictions' || sw.dataset.field === 'ShowName') return;
+		sw.addEventListener('click', function() { dpClearNoRestrictions(); sw.classList.toggle('dp-on'); dpMarkDirty(); });
+	});
+	// ShowName toggle: just flip its own state — no side-effects on the
+	// rest of the form.
+	var showNameSw = gInModal('.dp-toggle-sw[data-field="ShowName"]');
+	if (showNameSw) {
+		showNameSw.addEventListener('click', function() { showNameSw.classList.toggle('dp-on'); dpMarkDirty(); });
+	}
+	allInModal('.dp-al-seg').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			dpClearNoRestrictions();
+			var grp = btn.closest('.dp-al-slider');
+			if (grp) { dpSetAllergen(grp, btn.dataset.v); dpMarkDirty(); }
+		});
+	});
+
+	// No-restrictions master toggle — whole row is clickable
+	var noRestSw  = gInModal('.dp-toggle-sw[data-field="NoRestrictions"]');
+	var noRestRow = document.getElementById('dp-no-restrict-row');
+	if (noRestSw && noRestRow) {
+		noRestRow.addEventListener('click', function() {
+			var turningOn = !noRestSw.classList.contains('dp-on');
+			noRestSw.classList.toggle('dp-on', turningOn);
+			if (turningOn) {
+				allInModal('.dp-toggle-sw[data-field]').forEach(function(sw) {
+					if (sw.dataset.field !== 'ShowName' && sw.dataset.field !== 'NoRestrictions')
+						sw.classList.remove('dp-on');
+				});
+				allInModal('.dp-al-slider').forEach(function(grp) { dpSetAllergen(grp, 0); });
+			}
+			dpLockPrefs(turningOn);
+			dpMarkDirty();
+		});
+	}
+	document.getElementById('pn-dp-close-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-cancel-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-save-btn').addEventListener('click',    dpSave);
+	document.getElementById('pn-dp-overlay').addEventListener('click',     function(e) { if (e.target === this) dpClose(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && document.getElementById('pn-dp-overlay').classList.contains('pn-open'))
+			dpClose();
+	});
+
+	// Info popover
+	var dpInfoPop = document.getElementById('dp-info-pop');
+	allInModal('[data-info-btn]').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var rect = btn.getBoundingClientRect();
+			var isOpen = dpInfoPop.classList.contains('dp-pop-open');
+			dpInfoPop.classList.remove('dp-pop-open');
+			if (isOpen) return;
+			var top  = rect.bottom + 6;
+			var left = rect.left;
+			if (left + 295 > window.innerWidth - 10) left = window.innerWidth - 305;
+			dpInfoPop.style.top  = top  + 'px';
+			dpInfoPop.style.left = left + 'px';
+			dpInfoPop.classList.add('dp-pop-open');
+		});
+	});
+	document.addEventListener('click', function() { if (dpInfoPop) dpInfoPop.classList.remove('dp-pop-open'); });
+
+	// Pre-load on page load so summary is populated immediately
+	$.getJSON(DP_LOAD_URL, function(r) {
+		if (r && r.status === 0 && r.prefs) {
+			dpRender(r.prefs);
+			dpUpdateSummary(r.prefs);
+			dpLoaded = true;
+			dpSnap = dpCollect();
+		}
+	});
+})();
+<?php endif; ?>
+</script>
+
+<!-- =============================================
+     Qualification Test Quiz Modal
+     ============================================= -->
+<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
+<style>
+.pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
+@media (max-width: 600px) { .pn-qt-cards { flex-direction: column; } .pn-qt-card { flex: unset; min-width: 0; } }
+.pn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 8px; }
+.pn-qt-status { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+.pn-qt-status-pass   { color: #276749; }
+.pn-qt-status-expired{ color: #b7791f; }
+.pn-qt-status-none   { color: #718096; }
+.pn-qt-detail { font-size: 0.8rem; color: #718096; margin-bottom: 10px; }
+.pn-qt-meta { font-size: 0.78rem; color: #718096; line-height: 1.5; margin-bottom: 10px; }
+.pn-qt-meta strong { color: #2d3748; font-weight: 600; }
+.pn-qt-take-btn { margin-top: 4px; }
+.pn-qt-retake-warning { margin-top: 6px; padding: 7px 10px; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 5px; font-size: 0.8rem; color: #9b2c2c; line-height: 1.4; }
+.pn-qt-retake-warning i { margin-right: 5px; }
+.pn-qt-reset-retakes-btn { margin-top: 4px; }
+/* Past-attempts history (player + manager view) */
+.pn-qt-history { font-size: 0.8rem; }
+/* Full-width review panel below the cards (uses the whole modal width). */
+.pn-qt-history-panel { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc; overflow: hidden; font-size: 0.85rem; }
+.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2f7; }
+.pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
+.pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
+.pn-qt-history-panel-close:hover { color: #2d3748; }
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
+.pn-qt-hist-empty { color: #718096; padding: 4px 2px; }
+.pn-qt-hist-row { border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
+.pn-qt-hist-row.pass { border-left: 3px solid #48bb78; }
+.pn-qt-hist-row.fail { border-left: 3px solid #f56565; }
+.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: #fff; border: 0; cursor: pointer; font: inherit; text-align: left; }
+.pn-qt-hist-toggle:hover { background: #f7fafc; }
+.pn-qt-hist-badge { font-weight: 700; font-size: 0.8rem; }
+.pn-qt-hist-row.pass .pn-qt-hist-badge { color: #276749; }
+.pn-qt-hist-row.fail .pn-qt-hist-badge { color: #9b2c2c; }
+.pn-qt-hist-score { font-weight: 600; color: #2d3748; }
+.pn-qt-hist-when { margin-left: auto; font-size: 0.76rem; color: #718096; }
+.pn-qt-hist-detail { padding: 8px 11px 10px; background: #fafbfc; border-top: 1px solid #edf2f7; }
+.pn-qt-rev-q { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #276749; }
+.pn-qt-rev-q.bad .pn-qt-rev-qh { color: #9b2c2c; }
+.pn-qt-rev-qh { font-weight: 600; margin-bottom: 5px; }
+.pn-qt-rev-opt { padding: 3px 7px; border-radius: 4px; color: #4a5568; margin: 2px 0; font-size: 0.78rem; }
+.pn-qt-rev-opt.correct { background: #f0fff4; color: #276749; }
+.pn-qt-rev-opt.wrong   { background: #fff5f5; color: #9b2c2c; }
+.pn-qt-rev-opt em { font-style: normal; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
+html[data-theme="dark"] .pn-qt-hist-toggle, html[data-theme="dark"] .pn-qt-rev-q { background: #2d3748; }
+html[data-theme="dark"] .pn-qt-hist-row, html[data-theme="dark"] .pn-qt-rev-q { border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-hist-detail { background: #252d3a; }
+html[data-theme="dark"] .pn-qt-hist-score { color: #e2e8f0; }
+/* Attempt-row meta: dim #718096 timestamp and light-mode pass/fail badges are
+   too faint on the navy row — lift to readable brights. */
+html[data-theme="dark"] .pn-qt-hist-when { color: #a0aec0; }
+html[data-theme="dark"] .pn-qt-hist-row.pass .pn-qt-hist-badge { color: #68d391; }
+html[data-theme="dark"] .pn-qt-hist-row.fail .pn-qt-hist-badge { color: #fc8181; }
+/* Dark: clearly-filled pills with near-white text + left accent, matching the
+   reeve/corpora results report — high contrast for both answer and label. */
+html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+html[data-theme="dark"] .pn-qt-rev-opt em { opacity: 1; color: #cbd5e0; }
+/* Un-picked options (neither correct nor the player's pick): the base #4a5568 is
+   near-invisible on the navy card — lift to a readable muted grey. */
+html[data-theme="dark"] .pn-qt-rev-opt { color: #a0aec0; }
+/* Question headers: the light-mode green/red are too dark on the navy card. */
+html[data-theme="dark"] .pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #68d391; }
+html[data-theme="dark"] .pn-qt-rev-q.bad .pn-qt-rev-qh { color: #fc8181; }
+/* Chooser modal */
+#pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
+.pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
+.pn-qt-chooser-empty { padding: 18px; text-align: center; color: #718096; font-size: 0.9rem; }
+
+/* Dark mode — chooser cards */
+html[data-theme="dark"] .pn-qt-card {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-qt-card-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-status-pass    { color: #9ae6b4; }
+html[data-theme="dark"] .pn-qt-status-expired { color: #fbd38d; }
+html[data-theme="dark"] .pn-qt-status-none    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-detail,
+html[data-theme="dark"] .pn-qt-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-meta strong { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-retake-warning {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-qt-reset-retakes-btn {
+	background: #44337a !important;
+	border-color: #553c9a !important;
+	color: #d6bcfa !important;
+}
+html[data-theme="dark"] .pn-qt-chooser-prompt { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0aec0); }
+/* Quiz modal */
+#pn-quiz-overlay .pn-modal-box { width: 640px; max-width: calc(100vw - 40px); }
+
+/* Segmented progress bar */
+.pn-quiz-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pn-quiz-progress { font-size: 0.8rem; font-weight: 600; color: #718096; }
+.pn-quiz-progress-score { font-size: 0.78rem; color: #a0aec0; }
+.pn-quiz-progress-segments { display: flex; gap: 3px; margin-bottom: 20px; }
+.pn-quiz-progress-seg { flex: 1; height: 7px; border-radius: 4px; background: #e2e8f0; transition: background 0.3s; }
+.pn-quiz-progress-seg-done { background: #38a169; }
+.pn-quiz-progress-seg-current { background: #2b6cb0; box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2); }
+
+/* Question text */
+.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+
+/* Answer labels — card style with radio indicator */
+.pn-quiz-answers { list-style: none; padding: 0; margin: 0 0 16px; }
+.pn-quiz-answer-item { margin-bottom: 8px; }
+.pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+                         border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
+.pn-quiz-answer-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e0; flex-shrink: 0; margin-top: 1px;
+                         display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+.pn-quiz-answer-radio-inner { width: 9px; height: 9px; border-radius: 50%; background: transparent; transition: background 0.15s; }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+    background: #f7fafc; border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) { border-color: #2b6cb0; background: #ebf8ff; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-correct  { background: #f0fff4; border-color: #38a169; color: #276749; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio { border-color: #38a169; background: #38a169; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-wrong    { background: #fff5f5; border-color: #e53e3e; color: #9b2c2c; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio { border-color: #e53e3e; background: #e53e3e; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-disabled { pointer-events: none; opacity: 0.55; }
+.pn-quiz-answer-label.pn-quiz-correct, .pn-quiz-answer-label.pn-quiz-wrong { opacity: 1; }
+
+/* Feedback bar with slide animation */
+.pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
+                     overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
+.pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
+.pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
+.pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+
+/* Result view */
+.pn-quiz-result { text-align: center; padding: 28px 0 20px; }
+.pn-quiz-result-icon { font-size: 3.5rem; margin-bottom: 12px; }
+.pn-quiz-result-pass { color: #276749; }
+.pn-quiz-result-fail { color: #9b2c2c; }
+.pn-quiz-result-heading { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
+.pn-quiz-result-heading-pass { color: #276749; }
+.pn-quiz-result-heading-fail { color: #9b2c2c; }
+.pn-quiz-result-score { font-size: 2.4rem; font-weight: 800; margin-bottom: 6px; line-height: 1.1; }
+.pn-quiz-result-breakdown { font-size: 0.88rem; color: #4a5568; margin-bottom: 4px; }
+.pn-quiz-result-detail { font-size: 0.85rem; color: #718096; margin-bottom: 12px; }
+.pn-quiz-result-expiry-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: #c6f6d5; color: #276749; margin-bottom: 16px; }
+
+/* Loading / error / instructions */
+.pn-quiz-loading { text-align: center; padding: 40px 0; color: #718096; }
+.pn-quiz-error-msg { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c;
+                     padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 12px; display: none; }
+.pn-quiz-instructions { padding: 20px 0; }
+.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 14px; }
+.pn-quiz-instructions-body { padding: 12px 16px; background: #ebf4ff; border: 1px solid #bee3f8; border-left: 4px solid #2b6cb0;
+    border-radius: 0 6px 6px 0; font-size: 0.92rem; color: #2c5282; line-height: 1.65; margin-bottom: 18px; white-space: pre-line; }
+.pn-quiz-instructions-meta { font-size: 0.85rem; color: #718096; margin-bottom: 20px; text-align: center; }
+.pn-quiz-instructions-meta strong { color: #2d3748; }
+.pn-quiz-begin-row { text-align: center; }
+
+/* ── Dark mode — quiz modal contents ──────────────────── */
+html[data-theme="dark"] .pn-quiz-progress         { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-score   { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
+/* Done/current need brighter fills on the dark modal — the light-mode green/blue
+   and the faint current-glow wash out against #2d3748, so you can't tell which
+   question you're on. */
+html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* "Select all that apply" hint — color moved off the inline style so dark mode
+   can lift it off the too-dark #4a5568 it used to hard-code. */
+.pn-quiz-multi-hint { color: #4a5568; }
+html[data-theme="dark"] .pn-quiz-multi-hint { color: #cbd5e0; }
+html[data-theme="dark"] .pn-quiz-q-text {
+	color: var(--ork-text, #e2e8f0);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-quiz-answer-label {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .pn-quiz-answer-radio { border-color: #718096; }
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #4a5568;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #2a4365;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-correct {
+	background: #22543d;
+	border-color: #38a169;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-wrong {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-fb-correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-fb-wrong   { background: #742a2a; color: #feb2b2; }
+/* Result view */
+html[data-theme="dark"] .pn-quiz-result-pass,
+html[data-theme="dark"] .pn-quiz-result-heading-pass { color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-result-fail,
+html[data-theme="dark"] .pn-quiz-result-heading-fail { color: #feb2b2; }
+html[data-theme="dark"] .pn-quiz-result-score     { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-quiz-result-breakdown { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-quiz-result-detail    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-result-expiry-badge { background: #22543d; color: #9ae6b4; }
+/* Instructions / loading / error */
+html[data-theme="dark"] .pn-quiz-loading { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-error-msg {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-instructions-icon { color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-instructions-body {
+	background: #2a4365;
+	border-color: #4299e1;
+	border-left-color: #63b3ed;
+	color: #ebf8ff;
+}
+html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
+/* Report-question form inside the quiz modal */
+html[data-theme="dark"] #pn-quiz-report-reason {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+</style>
+
+<!-- Test chooser modal -->
+<?php
+	$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) {
+		return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled);
+	}, ARRAY_FILTER_USE_KEY);
+	$_qualResults   = is_array($QualResults ?? null) ? $QualResults : [];
+	$_qualKingdomId = $QualKingdomId ?? 0;
+	$_qualCanManage = $QualCanManage ?? false;
+	// Most kingdoms enable only ONE test, and asking "which would you like?" above a lone
+	// card reads as a choice the player doesn't actually have. The modal still earns its
+	// place (it carries the status, past attempts and retakes), so soften the wording
+	// rather than skip it.
+	$_qualOnlyOne   = (count($_qualTypes) === 1);
+?>
+<div class="pn-overlay" id="pn-qt-chooser-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
+			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<?php if (empty($_qualTypes)): ?>
+			<div class="pn-qt-chooser-empty">No tests are currently enabled for your kingdom.</div>
+			<?php else: ?>
+			<div class="pn-qt-chooser-prompt"><?= $_qualOnlyOne
+				? 'Your current status, score, and remaining retakes are shown below.'
+				: 'Pick a test to begin. Your current status, score, and remaining retakes are listed below.' ?></div>
+			<div class="pn-qt-cards">
+				<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
+				<?php
+					$_qr           = $_qualResults[$_qtType] ?? null;
+					// A record with QualResultId == 0 is a retake/attempt-only entry:
+					// the player has TAKEN the test but never PASSED (ork_qual_result
+					// is written only on a pass). Only a genuine passing result can be
+					// "Passed" or "Expired"; otherwise they simply haven't passed yet.
+					$_qtHasPass    = $_qr && !empty($_qr['QualResultId']);
+					$_qtPassed     = $_qtHasPass && empty($_qr['Expired']);
+					$_qtExpired    = $_qtHasPass && !empty($_qr['Expired']);
+					$_qtAttempted  = $_qr && !$_qtHasPass; // taken, never passed
+					$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
+					$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
+					$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
+					$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
+					// Score/expiry only mean something for a real passing result;
+					// the synthesized attempt-only entry carries a fake 0%.
+					$_qtScore      = $_qtHasPass ? (int)$_qr['ScorePercent'] : null;
+					$_qtExpires    = $_qtHasPass && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
+				?>
+				<div class="pn-qt-card" data-type="<?= $_qtType ?>">
+					<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
+					<?php if ($_qtPassed): ?>
+						<div class="pn-qt-status pn-qt-status-pass"><i class="fas fa-check-circle"></i> Passed</div>
+						<div class="pn-qt-detail">Score: <?= $_qtScore ?>% &mdash; Expires <?= $_qtExpires ?></div>
+					<?php elseif ($_qtExpired): ?>
+						<div class="pn-qt-status pn-qt-status-expired"><i class="fas fa-clock"></i> Expired<?= $_qtExpires ? ' ' . $_qtExpires : '' ?></div>
+						<?php if ($_qtScore !== null): ?>
+						<div class="pn-qt-detail">Last passing score: <?= $_qtScore ?>%</div>
+						<?php endif; ?>
+					<?php elseif ($_qtAttempted): ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not passed yet</div>
+					<?php else: ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not yet taken</div>
+					<?php endif; ?>
+					<div class="pn-qt-meta">
+						<?php if ($_qtMaxRetakes > 0): ?>
+							Retakes used: <strong><?= $_qtRetakes ?> of <?= $_qtMaxRetakes ?></strong>
+						<?php else: ?>
+							Retakes used: <strong><?= $_qtRetakes ?></strong> <span style="color:#a0aec0">(no limit)</span>
+						<?php endif; ?>
+					</div>
+					<?php
+					  // Switched on, but nothing published (or too few questions to fill a test).
+					  // Starting it would fail with "Not enough active questions available", so do
+					  // not offer it — say why, and let them see their history.
+					  $_qtTakeableNow = !empty($QualTakeable[$_qtType]);
+					?>
+					<?php if (!$_qtTakeableNow): ?>
+					<div class="pn-qt-retake-warning" style="background:#edf2f7;border-color:#cbd5e0;color:#4a5568;">
+						<i class="fas fa-hourglass-half"></i> This test isn't ready yet &mdash; your kingdom is still putting the questions together. Check back soon.
+					</div>
+					<?php elseif ($_qtBlocked): ?>
+					<div class="pn-qt-retake-warning">
+						<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
+					</div>
+					<?php else: ?>
+					<button class="pn-btn pn-btn-sm pn-btn-primary pn-qt-take-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>">
+						<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
+					</button>
+					<?php endif; ?>
+					<?php // Officer-only, and only when a retake LIMIT exists. With no limit the count never
+				      // blocks anyone, so resetting it changes nothing a player can feel — offering it
+				      // there just invites "did that actually do something?". ?>
+					<?php if ($_qualCanManage && $_qtMaxRetakes > 0): ?>
+					<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= $QualPlayerId ?? 0 ?>"
+					        style="color:#553c9a;border-color:#d6bcfa;font-size:0.75rem;">
+						<i class="fas fa-undo-alt"></i> Reset Retakes
+					</button>
+					<?php endif; ?>
+					<?php if ($isOwnProfile || $_qualCanManage): ?>
+					<button type="button" class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-history-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= (int)($QualPlayerId ?? 0) ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>"
+					        style="margin-top:4px;font-size:0.78rem;" aria-expanded="false">
+						<i class="fas fa-history"></i> View past attempts
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php endforeach; ?>
+			</div>
+			<!-- Full-width review panel: "View past attempts" renders here, using the whole modal. -->
+			<div class="pn-qt-history-panel" id="pn-qt-history-panel" style="display:none;">
+				<div class="pn-qt-history-panel-head">
+					<span class="pn-qt-history-panel-title" id="pn-qt-history-panel-title"></span>
+					<button type="button" class="pn-qt-history-panel-close" id="pn-qt-history-panel-close" aria-label="Close">&times;</button>
+				</div>
+				<div id="pn-qt-history-panel-body"></div>
+			</div>
+			<?php endif; ?>
+		</div>
+	</div>
+</div>
+<script>
+function pnOpenTestChooser() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	// Open cleanly: collapse and clear the shared "past attempts" panel so stale
+	// state from a previous open doesn't linger, and so reopening re-fetches
+	// (picking up attempts taken since the modal was last opened).
+	if (typeof window._pnResetQualHistory === 'function') {
+		window._pnResetQualHistory();
+	}
+	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+		btn.setAttribute('aria-expanded', 'false');
+	});
+	ov.classList.add('pn-open');
+}
+(function() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
+	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	// Escape closes the chooser — but if the full-width history panel is open, close
+	// that first (one layer at a time).
+	document.addEventListener('keydown', function(e) {
+		if ((e.key !== 'Escape' && e.keyCode !== 27) || !ov.classList.contains('pn-open')) return;
+		var panel = document.getElementById('pn-qt-history-panel');
+		if (panel && panel.style.display !== 'none') {
+			if (typeof window._pnResetQualHistory === 'function') window._pnResetQualHistory();
+			else panel.style.display = 'none';
+			return;
+		}
+		ov.classList.remove('pn-open');
+	});
+	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
+	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	});
 })();
 </script>
+
+<div class="pn-overlay" id="pn-quiz-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title" id="pn-quiz-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
+			<button class="pn-modal-close-btn" id="pn-quiz-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body" id="pn-quiz-body">
+			<div class="pn-quiz-loading" id="pn-quiz-loading"><i class="fas fa-spinner fa-spin"></i> Loading questions&hellip;</div>
+			<div class="pn-quiz-error-msg" id="pn-quiz-error"></div>
+
+			<!-- Instructions view -->
+			<div id="pn-quiz-instructions-view" style="display:none">
+				<div class="pn-quiz-instructions">
+					<div class="pn-quiz-instructions-icon"><i class="fas fa-info-circle"></i></div>
+					<div class="pn-quiz-instructions-body" id="pn-quiz-instructions-text"></div>
+					<div class="pn-quiz-instructions-meta" id="pn-quiz-instructions-meta"></div>
+					<div class="pn-quiz-begin-row">
+						<button class="pn-btn pn-btn-primary" id="pn-quiz-begin-btn"><i class="fas fa-play-circle" style="margin-right:6px;"></i>Begin Test</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Question view -->
+			<div id="pn-quiz-question-view" style="display:none">
+				<div class="pn-quiz-progress-header">
+					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
+					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
+				</div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
+				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
+				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
+				<!-- Multi-correct affordances: hidden for single-answer questions. -->
+				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
+				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
+				</div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
+				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
+					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
+					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
+						<select id="pn-quiz-report-reason" style="padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.85rem;">
+							<option value="">— Select a reason —</option>
+							<option value="wording">Question is worded poorly</option>
+							<option value="correct">My answer was correct</option>
+							<option value="outdated">This has not been updated for recent changes</option>
+							<option value="other">Other</option>
+						</select>
+						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit" style="margin-left:6px;font-size:0.82rem;">Submit</button>
+						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel" style="margin-left:4px;font-size:0.82rem;">Cancel</button>
+						<span id="pn-quiz-report-thanks" style="display:none;font-size:0.82rem;color:#276749;margin-left:8px;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
+					</div>
+				</div>
+				<div class="pn-quiz-nav">
+					<span></span>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-next" style="display:none"><i class="fas fa-chevron-right"></i> Next</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-submit" style="display:none"><i class="fas fa-check"></i> Submit Test</button>
+				</div>
+			</div>
+
+			<!-- Result view -->
+			<div id="pn-quiz-result-view" style="display:none">
+				<div class="pn-quiz-result">
+					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
+					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
+					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
+					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
+					<div id="pn-quiz-result-expiry-wrap" style="display:none">
+						<div class="pn-quiz-result-expiry-badge" id="pn-quiz-result-expiry">
+							<i class="fas fa-calendar-check"></i>
+							<span id="pn-quiz-result-expiry-text"></span>
+						</div>
+					</div>
+				</div>
+				<div class="pn-modal-footer">
+					<button class="pn-btn pn-btn-secondary" id="pn-quiz-done">Close</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-retake" style="display:none"><i class="fas fa-redo"></i> Retake</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay        = document.getElementById('pn-quiz-overlay');
+	var closeBtn       = document.getElementById('pn-quiz-close-btn');
+	var modalTitle     = document.getElementById('pn-quiz-modal-title');
+	var loading        = document.getElementById('pn-quiz-loading');
+	var errorMsg       = document.getElementById('pn-quiz-error');
+	var questionView   = document.getElementById('pn-quiz-question-view');
+	var resultView     = document.getElementById('pn-quiz-result-view');
+	var progressTxt    = document.getElementById('pn-quiz-progress-text');
+	var progressScore  = document.getElementById('pn-quiz-progress-score');
+	var progressSegs   = document.getElementById('pn-quiz-progress-segments');
+	var qText          = document.getElementById('pn-quiz-q-text');
+	var answersList    = document.getElementById('pn-quiz-answers');
+	var multiHintEl    = document.getElementById('pn-quiz-multi-hint');
+	var multiSubmitRow = document.getElementById('pn-quiz-multi-submit-row');
+	var multiSubmitBtn = document.getElementById('pn-quiz-multi-submit-btn');
+	var feedbackEl     = document.getElementById('pn-quiz-feedback');
+	var nextBtn        = document.getElementById('pn-quiz-next');
+	var submitBtn      = document.getElementById('pn-quiz-submit');
+	var doneBtn        = document.getElementById('pn-quiz-done');
+	var retakeBtn      = document.getElementById('pn-quiz-retake');
+	var reportArea     = document.getElementById('pn-quiz-report-area');
+	var reportBtn      = document.getElementById('pn-quiz-report-btn');
+	var reportForm     = document.getElementById('pn-quiz-report-form');
+	var reportReason   = document.getElementById('pn-quiz-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
+	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
+	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
+	var resultIcon     = document.getElementById('pn-quiz-result-icon');
+	var resultHeading  = document.getElementById('pn-quiz-result-heading');
+	var resultScore    = document.getElementById('pn-quiz-result-score');
+	var resultBreakdown= document.getElementById('pn-quiz-result-breakdown');
+	var resultDetail   = document.getElementById('pn-quiz-result-detail');
+	var resultExpiryWrap = document.getElementById('pn-quiz-result-expiry-wrap');
+	var resultExpiryText = document.getElementById('pn-quiz-result-expiry-text');
+	var instrView      = document.getElementById('pn-quiz-instructions-view');
+	var instrText      = document.getElementById('pn-quiz-instructions-text');
+	var instrMeta      = document.getElementById('pn-quiz-instructions-meta');
+	var beginBtn       = document.getElementById('pn-quiz-begin-btn');
+
+	var questions      = [];
+	var answers        = {};
+	var correctCount   = 0;
+	var currentIdx     = 0;
+	var passPercent    = 70;
+	// Set of checked answer ids for the multi-select question in view (null for single).
+	var multiSelected  = null;
+	// Pending answer id for a SINGLE-select question — chosen on click but not
+	// submitted until "Submit Answer", so a fat-fingered pick can be changed.
+	var singleSelected = null;
+	// True while the player is mid-test (questions in view, not yet finished) — used
+	// to confirm before an accidental close throws away in-progress answers.
+	var quizInProgress = false;
+	var currentType    = '';
+	var currentKingdom = 0;
+	var currentLabel   = '';
+	var isChecking     = false;
+
+	function openModal(type, kingdom, label) {
+		currentType    = type;
+		currentKingdom = kingdom;
+		currentLabel   = label;
+		questions      = [];
+		answers        = {};
+		correctCount   = 0;
+		currentIdx     = 0;
+		isChecking     = false;
+		quizInProgress = false;
+
+		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
+		overlay.classList.add('pn-open');
+		showLoading(true);
+		errorMsg.style.display = 'none';
+		instrView.style.display = 'none';
+		questionView.style.display = 'none';
+		resultView.style.display = 'none';
+
+		var fd = new FormData();
+		fd.append('KingdomId', kingdom);
+		fd.append('TestType',  type);
+		fetch(PnConfig.uir + 'QualTestAjax/gettest', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				showLoading(false);
+				if (j.status !== 0) { showError(j.error || 'Unable to load test questions.'); return; }
+				questions   = j.questions;
+				passPercent = j.pass_percent;
+				buildProgressSegments();
+				if (j.instructions) {
+					showInstructions(j.instructions);
+				} else {
+					renderQuestion(0);
+				}
+			})
+			.catch(function() { showLoading(false); showError('Network error. Please try again.'); });
+	}
+
+	function showInstructions(text) {
+		instrText.innerHTML = escHtml(text);
+		instrMeta.innerHTML = '<strong>' + questions.length + '</strong> question' + (questions.length !== 1 ? 's' : '') + ' &middot; <strong>' + passPercent + '%</strong> required to pass';
+		instrView.style.display = 'block';
+	}
+
+	beginBtn.addEventListener('click', function() {
+		instrView.style.display = 'none';
+		renderQuestion(0);
+	});
+
+	function buildProgressSegments() {
+		progressSegs.innerHTML = '';
+		for (var i = 0; i < questions.length; i++) {
+			var seg = document.createElement('div');
+			seg.className = 'pn-quiz-progress-seg';
+			progressSegs.appendChild(seg);
+		}
+	}
+
+	function updateProgressSegments() {
+		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		for (var i = 0; i < segs.length; i++) {
+			segs[i].className = 'pn-quiz-progress-seg';
+			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-done');
+			}
+			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-current');
+			}
+		}
+	}
+
+	function renderQuestion(idx) {
+		var q     = questions[idx];
+		var total = questions.length;
+		currentIdx = idx;
+		quizInProgress = true; // answering questions — guard against accidental close
+
+		progressTxt.textContent = 'Question ' + (idx + 1) + ' of ' + total;
+		progressScore.textContent = correctCount + ' correct so far';
+		updateProgressSegments();
+		qText.textContent = q.QuestionText;
+
+		feedbackEl.classList.remove('pn-quiz-feedback-show', 'pn-quiz-fb-correct', 'pn-quiz-fb-wrong');
+		feedbackEl.className = 'pn-quiz-feedback';
+		nextBtn.style.display   = 'none';
+		submitBtn.style.display = 'none';
+		reportArea.style.display = 'none';
+		reportForm.style.display = 'none';
+		reportReason.value = '';
+		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
+		reportThanks.style.display = 'none';
+
+		var isMulti = (q.AnswerMode === 'multi');
+		multiHintEl.style.display    = isMulti ? '' : 'none';
+		// Both single and multi now confirm with the Submit button, so a mis-click
+		// can be corrected before it counts.
+		multiSubmitRow.style.display = '';
+		multiSubmitBtn.disabled      = true;
+		multiSelected  = isMulti ? Object.create(null) : null;
+		singleSelected = null;
+
+		answersList.innerHTML = '';
+		q.Answers.forEach(function(a) {
+			var li    = document.createElement('li');
+			li.className = 'pn-quiz-answer-item';
+			var label = document.createElement('label');
+			label.className = 'pn-quiz-answer-label';
+			label.dataset.answerId = a.QualAnswerId;
+			label.setAttribute('tabindex', '0');
+			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
+			label.setAttribute('aria-checked', 'false');
+
+			var radio = document.createElement('span');
+			radio.className = 'pn-quiz-answer-radio';
+			var inner = document.createElement('span');
+			inner.className = 'pn-quiz-answer-radio-inner';
+			radio.appendChild(inner);
+			label.appendChild(radio);
+
+			var text = document.createElement('span');
+			text.textContent = a.AnswerText;
+			label.appendChild(text);
+
+			if (isMulti) {
+				// Multi: clicking toggles selection; scoring waits for Submit Answer.
+				var toggle = function() {
+					if (isChecking) return;
+					if (multiSelected[a.QualAnswerId]) {
+						delete multiSelected[a.QualAnswerId];
+						label.classList.remove('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'false');
+					} else {
+						multiSelected[a.QualAnswerId] = true;
+						label.classList.add('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'true');
+					}
+					multiSubmitBtn.disabled = (Object.keys(multiSelected).length === 0);
+				};
+				label.addEventListener('click', toggle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+				});
+			} else {
+				// Single: clicking selects; scoring waits for Submit Answer so a
+				// mis-tap can be changed.
+				var selectSingle = function() {
+					if (isChecking) return;
+					// Radio behaviour: clear any prior pick, then select this one.
+					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
+						l.classList.remove('pn-quiz-selected');
+						l.setAttribute('aria-checked', 'false');
+					});
+					label.classList.add('pn-quiz-selected');
+					label.setAttribute('aria-checked', 'true');
+					singleSelected = a.QualAnswerId;
+					multiSubmitBtn.disabled = false;
+				};
+				label.addEventListener('click', selectSingle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+				});
+			}
+			li.appendChild(label);
+			answersList.appendChild(li);
+		});
+
+		questionView.style.display = 'block';
+	}
+
+	// `selected` is a number for single-select, or an array of ids for multi.
+	function checkAnswer(q, selected) {
+		if (isChecking) return;
+		var isMulti = Array.isArray(selected);
+		if (isMulti && selected.length === 0) return;
+		isChecking = true;
+
+		var allLabels = answersList.querySelectorAll('.pn-quiz-answer-label');
+		if (isMulti) {
+			allLabels.forEach(function(l) {
+				var picked = selected.indexOf(parseInt(l.dataset.answerId, 10)) !== -1;
+				l.classList.toggle('pn-quiz-selected', picked);
+				l.setAttribute('aria-checked', picked ? 'true' : 'false');
+			});
+			multiSubmitBtn.disabled = true;
+		} else {
+			allLabels.forEach(function(l) {
+				l.classList.remove('pn-quiz-selected');
+				l.setAttribute('aria-checked', 'false');
+			});
+			var sel0 = answersList.querySelector('[data-answer-id="' + selected + '"]');
+			if (sel0) { sel0.classList.add('pn-quiz-selected'); sel0.setAttribute('aria-checked', 'true'); }
+		}
+		allLabels.forEach(function(l) { l.classList.add('pn-quiz-disabled'); });
+
+		var fd = new FormData();
+		fd.append('KingdomId',  currentKingdom);
+		fd.append('TestType',   currentType);
+		fd.append('QuestionId', q.QualQuestionId);
+		if (isMulti) {
+			selected.forEach(function(id) { fd.append('AnswerIds[]', id); });
+		} else {
+			fd.append('AnswerId', selected);
+			fd.append('AnswerIds[]', selected); // dual-post for forward compat
+		}
+		fetch(PnConfig.uir + 'QualTestAjax/checkanswer', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j.status !== 0) {
+					allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+					showError(j.error || 'Error checking answer.');
+					isChecking = false;
+					return;
+				}
+				answers[q.QualQuestionId] = selected;
+
+				// Server returns the full correct set (correct_answer_ids); the
+				// scalar correct_answer_id stays for single back-compat.
+				var correctIds = Array.isArray(j.correct_answer_ids)
+					? j.correct_answer_ids.map(function(x) { return parseInt(x, 10); })
+					: (j.correct_answer_id ? [parseInt(j.correct_answer_id, 10)] : []);
+				var pickedIds = isMulti ? selected : [selected];
+
+				if (j.is_correct) {
+					correctCount++;
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
+					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
+				} else {
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (!l) return;
+						l.classList.remove('pn-quiz-selected');
+						// A picked id that's also correct = partially right; show green.
+						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
+						else                               l.classList.add('pn-quiz-wrong');
+					});
+					// Reveal correct answers the player missed.
+					correctIds.forEach(function(id) {
+						if (pickedIds.indexOf(id) !== -1) return;
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
+					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
+				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
+
+				isChecking = false;
+				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				progressScore.textContent = correctCount + ' correct so far';
+				updateProgressSegments();
+
+				// Answer locked in — retire the multi affordances.
+				multiSubmitRow.style.display = 'none';
+				multiHintEl.style.display    = 'none';
+
+				if (currentIdx < questions.length - 1) {
+					nextBtn.style.display = 'inline-block';
+				} else {
+					submitBtn.style.display = 'inline-block';
+				}
+			})
+			.catch(function() {
+				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+				showError('Network error. Please try again.');
+				isChecking = false;
+			});
+	}
+
+	// "Submit Answer" grades the current question — the whole selected set for
+	// multi, or the single pending pick.
+	if (multiSubmitBtn) {
+		multiSubmitBtn.addEventListener('click', function() {
+			if (multiSubmitBtn.disabled) return;
+			var q = questions[currentIdx];
+			if (q.AnswerMode === 'multi') {
+				var ids = Object.keys(multiSelected || {}).map(function(x) { return parseInt(x, 10); });
+				if (ids.length === 0) return;
+				checkAnswer(q, ids);
+			} else {
+				if (singleSelected == null) return;
+				checkAnswer(q, singleSelected);
+			}
+		});
+	}
+
+	function showLoading(show) { loading.style.display = show ? 'block' : 'none'; }
+	function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+	function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
+
+	reportBtn.addEventListener('click', function() {
+		reportForm.style.display = 'block';
+		reportBtn.style.display  = 'none';
+	});
+	reportCancel.addEventListener('click', function() {
+		reportForm.style.display = 'none';
+		reportBtn.style.display  = 'inline-block';
+	});
+	reportSubmit.addEventListener('click', function() {
+		var reason = reportReason.value;
+		if (!reason) { showError('Please select a reason.'); return; }
+		var fd = new FormData();
+		fd.append('QuestionId', reportBtn.dataset.questionId);
+		fd.append('Reason', reason);
+		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j && j.status !== 0) {
+					reportForm.style.display = 'none';
+					reportBtn.style.display  = 'inline-block';
+					showError(j.error || 'Failed to submit report.');
+					return;
+				}
+				reportForm.style.display   = 'none';
+				reportThanks.style.display = 'inline';
+			})
+			.catch(function() {
+				reportForm.style.display = 'none';
+				reportBtn.style.display = 'inline-block';
+				showError('Failed to submit report. Please try again.');
+			});
+	});
+
+	nextBtn.addEventListener('click', function() {
+		if (currentIdx < questions.length - 1) renderQuestion(currentIdx + 1);
+	});
+
+	submitBtn.addEventListener('click', function() {
+		pnConfirm({ title: 'Submit Test', message: 'Submit your test? This cannot be undone.', confirmText: 'Submit', danger: false }, function() {
+			questionView.style.display = 'none';
+			showLoading(true);
+			var fd = new FormData();
+			fd.append('KingdomId', currentKingdom);
+			fd.append('TestType',  currentType);
+			fd.append('Answers',   JSON.stringify(answers));
+			fetch(PnConfig.uir + 'QualTestAjax/submittest', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(j) {
+					showLoading(false);
+					if (j.status !== 0) { showError(j.error || 'Error submitting test.'); questionView.style.display = 'block'; return; }
+					showResult(j);
+				})
+				.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
+		});
+	});
+
+	function animateScore(target, duration) {
+		var start = null;
+		function step(ts) {
+			if (!start) start = ts;
+			var p = Math.min((ts - start) / duration, 1);
+			var eased = 1 - Math.pow(1 - p, 3);
+			resultScore.textContent = Math.round(eased * target) + '%';
+			if (p < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+
+	function fireConfetti() {
+		if (typeof window.confetti !== 'function') return;
+		var end = Date.now() + 2000;
+		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
+		(function frame() {
+			window.confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0, y: 0.7 }, colors: colors, zIndex: 2000 });
+			window.confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: colors, zIndex: 2000 });
+			if (Date.now() < end) requestAnimationFrame(frame);
+		})();
+	}
+
+	function showResult(j) {
+		quizInProgress = false; // test finished — closing is safe now
+		if (j.passed) {
+			fireConfetti();
+			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-pass';
+			resultHeading.textContent = 'Congratulations!';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-pass';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '% to pass. You scored ' + j.score_percent + '%. Well done!';
+			if (j.expires_at) {
+				var d = new Date(j.expires_at.replace(' ', 'T'));
+				resultExpiryText.textContent = 'Valid until ' + d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				resultExpiryWrap.style.display = 'block';
+			} else {
+				resultExpiryWrap.style.display = 'none';
+			}
+			retakeBtn.style.display = 'none';
+		} else {
+			resultIcon.innerHTML    = '<i class="fas fa-times-circle pn-quiz-result-fail" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-fail';
+			resultHeading.textContent = 'Not Quite';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-fail';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '%, you scored ' + j.score_percent + '%. Keep studying and try again!';
+			resultExpiryWrap.style.display = 'none';
+			retakeBtn.style.display = 'inline-block';
+		}
+		resultView.style.display = 'block';
+		resultScore.textContent = '0%';
+		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
+
+		if (j.passed) {
+			var card = document.querySelector('.pn-qt-card[data-type="' + currentType + '"]');
+			if (card) {
+				var statusEl = card.querySelector('.pn-qt-status');
+				var detailEl = card.querySelector('.pn-qt-detail');
+				if (statusEl) { statusEl.className = 'pn-qt-status pn-qt-status-pass'; statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Passed'; }
+				if (detailEl && j.expires_at) {
+					var d2 = new Date(j.expires_at.replace(' ', 'T'));
+					detailEl.textContent = 'Score: ' + j.score_percent + '% \u2014 Expires ' + d2.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				}
+				var takeBtn = card.querySelector('.pn-qt-take-btn');
+				if (takeBtn) takeBtn.innerHTML = '<i class="fas fa-play-circle"></i> Retake Test';
+			}
+			var valId = currentType === 'reeve' ? 'pn-qual-reeve-val' : 'pn-qual-corpora-val';
+			var sideVal = document.getElementById(valId);
+			if (sideVal && j.expires_at) {
+				var dSide = new Date(j.expires_at.replace(' ', 'T'));
+				var until = dSide.toISOString().slice(0,10);
+				sideVal.innerHTML = '<span class="pn-badge pn-badge-green">Until ' + until + '</span>';
+			}
+		}
+	}
+
+	// Guarded close: if a test is mid-progress, confirm (via the in-app dialog,
+	// matching Submit Test etc.) before discarding answers.
+	function requestCloseQuiz() {
+		if (!quizInProgress) {
+			overlay.classList.remove('pn-open');
+			return;
+		}
+		pnConfirm({
+			title: 'Leave the test?',
+			message: 'Your progress on this attempt will be lost and it won\'t be recorded.',
+			confirmText: 'Leave Test',
+			danger: true
+		}, function() {
+			quizInProgress = false;
+			overlay.classList.remove('pn-open');
+		});
+	}
+	closeBtn.addEventListener('click', requestCloseQuiz);
+	// The result-view "Close" is a finished test — no guard needed.
+	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
+	retakeBtn.addEventListener('click', function() {
+		resultView.style.display = 'none';
+		openModal(currentType, currentKingdom, currentLabel);
+	});
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) requestCloseQuiz(); });
+	// Escape closes the quiz too — via the same guard, so a mid-test Escape prompts
+	// before discarding progress.
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) requestCloseQuiz();
+	});
+
+	document.querySelectorAll('.pn-qt-reset-retakes-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			pnConfirm({ title: 'Reset Retake Count', message: 'Reset retake count for this player on this test?', confirmText: 'Reset', danger: true }, function() {
+				var fd = new FormData();
+				fd.append('KingdomId', btn.dataset.kingdom);
+				fd.append('PlayerId',  btn.dataset.player);
+				fd.append('TestType',  btn.dataset.type);
+				fetch(PnConfig.uir + 'QualTestAjax/resetplayerretakes', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status === 0) {
+							// Swap warning back to take button if present
+							var card = btn.closest('.pn-qt-card');
+							var warn = card && card.querySelector('.pn-qt-retake-warning');
+							if (warn) warn.style.display = 'none';
+							btn.textContent = '\u2713 Done';
+							setTimeout(function() { location.reload(); }, 1200);
+						} else { showError(j.error || 'Error resetting retakes.'); }
+					});
+			});
+		});
+	});
+
+	document.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			openModal(btn.dataset.type, btn.dataset.kingdom, btn.dataset.label);
+		});
+	});
+
+	// Past-attempts history: lazy-load the player's attempt list + per-attempt
+	// answer review. Reuses the shared attempts/attemptdetail endpoints, which
+	// authorize owner-or-manager; the button only renders for those viewers.
+	(function() {
+		function esc(s) {
+			return String(s == null ? '' : s)
+				.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+				.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+		}
+		function renderReview(attempt) {
+			if (!attempt || !attempt.Questions || !attempt.Questions.length) {
+				return '<div class="pn-qt-hist-empty">No answer detail was recorded for this attempt.</div>';
+			}
+			var html = '';
+			attempt.Questions.forEach(function(q, i) {
+				var archived = (q.Archived ? ' <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Archived</span>' : '') + (q.NotInLiveSet ? ' <span style="font-size:0.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:0 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Not in current test</span>' : '');
+				html += '<div class="pn-qt-rev-q ' + (q.Correct ? 'ok' : 'bad') + '">';
+				html += '<div class="pn-qt-rev-qh">' + (q.Correct ? '✓' : '✗') + ' ' + (i + 1) + '. ' + esc(q.QuestionText) + archived + '</div>';
+				(q.Options || []).forEach(function(o) {
+					var cls = o.IsCorrect ? 'correct' : (o.WasSelected ? 'wrong' : '');
+					var tag = o.WasSelected ? ' <em>(your pick)</em>' : (o.IsCorrect ? ' <em>(correct)</em>' : '');
+					html += '<div class="pn-qt-rev-opt ' + cls + '">' + esc(o.AnswerText) + tag + '</div>';
+				});
+				html += '</div>';
+			});
+			return html;
+		}
+		function post(endpoint, params, cb) {
+			var fd = new FormData();
+			Object.keys(params).forEach(function(k) { fd.append(k, params[k]); });
+			fetch(PnConfig.uir + endpoint, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); }).then(cb).catch(function() { cb(null); });
+		}
+		// Shared full-width panel below the cards — one at a time, uses the whole modal.
+		var panel      = document.getElementById('pn-qt-history-panel');
+		var panelBody  = document.getElementById('pn-qt-history-panel-body');
+		var panelTitle = document.getElementById('pn-qt-history-panel-title');
+		var panelClose = document.getElementById('pn-qt-history-panel-close');
+		var activeBtn  = null;
+
+		function closePanel() {
+			if (panel) panel.style.display = 'none';
+			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+			activeBtn = null;
+		}
+		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
+		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
+		if (panelClose) panelClose.addEventListener('click', closePanel);
+
+		// Per-attempt review expansion (delegated within the shared panel body).
+		if (panelBody) panelBody.addEventListener('click', function(e) {
+			var t = e.target && e.target.closest ? e.target.closest('.pn-qt-hist-toggle') : null;
+			if (!t) return;
+			var detail = t.nextElementSibling;
+			if (detail.style.display !== 'none') { detail.style.display = 'none'; return; }
+			detail.style.display = 'block';
+			if (detail.dataset.loaded) return;
+			detail.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+			post('QualTestAjax/attemptdetail', { AttemptId: t.dataset.attemptId }, function(j) {
+				detail.dataset.loaded = '1';
+				detail.innerHTML = renderReview(j && j.status === 0 ? j.attempt : null);
+			});
+		});
+
+		document.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!panel) return;
+				// Same button already open → toggle closed.
+				if (activeBtn === btn && panel.style.display !== 'none') { closePanel(); return; }
+				if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+				activeBtn = btn;
+				btn.setAttribute('aria-expanded', 'true');
+				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
+				panel.style.display = 'block';
+				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				post('QualTestAjax/attempts', {
+					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
+				}, function(j) {
+					if (activeBtn !== btn) return; // switched away before this load returned
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					panelBody.innerHTML = '';
+					j.attempts.forEach(function(a) {
+						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
+						var row = document.createElement('div');
+						row.className = 'pn-qt-hist-row ' + (a.Passed ? 'pass' : 'fail');
+						row.innerHTML =
+							'<button type="button" class="pn-qt-hist-toggle" data-attempt-id="' + a.QualAttemptId + '">' +
+								'<span class="pn-qt-hist-badge">' + (a.Passed ? '✓ Passed' : '✗ Not passed') + '</span>' +
+								'<span class="pn-qt-hist-score">' + a.ScorePercent + '%</span>' +
+								'<span class="pn-qt-hist-when">' + esc(when) + (a.RulesVersion ? ' · ' + esc(a.RulesVersion) : '') + '</span>' +
+							'</button>' +
+							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
+						panelBody.appendChild(row);
+					});
+				});
+			});
+		});
+	})();
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($canManageAwards): ?>
 <!-- Revoke Award Modal -->
@@ -2495,29 +6585,31 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<div id="pn-revoke-award-feedback" style="display:none"></div>
 			<div class="pn-revoke-award-name" id="pn-revoke-award-name"></div>
 			<div class="pn-acct-field">
-				<label for="pn-revoke-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<label for="pn-revoke-reason">Revocation Reason <span class="required-indicator">*</span></label>
 				<textarea id="pn-revoke-reason" rows="3" maxlength="300" placeholder="Why is this award being revoked?"></textarea>
 				<span class="pn-char-count" id="pn-revoke-char-count">300 characters remaining</span>
 			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-revoke-award-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-revoke-award-save" style="background:#c53030;color:#fff;"><i class="fas fa-ban"></i> Revoke Award</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-revoke-award-save"><i class="fas fa-ban"></i> Revoke Award</button>
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
+<?php if ($canEditNotes): ?>
 <!-- Add Note Modal -->
 <div class="pn-overlay" id="pn-addnote-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#2c5282"></i><span id="pn-addnote-modal-title">Add Note</span></h3>
+			<h3 class="pn-modal-title"><i class="fas fa-sticky-note pn-modal-title-icon"></i><span id="pn-addnote-modal-title">Add Note</span></h3>
 			<button class="pn-modal-close-btn" id="pn-addnote-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
 			<div id="pn-addnote-feedback" style="display:none"></div>
 			<div class="pn-acct-field">
-				<label for="pn-note-title">Note Title <span style="color:#e53e3e">*</span></label>
+				<label for="pn-note-title">Note Title <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-note-title" maxlength="200" placeholder="e.g. Promotion, Warning, Waypoint Import" />
 			</div>
 			<div class="pn-acct-field">
@@ -2526,7 +6618,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			</div>
 			<div class="pn-addnote-date-row">
 				<div class="pn-acct-field" style="flex:1">
-					<label for="pn-note-date">Date <span style="color:#e53e3e">*</span></label>
+					<label for="pn-note-date">Date <span class="required-indicator">*</span></label>
 					<input type="date" id="pn-note-date" />
 				</div>
 				<div class="pn-acct-field" style="flex:1">
@@ -2537,11 +6629,30 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-addnote-cancel">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-addnote-save"><i class="fas fa-save"></i> Add Note</button>
+			<button class="pn-btn pn-btn-primary" id="pn-addnote-save" disabled><i class="fas fa-save"></i> Add Note</button>
 		</div>
 	</div>
 </div>
 <?php endif; ?>
+
+<!-- Clear Notes Confirm Modal -->
+<div class="pn-overlay" id="pn-clearnotes-overlay">
+	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#c05621"></i>Close Out Notes Tab</h3>
+			<button class="pn-modal-close-btn" id="pn-clearnotes-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-clearnotes-feedback" style="display:none"></div>
+			<p style="margin:0 0 12px;font-size:14px;color:var(--ork-text)">This will permanently delete all notes on your profile and remove the Notes tab. This cannot be undone.</p>
+			<p style="margin:0;font-size:13px;color:var(--ork-text-muted)">Make sure you have reconciled any relevant information with your Monarch or Prime Minister before continuing.</p>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-clearnotes-cancel">Cancel</button>
+			<button class="pn-btn" id="pn-clearnotes-confirm" style="background:#c05621;color:#fff"><i class="fas fa-trash"></i> Delete All Notes</button>
+		</div>
+	</div>
+</div>
 
 <!-- Player Add Attendance Modal -->
 <style>
@@ -2590,11 +6701,11 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 </div>
 
 <!-- Edit Attendance Modal -->
-<?php if ($canEditAnyAttendance): ?>
+<?php if ($canEditAdmin): ?>
 <div class="pn-overlay" id="pn-att-edit-overlay">
 	<div class="pn-modal-box" style="max-width:400px">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Attendance</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt pn-modal-title-icon"></i>Edit Attendance</h3>
 			<button class="pn-modal-close-btn" id="pn-att-edit-close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -2627,17 +6738,21 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <!-- Move Player Modal -->
 <?php if ($canEditAdmin): ?>
 <style>
-.pn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
-.pn-mp-toggle-btn { flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; background:transparent; color:#718096; white-space:nowrap; }
-.pn-mp-toggle-btn.pn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.pn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.pn-mp-toggle-btn { flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#4a5568; white-space:nowrap; }
+.pn-mp-toggle-btn:hover { border-color:#a0aec0; }
+.pn-mp-toggle-btn.pn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.pn-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.pn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.pn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-.pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
+.pn-mp-player-locked { background:var(--ork-surface-light); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt" style="margin-right:8px;color:#2c5282"></i>Move Player</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt pn-modal-title-icon"></i>Move Player</h3>
 			<button class="pn-modal-close-btn" id="pn-moveplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -2654,10 +6769,12 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				<strong>Current park:</strong> <span id="pn-move-current-park-name"></span>
 			</div>
 			<div class="pn-acct-field">
-				<label id="pn-moveplayer-park-label">New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pn-moveplayer-park-name" placeholder="Search for a park…" autocomplete="off" />
+				<label id="pn-moveplayer-park-label">New Home Park <span class="required-indicator">*</span></label>
+				<div class="pn-mp-cascade">
+					<select class="pn-mp-cascade-sel" id="pn-mp-dfilter-kingdom" aria-label="Destination kingdom"></select>
+					<select class="pn-mp-cascade-sel" id="pn-mp-dfilter-park" aria-label="Destination park" style="display:none"></select>
+				</div>
 				<input type="hidden" id="pn-moveplayer-park-id" value="" />
-				<div class="pn-ac-results" id="pn-moveplayer-park-results"></div>
 			</div>
 			<div class="pn-move-warning">
 				<i class="fas fa-exclamation-triangle"></i>
@@ -2666,7 +6783,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-move-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-move-submit" disabled style="background:#c53030;color:#fff;"><i class="fas fa-arrows-alt"></i> Move Player</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-move-submit" disabled><i class="fas fa-arrows-alt"></i> Move Player</button>
 		</div>
 	</div>
 </div>
@@ -2690,14 +6807,14 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-revoke-all-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<label for="pn-revoke-all-reason">Revocation Reason <span class="required-indicator">*</span></label>
 				<textarea id="pn-revoke-all-reason" rows="3" maxlength="300" placeholder="Why are all awards being revoked?"></textarea>
 				<span class="pn-char-count" id="pn-revoke-all-char-count">300 characters remaining</span>
 			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-revoke-all-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-revoke-all-save" style="background:#c53030;color:#fff;" disabled><i class="fas fa-ban"></i> Revoke All Awards</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-revoke-all-save" disabled><i class="fas fa-ban"></i> Revoke All Awards</button>
 		</div>
 	</div>
 </div>
@@ -2706,7 +6823,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <div class="pn-overlay" id="pn-reconcile-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-sliders-h" style="margin-right:8px;color:#2c5282"></i>Edit Class Reconciliation</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-sliders-h pn-modal-title-icon"></i>Edit Class Reconciliation</h3>
 			<button class="pn-modal-close-btn" id="pn-reconcile-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body" style="padding:0">
@@ -2738,7 +6855,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <div class="pn-overlay" id="pn-unit-create-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Create Company or Household</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt pn-modal-title-icon"></i>Create Company or Household</h3>
 			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close" onclick="pnCloseUnitCreateModal()">&times;</button>
 		</div>
 		<div style="background:var(--ork-bg-secondary,#ebf8ff);border-bottom:1px solid var(--ork-border,#bee3f8);padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ork-text-secondary,#2c5282);line-height:1.5;">
@@ -2749,7 +6866,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<input type="hidden" name="Action" value="create">
 			<div class="pn-acct-modal-body">
 				<div class="pn-acct-field">
-					<label>Name <span style="color:#e53e3e">*</span></label>
+					<label>Name <span class="required-indicator">*</span></label>
 					<input type="text" name="Name" required placeholder="Enter a name…" autocomplete="off" id="pn-unit-create-name">
 				</div>
 				<div class="pn-acct-field">
@@ -2776,7 +6893,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <div class="pn-overlay" id="pn-unit-confirm-overlay">
 	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Confirm Creation</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt pn-modal-title-icon"></i>Confirm Creation</h3>
 		</div>
 		<div class="pn-modal-body" style="padding:20px;">
 			<p style="margin:0 0 8px;font-size:14px;color:var(--ork-text,#2d3748);">
@@ -2795,19 +6912,560 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <?php endif; ?>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script>
 $(function() {
-	if ($('#pn-rec-table').length) {
-		$('#pn-rec-table').DataTable({
-			order: [[2, 'desc']],
-			columnDefs: [
-				{ targets: [2], type: 'date' },
-				<?php if ($this->__session->user_id): ?>
-				{ targets: [-1], orderable: false, searchable: false },
-				<?php endif; ?>
-			],
-			pageLength: 25
+	// Voting eligibility badge — loaded async so it doesn't block page render
+	if (PnConfig.playerId) {
+		$.getJSON(PnConfig.uir + 'PlayerAjax/voting_eligible/' + PnConfig.playerId, function(r) {
+			if (r.status === 0 && r.eligible) {
+				var sub = '';
+				if (r.province_mode)     sub = r.province_eligible ? 'Province &amp; Kingdom' : 'Kingdom';
+				else if (r.active_knight) sub = 'Active Knight';
+				else if (r.active_member === false) sub = 'Contributing';
+				var $sub = $('#pn-voting-badge-sub');
+				if (sub) { $sub.html(sub).show(); }
+				$('#pn-voting-badge').show();
+			}
 		});
 	}
+
+	// ---- Attendance lazy loading (fires immediately on page load) ----
+	(function() {
+		if (!PnConfig.playerId) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/attendance/' + PnConfig.playerId, function(r) {
+			if (r.status !== 0) return;
+			var att = r.attendance || [];
+			var total = r.total || 0;
+
+			// Update PnConfig for use by other modals/JS
+			PnConfig.attendanceDates = att.map(function(a) { return a.Date || ''; }).filter(Boolean);
+			PnConfig.canEditAnyAttendance = !!r.canEditAnyAttendance;
+			PnConfig.lastClassId = att.length && att[0].ClassId ? parseInt(att[0].ClassId) : 0;
+
+			// Update stat card and tab count
+			var statEl = document.getElementById('pn-att-stat-count');
+			if (statEl) statEl.textContent = total;
+			var tabEl = document.getElementById('pn-att-tab-count');
+			if (tabEl) tabEl.textContent = '(' + total + ')';
+			var lastEl = document.getElementById('pn-att-last-class');
+			if (lastEl) lastEl.textContent = r.lastClass || '—';
+
+			// Re-render sparkline now that dates are populated
+			if (typeof pnRenderSparkline === 'function') pnRenderSparkline();
+
+			// ---- Inject "Reached Level 6" milestones into the timeline ----
+			// We compute these client-side (instead of server-side) because they
+			// need full attendance history, which is fetched async to keep the
+			// initial page render fast. Honors the user's milestone toggle config.
+			(function() {
+				var msCfg = PnConfig.milestoneConfig || {};
+				if (msCfg.level6 === 0) return; // disabled in user prefs
+				var newestFirst = msCfg.newest_first === 1;
+				var classList = PnConfig.classList || [];
+				if (!classList.length || !att.length) return;
+
+				// classId → { name, reconciled, history: [{date, credits}, ...] }
+				var classData = {};
+				classList.forEach(function(c) {
+					classData[c.ClassId] = { name: c.ClassName, reconciled: parseInt(c.Reconciled || 0), history: [] };
+				});
+				// Credit rule (mirror GetPlayerClasses): at most ONE class credit per
+				// calendar date, attributed to the earliest-entered (lowest AttendanceId)
+				// sign-in on that date. The raw feed can hold several sign-ins per day
+				// (multiple parks/classes); summing them all over-counted credits, which
+				// pushed the Level-6 date earlier than reality and could even report a
+				// level the player never actually reached.
+				var bestByDate = {};
+				att.forEach(function(a) {
+					if (!a.Date || a.Date === '0000-00-00') return;
+					var cid = parseInt(a.ClassId || 0);
+					if (!cid) return;
+					var aid = parseInt(a.AttendanceId || 0);
+					var prev = bestByDate[a.Date];
+					if (!prev || aid < prev.aid) {
+						bestByDate[a.Date] = { aid: aid, cid: cid, date: a.Date, credits: parseFloat(a.Credits || 0) };
+					}
+				});
+				Object.keys(bestByDate).forEach(function(d) {
+					var rec = bestByDate[d];
+					if (classData[rec.cid]) classData[rec.cid].history.push({ date: rec.date, credits: rec.credits });
+				});
+
+				var newMilestones = [];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var maxClassCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
+				Object.keys(classData).forEach(function(cid) {
+					var cd = classData[cid];
+					if (!cd.history.length) return;
+					cd.history.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+					var cum = cd.reconciled;
+					for (var i = 0; i < cd.history.length; i++) {
+						cum += cd.history[i].credits;
+						if (maxClassCredits !== null && cum >= maxClassCredits) {
+							newMilestones.push({ date: cd.history[i].date, name: cd.name });
+							break;
+						}
+					}
+				});
+				if (!newMilestones.length) return;
+
+				// Build a DOM node for one milestone matching the server template structure
+				function fmtDate(iso) {
+					var d = new Date(iso + 'T00:00:00');
+					if (isNaN(d.getTime())) return iso;
+					return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+				}
+				function makeTlItem(date, desc) {
+					var item = document.createElement('div');
+					item.className = 'pn-tl-item';
+					item.setAttribute('data-tl-date', date);
+					var human = fmtDate(date);
+					item.innerHTML = ''
+						+ '<div class="pn-tl-left"><div class="pn-tl-date">' + human + '</div></div>'
+						+ '<div class="pn-tl-node"><i class="fas fa-hat-wizard"></i></div>'
+						+ '<div class="pn-tl-right">'
+						+   '<div class="pn-tl-desc">' + $('<div>').text(desc).html() + '</div>'
+						+   '<span class="pn-tl-date-mobile">' + human + '</span>'
+						+ '</div>';
+					return item;
+				}
+				function makeCmsItem(date, desc) {
+					var item = document.createElement('div');
+					item.className = 'pn-cms-item';
+					item.setAttribute('data-tl-date', date);
+					var d = new Date(date + 'T00:00:00');
+					var my = isNaN(d.getTime()) ? date : (String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getFullYear()).slice(-2));
+					item.innerHTML = ''
+						+ '<i class="fas fa-hat-wizard pn-cms-icon"></i>'
+						+ '<div class="pn-cms-line"><strong>' + my + '</strong> &ndash; ' + $('<div>').text(desc).html() + '</div>';
+					return item;
+				}
+
+				function injectInto(container, itemSelector, factory) {
+					if (!container) return;
+					// Backfill data-tl-date on existing items (server template doesn't emit it).
+					var existing = container.querySelectorAll(itemSelector);
+					for (var k = 0; k < existing.length; k++) {
+						if (existing[k].getAttribute('data-tl-date')) continue;
+						var label = existing[k].querySelector('.pn-tl-date, .pn-cms-line strong');
+						if (!label) continue;
+						var txt = label.textContent.trim();
+						// Compact label is "MM/YY" — assume day=01 for sort.
+						var iso = null;
+						var m = txt.match(/^(\d{2})\/(\d{2})$/);
+						if (m) {
+							var yr = parseInt(m[2]); yr += yr < 70 ? 2000 : 1900;
+							iso = yr + '-' + m[1] + '-01';
+						} else {
+							var parsed = Date.parse(txt);
+							if (!isNaN(parsed)) {
+								var d2 = new Date(parsed);
+								iso = d2.getFullYear() + '-' + String(d2.getMonth()+1).padStart(2,'0') + '-' + String(d2.getDate()).padStart(2,'0');
+							}
+						}
+						if (iso) existing[k].setAttribute('data-tl-date', iso);
+					}
+					newMilestones.forEach(function(m) {
+						var node = factory(m.date, 'Reached Level 6 in ' + m.name);
+						var siblings = container.querySelectorAll(itemSelector);
+						var inserted = false;
+						for (var j = 0; j < siblings.length; j++) {
+							var sd = siblings[j].getAttribute('data-tl-date') || '';
+							if (sd && (newestFirst ? sd < m.date : sd > m.date)) {
+								container.insertBefore(node, siblings[j]);
+								inserted = true;
+								break;
+							}
+						}
+						if (!inserted) container.appendChild(node);
+					});
+				}
+
+				// Center-timeline view (default) and compact-sidebar view (opt-in).
+				injectInto(document.querySelector('.pn-timeline'), '.pn-tl-item', makeTlItem);
+				injectInto(document.querySelector('.pn-cms-card'), '.pn-cms-item', makeCmsItem);
+
+				// If we emitted an empty skeleton (no server-side milestones) and JS injected
+				// any level6 items, hide the empty-state placeholder so it doesn't show alongside.
+				var emptyTarget = document.getElementById('pn-timeline-empty-target');
+				var emptyState = document.getElementById('pn-timeline-empty-state');
+				if (emptyTarget && emptyState && emptyTarget.querySelector('.pn-tl-item')) {
+					emptyState.style.display = 'none';
+				}
+			})();
+
+			// ---- Attendance tab ----
+			var body = document.getElementById('pn-attendance-body');
+			if (body) {
+				var canEditAny = !!r.canEditAnyAttendance;
+				var parkAuth   = r.parkEditAuth || {};
+				var esc = function(s) { return $('<div>').text(s || '').html(); };
+				var uir = PnConfig.uir;
+				if (!att.length) {
+					body.innerHTML = '<div class="pn-empty">No attendance records</div>';
+				} else {
+					var html = '<table class="pn-table display" id="pn-attendance-table"><thead><tr>'
+						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
+						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
+						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
+						+ '<th data-sorttype="text">By</th>'
+						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
+						+ '</tr></thead><tbody>';
+					att.forEach(function(d) {
+						var pid = parseInt(d.ParkId) || 0;
+						var eid = parseInt(d.EventId) || 0;
+						var ecid = parseInt(d.EventCalendarDetailId) || 0;
+						var dateLink = pid > 0
+							? '<a href="' + uir + 'Attendance/park/' + pid + '&AttendanceDate=' + esc(d.Date) + '">' + esc(d.Date) + '</a>'
+							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
+						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
+						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						// "By" cell: show the entry source. signin_link / self_reg
+						// surface as labels (not a link to the player themselves —
+						// that would be redundant and look like "John entered
+						// John's credit"). manual shows the officer's name linked.
+						var byCell;
+						if (d.EntryMethod === 'signin_link') {
+							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:var(--ork-text-muted)">Self via Sign-in Link</em>';
+						} else if (d.EntryMethod === 'self_reg') {
+							byCell = '<em title="Awarded on account creation" style="color:var(--ork-text-muted)">Self-registration</em>';
+						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
+							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
+						} else {
+							byCell = '<span style="color:var(--ork-text-muted)">—</span>';
+						}
+						html += '<tr>'
+							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
+							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
+							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
+							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
+							+ '<td>' + classLabel + '</td>'
+							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
+							+ '<td>' + byCell + '</td>';
+						if (canEditAny) {
+							html += '<td class="pn-award-actions-cell">';
+							if (canEditThis) {
+								html += '<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"'
+									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'
+									+ ' data-date="' + esc(d.Date) + '"'
+									+ ' data-credits="' + parseFloat(d.Credits) + '"'
+									+ ' data-class-id="' + parseInt(d.ClassId) + '"'
+									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>'
+									+ ' <button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"'
+									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'
+									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' title="Delete attendance"><i class="fas fa-trash"></i></button>';
+							}
+							html += '</td>';
+						}
+						html += '</tr>';
+					});
+					body.innerHTML = html + '</tbody></table>';
+					pnInitDataTable('#pn-attendance-table', { order: [[0, 'desc']], filename: 'Attendance' });
+				}
+			}
+
+			// ---- My Amtgard sections (own profile only) ----
+			if (!PnConfig.isOwnProfile) return;
+
+			// Class Progress
+			var cpBody = document.getElementById('pna-class-progress-body');
+			if (cpBody) {
+				var recentClassIds = [], seen = {};
+				att.forEach(function(a) {
+					var cid = parseInt(a.ClassId) || 0;
+					if (cid > 0 && !seen[cid]) { seen[cid] = true; recentClassIds.push(cid); }
+				});
+				recentClassIds = recentClassIds.slice(0, 3);
+				var classList = PnConfig.classList || [];
+				var classMap = {};
+				classList.forEach(function(c) { classMap[parseInt(c.ClassId)] = c; });
+				var classToParagon = PnConfig.classToParagon || {};
+				var heldAwardIds = {};
+				(PnConfig.heldAwardIds || []).forEach(function(id) { heldAwardIds[parseInt(id)] = true; });
+				var maClasses = recentClassIds.map(function(cid) { return classMap[cid]; }).filter(function(c) {
+					return c && ((parseInt(c.Credits||0) + parseInt(c.Reconciled||0)) > 0);
+				});
+				if (!maClasses.length) { cpBody.innerHTML = ''; return; }
+				var maHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab(\'classes\');return false;">All &rarr;</a></div><div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>';
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var thresholds = [0].concat(levelThresholds);
+				var maxCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
+				maClasses.forEach(function(mc) {
+					var total = parseInt(mc.Credits||0) + parseInt(mc.Reconciled||0);
+					var lvl = 1;
+					for (var ti = levelThresholds.length - 1; ti >= 0; ti--) {
+						if (total >= levelThresholds[ti]) { lvl = ti + 2; break; }
+					}
+					var isMax = maxCredits !== null && total >= maxCredits;
+					var pct = isMax ? 100 : Math.round((total / (thresholds[lvl] || 1)) * 100);
+					var next = thresholds[lvl] || maxCredits;
+					var parId = classToParagon[parseInt(mc.ClassId)] || 0;
+					var hasPar = parId > 0 && !!heldAwardIds[parId];
+					maHtml += '<div class="pna-class-row">'
+						+ '<div class="pna-class-header">'
+						+ '<span class="pna-class-name">' + $('<div>').text(mc.ClassName||'').html() + (hasPar ? ' <span class="pna-paragon-dot" title="Paragon"><i class="fas fa-crown"></i></span>' : '') + '</span>'
+						+ '<span class="pna-class-level">L' + lvl + (isMax ? ' <i class="fas fa-star" style="color:#dd6b20" title="Max level"></i>' : '') + '</span>'
+						+ '</div>'
+						+ '<div class="pna-bar-wrap"><div class="pna-bar' + (isMax?' pna-bar-max':'') + '" style="width:' + pct + '%"></div></div>'
+						+ '<div class="pna-class-credits">' + total + ' cr' + (!isMax ? ' &middot; ' + next + ' for L' + (lvl+1) : '') + '</div>'
+						+ '</div>';
+				});
+				cpBody.innerHTML = maHtml + '</div>';
+			}
+
+			// Recent Sign-ins
+			var raBody = document.getElementById('pna-recent-att-body');
+			if (raBody) {
+				var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+				var cutStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth()+1).padStart(2,'0') + '-' + String(cutoff.getDate()).padStart(2,'0');
+				var recAtt = att.filter(function(a) { return a.Date && a.Date >= cutStr; }).slice(0, 5);
+				var months2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+				var raHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-calendar-check"></i> Recent Sign-ins <a class="pna-card-more" href="#" onclick="pnActivateTab(\'attendance\');return false;">All ' + total + ' &rarr;</a></div>';
+				if (recAtt.length) {
+					recAtt.forEach(function(ra) {
+						var d2 = new Date(ra.Date + 'T00:00:00');
+						var lbl = months2[d2.getMonth()] + ' ' + d2.getDate();
+						raHtml += '<div class="pna-feed-row">'
+							+ '<span class="pna-feed-date">' + lbl + '</span>'
+							+ '<span class="pna-feed-label">' + $('<div>').text(ra.ClassName||'—').html() + '</span>'
+							+ (ra.ParkName ? '<span class="pna-feed-sub">' + $('<div>').text(ra.ParkName).html() + '</span>' : '')
+							+ '</div>';
+					});
+				} else {
+					raHtml += '<div style="font-size:12px;color:#718096;line-height:1.5;">No recent sign-ins. Check out the next events and park days in your <a href="' + PnConfig.kingdomUrl + '" style="color:#4299e1;">kingdom</a>.</div>';
+				}
+				raBody.innerHTML = raHtml + '</div>';
+			}
+		});
+	})();
+
+	// ---- Dues history lazy loading ----
+	function pnRenderDuesHtml(dues, isAdmin) {
+		if (!dues || !dues.length) return '<div class="pn-dues-modal-empty">No dues records on file</div>';
+		var html = '<table class="pn-dues-modal-table"><thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th>'
+			+ (isAdmin ? '<th></th>' : '') + '</tr></thead><tbody>';
+		dues.forEach(function(d) {
+			var status;
+			if (d.DuesForLife == 1) status = '<span class="pn-dues-life">Lifetime</span>';
+			else if (d.Revoked) status = '<span style="color:#e53e3e">Revoked</span>';
+			else if (d.DuesUntil && new Date(d.DuesUntil) < new Date()) status = '<span style="color:#999">Expired</span>';
+			else status = '<span style="color:#38a169">Active</span>';
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			html += '<tr>'
+				+ '<td>' + esc(d.ParkName) + '</td>'
+				+ '<td>' + esc(d.DuesFrom || '—') + '</td>'
+				+ '<td>' + (d.DuesForLife == 1 ? '—' : esc(d.DuesUntil)) + '</td>'
+				+ '<td>' + status + '</td>'
+				+ (isAdmin ? '<td>' + (!d.Revoked ? '<button class="pn-dues-revoke-btn" data-dues-id="' + parseInt(d.DuesId) + '">Revoke</button>' : '') + '</td>' : '')
+				+ '</tr>';
+		});
+		return html + '</tbody></table>';
+	}
+	var pnDuesCache = null;
+	function pnLoadDuesInto(elId, isAdmin) {
+		var el = document.getElementById(elId);
+		if (!el) return;
+		if (pnDuesCache !== null) { el.innerHTML = pnRenderDuesHtml(pnDuesCache, isAdmin); return; }
+		$.getJSON(PnConfig.uir + 'PlayerAjax/all_dues/' + PnConfig.playerId, function(r) {
+			pnDuesCache = (r.status === 0) ? (r.dues || []) : [];
+			el.innerHTML = pnRenderDuesHtml(pnDuesCache, isAdmin);
+		}).fail(function() { el.innerHTML = '<div class="pn-dues-modal-empty">Unable to load dues history.</div>'; });
+	}
+	if (typeof pnOpenDuesModal === 'function') {
+		var _origDues = pnOpenDuesModal;
+		pnOpenDuesModal = function() { _origDues(); pnLoadDuesInto('pn-dues-history-body', true); };
+	}
+	if (typeof pnOpenDuesHistoryModal === 'function') {
+		var _origDuesH = pnOpenDuesHistoryModal;
+		pnOpenDuesHistoryModal = function() { _origDuesH(); pnLoadDuesInto('pn-dues-history-modal-body', false); };
+	}
+
+	// ---- Notes lazy loading ----
+	var pnNotesLoaded = false;
+	function pnLoadNotes() {
+		if (pnNotesLoaded) return;
+		pnNotesLoaded = true;
+		var body = document.getElementById('pn-notes-body');
+		if (!body) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/notes/' + PnConfig.playerId, function(r) {
+			var notes = (r.status === 0) ? (r.notes || []) : [];
+			var countEl = document.getElementById('pn-notes-tab-count');
+			if (countEl) countEl.textContent = '(' + notes.length + ')';
+			// Infobox is PHP-rendered with notes=0 (lazy load), so swap it here once
+			// we know the real count from the AJAX response.
+			var _ihas = document.getElementById('pn-notes-infobox-has');
+			var _inone = document.getElementById('pn-notes-infobox-none');
+			if (_ihas)  _ihas.style.display  = notes.length > 0 ? '' : 'none';
+			if (_inone) _inone.style.display = notes.length > 0 ? 'none' : '';
+			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			var html = '<table class="pn-table display" id="pn-history-table"><thead><tr><th data-sorttype="text">Note</th><th data-sorttype="text">Description</th><th data-sorttype="date">Date</th>'
+				+ (PnConfig.canEditAdmin ? '<th class="pn-nosort" style="width:60px"></th>' : '') + '</tr></thead><tbody>';
+			notes.forEach(function(n) {
+				var nid = parseInt(n.NoteId) || 0;
+				var dt = esc(n.Date || '');
+				var dc = (n.DateComplete && n.DateComplete !== '0000-00-00') ? (' - ' + esc(n.DateComplete)) : '';
+				html += '<tr data-notes-id="' + nid + '">'
+					+ '<td>' + esc(n.Note) + '</td>'
+					+ '<td>' + esc(n.Description) + '</td>'
+					+ '<td class="pn-col-nowrap" data-order="' + esc(n.Date || '') + '">' + dt + dc + '</td>';
+				if (PnConfig.canEditAdmin) {
+					html += '<td class="pn-award-actions-cell">'
+						+ '<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"'
+						+ ' data-notes-id="' + nid + '"'
+						+ ' data-note="' + esc(n.Note).replace(/"/g, '&quot;') + '"'
+						+ ' data-desc="' + esc(n.Description).replace(/"/g, '&quot;') + '"'
+						+ ' data-date="' + esc(n.Date) + '"'
+						+ ' data-date-complete="' + esc(n.DateComplete) + '"'
+						+ ' title="Edit note"><i class="fas fa-pencil-alt"></i></button> '
+						+ '<button class="pn-award-action-btn pn-award-del-btn pn-note-del-btn" data-notes-id="' + nid + '" title="Delete note"><i class="fas fa-trash"></i></button>'
+						+ '</td>';
+				}
+				html += '</tr>';
+			});
+			body.innerHTML = html + '</tbody></table>';
+			pnInitDataTable('#pn-history-table', { order: [[2, 'desc']], filename: 'Notes' });
+		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load notes.</div>'; });
+	}
+
+	// ---- Recommendations lazy loading ----
+	var pnRecsLoaded = false;
+	function pnLoadRecs() {
+		if (pnRecsLoaded) return;
+		pnRecsLoaded = true;
+		var body = document.getElementById('pn-recs-body');
+		if (!body) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/recommendations/' + PnConfig.playerId, function(r) {
+			if (r.status === 5) { body.innerHTML = '<div class="pn-empty">Log in to see recommendations.</div>'; return; }
+			var allRecs = (r.status === 0 && r.recs) ? r.recs.filter(function(x) { return !x.AlreadyHas; }) : [];
+			var myRecs  = allRecs.filter(function(x) { return x.RecommendedById == PnConfig.loggedInUserId; });
+			var recList = PnConfig.showRecsTab ? allRecs : myRecs;
+			var countEl = document.getElementById('pn-recs-tab-count');
+			if (countEl) countEl.textContent = '(' + recList.length + ')';
+			if (!recList.length) { body.innerHTML = '<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.</div>'; return; }
+			var hasActions = PnConfig.loggedInUserId > 0;
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			var attr = function(s) { return esc(s).replace(/"/g, '&quot;'); };
+			var truncNotes = function(s) {
+				var txt = s || '';
+				if (txt.length <= 50) return esc(txt);
+				return '<span class="pk-rec-notes-short">' + esc(txt.substring(0, 50))
+					+ '<span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span>'
+					+ '<span class="pk-rec-notes-full" style="display:none">' + esc(txt.substring(50)) + ' <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span>'
+					+ '</span>';
+			};
+			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
+				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
+				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
+				+ '</tr></thead><tbody>';
+			recList.forEach(function(rec) {
+				var kaid  = parseInt(rec.KingdomAwardId) || 0;
+				var recId = parseInt(rec.RecommendationsId) || 0;
+				var mid   = parseInt(rec.MundaneId) || 0;
+				var rank  = rec.Rank && parseInt(rec.Rank) > 0 ? parseInt(rec.Rank) : '';
+				var secCount = parseInt(rec.SecondsCount) || 0;
+				var canEditReason = !!rec.ViewerCanEditReason;
+				var canSecond = !!rec.ViewerCanSecond;
+
+				// Reason cell — text + (optional) edit-pencil + seconds list
+				var reasonCell = esc(rec.Reason);
+				if (canEditReason) {
+					reasonCell += ' <button class="rs-edit-reason-btn" data-rec="' + recId + '" data-reason="' + attr(rec.Reason) + '" data-award="' + attr(rec.AwardName) + '" data-rstip="Edit your reason"><i class="fas fa-pen"></i></button>';
+				}
+				if (secCount > 0 && Array.isArray(rec.Seconds)) {
+					reasonCell += '<div class="rs-seconds">';
+					rec.Seconds.forEach(function(s) {
+						var supLink = '<a class="rs-supporter" href="' + PnConfig.uir + 'Player/profile/' + parseInt(s.SupporterMundaneId) + '">' + esc(s.SupporterName) + '</a>';
+						var notesPart = (s.Notes && s.Notes.length > 0)
+							? '<span class="rs-notes">&mdash; "' + truncNotes(s.Notes) + '"</span>'
+							: '';
+						// Edit (pencil) is supporter-only — server gates EditSecondNotes that way.
+						// Withdraw mirrors recommendation-delete: supporter OR anyone with
+						// park-level rec-delete authority (PnConfig.canDeleteRec).
+						// Wrap both in rs-second-actions so they always wrap as a unit.
+						var actionButtons = '';
+						if (s.IsMine) {
+							actionButtons += '<button class="rs-second-edit" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-notes="' + attr(s.Notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>';
+						}
+						if (s.IsMine || PnConfig.canDeleteRec) {
+							var withdrawTip = s.IsMine ? 'Withdraw your second' : 'Remove this second';
+							actionButtons += '<button class="rs-second-withdraw" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-supporter="' + attr(s.SupporterName) + '" data-rstip="' + withdrawTip + '"><i class="fas fa-times"></i></button>';
+						}
+						var secondButtons = actionButtons ? ' <span class="rs-second-actions">' + actionButtons + '</span>' : '';
+						reasonCell += '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + secondButtons + '</div>';
+					});
+					reasonCell += '</div>';
+				}
+
+				html += '<tr data-rec-id="' + recId + '">'
+					+ '<td>' + esc(rec.AwardName) + '</td>'
+					+ '<td class="pn-col-numeric">' + rank + '</td>'
+					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
+					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
+					+ '<td class="pk-rec-notes">' + reasonCell + '</td>';
+				if (hasActions) {
+					var actions = '';
+					if (secCount > 0) {
+						actions += '<span class="rs-seconds-badge" data-rstip="' + secCount + ' supporting ' + (secCount === 1 ? 'second' : 'seconds') + '"><i class="fas fa-thumbs-up"></i>' + secCount + '</span>';
+					}
+					if (canSecond) {
+						actions += '<button class="rs-action-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
+					}
+					if (PnConfig.canManageAwards && kaid > 0) {
+						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||''});
+						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
+					}
+					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;
+					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Delete</button>';
+					html += '<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">' + actions + '</td>';
+				}
+				html += '</tr>';
+			});
+			body.innerHTML = html + '</tbody></table>';
+			pnInitDataTable('#pn-rec-table', { order: [[2, 'desc']], filename: 'Recommendations' });
+		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
+	}
+
+	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
+	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
+	window.pnReloadNotes = function() { pnNotesLoaded = false; pnLoadNotes(); };
+
+	// Hook tab clicks to trigger lazy loading
+	$(document).on('click', '.pn-tab-nav li', function() {
+		var tab = $(this).data('tab');
+		if (tab === 'history')         pnLoadNotes();
+		if (tab === 'recommendations') pnLoadRecs();
+	});
 });
+initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
+// Username availability check on the Update Account modal. currentValue
+// prevents the player's existing username from being flagged as "taken"
+// against their own row.
+if (typeof initUsernameAvailabilityCheck === 'function' && document.getElementById('pn-acct-username')) {
+	window.pnAcctUsernameCheck = initUsernameAvailabilityCheck({
+		inputId:      'pn-acct-username',
+		statusId:     'pn-acct-username-status',
+		submitBtnId:  'pn-acct-save',
+		endpointUrl:  '<?= UIR ?>PlayerAjax/check_username',
+		gateMode:     'soft',
+		currentValue: <?= json_encode($Player['UserName'] ?? '') ?>
+	});
+	// Reset on modal open so a stale "X is taken" from a previous edit
+	// session doesn't linger when the modal is reopened.
+	var _origPnOpenAcct = window.pnOpenAccountModal;
+	if (typeof _origPnOpenAcct === 'function') {
+		window.pnOpenAccountModal = function() {
+			var r = _origPnOpenAcct.apply(this, arguments);
+			if (window.pnAcctUsernameCheck && window.pnAcctUsernameCheck.reset) window.pnAcctUsernameCheck.reset();
+			return r;
+		};
+	}
+}
 </script>
+
+

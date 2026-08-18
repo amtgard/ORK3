@@ -21,16 +21,17 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'scope';
 
-if (($report_type ?? null) === 'Park' && !empty($Awards)) {
-	$first       = reset($Awards);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)($report_id ?? 0);
+// Scope label comes from the request (set by controller), not the first row —
+// result rows can mix kingdoms when filtering by attendance kingdom while
+// selecting home-kingdom names.
+if (($report_type ?? null) === 'Park' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (($report_type ?? null) === 'Kingdom' && !empty($Awards)) {
-	$first       = reset($Awards);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
+} elseif (($report_type ?? null) === 'Kingdom' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -40,7 +41,7 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 .rp-guild-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -53,6 +54,16 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 }
 .rp-guild-pill:hover { background: #eef2ff; }
 .rp-guild-pill.rp-guild-pill-active { background: #4338ca; color: #fff; border-color: #4338ca; }
+
+html[data-theme="dark"] .rp-guild-pill {
+	background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border);
+}
+html[data-theme="dark"] .rp-guild-pill:hover {
+	background: var(--ork-bg-tertiary); color: var(--ork-text); border-color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
+	background: #44337a; color: #d6bcfa; border-color: #6b46c1;
+}
 </style>
 
 <div class="rp-root">
@@ -221,6 +232,7 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -241,6 +253,10 @@ $(function() {
 		pageLength: 25,
 		order: <?php
 			$sortOrder = [];
+			// Kingdom column (col 0) is shown unless scoped to one kingdom — sort by it first.
+			if (($report_type ?? null) !== 'Kingdom') {
+				$sortOrder[] = [0, 'asc'];
+			}
 			if (($report_type ?? null) !== 'Park') {
 				$parkCol    = ($report_type ?? null) !== 'Kingdom' ? 1 : 0;
 				$sortOrder[] = [$parkCol, 'asc'];
@@ -272,6 +288,6 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

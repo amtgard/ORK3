@@ -40,7 +40,7 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 .rp-guild-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -53,6 +53,9 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 }
 .rp-guild-pill:hover { background: #eef2ff; }
 .rp-guild-pill.rp-guild-pill-active { background: #4338ca; color: #fff; border-color: #4338ca; }
+html[data-theme="dark"] .rp-guild-pill { background: var(--ork-bg-secondary); border-color: #4c51bf; color: #a5b4fc; }
+html[data-theme="dark"] .rp-guild-pill:hover { background: #2d3748; border-color: #818cf8; color: #c7d2fe; }
+html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active { background: #4338ca; border-color: #4338ca; color: #fff; }
 </style>
 
 <div class="rp-root">
@@ -220,6 +223,7 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -261,6 +265,6 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

@@ -26,7 +26,7 @@
 	}
 	ksort($parkAuthsByPark);
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* Green accent override */
@@ -83,6 +83,11 @@
 
 /* Officer role pill */
 .ap-officer { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; background:#fef3c7; color:#92400e; letter-spacing:.03em; margin-left:5px; }
+/* Direct-grant pill: same geometry as ap-officer, muted palette */
+.ap-direct  { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; background:#edf2f7; color:#4a5568; letter-spacing:.03em; margin-left:5px; font-style:italic; }
+/* Direct-grant pill when redundant (mundane also has an officer-derived grant in this scope) */
+.ap-direct.ap-direct-redundant { background:#fef5e7; color:#9a3412; }
+.ap-redundant-hint { display:block; margin-top:3px; font-size:11px; color:#9a3412; font-style:italic; }
 
 /* Delete button */
 .ap-del { background:none; border:1px solid #fed7d7; color:#e53e3e; border-radius:4px; padding:3px 10px; font-size:12px; cursor:pointer; font-family:inherit; }
@@ -95,9 +100,27 @@
 
 .kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
-.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
+.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; outline:none; }
 .kn-ac-item:last-child { border-bottom:none; }
-.kn-ac-item:hover, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; }
+.kn-ac-item:hover, .kn-ac-item:focus, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; outline:none; }
+
+html[data-theme="dark"] .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-ac-item:hover,
+html[data-theme="dark"] .kn-ac-item:focus,
+html[data-theme="dark"] .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); outline:none; }
+
+html[data-theme="dark"] .ap-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .ap-field input,
+html[data-theme="dark"] .ap-field select { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
+html[data-theme="dark"] .ap-table td { color:var(--ork-text-secondary); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .ap-table tr:hover td { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ap-role-block { background:var(--ork-bg-secondary); border-color:var(--ork-border); }
+html[data-theme="dark"] .ap-explainer { background:rgba(56,161,105,0.1); border-color:rgba(56,161,105,0.3); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .ap-del { border-color:rgba(197,48,48,0.4); color:#fc8181; }
+html[data-theme="dark"] .ap-del:hover { background:rgba(197,48,48,0.15); }
+html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-color:#c53030; color:#fff; }
+
 </style>
 
 <div class="rp-root">
@@ -146,9 +169,6 @@
 					<select id="ap-role-select">
 						<option value="create">Create</option>
 						<option value="edit">Edit</option>
-						<?php if ($canGrantAdmin && $type !== 'Event'): ?>
-						<option value="admin">Administrator</option>
-						<?php endif; ?>
 					</select>
 				</div>
 				<button class="ap-btn" id="ap-add-btn" disabled>
@@ -174,7 +194,7 @@
 					<?php if ($type === 'Kingdom'): ?>
 					<li>Edit kingdom name, heraldry &amp; settings</li>
 					<li>Set and vacate officer roles (Monarch, Regent, etc.)</li>
-					<li>Add, edit, and claim parks within the kingdom</li>
+					<li>Add and edit parks within the kingdom</li>
 					<li>Manage kingdom-level awards and park titles</li>
 					<li>Track kingdom-wide attendance</li>
 					<li>Grant and revoke permissions for others</li>
@@ -215,16 +235,6 @@
 					<?php endif; ?>
 				</ul>
 			</div>
-			<?php if ($type !== 'Event'): ?>
-			<div class="ap-role-block">
-				<div class="ap-role-block-title"><span class="ap-role ap-role-admin">Administrator</span></div>
-				<ul>
-					<li>System-wide access — satisfies <em>all</em> authorization checks regardless of scope</li>
-					<li>Not scoped to this <?= strtolower(htmlspecialchars($type)) ?> alone</li>
-					<li>Use sparingly; prefer Create for local admins</li>
-				</ul>
-			</div>
-			<?php endif; ?>
 		</div>
 		<?php if ($type === 'Kingdom'): ?>
 		<p style="margin:10px 0 0;font-size:12px;color:var(--rp-text-muted)"><i class="fas fa-level-up-alt" style="margin-right:4px"></i><strong>Cascade:</strong> Kingdom Create/Edit access automatically satisfies the same check at any park within the kingdom — no separate park grant needed.</p>
@@ -332,6 +342,17 @@
 				</tr>
 			</thead>
 			<tbody id="ap-kingdom-tbody">
+				<?php
+				// Pre-pass: collect mundane_ids that have an officer-derived grant
+				// in this scope, so we can flag manual grants on the same mundane
+				// as redundant (the officer grant already confers the same powers).
+				$_officerHolders = [];
+				foreach ($auths as $_pa) {
+					if (!empty($_pa['OfficerId']) && (int)$_pa['MundaneId'] > 0) {
+						$_officerHolders[(int)$_pa['MundaneId']] = true;
+					}
+				}
+				?>
 				<?php foreach ($auths as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
@@ -351,8 +372,12 @@
 					<td>
 						<?php if (!empty($a['OfficerRole'])): ?>
 							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
-						<?php else: ?>
-							<span style="color:var(--rp-text-hint);font-size:12px">—</span>
+						<?php else:
+							$_redundant = !empty($_officerHolders[(int)$a['MundaneId']]); ?>
+							<span class="ap-direct<?= $_redundant ? ' ap-direct-redundant' : '' ?>" title="<?= $_redundant ? 'This player already has an officer-derived grant in the same scope. Removing this manual grant is safe — the officer grant will continue to confer the same access.' : 'Granted access directly, not through an officer position. The original grantor is not tracked.' ?>">Manually Added<?= $_redundant ? ' (redundant)' : '' ?></span>
+							<?php if ($_redundant): ?>
+								<span class="ap-redundant-hint">Officer grant covers this — safe to remove</span>
+							<?php endif; ?>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">
@@ -409,14 +434,6 @@
 					<li>Cannot manage park settings, events, awards, or grant permissions</li>
 				</ul>
 			</div>
-			<div class="ap-role-block">
-				<div class="ap-role-block-title"><span class="ap-role ap-role-admin">Administrator</span></div>
-				<ul>
-					<li>System-wide access — satisfies <em>all</em> authorization checks regardless of scope</li>
-					<li>Not scoped to this park alone</li>
-					<li>Use sparingly; prefer Create for local park admins</li>
-				</ul>
-			</div>
 		</div>
 		<p style="margin:10px 0 0;font-size:12px;color:var(--rp-text-muted)"><i class="fas fa-info-circle" style="margin-right:4px"></i>Officers listed here received their access automatically when assigned their officer role — it will be revoked when the role is vacated.</p>
 	</div>
@@ -442,6 +459,16 @@
 						</a>
 					</td>
 				</tr>
+				<?php
+				// Pre-pass for this park: which mundanes already have an officer
+				// grant in this park? Manual grants on the same mundane are redundant.
+				$_officerHolders = [];
+				foreach ($entries as $_pa) {
+					if (!empty($_pa['OfficerId']) && (int)$_pa['MundaneId'] > 0) {
+						$_officerHolders[(int)$_pa['MundaneId']] = true;
+					}
+				}
+				?>
 				<?php foreach ($entries as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
@@ -461,8 +488,12 @@
 					<td>
 						<?php if (!empty($a['OfficerRole'])): ?>
 							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
-						<?php else: ?>
-							<span style="color:var(--rp-text-hint);font-size:12px">—</span>
+						<?php else:
+							$_redundant = !empty($_officerHolders[(int)$a['MundaneId']]); ?>
+							<span class="ap-direct<?= $_redundant ? ' ap-direct-redundant' : '' ?>" title="<?= $_redundant ? 'This player already has an officer-derived grant in the same scope. Removing this manual grant is safe — the officer grant will continue to confer the same access.' : 'Granted access directly, not through an officer position. The original grantor is not tracked.' ?>">Manually Added<?= $_redundant ? ' (redundant)' : '' ?></span>
+							<?php if ($_redundant): ?>
+								<span class="ap-redundant-hint">Officer grant covers this — safe to remove</span>
+							<?php endif; ?>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">

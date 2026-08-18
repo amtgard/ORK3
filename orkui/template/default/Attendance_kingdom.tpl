@@ -41,7 +41,7 @@ $show_charts = $total > 0;
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Attendance-specific styles ───────────────────── */
@@ -198,6 +198,48 @@ $show_charts = $total > 0;
 }
 .att-edit-btn-save:hover:not(:disabled) { background: #3730a3; }
 .att-edit-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Active-event banner: surfaced when an event is happening at this scope on
+   the rendered date — nudges the user toward Event-attendance instead. */
+.att-event-nudge {
+	display: flex; gap: 10px; align-items: flex-start;
+	padding: 10px 12px; margin-bottom: 12px;
+	background: var(--ork-alert-info-bg, #ebf8ff);
+	border: 1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left: 3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius: 6px;
+	color: var(--ork-alert-info-text, #2a4365);
+	font-size: 0.82rem; line-height: 1.45;
+}
+.att-event-nudge-icon { font-size: 16px; color: var(--ork-alert-info-text, #2b6cb0); flex-shrink: 0; margin-top: 1px; }
+.att-event-nudge-body { flex: 1; min-width: 0; }
+.att-event-nudge-text { margin: 0 0 8px 0; }
+.att-event-nudge-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 6px 12px; border-radius: 6px;
+	background: var(--ork-link, #2b6cb0); color: #fff;
+	font-size: 0.78rem; font-weight: 600; text-decoration: none;
+	transition: background 0.15s;
+}
+.att-event-nudge-btn:hover { background: var(--ork-link-bright, #3182ce); color: #fff; text-decoration: none; }
+.att-event-nudge-btn i { font-size: 0.7rem; }
+
+/* =====================================================
+   DARK MODE — Attendance form + edit modal (.att-*)
+   ===================================================== */
+html[data-theme="dark"] .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-form-input, html[data-theme="dark"] .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
 </style>
 
 <div class="rp-root">
@@ -279,6 +321,15 @@ $show_charts = $total > 0;
 				<div class="att-form-card-body">
 <?php if ($Error) : ?>
 					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
+<?php endif; ?>
+<?php if (!empty($ActiveEvent)) : ?>
+					<div class="att-event-nudge">
+						<div class="att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+						<div class="att-event-nudge-body">
+							<p class="att-event-nudge-text">It looks like <strong><?=htmlspecialchars($ActiveEvent['Name'])?></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+							<a class="att-event-nudge-btn" href="<?=UIR?>Event/detail/<?=(int)$ActiveEvent['EventId']?>/<?=(int)$ActiveEvent['EventCalendarDetailId']?>">Go To Event <i class="fas fa-arrow-right"></i></a>
+						</div>
+					</div>
 <?php endif; ?>
 					<form method="post" action="<?=UIR?>Attendance/kingdom/<?=$Id?>/new">
 						<div class="att-form-group">
@@ -428,6 +479,7 @@ $show_charts = $total > 0;
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -518,11 +570,19 @@ $(function() {
 		scrollX: true
 	});
 	$('#att-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('#att-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 	/* ── Charts ──────────────────────────────────────── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+	var _ttOpts = {
+		headerFormat: '',
+		pointFormat: '<b>{point.category}</b>: {point.y}',
+		backgroundColor: _isDark ? '#1e293b' : undefined,
+		borderColor: _isDark ? '#334155' : undefined,
+		style: { color: _isDark ? '#e2e8f0' : '#333333' }
+	};
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-park-chart', type: 'column',
+		chart: { renderTo: 'att-park-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {
@@ -533,12 +593,12 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($park_counts))?>, color: '#4338ca' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: _ttOpts,
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-class-chart', type: 'column',
+		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {
@@ -549,7 +609,7 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($class_counts))?>, color: '#7c3aed' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: _ttOpts,
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 <?php endif; ?>

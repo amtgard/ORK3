@@ -9,7 +9,7 @@ $kingdomList = is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'] ?? nu
 $kingdoms       = array_values(array_filter($kingdomList, fn($k) => !$k['IsPrincipality']));
 $principalities = array_filter($kingdomList, fn($k) => $k['IsPrincipality']);
 
-$totalParks      = array_sum(array_column($kingdomList, 'ParkCount'));
+$totalParks      = array_sum(array_column($kingdoms, 'ParkCount')); // kingdoms only — principality parks are already included in parent kingdom count
 $totalKingdoms   = count($kingdoms);
 $totalAttendance = array_sum(array_column($kingdomList, 'Attendance'));
 $uir             = UIR;
@@ -50,6 +50,11 @@ function cpTrend(int $cur, ?int $prev): string {
 			<div class="cp-hero-stat">
 				<span class="cp-hero-stat-val"><?= count($kingdoms) ?></span>
 				<span class="cp-hero-stat-lbl">Kingdoms</span>
+			</div>
+			<div class="cp-hero-stat-div"></div>
+			<div class="cp-hero-stat">
+				<span class="cp-hero-stat-val"><?= count($principalities) ?></span>
+				<span class="cp-hero-stat-lbl">Principalities</span>
 			</div>
 			<div class="cp-hero-stat-div"></div>
 			<div class="cp-hero-stat">
@@ -143,6 +148,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Create Park</div>
 					<div class="cp-action-desc">Add a new park to any kingdom</div>
 				</button>
+				<a class="cp-action-card" href="<?= UIR ?>Admin/inactivekingdoms" style="text-decoration:none">
+					<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
+					<div class="cp-action-label">Inactive Kingdoms</div>
+					<div class="cp-action-desc">Retired kingdoms &amp; principalities</div>
+				</a>
 			</div>
 		</div>
 
@@ -182,6 +192,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Migrate Park Members</div>
 					<div class="cp-action-desc">Move all members from one park to another</div>
 				</button>
+			<a class="cp-action-card" href="<?= UIR ?>Admin/inactiveparks" style="text-decoration:none">
+				<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
+				<div class="cp-action-label">Inactive Parks</div>
+				<div class="cp-action-desc">Retired parks across all kingdoms</div>
+			</a>
 			</div>
 		</div>
 
@@ -236,7 +251,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 						foreach ($allRows as $row):
 							$isPrinz  = (bool)$row['IsPrincipality'];
 					?>
-					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>">
+					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>" data-kingdom-id="<?= (int)$row['KingdomId'] ?>" <?= $isPrinz ? 'data-parent-id="' . (int)$row['ParentKingdomId'] . '"' : '' ?>>
 						<td>
 							<a href="<?= UIR ?>Kingdom/profile/<?= (int)$row['KingdomId'] ?>" style="color:#3182ce;text-decoration:none;font-weight:<?= $isPrinz ? '400' : '600' ?>">
 								<?= $isPrinz ? '&ensp;↳ ' : '' ?><?= htmlspecialchars($row['KingdomName']) ?>
@@ -274,6 +289,10 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
+				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
 			</ul>
 		</div>
 
@@ -304,26 +323,26 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-overlay.cp-open { display: flex; }
 .cp-modal-box {
 	background: #fff; border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
-	max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+	max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: visible;
 }
 .cp-modal-header {
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-border);
 	display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
 .cp-modal-title {
 	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
 	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
 }
-.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ork-text-hint); line-height: 1; padding: 2px 6px; }
 .cp-modal-close:hover { color: #2d3748; }
 .cp-modal-body { padding: 20px; overflow: visible; flex: 1; }
-.cp-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
+.cp-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ork-border); display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: var(--ork-surface-light); border-radius: 0 0 10px 10px; }
 /* Field rows */
 .cp-field { margin-bottom: 14px; }
-.cp-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.cp-field label { display: block; font-size: 12px; font-weight: 600; color: var(--ork-text-body); margin-bottom: 5px; }
 .cp-field input[type=text], .cp-field input[type=email], .cp-field input[type=password], .cp-field input[type=date], .cp-field select, .cp-field textarea {
-	width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+	width: 100%; padding: 7px 10px; border: 1.5px solid var(--ork-border); border-radius: 6px;
 	font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
 }
 .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus {
@@ -332,6 +351,9 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cp-field-ac { position: relative; }
 .cp-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: 9999; }
+.cp-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.cp-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+html[data-theme="dark"] .cp-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 /* Feedback */
 .cp-feedback { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-bottom: 14px; display: none; }
 .cp-feedback-ok  { background: #c6f6d5; color: #276749; border: 1px solid #9ae6b4; }
@@ -343,6 +365,25 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-radio-group { display: flex; gap: 16px; }
 .cp-radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 /* inline autocomplete dropdown (kn-ac-results already in revised.css) */
+/* =====================================================
+   DARK MODE — Admin award modals (.cp-*)
+   ===================================================== */
+html[data-theme="dark"] .cp-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .cp-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .cp-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-footer { background: var(--ork-bg-secondary); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .cp-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .cp-radio-group label { color: var(--ork-text); }
+html[data-theme="dark"] .cp-field input[type=text], html[data-theme="dark"] .cp-field input[type=email],
+html[data-theme="dark"] .cp-field input[type=password], html[data-theme="dark"] .cp-field input[type=date],
+html[data-theme="dark"] .cp-field select, html[data-theme="dark"] .cp-field textarea {
+  background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .cp-feedback-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .cp-feedback-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
 </style>
 
 <!-- ---- Create Player ---- -->
@@ -392,11 +433,12 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			</div>
 			<div class="cp-field-row">
 				<div class="cp-field">
-					<label>Restricted</label>
+					<label>Restrict Mundane Name Visibility</label>
 					<div class="cp-radio-group">
 						<label><input type="radio" name="cp-cp-restricted" value="0" checked> No</label>
 						<label><input type="radio" name="cp-cp-restricted" value="1"> Yes</label>
 					</div>
+					<small style="display:block;color:var(--ork-text-muted);margin-top:4px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 				</div>
 				<div class="cp-field">
 					<label>Waivered</label>
@@ -418,22 +460,28 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 <div class="cp-overlay" id="cp-moveplayer-overlay">
 	<div class="cp-modal-box">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-moveplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
 			<div class="cp-feedback" id="cp-mp-feedback"></div>
 			<div class="cp-field cp-field-ac">
 				<label>Player <span style="color:#e53e3e">*</span></label>
+				<div class="cp-mp-cascade">
+					<select class="cp-mp-cascade-sel" id="cp-mp-pfilter-kingdom" aria-label="Filter players by kingdom"><option value="">All Kingdoms</option></select>
+					<select class="cp-mp-cascade-sel" id="cp-mp-pfilter-park" aria-label="Filter players by park" style="display:none"><option value="">All Parks</option></select>
+				</div>
 				<input type="text" id="cp-mp-player-name" autocomplete="off" placeholder="Search all players…">
 				<input type="hidden" id="cp-mp-player-id">
 				<div class="kn-ac-results" id="cp-mp-player-results"></div>
 			</div>
 			<div class="cp-field cp-field-ac" style="margin-top:12px">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-mp-park-name" autocomplete="off" placeholder="Search all parks…">
+				<div class="cp-mp-cascade">
+					<select class="cp-mp-cascade-sel" id="cp-mp-dfilter-kingdom" aria-label="Destination kingdom"><option value="">Select Kingdom</option></select>
+					<select class="cp-mp-cascade-sel" id="cp-mp-dfilter-park" aria-label="Destination park" style="display:none"><option value="">Select Park</option></select>
+				</div>
 				<input type="hidden" id="cp-mp-park-id">
-				<div class="kn-ac-results" id="cp-mp-park-results"></div>
 			</div>
 		</div>
 		<div class="cp-modal-footer">
@@ -447,7 +495,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 <div class="cp-overlay" id="cp-mergeplayer-overlay">
 	<div class="cp-modal-box" style="width:560px">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-mergeplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
@@ -472,7 +520,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		</div>
 		<div class="cp-modal-footer">
 			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-mergeplayer-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -657,19 +705,19 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-field-row" style="margin-top:8px">
 						<div class="cp-field">
 							<label for="cp-crkn-att-weekly-min">Weekly Min</label>
-							<input type="number" id="cp-crkn-att-weekly-min" value="2" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-weekly-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-att-daily-min">Daily Min</label>
-							<input type="number" id="cp-crkn-att-daily-min" value="6" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-daily-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-att-credit-min">Credit Min</label>
-							<input type="number" id="cp-crkn-att-credit-min" value="9" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-credit-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-monthly-credit-max">Monthly Credit Max</label>
-							<input type="number" id="cp-crkn-monthly-credit-max" value="4" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-monthly-credit-max" placeholder="none">
 						</div>
 					</div>
 					<div class="cp-field-row" style="margin-top:8px">
@@ -906,6 +954,36 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			}));
 		}).catch(function(){cb([]);});
 	}
+	// Move Player cascade: kingdom-scoped player search (consistent with the
+	// other Move Player modals). revised.js/MpCascade is not loaded on the admin
+	// page, so this is a small self-contained version using the shared endpoints.
+	function cpSearchPlayersInKingdom(q, kingdomId, parkId, cb) {
+		var url = UIR + 'KingdomAjax/playersearch/' + kingdomId + '&scope=own&include_inactive=1'
+			+ (parkId ? '&park_id=' + parkId : '') + '&q=' + encodeURIComponent(q);
+		fetch(url).then(function(r){return r.json();}).then(function(d) {
+			cb((d || []).map(function(p) {
+				var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+				return { id: p.MundaneId, label: p.Persona,
+					html: cpEsc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.KAbbr||'') + ' · ' + cpEsc(p.ParkName||'') + ')</span>' + inactive };
+			}));
+		}).catch(function(){cb([]);});
+	}
+	var cpKingdomsCache = null;
+	function cpLoadKingdoms(cb) {
+		if (cpKingdomsCache) { cb(cpKingdomsCache); return; }
+		fetch(UIR + 'KingdomAjax/getkingdoms').then(function(r){return r.json();}).then(function(d){ cpKingdomsCache = (d && d.kingdoms) || []; cb(cpKingdomsCache); }).catch(function(){cb([]);});
+	}
+	function cpWireCascade(kSelId, pSelId, onChange, parkLabel) {
+		var kSel = document.getElementById(kSelId), pSel = document.getElementById(pSelId);
+		if (!kSel || !pSel) return { get: function(){ return { kingdomId:0, parkId:0 }; } };
+		function resetPark(show) { pSel.innerHTML = '<option value="">' + (parkLabel || 'All Parks') + '</option>'; pSel.style.display = show ? '' : 'none'; }
+		function fillParks(kid) { fetch(UIR + 'KingdomAjax/kingdom/' + kid + '/getparks').then(function(r){return r.json();}).then(function(d){ resetPark(true); (d.parks||[]).forEach(function(pk){ var o=document.createElement('option'); o.value=pk.ParkId; o.textContent=pk.Name; pSel.appendChild(o); }); }).catch(function(){}); }
+		cpLoadKingdoms(function(ks){ ks.forEach(function(k){ var o=document.createElement('option'); o.value=k.KingdomId; o.textContent=k.KingdomName; kSel.appendChild(o); }); });
+		resetPark(false);
+		kSel.addEventListener('change', function(){ var kid=parseInt(this.value,10)||0; if(kid) fillParks(kid); else resetPark(false); onChange(); });
+		pSel.addEventListener('change', onChange);
+		return { get: function(){ return { kingdomId: parseInt(kSel.value,10)||0, parkId: parseInt(pSel.value,10)||0 }; } };
+	}
 
 	/* --------------------------------------------------
 	   POST helper
@@ -971,10 +1049,24 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		var pkid = document.getElementById('cp-mp-park-id').value;
 		document.getElementById('cp-mp-submit').disabled = !(pid && pkid);
 	}
+	var cpMpPlayerCascade = null, cpMpDestCascade = null;
 	cpAc({ inputId:'cp-mp-player-name', hiddenId:'cp-mp-player-id', resultsId:'cp-mp-player-results',
-		fetchFn: function(q, cb) { cpSearchPlayersGlobal(q, cb, true); }, onSelect: cpMpCheck, onClear: cpMpCheck });
-	cpAc({ inputId:'cp-mp-park-name', hiddenId:'cp-mp-park-id', resultsId:'cp-mp-park-results',
-		fetchFn: cpSearchParks, onSelect: cpMpCheck, onClear: cpMpCheck });
+		fetchFn: function(q, cb) {
+			var sel = cpMpPlayerCascade ? cpMpPlayerCascade.get() : { kingdomId:0, parkId:0 };
+			if (sel.kingdomId) cpSearchPlayersInKingdom(q, sel.kingdomId, sel.parkId, cb);
+			else cpSearchPlayersGlobal(q, cb, true);
+		}, onSelect: cpMpCheck, onClear: cpMpCheck });
+	// Destination park is chosen via the Kingdom -> Park cascade below — no free-text park search.
+	// Cascade filters (Kingdom -> Park) for the player and destination searches
+	cpMpPlayerCascade = cpWireCascade('cp-mp-pfilter-kingdom', 'cp-mp-pfilter-park', function() {
+		var inp = document.getElementById('cp-mp-player-name');
+		if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
+	});
+	cpMpDestCascade = cpWireCascade('cp-mp-dfilter-kingdom', 'cp-mp-dfilter-park', function() {
+		var sel = cpMpDestCascade.get();
+		document.getElementById('cp-mp-park-id').value = sel.parkId ? sel.parkId : '';
+		cpMpCheck();
+	}, 'Select Park');
 	document.getElementById('cp-mp-submit').addEventListener('click', function() {
 		var playerId = document.getElementById('cp-mp-player-id').value;
 		var parkId   = document.getElementById('cp-mp-park-id').value;
@@ -987,7 +1079,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					'<a href="' + UIR + 'Park/profile/' + parkId + '">View new home park</a> · ' +
 					'<a href="' + UIR + 'Player/profile/' + playerId + '">View player</a>', true);
 				// reset
-				['cp-mp-player-name','cp-mp-park-name'].forEach(function(id){document.getElementById(id).value='';});
+				document.getElementById('cp-mp-player-name').value='';
 				['cp-mp-player-id','cp-mp-park-id'].forEach(function(id){document.getElementById(id).value='';});
 				btn.disabled = true;
 			});
@@ -1201,7 +1293,14 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	/* --------------------------------------------------
 	   Kingdom overview table — sort + filter
 	   -------------------------------------------------- */
-	var sortCol = 0, sortAsc = true;
+	var sortCol = -1, sortAsc = true;
+	var cpSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	function cpSortKey(name) {
+		var s = name.trim();
+		var prev;
+		do { prev = s; s = s.replace(cpSkipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
 	function cpSort(col) {
 		if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = col === 0; }
 		document.querySelectorAll('.cp-kd-table thead th').forEach(function(th, i) {
@@ -1209,15 +1308,32 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			if (i === sortCol) th.classList.add(sortAsc ? 'cp-sort-asc' : 'cp-sort-desc');
 		});
 		var tbody = document.getElementById('cp-kd-tbody');
-		var rows  = Array.from(tbody.querySelectorAll('tr'));
-		rows.sort(function(a, b) {
+		var allRows = Array.from(tbody.querySelectorAll('tr'));
+
+		// Separate kingdoms from principalities
+		var kingdoms = allRows.filter(function(r) { return !r.dataset.parentId; });
+		var prinzMap  = {};
+		allRows.filter(function(r) { return !!r.dataset.parentId; }).forEach(function(r) {
+			var pid = r.dataset.parentId;
+			if (!prinzMap[pid]) prinzMap[pid] = [];
+			prinzMap[pid].push(r);
+		});
+
+		// Sort kingdoms only
+		kingdoms.sort(function(a, b) {
 			var av = a.children[sortCol].innerText.trim().replace(/,/g,'');
 			var bv = b.children[sortCol].innerText.trim().replace(/,/g,'');
 			var ai = parseFloat(av), bi = parseFloat(bv);
-			var cmp = isNaN(ai) || isNaN(bi) ? av.localeCompare(bv) : ai - bi;
+			var cmp = isNaN(ai) || isNaN(bi) ? cpSortKey(av).localeCompare(cpSortKey(bv)) : ai - bi;
 			return sortAsc ? cmp : -cmp;
 		});
-		rows.forEach(function(r) { tbody.appendChild(r); });
+
+		// Re-insert: kingdom row followed immediately by its principalities
+		kingdoms.forEach(function(r) {
+			tbody.appendChild(r);
+			var kid = r.dataset.kingdomId;
+			if (prinzMap[kid]) prinzMap[kid].forEach(function(p) { tbody.appendChild(p); });
+		});
 	}
 	function cpFilterTable(q) {
 		q = q.toLowerCase().trim();
@@ -1408,5 +1524,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 
 	window.cpSort        = cpSort;
 	window.cpFilterTable = cpFilterTable;
+	cpSort(0); // apply prefix-stripped alphabetical sort on load
 })();
 </script>

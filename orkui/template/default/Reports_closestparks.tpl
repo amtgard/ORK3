@@ -2,8 +2,16 @@
 $_cp_parks  = is_array($parks ?? null) ? $parks : [];
 $_cp_total  = count($_cp_parks);
 $_cp_origin = htmlspecialchars($origin_park ?? '');
+$MI_TO_KM   = 1.609344;
+
+// Dual-unit distance — miles and km given equal visual weight. Miles
+// first only because the player base skews US; neither is styled as
+// secondary.
+$_cp_dist = function($mi) use ($MI_TO_KM) {
+	return number_format($mi, 1) . ' mi / ' . number_format($mi * $MI_TO_KM, 1) . ' km';
+};
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <div class="rp-root">
@@ -23,7 +31,7 @@ $_cp_origin = htmlspecialchars($origin_park ?? '');
 
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Nearest active parks by straight-line distance (Haversine/great-circle). Does not account for roads or travel time. Parks without GPS coordinates on file are excluded.</span>
+		<span>Nearest active parks by straight-line distance (Haversine/great-circle), shown in miles and kilometres. Does not account for roads or travel time. Parks without GPS coordinates on file are excluded.</span>
 	</div>
 
 <?php if (!empty($error)): ?>
@@ -45,13 +53,13 @@ $_cp_origin = htmlspecialchars($origin_park ?? '');
 			<div class="rp-stat-label">Nearby Parks</div>
 		</div>
 		<div class="rp-stat-card">
-			<div class="rp-stat-icon"><i class="fas fa-road"></i></div>
-			<div class="rp-stat-number"><?=number_format($_cp_parks[0]['Miles'], 1)?> mi</div>
+			<div class="rp-stat-icon"><i class="fas fa-location-arrow"></i></div>
+			<div class="rp-stat-number"><?=$_cp_dist($_cp_parks[0]['Miles'])?></div>
 			<div class="rp-stat-label">Closest Park</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-expand-arrows-alt"></i></div>
-			<div class="rp-stat-number"><?=number_format($_cp_parks[$_cp_total - 1]['Miles'], 1)?> mi</div>
+			<div class="rp-stat-number"><?=$_cp_dist($_cp_parks[$_cp_total - 1]['Miles'])?></div>
 			<div class="rp-stat-label">Farthest (#<?=$_cp_total?>)</div>
 		</div>
 	</div>
@@ -72,9 +80,9 @@ $_cp_origin = htmlspecialchars($origin_park ?? '');
 				<tr>
 					<td><?=$i + 1?></td>
 					<td><a href="<?=UIR?>Park/profile/<?=(int)$park['ParkId']?>"><?=htmlspecialchars($park['ParkName'])?></a></td>
-					<td><?=htmlspecialchars($park['KingdomName'])?></td>
+					<td><?php if (!empty($park['KingdomId'])): ?><a href="<?=UIR?>Kingdom/profile/<?=(int)$park['KingdomId']?>"><?=htmlspecialchars($park['KingdomName'])?></a><?php else: ?><?=htmlspecialchars($park['KingdomName'])?><?php endif; ?></td>
 					<td><?=htmlspecialchars(trim($park['City'] . ', ' . $park['Province'], ', '))?></td>
-					<td data-order="<?=$park['Miles']?>"><?=number_format($park['Miles'], 1)?> mi</td>
+					<td data-order="<?=$park['Miles']?>"><?=$_cp_dist($park['Miles'])?></td>
 				</tr>
 <?php endforeach; ?>
 			</tbody>
@@ -92,6 +100,7 @@ $_cp_origin = htmlspecialchars($origin_park ?? '');
 
 	var table = $('#cp-table').DataTable({
 		dom       : 'lfrtip',
+		scrollX: true,
 		pageLength: 25,
 		order     : [[4, 'asc']],
 		columnDefs: [{ targets: [0], orderable: false }]

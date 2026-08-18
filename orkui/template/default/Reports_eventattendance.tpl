@@ -16,7 +16,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <style>
 .rp-stats-filter-notice {
 	display: none;
@@ -35,6 +35,28 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 	filter: grayscale(0.5);
 	transition: opacity 0.2s, filter 0.2s;
 }
+html[data-theme="dark"] .rp-stats-filter-notice { background: #2d2b0e; border-color: #854d0e; color: #fde68a; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length select {
+  background: #374151; border-color: #4a5568; color: #e2e8f0; outline: none;
+}
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter input:focus,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length select:focus {
+  border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
+}
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter label,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length label { color: #a0aec0; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_info { color: #718096; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button { background: #374151 !important; border-color: #4a5568 !important; color: #cbd5e0 !important; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button:hover { background: #4a5568 !important; border-color: #718096 !important; color: #e2e8f0 !important; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover { background: #2d3748 !important; border-color: #4a5568 !important; color: #718096 !important; }
+html[data-theme="dark"] .rp-main table.dataTable thead th { background: #374151; color: #e2e8f0; border-color: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable thead th:hover { background: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable tbody td { border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .rp-main table.dataTable tbody tr:hover > td { background: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable tbody tr.odd > td,
+html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background: #1a202c; }
 </style>
 
 <div class="rp-root">
@@ -160,6 +182,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 (function() {
@@ -171,6 +194,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 			orderClasses: false,
 			pageLength: 25,
 			dom: 'lfrtip',
+			scrollX: true,
 			buttons: [
 				{ extend: 'csv',   text: 'Export CSV' },
 				{ extend: 'print', text: 'Print' }
@@ -193,7 +217,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 		syncStatsMuted();
 		dt.on('search.dt', syncStatsMuted);
 		$('.rp-btn-export').on('click', function() { dt.button('.buttons-csv').trigger(); });
-		$('.rp-btn-print').on('click', function() { dt.button('.buttons-print').trigger(); });
+		$('.rp-btn-print').on('click', function() { orkPrintTable(dt); });
 	});
 })();
 </script>

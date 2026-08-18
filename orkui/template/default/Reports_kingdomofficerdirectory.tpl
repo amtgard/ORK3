@@ -5,6 +5,18 @@ $_od_mode  = ($OfficerDirectoryMode ?? 'kingdoms') === 'parks' ? 'parks' : 'king
 $_od_label = $_od_mode === 'parks' ? 'Park' : 'Kingdom';
 $_od_entity_url_prefix = $_od_mode === 'parks' ? 'Park/profile/' : 'Kingdom/profile/';
 $_od_admin = !empty($IsOrkAdmin);
+$_od_principalities = is_array($OfficerDirectoryPrincipalities ?? null) ? $OfficerDirectoryPrincipalities : [];
+
+function _od_cell($persona, $id, $uir, $given = '', $surname = '', $email = '', $admin = false) {
+	if (empty($persona) || !$id) return '<span class="od-vacant-badge">Vacant</span>';
+	$out = '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
+	if ($admin) {
+		$real = trim($given . ' ' . $surname);
+		if ($real)  $out .= '<span class="od-real-name">'  . htmlspecialchars($real)  . '</span>';
+		if ($email) $out .= '<a class="od-email-link" href="mailto:' . htmlspecialchars($email) . '">' . htmlspecialchars($email) . '</a>';
+	}
+	return $out;
+}
 
 /* Count vacancies per role */
 $_vacant = ['Monarch' => 0, 'Regent' => 0, 'PM' => 0, 'Champion' => 0, 'GMR' => 0];
@@ -16,7 +28,7 @@ foreach ($_od_rows as $_r) {
 	if (empty($_r['GMRPersona']))      $_vacant['GMR']++;
 }
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
@@ -107,19 +119,7 @@ foreach ($_od_rows as $_r) {
 				</tr>
 			</thead>
 			<tbody>
-<?php
-function _od_cell($persona, $id, $uir, $given = '', $surname = '', $email = '', $admin = false) {
-	if (empty($persona) || !$id) return '<span class="od-vacant-badge">Vacant</span>';
-	$out = '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
-	if ($admin) {
-		$real = trim($given . ' ' . $surname);
-		if ($real)  $out .= '<span class="od-real-name">'  . htmlspecialchars($real)  . '</span>';
-		if ($email) $out .= '<a class="od-email-link" href="mailto:' . htmlspecialchars($email) . '">' . htmlspecialchars($email) . '</a>';
-	}
-	return $out;
-}
-foreach ($_od_rows as $row):
-?>
+<?php foreach ($_od_rows as $row): ?>
 				<tr>
 					<td><a class="od-officer-link" href="<?=UIR?><?=$_od_entity_url_prefix?><?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
 					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR, $row['MonarchGiven'],  $row['MonarchSurname'],  $row['MonarchEmail'],  $_od_admin)?></td>
@@ -134,6 +134,31 @@ foreach ($_od_rows as $row):
 <?php endif; ?>
 	</div>
 
+<?php foreach ($_od_principalities as $_pr): ?>
+	<div class="rp-table-area" style="margin-top:24px;">
+		<div style="font-size:15px;font-weight:700;color:var(--rp-text);margin:0 0 8px;display:flex;align-items:center;gap:8px;">
+			<i class="fas fa-shield-alt" style="color:var(--rp-accent);"></i>
+			<a href="<?=UIR?>Kingdom/profile/<?=(int)$_pr['KingdomId']?>" style="color:inherit;text-decoration:none;"><?=htmlspecialchars($_pr['Name'])?></a>
+			<span style="font-size:11px;font-weight:600;color:var(--rp-text-muted);text-transform:uppercase;letter-spacing:.05em;">Principality</span>
+		</div>
+		<table class="dataTable" style="width:100%">
+			<thead><tr><th>Park</th><th>Monarch</th><th>Regent</th><th>Prime Minister</th><th>Champion</th><th>GMR</th></tr></thead>
+			<tbody>
+<?php foreach ((array)$_pr['Rows'] as $row): ?>
+				<tr>
+					<td><a class="od-officer-link" href="<?=UIR?>Park/profile/<?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
+					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR, $row['MonarchGiven'],  $row['MonarchSurname'],  $row['MonarchEmail'],  $_od_admin)?></td>
+					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR, $row['RegentGiven'],   $row['RegentSurname'],   $row['RegentEmail'],   $_od_admin)?></td>
+					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR, $row['PMGiven'],       $row['PMSurname'],       $row['PMEmail'],       $_od_admin)?></td>
+					<td><?=_od_cell($row['ChampionPersona'], $row['ChampionId'], UIR, $row['ChampionGiven'], $row['ChampionSurname'], $row['ChampionEmail'], $_od_admin)?></td>
+					<td><?=_od_cell($row['GMRPersona'],      $row['GMRId'],      UIR, $row['GMRGiven'],      $row['GMRSurname'],      $row['GMREmail'],      $_od_admin)?></td>
+				</tr>
+<?php endforeach; ?>
+			</tbody>
+		</table>
+	</div>
+<?php endforeach; ?>
+
 </div>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -143,13 +168,33 @@ foreach ($_od_rows as $row):
 (function () {
 	if (!$('#od-table').length) return;
 
+	var odSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	function odSortKey(name) {
+		var s = name.trim(), prev;
+		do { prev = s; s = s.replace(odSkipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
+
 	var table = $('#od-table').DataTable({
 		dom        : 'lfrtip',
 		pageLength : 50,
 		scrollX    : true,
 		order      : [[0, 'asc']],
 		fixedHeader: { headerOffset: 48 },
-		columnDefs : [{ targets: [1, 2, 3, 4, 5], orderable: false }]
+		columnDefs : [
+			{
+				targets: 0,
+				render: function (data, type) {
+					if (type === 'sort' || type === 'filter') {
+						var tmp = document.createElement('div');
+						tmp.innerHTML = data;
+						return odSortKey(tmp.textContent || tmp.innerText || '');
+					}
+					return data;
+				}
+			},
+			{ targets: [1, 2, 3, 4, 5], orderable: false }
+		]
 	});
 
 	/* CSV export — strips HTML from cells */

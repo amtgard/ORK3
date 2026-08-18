@@ -86,40 +86,14 @@ if ($variant === 'suspended' && is_array($roster) && count($roster) > 1) {
 }
 
 /* ── Remove-suspension auth ────────────────────────────────── */
-$_canRemoveAny = false;
-$_canRemoveMap = [];
-if ($variant === 'suspended' && $this->__session->user_id) {
-	$_uid        = $this->__session->user_id;
-	$_isOrkAdmin = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-if ($_isOrkAdmin) {
-		$_canRemoveAny = true;
-		// Mark every roster player as removable
-		if (is_array($roster)) {
-			foreach ($roster as $player) {
-				$_canRemoveMap[(int)$player['MundaneId']] = true;
-			}
-		}
-	} elseif (is_array($roster)) {
-		// Check if user has authority for the report's scope kingdom directly —
-		// covers cases where a player's KingdomId differs from the scoped kingdom
-		// (e.g. parent/child kingdom relationships or data inconsistencies).
-		$_scopeKingdomAuth = $_scopeType === 'kingdom' && valid_id($_scopeId)
-			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$_scopeId, AUTH_EDIT);
-		foreach ($roster as $player) {
-			$mid = (int)$player['MundaneId'];
-			$can = $_scopeKingdomAuth
-				|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
-			$_canRemoveMap[$mid] = $can;
-			if ($can) $_canRemoveAny = true;
-		}
-	}
-}
+$_canRemoveAny = !empty($RosterCanRemoveAny);
+$_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [];
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <div class="rp-root">
 
@@ -192,7 +166,7 @@ if ($_isOrkAdmin) {
 				</div>
 				<div class="rp-filter-card-body">
 <?php if ($is_suspended) : ?>
-					<label style="display:flex;align-items:center;gap:8px;font-size:.9em;color:#4a5568;cursor:pointer;user-select:none;">
+					<label style="display:flex;align-items:center;gap:8px;font-size:.9em;color:var(--ork-text-secondary,#4a5568);cursor:pointer;user-select:none;">
 						<input type="checkbox" id="rp-propagates-filter" style="width:14px;height:14px;accent-color:#c53030;cursor:pointer;">
 						Propagating suspensions only
 					</label>
@@ -237,8 +211,8 @@ if ($_isOrkAdmin) {
 						<span class="rp-col-guide-desc">Date the suspension was recorded in the system.</span>
 					</div>
 					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Suspendator</span>
-						<span class="rp-col-guide-desc">The user who entered the suspension record.</span>
+						<span class="rp-col-guide-name">Suspended By</span>
+						<span class="rp-col-guide-desc">The player responsible for the suspension — may differ from the admin who entered the record.</span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Comments</span>
@@ -280,7 +254,7 @@ if ($_isOrkAdmin) {
 <?php if ($_canRemoveAny) : ?>
 						<th class="rp-col-actions">Actions</th>
 <?php endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 						<th>Mundane</th>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -297,7 +271,7 @@ if ($_isOrkAdmin) {
 						<th>Suspended Until</th>
 <?php if ($is_suspended) : ?>
 						<th class="rp-col-propagates">Propagates</th>
-						<th>Suspendator</th>
+						<th>Suspended By</th>
 						<th>Comments</th>
 <?php endif; ?>
 				</tr>
@@ -323,7 +297,8 @@ if ($_isOrkAdmin) {
 						data-suspended-until="<?=htmlspecialchars($player['SuspendedUntil'] ?? '')?>"
 						data-suspension="<?=htmlspecialchars($player['Suspension'] ?? '')?>"
 						data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>"
-						data-suspendator-id="<?= (int)($player['SuspendatorId'] ?? 0) ?>">
+						data-suspendator-id="<?= (int)($player['SuspendatorId'] ?? 0) ?>"
+						data-suspendator-persona="<?=htmlspecialchars($player['Suspendator'] ?? '')?>">
 						<i class="fas fa-pencil-alt" style="margin-right:3px"></i> Edit
 					</a>
 					&nbsp;·&nbsp;
@@ -335,7 +310,7 @@ if ($_isOrkAdmin) {
 					</a>
 				<?php endif; ?></td>
 <?php 		endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -354,7 +329,7 @@ if ($_isOrkAdmin) {
 					<td><?php
 					$_prop = $player['SuspensionPropagates'] ?? null;
 					if ($_prop === null)  echo '<span style="color:#a0aec0">—</span>';
-					elseif ($_prop)       echo '<span title="Propagates to all Kingdoms" style="color:#2d3748">Yes</span>';
+					elseif ($_prop)       echo '<span title="Propagates to all Kingdoms" style="color:var(--ork-text,#2d3748)">Yes</span>';
 					else                  echo '<span title="Local only" style="color:#a0aec0">No</span>';
 				?></td>
 					<td><?=htmlspecialchars($player['Suspendator'] ?? '')?></td>
@@ -379,6 +354,7 @@ if ($_isOrkAdmin) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -427,7 +403,7 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 <?php if ($is_suspended) : ?>
 	// Propagates filter
@@ -437,7 +413,7 @@ $(function() {
 		<?php if (!isset($this->__session->park_id)) { echo 'idx++;'; } ?>
 		idx++; // Persona
 		<?php if ($_canRemoveAny) { echo 'idx++;'; } ?>
-		<?php if (!empty($canViewMundane)) { echo 'idx++;'; } ?>
+		<?php if (!empty($CanViewMundane)) { echo 'idx++;'; } ?>
 		idx++; // Last Sign-in
 		idx++; // Suspended At
 		idx++; // Suspended Until
@@ -508,7 +484,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="es-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-pencil-alt" style="color:#4a5568;margin-right:7px"></i>Edit Suspension</div>
 
 		<div id="es-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
@@ -517,6 +493,16 @@ $(function() {
 			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Player</label>
 			<div id="es-player-name" style="padding:7px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:.95em;color:#2d3748"></div>
 			<input type="hidden" id="es-player-id">
+		</div>
+
+		<div style="margin-bottom:14px">
+			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<div style="position:relative">
+				<input type="text" id="es-by-text" autocomplete="off" placeholder="Leave blank to keep existing"
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+				<div id="es-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+			</div>
+			<input type="hidden" id="es-by-id">
 		</div>
 
 		<div style="display:flex;gap:14px;margin-bottom:14px">
@@ -557,8 +543,8 @@ $(function() {
 </div>
 <script>
 (function() {
-	var _suspUrl       = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
-	var _suspendatorId = <?= (int)$this->__session->user_id ?>; // used for new suspensions; overridden per-row on edit
+	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
+	var _searchUrl  = '<?= UIR ?>KingdomAjax/playersearch/<?= (int)$_scopeId ?>&scope=all';
 	var _fpFrom, _fpUntil;
 
 	_fpFrom  = flatpickr('#es-from',  { dateFormat: 'Y-m-d' });
@@ -577,10 +563,65 @@ $(function() {
 		}
 	}
 
+	// Suspended By autocomplete for edit modal
+	(function() {
+		var timer = null;
+		var textEl    = document.getElementById('es-by-text');
+		var hiddenEl  = document.getElementById('es-by-id');
+		var resultsEl = document.getElementById('es-by-results');
+
+		function getItems() { return Array.from(resultsEl.querySelectorAll('[data-ac-item]')); }
+		function highlight(items, idx) {
+			items.forEach(function(el, i) { el.style.background = i === idx ? '#ebf4ff' : ''; });
+		}
+		function select(p) {
+			textEl.value   = p.Persona;
+			hiddenEl.value = p.MundaneId;
+			resultsEl.style.display = 'none';
+		}
+		textEl.addEventListener('input', function() {
+			var q = this.value.trim();
+			hiddenEl.value = '';
+			clearTimeout(timer);
+			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+			timer = setTimeout(function() {
+				fetch(_searchUrl + '&q=' + encodeURIComponent(q))
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						resultsEl.innerHTML = '';
+						if (!data.length) { resultsEl.style.display = 'none'; return; }
+						data.forEach(function(p) {
+							var div = document.createElement('div');
+							div.setAttribute('data-ac-item', '1');
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
+							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+							div.addEventListener('click', function() { select(p); });
+							resultsEl.appendChild(div);
+						});
+						resultsEl.style.display = 'block';
+					});
+			}, 200);
+		});
+		textEl.addEventListener('keydown', function(e) {
+			var items = getItems();
+			if (!items.length) return;
+			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
+			if (e.key === 'ArrowDown') { e.preventDefault(); var n = cur < items.length-1 ? cur+1 : 0; highlight(items,n); items[n].scrollIntoView({block:'nearest'}); }
+			else if (e.key === 'ArrowUp') { e.preventDefault(); var p = cur > 0 ? cur-1 : items.length-1; highlight(items,p); items[p].scrollIntoView({block:'nearest'}); }
+			else if (e.key === 'Enter')   { if (cur >= 0) { e.preventDefault(); items[cur].click(); } }
+			else if (e.key === 'Escape')  { resultsEl.style.display = 'none'; }
+		});
+		textEl.addEventListener('blur', function() {
+			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
+		});
+	})();
+
 	function openEditOverlay(data) {
-		if (data.suspendatorId) _suspendatorId = data.suspendatorId;
 		document.getElementById('es-player-name').textContent = data.persona;
 		document.getElementById('es-player-id').value         = data.mundaneId;
+		document.getElementById('es-by-text').value           = data.suspendatorPersona || '';
+		document.getElementById('es-by-id').value             = data.suspendatorId ? String(data.suspendatorId) : '';
 		document.getElementById('es-error').style.display     = 'none';
 
 		_fpFrom.setDate(data.suspendedAt || '', true);
@@ -640,9 +681,10 @@ $(function() {
 		btn.disabled  = true;
 
 		var fd = new FormData();
-		fd.append('MundaneId',         mundaneId);
-		fd.append('SuspendatorId',     _suspendatorId);
-		fd.append('SuspendedAt',       from);
+		var byId = document.getElementById('es-by-id').value;
+		fd.append('MundaneId',   mundaneId);
+		if (byId) fd.append('SuspendedById', byId);
+		fd.append('SuspendedAt', from);
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',        comment);
 		fd.append('SuspensionPropagates', propagates);
@@ -663,13 +705,14 @@ $(function() {
 		e.preventDefault();
 		var el = this;
 		openEditOverlay({
-			mundaneId:     $(el).data('mundane-id'),
-			persona:       $(el).data('persona'),
-			suspendedAt:   $(el).data('suspended-at'),
-			suspendedUntil: $(el).data('suspended-until'),
-			suspension:    $(el).data('suspension'),
-			propagates:    String($(el).data('propagates')),
-			suspendatorId: $(el).data('suspendator-id') || 0
+			mundaneId:          $(el).data('mundane-id'),
+			persona:            $(el).data('persona'),
+			suspendedAt:        $(el).data('suspended-at'),
+			suspendedUntil:     $(el).data('suspended-until'),
+			suspension:         $(el).data('suspension'),
+			propagates:         String($(el).data('propagates')),
+			suspendatorId:      $(el).data('suspendator-id') || 0,
+			suspendatorPersona: $(el).data('suspendator-persona') || ''
 		});
 	});
 })();
@@ -681,7 +724,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="sp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Suspend Player</div>
 
 		<div id="sp-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
@@ -701,6 +744,16 @@ $(function() {
 				<div id="sp-player-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-player-id">
+		</div>
+
+		<div style="margin-bottom:14px">
+			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<div style="position:relative">
+				<input type="text" id="sp-by-text" autocomplete="off" placeholder="Default: you (leave blank to use your account)"
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+				<div id="sp-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+			</div>
+			<input type="hidden" id="sp-by-id">
 		</div>
 
 		<div style="display:flex;gap:14px;margin-bottom:14px">
@@ -811,42 +864,96 @@ $(function() {
 		document.getElementById('sp-player-results').style.display = 'none';
 	});
 
-	// Player search autocomplete
-	var _searchTimer = null;
-	document.getElementById('sp-player-text').addEventListener('input', function() {
-		var q = this.value.trim();
-		var results = document.getElementById('sp-player-results');
-		document.getElementById('sp-player-id').value = '';
-		updateSubmitBtn();
-		clearTimeout(_searchTimer);
-		if (q.length < 2) { results.style.display = 'none'; return; }
-		_searchTimer = setTimeout(function() {
-			var parkId = document.getElementById('sp-park').value;
-			var parkParam = parkId ? '&park_id=' + encodeURIComponent(parkId) : '';
-			fetch(_searchUrl + '&q=' + encodeURIComponent(q) + parkParam)
-				.then(function(r) { return r.json(); })
-				.then(function(data) {
-					results.innerHTML = '';
-					if (!data.length) { results.style.display = 'none'; return; }
-					data.forEach(function(p) {
-						var div = document.createElement('div');
-						div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
-						div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
-						div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-						div.addEventListener('click', function() {
-							document.getElementById('sp-player-text').value = p.Persona;
-							document.getElementById('sp-player-id').value   = p.MundaneId;
-							results.style.display = 'none';
-							updateSubmitBtn();
+	// Shared autocomplete helper
+	function spAc(opts) {
+		// opts: textId, hiddenId, resultsId, getUrl, onSelect, extraParams
+		var textEl    = document.getElementById(opts.textId);
+		var hiddenEl  = document.getElementById(opts.hiddenId);
+		var resultsEl = document.getElementById(opts.resultsId);
+		var timer = null;
+
+		function getItems() {
+			return Array.from(resultsEl.querySelectorAll('[data-ac-item]'));
+		}
+		function highlight(items, idx) {
+			items.forEach(function(el, i) {
+				el.style.background = i === idx ? '#ebf4ff' : '';
+			});
+		}
+		function select(p) {
+			textEl.value   = p.Persona;
+			hiddenEl.value = p.MundaneId;
+			resultsEl.style.display = 'none';
+			if (opts.onSelect) opts.onSelect(p);
+		}
+
+		textEl.addEventListener('input', function() {
+			var q = this.value.trim();
+			hiddenEl.value = '';
+			if (opts.onSelect) opts.onSelect(null);
+			clearTimeout(timer);
+			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+			timer = setTimeout(function() {
+				var url = opts.getUrl() + '&q=' + encodeURIComponent(q);
+				fetch(url)
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						resultsEl.innerHTML = '';
+						if (!data.length) { resultsEl.style.display = 'none'; return; }
+						data.forEach(function(p) {
+							var div = document.createElement('div');
+							div.setAttribute('data-ac-item', '1');
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
+							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+							div.addEventListener('click', function() { select(p); });
+							resultsEl.appendChild(div);
 						});
-						results.appendChild(div);
+						resultsEl.style.display = 'block';
 					});
-					results.style.display = 'block';
-				});
-		}, 200);
+			}, 200);
+		});
+
+		textEl.addEventListener('keydown', function(e) {
+			var items = getItems();
+			if (!items.length) return;
+			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				var next = cur < items.length - 1 ? cur + 1 : 0;
+				highlight(items, next);
+				items[next].scrollIntoView({ block: 'nearest' });
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				var prev = cur > 0 ? cur - 1 : items.length - 1;
+				highlight(items, prev);
+				items[prev].scrollIntoView({ block: 'nearest' });
+			} else if (e.key === 'Enter') {
+				if (cur >= 0) { e.preventDefault(); items[cur].click(); }
+			} else if (e.key === 'Escape') {
+				resultsEl.style.display = 'none';
+			}
+		});
+
+		textEl.addEventListener('blur', function() {
+			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
+		});
+	}
+
+	// Player search
+	spAc({
+		textId: 'sp-player-text', hiddenId: 'sp-player-id', resultsId: 'sp-player-results',
+		getUrl: function() {
+			var parkId = document.getElementById('sp-park').value;
+			return _searchUrl + (parkId ? '&park_id=' + encodeURIComponent(parkId) : '');
+		},
+		onSelect: function() { updateSubmitBtn(); }
 	});
-	document.getElementById('sp-player-text').addEventListener('blur', function() {
-		setTimeout(function() { document.getElementById('sp-player-results').style.display = 'none'; }, 150);
+
+	// Suspended By search
+	spAc({
+		textId: 'sp-by-text', hiddenId: 'sp-by-id', resultsId: 'sp-by-results',
+		getUrl: function() { return _searchUrl + '&scope=all'; }
 	});
 
 	// Open / close
@@ -855,6 +962,8 @@ $(function() {
 		document.getElementById('sp-error').style.display = 'none';
 		document.getElementById('sp-player-text').value = '';
 		document.getElementById('sp-player-id').value   = '';
+		document.getElementById('sp-by-text').value     = '';
+		document.getElementById('sp-by-id').value       = '';
 		document.getElementById('sp-comment').value     = '';
 		document.getElementById('sp-char-count').textContent = '0 / 100';
 		document.getElementById('sp-indefinite').checked = false;
@@ -910,9 +1019,10 @@ $(function() {
 		btn.innerHTML = 'Suspending…';
 		btn.disabled  = true;
 
+		var byId = document.getElementById('sp-by-id').value;
 		var fd = new FormData();
 		fd.append('MundaneId',    mundaneId);
-		fd.append('SuspendatorId', _suspendatorId);
+		if (byId) fd.append('SuspendedById', byId);
 		fd.append('SuspendedAt',  from);
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',   comment);

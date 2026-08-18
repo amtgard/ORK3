@@ -280,6 +280,61 @@ class Common
 		return false;
 	}
 
+	/**
+	 * Crop fully-transparent rows/columns from the edges of a GD image.
+	 * Pixel-accurate (imagecrop copies verbatim — no resampling, no aspect
+	 * distortion). Returns the original resource untouched if there is no
+	 * transparent border to trim, the image is fully transparent, or any
+	 * step fails. Alpha channel is preserved on the returned resource.
+	 *
+	 * $alpha_threshold: GD alpha is 0 (opaque) to 127 (transparent). A pixel
+	 * counts as "content" if its alpha is LESS than this value. Default 120
+	 * tolerates faint anti-alias fringe without eating real strokes.
+	 */
+	public static function gd_trim_transparent( $gd, $alpha_threshold = 120 )
+	{
+		if ( ! $gd ) return $gd;
+		$w = imagesx( $gd );
+		$h = imagesy( $gd );
+		if ( $w < 2 || $h < 2 ) return $gd;
+
+		$top = -1; $bottom = -1; $left = $w; $right = -1;
+
+		for ( $y = 0; $y < $h; $y++ ) {
+			for ( $x = 0; $x < $w; $x++ ) {
+				$rgba = imagecolorsforindex( $gd, imagecolorat( $gd, $x, $y ) );
+				if ( $rgba['alpha'] < $alpha_threshold ) {
+					if ( $top === -1 ) $top = $y;
+					$bottom = $y;
+					if ( $x < $left )  $left  = $x;
+					if ( $x > $right ) $right = $x;
+				}
+			}
+		}
+
+		// Fully transparent or nothing found — leave image alone.
+		if ( $top === -1 || $right === -1 ) return $gd;
+
+		// Already tight — no trim needed.
+		if ( $top === 0 && $left === 0 && $bottom === $h - 1 && $right === $w - 1 ) {
+			return $gd;
+		}
+
+		$rect = array(
+			'x'      => $left,
+			'y'      => $top,
+			'width'  => $right - $left + 1,
+			'height' => $bottom - $top + 1,
+		);
+
+		$cropped = imagecrop( $gd, $rect );
+		if ( $cropped === false ) return $gd;
+
+		imagealphablending( $cropped, false );
+		imagesavealpha( $cropped, true );
+		return $cropped;
+	}
+
 	public static function resolve_image_ext( $dir_base, $name )
 	{
 		if ( file_exists( $dir_base . $name . '.png' ) ) {
@@ -448,13 +503,6 @@ class Common
 		$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create' );
 		$this->create_officer( $kingdom_id, $park_id, 'Champion', null );
 		$this->create_officer( $kingdom_id, $park_id, 'GMR', null );
-		if ( valid_id( $for_principality ) ) {
-			$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Champion', null, 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'GMR', null, 1, $principality_id );
-		}
 	}
 
 	private function create_officer( $kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0 )
@@ -548,7 +596,7 @@ class Common
 			$this->config->key = $key;
 		}
 		if ( $this->config->find() ) {
-			if ( $value != null ) {
+			if ( $value !== null ) {
 				$allowed = json_decode( $this->config->allowed_values );
 				if ( is_array( $allowed ) ) {
 					$allow = true;
@@ -565,6 +613,8 @@ class Common
 					}
 				}
 				$this->config->value = json_encode( $value );
+			} else {
+				$this->config->value = json_encode( null );
 			}
 			$this->config->modified = date( "Y-m-d H:i:s", time() );
 			$this->config->save();

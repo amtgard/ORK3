@@ -24,7 +24,7 @@ if ($kingdom_id && !empty($knights)) {
 }
 ?>
 
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Beltline Explorer specific styles ───────────────────── */
@@ -534,6 +534,13 @@ if ($kingdom_id && !empty($knights)) {
 			}
 		});
 
+		// Destroy DataTables before touching the DOM so it doesn't
+		// restore its cached snapshot over the new rows.
+		if (dtTable) {
+			dtTable.destroy();
+			dtTable = null;
+		}
+
 		var tbody = document.getElementById('be-table-body');
 		tbody.innerHTML = '';
 		rows.forEach(function(rel) {
@@ -546,16 +553,12 @@ if ($kingdom_id && !empty($knights)) {
 			tbody.appendChild(tr);
 		});
 
-		if (dtTable) {
-			dtTable.destroy();
-			dtTable = null;
-		}
-
 		document.getElementById('be-table-empty').style.display = 'none';
 		document.getElementById('be-table-container').style.display = 'block';
 
 		dtTable = $('#be-table').DataTable({
 			dom: 'lfrtip',
+			scrollX: true,
 			pageLength: 50,
 			order: [[3, 'asc']],
 			destroy: true

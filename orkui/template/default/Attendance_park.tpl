@@ -49,7 +49,7 @@ $show_chart = $total > 0;
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Attendance-specific styles ───────────────────── */
@@ -202,6 +202,32 @@ $show_chart = $total > 0;
 }
 .att-edit-btn-save:hover:not(:disabled) { background: #3730a3; }
 .att-edit-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Active-event banner: surfaced when an event is happening at this scope on
+   the rendered date — nudges the user toward Event-attendance instead. */
+.att-event-nudge {
+	display: flex; gap: 10px; align-items: flex-start;
+	padding: 10px 12px; margin-bottom: 12px;
+	background: var(--ork-alert-info-bg, #ebf8ff);
+	border: 1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left: 3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius: 6px;
+	color: var(--ork-alert-info-text, #2a4365);
+	font-size: 0.82rem; line-height: 1.45;
+}
+.att-event-nudge-icon { font-size: 16px; color: var(--ork-alert-info-text, #2b6cb0); flex-shrink: 0; margin-top: 1px; }
+.att-event-nudge-body { flex: 1; min-width: 0; }
+.att-event-nudge-text { margin: 0 0 8px 0; }
+.att-event-nudge-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 6px 12px; border-radius: 6px;
+	background: var(--ork-link, #2b6cb0); color: #fff;
+	font-size: 0.78rem; font-weight: 600; text-decoration: none;
+	transition: background 0.15s;
+}
+.att-event-nudge-btn:hover { background: var(--ork-link-bright, #3182ce); color: #fff; text-decoration: none; }
+.att-event-nudge-btn i { font-size: 0.7rem; }
+
 .ui-autocomplete-separator {
 	padding: 2px 12px;
 	cursor: default;
@@ -244,6 +270,7 @@ $show_chart = $total > 0;
 	width: 680px;
 	max-width: 96vw;
 	max-height: 82vh;
+	max-height: 82dvh;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -366,6 +393,31 @@ $show_chart = $total > 0;
 }
 .att-qa-feedback.att-qa-fb-err  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .att-qa-feedback.att-qa-fb-ok   { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+/* =====================================================
+   DARK MODE — Attendance form + edit modal (.att-*)
+   ===================================================== */
+html[data-theme="dark"] .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-form-input, html[data-theme="dark"] .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-open-btn { background: var(--ork-bg-secondary); color: var(--ork-link); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-feedback.att-qa-fb-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .att-qa-feedback.att-qa-fb-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .att-qa-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-qa-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-table td { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-select,
+html[data-theme="dark"] .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 </style>
 
 <div class="rp-root">
@@ -377,6 +429,18 @@ $show_chart = $total > 0;
 				<i class="fas fa-calendar-day rp-header-icon"></i>
 				<h1 class="rp-header-title">Park Attendance &mdash; <?=htmlspecialchars($AttendanceDate)?></h1>
 			</div>
+			<?php
+				// Only attempt historic weather when the park has coords AND
+				// the date is far enough in the past for Open-Meteo's ERA5
+				// archive to have published (~5-day lag). Coords resolution
+				// falls back to the location-JSON blob when the scalar lat/lng
+				// columns aren't backfilled.
+				$_wxCutoff   = date('Y-m-d', strtotime('-5 days'));
+				$_wxEligible = ($pid > 0
+					&& wx_park_has_coords($pid)
+					&& $AttendanceDate < $_wxCutoff
+					&& $AttendanceDate >= '1940-01-01');
+			?>
 			<div class="rp-header-scope">
 <?php if ($pname) : ?>
 				<a class="rp-scope-chip" href="<?=UIR.'Park/profile/'.$pid?>">
@@ -422,6 +486,14 @@ $show_chart = $total > 0;
 			<div class="rp-stat-number"><?=count($class_counts)?></div>
 			<div class="rp-stat-label">Classes Played</div>
 		</div>
+		<?php if ($_wxEligible): ?>
+		<div class="rp-stat-card" id="att-wx-card"
+		     data-park="<?=(int)$pid?>" data-date="<?=htmlspecialchars($AttendanceDate)?>">
+			<div class="rp-stat-icon" id="att-wx-icon"><i class="fas fa-cloud-sun" style="opacity:.4"></i></div>
+			<div class="rp-stat-number" id="att-wx-temps" style="font-size:1.1rem;padding-top:3px;opacity:.5">—</div>
+			<div class="rp-stat-label" id="att-wx-meta"><em style="opacity:.6">loading historical…</em></div>
+		</div>
+		<?php endif; ?>
 	</div>
 
 	<!-- ── Body: form sidebar + main content ────────────── -->
@@ -437,6 +509,15 @@ $show_chart = $total > 0;
 				<div class="att-form-card-body">
 <?php if ($Error) : ?>
 					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
+<?php endif; ?>
+<?php if (!empty($ActiveEvent)) : ?>
+					<div class="att-event-nudge">
+						<div class="att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+						<div class="att-event-nudge-body">
+							<p class="att-event-nudge-text">It looks like <strong><?=htmlspecialchars($ActiveEvent['Name'])?></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+							<a class="att-event-nudge-btn" href="<?=UIR?>Event/detail/<?=(int)$ActiveEvent['EventId']?>/<?=(int)$ActiveEvent['EventCalendarDetailId']?>">Go To Event <i class="fas fa-arrow-right"></i></a>
+						</div>
+					</div>
 <?php endif; ?>
 					<form method="post" action="<?=UIR?>Attendance/park/<?=$Id?>/new">
 						<input type="hidden" name="AttendanceDate" id="AttendanceDate" value="<?=htmlspecialchars($AttendanceDate)?>">
@@ -627,6 +708,7 @@ $show_chart = $total > 0;
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -898,11 +980,12 @@ $(function() {
 		scrollX: true
 	});
 	$('#att-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('#att-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 	/* ── Class chart ─────────────────────────────────── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-class-chart', type: 'column',
+		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {
@@ -913,7 +996,13 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($class_counts))?>, color: '#7c3aed' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: {
+			headerFormat: '',
+			pointFormat: '<b>{point.category}</b>: {point.y}',
+			backgroundColor: _isDark ? '#1e293b' : undefined,
+			borderColor: _isDark ? '#334155' : undefined,
+			style: { color: _isDark ? '#e2e8f0' : '#333333' }
+		},
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 <?php endif; ?>
@@ -986,5 +1075,58 @@ $(function() {
 		});
 	});
 <?php endif; ?>
+
+	// Lazy-fill the historic weather card for this attendance day. Cache
+	// hits (memcache) come back almost instantly; cache misses make one
+	// ~500ms call to Open-Meteo's archive endpoint. The card starts hidden
+	// and reveals itself when data arrives so it doesn't render an empty
+	// placeholder if the archive has nothing.
+	(function() {
+		var card = document.getElementById('att-wx-card');
+		if (!card) return;
+		var pid = card.dataset.park;
+		var date = card.dataset.date;
+		if (!pid || !date) return;
+		function wxIcon(c) {
+			if (c === 0)                          return '☀️';
+			if (c === 1)                          return '🌤️';
+			if (c === 2)                          return '⛅';
+			if (c === 3)                          return '☁️';
+			if (c === 45 || c === 48)             return '🌫️';
+			if (c >= 51 && c <= 57)               return '🌦️';
+			if (c >= 61 && c <= 67)               return '🌧️';
+			if (c >= 71 && c <= 77)               return '❄️';
+			if (c >= 80 && c <= 82)               return '🌦️';
+			if (c === 85 || c === 86)             return '🌨️';
+			if (c >= 95 && c <= 99)               return '⛈️';
+			return '🌡️';
+		}
+		function showUnavailable() {
+			document.getElementById('att-wx-icon').innerHTML = '<i class="fas fa-cloud-sun" style="opacity:.35"></i>';
+			document.getElementById('att-wx-temps').innerHTML = '<span style="opacity:.55;font-size:12px;font-weight:400">unavailable</span>';
+			document.getElementById('att-wx-meta').innerHTML  = 'Historical';
+		}
+		fetch('<?=UIR?>AttendanceAjax/park/' + pid + '/weather/' + date, { credentials: 'same-origin' })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (!d || d.status !== 0 || !d.weather || d.weather.hi_f == null) { showUnavailable(); return; }
+				var w = d.weather;
+				var hi  = Math.round(w.hi_f), hiC = Math.round((w.hi_f - 32) * 5 / 9);
+				var lo  = w.lo_f != null ? Math.round(w.lo_f) : null;
+				var loC = w.lo_f != null ? Math.round((w.lo_f - 32) * 5 / 9) : null;
+				document.getElementById('att-wx-icon').textContent = wxIcon(w.code);
+				document.getElementById('att-wx-temps').style.opacity = '';
+				document.getElementById('att-wx-temps').innerHTML  = hi + '/' + hiC + '°' +
+					(lo != null ? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);font-weight:400;margin-top:1px">L ' + lo + '/' + loC + '°</div>' : '');
+				var metaParts = ['Historical'];
+				if (w.precip_inches != null && w.precip_inches >= 0.1) {
+					var mm = Math.round(w.precip_inches * 25.4);
+					metaParts.push(w.precip_inches.toFixed(2) + '" / ' + mm + ' mm rain');
+				}
+				document.getElementById('att-wx-meta').innerHTML = metaParts.join(' · ') +
+					' <a href="https://open-meteo.com/" target="_blank" rel="noopener" title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com" style="margin-left:4px;opacity:.55;text-decoration:none;font-size:10px">ⓘ</a>';
+			})
+			.catch(showUnavailable);
+	})();
 });
 </script>

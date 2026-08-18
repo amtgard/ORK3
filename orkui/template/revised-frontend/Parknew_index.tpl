@@ -3,11 +3,28 @@
 	$parkInfo    = $park_info['ParkInfo']     ?? [];
 	$heraldryUrl = $park_info['Heraldry']['Url'] ?? '';
 	$hasHeraldry = !empty($parkInfo['HasHeraldry']);
+	$hasBanner       = !empty($parkInfo['HasBanner']);
+	$bannerShowLogo  = !isset($parkInfo['BannerShowLogo']) || (int)$parkInfo['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($parkInfo['BannerVignette']) || (int)$parkInfo['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($parkInfo['BannerOffsetX']) ? max(0, min(100, (int)$parkInfo['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($parkInfo['BannerOffsetY']) ? max(0, min(100, (int)$parkInfo['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PARK_BANNER, sprintf('%05d', (int)($parkInfo['ParkId'] ?? 0)));
+		$bannerFs   = DIR_PARK_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PARK_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
 	$parkTitle   = trim($parkInfo['ParkTitle']   ?? '');
 	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
 	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
 	$websiteUrl  = trim($parkInfo['Url']          ?? '');
 	$parkIsInactive = (trim($parkInfo['Active'] ?? 'Active') !== 'Active');
+	// Cycle 2 fix: do not expose banner-edit UI on retired parks (backend
+	// already rejects update/config for inactive parks; this prevents the
+	// dead-end UX of opening the modal only to receive a server rejection).
+	$pkCanManageBanner = !empty($CanManagePark) && !$parkIsInactive;
 
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
@@ -38,23 +55,34 @@
 		? 'https://maps.google.com/maps?q=@' . $parkLat . ',' . $parkLng
 		: null;
 
-	// Group all players by 6-month period (0 = 0–6 months ago, 1 = 6–12, etc.)
-	$allPlayers = $park_players ?? [];
-	$nowTs      = time();
-	$playerPeriods  = [];
-	$heraldryPeriods = [];
+	// Group all players by year of last sign-in (newest year first; 'never' last).
+	// Also separately track players whose last signin is within the past 6 months
+	// (for the "active member" stat) and 12 months (for the Heraldry hall of arms).
+	$allPlayers      = $park_players ?? [];
+	$nowTs           = time();
+	$nowYear         = (int)date('Y');
+	$sixMoCutoff     = strtotime('-6 months');
+	$twelveMoCutoff  = strtotime('-12 months');
+	$playersByYear   = [];   // key: 'YYYY' or 'never', value: array of players
+	$playerList      = [];   // active in past 6 months
+	$hoaPlayers12    = [];   // heraldry holders active in past 12 months
+	$totalHeraldry   = 0;
 	foreach ($allPlayers as $p) {
-		$ts = strtotime($p['LastSignin']);
-		$period = max(0, (int)floor(($nowTs - $ts) / (30.44 * 24 * 3600) / 6));
-		$playerPeriods[$period][] = $p;
-		if ($p['HasHeraldry']) $heraldryPeriods[$period][] = $p;
+		$ts  = strtotime($p['LastSignin']);
+		$key = ($ts && $ts > 0 && date('Y', $ts) !== '1970') ? date('Y', $ts) : 'never';
+		$playersByYear[$key][] = $p;
+		if (!empty($p['HasHeraldry'])) {
+			$totalHeraldry++;
+			if ($ts >= $twelveMoCutoff) $hoaPlayers12[] = $p;
+		}
+		if ($ts >= $sixMoCutoff) $playerList[] = $p;
 	}
-	ksort($playerPeriods);
-	ksort($heraldryPeriods);
-
-	$playerList    = $playerPeriods[0] ?? [];  // 0–6 months (used for stats row count)
-	$totalHeraldry = array_sum(array_map('count', $heraldryPeriods));
-	$hoaPlayers12  = array_merge($heraldryPeriods[0] ?? [], $heraldryPeriods[1] ?? []);
+	// Sort: real years descending (newest first); 'never' bucket goes last.
+	uksort($playersByYear, function ($a, $b) {
+		if ($a === 'never') return 1;
+		if ($b === 'never') return -1;
+		return strcmp($b, $a);
+	});
 
 	$firstTab = 'about';
 
@@ -72,7 +100,39 @@
 	$pkCalEvents = [];
 	foreach ($eventList as $ev) {
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		if (!empty($ev['is_park_day'])) {
+		if (!empty($ev['_IsCalendarItem'])) {
+			$allDay = !empty($ev['AllDay']);
+			$_ciColor = $ev['Color'] ?? '#64748b';
+			// Prefix kingdom-level items with the kingdom abbreviation so they're
+			// distinguishable from this park's own items (mirrors the kingdom calendar,
+			// which prefixes park items with the park abbreviation).
+			$_ciTitle = (!empty($ev['_IsKingdomLevel']) && !empty($ev['KingdomAbbr']))
+				? $ev['KingdomAbbr'] . ': ' . $ev['Name']
+				: $ev['Name'];
+			$calEv = [
+				'title'         => $_ciTitle,
+				'start'         => $allDay ? substr($ev['NextDate'], 0, 10) : $ev['NextDate'],
+				'color'         => $_ciColor,
+				'textColor'     => CalendarItem::TextColorFor($_ciColor),
+				'type'          => 'calendar-item',
+				'allDay'        => $allDay,
+				'extendedProps' => [
+					'calendarItemId' => $ev['CalendarItemId'],
+					'description'    => $ev['Description'] ?? '',
+					'rawStart'       => $ev['NextDate'],
+					'rawEnd'         => $ev['NextEndDate'] ?? $ev['NextDate'],
+				],
+			];
+			$startDate = substr($ev['NextDate'], 0, 10);
+			$endDate   = substr($ev['NextEndDate'] ?? $ev['NextDate'], 0, 10);
+			if ($endDate > $startDate) {
+				$endDt = new DateTime($endDate);
+				if ($allDay) $endDt->modify('+1 day');
+				$calEv['end'] = $allDay ? $endDt->format('Y-m-d') : ($ev['NextEndDate'] ?? '');
+			} elseif (!$allDay) {
+				$calEv['end'] = $ev['NextEndDate'] ?? '';
+			}
+		} elseif (!empty($ev['is_park_day'])) {
 			$calEv = [
 				'title' => $ev['Name'],
 				'start' => $ev['NextDate'] . 'T' . $ev['park_day_time'],
@@ -85,6 +145,11 @@
 				'start' => $ev['NextDate'],
 				'url'   => $ev['NextDetailId'] ? UIR . 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : '',
 				'color' => '#2b6cb0', // Blue for regular events
+				'extendedProps' => [
+					'eventId'  => (int)$ev['EventId'],
+					'detailId' => (int)$ev['NextDetailId'],
+					'isDraft'  => (($ev['Status'] ?? 'published') === 'draft'),
+				],
 			];
 			$endRaw = $ev['NextEndDate'] ?? '';
 			if ($endRaw && substr($endRaw, 0, 10) > substr($ev['NextDate'], 0, 10)) {
@@ -101,8 +166,8 @@
 	$_pd_today      = new DateTime(); $_pd_today->setTime(0, 0, 0);
 	$_pd_end        = (clone $_pd_today)->modify('+90 days');
 	$_pd_dayNames   = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-	$_pd_colors     = ['fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
-	$_pd_labels     = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+	$_pd_colors     = ['park-day'=>'#38a169','fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
+	$_pd_labels     = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 	foreach ($parkDayList as $_pd) {
 		$_pdColor   = $_pd_colors[$_pd['Purpose']] ?? '#38a169';
 		$_pdLabel   = $_pd_labels[$_pd['Purpose']] ?? 'Park Day';
@@ -132,6 +197,10 @@
 					$_pdD->modify('first day of next month');
 				}
 				break;
+			case 'every-x-weeks':
+				$_pdEnd1 = (clone $_pd_end)->modify('+1 day'); // helper end is exclusive; keep day 90 inclusive
+				$_pdOccs = Park::ExpandEveryXWeeks($_pd['StartDate'] ?? '', (int)($_pd['WeekInterval'] ?? 0), $_pd_today, $_pdEnd1);
+				break;
 			case 'monthly':
 				$_pdMd = (int)$_pd['MonthDay'];
 				$_pdD  = clone $_pd_today; $_pdD->modify('first day of this month'); $_pdD->setTime(0,0,0);
@@ -146,35 +215,80 @@
 		}
 		foreach ($_pdOccs as $_pdOcc) {
 			$_pdTitle = !empty($_pd['Online']) ? '(Online) ' . $_pdLabel : $_pdLabel;
-			$pkCalParkDays[] = ['title'=>$_pdTitle,'start'=>$_pdOcc.'T'.$_pdTimeStr,'color'=>$_pdColor];
+			$pkCalParkDays[] = ['title'=>$_pdTitle,'start'=>$_pdOcc.'T'.$_pdTimeStr,'color'=>$_pdColor,'online'=>!empty($_pd['Online'])];
+		}
+		// Lookup: first upcoming occurrence per park-day-id, for the schedule cards' forecast badges
+		if (!empty($_pdOccs)) { $pdNextDateById[(int)$_pd['ParkDayId']] = $_pdOccs[0]; }
+	}
+	if (!isset($pdNextDateById)) { $pdNextDateById = []; }
+
+	// Next Park Day: earliest upcoming IN-PERSON occurrence. Online park days
+	// (Discord/Zoom A&S, virtual fighter practice prep, etc.) are excluded —
+	// the card drives field/weather decisions, which don't apply to online.
+	$nextParkDayDate = null;
+	$_inPersonStarts = array_column(array_filter($pkCalParkDays, function($e) { return empty($e['online']); }), 'start');
+	if (!empty($_inPersonStarts)) {
+		sort($_inPersonStarts);
+		$nextParkDayDate = substr($_inPersonStarts[0], 0, 10);
+	}
+
+	// "Today" anchor for forecast-vs-current labelling.
+	// Open-Meteo returns dates in each park's local timezone (we use timezone=auto)
+	// so the right comparison is "today in this park's local time" — not server time
+	// (Chicago) and not the viewer's time (could be anywhere).
+	$parkLocalToday = date('Y-m-d');  // sensible fallback
+	if (!empty($park_weather['forecast_json'])) {
+		$_wxDecoded = @json_decode($park_weather['forecast_json'], true);
+		$_wxTz      = $_wxDecoded['timezone'] ?? null;
+		if ($_wxTz) {
+			try {
+				$parkLocalToday = (new DateTime('now', new DateTimeZone($_wxTz)))->format('Y-m-d');
+			} catch (Exception $e) { /* fall back to server-local */ }
 		}
 	}
 
-	// Next Park Day: earliest upcoming occurrence across all park days
-	$nextParkDayDate = null;
-	if (!empty($pkCalParkDays)) {
-		$_starts = array_column($pkCalParkDays, 'start');
-		sort($_starts);
-		$nextParkDayDate = substr($_starts[0], 0, 10);
-	}
-
-	// Active Players: at least one sign-in in the past 365 days
-	$activePlayersYear = count(array_filter($allPlayers, function($_ap) use ($nowTs) {
-		return ($nowTs - strtotime($_ap['LastSignin'])) <= 365 * 24 * 3600;
-	}));
+	// Active Players: last sign-in within the past 6 months — matches the Players tab subtitle
+	$activePlayersYear = count($playerList);
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="pk-hero<?= $parkIsInactive ? ' pk-hero--inactive' : '' ?>">
-	<div class="pk-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses  = 'pk-hero';
+	if ($parkIsInactive)              $_heroClasses .= ' pk-hero--inactive';
+	if ($bannerUrl)                    $_heroClasses .= ' pk-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pk-hero-vignette';
+	if ($pkCanManageBanner)            $_heroClasses .= ' pk-hero-editable';
+	$_pkShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pk-hero">
+	<div class="pk-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+	<?php if ($pkCanManageBanner): ?>
+	<button type="button" class="pk-banner-edit-btn"
+			onclick="pkOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pk-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pk-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pk-hero-content">
 
 		<!-- Heraldry -->
+		<?php if ($_pkShowLogo): ?>
 		<div class="pk-hero-left">
 			<?php $displayHeraldryUrl = $hasHeraldry ? $heraldryUrl : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 			<div class="pk-heraldry-frame<?= !empty($CanAdminPark) ? ' pk-heraldry-editable' : '' ?>">
@@ -184,12 +298,13 @@
 				     crossorigin="anonymous"
 				     onload="typeof pkApplyHeroColor==='function'&&!<?= $parkIsInactive ? 'true' : 'false' ?>&&pkApplyHeroColor(this)">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
+				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" data-tip="Change heraldry">
 					<i class="fas fa-camera"></i>
 				</button>
 				<?php endif; ?>
 			</div>
 		</div>
+		<?php endif; ?>
 
 		<!-- Name / title / officers -->
 		<div class="pk-hero-center">
@@ -255,11 +370,46 @@
      ZONE 2: Stats Row
      ============================================= -->
 <div class="pk-stats-row">
+	<?php
+		// Forecast for the next park day (when within the 7-day cache window)
+		$nextPdForecast = ($nextParkDayDate && $park_weather)
+			? wx_forecast_for_date($park_id, $nextParkDayDate)
+			: null;
+	?>
 	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
 		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
 		<?php if ($nextParkDayDate): ?>
 			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
 			<div class="pk-stat-sub"><?= date('l', strtotime($nextParkDayDate)) ?></div>
+			<?php if ($nextPdForecast && $nextPdForecast['hi_f'] !== null):
+				// WMO code → emoji (daytime; forecast doesn't distinguish day/night)
+				$fcCode = (int)$nextPdForecast['code'];
+				if     ($fcCode === 0)                        { $fcIcon = '☀️'; }
+				elseif ($fcCode === 1)                        { $fcIcon = '🌤️'; }
+				elseif ($fcCode === 2)                        { $fcIcon = '⛅'; }
+				elseif ($fcCode === 3)                        { $fcIcon = '☁️'; }
+				elseif ($fcCode === 45 || $fcCode === 48)     { $fcIcon = '🌫️'; }
+				elseif ($fcCode >= 51 && $fcCode <= 57)       { $fcIcon = '🌦️'; }
+				elseif ($fcCode >= 61 && $fcCode <= 67)       { $fcIcon = '🌧️'; }
+				elseif ($fcCode >= 71 && $fcCode <= 77)       { $fcIcon = '❄️'; }
+				elseif ($fcCode >= 80 && $fcCode <= 82)       { $fcIcon = '🌦️'; }
+				elseif ($fcCode === 85 || $fcCode === 86)     { $fcIcon = '🌨️'; }
+				elseif ($fcCode >= 95 && $fcCode <= 99)       { $fcIcon = '⛈️'; }
+				else                                          { $fcIcon = '🌡️'; }
+				$fcHiC = round(($nextPdForecast['hi_f'] - 32) * 5 / 9);
+				$fcLoC = $nextPdForecast['lo_f'] !== null ? round(($nextPdForecast['lo_f'] - 32) * 5 / 9) : null;
+			?>
+				<div class="pk-stat-sub" style="margin-top:2px;font-size:11px">
+					<?php if ($nextParkDayDate !== $parkLocalToday): ?><span style="font-style:italic;opacity:.55;margin-right:3px">forecast</span><?php endif; ?>
+					<?= $fcIcon ?> <?= round($nextPdForecast['hi_f']) ?>/<?= $fcHiC ?>°<?php
+						if ($nextPdForecast['lo_f'] !== null) echo ' · <span style="opacity:.7">L ' . round($nextPdForecast['lo_f']) . '/' . $fcLoC . '°</span>';
+						if (!empty($nextPdForecast['precip_pct']) && $nextPdForecast['precip_pct'] >= 20) echo ' · ' . (int)$nextPdForecast['precip_pct'] . '% rain';
+					?>
+					<?php foreach (wx_badges_for_date($park_id, $nextParkDayDate) as $_b): ?>
+						<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
 		<?php else: ?>
 			<div class="pk-stat-value">&mdash;</div>
 		<?php endif; ?>
@@ -271,15 +421,68 @@
 		<div class="pk-stat-label">Active Players</div>
 	</div>
 	<div class="pk-stat-card">
+		<div class="pk-stat-icon"><i class="fas fa-chart-bar"></i></div>
+		<div class="pk-stat-value"><?= $WeeklyAvg > 0 ? number_format($WeeklyAvg, 1) : '&mdash;' ?></div>
+		<div class="pk-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week, averaged over the past 6 months. Each player counts once per week. This matches the Top Parks ranking formula.</span></span></div>
+	</div>
+	<div class="pk-stat-card">
 		<div class="pk-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="pk-stat-value"><?= $MonthlyAvg > 0 ? number_format($MonthlyAvg, 1) : '&mdash;' ?></div>
-		<div class="pk-stat-label">Avg / Month</div>
+		<div class="pk-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month, averaged over the past 12 months. Higher than Avg/Week because a monthly window captures players who don&rsquo;t attend every week.</span></span></div>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-flag"></i></div>
 		<div class="pk-stat-value"><?= count($eventList) ?></div>
 		<div class="pk-stat-label">Event<?= count($eventList) != 1 ? 's' : '' ?></div>
 	</div>
+	<?php
+	// Park weather card — only render when we have a valid current temp AND the
+	// Next Park Day card isn't already showing today/upcoming forecast (which
+	// would make this redundant).
+	$wx = $park_weather ?? null;
+	$wxTemp = $wx['current_temp_f'] ?? null;
+	if ($wxTemp !== null && empty($nextPdForecast)):
+		$wxCode  = (int)($wx['current_code']  ?? -1);
+		$wxIsDay = (int)($wx['current_is_day'] ?? 1);
+		// WMO code → emoji + short label (mirrors Live ticker logic)
+		$wxIcon  = '';
+		$wxLabel = '';
+		if     ($wxCode === 0)                          { $wxIcon = $wxIsDay ? '☀️' : '🌙';  $wxLabel = 'Clear'; }
+		elseif ($wxCode === 1)                          { $wxIcon = $wxIsDay ? '🌤️' : '🌙'; $wxLabel = 'Mostly clear'; }
+		elseif ($wxCode === 2)                          { $wxIcon = '⛅';  $wxLabel = 'Partly cloudy'; }
+		elseif ($wxCode === 3)                          { $wxIcon = '☁️';  $wxLabel = 'Overcast'; }
+		elseif ($wxCode === 45 || $wxCode === 48)       { $wxIcon = '🌫️'; $wxLabel = 'Fog'; }
+		elseif ($wxCode >= 51 && $wxCode <= 57)         { $wxIcon = '🌦️'; $wxLabel = 'Drizzle'; }
+		elseif ($wxCode >= 61 && $wxCode <= 67)         { $wxIcon = '🌧️'; $wxLabel = 'Rain'; }
+		elseif ($wxCode >= 71 && $wxCode <= 77)         { $wxIcon = '❄️';  $wxLabel = 'Snow'; }
+		elseif ($wxCode >= 80 && $wxCode <= 82)         { $wxIcon = '🌦️'; $wxLabel = 'Showers'; }
+		elseif ($wxCode === 85 || $wxCode === 86)       { $wxIcon = '🌨️'; $wxLabel = 'Snow showers'; }
+		elseif ($wxCode >= 95 && $wxCode <= 99)         { $wxIcon = '⛈️'; $wxLabel = 'Thunderstorm'; }
+	?>
+	<?php
+		// Pair of °F / °C for the US + Canadian audience.
+		$wxTempC      = ($wxTemp - 32) * 5 / 9;
+		$wxTodayHi    = $wx['today_high_f'] ?? null;
+		$wxTodayLo    = $wx['today_low_f']  ?? null;
+		$wxTodayHiC   = $wxTodayHi !== null ? ($wxTodayHi - 32) * 5 / 9 : null;
+		$wxTodayLoC   = $wxTodayLo !== null ? ($wxTodayLo - 32) * 5 / 9 : null;
+	?>
+	<div class="pk-stat-card pk-stat-card-weather">
+		<div class="pk-stat-icon"><?= $wxIcon ?: '🌡️' ?></div>
+		<div class="pk-stat-value" style="font-size:1.1rem"><?= round($wxTemp) ?>°F / <?= round($wxTempC) ?>°C</div>
+		<div class="pk-stat-label">
+			<?= htmlspecialchars($wxLabel) ?>
+			<?php if ($wxTodayHi !== null && $wxTodayLo !== null): ?>
+				<br><span style="font-size:.85em;color:var(--ork-text-muted,#718096)">H <?= round($wxTodayHi) ?>/<?= round($wxTodayHiC) ?>° · L <?= round($wxTodayLo) ?>/<?= round($wxTodayLoC) ?>°<?php
+					if (!empty($wx['today_precip_pct'])) echo ' · ' . (int)$wx['today_precip_pct'] . '% rain';
+				?></span>
+			<?php endif; ?>
+			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
+			   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
+		</div>
+	</div>
+	<?php endif; ?>
 </div>
 
 <!-- =============================================
@@ -293,10 +496,10 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
+				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
 					<i class="fas fa-pencil-alt"></i>
 				</button>
 				<?php endif; ?>
@@ -338,7 +541,7 @@
 
 		<!-- Quick Links -->
 		<div class="pk-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="pk-link-list">
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
@@ -492,14 +695,21 @@
 							switch ($day['Recurrence']) {
 								case 'weekly':        $recText = 'Every ' . $day['WeekDay']; break;
 								case 'week-of-month': $recText = 'Every ' . pk_ordinal($day['WeekOfMonth']) . ' ' . $day['WeekDay']; break;
+								case 'every-x-weeks':
+									$_wi = (int)($day['WeekInterval'] ?? 0);
+									$recText = ($_wi === 2)
+										? 'Every other ' . $day['WeekDay']
+										: 'Every ' . $_wi . ' weeks on ' . $day['WeekDay'] . 's';
+									break;
 								case 'monthly':       $recText = 'Monthly on the ' . pk_ordinal($day['MonthDay']); break;
 								default:              $recText = $day['Recurrence'];
 							}
 							switch ($day['Purpose']) {
-								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
-								case 'arts-day':         $purposeLabel = 'A&S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
+								case 'park-day':         $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt'; break;
+								case 'fighter-practice': $purposeLabel = 'Fighter Practice';  $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
+								case 'arts-day':         $purposeLabel = 'A&S Day';           $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
 								case 'other':            $purposeLabel = 'Other';             $purposeCls = 'purpose-other';   $iconCls = 'icon-other';   $iconFa = 'fa-star';       break;
-								default:                 $purposeLabel = 'Park Day';          $purposeCls = '';                $iconCls = '';             $iconFa = 'fa-shield-alt';
+								default:                 $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt';
 							}
 							// Day-specific map URL
 							$dayMapUrl = null;
@@ -523,6 +733,8 @@
 					data-weekday="<?= htmlspecialchars($day['WeekDay'] ?? '') ?>"
 					data-weekof="<?= (int)($day['WeekOfMonth'] ?? 0) ?>"
 					data-monthday="<?= (int)($day['MonthDay'] ?? 0) ?>"
+					data-startdate="<?= htmlspecialchars($day['StartDate'] ?? '') ?>"
+					data-interval="<?= (int)($day['WeekInterval'] ?? 0) ?>"
 					data-time="<?= htmlspecialchars($day['Time'] ?? '') ?>"
 					data-desc="<?= htmlspecialchars($day['Description'] ?? '', ENT_QUOTES) ?>"
 					data-online="<?= (int)($day['Online'] ?? 0) ?>"
@@ -532,7 +744,7 @@
 					data-province="<?= htmlspecialchars($day['Province'] ?? '', ENT_QUOTES) ?>"
 					data-postal="<?= htmlspecialchars($day['PostalCode'] ?? '', ENT_QUOTES) ?>">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-schedule-card-edit" title="Edit park day"><i class="fas fa-pencil-alt"></i></button>
+				<button class="pk-schedule-card-edit" data-tip="Edit park day"><i class="fas fa-pencil-alt"></i></button>
 				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
 								<i class="fas <?= $iconFa ?>"></i>
@@ -540,6 +752,12 @@
 							<div class="pk-schedule-info">
 								<div class="pk-schedule-when"><?= htmlspecialchars($recText) ?></div>
 								<div class="pk-schedule-time"><?= date('g:i A', strtotime($day['Time'])) ?></div>
+								<?php $_pdNextDate = $pdNextDateById[(int)$day['ParkDayId']] ?? null; ?>
+								<?php if ($_pdNextDate): ?>
+									<div class="pk-schedule-next" style="font-size:12px;color:var(--ork-text-muted,#718096);margin-top:2px">
+										<i class="fas fa-calendar-day" style="margin-right:4px;opacity:.7"></i>Next: <strong style="color:var(--ork-text,#2d3748);font-weight:600"><?= ($_pdNextDate === $parkLocalToday) ? 'Today' : date('D, M j', strtotime($_pdNextDate)) ?></strong>
+									</div>
+								<?php endif; ?>
 								<span class="pk-schedule-purpose <?= $purposeCls ?>"><?= $purposeLabel ?></span>
 								<?php if (!empty($day['Online'])): ?>
 									<span class="pk-schedule-online-badge"><i class="fas fa-wifi"></i> Online</span>
@@ -562,6 +780,37 @@
 										</a>
 									<?php endif; ?>
 								<?php endif; ?>
+							<?php
+								// Forecast for the next occurrence of THIS park day, when in-person and within the 7-day cache window
+								$_pdNext = $pdNextDateById[(int)$day['ParkDayId']] ?? null;
+								$_pdFC   = (empty($day['Online']) && $_pdNext)
+									? wx_forecast_for_date($park_id, $_pdNext)
+									: null;
+								if ($_pdFC && $_pdFC['hi_f'] !== null):
+									$c = (int)$_pdFC['code'];
+									$ic = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c===45||$c===48)?'🌫️':(($c>=51&&$c<=57)?'🌦️':(($c>=61&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c===85||$c===86)?'🌨️':(($c>=95)?'⛈️':'🌡️'))))))))));
+									$hiC = round(($_pdFC['hi_f']-32)*5/9);
+									$loC = $_pdFC['lo_f'] !== null ? round(($_pdFC['lo_f']-32)*5/9) : null;
+							?>
+								<?php $_pdBadges = wx_badges_for_date($park_id, $_pdNext); ?>
+								<div class="pk-schedule-forecast" style="margin-top:6px;padding:6px 8px;background:var(--ork-bg-secondary,#f7fafc);border-radius:4px;font-size:11px;color:var(--ork-text-muted,#718096)">
+									<?php if ($_pdNext !== $parkLocalToday): ?><em style="opacity:.75;margin-right:3px">forecast</em><?php endif; ?>
+									<span style="font-size:13px"><?= $ic ?></span>
+									<span style="color:var(--ork-text,#2d3748);font-weight:600;margin-left:4px"><?= round($_pdFC['hi_f']) ?>/<?= $hiC ?>°</span>
+									<?php if ($_pdFC['lo_f'] !== null): ?>
+										<span style="margin-left:6px">L <?= round($_pdFC['lo_f']) ?>/<?= $loC ?>°</span>
+									<?php endif; ?>
+									<?php if (!empty($_pdFC['precip_pct']) && $_pdFC['precip_pct'] >= 20): ?>
+										<span style="margin-left:6px"><?= (int)$_pdFC['precip_pct'] ?>% rain</span>
+									<?php endif; ?>
+									<?php foreach ($_pdBadges as $_b): ?>
+										<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>" style="margin-left:6px"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
+									<?php endforeach; ?>
+									<a href="https://open-meteo.com/" target="_blank" rel="noopener"
+									   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+									   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:6px;opacity:.6">ⓘ</a>
+								</div>
+							<?php endif; ?>
 							<?php if (!empty($day['Description'])): ?>
 								<p class="pk-schedule-desc"><?= htmlspecialchars($day['Description']) ?></p>
 							<?php endif; ?>
@@ -578,17 +827,19 @@
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
-						<?php if (count($parkDayList) > 0): ?>
+						<button class="pk-view-btn" id="pk-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
 						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
+							<button class="pk-filter-toggle pk-filter-on" data-filter="calendar-item">Calendar Items</button>
+							<?php if (count($parkDayList) > 0): ?>
 							<button class="pk-filter-toggle" data-filter="park-day">Park Days</button>
+							<?php endif; ?>
 						</div>
-						<?php endif; ?>
 						<?php if ($CanAdminPark): ?>
 						<button onclick="pkOpenEventModal()"style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -600,6 +851,12 @@
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="pk-events-cal" style="display:none"></div>
 
+				<!-- Map view (lazy-loaded Google Maps) -->
+				<div id="pk-events-map-wrap" style="position:relative;display:none">
+					<div id="pk-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="pk-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
+				</div>
+
 				<!-- List view -->
 				<div id="pk-events-list-view">
 				<?php if (count($eventList) > 0 || count($parkDayList) > 0): ?>
@@ -608,41 +865,92 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
-								<th data-sorttype="numeric">Going</th>
-							<th data-sorttype="numeric">Interested</th>
+								<th colspan="2" style="text-align:right;padding-right:8px;">RSVP</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
-								<td>
-									<div class="pk-tiny-heraldry">
-										<?php if ($event['HasHeraldry'] == 1): ?>
-											<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
-											     loading="lazy"
-											     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
-										<?php else: ?>
-											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
-										<?php endif; ?>
+								<?php if (!empty($event['_IsCalendarItem'])): ?>
+								<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?> <?= $ciLoc ? 'pk-locals-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+									<td>
+										<?php $ciColor = $event['Color'] ?? '#64748b'; $ciColorText = $event['ColorText'] ?? '#fff'; ?>
+										<span class="pk-ci-pill" style="background:<?= htmlspecialchars($ciColor) ?>;border-color:<?= htmlspecialchars($ciColor) ?>;color:<?= htmlspecialchars($ciColorText) ?>"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
-									</div>
-								</td>
-								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
-									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
-								</td>
-								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
-							</tr>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
+										<?= $event['NextDate'] ? date('M. j, Y', strtotime($event['NextDate'])) : '' ?>
+									</td>
+									<td class="pk-date-col" colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>
+								</tr>
+								<?php else: ?>
+								<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
+								<tr class="<?= $isDraft ? 'pk-row-draft' : '' ?>" data-type="event"<?= $event['NextDetailId'] ? ' onclick="if(event.target.closest(\'.pk-rsvp-wrap\'))return; window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+									<td>
+										<div class="pk-tiny-heraldry">
+											<?php if ($event['HasHeraldry'] == 1): ?>
+												<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
+												     loading="lazy"
+												     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
+											<?php else: ?>
+												<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
+											<?php endif; ?>
+											<?php if ($isDraft): ?><span class="pk-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?><?= htmlspecialchars($event['Name']) ?>
+										</div>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
+										<?php if (0 != $event['NextDate']): ?>
+											<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
+											<?php
+												// Compare date-to-date so an event happening *today* (NextDate
+												// = today at 00:00) isn't flagged Past at 00:01.
+												$_evDate    = date('Y-m-d', strtotime($event['NextDate']));
+												$_isEvPast  = strtotime($_evDate) < strtotime(date('Y-m-d'));
+											?>
+											<?php if ($_isEvPast): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+											<?php
+												// Forecast badge when the event date is within the 7-day cache window
+												$evDateStr = substr($event['NextDate'], 0, 10);
+												$evFC = (strtotime($event['NextDate']) >= time() && $park_weather)
+													? wx_forecast_for_date($park_id, $evDateStr)
+													: null;
+												if ($evFC && $evFC['hi_f'] !== null):
+													$c = (int)$evFC['code'];
+													$ic = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c>=51&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c>=95)?'⛈️':'🌡️')))))));
+													$hiC = round(($evFC['hi_f']-32)*5/9);
+											?>
+											<br><span style="font-size:11px;color:var(--ork-text-muted,#718096)"><?php if ($evDateStr !== $parkLocalToday): ?><em style="opacity:.7;margin-right:2px">forecast</em> <?php endif; ?><?= $ic ?> <?= round($evFC['hi_f']) ?>/<?= $hiC ?>°<?php
+												if (!empty($evFC['precip_pct']) && $evFC['precip_pct'] >= 20) echo ' · ' . (int)$evFC['precip_pct'] . '%';
+											?><?php foreach (wx_badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?></span><?php endforeach; ?></span>
+											<?php endif; ?>
+										<?php endif; ?>
+									</td>
+									<td class="pk-date-col" colspan="2" style="text-align:right;padding:6px 8px;">
+										<?php if ((int)$event['NextDetailId'] > 0): ?>
+											<span class="pk-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
+										<?php else: ?>
+											<span style="color:#a0aec0">—</span>
+										<?php endif; ?>
+									</td>
+								</tr>
+								<?php endif; ?>
 							<?php endforeach; ?>
 							<?php foreach ($parkDayList as $pkDay): ?>
 							<?php
 								switch ($pkDay['Recurrence']) {
 									case 'weekly':        $pkDayRec = 'Every ' . $pkDay['WeekDay']; break;
 									case 'week-of-month': $pkDayRec = 'Every ' . pk_ordinal($pkDay['WeekOfMonth']) . ' ' . $pkDay['WeekDay']; break;
+									case 'every-x-weeks':
+										$_wi = (int)($pkDay['WeekInterval'] ?? 0);
+										$pkDayRec = ($_wi === 2)
+											? 'Every other ' . $pkDay['WeekDay']
+											: 'Every ' . $_wi . ' weeks on ' . $pkDay['WeekDay'] . 's';
+										break;
 									case 'monthly':       $pkDayRec = 'Monthly on the ' . pk_ordinal($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}
-								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+								$pkPurposeLabels = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 								$pkDayLabel = $pkPurposeLabels[$pkDay['Purpose']] ?? 'Park Day';
 							?>
 							<tr data-type="park-day" style="display:none">
@@ -674,13 +982,14 @@
 				<?php if (count($allPlayers) > 0): ?>
 					<div class="pk-players-toolbar">
 						<span class="pk-players-toolbar-left">
-							<?= count($playerPeriods[0] ?? []) ?> active member<?= count($playerPeriods[0] ?? []) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerPeriods[0] ?? [])): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
+							<?= count($playerList) ?> active member<?= count($playerList) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
 						</span>
 						<div class="pk-players-toolbar-right">
 							<div class="pk-player-search-wrap">
 								<i class="fas fa-search pk-player-search-icon"></i>
 								<input type="text" id="pk-player-search" class="pk-player-search-input" placeholder="Search all players…" autocomplete="off">
 							</div>
+							<button class="pk-view-btn" id="pk-active-only-btn" type="button" title="Show only members with sign-ins in the past 6 months"><i class="fas fa-filter"></i> Active only</button>
 							<div class="pk-view-toggle">
 								<button class="pk-view-btn pk-view-active" data-pkview="cards">
 									<i class="fas fa-th-large"></i> Cards
@@ -695,8 +1004,8 @@
 								<div class="plr-gear-wrap">
 									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 									<div class="plr-gear-menu" id="pk-plr-gear-menu">
-										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
-										<button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-exchange-alt"></i> Move Player</button>
+										<?php if (!empty($CanMergePlayers)): ?><button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button><?php endif; ?>
 									</div>
 								</div>
 							</div>
@@ -704,34 +1013,30 @@
 						</div>
 					</div>
 
-					<!-- Card view (default) -->
-					<div id="pk-players-cards">
-						<!-- Period 0 (0–6 months) always visible -->
-						<div class="pk-players-grid">
-							<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-							<?php
-								$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-								$heraldryBgSrc = $p['HasHeraldry']
-									? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-									: null;
-								if ($p['HasImage']) {
-									$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-								} elseif ($p['HasHeraldry']) {
-									$avatarSrc = $heraldryBgSrc;
-								} else {
-									$avatarSrc = null;
-								}
+					<?php
+						// Renderers reused for each year section.
+						$pkRenderCard = function (array $p) {
+							$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
+							$heraldryBgSrc = $p['HasHeraldry']
+								? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
+								: null;
+							if ($p['HasImage']) {
+								$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
+							} elseif ($p['HasHeraldry']) {
+								$avatarSrc = $heraldryBgSrc;
+							} else {
+								$avatarSrc = null;
+							}
 							?>
 							<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 							   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
+							   <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?>
+							   data-signin-count="<?= (int)$p['SigninCount'] ?>"
 							   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 								<div class="pk-player-card-top">
 									<div class="pk-player-avatar">
 										<?php if ($avatarSrc): ?>
-											<img src="<?= htmlspecialchars($avatarSrc) ?>"
-											     alt=""
-											     loading="lazy"
-											     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
+											<img src="<?= htmlspecialchars($avatarSrc) ?>" alt="" loading="lazy" onerror="pkAvatarFallback(this,'<?= $initial ?>')">
 										<?php else: ?>
 											<?= $initial ?>
 										<?php endif; ?>
@@ -746,119 +1051,28 @@
 									</div>
 								</div>
 								<div class="pk-player-stats">
-									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
+									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> six month sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
+									<?php $_lsTs = strtotime($p['LastSignin']); ?>
+									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= ($_lsTs > 0 && date('Y', $_lsTs) !== '1970') ? date('M j, Y', $_lsTs) : '—' ?></span>
+									<?php
+										// "Last here" indicator when the player's most recent sign-in wasn't at this park.
+										$_lpTs = !empty($p['LastSigninAtPark']) ? strtotime($p['LastSigninAtPark']) : 0;
+										if (!empty($p['LastSigninAtPark']) && $p['LastSigninAtPark'] !== $p['LastSignin']):
+											$_hereTxt = ($_lpTs > 0 && date('Y', $_lpTs) !== '1970') ? 'here ' . date('M j, Y', $_lpTs) : 'never here';
+									?>
+										<span style="color:#a0aec0"><i class="fas fa-flag" style="color:#a0aec0;width:14px"></i> <?= htmlspecialchars($_hereTxt) ?></span>
+									<?php endif; ?>
 									<?php if (!empty($p['LastClass'])): ?>
 										<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
 									<?php endif; ?>
 								</div>
 							</a>
-							<?php endforeach; ?>
-						</div>
+							<?php
+						};
 
-						<!-- Period 1+ (hidden; revealed by Load More) -->
-						<?php $_pkCardIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<div class="pk-period-block" id="pk-players-block-<?= $_pkCardIdx ?>" style="display:none">
-							<div class="pk-period-label"><?= $pkPeriod * 6 ?>–<?= ($pkPeriod + 1) * 6 ?> months ago</div>
-							<div class="pk-players-grid">
-								<?php foreach ($pkPeriodPlayers as $p): ?>
-								<?php
-									$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-									$heraldryBgSrc = $p['HasHeraldry']
-										? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-										: null;
-									if ($p['HasImage']) {
-										$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-									} elseif ($p['HasHeraldry']) {
-										$avatarSrc = $heraldryBgSrc;
-									} else {
-										$avatarSrc = null;
-									}
-								?>
-								<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
-								   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
-								   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
-									<div class="pk-player-card-top">
-										<div class="pk-player-avatar">
-											<?php if ($avatarSrc): ?>
-												<img src="<?= htmlspecialchars($avatarSrc) ?>"
-												     loading="lazy"
-												     alt=""
-												     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
-											<?php else: ?>
-												<?= $initial ?>
-											<?php endif; ?>
-										</div>
-										<div>
-											<div class="pk-player-name"><?= htmlspecialchars($p['Persona']) ?></div>
-											<?php if (!empty($p['OfficerRoles'])): ?>
-												<?php foreach (explode(', ', $p['OfficerRoles']) as $role): ?>
-													<span class="pk-officer-pill"><?= htmlspecialchars(trim($role)) ?></span>
-												<?php endforeach; ?>
-											<?php endif; ?>
-										</div>
-									</div>
-									<div class="pk-player-stats">
-										<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-										<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
-										<?php if (!empty($p['LastClass'])): ?>
-											<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
-										<?php endif; ?>
-									</div>
-								</a>
-								<?php endforeach; ?>
-							</div>
-						</div>
-						<?php $_pkCardIdx++; endforeach; ?>
-
-						<?php if (count($playerPeriods) > 1): ?>
-						<div class="pk-load-more-wrap" data-next="1" data-group="pk-players">
-							<button class="pk-load-more-btn" onclick="pkLoadMoreCards('pk-players', this)">
-								<i class="fas fa-chevron-down"></i> Load More...
-							</button>
-							<span class="pk-load-more-hint">Showing <?= count($playerPeriods[0] ?? []) ?> of <?= count($allPlayers) ?> members</span>
-						</div>
-						<?php endif; ?>
-					</div><!-- /pk-players-cards -->
-
-					<!-- List view (hidden by default) -->
-					<div id="pk-players-list" style="display:none">
-						<table class="pk-table" id="pk-players-table">
-							<thead>
-								<tr>
-									<th data-sorttype="text">Persona</th>
-									<th data-sorttype="numeric">Sign-ins</th>
-									<th data-sorttype="date">Last Visit</th>
-									<th data-sorttype="text">Last Class</th>
-									<th data-sorttype="text">Role</th>
-								</tr>
-							</thead>
-							<tbody>
-								<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-								<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
-									<td>
-										<?= htmlspecialchars($p['Persona']) ?>
-										<?php if (!empty($p['OfficerRoles'])): ?>
-											<?php foreach (explode(', ', $p['OfficerRoles']) as $role): ?>
-												<span class="pk-officer-pill"><?= htmlspecialchars(trim($role)) ?></span>
-											<?php endforeach; ?>
-										<?php endif; ?>
-									</td>
-									<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-									<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-										<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-									</td>
-									<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
-									<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
-								</tr>
-								<?php endforeach; ?>
-							</tbody>
-						</table>
-						<!-- Hidden row templates for older periods -->
-						<?php $_pkListIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<template id="pk-players-tmpl-<?= $_pkListIdx ?>">
-							<?php foreach ($pkPeriodPlayers as $p): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
+						$pkRenderRow = function (array $p) {
+							?>
+							<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> data-signin-count="<?= (int)$p['SigninCount'] ?>" onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 								<td>
 									<?= htmlspecialchars($p['Persona']) ?>
 									<?php if (!empty($p['OfficerRoles'])): ?>
@@ -868,24 +1082,67 @@
 									<?php endif; ?>
 								</td>
 								<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-									<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-								</td>
+								<?php
+									$_lsTsRow = strtotime($p['LastSignin']);
+									$_lpTsRow = !empty($p['LastSigninAtPark']) ? strtotime($p['LastSigninAtPark']) : 0;
+									$_dateCell = ($_lsTsRow > 0 && date('Y', $_lsTsRow) !== '1970') ? date('M j, Y', $_lsTsRow) : '—';
+									if (!empty($p['LastSigninAtPark']) && $p['LastSigninAtPark'] !== $p['LastSignin']) {
+										$_hereTxtRow = ($_lpTsRow > 0 && date('Y', $_lpTsRow) !== '1970') ? 'here ' . date('M j, Y', $_lpTsRow) : 'never here';
+										$_dateCell .= ' <span style="color:#a0aec0;font-size:.85em">(' . htmlspecialchars($_hereTxtRow) . ')</span>';
+									}
+								?>
+								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>"><?= $_dateCell ?></td>
 								<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
 								<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
 							</tr>
-							<?php endforeach; ?>
-						</template>
-						<?php $_pkListIdx++; endforeach; ?>
-						<?php if (count($playerPeriods) > 1): ?>
-						<div class="pk-load-more-wrap pk-load-more-list" data-next="1">
-							<button class="pk-load-more-btn" onclick="pkLoadMoreList('pk-players-table', 'pk-players-tmpl', this)">
-								<i class="fas fa-chevron-down"></i> Load More...
-							</button>
-							<span class="pk-load-more-hint">Showing <?= count($playerPeriods[0] ?? []) ?> of <?= count($allPlayers) ?> members</span>
-						</div>
-						<?php endif; ?>
-						<div class="pk-pagination" id="pk-players-table-pages"></div>
+							<?php
+						};
+
+						$pkYearLabel = function ($year) use ($nowYear) {
+							if ($year === 'never') return 'No recorded sign-ins';
+							return ((int)$year === $nowYear) ? ($year . ' (current)') : (string)$year;
+						};
+					?>
+
+					<!-- Card view (default) — one details/year section -->
+					<div id="pk-players-cards">
+						<?php $_pkIdx = 0; foreach ($playersByYear as $_pkYear => $_pkYearPlayers): ?>
+						<details class="pk-year-section"<?= $_pkIdx === 0 ? ' open' : '' ?> data-year="<?= htmlspecialchars((string)$_pkYear) ?>">
+							<summary class="pk-year-summary">
+								<span class="pk-year-label"><?= htmlspecialchars($pkYearLabel($_pkYear)) ?></span>
+								<span class="pk-year-count"><?= count($_pkYearPlayers) ?> member<?= count($_pkYearPlayers) != 1 ? 's' : '' ?></span>
+							</summary>
+							<div class="pk-players-grid">
+								<?php foreach ($_pkYearPlayers as $p) { $pkRenderCard($p); } ?>
+							</div>
+						</details>
+						<?php $_pkIdx++; endforeach; ?>
+					</div><!-- /pk-players-cards -->
+
+					<!-- List view (hidden by default) — one details/year section, each with its own table -->
+					<div id="pk-players-list" style="display:none">
+						<?php $_pkIdx = 0; foreach ($playersByYear as $_pkYear => $_pkYearPlayers): ?>
+						<details class="pk-year-section"<?= $_pkIdx === 0 ? ' open' : '' ?> data-year="<?= htmlspecialchars((string)$_pkYear) ?>">
+							<summary class="pk-year-summary">
+								<span class="pk-year-label"><?= htmlspecialchars($pkYearLabel($_pkYear)) ?></span>
+								<span class="pk-year-count"><?= count($_pkYearPlayers) ?> member<?= count($_pkYearPlayers) != 1 ? 's' : '' ?></span>
+							</summary>
+							<table class="pk-table pk-year-table">
+								<thead>
+									<tr>
+										<th data-sorttype="text">Persona</th>
+										<th data-sorttype="numeric">6mo Sign-ins</th>
+										<th data-sorttype="date">Last Visit</th>
+										<th data-sorttype="text">Last Class</th>
+										<th data-sorttype="text">Role</th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ($_pkYearPlayers as $p) { $pkRenderRow($p); } ?>
+								</tbody>
+							</table>
+						</details>
+						<?php $_pkIdx++; endforeach; ?>
 					</div><!-- /pk-players-list -->
 				<?php else: ?>
 					<div class="pk-empty">No players found</div>
@@ -955,8 +1212,8 @@
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
-				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
-					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
 				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
@@ -977,9 +1234,11 @@
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspended Players</a></li>
 							<li><a href="<?= UIR ?>Reports/active_duespaid/Park&id=<?= $park_id ?>">Player Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Park&id=<?= $park_id ?>">Waivered Attendance</a></li>
+							<?php if ($ShowVotingEligibleLink ?? false): ?><li><a href="<?= UIR ?>Reports/voting_eligible/Park&id=<?= $park_id ?>">Voting Eligible</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/reeve&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Park&id=<?= $park_id ?>">Player Status Reconciliation</a></li>
+							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<?php endif; ?>
 						</ul>
@@ -1010,8 +1269,7 @@
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Player Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Class Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
-							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
-							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
+											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -1028,7 +1286,7 @@
 						<ul>
 							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
-							<li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li>
+							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
 						</ul>
 					</div>
@@ -1055,28 +1313,35 @@
 				<?php if (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
-				<?php if (!empty($CanAdminPark)): ?>
+				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
 				<div class="kn-rec-filter-bar">
 					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-					<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
 					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-					<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
 					<button class="kn-rec-filter-btn" data-filter="all">All</button>
+					<?php if (!empty($ViewerHasCircle)): ?>
+					<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
+					<?php endif; ?>
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
-							<h4>About These Filters</h4>
+							<h4 class="kn-bare-heading">About These Filters</h4>
 							<dl>
 								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
 								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
-								<dt>Below Recommended</dt>
+								<dt>Below Rec'd</dt>
 								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 								<dt>Non-Ladder</dt>
-								<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
-								<dt>At or Above Recommended</dt>
+								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
+								<dt>At or Above Rec'd</dt>
 								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
 								<dt>All</dt>
 								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+								<?php if (!empty($ViewerHasCircle)): ?>
+								<dt>My Circles</dt>
+								<dd>Open recommendations your peerage circle votes on &mdash; all knighthood recs (knights vote as a group) plus recs for each Paragon you hold.</dd>
+								<?php endif; ?>
 							</dl>
 						</div>
 					</span>
@@ -1087,7 +1352,7 @@
 				</div>
 				<?php endif; ?>
 				<div class="pk-recs-table-wrap">
-					<table id="pk-rec-table" class="pk-recs-table display">
+					<table id="pk-rec-table" class="pk-recs-table display" data-circle-ids="<?= htmlspecialchars(json_encode($ViewerCircleAwardIds ?? array())) ?>">
 						<thead>
 							<tr>
 								<th>Player</th>
@@ -1096,13 +1361,13 @@
 								<th data-short="Rec. By">Recommended By</th>
 								<th>Date</th>
 								<th>Notes</th>
-								<?php if (!empty($CanAdminPark)): ?><th></th><?php endif; ?>
+								<?php if (!empty($IsLoggedIn)): ?><th></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody id="pk-recs-tbody">
 						<?php foreach ($AwardRecommendations as $rec): ?>
 						<tr class="pk-rec-row"
-							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
+							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
@@ -1113,9 +1378,26 @@
 <?php if (!empty($rec['Reason'])): ?>
 							<span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span>
 <?php else: ?>&mdash;<?php endif; ?>
-						</td>
-							<?php if (!empty($CanAdminPark)): ?>
-							<td class="pk-rec-actions">
+								<?php if (!empty($rec['ViewerCanEditReason'])): ?>
+								<button class="rs-edit-reason-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-reason="<?= htmlspecialchars($rec['Reason'] ?? '', ENT_QUOTES) ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your reason"><i class="fas fa-pen"></i></button>
+								<?php endif; ?>
+								<?php if (!empty($rec['Seconds']) && is_array($rec['Seconds'])): ?>
+								<div class="rs-seconds">
+									<?php foreach ($rec['Seconds'] as $sec): ?>
+									<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i><a class="rs-supporter" href="<?= UIR ?>Player/profile/<?= (int)$sec['SupporterMundaneId'] ?>"><?= htmlspecialchars($sec['SupporterName'] ?? '') ?></a><?php if (!empty($sec['Notes'])): $_sn = $sec['Notes']; ?><span class="rs-notes">&mdash; "<?php if (mb_strlen($_sn) > 50): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($_sn, 0, 50)) ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($_sn, 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span></span><?php else: ?><?= htmlspecialchars($_sn) ?><?php endif; ?>"</span><?php endif; ?><?php $_canWithdrawSec = !empty($sec['IsMine']) || ($CanAdminPark ?? false); if (!empty($sec['IsMine']) || $_canWithdrawSec): ?> <span class="rs-second-actions"><?php if (!empty($sec['IsMine'])): ?><button class="rs-second-edit" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-notes="<?= htmlspecialchars($sec['Notes'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button><?php endif; ?><?php if ($_canWithdrawSec): ?><button class="rs-second-withdraw" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-supporter="<?= htmlspecialchars($sec['SupporterName'] ?? '', ENT_QUOTES) ?>" data-rstip="<?= !empty($sec['IsMine']) ? 'Withdraw your second' : 'Remove this second' ?>"><i class="fas fa-times"></i></button><?php endif; ?></span><?php endif; ?></div>
+									<?php endforeach; ?>
+								</div>
+								<?php endif; ?>
+							</td>
+							<?php if (!empty($IsLoggedIn)): ?>
+							<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">
+								<?php if (!empty($rec['SecondsCount'])): $_sc = (int)$rec['SecondsCount']; ?>
+								<span class="rs-seconds-badge" data-rstip="<?= $_sc ?> supporting <?= $_sc === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= $_sc ?></span>
+								<?php endif; ?>
+								<?php if (!empty($rec['ViewerCanSecond'])): ?>
+								<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
+								<?php endif; ?>
+								<?php if (!empty($CanAdminPark)): ?>
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
 									data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
 									<i class="fas fa-medal"></i> Grant
@@ -1124,12 +1406,44 @@
 									data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
 									<i class="fas fa-times"></i> Delete
 								</button>
+								<?php endif; ?>
 							</td>
 							<?php endif; ?>
 						</tr>
 						<?php endforeach; ?>
 						</tbody>
 					</table>
+				</div>
+				<?php endif; ?>
+				<?php if (!empty($CanAdminPark)): ?>
+				<div class="pk-deleted-recs" id="pk-deleted-recs" data-loaded="0">
+					<button type="button" class="pk-deleted-recs-toggle" id="pk-deleted-recs-toggle" aria-expanded="false">
+						<span class="pk-deleted-recs-caret">&#9654;</span>
+						<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
+						<span class="pk-deleted-recs-count" id="pk-deleted-recs-count" style="display:none">0</span>
+					</button>
+					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
+						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
+						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
+							<table class="pk-deleted-recs-table">
+								<thead>
+									<tr>
+										<th>Player</th>
+										<th>Award</th>
+										<th>Rank</th>
+										<th>Notes</th>
+										<th>Date Rec.</th>
+										<th>Recommended By</th>
+										<th>Deleted At</th>
+										<th>Deleted By</th>
+										<th class="no-export"></th>
+									</tr>
+								</thead>
+								<tbody id="pk-deleted-recs-tbody"></tbody>
+							</table>
+						</div>
+					</div>
 				</div>
 				<?php endif; ?>
 			</div>
@@ -1174,6 +1488,21 @@ var PkConfig = {
 		directions:  <?= json_encode($directions) ?>,
 	},
 };
+window.pkEventMapLocations  = <?= json_encode(array_values($pkEventMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
+</script>
+<script>
+var PkBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pkCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)($parkInfo['ParkId'] ?? 0) ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
 </script>
 <?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
@@ -1196,6 +1525,12 @@ var PkConfig = {
 				<button type="button" class="pk-award-type-btn" id="pk-award-type-officers">
 					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
 				</button>
+				<button type="button" class="pk-award-type-btn" id="pk-award-type-achievements">
+					<i class="fas fa-star" style="margin-right:5px"></i>Achievement Titles
+				</button>
+				<button type="button" class="pk-award-type-btn" id="pk-award-type-associations">
+					<i class="fas fa-handshake" style="margin-right:5px"></i>Associations
+				</button>
 			</div>
 
 			<!-- Player search -->
@@ -1208,7 +1543,7 @@ var PkConfig = {
 
 			<!-- Award Select -->
 			<div class="pk-acct-field">
-				<label for="pk-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<label for="pk-award-select" id="pk-award-select-label">Award <span style="color:#e53e3e">*</span></label>
 				<select id="pk-award-select" name="KingdomAwardId">
 					<option value="">Select award...</option>
 					<?= $AwardOptions ?>
@@ -1218,13 +1553,36 @@ var PkConfig = {
 
 			<!-- Custom Award Name -->
 			<div class="pk-acct-field" id="pk-award-custom-row" style="display:none">
-				<label for="pk-award-custom-name">Custom Award Name</label>
+				<label for="pk-award-custom-name" id="pk-award-custom-label">Custom Award Name</label>
 				<input type="text" id="pk-award-custom-name" maxlength="64" placeholder="Enter custom award name..." />
+			</div>
+
+			<!-- Alias dropdown (shown only for "Custom Title") -->
+			<div class="pk-acct-field" id="pk-award-alias-row" style="display:none">
+				<label for="pk-award-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
+				<select name="AliasAwardId" id="pk-award-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker -->
 			<div class="pk-acct-field" id="pk-award-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<label>Rank <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
 				<div class="pk-rank-pills-wrap" id="pk-rank-pills"></div>
 				<input type="hidden" id="pk-award-rank-val" value="" />
 			</div>
@@ -1252,6 +1610,7 @@ var PkConfig = {
 				<input type="text" id="pk-award-givenby-text" placeholder="Search by persona..." autocomplete="off" />
 				<input type="hidden" id="pk-award-givenby-id" value="" />
 				<div class="pk-ac-results" id="pk-award-givenby-results"></div>
+				<div id="pk-award-givenby-note" style="display:none;margin-top:6px;padding:8px 12px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;color:#2b6cb0;font-size:12px;line-height:1.5;"><i class="fas fa-info-circle" style="margin-right:5px"></i>This should reflect the person granting the association. For example, if a Knight is taking a Squire, enter the Knight's name here.</div>
 			</div>
 
 			<!-- Given At -->
@@ -1263,7 +1622,7 @@ var PkConfig = {
 				       value="<?= htmlspecialchars($park_name ?? '') ?>" />
 				<div class="pk-ac-results" id="pk-award-givenat-results"></div>
 				<input type="hidden" id="pk-award-park-id" value="<?= (int)$park_id ?>" />
-				<input type="hidden" id="pk-award-kingdom-id" value="0" />
+				<input type="hidden" id="pk-award-kingdom-id" value="<?= (int)($kingdom_id ?? 0) ?>" />
 				<input type="hidden" id="pk-award-event-id" value="0" />
 			</div>
 
@@ -1325,6 +1684,14 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<div id="pk-att-event-nudge" class="pk-att-event-nudge" style="display:none">
+				<div class="pk-att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+				<div class="pk-att-event-nudge-body">
+					<p class="pk-att-event-nudge-text">It looks like <strong id="pk-att-event-nudge-name"></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+					<a class="pk-att-event-nudge-btn" id="pk-att-event-nudge-link" href="#">Go To Event <i class="fas fa-arrow-right"></i></a>
+				</div>
+			</div>
+
 			<div class="pk-att-feedback" id="pk-att-feedback" style="display:none"></div>
 
 			<!-- Tab bar -->
@@ -1335,6 +1702,11 @@ var PkConfig = {
 				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
 					<i class="fas fa-users"></i> Recent Park Attendees
 				</button>
+			<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-att-tab" id="pk-att-tab-link" data-panel="pk-att-panel-link">
+					<i class="fas fa-link"></i> Sign-in Link
+				</button>
+			<?php endif; ?>
 			</div>
 
 			<!-- Search panel -->
@@ -1382,10 +1754,73 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<?php if (!empty($CanManagePark)): ?>
+			<!-- Sign-in Link panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-link" style="display:none">
+				<div class="pk-att-search-section-inner">
+					<div class="pk-att-search-row">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="pk-att-link-hours" min="1" max="120" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="pk-att-link-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="pk-btn pk-btn-primary" id="pk-att-link-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="pk-att-link-result" style="display:none;margin-top:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="pk-att-link-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+							<button class="pk-btn" id="pk-att-link-remove-btn" style="white-space:nowrap;background:#fed7d7;border:1px solid #fc8181;color:#c53030" title="Revoke this link so it can no longer be used">
+								<i class="fas fa-times"></i> Revoke
+							</button>
+						</div>
+						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<div style="margin-top:10px;font-size:11px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</div>
+					<!-- Active links (always visible — typically 0-3 at any time) -->
+					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
+						<div style="font-size:12px;color:#4a5568;font-weight:600">
+							Active Links <span id="pk-att-links-count" style="color:#a0aec0;font-weight:400"></span>
+						</div>
+						<div id="pk-att-links-body" style="margin-top:8px">
+							<div id="pk-att-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="pk-att-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="pk-att-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="pk-att-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
-					<i class="fas fa-list-check" style="margin-right:6px;color:#a0aec0"></i>Attendance
+					<?php // fa-tasks, not fa-list-check: the ORK loads Font Awesome 5, where the FA6
+					      // name renders as nothing at all — no icon, no error, no broken glyph. ?>
+					<i class="fas fa-tasks" style="margin-right:6px;color:#a0aec0"></i>Attendance
 					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
 				</div>
 				<div id="pk-att-entered-empty" class="pk-att-qa-empty">No entries yet for this date.</div>
@@ -1406,7 +1841,24 @@ var PkConfig = {
 	</div>
 </div>
 
-<!-- Recommend Award Modal -->
+<!-- QR Code Modal -->
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200);align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
+			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="pk-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="pk-qr-download" href="" download="signin-qr.png" class="pk-btn pk-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
+	</div>
+</div>
+
+<!-- Recommend Award Modal — outside CanManagePark block; any logged-in user can submit -->
+</div><!-- /CanManagePark -->
+<?php endif; ?>
 <div id="pk-rec-overlay">
 	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1433,7 +1885,7 @@ var PkConfig = {
 				<div id="pk-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-rec-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<label>Rank <span id="pk-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
 				<div class="pk-rank-pills-wrap" id="pk-rec-rank-pills"></div>
 				<input type="hidden" id="pk-rec-rank-val" value="" />
 			</div>
@@ -1452,37 +1904,233 @@ var PkConfig = {
 	</div>
 </div>
 
-<?php endif; ?>
-
 <?php if ($CanAdminPark ?? false): ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
+
+			<div class="pk-emod-typesel">
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="event" checked>
+					<span><i class="fas fa-flag"></i> Amtgard Event</span>
+				</label>
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="calendar-item">
+					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
+				</label>
+			</div>
+
 			<div class="pk-emod-field">
-				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
 			</div>
-			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
-			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+			<!-- Copy from past event (collapsible, event-mode only) -->
+			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
+				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
+					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
+					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
+					<i class="fas fa-chevron-down pk-cfe-chev" id="pk-cfe-chev" style="margin-left:auto"></i>
+				</button>
+				<div class="pk-cfe-body" id="pk-cfe-body" style="display:none">
+					<div class="pk-cfe-field" id="pk-cfe-picker-wrap">
+						<label class="pk-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(park-level)</span></label>
+						<div class="kn-ac-wrap">
+							<input type="text" class="pk-emod-input" id="pk-cfe-search" autocomplete="off" placeholder="Search past events…">
+							<div class="kn-ac-results" id="pk-cfe-results"></div>
+						</div>
+						<input type="hidden" id="pk-cfe-source-id" value="">
+						<input type="hidden" id="pk-cfe-source-start" value="">
+						<input type="hidden" id="pk-cfe-source-end" value="">
+					</div>
+					<div class="pk-cfe-chip" id="pk-cfe-chip" style="display:none">
+						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
+						<span id="pk-cfe-chip-label"></span>
+						<button type="button" class="pk-cfe-chip-clear" onclick="pkCfeClear()" aria-label="Clear source">&times;</button>
+					</div>
+					<div class="pk-cfe-detail" id="pk-cfe-detail" style="display:none">
+						<div class="pk-emod-row" style="display:flex;gap:10px;margin-top:12px">
+							<div class="pk-emod-field" style="flex:1">
+								<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="pk-emod-input" id="pk-cfe-start" autocomplete="off" placeholder="Select start…">
+							</div>
+							<div class="pk-emod-field" style="flex:1">
+								<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="pk-emod-input" id="pk-cfe-end" autocomplete="off" placeholder="Select end…">
+							</div>
+						</div>
+						<div class="pk-cfe-modules" style="margin-top:12px">
+							<div class="pk-cfe-mod-title">What to copy</div>
+							<label class="pk-cfe-mod-row pk-cfe-mod-all">
+								<input type="checkbox" id="pk-cfe-mod-all" checked onchange="pkCfeToggleAll(this)">
+								<span><strong>Select all</strong></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-details" checked onchange="pkCfeSyncAll()">
+								<span>Event Details <span class="pk-cfe-mod-hint">description, address, fees, links</span></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-schedule" checked onchange="pkCfeSyncAll()">
+								<span>Schedule</span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-staff" checked onchange="pkCfeSyncAll()">
+								<span>Staff <span class="pk-cfe-mod-hint">banned/deactivated people are skipped</span></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-feast" checked onchange="pkCfeSyncAll()">
+								<span>Feast</span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-banner" onchange="pkCfeSyncAll()">
+								<span>Banner <span class="pk-cfe-mod-hint">image + framing config</span></span>
+							</label>
+						</div>
+					</div>
+				</div>
+			</div>
+
+						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+
+			<!-- Calendar-item-only fields -->
+			<div class="pk-emod-ci-only" style="display:none">
+				<div class="pk-emod-field" style="margin-top:12px">
+					<label class="pk-emod-check-label">
+						<input type="checkbox" id="pk-ci-allday"> All day
+					</label>
+				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
+						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
+					</label>
+				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
+						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
+					</label>
+				</div>
+				<div style="display:flex;gap:10px;margin-top:8px">
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
+					</div>
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
+					</div>
+				</div>
+				<div class="pk-emod-field" style="margin-top:10px">
+					<label class="pk-emod-label">Color</label>
+					<div class="ci-swatches" id="pk-ci-swatches">
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+					</div>
+					<input type="hidden" id="pk-ci-color" value="#64748b">
+				</div>
+				<div class="pk-emod-field" style="margin-top:10px">
+					<label class="pk-emod-label">Description</label>
+					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
+				</div>
+				<div class="pk-emod-ci-note">
+					<i class="fas fa-info-circle" style="margin-right:6px"></i>
+					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
+				</div>
+			</div>
+
 			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="pk-emod-footer">
 			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
+			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
+				<i class="fas fa-eye-slash"></i> Save as Draft
+			</button>
 			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				Create Event <i class="fas fa-arrow-right"></i>
+				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>
 </div>
 
 <?php endif; ?>
+
+<!-- Event Preview Overlay (calendar quick-look) -->
+<div class="evpv-overlay" id="evpv-overlay">
+	<div class="evpv-box">
+		<div class="evpv-header">
+			<div class="evpv-header-meta">
+				<span class="evpv-kind-pill" id="evpv-kind-pill"><i class="fas fa-flag"></i> <span id="evpv-kind-label">Amtgard Event</span></span>
+				<span class="kn-draft-pill" id="evpv-draft-pill" style="display:none">DRAFT</span>
+			</div>
+			<button class="evpv-close" onclick="evpvClose()" aria-label="Close">&times;</button>
+		</div>
+		<div class="evpv-body">
+			<div class="evpv-hero">
+				<img class="evpv-heraldry" id="evpv-heraldry" alt="" loading="lazy">
+				<div class="evpv-hero-text">
+					<a class="evpv-name" id="evpv-name" href="#"></a>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-date"><i class="far fa-calendar-alt"></i> <span id="evpv-date"></span></span>
+					</div>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-time" id="evpv-time-row"><i class="far fa-clock"></i> <span id="evpv-time"></span></span>
+						<span class="evpv-meta-park" id="evpv-park-row" style="display:none"><i class="fas fa-tree"></i> <span id="evpv-park"></span></span>
+					</div>
+				</div>
+			</div>
+			<div class="evpv-description" id="evpv-description" style="display:none"></div>
+			<div class="evpv-rsvp-row">
+				<span class="kn-rsvp-wrap" id="evpv-rsvp"></span>
+			</div>
+		</div>
+		<div class="evpv-footer">
+			<button class="kn-emod-btn-cancel" onclick="evpvClose()">Close</button>
+			<a class="evpv-cta" id="evpv-cta" href="#"><i class="fas fa-arrow-right"></i> See Full Details</a>
+		</div>
+	</div>
+</div>
+
+<!-- Calendar Item Detail Overlay (read/edit/delete) — available to all viewers -->
+<div class="pk-ci-overlay" id="pk-ci-overlay">
+	<div class="pk-ci-box">
+		<div class="pk-ci-header">
+			<h3><i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>Calendar Item</h3>
+			<button class="pk-emod-close" onclick="pkCloseCalendarItemOverlay()">&times;</button>
+		</div>
+		<div class="pk-ci-body">
+			<div class="pk-ci-name" id="pk-ci-view-name"></div>
+			<div class="pk-ci-meta">
+				<i class="fas fa-clock" style="margin-right:6px;color:#a0aec0"></i>
+				<span id="pk-ci-view-when"></span>
+			</div>
+			<div class="pk-ci-scope" id="pk-ci-view-scope"></div>
+			<div class="pk-ci-description" id="pk-ci-view-desc"></div>
+		</div>
+		<div class="pk-ci-footer">
+			<button class="pk-emod-btn-cancel" onclick="pkCloseCalendarItemOverlay()">Close</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-edit-btn" style="display:none" onclick="pkEditCalendarItem()">
+				<i class="fas fa-pencil-alt"></i> Edit
+			</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-delete-btn" style="display:none;color:#c53030;border-color:#fc8181" onclick="pkDeleteCalendarItem()">
+				<i class="fas fa-trash"></i> Delete
+			</button>
+		</div>
+	</div>
+</div>
 
 <?php if ($CanAdminPark ?? false): ?>
 <!-- Add Player Modal -->
@@ -1514,12 +2162,19 @@ var PkConfig = {
 				<div class="plr-field plr-field-grow">
 					<label>Email</label>
 					<input type="email" id="pk-addplayer-email" placeholder="email@example.com">
+					<div id="pk-addplayer-email-suggestion" class="esc-suggestion" role="alert">
+						<i class="fas fa-magic"></i>
+						<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+						<button type="button" class="esc-suggestion-use">Use it</button>
+						<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+					</div>
 				</div>
 			</div>
 			<div class="plr-field-row">
 				<div class="plr-field">
 					<label>Username <span class="plr-req">*</span></label>
 					<input type="text" id="pk-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+					<div class="plr-field-hint" id="pk-addplayer-username-status" style="display:none;font-size:12px;margin-top:4px"></div>
 				</div>
 				<div class="plr-field">
 					<label>Password</label>
@@ -1528,11 +2183,12 @@ var PkConfig = {
 			</div>
 			<div class="plr-field-row">
 				<div class="plr-field">
-					<label>Restricted</label>
+					<label>Restrict Mundane Name Visibility</label>
 					<div class="plr-radio-row">
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="0" checked> No</label>
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="1"> Yes</label>
 					</div>
+					<small style="display:block;color:var(--ork-text-muted);margin-top:4px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 				</div>
 				<div class="plr-field">
 					<label>Waivered</label>
@@ -1549,11 +2205,228 @@ var PkConfig = {
 				</div>
 			</div>
 		</div>
-		<div class="pk-modal-footer">
+		<div class="pk-modal-footer" style="justify-content:flex-end;gap:8px;">
+			<button class="pk-btn pk-btn-secondary pk-selfreg-trigger" id="pk-selfreg-btn" onclick="pkOpenSelfRegModal()" style="margin-right:auto;">
+				<i class="fas fa-qrcode"></i> Self Registration
+			</button>
 			<button class="pk-btn pk-btn-ghost" id="pk-addplayer-cancel">Cancel</button>
 			<button class="pk-btn pk-btn-primary" id="pk-addplayer-submit">
 				<i class="fas fa-user-plus"></i> Create Player
 			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Copy-link icon ---- */
+.pk-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .pk-copy-link { opacity: 1; }
+.pk-copy-link:hover { color: #4299e1; }
+.pk-copy-link.pk-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: pkCopiedFade 1.4s forwards;
+}
+@keyframes pkCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
+
+<?php if ($CanAdminPark ?? false): ?>
+<!-- Self-Registration QR Modal -->
+<style>
+/* ---- Self-Registration QR Modal ---- */
+#pk-selfreg-overlay {
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.5);
+	display: flex; align-items: center; justify-content: center;
+	z-index: var(--z-modal, 1100);
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+#pk-selfreg-overlay.pk-selfreg-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+#pk-selfreg-overlay .pk-modal-box {
+	background: #fff; border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
+}
+#pk-selfreg-overlay .pk-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+}
+#pk-selfreg-overlay .pk-modal-title {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+#pk-selfreg-overlay .pk-modal-close-btn {
+	background: none; border: none; font-size: 22px; color: #a0aec0;
+	cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#pk-selfreg-overlay .pk-modal-close-btn:hover { color: #4a5568; }
+#pk-selfreg-overlay .pk-modal-body {
+	padding: 20px; overflow-y: auto; flex: 1;
+}
+#pk-selfreg-overlay .pk-modal-footer {
+	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+	display: flex; align-items: center; flex-shrink: 0;
+}
+
+/* Warning banner */
+.pk-selfreg-warning {
+	background: #fffbeb;
+	border: 1px solid #f6e05e;
+	color: #744210;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-warning i {
+	color: #d69e2e;
+	margin-right: 6px;
+}
+.pk-selfreg-note {
+	background: #ebf8ff;
+	border: 1px solid #90cdf4;
+	color: #2a4365;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-note i {
+	color: #3182ce;
+	margin-right: 6px;
+}
+
+/* QR container + anti-copy shield */
+#pk-selfreg-qr-wrap {
+	position: relative;
+	display: inline-block;
+	margin: 0 auto 16px;
+	background: #fff;
+	padding: 10px;
+	border-radius: 6px;
+}
+.pk-selfreg-qr-container {
+	user-select: none;
+	pointer-events: none;
+	-webkit-user-select: none;
+}
+.pk-selfreg-qr-container canvas,
+.pk-selfreg-qr-container img {
+	display: block;
+	margin: 0 auto;
+}
+.pk-selfreg-qr-shield {
+	position: absolute; inset: 0;
+	z-index: 2;
+	background: transparent;
+	cursor: default;
+}
+
+/* A18: Expired badge overlay */
+.pk-selfreg-expired-badge {
+	position: absolute;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255,255,255,0.85);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	color: #c53030;
+	font-size: 20px;
+	font-weight: 700;
+	padding: 12px 28px;
+	border-radius: 8px;
+	z-index: 3;
+	display: none;
+}
+
+/* Timer */
+.pk-selfreg-timer-row {
+	font-size: 18px;
+	font-weight: 600;
+	color: #2d3748;
+	margin: 12px 0 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+.pk-selfreg-timer-row i {
+	color: #a0aec0;
+	font-size: 14px;
+}
+.pk-selfreg-timer-expired {
+	color: #c53030;
+}
+
+/* Regenerate button */
+#pk-selfreg-regen-btn {
+	margin-top: 8px;
+}
+</style>
+<div id="pk-selfreg-overlay">
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-qrcode" style="margin-right:8px;color:#2c5282"></i>Self Registration</h3>
+			<button class="pk-modal-close-btn" id="pk-selfreg-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="text-align:center;">
+			<div id="pk-selfreg-feedback" class="plr-feedback" style="display:none" aria-live="polite" role="status"></div>
+			<div class="pk-selfreg-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				Do not distribute this self-registration QR code. This is designed to be used for in-person registration only.
+			</div>
+			<div class="pk-selfreg-note">
+				<i class="fas fa-info-circle"></i>
+				The new player will be assigned a Color credit for today to ensure they show in Active Player lists, but you can change this to any other class at a later time.
+			</div>
+			<div id="pk-selfreg-qr-wrap">
+				<div id="pk-selfreg-qr" class="pk-selfreg-qr-container"></div>
+				<div class="pk-selfreg-qr-shield" id="pk-selfreg-shield"></div>
+				<div class="pk-selfreg-expired-badge" id="pk-selfreg-expired-badge">Expired</div>
+			</div>
+			<div class="pk-selfreg-timer-row" aria-live="polite">
+				<i class="fas fa-clock"></i>
+				<span id="pk-selfreg-timer">--:--</span>
+			</div>
+			<button class="pk-btn pk-btn-primary" id="pk-selfreg-regen-btn" style="display:none;">
+				<i class="fas fa-sync-alt"></i> Regenerate
+			</button>
+		</div>
+		<div class="pk-modal-footer" style="justify-content:center;">
+			<button class="pk-btn pk-btn-ghost" id="pk-selfreg-cancel">Close</button>
 		</div>
 	</div>
 </div>
@@ -1597,21 +2470,37 @@ var PkConfig = {
 			<div class="pk-addday-field">
 				<label>Purpose</label>
 				<div class="pk-seg-group">
-					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
+					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="park-day">Park Day</button>
+					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="arts-day">A&amp;S Day</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="other">Other</button>
 				</div>
-				<input type="hidden" id="pk-addday-purpose" value="fighter-practice" />
+				<input type="hidden" id="pk-addday-purpose" value="park-day" />
 			</div>
 
 			<div class="pk-addday-field">
 				<label>Recurrence</label>
 				<div class="pk-seg-group">
 					<button type="button" class="pk-seg-btn pk-seg-active" data-group="recurrence" data-val="weekly">Weekly</button>
+					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="every-x-weeks">Every X Weeks</button>
 					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="week-of-month">Week of Month</button>
 					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="monthly">Monthly</button>
 				</div>
 				<input type="hidden" id="pk-addday-recurrence" value="weekly" />
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-interval-row" style="display:none">
+				<label for="pk-addday-interval">Interval</label>
+				<select id="pk-addday-interval">
+					<option value="2">Every 2 weeks (biweekly)</option>
+					<option value="3">Every 3 weeks</option>
+					<option value="4">Every 4 weeks</option>
+				</select>
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-startdate-row" style="display:none">
+				<label for="pk-addday-startdate">Start Date <span style="color:#e53e3e">*</span> <span style="color:#a0aec0;font-weight:400;font-size:11px">(first occurrence — sets the cadence)</span></label>
+				<input type="date" id="pk-addday-startdate" />
 			</div>
 
 			<div class="pk-addday-field" id="pk-addday-weekday-row">
@@ -1749,7 +2638,7 @@ var PkConfig = {
 				<button type="button" id="pk-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
 					<i class="fas fa-trash"></i> Remove Heraldry
 				</button>
-				<div id="pk-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+				<div id="pk-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:var(--ork-alert-danger-bg,#fff5f5);border:1px solid var(--ork-alert-danger-border,#fed7d7);border-radius:6px;font-size:13px;color:var(--ork-alert-danger-text,#c53030);text-align:left">
 					Remove this park's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('pk-heraldry-remove-confirm').style.display='none'">Cancel</button>
@@ -1774,17 +2663,192 @@ var PkConfig = {
 
 <!-- Move Player Modal -->
 <style>
-.pk-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pk-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
-	flex:1; padding:6px 10px; border:none; border-radius:4px; font-size:12px; font-weight:600;
-	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
+	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);
+	cursor:pointer; background:#fff; color:var(--ork-text-body); transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
 }
-.pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.pk-mp-toggle-btn:hover { border-color:#a0aec0; }
+.pk-mp-toggle-btn.pk-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.pk-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.pk-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.pk-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Parknew profile
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+html[data-theme="dark"] .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pk-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+html[data-theme="dark"] .pk-sidebar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-tab-nav li.pk-tab-active { background: var(--ork-card-bg); color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-tab-nav li:hover:not(.pk-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pk-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+html[data-theme="dark"] .pk-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-day-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-day-time { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-day-name { color: var(--ork-text); }
+html[data-theme="dark"] .pk-day-addr { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-acct-field input[type="text"],
+html[data-theme="dark"] .pk-acct-field input[type="date"],
+html[data-theme="dark"] .pk-acct-field input[type="number"],
+html[data-theme="dark"] .pk-acct-field select,
+html[data-theme="dark"] .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-mp-toggle-btn { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-mp-toggle-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-link); color: #fff; border-color: var(--ork-link); }
+html[data-theme="dark"] .pk-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pk-mp-cascade-sel:disabled { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-officer-item { border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-officer-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-officer-name { color: var(--ork-text); }
+html[data-theme="dark"] #theme_container .pk-officer-name a { color: hsl(calc(var(--pk-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] .pk-empty { color: var(--ork-text-muted); }
+/* FullCalendar dark overrides */
+html[data-theme="dark"] .fc-toolbar { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .fc-toolbar-title { color: var(--ork-text); }
+html[data-theme="dark"] .fc-col-header { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-col-header-cell { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-daygrid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-daygrid-day-number { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-day-today { background: var(--ork-bg-tertiary) !important; }
+html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
+html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* Weather safety badges (heat, cold, storm, UV, wind) */
+.pk-wx-badge { display:inline-block; padding:1px 6px; border-radius:10px; font-size:10px; font-weight:600; line-height:1.4; vertical-align:middle; white-space:nowrap; }
+.pk-wx-caution { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+.pk-wx-warning { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+html[data-theme="dark"] .pk-wx-caution { background:#422006; color:#fcd34d; border-color:#78350f; }
+html[data-theme="dark"] .pk-wx-warning { background:#450a0a; color:#fca5a5; border-color:#7f1d1d; }
+/* ---- Self-Registration QR modal — dark mode ---- */
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-box {
+	background: var(--ork-card-bg);
+	box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-header { border-bottom-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-footer { border-top-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn:hover { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-warning {
+	background: #744210;
+	border-color: #975a16;
+	color: #fbd38d;
+}
+html[data-theme="dark"] .pk-selfreg-warning i { color: #f6ad55; }
+html[data-theme="dark"] .pk-selfreg-note {
+	background: #1a365d;
+	border-color: #2c5282;
+	color: #90cdf4;
+}
+html[data-theme="dark"] .pk-selfreg-note i { color: #63b3ed; }
+html[data-theme="dark"] .pk-selfreg-timer-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-timer-row i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-selfreg-timer-expired { color: #fc8181 !important; }
+html[data-theme="dark"] .pk-selfreg-expired-badge {
+	background: rgba(45,55,72,0.85);
+	color: #fc8181;
+}
+
+/* ---- Sign-in QR overlay (#pk-qr-overlay) — dark mode ---- */
+html[data-theme="dark"] #pk-qr-overlay > div { background: var(--ork-card-bg) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-qr-img { border-color: var(--ork-border) !important; background: #fff; }
+html[data-theme="dark"] #pk-qr-expires { color: var(--ork-text-muted) !important; }
+
+/* ---- Sign-in Link panel inputs/labels (within pk-att-* tabs) — dark mode ---- */
+html[data-theme="dark"] #pk-att-link-url { background: var(--ork-input-bg) !important; border-color: var(--ork-input-border) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-att-link-expires { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-wrap { border-top-color: var(--ork-border) !important; }
+html[data-theme="dark"] #pk-att-links-toggle { color: var(--ork-text-secondary) !important; }
+html[data-theme="dark"] #pk-att-links-loading,
+html[data-theme="dark"] #pk-att-links-empty { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-table thead tr,
+html[data-theme="dark"] #pk-att-links-table th { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-count { color: var(--ork-text-muted) !important; }
+
+/* Copy-link / data-tip — dark mode */
+html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
+html[data-theme="dark"] .pk-copy-link { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-copy-link:hover { color: #63b3ed; }
+html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
+/* ============================================================
+
+/* ---- Copy from past event (pk-cfe-*) ---- */
+.pk-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
+.pk-cfe-toggle:hover { background: #edf2f7; }
+.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
+.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
+.pk-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.pk-cfe-field { position: relative; }
+.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
+.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
+.pk-cfe-chip-clear:hover { color: #1a365d; }
+.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
+.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
+.pk-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
+
+#pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+#pk-cfe-results .kn-ac-row:hover, #pk-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
+#pk-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
+#pk-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
+#pk-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
+#pk-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+
+html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
+html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #pk-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+
+
+/* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */
+/* The shared .pk-addday-field rule in revised.css covers input[type=text|time]
+   and select, but NOT input[type=date]. Mirror that styling for the date input. */
+#pk-addday-startdate { padding:7px 9px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; width:100%; }
+#pk-addday-startdate:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+html[data-theme="dark"] #pk-addday-startdate,
+html[data-theme="dark"] #pk-addday-interval { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
+html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="pk-modal-close-btn" id="pk-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="pk-modal-body">
@@ -1800,15 +2864,21 @@ var PkConfig = {
 			</div>
 			<div class="pk-acct-field">
 				<label id="pk-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
+				<div class="pk-mp-cascade" id="pk-mp-pfilter-wrap">
+					<select class="pk-mp-cascade-sel" id="pk-mp-pfilter-kingdom" aria-label="Filter players by kingdom"></select>
+					<select class="pk-mp-cascade-sel" id="pk-mp-pfilter-park" aria-label="Filter players by park" style="display:none"></select>
+				</div>
 				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search by name, or KD:PK name…">
 				<input type="hidden" id="pk-moveplayer-player-id">
 				<div class="pk-ac-results" id="pk-moveplayer-player-results"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-moveplayer-park-section" style="margin-top:10px;display:none">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pk-moveplayer-park-name" autocomplete="off" placeholder="Search parks…">
+				<div class="pk-mp-cascade">
+					<select class="pk-mp-cascade-sel" id="pk-mp-dfilter-kingdom" aria-label="Destination kingdom"></select>
+					<select class="pk-mp-cascade-sel" id="pk-mp-dfilter-park" aria-label="Destination park" style="display:none"></select>
+				</div>
 				<input type="hidden" id="pk-moveplayer-park-id">
-				<div class="pk-ac-results" id="pk-moveplayer-park-results"></div>
 			</div>
 		</div>
 		<div class="pk-modal-footer">
@@ -1822,7 +2892,7 @@ var PkConfig = {
 <div id="pk-mergeplayer-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="pk-modal-close-btn" id="pk-mergeplayer-close-btn">&times;</button>
 		</div>
 		<div class="pk-modal-body">
@@ -1833,6 +2903,10 @@ var PkConfig = {
 					<strong>This action is permanent and cannot be undone.</strong><br>
 					The <em>Remove</em> player&rsquo;s account will be permanently deleted. All their awards, attendance, officer history, unit memberships, and notes will be transferred to the <em>Keep</em> player. Any attendance on the same date as an existing record will be dropped.
 				</div>
+			</div>
+			<div class="plr-merge-scope-note">
+				<i class="fas fa-info-circle"></i>
+				Both players must be members of <strong><?= htmlspecialchars($park_name ?? 'this Park') ?></strong>. To merge players across Parks or Kingdoms, use the Kingdom profile&rsquo;s Merge Players tool.
 			</div>
 			<div class="pk-acct-field">
 				<label>Player to Keep <span style="color:#e53e3e">*</span></label>
@@ -1860,7 +2934,7 @@ var PkConfig = {
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-mergeplayer-cancel">Cancel</button>
-			<button class="pk-btn" id="pk-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="pk-btn" id="pk-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -1873,7 +2947,7 @@ var PkConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6;white-space:pre-line"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
@@ -2009,11 +3083,195 @@ var PkConfig = {
 
 <?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<?php if ($CanAdminPark ?? false): ?>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<?php endif; ?>
+<?php if ($pkCanManageBanner): ?>
+<!-- pk-banner-modal -->
+<div class="pk-img-overlay pk-banner-modal" id="pk-banner-overlay">
+	<div class="pk-img-modal" style="width:min(680px, 96vw)">
+		<div class="pk-img-modal-header">
+			<span class="pk-img-modal-title" id="pk-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<button class="pk-img-close-btn" id="pk-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the park header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
+
+			<div class="pk-banner-wireframes">
+				<figure class="pk-banner-wireframe pk-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pk-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pk-wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pk-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="pk-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pk-banner-wireframe pk-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pk-wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pk-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pk-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pk-banner-config">
+				<label class="pk-banner-toggle">
+					<input type="checkbox" id="pk-banner-show-logo" checked>
+					<span>Show Park Heraldry on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pk-banner-toggle">
+					<input type="checkbox" id="pk-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pk-upload-area" for="pk-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pk-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pk-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pk-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
+			<div class="pk-img-form-error" id="pk-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pk-btn pk-btn-outline" id="pk-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pk-btn pk-btn-outline" id="pk-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pk-btn pk-btn-outline pk-btn-danger" id="pk-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="pk-field-hint">Upload an image to enable banner display settings.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pk-banner-position-wrap">
+				<canvas id="pk-banner-position-canvas" class="pk-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pk-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pk-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#pk-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pk-posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Park Name goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="pk-posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="pk-posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pk-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pk-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pk-img-form-error" id="pk-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pk-btn pk-btn-outline" id="pk-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pk-btn pk-btn-white" id="pk-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;">Uploading…</p>
+		</div>
+		<div class="pk-img-modal-body" id="pk-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+function pkCopyEventLink(el) {
+	var url = el.getAttribute('data-url');
+	navigator.clipboard.writeText(url).then(function() {
+		el.classList.add('pk-copied');
+		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
+	});
+}
 window.pkRecActiveFilter = 'open';
+window.pkRecCircleAwardIds = <?= json_encode($ViewerCircleAwardIds ?? array()) ?>;
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;
 	var filter = window.pkRecActiveFilter || 'all';
@@ -2021,6 +3279,11 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	var row = settings.aoData[dataIndex].nTr;
 	var rowFilter = row ? row.getAttribute('data-filter') : '';
 	if (filter === 'open') return rowFilter !== 'already';
+	if (filter === 'mycircles') {
+		if (rowFilter === 'already') return false;
+		var aid = parseInt(row.getAttribute('data-award-id') || '0', 10);
+		return (window.pkRecCircleAwardIds || []).indexOf(aid) !== -1;
+	}
 	return rowFilter === filter;
 });
 $(function() {
@@ -2033,10 +3296,45 @@ $(function() {
 				{ targets: [-1], orderable: false, searchable: false },
 				<?php endif; ?>
 			],
-			pageLength: 25
+			pageLength: 25,
+			scrollX: true,
+			dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+			lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
 	}
 });
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
+initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+window.pkUsernameCheck = initUsernameAvailabilityCheck({
+	inputId:     'pk-addplayer-username',
+	statusId:    'pk-addplayer-username-status',
+	submitBtnId: 'pk-addplayer-submit',
+	endpointUrl: '<?= UIR ?>PlayerAjax/check_username',
+	gateMode:    'soft'  // host form has its own required/min-length validation
+});
+// Patch the modal-open function so a stale "X is taken" doesn't linger across
+// closes. Defined in revised.js; we wrap to call reset() after the original.
+(function() {
+	var _origOpen = window.pkOpenAddPlayerModal;
+	if (typeof _origOpen !== 'function') return;
+	window.pkOpenAddPlayerModal = function() {
+		var r = _origOpen.apply(this, arguments);
+		if (window.pkUsernameCheck && window.pkUsernameCheck.reset) window.pkUsernameCheck.reset();
+		return r;
+	};
+})();
 </script>
+
+<?php if (!empty($IsLoggedIn)): ?>
+<script>
+window.OrkRsCfg = {
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
