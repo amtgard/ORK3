@@ -1,108 +1,125 @@
 <?php
-	require_once(DIR_LIB . 'Parsedown.php');
-	/* -----------------------------------------------
-	   Pre-process template data
-	   ----------------------------------------------- */
-	$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
-	$parkCounts       = []; // loaded via AJAX (park_averages_json)
-	$eventList        = is_array($event_summary) ? $event_summary : array();
-	// [TOURNAMENTS HIDDEN] $tournamentList = [];
-	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
-	$prinzParks       = is_array($principality_parks ?? null) ? $principality_parks : [];
-	$prinzMapParks    = is_array($prinz_map_parks ?? null) ? $prinz_map_parks : [];
-	$officerList      = is_array($kingdom_officers['Officers']) ? $kingdom_officers['Officers'] : array();
+require_once(DIR_LIB . 'Parsedown.php');
+/* -----------------------------------------------
+   Pre-process template data
+   ----------------------------------------------- */
+$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
+$parkCounts       = []; // loaded via AJAX (park_averages_json)
+$eventList        = is_array($event_summary) ? $event_summary : array();
+// [TOURNAMENTS HIDDEN] $tournamentList = [];
+$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
+$prinzParks       = is_array($principality_parks ?? null) ? $principality_parks : [];
+$prinzMapParks    = is_array($prinz_map_parks ?? null) ? $prinz_map_parks : [];
+$officerList      = is_array($kingdom_officers['Officers']) ? $kingdom_officers['Officers'] : array();
 
-	// Aggregate attendance — weekly loaded now, monthly loaded via AJAX after page load
-	$totalAtt = 0;
-	foreach ($parkList as $p) {
-		$totalAtt += (int)$p['AttendanceCount'];
-	}
+// Aggregate attendance — weekly loaded now, monthly loaded via AJAX after page load
+$totalAtt = 0;
+foreach ($parkList as $p) {
+    $totalAtt += (int)$p['AttendanceCount'];
+}
 
-	// Heraldry
-	$hasHeraldry = $kingdom_info['Info']['KingdomInfo']['HasHeraldry'] == 1;
-	$heraldryUrl = $hasHeraldry
-		? $kingdom_info['HeraldryUrl']['Url']
-		: HTTP_KINGDOM_HERALDRY . '0000.jpg';
-	$entityLabel = $IsPrinz ? 'Principality' : 'Kingdom';
+// Heraldry
+$hasHeraldry = $kingdom_info['Info']['KingdomInfo']['HasHeraldry'] == 1;
+$heraldryUrl = $hasHeraldry
+    ? $kingdom_info['HeraldryUrl']['Url']
+    : HTTP_KINGDOM_HERALDRY . '0000.jpg';
+$entityLabel = $IsPrinz ? 'Principality' : 'Kingdom';
 
-	$_knInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
-	$hasBanner       = !empty($_knInfo['HasBanner']);
-	$bannerShowLogo  = !isset($_knInfo['BannerShowLogo']) || (int)$_knInfo['BannerShowLogo'] !== 0;
-	$bannerVignette  = !isset($_knInfo['BannerVignette']) || (int)$_knInfo['BannerVignette'] !== 0;
-	$bannerOffsetX   = isset($_knInfo['BannerOffsetX']) ? max(0, min(100, (int)$_knInfo['BannerOffsetX'])) : 50;
-	$bannerOffsetY   = isset($_knInfo['BannerOffsetY']) ? max(0, min(100, (int)$_knInfo['BannerOffsetY'])) : 50;
-	$bannerUrl       = '';
-	if ($hasBanner) {
-		$bannerFile = Common::resolve_image_ext(DIR_KINGDOM_BANNER, sprintf('%04d', (int)($_knInfo['KingdomId'] ?? 0)));
-		$bannerFs   = DIR_KINGDOM_BANNER . $bannerFile;
-		if (file_exists($bannerFs)) {
-			$bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
-		}
-	}
-	$knCanManageBanner = !empty($knCanManageBanner);
+$_knInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
+$hasBanner       = !empty($_knInfo['HasBanner']);
+$bannerShowLogo  = !isset($_knInfo['BannerShowLogo']) || (int)$_knInfo['BannerShowLogo'] !== 0;
+$bannerVignette  = !isset($_knInfo['BannerVignette']) || (int)$_knInfo['BannerVignette'] !== 0;
+$bannerOffsetX   = isset($_knInfo['BannerOffsetX']) ? max(0, min(100, (int)$_knInfo['BannerOffsetX'])) : 50;
+$bannerOffsetY   = isset($_knInfo['BannerOffsetY']) ? max(0, min(100, (int)$_knInfo['BannerOffsetY'])) : 50;
+$bannerUrl       = '';
+if ($hasBanner) {
+    $bannerFile = Common::resolve_image_ext(DIR_KINGDOM_BANNER, sprintf('%04d', (int)($_knInfo['KingdomId'] ?? 0)));
+    $bannerFs   = DIR_KINGDOM_BANNER . $bannerFile;
+    if (file_exists($bannerFs)) {
+        $bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+    }
+}
+// Banner management gates on AUTH_EDIT (matches Park/Player and the AJAX endpoint).
+// $CanManageKingdom is AUTH_CREATE, so the controller publishes this separately
+// as $knCanManageBanner (= $CanEditKingdom).
+$knCanManageBanner = !empty($knCanManageBanner);
 
-	// Extract Monarch & Regent for hero display
-	$monarch = null; $regent = null;
-	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
-	}
+// Extract Monarch & Regent for hero display
+$monarch = null;
+$regent = null;
+foreach ($officerList as $o) {
+    if ($o['OfficerRole'] === 'Monarch') {
+        $monarch = $o;
+    }
+    if ($o['OfficerRole'] === 'Regent') {
+        $regent  = $o;
+    }
+}
 
-	// Players loaded via AJAX (players_json) — not available at render time
-	$knAllPlayers    = [];
-	$knPlayerPeriods = [];
+// Players loaded via AJAX (players_json) — not available at render time
+$knAllPlayers    = [];
+$knPlayerPeriods = [];
 
-	// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
-	if (!function_exists('kn_map_markdown')) {
-		function kn_map_markdown(string $text): string {
-			$clean = str_replace(['<br />', '<br/>', '<br>'], "\n", $text);
-			$html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
-			return preg_replace('/<img[^>]*>/i', '', $html);
-		}
-	}
-	$knMapLocations = [];
-	foreach ((array)$map_parks as $p) {
-		$loc = @json_decode(stripslashes((string)$p['Location']));
-		if (!$loc) continue;
-		$latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
-		if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
-		$knMapLocations[] = [
-			'name'     => ucwords($p['Name']),
-			'lat'      => (float)$latlng->lat,
-			'lng'      => (float)$latlng->lng,
-			'id'       => (int)$p['ParkId'],
-			'city'     => htmlspecialchars(trim($p['City'] ?? '')),
-			'province' => htmlspecialchars(trim($p['Province'] ?? '')),
-			'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
-			'dir'      => kn_map_markdown($p['Directions'] ?? ''),
-			'desc'     => kn_map_markdown($p['Description'] ?? ''),
-		];
-	}
-	// Principality parks — same location objects, flagged with prinz metadata
-	foreach ($prinzMapParks as $prinz) {
-		$prName = (string)($prinz['Name'] ?? '');
-		$prId   = (int)($prinz['KingdomId'] ?? 0);
-		foreach ((array)($prinz['parks'] ?? []) as $p) {
-			$loc = @json_decode(stripslashes((string)$p['Location']));
-			if (!$loc) continue;
-			$latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
-			if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
-			$knMapLocations[] = [
-				'name'     => ucwords($p['Name']),
-				'lat'      => (float)$latlng->lat,
-				'lng'      => (float)$latlng->lng,
-				'id'       => (int)$p['ParkId'],
-				'city'     => htmlspecialchars(trim($p['City'] ?? '')),
-				'province' => htmlspecialchars(trim($p['Province'] ?? '')),
-				'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
-				'dir'      => kn_map_markdown($p['Directions'] ?? ''),
-				'desc'     => kn_map_markdown($p['Description'] ?? ''),
-				'prinz'    => true,
-				'prName'   => $prName,
-				'prId'     => $prId,
-			];
-		}
-	}
+// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
+if (!function_exists('kn_map_markdown')) {
+    function kn_map_markdown(string $text): string
+    {
+        $clean = str_replace(['<br />', '<br/>', '<br>'], "\n", $text);
+        $html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
+        return preg_replace('/<img[^>]*>/i', '', $html);
+    }
+}
+$knMapLocations = [];
+foreach ((array)$map_parks as $p) {
+    $loc = @json_decode(stripslashes((string)$p['Location']));
+    if (!$loc) {
+        continue;
+    }
+    $latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+    if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) {
+        continue;
+    }
+    $knMapLocations[] = [
+        'name'     => ucwords($p['Name']),
+        'lat'      => (float)$latlng->lat,
+        'lng'      => (float)$latlng->lng,
+        'id'       => (int)$p['ParkId'],
+        'city'     => htmlspecialchars(trim($p['City'] ?? '')),
+        'province' => htmlspecialchars(trim($p['Province'] ?? '')),
+        'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+        'dir'      => kn_map_markdown($p['Directions'] ?? ''),
+        'desc'     => kn_map_markdown($p['Description'] ?? ''),
+    ];
+}
+// Principality parks — same location objects, flagged with prinz metadata
+foreach ($prinzMapParks as $prinz) {
+    $prName = (string)($prinz['Name'] ?? '');
+    $prId   = (int)($prinz['KingdomId'] ?? 0);
+    foreach ((array)($prinz['parks'] ?? []) as $p) {
+        $loc = @json_decode(stripslashes((string)$p['Location']));
+        if (!$loc) {
+            continue;
+        }
+        $latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+        if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) {
+            continue;
+        }
+        $knMapLocations[] = [
+            'name'     => ucwords($p['Name']),
+            'lat'      => (float)$latlng->lat,
+            'lng'      => (float)$latlng->lng,
+            'id'       => (int)$p['ParkId'],
+            'city'     => htmlspecialchars(trim($p['City'] ?? '')),
+            'province' => htmlspecialchars(trim($p['Province'] ?? '')),
+            'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+            'dir'      => kn_map_markdown($p['Directions'] ?? ''),
+            'desc'     => kn_map_markdown($p['Description'] ?? ''),
+            'prinz'    => true,
+            'prName'   => $prName,
+            'prId'     => $prId,
+        ];
+    }
+}
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -113,19 +130,25 @@
      ZONE 1: Hero Header
      ============================================= -->
 <?php
-	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
-	$_heroClasses  = 'kn-hero';
-	if ($bannerUrl)                    $_heroClasses .= ' kn-hero-has-banner';
-	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' kn-hero-vignette';
-	if ($knCanManageBanner)            $_heroClasses .= ' kn-hero-editable';
-	$_knShowLogo = !$bannerUrl || $bannerShowLogo;
-	$_bgStyle = '';
-	if ($_heroBgUrl) {
-		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
-		if ($bannerUrl) {
-			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
-		}
-	}
+    $_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+$_heroClasses  = 'kn-hero';
+if ($bannerUrl) {
+    $_heroClasses .= ' kn-hero-has-banner';
+}
+if ($bannerUrl && $bannerVignette) {
+    $_heroClasses .= ' kn-hero-vignette';
+}
+if ($knCanManageBanner) {
+    $_heroClasses .= ' kn-hero-editable';
+}
+$_knShowLogo = !$bannerUrl || $bannerShowLogo;
+$_bgStyle = '';
+if ($_heroBgUrl) {
+    $_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+    if ($bannerUrl) {
+        $_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+    }
+}
 ?>
 <div class="<?= $_heroClasses ?>" id="kn-hero">
 	<div class="kn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
@@ -196,6 +219,11 @@
 			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
 				<i class="fas fa-cog"></i> Admin
 			</button>
+			<?php endif; ?>
+			<?php if ($CanEditKingdom ?? false): ?>
+			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Cms/dashboard&scope=k:<?= (int)$kingdom_id ?>" data-tip="Build and publish your kingdom's standalone public website in OGRE.">
+				<i class="fas fa-globe"></i> Manage Public Site
+			</a>
 			<?php endif; ?>
 		</div>
 
@@ -275,8 +303,8 @@
 		<?php endif; ?>
 
 		<?php
-			$_knDescription = $kingdom_info['Info']['KingdomInfo']['Description'] ?? '';
-		?>
+            $_knDescription = $kingdom_info['Info']['KingdomInfo']['Description'] ?? '';
+?>
 		<?php if (!empty($_knDescription)): ?>
 		<div class="kn-card kn-description-card">
 			<h4 class="kn-bare-heading"><i class="fas fa-info-circle"></i> About</h4>
@@ -321,36 +349,36 @@
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
 	<div class="kn-main">
 		<div class="kn-tabs">
-			<ul class="kn-tab-nav">
-				<li class="kn-tab-active" data-kntab="parks">
+			<ul class="kn-tab-nav" role="tablist" aria-label="Kingdom sections">
+				<li class="kn-tab-active" data-kntab="parks" id="kn-tab-btn-parks" role="tab" tabindex="0" aria-selected="true" aria-controls="kn-tab-parks">
 					<i class="fas fa-map-marker-alt"></i><span class="kn-tab-label"> Parks</span>
 					<span class="kn-tab-count">(<?= $StatsParkCount ?? count($parkList) ?>)</span>
 				</li>
-				<li data-kntab="events">
+				<li data-kntab="events" id="kn-tab-btn-events" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-events">
 					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>
 					<span class="kn-tab-count">(<?= count($eventList) ?>)</span>
 				</li>
-				<li data-kntab="map">
+				<li data-kntab="map" id="kn-tab-btn-map" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-map">
 					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
 				</li>
-				<li data-kntab="players" id="kn-tab-btn-players">
+				<li data-kntab="players" id="kn-tab-btn-players" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-players">
 					<i class="fas fa-users"></i><span class="kn-tab-label"> Players</span>
 					<?php $_pcN = (int)($PlayerCount ?? 0); ?>
 					<span class="kn-tab-count" id="kn-players-tab-count"><?= $_pcN > 0 ? '(' . $_pcN . ')' : '' ?></span>
 				</li>
-				<li data-kntab="reports">
+				<li data-kntab="reports" id="kn-tab-btn-reports" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
 				<?php if ($ShowRecsTab ?? false):
-					$_recsN = (int)($AwardRecommendationsCount ?? 0);
-				?>
-				<li data-kntab="recommendations">
+				    $_recsN = (int)($AwardRecommendationsCount ?? 0);
+				    ?>
+				<li data-kntab="recommendations" id="kn-tab-btn-recommendations" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-recommendations">
 					<i class="fas fa-star"></i><span class="kn-tab-label"> Recommendations</span>
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
 				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<li data-kntab="admin">
+				<li data-kntab="admin" id="kn-tab-btn-admin" role="tab" tabindex="-1" aria-selected="false" aria-controls="kn-tab-admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
@@ -358,32 +386,34 @@
 			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
 			<!-- Parks Tab -->
-			<div class="kn-tab-panel" id="kn-tab-parks">
+			<div class="kn-tab-panel" id="kn-tab-parks" role="tabpanel" aria-labelledby="kn-tab-btn-parks">
 				<?php
-					// Pre-sort alphabetically so tiles match default list order
-					usort($parkList, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
-					// Pin the logged-in user's home park to the first slot
-					$_upid = isset($UserParkId) ? (int)$UserParkId : 0;
-					if ($_upid > 0) {
-						$_pinIdx = array_search($_upid, array_column($parkList, 'ParkId'));
-						if ($_pinIdx !== false) {
-							$_pinned = array_splice($parkList, $_pinIdx, 1);
-							$_pinned[0]['_pinned'] = true;
-							array_unshift($parkList, $_pinned[0]);
-						}
-					}
-				?>
+				        // Pre-sort alphabetically so tiles match default list order
+				        usort($parkList, function ($a, $b) {
+				            return strcmp($a['ParkName'], $b['ParkName']);
+				        });
+// Pin the logged-in user's home park to the first slot
+$_upid = isset($UserParkId) ? (int)$UserParkId : 0;
+if ($_upid > 0) {
+    $_pinIdx = array_search($_upid, array_column($parkList, 'ParkId'));
+    if ($_pinIdx !== false) {
+        $_pinned = array_splice($parkList, $_pinIdx, 1);
+        $_pinned[0]['_pinned'] = true;
+        array_unshift($parkList, $_pinned[0]);
+    }
+}
+?>
 				<?php if (count($parkList) > 0): ?>
 
 					<!-- Toolbar -->
 					<div class="kn-parks-toolbar">
-						<button class="kn-view-btn" id="kn-view-tiles" title="Tile view">
+						<button class="kn-view-btn" id="kn-view-tiles" data-tip="Tile view" aria-label="Tile view">
 							<i class="fas fa-th-large"></i>
 						</button>
-						<button class="kn-view-btn" id="kn-view-list" title="List view">
+						<button class="kn-view-btn" id="kn-view-list" data-tip="List view" aria-label="List view">
 							<i class="fas fa-list"></i>
 						</button>
-						<button class="kn-view-btn" title="Map view" onclick="knActivateTab('map');return false;">
+						<button class="kn-view-btn" data-tip="Map view" aria-label="Map view" onclick="knActivateTab('map');return false;">
 							<i class="fas fa-map"></i>
 						</button>
 						<?php if ($CanAddPark ?? false): ?>
@@ -397,8 +427,8 @@
 					<div id="kn-parks-tiles" class="kn-park-tiles">
 						<?php foreach ($parkList as $park): ?>
 							<?php $tileHeraldry = $park['HasHeraldry'] == 1
-								? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
-								: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
+                ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+                : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 							<a class="kn-park-tile<?= !empty($park['_pinned']) ? ' kn-pinned' : '' ?>" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 								<div class="kn-park-tile-img-wrap">
 									<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge">Your Park</span><?php endif; ?>
@@ -457,8 +487,10 @@
 										<td class="kn-col-numeric kn-tp-row">—</td>
 										<td class="kn-col-numeric kn-tm-row">—</td>
 										<?php if ($CanManageKingdom ?? false): ?>
-										<td class="kn-col-edit" onclick="event.stopPropagation();knOpenEditParkModal(<?= (int)$park['ParkId'] ?>)" title="Edit park">
-											<i class="fas fa-pencil-alt"></i>
+										<td class="kn-col-edit">
+											<button type="button" class="kn-col-edit-btn" aria-label="Edit park" data-tip="Edit park" style="background:none;border:none;padding:0;margin:0;color:inherit;font-size:inherit;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:32px;" onclick="event.stopPropagation();knOpenEditParkModal(<?= (int)$park['ParkId'] ?>)">
+												<i class="fas fa-pencil-alt"></i>
+											</button>
 										</td>
 										<?php endif; ?>
 									</tr>
@@ -485,7 +517,8 @@
 					<!-- Principality tile sections (tile view) -->
 					<div id="kn-prinz-tile-sections">
 						<?php foreach ($prinzParks as $prinz): ?>
-							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<?php $prId = (int)$prinz['KingdomId'];
+						    $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
 								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
 									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
@@ -495,8 +528,8 @@
 								<div class="kn-park-tiles">
 									<?php foreach ((array)$prinz['parks'] as $park): ?>
 										<?php $tileHeraldry = $park['HasHeraldry'] == 1
-											? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
-											: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
+						                    ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+						                    : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 										<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 											<div class="kn-park-tile-img-wrap">
 												<img src="<?= $tileHeraldry ?>"
@@ -528,7 +561,8 @@
 					<!-- Principality tables (list view) -->
 					<div id="kn-prinz-tables" style="display:none">
 						<?php foreach ($prinzParks as $prinz): ?>
-							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<?php $prId = (int)$prinz['KingdomId'];
+						    $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
 								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
 									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
@@ -604,13 +638,13 @@
 			html[data-theme="dark"] .kn-sub-webcal-btn:hover{color:var(--ork-text)}
 			</style>
 			<!-- Events Tab -->
-			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
+			<div class="kn-tab-panel" id="kn-tab-events" role="tabpanel" aria-labelledby="kn-tab-btn-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
 					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
-						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
-							<button class="kn-view-btn" id="kn-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
+						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" data-tip="List view" aria-label="List view"><i class="fas fa-list"></i></button>
+						<button class="kn-view-btn" id="kn-ev-view-cal" data-tip="Calendar view" aria-label="Calendar view"><i class="fas fa-calendar-alt"></i></button>
+							<button class="kn-view-btn" id="kn-ev-view-map" data-tip="Map view" aria-label="Map view"><i class="fas fa-map-marked-alt"></i></button>
 						<div id="kn-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="kn-filter-toggle kn-filter-on" data-filter="kingdom-event">Kingdom Events</button>
@@ -619,7 +653,7 @@
 							<button class="kn-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
 						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
-							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
+							<button class="kn-view-btn" id="kn-sub-btn" data-tip="Subscribe to calendar" aria-label="Subscribe to calendar"
 								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';var show=p.style.display==='none';p.style.setProperty('display',show?'block':'none','important');event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
@@ -628,7 +662,7 @@
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
 										value="<?= htmlspecialchars($IcsUrl) ?>" readonly>
-									<button class="kn-sub-copy-btn" onclick="knCopyIcsUrl()" title="Copy URL">
+									<button class="kn-sub-copy-btn" onclick="knCopyIcsUrl()" data-tip="Copy URL" aria-label="Copy URL">
 										<i class="fas fa-copy"></i>
 									</button>
 								</div>
@@ -681,15 +715,17 @@
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
 								<?php if (!empty($event['_IsCalendarItem'])): ?>
-									<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+									<?php $ciOff = !empty($event['IsOfficerOnly']);
+								    $ciLoc = !empty($event['IsLocalsOnly']); ?>
 									<tr class="kn-row-link <?= $ciOff ? 'kn-officer-only' : '' ?> <?= $ciLoc ? 'kn-locals-only' : '' ?>" data-type="calendar-item" onclick="knShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
 										<td class="kn-col-nowrap">
 											<?= ($event['NextDate'] && $event['NextDate'] != '0000-00-00')
-												? date("M j, Y", strtotime($event['NextDate']))
-												: '<span style="color:#a0aec0">—</span>' ?>
+								                ? date("M j, Y", strtotime($event['NextDate']))
+								                : '<span style="color:#a0aec0">—</span>' ?>
 										</td>
 										<td class="kn-col-nowrap">
-											<?php $ciColor = $event['Color'] ?? '#64748b'; $ciColorText = $event['ColorText'] ?? '#fff'; ?>
+											<?php $ciColor = $event['Color'] ?? '#64748b';
+								    $ciColorText = $event['ColorText'] ?? '#fff'; ?>
 											<span class="kn-ci-pill" style="background:<?= htmlspecialchars($ciColor) ?>;border-color:<?= htmlspecialchars($ciColor) ?>;color:<?= htmlspecialchars($ciColorText) ?>"><i class="fas fa-calendar-day"></i> Calendar Item</span>
 											<?php if ($ciOff): ?><span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 											<?= htmlspecialchars($event['Name']) ?>
@@ -704,11 +740,11 @@
 											<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
 												<?= date("M j, Y", strtotime($event['NextDate'])) ?>
 												<?php
-													// Compare date-to-date so an event happening *today*
-													// (NextDate = today at 00:00) isn't flagged Past at 00:01.
-													$_evDate   = date('Y-m-d', strtotime($event['NextDate']));
-													$_isEvPast = strtotime($_evDate) < strtotime(date('Y-m-d'));
-												?>
+								                    // Compare date-to-date so an event happening *today*
+								                    // (NextDate = today at 00:00) isn't flagged Past at 00:01.
+								                    $_evDate   = date('Y-m-d', strtotime($event['NextDate']));
+											    $_isEvPast = strtotime($_evDate) < strtotime(date('Y-m-d'));
+											    ?>
 												<?php if ($_isEvPast): ?><span class='event-past-badge'>Past</span><?php endif; ?>
 											<?php else: ?>
 												<span style="color:#a0aec0">—</span>
@@ -738,10 +774,10 @@
 							<?php endforeach; ?>
 						<?php foreach ($kingdom_park_days ?? [] as $day): ?>
 							<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
-								<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
+								<td class="kn-col-nowrap" style="color:var(--ork-text-muted,#718096);font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
 								<td class="kn-col-nowrap">
 									<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
-									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
+									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:var(--ork-text,#4a5568);margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
 									<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
 								</td>
 								<td><?= htmlspecialchars($day['ParkName']) ?></td>
@@ -768,7 +804,7 @@
 
 
 			<!-- Map Tab -->
-			<div class="kn-tab-panel" id="kn-tab-map" style="display:none">
+			<div class="kn-tab-panel" id="kn-tab-map" role="tabpanel" aria-labelledby="kn-tab-btn-map" style="display:none">
 				<?php if (count($knMapLocations) > 0): ?>
 					<div id="kn-map-loading" class="kn-map-loading">
 						<i class="fas fa-spinner fa-spin" style="font-size:22px"></i>
@@ -799,7 +835,7 @@
 			</div>
 
 			<!-- Reports Tab -->
-			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
+			<div class="kn-tab-panel" id="kn-tab-reports" role="tabpanel" aria-labelledby="kn-tab-btn-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
 				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
 					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
@@ -904,7 +940,7 @@
 
 		<!-- Admin Tab -->
 		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
+		<div class="kn-tab-panel" id="kn-tab-admin" role="tabpanel" aria-labelledby="kn-tab-btn-admin" style="display:none">
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
@@ -960,7 +996,7 @@
 		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
 		     busy kingdom) was blocking DOMContentLoaded for 1+ seconds. -->
 		<?php if ($ShowRecsTab ?? false): ?>
-		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
+		<div class="kn-tab-panel" id="kn-tab-recommendations" role="tabpanel" aria-labelledby="kn-tab-btn-recommendations" style="display:none">
 			<div id="kn-recs-lazy" data-loaded="0" data-kid="<?= (int)$kingdom_id ?>">
 				<div class="pk-recs-loading" style="padding:2em 0;text-align:center;color:#a0aec0">
 					<i class="fas fa-spinner fa-spin"></i> Loading recommendations&hellip;
@@ -970,7 +1006,7 @@
 		<?php endif; ?>
 
 		<!-- Players Tab -->
-		<div class="kn-tab-panel" id="kn-tab-players" style="display:none">
+		<div class="kn-tab-panel" id="kn-tab-players" role="tabpanel" aria-labelledby="kn-tab-btn-players" style="display:none">
 			<div class="kn-players-toolbar">
 				<span class="kn-players-toolbar-left" id="kn-players-summary">&hellip;</span>
 				<div class="kn-players-toolbar-right">
@@ -978,7 +1014,7 @@
 						<i class="fas fa-search kn-player-search-icon"></i>
 						<input type="text" id="kn-player-search" class="kn-player-search-input" placeholder="Search all players&hellip;" autocomplete="off">
 					</div>
-					<button class="kn-view-btn" id="kn-active-only-btn" type="button" title="Show only members with sign-ins in the past 6 months"><i class="fas fa-filter"></i> Active only</button>
+					<button class="kn-view-btn kn-tip-wrap" id="kn-active-only-btn" type="button" data-tip="Show only members with sign-ins in the past 6 months"><i class="fas fa-filter"></i> Active only</button>
 					<div class="kn-view-toggle">
 						<button class="kn-view-btn kn-view-active" data-knview="cards"><i class="fas fa-th-large"></i> Cards</button>
 						<button class="kn-view-btn" data-knview="list"><i class="fas fa-list"></i> List</button>
@@ -1016,15 +1052,19 @@ var KnConfig = {
 	httpService:      '<?= HTTP_SERVICE ?>',
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
-	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
+	canEdit:          <?= !empty($CanEditKingdom) ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	officerList:      <?= json_encode($CanManageKingdom ? array_map(function ($o) {
+	    return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
+	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
+	principalityIds:  <?= json_encode(array_map(function ($p) {
+	    return (int)$p['KingdomId'];
+	}, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1053,7 +1093,7 @@ var KnBannerConfig = {
 </script>
 <?php if ($IsLoggedIn): ?>
 <div id="kn-award-overlay">
-	<div class="kn-modal-box">
+	<div class="kn-modal-box" role="dialog" aria-modal="true" aria-labelledby="kn-award-modal-title">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title" id="kn-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
 			<button class="kn-modal-close-btn" id="kn-award-close-btn" aria-label="Close">&times;</button>
@@ -1196,9 +1236,9 @@ var KnBannerConfig = {
 
 <!-- Recommend Award Modal -->
 <div id="kn-rec-overlay">
-	<div class="kn-modal-box">
+	<div class="kn-modal-box" role="dialog" aria-modal="true" aria-labelledby="kn-rec-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-star" style="margin-right:8px;color:#d69e2e"></i>Make a Recommendation</h3>
+			<h3 class="kn-modal-title" id="kn-rec-modal-title"><i class="fas fa-star" style="margin-right:8px;color:#d69e2e"></i>Make a Recommendation</h3>
 			<button class="kn-modal-close-btn" id="kn-rec-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -1381,14 +1421,14 @@ var KnBannerConfig = {
 				<div class="kn-emod-field" style="margin-top:10px">
 					<label class="kn-emod-label">Color</label>
 					<div class="ci-swatches" id="kn-ci-swatches">
-						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
-						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
-						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
-						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
-						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
-						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
-						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" data-tip="Slate" aria-label="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" data-tip="Blue" aria-label="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" data-tip="Purple" aria-label="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" data-tip="Cyan" aria-label="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" data-tip="Green" aria-label="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" data-tip="Amber" aria-label="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" data-tip="Orange" aria-label="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" data-tip="Rose" aria-label="Rose"></button>
 					</div>
 					<input type="hidden" id="kn-ci-color" value="#64748b">
 				</div>
@@ -1418,9 +1458,9 @@ var KnBannerConfig = {
 
 <!-- Add Park Modal -->
 <div id="kn-addpark-overlay">
-	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px);" role="dialog" aria-modal="true" aria-labelledby="kn-addpark-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-plus-circle" style="margin-right:8px;color:#276749"></i>Add Park</h3>
+			<h3 class="kn-modal-title" id="kn-addpark-modal-title"><i class="fas fa-plus-circle" style="margin-right:8px;color:#276749"></i>Add Park</h3>
 			<button class="kn-modal-close-btn" id="kn-addpark-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -1455,9 +1495,9 @@ var KnBannerConfig = {
 
 <!-- Edit Park Modal -->
 <div id="kn-editpark-overlay">
-	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px);" role="dialog" aria-modal="true" aria-labelledby="kn-editpark-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#276749"></i>Edit Park</h3>
+			<h3 class="kn-modal-title" id="kn-editpark-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#276749"></i>Edit Park</h3>
 			<button class="kn-modal-close-btn" id="kn-editpark-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -1482,7 +1522,7 @@ var KnBannerConfig = {
 				</select>
 			</div>
 			<div class="kn-acct-field">
-				<label style="display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:#4a5568;">
+				<label style="display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--ork-text-secondary,#4a5568);">
 					<input type="checkbox" id="kn-editpark-active" style="width:16px;height:16px;cursor:pointer;" />
 					Active (uncheck to mark Retired)
 				</label>
@@ -1540,9 +1580,9 @@ var KnBannerConfig = {
 
 <!-- Edit Officers Modal -->
 <div id="kn-editoff-overlay">
-	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);" role="dialog" aria-modal="true" aria-labelledby="kn-editofficers-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#744210"></i>Edit Officers</h3>
+			<h3 class="kn-modal-title" id="kn-editofficers-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#744210"></i>Edit Officers</h3>
 			<button class="kn-modal-close-btn" id="kn-editoff-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -1563,10 +1603,10 @@ var KnBannerConfig = {
 
 <!-- Kingdom Admin Overlay -->
 <div id="kn-admin-overlay">
-	<div class="kn-modal-box" style="width:700px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box" style="width:700px;max-width:calc(100vw - 40px);" role="dialog" aria-modal="true" aria-labelledby="kn-admin-modal-title">
 
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-cog" style="margin-right:8px;color:#2b6cb0"></i>Kingdom Administration</h3>
+			<h3 class="kn-modal-title" id="kn-admin-modal-title"><i class="fas fa-cog" style="margin-right:8px;color:#2b6cb0"></i>Kingdom Administration</h3>
 			<button class="kn-modal-close-btn" id="kn-admin-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -1592,7 +1632,7 @@ var KnBannerConfig = {
 					<div class="kn-admin-field">
 						<label for="kn-admin-description" style="display:flex;align-items:center;gap:6px;">
 						Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
-						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('kn-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('kn-md-help-overlay').classList.add('kn-open')" data-tip="Markdown help" aria-label="Markdown help">?</button>
 					</label>
 						<textarea id="kn-admin-description" rows="4" style="resize:vertical" data-original="<?= htmlspecialchars($AdminInfo['Description'] ?? '') ?>"><?= htmlspecialchars($AdminInfo['Description'] ?? '') ?></textarea>
 					</div>
@@ -1615,7 +1655,7 @@ var KnBannerConfig = {
 			</button>
 			<div class="kn-admin-panel-body" id="kn-admin-body-prinz" style="display:none">
 				<div id="kn-admin-prinz-feedback" class="kn-admin-feedback" style="display:none"></div>
-				<p style="margin:0 0 12px;font-size:13px;color:#4a5568">
+				<p style="margin:0 0 12px;font-size:13px;color:var(--ork-text-secondary,#4a5568)">
 					This is a <strong>Principality</strong> sponsored by
 					<strong><?= htmlspecialchars($AdminInfo['ParentKingdomName']) ?></strong>.
 				</p>
@@ -1681,7 +1721,7 @@ var KnBannerConfig = {
 						<thead>
 							<tr>
 								<th>Title</th>
-								<th><span class="kn-admin-th-tip" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
+								<th><span class="kn-admin-th-tip kn-tip-wrap" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
 								<th>Min Att.</th>
 								<th>Cutoff</th>
 								<th>Period</th>
@@ -1727,7 +1767,7 @@ var KnBannerConfig = {
 						<i class="fas fa-search kn-admin-award-search-icon"></i>
 						<input type="text" id="kn-admin-award-search" class="kn-admin-award-search-input"
 							placeholder="Filter awards by name or class&hellip;" autocomplete="off">
-						<button type="button" id="kn-admin-award-search-clear" class="kn-admin-award-search-clear" title="Clear" style="display:none">&times;</button>
+						<button type="button" id="kn-admin-award-search-clear" class="kn-admin-award-search-clear" data-tip="Clear" aria-label="Clear" style="display:none">&times;</button>
 					</div>
 					<div class="kn-admin-award-search-empty" id="kn-admin-award-search-empty" style="display:none">
 						No awards match this filter.
@@ -1782,7 +1822,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-new-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle kn-tip-wrap" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." role="img" aria-label="Title Class help: Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-new-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -1814,7 +1854,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-custom-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle kn-tip-wrap" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." role="img" aria-label="Title Class help: Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-custom-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -1880,7 +1920,7 @@ var KnBannerConfig = {
 						<label>Park <span style="font-weight:400;color:#a0aec0">(optional — leave blank for kingdom-wide)</span></label>
 						<input type="text" id="kn-signinlink-park-name" autocomplete="off"
 							placeholder="Search parks in this kingdom&hellip;"
-							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;color:#2d3748">
+							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--ork-input-border);border-radius:6px;font-size:13px;color:var(--ork-text);background:var(--ork-card-bg)">
 						<input type="hidden" id="kn-signinlink-park-id" value="">
 						<div class="kn-ac-results" id="kn-signinlink-park-results"></div>
 					</div>
@@ -1918,7 +1958,7 @@ var KnBannerConfig = {
 					</p>
 					<!-- Active links (always visible — typically 0-3 at any time) -->
 					<div id="kn-signinlink-links-wrap" style="border-top:1px solid #e2e8f0;padding-top:10px">
-						<div style="font-size:12px;color:#4a5568;font-weight:600">
+						<div style="font-size:12px;color:var(--ork-text-secondary,#4a5568);font-weight:600">
 							Active Links <span id="kn-signinlink-links-count" style="color:#a0aec0;font-weight:400"></span>
 						</div>
 						<div id="kn-signinlink-links-body" style="margin-top:8px">
@@ -1956,7 +1996,7 @@ var KnBannerConfig = {
 						</button>
 					</div>
 					<?php if (!empty($IsOrkAdmin)):
-						$isActive = ($AdminInfo['Active'] ?? 'Active') === 'Active'; ?>
+					    $isActive = ($AdminInfo['Active'] ?? 'Active') === 'Active'; ?>
 					<div class="kn-admin-ops-row">
 						<div class="kn-admin-ops-info">
 							<strong>Active Status</strong>
@@ -2053,9 +2093,9 @@ var KnBannerConfig = {
 
 <!-- Markdown Help Modal -->
 <div id="kn-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
-	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)" role="dialog" aria-modal="true" aria-labelledby="kn-markdown-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-markdown" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<h3 class="kn-modal-title" id="kn-markdown-modal-title"><i class="fas fa-markdown" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
 			<button class="kn-modal-close-btn" onclick="document.getElementById('kn-md-help-overlay').classList.remove('kn-open')">&times;</button>
 		</div>
 		<div class="kn-modal-body" style="padding:16px 20px">
@@ -2096,7 +2136,7 @@ var KnBannerConfig = {
 </div>
 
 <div id="kn-confirm-overlay">
-	<div class="kn-modal-box kn-confirm-box">
+	<div class="kn-modal-box kn-confirm-box" role="dialog" aria-modal="true" aria-labelledby="kn-confirm-title">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title" id="kn-confirm-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#e53e3e"></i>Confirm</h3>
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
@@ -2114,9 +2154,9 @@ var KnBannerConfig = {
 <?php if ($CanManageKingdom ?? false): ?>
 <!-- Add Player Modal -->
 <div id="kn-addplayer-overlay">
-	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);" role="dialog" aria-modal="true" aria-labelledby="kn-createplayer-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Create Player</h3>
+			<h3 class="kn-modal-title" id="kn-createplayer-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Create Player</h3>
 			<button class="kn-modal-close-btn" id="kn-addplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2218,6 +2258,25 @@ var KnBannerConfig = {
 	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
 }
 [data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+/* Wrapping variant for longer help hints so the tooltip doesn't run off-screen */
+[data-tip].kn-tip-wrap::after { white-space: normal; width: max-content; max-width: 240px; text-align: left; }
+/* Actions-column tooltip: right-anchor so the bubble grows leftward instead of
+   clipping off the right edge of the viewport.
+   !important and :hover::after are BOTH required here. revised.css:9804 defines a
+   generic [data-tip]:not(...):not(...)...:hover::after at specificity (0,7,1); a plain
+   .kn-col-edit-btn[data-tip]::after is (0,2,1) and loses every contested property,
+   leaving the bubble centered. Same trap the three existing workarounds at
+   revised.css:9824/:9839/:9852 document. (.cms-fab[data-tip] in default.theme gets
+   away with plain specificity only because CMS admin pages never load revised.css.)
+   transform:none, not translateY(-4px): the winning bottom:calc(100% + 6px) already
+   seats the bubble on the arrow, so re-adding a shift would detach it. min-width:0 is
+   required or revised.css's min-width:max-content defeats the wrap. */
+.kn-col-edit-btn[data-tip]:hover::after {
+	left: auto !important; right: 0 !important; transform: none !important;
+	min-width: 0 !important; max-width: 200px !important;
+	white-space: normal !important; text-align: left;
+}
+.kn-col-edit-btn[data-tip]::before { left: auto; right: 8px; transform: none; }
 
 /* ---- Royal Progress crowns ---- */
 .kn-royal-badge {
@@ -2429,9 +2488,9 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 </style>
 <div id="kn-moveplayer-overlay">
-	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)" role="dialog" aria-modal="true" aria-labelledby="kn-moveplayer-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="kn-modal-title" id="kn-moveplayer-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="kn-modal-close-btn" id="kn-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2476,9 +2535,9 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 <!-- Merge Players Modal (Kingdom) -->
 <div id="kn-mergeplayer-overlay">
-	<div class="kn-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:540px;max-width:calc(100vw - 40px)" role="dialog" aria-modal="true" aria-labelledby="kn-mergeplayers-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="kn-modal-title" id="kn-mergeplayers-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="kn-modal-close-btn" id="kn-mergeplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2523,9 +2582,9 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 <!-- Claim Park Modal -->
 <div id="kn-claimpark-overlay">
-	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px)" role="dialog" aria-modal="true" aria-labelledby="kn-claimpark-modal-title">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-flag" style="margin-right:8px;color:#276749"></i>Claim Park</h3>
+			<h3 class="kn-modal-title" id="kn-claimpark-modal-title"><i class="fas fa-flag" style="margin-right:8px;color:#276749"></i>Claim Park</h3>
 			<button class="kn-modal-close-btn" id="kn-claimpark-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body" style="padding:20px">
@@ -2817,6 +2876,54 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 	document.addEventListener('DOMContentLoaded', function() {
 		var btn = document.querySelector('[data-kntab="players"]');
 		if (btn) btn.addEventListener('click', knLoadPlayers, {once: true});
+
+		// ---- Keyboard-operable primary tabs (ARIA tablist) ----
+		(function() {
+			var nav = document.querySelector('.kn-tab-nav');
+			if (!nav) return;
+			var tabs = Array.prototype.slice.call(nav.querySelectorAll('li[data-kntab]'));
+			if (!tabs.length) return;
+			function syncAria() {
+				tabs.forEach(function(t) {
+					var active = t.classList.contains('kn-tab-active');
+					t.setAttribute('aria-selected', active ? 'true' : 'false');
+					t.setAttribute('tabindex', active ? '0' : '-1');
+				});
+			}
+			function activate(t, focus) {
+				if (typeof knActivateTab === 'function') {
+					knActivateTab(t.getAttribute('data-kntab'));
+				}
+				syncAria();
+				if (focus) t.focus();
+			}
+			nav.addEventListener('keydown', function(e) {
+				var li = e.target.closest ? e.target.closest('li[data-kntab]') : null;
+				if (!li) return;
+				var idx = tabs.indexOf(li);
+				if (idx < 0) return;
+				var k = e.key;
+				if (k === 'Enter' || k === ' ' || k === 'Spacebar') {
+					e.preventDefault();
+					activate(li, false);
+				} else if (k === 'ArrowRight' || k === 'ArrowDown') {
+					e.preventDefault();
+					activate(tabs[(idx + 1) % tabs.length], true);
+				} else if (k === 'ArrowLeft' || k === 'ArrowUp') {
+					e.preventDefault();
+					activate(tabs[(idx - 1 + tabs.length) % tabs.length], true);
+				} else if (k === 'Home') {
+					e.preventDefault();
+					activate(tabs[0], true);
+				} else if (k === 'End') {
+					e.preventDefault();
+					activate(tabs[tabs.length - 1], true);
+				}
+			});
+			// Keep aria-selected/roving-tabindex in sync when tabs are clicked too.
+			nav.addEventListener('click', function() { setTimeout(syncAria, 0); });
+			syncAria();
+		})();
 
 		function knApplyPlayerFilters() {
 			var qInput = document.getElementById('kn-player-search');

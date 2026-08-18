@@ -16,6 +16,61 @@ class Kingdom extends Ork3
         $this->kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
     }
 
+    /**
+     * Lightweight single-column read of a kingdom's display name (or '' when the
+     * id is unknown). Keeps raw $DB out of the CMS controller/trait layer — the
+     * admin scope-context banner calls this via the model pass-through.
+     *
+     * @param int $id kingdom_id
+     * @return string
+     */
+    public function GetName($id)
+    {
+        $id = (int)$id;
+        if ($id <= 0) {
+            return '';
+        }
+        $this->kingdom->clear();
+        $this->kingdom->kingdom_id = $id;
+        if ($this->kingdom->find()) {
+            return (string)$this->kingdom->name;
+        }
+        return '';
+    }
+
+    /**
+     * The minimal active-kingdom list: id + name only, ordered by name in SQL.
+     *
+     * GetKingdoms() cannot serve this — it calls Common::get_configs() once per
+     * kingdom to attach AtlasColor, an N-config fan-out that callers wanting only
+     * a picker's id/name pairs pay for and never use. This is the light lister:
+     * a parameterless, static query (no user input reaches it, so nothing to
+     * bind/escape), sorted in SQL so callers need no post-sort.
+     *
+     * @return array<int,array{kingdom_id:int,name:string}> ordered by name ASC
+     */
+    public function ListActiveIdName()
+    {
+        global $DB;
+        $out = array();
+        $DB->Clear();
+        $rows = $DB->DataSet(
+            'SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom'
+            . " WHERE active = 'Active' ORDER BY name ASC"
+        );
+        if ($rows !== false) {
+            while ($rows->Next()) {
+                $kid = (int)$rows->kingdom_id;
+                if ($kid <= 0) {
+                    continue;
+                }
+                $out[] = array('kingdom_id' => $kid, 'name' => (string)$rows->name);
+            }
+        }
+        $DB->Clear();
+        return $out;
+    }
+
     public function GetKingdomByAbbreviation($request)
     {
         if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3) {

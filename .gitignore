@@ -49,6 +49,19 @@ ork.zip
 config.tmpprod.php
 .DS_Store
 .vscode/
+# Superpowers brainstorming companion (local-only)
+.superpowers/
+
+# CMS media uploads (runtime; keep dir via .gitkeep)
+assets/cms-media/*
+!assets/cms-media/.gitkeep
+
+# CMS document downloads (runtime, self-hosted PDFs; keep dir via .gitkeep)
+assets/cms-docs/*
+!assets/cms-docs/.gitkeep
+
+# amtgard.com replication seed staging (regenerable extract; docker-mounted)
+db-migrations/.amtgard-assets/
 .ork3-db.local
 tools/ork-db/extracted/
 tools/ork-db/rendered/

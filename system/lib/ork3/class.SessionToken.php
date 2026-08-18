@@ -14,6 +14,11 @@ class SessionToken extends Ork3
         $rs = $this->db->DataSet(
             'SELECT token FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
         );
+        // $rs === false means the query itself failed (transient DB error). Report the
+        // session as still valid in that case: a DB blip must not log every user out.
+        if ($rs === false) {
+            return true;
+        }
         if (!$rs || !$rs->Next()) {
             return false;
         }

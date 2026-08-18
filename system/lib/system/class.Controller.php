@@ -2,6 +2,28 @@
 
 class Controller
 {
+    /**
+     * Org name used in the browser tab for the Amtgard-level public site: the
+     * front door and the global CMS pages/blog. Kingdom and park sites supply
+     * their own name instead (Controller_Site::_bootShell).
+     *
+     * Deliberately NOT "ORK 3" — that is the internal application brand, and it
+     * still prefixes every in-app page. These are public marketing pages whose
+     * tab should read "Amtgard - About", not "ORK 3: About".
+     */
+    public const PUBLIC_SITE_BRAND = 'Amtgard';
+
+    /**
+     * The full application brand used in og:site_name / og:title on the public
+     * CMS surfaces (front door, global pages, blog, Kingdoms Directory).
+     *
+     * Distinct from PUBLIC_SITE_BRAND above, which is the SHORT org name shown in
+     * the browser tab. default.theme carries its own copies of this string as the
+     * last-resort fallback for a surface that publishes no $PageMeta at all —
+     * those stay where they are on purpose.
+     */
+    public const APP_BRAND = 'ORK 3 - Amtgard Online Record Keeper';
+
     public $data = [ ];
     public $kingdom = null;
     public $view = null;
@@ -47,10 +69,14 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_CmsAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
+            // validate_session_token() only reports "invalid" when the query SUCCEEDED and
+            // the token is absent or mismatched; a transient DB error reports valid so a
+            // blip cannot log everyone out.
             $this->load_model('SessionToken');
             if (!$this->SessionToken->validate_session_token($_uid_check, $_tok_check)) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
@@ -78,7 +104,7 @@ class Controller
             $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
             $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
 
-            require_once(DIR_UI . 'whats_new_content.php');
+            require(DIR_UI . 'whats_new_content.php'); // require, not require_once — see the note in that file
             foreach ($WHATS_NEW_ITEMS as $_release) {
                 if ($_release['date'] === WHATS_NEW_VERSION) {
                     $this->data['WhatsNewRelease'] = $_release;
@@ -87,6 +113,28 @@ class Controller
             }
             if ($this->data['WhatsNewRelease'] !== null) {
                 $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
+            }
+        }
+
+        // CMS admin access flag for the user drop-down ("Manage Site Pages").
+        // True for any holder of a CMS capability at global scope (and super-admins).
+        // Computed LAZILY: only the non-AJAX (nav-rendering) request path shows the
+        // user drop-down, so skip the capability probe entirely for the *Ajax
+        // controllers (reuse the $_skipTokenCheck detection) — they never render the
+        // nav and so would pay a needless CmsAuth query on every XHR.
+        $this->data['CanManageCms'] = false;
+        if ($_uid > 0 && !$_skipTokenCheck) {
+            $this->load_model('CmsAuth');
+            if (isset($this->CmsAuth)) {
+                // One capability probe (not a loop): every CMS role from
+                // contributor up holds page.create, and super-admins short-circuit
+                // inside cms_can — so a single check answers "can this user reach
+                // the CMS admin?" without N grant/auth queries on every request.
+                $this->data['CanManageCms'] = (bool) $this->CmsAuth->cms_can(
+                    $_uid,
+                    'page.create',
+                    ['type' => 'global', 'id' => 0]
+                );
             }
         }
 
@@ -119,6 +167,22 @@ class Controller
         $this->Authorization->clear_db_after_auth_checks();
     }
 
+    /**
+     * Per-session CSRF synchronizer token. Minted once and persisted in the
+     * session; the same value is emitted to authenticated pages (for JS to send
+     * back on state-changing requests) and validated server-side. Cryptographically
+     * random; constant-time compared at the validation site.
+     *
+     * @return string 64-hex-char token
+     */
+    protected function _csrfToken()
+    {
+        if (empty($this->session->csrf_token)) {
+            $this->session->csrf_token = bin2hex(random_bytes(32));
+        }
+        return (string) $this->session->csrf_token;
+    }
+
     public function load_model($name)
     {
         if (file_exists(DIR_MODEL . 'model.' . $name . '.php')) {
@@ -138,7 +202,31 @@ class Controller
         return base64_encode($imgbinary);
     }
 
+    /**
+     * The default landing action, inherited verbatim by every controller that
+     * declares no index() of its own (17 of them) as well as by the site root.
+     *
+     * It is TWO separable halves, split out below so a surface can reuse one
+     * without the other: the shared home data every inheritor expects, and the
+     * front-door payload only the site root renders. index() itself must keep
+     * calling both, in this order, so the front door and all the index()-less
+     * controllers stay byte-identical.
+     */
     public function index($action = null)
+    {
+        $this->_indexCommonData();
+        $this->_indexFrontDoor();
+    }
+
+    /**
+     * Half 1 of index(): the shared landing data — the viewer's home kingdom,
+     * the tournament/kingdom/event/recap summaries, the viewer display name and
+     * the top-level menu shape. No front-door / CMS content.
+     *
+     * Controller_Directory calls THIS ONLY: it renders the same summaries under
+     * its own identity and must not pull in the front-door payload.
+     */
+    protected function _indexCommonData()
     {
         // Determine the logged-in user's home kingdom from their profile in the DB.
         // Fall back to the session-cached value only when not logged in.
@@ -149,7 +237,8 @@ class Controller
             $this->data['UserKingdomId']       = (int) ($home['KingdomId'] ?? 0);
             $this->data['UserParentKingdomId'] = (int) ($home['ParentKingdomId'] ?? 0);
         } else {
-            $this->data['UserKingdomId'] = 0;
+            $this->data['UserKingdomId']       = 0;
+            $this->data['UserParentKingdomId'] = 0;
         }
 
         unset($this->session->kingdom_id);
@@ -173,12 +262,109 @@ class Controller
             }
         }
         $this->data[ 'EventSummary' ] = $eventSummary;
+
+        // Display name for the member bar (logged-in only)
+        $this->data[ 'ViewerName' ] = '';
+        if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
+            $this->load_model('Player');
+            $this->data[ 'ViewerName' ] = $this->Player->get_viewer_display_name((int) $this->session->user_id);
+        }
+
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
         if ($this->data['LoggedIn']) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
         }
         unset($this->data[ 'menu' ][ 'kingdom' ]);
         unset($this->data[ 'menu' ][ 'park' ]);
+    }
+
+    /**
+     * Half 2 of index(): the FRONT-DOOR payload — the CMS-backed home blocks (or
+     * the hardcoded Model_FrontDoor defaults), the front-door theme tokens, the
+     * "Amtgard - {Page}" tab identity, the home-page edit FAB, and the home
+     * canonical/OG. Only the site root renders these.
+     */
+    protected function _indexFrontDoor()
+    {
+        // ---- Front door (now CMS-backed, with hardcoded defaults as fallback) ----
+        // Prefer the CMS-managed `home` system page when it exists and has blocks;
+        // otherwise fall back to the hardcoded Model_FrontDoor defaults so the front
+        // door always renders even before the home page is seeded.
+        $this->data[ 'IsFrontDoor' ] = true;
+        // Browser-tab identity: public site pages read "{Org} - {Page}". The front
+        // door is the Amtgard-level site, so "Amtgard - Home". See
+        // Controller::PUBLIC_SITE_BRAND and the <title> block in default.theme.
+        $this->data[ 'SiteTitleOrg' ] = self::PUBLIC_SITE_BRAND;
+        $this->_attachFrontDoorTheme();
+        $frontDoorBlocks = null;
+        $this->load_model('CmsPage');
+        // C1: one GhettoCache-backed bundle (home page row + its enabled blocks)
+        // instead of a separate GetHomePage() + GetBlocks() pair. A null slug means
+        // "the scope's home page".
+        $bundle = $this->CmsPage->get_page_with_blocks('global', 0, null);
+        $home = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
+        $homeBlocks = (is_array($bundle) && isset($bundle['blocks']) && is_array($bundle['blocks']))
+            ? $bundle['blocks'] : array();
+        if (!empty($home) && !empty($home['page_id'])) {
+            if (!empty($homeBlocks)) {
+                $frontDoorBlocks = $homeBlocks;
+            }
+            // Floating editor FAB on the front-door home for CMS editors
+            // (rendered by default.theme from cmsEditUrl). NOTE: $_uid from the
+            // bootstrap method is out of scope here, so read the session directly.
+            $fabUid = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+            if ($fabUid > 0) {
+                $this->load_model('CmsAuth');
+                if (isset($this->CmsAuth) && $this->CmsAuth->cms_can($fabUid, 'page.edit', ['type' => 'global', 'id' => 0])) {
+                    $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $home['page_id'];
+                    $this->data['cmsEditTip'] = 'Edit home page';
+                }
+            }
+        }
+        if ($frontDoorBlocks === null) {
+            $this->load_model('FrontDoor');
+            $frontDoorBlocks = $this->FrontDoor->GetContent([
+                'logged_in'  => (bool) $this->data['LoggedIn'],
+                'kingdom_id' => (int) ($this->data['UserKingdomId'] ?? 0),
+            ]);
+        }
+        $this->data[ 'FrontDoor' ] = $frontDoorBlocks;
+
+        // C6: per-page canonical + OG for the front-door HOME. The hardcoded ORK
+        // branding in default.theme is now a FALLBACK, overridden here so the home
+        // canonical is the site root and og:image can use the home page's hero
+        // when one is set (else the theme falls back to the ORK default image).
+        $_origin  = CmsMeta::Origin();
+        $_ogImage = '';
+        if (!empty($home) && !empty($home['hero_media_id'])) {
+            $this->load_model('CmsMedia');
+            if (isset($this->CmsMedia)) {
+                $_hm = $this->CmsMedia->get_media((int) $home['hero_media_id']);
+                if (is_array($_hm) && !empty($_hm['url'])) {
+                    $_ogImage = CmsMeta::Absolutize((string) $_hm['url'], $_origin);
+                }
+            }
+        }
+        // No Host header (CLI/test render) → no canonical at all rather than a
+        // bare '/' that would resolve against whatever host reads the page.
+        $this->data['PageMeta'] = CmsMeta::Build(array(
+            'canonical'   => ($_origin !== '') ? ($_origin . '/') : '',
+            'og_type'     => 'website',
+            'og_title'    => self::APP_BRAND,
+            'og_desc'     => 'The Online Record Keeper for the Amtgard International LARP.',
+            'og_image'    => $_ogImage,
+            'og_sitename' => self::APP_BRAND,
+        ));
+    }
+
+    /** Resolve the active front-door theme into $data['fdThemeCss'] (global scope, v1). */
+    protected function _attachFrontDoorTheme()
+    {
+        $this->load_model('CmsTheme');
+        $css = (string) $this->CmsTheme->get_active_css('global', 0);
+        if ($css !== '') {
+            $this->data['fdThemeCss'] = $css;
+        }
     }
 
     public function view()

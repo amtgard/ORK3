@@ -1,0 +1,2436 @@
+
+/* ============================================================================
+ * cms-admin.css — CMS admin page-list + block editor + media-picker modal.
+ *
+ * CMS admin theme: navy + gold brand accent. The generic blue accent
+ * is re-pointed to gold throughout the admin (primary button, active tab, focus
+ * rings, selected states).
+ *
+ * All classes prefixed `cms-`. Dark mode via html[data-theme="dark"] (we reuse
+ * the global --ork-* variables so most surfaces theme automatically; explicit
+ * dark overrides are added only where a hand-picked colour is used).
+ * Responsive: layouts stack on narrow viewports.
+ * ========================================================================== */
+
+/* Warning/accent token used by Cms_media.tpl ("In use" label) and note-live
+   surfaces. Defined globally so it isn't left undefined (bad contrast). */
+:root { --ork-warn: #9c4221; }
+html[data-theme="dark"] { --ork-warn: #fbd38d; }
+
+.cms-wrap {
+    /* Admin brand accent tokens, scoped to the admin shell */
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+    /* #93: the global #newmenu navbar is position:fixed at 48px tall (see orkui.css).
+       Sticky elements below must clear it or they hide behind it on scroll. */
+    --ork-header-h: 48px;
+
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 16px 60px;
+    color: var(--ork-text);
+}
+
+/* ---- Shared bits -------------------------------------------------------- */
+
+.cms-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.cms-topbar h1.cms-title,
+.cms-title {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    margin: 0;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-spacer { flex: 1 1 auto; }
+
+/* ---- Masthead (heraldic mark + wordmark + subtitle) --------------------- */
+.cms-masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 4px 0 2px;
+}
+.cms-masthead-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 24px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-masthead-word {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    color: var(--ork-text);
+    /* reset the global h1-h6 gray pill in case it lands on a heading */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+.cms-masthead-sub {
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    line-height: 1.3;
+    flex: 1 1 100%;
+    margin-top: -2px;
+}
+
+/* ============================================================================
+ * CMS Shell — persistent left rail + masthead workspace.
+ *
+ * Sits inside the global ORK app chrome (default.theme header/footer); the shell
+ * owns the admin workspace. The accent tokens are scoped to .cms-shell here
+ * (the legacy .cms-wrap still carries its own copy for non-shell surfaces).
+ * ========================================================================== */
+
+.cms-shell {
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 12px 14px 36px;
+    color: var(--ork-text);
+}
+
+/* ---- Left rail --------------------------------------------------------- */
+.cms-rail {
+    flex: 0 0 220px;
+    width: 220px;
+    align-self: flex-start;
+    position: sticky;
+    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 11px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    border: 1px solid rgba(240, 180, 41, .22);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+/* Edit surfaces add the Page-settings panel, so the rail widens to fit a form. */
+.cms-rail-wide { flex-basis: 258px; width: 258px; }
+.cms-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 8px 12px;
+    border-bottom: 1px solid rgba(240, 180, 41, .18);
+}
+.cms-rail-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 20px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-rail-word {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    /* OGRE wordmark — a 4-letter acronym reads better with a touch of tracking */
+    letter-spacing: .06em;
+    line-height: 1.1;
+    color: var(--cms-gold, #f0b429);
+}
+/* Visually-hidden text that stays in the a11y tree (same technique the rail
+   already uses to keep icon-only nav labels available to screen readers).
+   Carries the OGRE expansion so the acronym is never read as an opaque token. */
+.cms-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.cms-rail-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cms-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    color: rgba(226, 232, 240, .82);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.cms-rail-item:hover {
+    background: rgba(255, 255, 255, .06);
+    color: #fff;
+}
+.cms-rail-item.active {
+    background: rgba(240, 180, 41, .12);
+    border-left-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+}
+.cms-rail-item:focus-visible {
+    outline: none;
+    background: rgba(255, 255, 255, .08);
+    box-shadow: 0 0 0 2px var(--cms-gold);
+}
+.cms-rail-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+}
+.cms-rail-item.active .cms-rail-icon { color: var(--cms-gold, #f0b429); }
+.cms-rail-label { min-width: 0; }
+.cms-rail-item-quiet { color: rgba(226, 232, 240, .6); font-weight: 500; }
+.cms-rail-item-quiet:hover { color: #fff; }
+.cms-rail-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: rgba(240, 180, 41, .18);
+}
+
+/* ---- Main workspace ---------------------------------------------------- */
+.cms-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 0 0 16px;
+}
+.cms-shell-masthead {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.cms-shell-masthead-text { flex: 1 1 auto; min-width: 0; }
+.cms-shell-title {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    margin: 0;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-shell-sub {
+    color: var(--ork-text-muted);
+    font-size: 14px;
+    line-height: 1.3;
+    margin-top: 3px;
+}
+.cms-shell-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.cms-shell-body { min-width: 0; }
+
+/* ---- Breadcrumb -------------------------------------------------------- */
+.cms-crumbs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12.5px;
+    margin-bottom: 6px;
+}
+.cms-crumb { color: var(--ork-text-muted); text-decoration: none; }
+.cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+.cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
+.cms-crumb-sep { color: var(--ork-text-lighter); }
+
+html[data-theme="dark"] .cms-crumb[href]:hover { color: var(--cms-gold, #f0b429); }
+
+/* ---- Responsive: collapse the rail to a top horizontal bar ------------- */
+@media (max-width: 900px) {
+    .cms-shell {
+        flex-direction: column;
+        padding: 12px 12px 48px;
+    }
+    .cms-rail {
+        flex: 1 1 auto;
+        width: auto;
+        position: static;
+        top: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .cms-rail-brand {
+        padding: 0 10px 0 4px;
+        margin-right: 4px;
+        border-bottom: none;
+        border-right: 1px solid rgba(240, 180, 41, .18);
+        flex: 0 0 auto;
+    }
+    .cms-rail-nav {
+        flex-direction: row;
+        gap: 4px;
+    }
+    .cms-rail-item {
+        flex: 0 0 auto;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        padding: 7px 11px;
+        white-space: nowrap;
+    }
+    .cms-rail-item.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--cms-gold, #f0b429);
+    }
+    .cms-rail-divider {
+        width: 1px;
+        height: 22px;
+        margin: 0 4px;
+    }
+    .cms-main {
+        padding-left: 0;
+    }
+}
+
+/* Narrow phones: icon-only rail (labels hidden) to keep it on one line. */
+@media (max-width: 560px) {
+    .cms-rail-word { display: none; }
+    .cms-rail-brand { padding: 0 8px 0 4px; }
+    /* Keep the label in the a11y tree (screen readers / accessible name)
+       while hiding it visually — icon-only rail must not strip names. */
+    .cms-rail-item .cms-rail-label,
+    .cms-rail-item-quiet .cms-rail-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .cms-rail-item { padding: 8px 10px; }
+    .cms-rail-icon { font-size: 16px; }
+    .cms-shell-actions { margin-left: 0; width: 100%; }
+}
+
+.cms-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    padding: 9px 15px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border-dark);
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .12s, border-color .12s, opacity .12s;
+}
+.cms-btn:hover { background: var(--ork-bg-tertiary); }
+.cms-btn:disabled,
+.cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.cms-btn-primary {
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    border-color: var(--cms-gold-deep, #caa23a);
+    color: #1a1205 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.cms-btn-primary:hover { background: linear-gradient(180deg, #f6c14a, var(--cms-gold, #f0b429)); }
+/* Harden against #theme_container a dark-mode link colour winning over the
+   button label when a "New" button is rendered as an <a> (real bug). */
+#theme_container a.cms-btn-primary,
+a.cms-btn-primary,
+a.cms-btn-primary:visited,
+a.cms-btn-primary:hover { color: #1a1205 !important; }
+.cms-btn-ghost {
+    background: transparent;
+    border-color: var(--ork-border-dark);
+    color: var(--ork-text-secondary);
+}
+.cms-btn-ghost:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-btn-danger {
+    background: var(--ork-badge-red-bg);
+    border-color: var(--ork-badge-red-text);
+    color: var(--ork-badge-red-text);
+}
+.cms-btn-danger:hover { filter: brightness(.96); }
+.cms-btn-sm { padding: 5px 10px; font-size: 12.5px; border-radius: 6px; }
+.cms-btn i { font-size: .92em; }
+
+/* Keyboard a11y: shared gold focus ring on all CMS buttons. */
+.cms-icon-btn:focus-visible,
+.cms-btn:focus-visible,
+.cms-devbtn:focus-visible,
+.cms-modal-close:focus-visible {
+    outline: 2px solid var(--cms-gold);
+    outline-offset: 2px;
+}
+
+.cms-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    line-height: 1.4;
+}
+.cms-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.cms-badge-draft { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+.cms-badge-system { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
+.cms-badge-scope { background: var(--ork-badge-purple-bg); color: var(--ork-badge-purple-text); }
+
+.cms-muted { color: var(--ork-text-muted); }
+
+.cms-notice {
+    background: var(--ork-alert-warning-bg);
+    border: 1px solid var(--ork-alert-warning-border);
+    color: var(--ork-alert-warning-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.cms-input,
+.cms-select,
+.cms-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-input-border);
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+}
+.cms-textarea { resize: vertical; min-height: 46px; line-height: 1.4; }
+.cms-input::placeholder,
+.cms-textarea::placeholder { color: var(--ork-text-lighter); }
+.cms-input:focus,
+.cms-select:focus,
+.cms-textarea:focus {
+    outline: none;
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
+}
+.cms-field { margin-bottom: 7px; }
+.cms-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ork-text-secondary);
+    margin-bottom: 3px;
+}
+.cms-help { font-size: 11.5px; color: var(--ork-text-muted); margin-top: 3px; }
+
+/* ============================================================================
+ * Page list (Cms_index)
+ * ========================================================================== */
+
+.cms-filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.cms-filters .cms-input { max-width: 280px; }
+.cms-filters .cms-select { max-width: 180px; }
+
+/* ---- Pages / Posts tabs ------------------------------------------------- */
+.cms-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--ork-border-dark);
+}
+.cms-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 9px 16px;
+    color: var(--ork-text-muted);
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    margin-bottom: -1px;
+    transition: color .12s, background .12s, border-color .12s;
+}
+.cms-tab:hover { color: var(--ork-text); background: var(--ork-bg-secondary); }
+.cms-tab-active {
+    color: var(--ork-text);
+    background: var(--ork-bg);
+    border-color: var(--ork-border-dark);
+    border-bottom: 1px solid var(--ork-bg);
+    box-shadow: inset 0 3px 0 var(--cms-gold, #f0b429);
+}
+
+.cms-table-wrap {
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--ork-card-bg);
+}
+.cms-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.cms-table th,
+.cms-table td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--ork-border);
+    vertical-align: middle;
+}
+.cms-table thead th {
+    background: var(--ork-bg-secondary);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ork-text-muted);
+    font-weight: 700;
+}
+.cms-table tbody tr:last-child td { border-bottom: none; }
+.cms-table tbody tr:hover { background: var(--ork-bg-secondary); }
+.cms-table .cms-pg-title { font-weight: 600; color: var(--ork-text); }
+.cms-table .cms-pg-slug { font-size: 12px; color: var(--ork-text-muted); }
+.cms-table a.cms-pg-slug-link { color: var(--ork-text-muted); text-decoration: none; cursor: pointer; }
+.cms-table a.cms-pg-slug-link:hover { text-decoration: underline; }
+.cms-table a.cms-pg-slug-link .fa-external-link-alt { font-size: .78em; opacity: .55; margin-left: 3px; }
+.cms-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.cms-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--ork-text-muted);
+}
+.cms-empty-icon {
+    color: var(--cms-gold, #f0b429);
+    font-size: 44px;
+    line-height: 1;
+    opacity: .9;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .15));
+}
+.cms-empty-copy {
+    font-size: 14px;
+    max-width: 420px;
+    line-height: 1.5;
+}
+.cms-empty-cta {
+    margin-top: 4px;
+}
+
+/* New-page type chooser (in a modal) */
+.cms-typegrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+.cms-typecard {
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 9px;
+    padding: 13px 14px;
+    background: var(--ork-bg-secondary);
+    cursor: pointer;
+    text-align: left;
+    color: var(--ork-text);
+    transition: border-color .12s, background .12s;
+}
+.cms-typecard:hover { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
+.cms-typecard strong { display: block; font-size: 14px; margin-bottom: 3px; }
+.cms-typecard span { font-size: 12px; color: var(--ork-text-muted); }
+
+/* Block chooser: searchable + grouped + icon'd tiles */
+.cms-typesearch {
+    position: relative;
+    margin-bottom: 14px;
+}
+.cms-typesearch i {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    pointer-events: none;
+}
+.cms-typesearch .cms-input { padding-left: 32px; width: 100%; box-sizing: border-box; }
+
+.cms-typegroup { margin-bottom: 16px; }
+.cms-typegroup:last-child { margin-bottom: 0; }
+.cms-typegroup-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ork-text-muted);
+    margin: 0 0 8px;
+    padding: 4px 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+}
+.cms-typegroup-title:hover { color: var(--ork-text); }
+.cms-typegroup-caret {
+    font-size: 10px;
+    transition: transform .12s ease;
+}
+.cms-typegroup-count {
+    font-weight: 600;
+    color: var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-radius: 999px;
+    padding: 0 7px;
+    letter-spacing: 0;
+}
+.cms-typegroup-collapsed .cms-typegroup-caret { transform: rotate(-90deg); }
+.cms-typegroup-collapsed .cms-typegrid { display: none; }
+.cms-typegroup-collapsed .cms-typegroup-title { margin-bottom: 0; }
+.cms-typegrid-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--ork-text-muted);
+    font-size: 13px;
+}
+
+/* "Show all blocks" / "Show only suited" toggle in the Add-block chooser */
+.cms-addshowall {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ork-border);
+    text-align: center;
+}
+.cms-link-btn {
+    background: none;
+    border: 0;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-link-btn:hover { color: var(--cms-gold, #f0b429); text-decoration: underline; }
+.cms-link-btn i { font-size: 11px; }
+
+/* Tile layout: icon chip + text column */
+.cms-typecard {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+.cms-typecard-icon {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ork-bg-tertiary);
+    color: var(--cms-gold, #f0b429);
+    font-size: 14px;
+}
+.cms-typecard-text { min-width: 0; }
+.cms-typecard-text strong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cms-typecard-key {
+    display: none;
+    font-size: 11px;
+    color: var(--ork-text-muted);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    margin-top: 3px;
+}
+.cms-typecard:hover .cms-typecard-key,
+.cms-typecard:focus-visible .cms-typecard-key { display: block; }
+.cms-typecard-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    line-height: 1.5;
+}
+.cms-badge-dynamic { background: var(--ork-badge-blue-bg, #e0ecff); color: var(--ork-badge-blue-text, #1d4ed8); }
+.cms-badge-soon    { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px dashed var(--ork-border-dark); }
+
+.cms-typecard-disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
+.cms-typecard-disabled:hover { border-color: var(--ork-border-dark); background: var(--ork-bg-secondary); }
+.cms-typecard-disabled .cms-typecard-icon { color: var(--ork-text-muted); }
+
+/* Add-block chooser: wide modal → three responsive columns (less vertical
+ * scroll), each card carrying a one-line description of what the block is. */
+#cmsAddModal .cms-typegrid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.cms-typecard-desc {
+    display: block;
+    font-size: 12px;
+    color: var(--ork-text-muted);
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* ============================================================================
+ * Block editor (Cms_edit)
+ * ========================================================================== */
+
+.cms-editor {
+    display: grid;
+    grid-template-columns: 1fr;   /* blocks span the full width; settings live in the rail */
+    gap: 16px;
+    align-items: start;
+}
+.cms-meta-panel {
+    position: sticky;
+    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    background: var(--ork-card-bg);
+    padding: 16px;
+}
+.cms-meta-panel h2 {
+    font-size: 15px;
+    margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+
+/* ---- Page-settings panel inside the rail (edit page) ------------------- */
+.cms-rail-extra {
+    border-top: 1px solid rgba(240, 180, 41, .18);
+    padding-top: 12px;
+    margin-top: 2px;
+}
+.cms-rail-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    padding: 0 4px;
+    color: var(--cms-gold, #f0b429);
+    background: transparent; border: none; border-radius: 0; text-shadow: none;
+}
+.cms-rail-settings .cms-field { margin-bottom: 9px; }
+.cms-rail-settings .cms-input,
+.cms-rail-settings .cms-select,
+.cms-rail-settings .cms-textarea { font-size: 13px; padding: 7px 9px; }
+.cms-rail-settings .cms-help { font-size: 11px; }
+.cms-btn-block { width: 100%; justify-content: center; }
+.cms-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 14px;
+    font-size: 13px;
+    color: var(--ork-text-secondary);
+}
+.cms-action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.cms-action-row .cms-btn { flex: 1 1 auto; justify-content: center; }
+
+.cms-blocks-col { min-width: 0; }
+.cms-blocks-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.cms-blocks-head h2 {
+    font-size: 15px; margin: 0;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+
+.cms-block-card {
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    background: var(--ork-card-bg);
+    margin-bottom: 9px;
+    overflow: hidden;
+}
+.cms-block-card.cms-block-disabled { opacity: .62; }
+.cms-block-card.cms-dragging { opacity: .4; }
+.cms-block-card.cms-drag-over { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .4); }
+.cms-block-card.cms-block-error { border-color: var(--ork-badge-red-text, #c0392b); box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
+
+/* Block icon chip on the card head */
+.cms-block-icon {
+    flex: 0 0 auto;
+    color: var(--cms-gold, #f0b429);
+    font-size: 14px;
+    width: 18px;
+    text-align: center;
+}
+
+/* Quiet inline error message inside a block body */
+.cms-block-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 12px;
+    padding: 8px 11px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    background: var(--ork-badge-red-bg, #fde8e6);
+    color: var(--ork-badge-red-text, #c0392b);
+    border: 1px solid var(--ork-badge-red-text, #c0392b);
+}
+
+/* A block "row" wraps an insert-before zone + its card WITHOUT adding a layout
+   box (display:contents), so a single-block reorder / insert / remove can move
+   one node instead of rebuilding the whole list — which is what tears down every
+   open TinyMCE editor. Full renderList is reserved for replaceModel/seed. */
+.cms-block-row { display: contents; }
+
+/* Brief highlight when jumping the author to a save-blocking (invalid-JSON) block. */
+.cms-block-card.cms-block-error-flash { animation: cmsErrFlash 1.4s ease; }
+@keyframes cmsErrFlash {
+    0%, 100% { box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
+    30% { box-shadow: 0 0 0 4px rgba(192, 57, 43, .5); }
+}
+
+/* Degraded rich-text warning — shown when the TinyMCE bundle fails to load and
+   a rich-text field silently falls back to a raw-HTML textarea (theme-aware). */
+.cms-help-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: var(--ork-badge-orange-bg, #feebc8);
+    color: var(--ork-badge-orange-text, #9c4221);
+    border: 1px solid var(--ork-badge-orange-text, #9c4221);
+}
+
+/* Insert-between hover-reveal "+" zone */
+.cms-inserter {
+    position: relative;
+    height: 10px;
+    margin: -4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-inserter::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    background: var(--cms-gold, #f0b429);
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity .12s;
+}
+.cms-inserter:hover { height: 22px; }
+.cms-inserter:hover::before { opacity: .55; }
+.cms-inserter-btn {
+    position: relative;
+    z-index: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--ork-border);
+    background: var(--ork-card-bg);
+    color: var(--ork-text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(.7);
+    transition: opacity .12s, transform .12s, color .12s, border-color .12s;
+}
+.cms-inserter:hover .cms-inserter-btn,
+.cms-inserter-btn:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+}
+.cms-inserter-btn:hover {
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+}
+.cms-block-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    background: var(--ork-bg-secondary);
+    border-bottom: 1px solid var(--ork-border);
+}
+.cms-drag-handle {
+    cursor: grab;
+    color: var(--ork-text-lighter);
+    font-size: 15px;
+    padding: 2px 4px;
+}
+.cms-drag-handle:active { cursor: grabbing; }
+.cms-block-type {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--ork-text);
+}
+.cms-block-typekey {
+    font-size: 11px;
+    color: var(--ork-text-muted);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.cms-block-summary {
+    font-size: 12px;
+    color: var(--ork-text-muted);
+    margin-left: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+}
+.cms-block-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+.cms-icon-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ork-text-secondary);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-icon-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Touch: enlarge the block-editor icon controls toward the ~44px minimum and
+   space them out so they aren't clustered below the finger-friendly size. */
+@media (max-width: 680px) {
+    .cms-block-tools { gap: 8px; }
+    .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+}
+
+/* Narrow phones: let the nav-manager row wrap so the action buttons drop to
+   their own full-width row (no off-screen clipping) and stay tappable. */
+@media (max-width: 560px) {
+    .cms-nav-item .cms-block-head { flex-wrap: wrap; }
+    .cms-nav-item .cms-block-tools {
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .cms-nav-item .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+    .cms-nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+.cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
+
+.cms-block-body { padding: 10px 12px; }
+.cms-block-body.cms-collapsed { display: none; }
+
+/* toggle switch */
+.cms-switch { position: relative; display: inline-block; width: 38px; height: 21px; flex: 0 0 auto; }
+.cms-switch input { opacity: 0; width: 0; height: 0; }
+.cms-switch .cms-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: var(--ork-border-dark);
+    border-radius: 999px; transition: background .15s;
+}
+.cms-switch .cms-slider::before {
+    content: ""; position: absolute; height: 15px; width: 15px;
+    left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .15s;
+}
+.cms-switch input:checked + .cms-slider { background: var(--cms-gold, #f0b429); }
+.cms-switch input:checked + .cms-slider::before { transform: translateX(17px); }
+
+/* repeating sub-item lists (slides, cards, ctas) */
+.cms-subitems { margin-top: 4px; }
+.cms-subitem {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background: var(--ork-bg-secondary);
+}
+.cms-subitem-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.cms-subitem-head strong { font-size: 12.5px; color: var(--ork-text-secondary); }
+.cms-subitem-head .cms-block-tools { margin-left: auto; }
+.cms-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* schema-form: grouped object fields (e.g. a CTA's label + href) */
+.cms-group {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 10px 12px 4px;
+    margin-bottom: 14px;
+    background: var(--ork-bg-secondary);
+}
+.cms-group > .cms-label { margin-bottom: 8px; }
+.cms-group-body .cms-field:last-child { margin-bottom: 6px; }
+
+/* schema-form: static info note (e.g. marketing_nav → managed in Navigation tab) */
+.cms-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--ork-text-secondary);
+    background: var(--ork-bg-secondary);
+    border: 1px solid var(--ork-border);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 7px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+.cms-note > i { color: var(--cms-gold, #f0b429); margin-top: 2px; }
+.cms-note a { color: var(--cms-gold-deep, #caa23a); font-weight: 600; }
+/* #45: "edits to a published page go live immediately" — amber warning variant. */
+.cms-note-live {
+    border-left-color: var(--ork-warn, #b8860b);
+    background: rgba(184, 134, 11, .08);
+}
+.cms-note-live > i { color: var(--ork-warn, #b8860b); }
+html[data-theme="dark"] .cms-note-live { background: rgba(184, 134, 11, .14); }
+
+/* dynamic-block info card (icon + one-line live description) */
+.cms-dyninfo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(180deg, var(--ork-bg-tertiary), var(--ork-bg-secondary));
+    border: 1px solid var(--ork-border);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 9px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+.cms-dyninfo-icon {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--cms-navy, #0b1120);
+    background: var(--cms-gold, #f0b429);
+}
+.cms-dyninfo-text { min-width: 0; }
+.cms-dyninfo-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--cms-gold-deep, #caa23a);
+    margin-bottom: 3px;
+}
+.cms-dyninfo-title > i { margin-right: 4px; }
+.cms-dyninfo-body { font-size: 13px; line-height: 1.45; color: var(--ork-text-secondary); }
+
+html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
+html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
+
+/* media picker field control */
+.cms-media-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.cms-media-thumb {
+    width: 74px; height: 56px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border-dark);
+    object-fit: cover;
+    background: var(--ork-bg-tertiary);
+    flex: 0 0 auto;
+}
+.cms-media-thumb.cms-empty-thumb {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ork-text-lighter); font-size: 18px;
+}
+.cms-media-meta { min-width: 0; flex: 1 1 auto; }
+.cms-media-meta .cms-media-name { font-size: 12.5px; color: var(--ork-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* TinyMCE wrapper keeps a min height while the editor boots */
+.cms-richtext-host { min-height: 220px; }
+
+/* ============================================================================
+ * Modals (media picker, confirm, type chooser) — position:fixed, dark-styled
+ * ========================================================================== */
+
+.cms-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--ork-overlay);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 10000;
+    padding: 40px 16px;
+    overflow-y: auto;
+}
+.cms-modal-overlay.cms-open { display: flex; }
+.cms-modal {
+    background: var(--ork-card-bg);
+    color: var(--ork-text);
+    border: 1px solid var(--ork-border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 760px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 80px);
+}
+.cms-modal.cms-modal-sm { max-width: 440px; }
+.cms-modal.cms-modal-wide { max-width: 840px; }
+.cms-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--ork-border);
+}
+.cms-modal-head h3 {
+    margin: 0; font-size: 16px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-modal-close {
+    margin-left: auto;
+    border: none; background: transparent;
+    color: var(--ork-text-muted);
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.cms-modal-close:hover { color: var(--ork-text); }
+.cms-modal-body { padding: 18px; overflow-y: auto; }
+.cms-modal-foot {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 14px 18px;
+    border-top: 1px solid var(--ork-border);
+}
+
+/* media library grid */
+.cms-media-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.cms-media-toolbar .cms-input { max-width: 240px; }
+.cms-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+.cms-media-tile {
+    border: 2px solid var(--ork-border);
+    border-radius: 9px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--ork-bg-secondary);
+    transition: border-color .12s, transform .08s;
+}
+.cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); transform: translateY(-1px); }
+.cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
+.cms-media-tile:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
+.cms-media-tile img {
+    width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
+}
+/* #95: broken-thumbnail fallback for picker tiles — same 92px footprint as the
+   image, centered fa-image, sitting above the caption so nothing overlaps. */
+.cms-media-tile-fallback {
+    width: 100%; height: 92px; display: flex; align-items: center; justify-content: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-lighter, #9aa2ad); font-size: 24px;
+}
+.cms-media-tile .cms-media-cap {
+    font-size: 11px; padding: 6px 8px; color: var(--ork-text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cms-media-empty { padding: 30px; text-align: center; color: var(--ork-text-muted); grid-column: 1 / -1; }
+
+.cms-upload-drop {
+    display: block;
+    box-sizing: border-box;
+    border: 2px dashed var(--ork-border-dark);
+    border-radius: 9px;
+    padding: 18px;
+    text-align: center;
+    color: var(--ork-text-muted);
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+.cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
+.cms-upload-drop input[type=file] { display: none; }
+
+/* ============================================================================
+ * Toast
+ * ========================================================================== */
+
+.cms-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 11000;
+    min-width: 200px;
+    max-width: 360px;
+    padding: 12px 16px;
+    border-radius: 9px;
+    background: var(--ork-text);
+    color: var(--ork-bg);
+    font-size: 13.5px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+}
+.cms-toast.cms-show { opacity: 1; transform: translateY(0); }
+.cms-toast.cms-toast-error { background: var(--ork-badge-red-text); color: #fff; }
+.cms-toast.cms-toast-ok { background: var(--ork-badge-green-text); color: #fff; }
+
+/* spinner */
+.cms-spin {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: cms-spin .7s linear infinite;
+    vertical-align: -2px;
+}
+@keyframes cms-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================================
+ * Dark-mode tweaks (variables already flip; these refine hand-picked bits)
+ * ========================================================================== */
+
+html[data-theme="dark"] .cms-toast { background: #f0f2f5; color: #1a202c; }
+/* The neutral dark toast above is (0,2,1) and declared after the .cms-toast.cms-toast-*
+   status colors (0,2,0), so it would otherwise repaint an error toast light-gray and
+   throw away the one signal that matters. Re-assert both at matching specificity. */
+html[data-theme="dark"] .cms-toast.cms-toast-error { background: var(--ork-badge-red-text); color: #fff; }
+html[data-theme="dark"] .cms-toast.cms-toast-ok { background: var(--ork-badge-green-text); color: #fff; }
+/* Gold primary button keeps DARK ink in both themes */
+html[data-theme="dark"] .cms-btn-primary,
+html[data-theme="dark"] #theme_container a.cms-btn-primary,
+html[data-theme="dark"] a.cms-btn-primary { color: #1a1205 !important; }
+html[data-theme="dark"] .cms-switch .cms-slider::before { background: #e2e8f0; }
+html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
+
+/* ============================================================================
+ * DataTables — theme the controls to match the admin theme + .cms-table
+ * (Pages list / Posts list). Neutralize DataTables' default light CSS so it
+ * never clashes with the dark theme.
+ * ========================================================================== */
+
+/* The DataTables wrapper sits inside .cms-table-wrap; give the controls room. */
+.cms-table-wrap .dataTables_wrapper {
+    padding: 12px 14px 4px;
+    color: var(--ork-text);
+    font-size: 13px;
+}
+/* Search box + page-length live above the table. */
+.cms-table-wrap .dataTables_length,
+.cms-table-wrap .dataTables_filter {
+    margin-bottom: 10px;
+}
+.cms-table-wrap .dataTables_filter { text-align: right; }
+.cms-table-wrap .dataTables_length label,
+.cms-table-wrap .dataTables_filter label {
+    color: var(--ork-text-secondary);
+    font-weight: 600;
+    font-size: 12.5px;
+}
+/* Inputs / selects — reuse the cms-input look. */
+.cms-table-wrap .dataTables_length select,
+.cms-table-wrap .dataTables_filter input {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 9px;
+    margin: 0 6px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-input-border);
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    box-sizing: border-box;
+}
+.cms-table-wrap .dataTables_filter input { min-width: 200px; }
+.cms-table-wrap .dataTables_length select:focus,
+.cms-table-wrap .dataTables_filter input:focus {
+    outline: none;
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
+}
+/* The DataTables-managed table keeps the .cms-table look; kill DT borders. */
+.cms-table-wrap table.cms-table.dataTable {
+    border-collapse: collapse;
+    margin: 0;
+    border: none;
+}
+.cms-table-wrap table.cms-table.dataTable thead th {
+    border-bottom: 1px solid var(--ork-border);
+}
+/* Sort indicators — gold-tinted, no clashing default background images. */
+.cms-table-wrap table.cms-table.dataTable thead th.sorting,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc {
+    cursor: pointer;
+    position: relative;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting:after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after {
+    content: "\2195"; /* up-down arrow */
+    margin-left: 6px;
+    opacity: .35;
+    font-size: 11px;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after { content: "\2191"; opacity: .9; color: var(--cms-gold, #f0b429); }
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after { content: "\2193"; opacity: .9; color: var(--cms-gold, #f0b429); }
+/* Remove DataTables' default PNG sprite background on sortable headers. */
+.cms-table-wrap table.cms-table.dataTable thead .sorting,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc_disabled,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc_disabled {
+    background-image: none;
+}
+/* Info text + pager. */
+.cms-table-wrap .dataTables_info {
+    color: var(--ork-text-muted);
+    padding-top: 10px;
+    font-size: 12.5px;
+}
+.cms-table-wrap .dataTables_paginate {
+    padding-top: 8px;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button {
+    box-sizing: border-box;
+    padding: 5px 11px !important;
+    margin-left: 4px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border) !important;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    cursor: pointer;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+    border-color: var(--ork-border-dark) !important;
+    color: var(--ork-text) !important;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.current,
+.cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420) !important;
+    border-color: var(--cms-gold-deep, #caa23a) !important;
+    color: #1a1205 !important;
+    font-weight: 700;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled,
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled:hover {
+    opacity: .4;
+    cursor: not-allowed;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text-muted) !important;
+}
+
+/* ---- Dark mode (html[data-theme="dark"]) ---- */
+html[data-theme="dark"] .cms-table-wrap .dataTables_length select,
+html[data-theme="dark"] .cms-table-wrap .dataTables_filter input {
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    border-color: var(--ork-input-border);
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button {
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    color: #1a1205 !important;
+}
+/* DataTables sets inline odd/even row striping; let the .cms-table hover win. */
+.cms-table-wrap table.cms-table.dataTable tbody tr,
+.cms-table-wrap table.cms-table.dataTable.stripe tbody tr.odd,
+.cms-table-wrap table.cms-table.dataTable.display tbody tr.odd {
+    background: transparent;
+}
+.cms-table-wrap table.cms-table.dataTable tbody tr:hover {
+    background: var(--ork-bg-secondary);
+}
+
+/* ============================================================================
+ * Bulk-select bar + checkbox column + row-action overflow menu
+ * ========================================================================== */
+
+/* Leading checkbox column — keep tight + centered, no wrap. */
+.cms-table th.cms-check-col,
+.cms-table td.cms-check-col {
+    width: 34px;
+    text-align: center;
+    padding-left: 12px;
+    padding-right: 4px;
+}
+.cms-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--cms-gold, #f0b429);
+    vertical-align: middle;
+}
+
+/* Bulk-action bar — hidden until ≥1 row selected. */
+.cms-bulkbar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 9px;
+    background: var(--ork-bg-secondary);
+}
+.cms-bulkbar.cms-open { display: flex; }
+.cms-bulkbar.cms-busy { opacity: .6; pointer-events: none; }
+.cms-bulkbar-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ork-text);
+}
+.cms-bulkbar-count i { color: var(--cms-gold-deep, #caa23a); margin-right: 6px; }
+.cms-bulkbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+/* Row-action overflow menu (⋯) — lightweight dark-themed dropdown. */
+.cms-overflow {
+    position: relative;
+    display: inline-block;
+}
+.cms-overflow-btn {
+    border: 1px solid var(--ork-border-dark);
+    background: transparent;
+    color: var(--ork-text-secondary);
+    width: 30px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-overflow-btn:hover,
+.cms-overflow-btn:focus-visible {
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+    outline: none;
+}
+.cms-overflow-menu {
+    display: none;
+    /* JS positions this as position:fixed (left/top set inline) when opened, so it
+     * escapes the .cms-table-wrap overflow:hidden clip and flips upward near the
+     * viewport bottom — matches the project's tnFixedAcPosition pattern. */
+    position: fixed;
+    z-index: 1200;
+    min-width: 168px;
+    padding: 5px;
+    border: 1px solid var(--ork-border);
+    border-radius: 9px;
+    background: var(--ork-card-bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+}
+.cms-overflow.cms-open .cms-overflow-menu { display: block; }
+.cms-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 11px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ork-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.cms-overflow-item:hover,
+.cms-overflow-item:focus-visible {
+    background: var(--ork-bg-secondary);
+    outline: none;
+}
+.cms-overflow-item i { width: 15px; text-align: center; color: var(--ork-text-muted); }
+.cms-overflow-item.cms-overflow-danger { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger i { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger:hover,
+.cms-overflow-item.cms-overflow-danger:focus-visible { background: var(--ork-badge-red-bg); }
+.cms-overflow-sep { height: 1px; background: var(--ork-border); margin: 5px 4px; }
+
+html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, .55); }
+
+/* The primary Edit button + the overflow trigger live in the row-actions cluster. */
+.cms-row-actions .cms-overflow { margin-left: 2px; }
+
+/* ============================================================================
+ * Editor — sticky action bar (Save / Publish / Preview, always visible)
+ * ========================================================================== */
+
+.cms-editbar {
+    position: sticky;
+    top: var(--ork-header-h, 48px); /* #93: was 0 — hid behind the fixed 48px navbar */
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .18);
+}
+.cms-editbar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.cms-editbar-author { color: rgba(255, 255, 255, .7); font-size: 12.5px; }
+.cms-editbar-hint {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, .62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-editbar-hint .cms-spin { border-top-color: var(--cms-gold, #f0b429); }
+.cms-editbar-hint-dirty { color: var(--cms-gold, #f0b429); }
+.cms-editbar-hint-saved { color: #8be8a8; }
+.cms-editbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+/* Ghost buttons sit on the navy bar — lighten their text/border for contrast. */
+.cms-editbar .cms-btn-ghost {
+    border-color: rgba(255, 255, 255, .22);
+    color: rgba(255, 255, 255, .9);
+    background: rgba(255, 255, 255, .04);
+}
+.cms-editbar .cms-btn-ghost:hover {
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+}
+.cms-editbar .cms-btn-active {
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+    background: rgba(240, 180, 41, .12);
+}
+
+/* ============================================================================
+ * Editor — front-door identity banner
+ * ========================================================================== */
+
+.cms-frontdoor-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(240, 180, 41, .14), rgba(240, 180, 41, .06));
+}
+.cms-frontdoor-mark {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    color: #1a1205;
+}
+.cms-frontdoor-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cms-frontdoor-text strong { color: var(--ork-text); font-size: 14px; }
+.cms-frontdoor-text span { color: var(--ork-text-muted); font-size: 12.5px; }
+html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b429); }
+
+/* ============================================================================
+ * Editor — in-context preview pane
+ * ========================================================================== */
+
+/* The grid gains a 3rd track only when the pane is open. */
+.cms-editor-haspreview.cms-preview-active {
+    grid-template-columns: 1fr minmax(360px, 0.95fr);
+}
+.cms-preview-pane {
+    display: none;
+    position: sticky;
+    top: 64px;
+    align-self: start;
+    max-height: calc(100vh - 84px);
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 12px;
+    background: var(--ork-card-bg);
+    overflow: hidden;
+    flex-direction: column;
+}
+.cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+    display: flex;
+}
+.cms-preview-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+.cms-preview-pane-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ork-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-preview-pane-title i { color: var(--cms-gold-deep, #caa23a); }
+.cms-preview-devtoggle {
+    display: inline-flex;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 7px;
+    overflow: hidden;
+    margin-left: 6px;
+}
+.cms-devbtn {
+    border: none;
+    background: var(--ork-bg);
+    color: var(--ork-text-muted);
+    padding: 5px 9px;
+    font-size: 12.5px;
+    cursor: pointer;
+    line-height: 1;
+}
+.cms-devbtn + .cms-devbtn { border-left: 1px solid var(--ork-border-dark); }
+.cms-devbtn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-devbtn-active {
+    background: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+.cms-preview-note {
+    font-size: 11.5px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg);
+}
+.cms-preview-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    justify-content: center;
+}
+.cms-preview-frame-wrap {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    transition: max-width .18s ease;
+}
+.cms-preview-frame-wrap[data-device="mobile"] {
+    max-width: 390px;
+    box-shadow: 0 0 0 1px var(--ork-border-dark);
+}
+.cms-preview-iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    border: 0;
+    background: #fff;
+    display: block;
+}
+
+/* ============================================================================
+ * Responsive — stack on mobile
+ * ========================================================================== */
+
+@media (max-width: 1100px) {
+    /* Preview pane drops below the editor instead of a 3rd column. */
+    .cms-editor-haspreview.cms-preview-active {
+        grid-template-columns: 320px 1fr;
+    }
+    .cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: 70vh;
+    }
+}
+@media (max-width: 860px) {
+    .cms-editor { grid-template-columns: 1fr; }
+    .cms-editor-haspreview.cms-preview-active { grid-template-columns: 1fr; }
+    .cms-meta-panel { position: static; }
+    .cms-editbar-actions { width: 100%; margin-left: 0; }
+    .cms-editbar-status { flex: 1 1 100%; }
+}
+@media (max-width: 620px) {
+    .cms-grid2 { grid-template-columns: 1fr; }
+    .cms-typegrid { grid-template-columns: 1fr; }
+    .cms-block-summary { display: none; }
+    .cms-table thead { display: none; }
+    .cms-table, .cms-table tbody, .cms-table tr, .cms-table td { display: block; width: 100%; box-sizing: border-box; }
+    .cms-table tr { border-bottom: 1px solid var(--ork-border); padding: 8px 0; }
+    .cms-table td { border: none; padding: 5px 14px; }
+    .cms-row-actions { justify-content: flex-start; }
+    .cms-filters .cms-input,
+    .cms-filters .cms-select { max-width: none; flex: 1 1 100%; }
+    .cms-bulkbar-actions { margin-left: 0; width: 100%; }
+}
+
+/* Staff Roster — persona link chip + autocomplete meta.
+   Note: .cms-help and .cms-link-btn already exist above (theme-var based,
+   dark-compatible) and are reused as-is; only the new selectors are added here. */
+.cms-persona-chip{display:flex;align-items:center;gap:8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:4px 8px;margin-bottom:6px;font-size:13px;}
+.kn-ac-meta{color:#9aa3b8;font-size:12px;margin-left:6px;}
+html[data-theme="dark"] .cms-persona-chip{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+
+/* Persona-search autocomplete dropdown. It is appended to <body> (outside
+   .cms-shell) and fixed-positioned, so it is styled globally here with a SOLID
+   surface + scroll so results never bleed through onto the fields beneath. */
+.cms-persona-ac {
+    box-sizing: border-box;
+    background: var(--ork-card-bg, #ffffff);
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+}
+.cms-persona-ac .kn-ac-item {
+    display: block;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.25;
+    color: var(--ork-text, #1b2a4a);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-persona-ac .kn-ac-item:hover { background: rgba(240, 180, 41, .16); }
+.cms-persona-ac .kn-ac-none { color: var(--ork-text-muted, #8a93a6); cursor: default; }
+.cms-persona-ac .kn-ac-none:hover { background: transparent; }
+html[data-theme="dark"] .cms-persona-ac {
+    background: #1c2333;
+    border-color: #2c3650;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+}
+html[data-theme="dark"] .cms-persona-ac .kn-ac-item { color: #eef1f8; }
+html[data-theme="dark"] .cms-persona-ac .kn-ac-item:hover { background: rgba(240, 180, 41, .18); }
+
+/* ============================================================
+   Theme Editor (.theme-editor)
+   Two-column: controls left, preview right.
+   All dark-mode overrides use html[data-theme="dark"].
+   ============================================================ */
+
+.theme-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+}
+
+/* ---- Presets row ---- */
+.te-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec);
+    margin-bottom: 16px;
+}
+.te-presets-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-right: 4px;
+}
+.te-preset {
+    padding: 5px 13px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 20px;
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.te-preset:hover {
+    background: rgba(240, 180, 41, .14);
+    border-color: rgba(240, 180, 41, .5);
+}
+html[data-theme="dark"] .te-presets { border-bottom-color: #2c3650; }
+html[data-theme="dark"] .te-preset {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c8d0e0;
+}
+html[data-theme="dark"] .te-preset:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: rgba(240, 180, 41, .4);
+}
+
+/* ---- Two-column layout ---- */
+.te-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+    min-height: 0;
+}
+@media (max-width: 900px) {
+    .te-layout { grid-template-columns: 1fr; }
+}
+
+/* ---- Controls column ---- */
+.te-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* ---- Token group section ---- */
+.te-group {
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-group-title {
+    /* Reset the global h1–h6 pill style from orkui.css */
+    background: var(--ork-surface, #f4f6fa) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec) !important;
+    border-radius: 0 !important;
+    text-shadow: none !important;
+    padding: 9px 14px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.te-group-title i { font-size: 11px; }
+.te-group-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+html[data-theme="dark"] .te-group {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-group-title {
+    background: #151c2b !important;
+    border-bottom-color: #2c3650 !important;
+    color: #7a8ba6 !important;
+}
+
+/* ---- Token row ---- */
+.te-token-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+}
+.te-token-label {
+    flex: 0 0 140px;
+    font-size: 13px;
+    color: var(--ork-text, #1b2a4a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+html[data-theme="dark"] .te-token-label { color: #c0cad8; }
+
+/* Color input */
+.te-color {
+    width: 38px;
+    height: 30px;
+    padding: 2px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    cursor: pointer;
+    background: none;
+    flex: 0 0 auto;
+}
+.te-color::-webkit-color-swatch-wrapper { padding: 0; }
+.te-color::-webkit-color-swatch { border: none; border-radius: 3px; }
+.te-color-hex {
+    flex: 1 1 80px;
+    max-width: 96px;
+    font-size: 12px;
+    font-family: monospace;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+}
+html[data-theme="dark"] .te-color { border-color: #2c3650; }
+html[data-theme="dark"] .te-color-hex {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-color-hex::placeholder { color: #6b7585; }
+
+/* Select */
+.te-select {
+    flex: 1 1 auto;
+    max-width: 200px;
+    padding: 5px 8px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+}
+html[data-theme="dark"] .te-select {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+
+/* Range + number */
+.te-range-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+}
+.te-range {
+    flex: 1 1 80px;
+    accent-color: var(--cms-gold, #f0b429);
+}
+.te-number {
+    width: 60px;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    text-align: right;
+}
+.te-unit {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+}
+html[data-theme="dark"] .te-number {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+
+/* ---- Advanced details ---- */
+.te-advanced {
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-advanced-summary {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+    background: var(--ork-surface, #f4f6fa);
+    user-select: none;
+    list-style: none;
+}
+.te-advanced-summary::-webkit-details-marker { display: none; }
+.te-advanced-summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 7px;
+    font-size: 10px;
+    transition: transform .15s;
+}
+.te-advanced[open] .te-advanced-summary::before { transform: rotate(90deg); }
+.te-advanced-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.te-advanced-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    margin: 0 0 6px;
+}
+html[data-theme="dark"] .te-advanced {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-advanced-summary {
+    background: #151c2b;
+    color: #7a8ba6;
+}
+
+/* ---- Preview column ---- */
+.te-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: sticky;
+    top: 16px;
+}
+.te-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+}
+.te-preview-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+}
+html[data-theme="dark"] .te-preview-bar {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+
+/* Dark toggle */
+.te-dark-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+}
+.te-dark-toggle input { margin: 0; accent-color: var(--cms-gold, #f0b429); }
+.te-dark-toggle-track i { font-size: 11px; }
+
+/* Contrast warning */
+.te-contrast-warn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 5px;
+    padding: 3px 9px;
+}
+html[data-theme="dark"] .te-contrast-warn {
+    color: #fbbf24;
+    background: #27200a;
+    border-color: #78500a;
+}
+
+/* Preview iframe */
+.te-preview-frame {
+    display: block;
+    width: 100%;
+    height: 540px;
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+}
+html[data-theme="dark"] .te-preview-frame { border-color: #2c3650; }
+
+.te-preview-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    text-align: center;
+}
+
+/* ---- Action bar ---- */
+.te-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0 4px;
+    border-top: 1px solid var(--ork-border, #e2e6ec);
+    margin-top: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.te-actions-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+html[data-theme="dark"] .te-actions { border-top-color: #2c3650; }
+/* #97: currently-active-theme indicator in the action bar. */
+.te-active-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--ork-text-muted, #5b6472);
+}
+.te-active-status[data-active="1"] { color: var(--ork-text-secondary, #47506a); }
+.te-active-status[data-active="1"] > i { color: #16a34a; font-size: 9px; }
+.te-active-status[data-active="0"] > i { color: var(--ork-text-lighter, #9aa2ad); font-size: 10px; }
+
+/* ---- Shared button styles for the editor ---- */
+.te-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--ork-border, #d8dde6);
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    transition: background .15s, border-color .15s;
+}
+.te-btn:hover {
+    background: var(--ork-surface, #f4f6fa);
+}
+.te-btn-ghost {
+    background: transparent;
+    border-color: var(--ork-border, #d8dde6);
+    color: var(--ork-text-muted, #8a93a6);
+}
+.te-btn-ghost:hover {
+    background: var(--ork-surface, #f4f6fa);
+    color: var(--ork-text, #1b2a4a);
+}
+.te-btn-primary {
+    background: var(--cms-navy, #1b3b6f);
+    border-color: var(--cms-navy, #1b3b6f);
+    color: #fff;
+}
+.te-btn-primary:hover {
+    background: #142e58;
+    border-color: #142e58;
+}
+html[data-theme="dark"] .te-btn {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn:hover { background: #232e44; }
+html[data-theme="dark"] .te-btn-ghost {
+    background: transparent;
+    border-color: #2c3650;
+    color: #7a8ba6;
+}
+html[data-theme="dark"] .te-btn-ghost:hover {
+    background: #1c2333;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn-primary {
+    background: #2a5298;
+    border-color: #2a5298;
+    color: #fff;
+}
+html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
+
+/* Per-token inline contrast warning chip (appended to .te-token-row by JS) */
+.te-contrast-warn-inline {
+    font-size: 11px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+html[data-theme="dark"] .te-contrast-warn-inline {
+    color: #fbbf24;
+    background: #27200a;
+    border-color: #78500a;
+}
+
+/* ============================================================================
+   Dashboard (Cms_dashboard.tpl) — moved out of the page's inline <style> so the
+   rules are fetched once and cached across CMS admin views. Reuses cms-/ork-
+   tokens; dark-mode via those vars + explicit html[data-theme] overrides.
+   ============================================================================ */
+.cms-dash-greet {
+    font-family: inherit;
+    font-size: 22px;
+    color: var(--cms-gold, #f0b429);
+    margin: 0 0 4px;
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none;
+}
+.cms-dash-lede { color: var(--ork-text-muted); font-size: 14px; margin: 0 0 22px; }
+
+.cms-dash-section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.cms-dash-block { margin-bottom: 30px; }
+
+/* Quick-create cards */
+.cms-quick-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+}
+.cms-quick-card {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--ork-border-dark); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text);
+    transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
+}
+.cms-quick-card:hover {
+    border-color: var(--cms-gold, #f0b429); transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+.cms-quick-ico {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420); color: #1a1205;
+}
+.cms-quick-text strong { display: block; font-size: 15px; }
+.cms-quick-text span { font-size: 12.5px; color: var(--ork-text-muted); }
+
+/* Stat tiles */
+.cms-stat-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
+}
+.cms-stat-tile {
+    border: 1px solid var(--ork-border); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text); display: block;
+    transition: border-color .12s;
+}
+a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
+.cms-stat-num { font-size: 28px; font-weight: 800; line-height: 1; color: var(--ork-text); }
+.cms-stat-lbl { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 6px; }
+.cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
+
+/* Continue-editing list */
+.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; }
+.cms-recent-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border-bottom: 1px solid var(--ork-border); background: var(--ork-bg);
+}
+.cms-recent-item:last-child { border-bottom: none; }
+.cms-recent-item:hover { background: var(--ork-bg-secondary); }
+.cms-recent-kind {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
+}
+.cms-recent-main { flex: 1 1 auto; min-width: 0; }
+.cms-recent-title { font-weight: 600; color: var(--ork-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
+.cms-recent-actions { flex: 0 0 auto; }
+
+/* Public-site status card (Multi-Site) */
+.cms-sitecard {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
+    border-radius: 11px; background: var(--ork-bg-secondary); padding: 16px 18px;
+}
+.cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
+.cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.cms-sitecard-title .fa-globe-americas { color: var(--cms-gold-deep, #caa23a); }
+.cms-sitecard-sub { font-size: 13px; color: var(--ork-text-muted); margin-top: 5px; }
+.cms-sitecard-sub code { background: var(--ork-bg-tertiary); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+.cms-sitecard-badge { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.cms-sitecard-badge-pub { background: #1f7a3d; color: #fff; }
+.cms-sitecard-badge-draft { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px solid var(--ork-border); }
+.cms-sitecard-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
+.cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
+html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
+
+.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
+.cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
+
+@media (max-width: 560px) {
+    /* Collapse the label visually but keep the accessible name. */
+    .cms-recent-actions .cms-btn-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+/* ============================================================================
+   Scope-context banner (cms/_shell_top.tpl) — moved out of the shell's inline
+   <style> so it isn't duplicated on every scoped admin render. Dark-mode via
+   html[data-theme].
+   ============================================================================ */
+.cms-scope-banner {
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 0 18px; padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 9px;
+    background: #fff8e6; color: #4a3b12;
+    font-size: 13.5px; line-height: 1.35;
+}
+.cms-scope-banner .fa-globe-americas,
+.cms-scope-banner .cms-scope-ico { color: var(--cms-gold-deep, #caa23a); font-size: 16px; }
+.cms-scope-banner strong { font-weight: 700; }
+.cms-scope-banner .cms-scope-hint { color: #6b5a29; }
+html[data-theme="dark"] .cms-scope-banner {
+    background: rgba(240, 180, 41, .10);
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--ork-text, #e8e2d0);
+}
+html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }

@@ -758,6 +758,15 @@ body {
 	padding-top: 48px; /* clear the fixed navbar (#newmenu height: 48px) */
 	scrollbar-gutter: stable;
 }
+/* Front door only: it hides #newmenu outright (display:none, height 0) and ships its
+   own marketing nav, so the 48px navbar clearance above reserves space for a bar that
+   is never painted. Together with the UA's default 8px body margin that pushed the
+   marketing nav down 56px of dead space. #theme_container's own 10px/6px inset is
+   deliberate — it gives the rounded nav bar its gutter — so it stays. */
+body.fd-home {
+	padding-top: 0;
+	margin-top: 0;
+}
 #theme_container {
 	width: 95%;
 	max-width: 1600px;

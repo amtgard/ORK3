@@ -1,0 +1,1409 @@
+/* ============================================================
+ * Front Door stylesheet — fd- namespace
+ * Scoped under .fd-page; never bleeds into the ORK shell.
+ * ============================================================ */
+
+/* ---- Palette & base ---------------------------------------- */
+.fd-page {
+    /* Theme tokens (overridable by the theme engine) */
+    --fd-primary: #0b1120;
+    --fd-accent:  #f0b429;
+    --fd-bg:      #ffffff;
+    --fd-surface: #f7f8fa;
+    --fd-text:    #1a2236;
+    --fd-text-muted: #5b6472;
+    --fd-border:  #e2e6ec;
+    --fd-primary-contrast: #ffffff;
+    /* Not a faux-medieval face. A new site seeds no theme row, so whatever is
+       defaulted here is what every org actually ships — and faux-medieval type
+       is exactly the cosplay the brand rule forbids. The old default remains
+       selectable in the theme editor (see the PHP allowlist) for orgs that
+       deliberately want it. */
+    --fd-font-heading: 'Archivo', 'Trebuchet MS', Georgia, serif;
+    --fd-font-body: system-ui, -apple-system, sans-serif;
+    /* A LENGTH, not a ratio. CmsThemeTokens::Block() emits this token as
+       `calc(1rem * <ratio>)`, so every consumer must multiply it by a UNITLESS
+       number — `var(--fd-font-scale) * 0.6875rem` is rem x rem, which is invalid
+       at computed-value time and silently drops the whole declaration. Any
+       `var(--fd-font-scale, …)` fallback must therefore be `1rem`, never `1`. */
+    --fd-font-scale: 1rem;
+    --fd-radius: 12px;
+    --fd-space: 1;
+    --fd-border-width: 1px;
+    --fd-shadow: 0 12px 50px rgba(0, 0, 0, .4);
+
+    /* ---- Park paper scale -------------------------------------------------
+       Three values, not two. The old #fff / #f7f8fb alternation is a 4% step,
+       i.e. invisible, which is why a long page reads as sameness. These carry
+       the org's own hue at low chroma so the "white" is faintly wine or faintly
+       forest — considered rather than unstyled. --fd-primary supplies the hue
+       via --fd-primary-h, set alongside it by CmsThemeTokens::Derive(). */
+    --pk-paper:  hsl(var(--fd-primary-h, 220) 34% 98.5%);
+    --pk-vellum: hsl(var(--fd-primary-h, 220) 26% 95.5%);
+    --pk-line:   hsl(var(--fd-primary-h, 220) 18% 88%);
+    --pk-link:   var(--fd-primary);
+
+    /* The crest plate and its monogram ink. These two are the ONLY park tokens
+       that must NOT flip in dark mode — a heraldry device is artwork drawn for a
+       light field, so the disc behind it stays light and the initials on it stay
+       dark whatever the page is doing. See the dark block near the foot of this
+       file: --pk-paper et al are remapped there and these two deliberately are
+       not. */
+    --pk-seal-plate: hsl(var(--fd-primary-h, 220) 34% 98.5%);
+    --pk-seal-ink:   hsl(var(--fd-primary-h, 220) 42% 24%);
+
+    /* Legacy aliases (existing rules still reference these) */
+    /* STATIC navy — NOT aliased to --fd-primary, which dark mode redefines to a
+       periwinkle (#3b62c2). The always-dark brand bands (steps dark band,
+       photo_mosaic caption, kingdoms_teaser "+N more", cta_band, nav dropdown)
+       must stay navy in both themes. */
+    --navy:  #0b1120;
+    --navy2: #121a30;
+    --gold:  var(--fd-accent);
+    --ink:   var(--fd-text);
+
+    font-family: var(--fd-font-body);
+    color: var(--fd-text);
+    border-radius: var(--fd-radius);
+    overflow: hidden;
+    box-shadow: var(--fd-shadow);
+}
+
+.fd-page * {
+    box-sizing: border-box;
+}
+
+/* ---- Global heading reset (overrides orkui.css gray-box) --- */
+.fd-page h1,
+.fd-page h2,
+.fd-page h3,
+.fd-page h4,
+.fd-page h5,
+.fd-page h6 {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+
+/* ---- Typography helpers ------------------------------------ */
+.fd-serif {
+    font-family: var(--fd-font-heading);
+}
+
+/* Longhands, NOT the `font` shorthand: `font:` resets font-family, so the
+   shorthand silently overrode --fd-font-body on every themed site. */
+.fd-kicker {
+    font-family: var(--fd-font-body);
+    font-weight: 700;
+    /* Unit comes from the variable (a length), the literal is the bare ratio —
+       see the --fd-font-scale note in the token block above. */
+    font-size: calc(var(--fd-font-scale, 1rem) * 0.6875);
+    line-height: 1;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+
+.fd-kicker-d {
+    color: #8a6608;
+}
+
+.fd-sec-title {
+    font-family: var(--fd-font-heading);
+    font-size: 30px;
+    margin: 0;
+    color: var(--ink);
+}
+
+.fd-body-text { color: var(--fd-text); }
+
+/* Lists keep left-aligned contents even inside a center-aligned rich_text block
+   (otherwise bullets ragged-center). */
+.fd-body-text ul,
+.fd-body-text ol { text-align: left; }
+
+/* Outbound-link affordance on off-site links in body copy. */
+.fd-body-text a[href^="http"]::after {
+    content: " \2197";
+    font-size: .85em;
+    opacity: .7;
+}
+
+/* Clamp embedded media/tables/code so pasted rich-text (richtext + its rich_text
+   alias) can't force horizontal scroll on phones. */
+.fd-body-text { overflow-wrap: anywhere; }
+.fd-body-text img { max-width: 100%; height: auto; }
+.fd-body-text table { display: block; max-width: 100%; overflow-x: auto; }
+.fd-body-text pre { overflow-x: auto; max-width: 100%; }
+
+.fd-pad {
+    padding: 42px 44px;
+}
+
+/* ---- Section bands ----------------------------------------- */
+/* Light default supplied by the class (not inline style) so the dark-mode
+   override below can win. `.fd-section-light` used by richtext / events_feed /
+   blog_feed / kingdom_* section wrappers. */
+/* Bands read TOKENS, not literals. Until this change per-org theming stopped at
+   the hero: every section below it was hard-coded #fff / #f7f8fb regardless of
+   the park's palette. */
+.fd-section-light {
+    background: var(--pk-paper);
+    /* Skip style/layout/paint for off-screen block sections (below the fold).
+       The above-the-fold hero uses .fd-carousel (NOT a section wrapper), so it
+       is never lazy-rendered. `contain-intrinsic-size: auto <h>` seeds a
+       placeholder height, then remembers the real rendered size once painted —
+       keeping scrollbar length and #anchor offsets stable. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+}
+
+/* Muted band — the soft off-white used by card_grid / kingdoms_teaser section
+   wrappers. Real base rule (not a fragile inline `style="background:#f7f8fb"`
+   coupled to an attribute-selector dark override); the dark-mode override for
+   `.fd-section-muted` lives with the other section overrides below. */
+.fd-section-muted {
+    background: var(--pk-vellum);
+    /* See .fd-section-light — same off-screen render skipping; hero excluded. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+}
+
+/* ---- Buttons & links --------------------------------------- */
+.fd-btn-gold {
+    display: inline-block;
+    background: var(--gold);
+    color: #1a1205;
+    font-weight: 700;
+    padding: 14px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    box-shadow: 0 6px 18px rgba(240, 180, 41, .4);
+    text-decoration: none;
+}
+
+/* Gold-filled buttons are <a> tags; the global `#theme_container a` (ID
+   specificity) forces link-blue text in dark mode. Override with matching
+   specificity, restating the SAME dark ink the base .fd-btn-gold/.fd-nav-cta
+   rules already use (#1a1205, not a token — no "ink on accent" token exists
+   in CmsThemeTokens, and both base rules already hard-code this exact value,
+   so restating it keeps one source of truth rather than inventing a second
+   near-black). Fix round 1: this used to force white here, which measured
+   1.86:1 on the gold background (needs 4.5:1) — backwards from what the old
+   comment claimed. #1a1205 on gold measures ~10.7:1. No text-shadow needed
+   once the ink itself has real contrast. */
+#theme_container a.fd-btn-gold,
+#theme_container a.fd-btn-gold:hover,
+#theme_container a.fd-nav-cta,
+#theme_container a.fd-nav-cta:hover {
+    color: #1a1205 !important;
+}
+
+/* Ghost buttons sit on the DARK hero field (not on gold), where white is the
+   correct, legible choice — kept separate from the gold-filled pair above so
+   a future contrast fix to one never silently changes the other. */
+#theme_container a.fd-btn-ghost,
+#theme_container a.fd-btn-ghost:hover {
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+
+/* Same trap for the outline login button: `#theme_container a` is (1,0,1), so a
+   plain .fd-nav-login colour never lands and the button renders link-blue. Restate
+   both themes at ID specificity. (`inherit` is NOT the shortcut here — it would
+   pull the nav bar's colour, not the button's.) */
+#theme_container a.fd-nav-login {
+    color: #56607a;
+}
+#theme_container a.fd-nav-login:hover {
+    color: var(--fd-text);
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login {
+    color: #c8d2e6;
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
+    color: #fff;
+}
+
+/* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
+   their title/blurb are meant to be white. The global `#theme_container a` (ID
+   specificity) drags the link + its inherited children to link-blue in dark
+   mode; restore white with matching specificity. Color only (no text-shadow) so
+   light mode — already white via .fd-path — is visually unchanged. The gold
+   icon keeps its own inline color:var(--gold) (not matched here). */
+#theme_container a.fd-path,
+#theme_container a.fd-path:hover,
+#theme_container a.fd-path .fd-path-label,
+#theme_container a.fd-path .fd-serif {
+    color: #fff !important;
+}
+
+.fd-btn-ghost {
+    display: inline-block;
+    border: 1.5px solid rgba(255, 255, 255, .6);
+    color: #fff;
+    font-weight: 600;
+    padding: 14px 26px;
+    border-radius: 8px;
+    font-size: 15px;
+    text-decoration: none;
+}
+
+.fd-link {
+    color: var(--pk-link);
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.fd-link:hover {
+    text-decoration: underline;
+}
+
+/* ---- Keyboard focus (WCAG 2.4.7) — branded gold focus ring - */
+/* Custom border:0 controls (dots, lightbox buttons, nav toggle, CTA) have no
+   default focus indicator; give every interactive element a visible ring. */
+.fd-page a:focus-visible,
+.fd-page button:focus-visible,
+.fd-dot:focus-visible,
+.fd-nav-toggle:focus-visible,
+.fd-nav-cta:focus-visible,
+.fd-carousel-toggle:focus-visible,
+.fdb-gallery-thumb:focus-visible,
+.fdb-gallery-lb-btn:focus-visible,
+.fdb-gallery-lb-close:focus-visible {
+    outline: 3px solid var(--fd-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Controls sitting on the dark hero scrim get a touch more offset so the ring
+   reads clearly against the imagery. */
+.fd-slide a:focus-visible,
+.fd-dot:focus-visible,
+.fd-carousel-toggle:focus-visible,
+.fdb-gallery-lb-btn:focus-visible,
+.fdb-gallery-lb-close:focus-visible {
+    outline-offset: 3px;
+}
+
+/* ---- Card -------------------------------------------------- */
+.fd-card {
+    background: var(--fd-bg);
+    border: 1px solid var(--pk-line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ---- Empty state ------------------------------------------- */
+.fd-empty {
+    color: var(--fd-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 24px 16px;
+}
+
+/* ---- Preview-only block-render error placeholder ----------- */
+/* Emitted by render_blocks.tpl when a block throws (preview/admin only). Themed
+   so the dark-mode preview isn't a light-only card on a dark page. */
+.fd-block-error {
+    margin: 12px 16px;
+    padding: 14px 16px;
+    border: 1px dashed #c9a227;
+    border-radius: 10px;
+    background: #fbf6e7;
+    color: #5c4a12;
+    font-size: 14px;
+    line-height: 1.5;
+}
+html[data-theme="dark"] .fd-block-error {
+    border-color: #7a5b10;
+    background: #241d0c;
+    color: #e6cf8a;
+}
+
+/* ---- events_feed card sub-text (contrast on dark cards) ----
+   Light-mode values match the block's original inline colors; the dark
+   overrides lift them to >=4.5:1 on the #1b2233 card (was #778 / #1d4ed8,
+   both failing on the dark surface). */
+.fd-ev-sub {
+    font-size: 12px;
+    color: var(--fd-text-muted);
+}
+.fd-ev-rsvp {
+    font-size: 12px;
+    color: var(--pk-link);
+    margin-top: 6px;
+    font-weight: 600;
+}
+html[data-theme="dark"] .fd-ev-sub { color: #b6c0d4; }
+html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
+
+/* Event date label — darkened from #b8860b (2.9:1 on white, fails AA) to
+   #8a5d00 (>=4.5:1), matching the .fd-ev-sub treatment. Dark override keeps the
+   warm gold legible on the #1b2233 card. */
+.fd-ev-date {
+    font-size: 12px;
+    color: #8a5d00;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
+
+/* ---- Hero Carousel ----------------------------------------- */
+.fd-carousel {
+    position: relative;
+    height: 480px;
+}
+
+.fd-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+    display: flex;
+    align-items: center;
+}
+
+.fd-slide.is-active {
+    opacity: 1;
+}
+
+/* Respect reduced-motion: drop the cross-fade (JS also suppresses autoplay). */
+@media (prefers-reduced-motion: reduce) {
+    .fd-slide {
+        transition: none;
+    }
+}
+
+.fd-slide-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fd-slide-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(95deg, rgba(11, 17, 32, .94) 0%, rgba(11, 17, 32, .72) 40%, rgba(11, 17, 32, .15) 100%);
+}
+
+.fd-slide-body {
+    position: relative;
+    padding: 0 56px;
+    color: #fff;
+    max-width: 660px;
+}
+
+.fd-dots {
+    position: absolute;
+    bottom: 74px;
+    left: 56px;
+    display: flex;
+    gap: 8px;
+    z-index: 3;
+}
+
+.fd-dot {
+    position: relative;
+    width: 30px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, .35);
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+}
+
+/* Expand the pointer/touch hit target to >=24px tall (WCAG 2.5.8) without
+   changing the visible 30x4 pill. The pseudo is part of the button, so clicks
+   on it register as the dot; it extends vertically only, clearing sibling dots. */
+.fd-dot::before {
+    content: "";
+    position: absolute;
+    top: -11px;
+    bottom: -11px;
+    left: 0;
+    right: 0;
+}
+
+.fd-dot.on {
+    background: var(--gold);
+}
+
+/* Auto-advance pause/play toggle (WCAG 2.2.2) */
+.fd-carousel-toggle {
+    position: absolute;
+    bottom: 72px;
+    right: 56px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(7, 11, 22, .55);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fd-carousel-toggle:hover {
+    background: rgba(7, 11, 22, .82);
+}
+
+/* ---- Stat ticker (pinned to carousel base) ----------------- */
+.fd-stat-ticker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    /* Solid semi-opaque fill instead of backdrop-filter: blur() — the blur
+       recomputed every frame over the animating carousel behind it (jank on
+       low-end GPUs). A solid rgba reads the same and costs nothing. */
+    background: rgba(7, 11, 22, .85);
+    border-top: 1px solid rgba(240, 180, 41, .3);
+    display: flex;
+    color: #fff;
+}
+
+.fd-stat-ticker-cell {
+    flex: 1;
+    text-align: center;
+    padding: 13px 8px;
+    border-right: 1px solid rgba(255, 255, 255, .1);
+}
+
+.fd-stat-ticker-cell:last-child {
+    border-right: none;
+}
+
+.fd-stat-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--gold);
+}
+
+.fd-stat-label {
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    opacity: .7;
+}
+
+/* ---- Ways-to-Play (path) cards ----------------------------- */
+.fd-path {
+    position: relative;
+    height: 180px;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    color: #fff;
+    text-decoration: none;
+}
+
+.fd-path img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .3s;
+}
+
+.fd-path:hover img {
+    transform: scale(1.06);
+}
+
+/* Disabled ("Coming soon") card: not a link, so no hover zoom / pointer. */
+.fd-path-disabled {
+    cursor: default;
+}
+
+.fd-path-disabled:hover img {
+    transform: none;
+}
+
+/* Stronger low/mid stops so titles stay legible over pale card imagery. */
+.fd-path-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(11, 17, 32, .95) 0%, rgba(11, 17, 32, .45) 60%, rgba(11, 17, 32, 0) 100%);
+}
+
+.fd-path-label {
+    position: relative;
+    padding: 14px 16px;
+}
+
+/* "Coming soon" pill — gold-on-navy, sits inline after the card title. */
+.fd-path-badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--navy);
+    color: var(--gold);
+    font-family: var(--fd-font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(240, 180, 41, .5);
+}
+
+/* ---- Marketing nav ----------------------------------------- */
+.fd-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--fd-bg);
+    border-bottom: 1px solid var(--pk-line);
+    padding: 10px 24px;
+    position: relative;
+}
+
+.fd-logo {
+    height: 40px;
+    margin-right: 18px;
+}
+
+.fd-navlinks {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+}
+
+.fd-navitem {
+    position: relative;
+}
+
+.fd-navitem > a {
+    display: block;
+    padding: 10px 13px;
+    color: var(--fd-text);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 6px;
+}
+
+.fd-navitem > a:hover {
+    background: #f2f4f8;
+    color: #8a6608;
+}
+
+/* Active top-level nav item (current page or one of its children). */
+.fd-navitem > a.is-active {
+    color: #8a6608;
+    box-shadow: inset 0 -2px 0 var(--gold);
+    border-radius: 6px 6px 0 0;
+}
+
+.fd-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 180px;
+    background: var(--navy);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+    padding: 6px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: all .15s;
+    z-index: 30;
+}
+
+.fd-navitem:hover .fd-dropdown,
+.fd-navitem:focus-within .fd-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(2px);
+}
+
+.fd-dropdown a {
+    display: block;
+    color: #dce3f3;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 5px;
+}
+
+.fd-dropdown a:hover {
+    background: rgba(240, 180, 41, .18);
+    color: var(--gold);
+}
+
+.fd-nav-cta {
+    background: var(--gold);
+    color: #1a1205;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 9px 16px;
+    border-radius: 7px;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+/* Secondary button, deliberately NOT gold: "Find a Chapter" is the single primary
+   CTA on this bar, so this gets an outline treatment at matching metrics rather
+   than a second filled button competing with it. */
+.fd-nav-login {
+    background: transparent;
+    border: 1px solid var(--fd-border, #e2e6ec);
+    color: #56607a;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 8px 15px; /* 1px less than .fd-nav-cta's 9px/16px to absorb the border */
+    border-radius: 7px;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.fd-nav-login:hover {
+    background: rgba(240, 180, 41, .12);
+    border-color: var(--gold, #f0b429);
+    color: var(--fd-text);
+}
+
+/* Mobile nav toggle (hidden by default, shown at ≤680px) */
+.fd-nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1.5px solid #ccd0db;
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--ink);
+    margin-left: auto;
+}
+
+/* ---- Wayfinding breadcrumbs (CMS Page_view) ---------------- */
+.fd-breadcrumbs {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 14px 44px 0;
+    font-size: 12.5px;
+    color: var(--fd-text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.fd-breadcrumbs a {
+    color: var(--fd-text-muted);
+    text-decoration: none;
+}
+
+.fd-breadcrumbs a:hover {
+    color: var(--gold);
+    text-decoration: underline;
+}
+
+.fd-crumb-sep {
+    color: #aeb6c4;
+}
+
+.fd-crumb-current {
+    color: var(--fd-text);
+    font-weight: 600;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs,
+html[data-theme="dark"] .fd-breadcrumbs a {
+    color: #9aa6bd;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs a:hover {
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-crumb-current {
+    color: #dce3f3;
+}
+
+@media (max-width: 900px) {
+    .fd-breadcrumbs { padding: 12px 24px 0; }
+}
+
+@media (max-width: 680px) {
+    .fd-breadcrumbs { padding: 10px 16px 0; }
+}
+
+/* ============================================================
+ * DARK MODE — html[data-theme="dark"]
+ * Navy/dark bands stay as-is; light bands get dark surfaces.
+ * ============================================================ */
+html[data-theme="dark"] .fd-page {
+    /* Dark-mode token defaults (keep UNTHEMED dark looking like today) */
+    --fd-bg: #0e1626;
+    --fd-surface: #16203a;
+    --fd-border: #243049;
+    --fd-text: #e8ecf1;
+    --fd-text-muted: #aab3c0;
+    --fd-primary: #3b62c2;
+    --fd-accent: #f0b429;
+    --pk-paper:  var(--fd-bg);
+    --pk-vellum: var(--fd-surface);
+    --pk-line:   var(--fd-border);
+    --pk-link:   var(--fd-accent);
+    /* Direct color rule preserves current dark page-text (#dce3f3) exactly */
+    color: #dce3f3;
+}
+
+/* Light white bands → dark surface */
+html[data-theme="dark"] .fd-pad[style*="background:#fff"] {
+    background: #1a2236 !important;
+}
+
+html[data-theme="dark"] .fd-pad[style*="background:#f7f8fb"] {
+    background: #131c2e !important;
+}
+
+/* Generic section backgrounds */
+html[data-theme="dark"] .fd-section-light {
+    background: #1a2236;
+    color: #dce3f3;
+}
+
+html[data-theme="dark"] .fd-section-muted {
+    background: #131c2e;
+    color: #dce3f3;
+}
+
+/* Cards */
+html[data-theme="dark"] .fd-card {
+    background: #1e2a3e;
+    border-color: #2e3d55;
+    color: #dce3f3;
+}
+
+/* Nav bar */
+html[data-theme="dark"] .fd-nav {
+    background: #111827;
+    border-bottom-color: #2e3d55;
+}
+
+html[data-theme="dark"] .fd-navitem > a {
+    color: #dce3f3;
+}
+
+html[data-theme="dark"] .fd-navitem > a:hover {
+    background: #1e2a3e;
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-navitem > a.is-active {
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-nav-login {
+    border-color: #2f3a52;
+    color: #c8d2e6;
+}
+
+html[data-theme="dark"] .fd-nav-login:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: var(--gold, #f0b429);
+    color: #fff;
+}
+
+html[data-theme="dark"] .fd-dropdown {
+    background: #0b1120;
+}
+
+html[data-theme="dark"] .fd-nav-toggle {
+    /* The mobile hamburger is the ONLY nav opener <=680px; the old #1a2236 made
+       it near-invisible (~1.2:1) on the dark nav. Use a light glyph color. */
+    color: #e8edf8;
+}
+
+/* Section titles and body text */
+html[data-theme="dark"] .fd-sec-title {
+    color: #e8edf8;
+}
+
+html[data-theme="dark"] .fd-body-text { color: #c8d3ea; }
+
+html[data-theme="dark"] .fd-kicker-d {
+    color: #c9940c;
+}
+
+/* Links */
+html[data-theme="dark"] .fd-link {
+    color: #7ba3f5;
+}
+
+html[data-theme="dark"] .fd-link:hover {
+    color: #a5c2ff;
+}
+
+/* Empty state */
+html[data-theme="dark"] .fd-empty {
+    color: #8899aa;
+}
+
+/* Buttons: gold stays, ghost border brightens slightly */
+html[data-theme="dark"] .fd-btn-ghost {
+    border-color: rgba(255, 255, 255, .5);
+}
+
+/* Member bar (navy2) already dark — no change needed */
+
+/* Stat ticker already dark — no change needed */
+
+/* Path cards: dark scrim already covers images — no change needed */
+
+/* ============================================================
+ * RESPONSIVE
+ * ============================================================ */
+
+/* ---- 900px: 3-col grids → 2 col; mosaic stacks ----------- */
+@media (max-width: 900px) {
+    .fd-pad {
+        padding: 32px 24px;
+    }
+
+    /* Path grid */
+    .fd-paths-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Events grid */
+    .fd-events-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Kingdoms grid */
+    .fd-kingdoms-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    /* Photo mosaic: stack into single column */
+    .fd-mosaic {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+    }
+
+    .fd-mosaic > * {
+        grid-row: span 1 !important;
+        /* !important beats the tile's inline height:100% so stacked tiles are a
+           uniform 200px on phones (otherwise the image height wins). */
+        height: 200px !important;
+    }
+
+    .fd-mosaic > * img {
+        object-fit: cover;
+    }
+}
+
+/* ---- 680px: carousel height, hero text, nav hamburger ----- */
+@media (max-width: 680px) {
+    .fd-carousel {
+        height: 360px;
+    }
+
+    .fd-slide-body {
+        padding: 0 24px;
+    }
+
+    .fd-hero-headline {
+        font-size: 34px !important;
+    }
+
+    /* Raised above the 2-row (2×2) stat ticker so the dots + play/pause toggle
+       don't collide with it on phones (ticker wraps to ~double height here). */
+    .fd-dots {
+        left: 24px;
+        bottom: 150px;
+    }
+
+    .fd-carousel-toggle {
+        right: 24px;
+        bottom: 148px;
+    }
+
+    /* Stat ticker: 2×2 grid */
+    .fd-stat-ticker {
+        flex-wrap: wrap;
+    }
+
+    .fd-stat-ticker-cell {
+        flex: 0 0 50%;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .fd-stat-ticker-cell:nth-child(odd) {
+        border-right: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .fd-stat-ticker-cell:nth-last-child(-n+2) {
+        border-bottom: none;
+    }
+
+    /* Nav: hide links, show hamburger toggle */
+    .fd-navlinks {
+        display: none;
+        flex-direction: column;
+        align-items: flex-start;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--fd-bg);
+        border-bottom: 1px solid var(--pk-line);
+        padding: 8px 16px 16px;
+        z-index: 50;
+        gap: 0;
+    }
+
+    .fd-nav.fd-nav-open .fd-navlinks {
+        display: flex;
+    }
+
+    .fd-nav-toggle {
+        display: inline-flex;
+    }
+
+    .fd-navitem {
+        width: 100%;
+    }
+
+    .fd-navitem > a {
+        padding: 11px 8px;
+        font-size: 14px;
+    }
+
+    .fd-dropdown {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        box-shadow: none;
+        background: rgba(11, 17, 32, .05);
+        border-radius: 6px;
+        margin: 0 0 4px 16px;
+        padding: 4px;
+    }
+
+    .fd-dropdown a {
+        color: var(--ink);
+    }
+
+    .fd-nav-login,
+    .fd-nav-cta {
+        display: none;
+    }
+
+    .fd-nav.fd-nav-open .fd-nav-login,
+    .fd-nav.fd-nav-open .fd-nav-cta {
+        display: block;
+        text-align: center;
+        margin-top: 8px;
+        width: 100%;
+    }
+
+    /* Member bar stays VISIBLE on phones for org sites. The original rule hid it
+       "to reclaim above-the-fold", which is right for the global marketing front
+       door and exactly backwards for a park: the highest-frequency visit a park
+       site ever gets is a member checking the time on a phone in a parking lot. */
+    .fd-member-bar {
+        display: none !important;
+        flex-wrap: wrap;
+        gap: 8px 14px !important;
+        padding: 10px 16px !important;
+    }
+    .fd-org .fd-member-bar,
+    body.fd-org .fd-member-bar {
+        display: flex !important;
+    }
+
+    /* Path grid already 2-col from 900px break */
+    /* Events: single col */
+    .fd-events-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Kingdoms: 3-col */
+    .fd-kingdoms-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+
+    /* Pad sections */
+    .fd-pad {
+        padding: 28px 16px;
+    }
+
+    /* Dark mode nav open override */
+    html[data-theme="dark"] .fd-navlinks {
+        background: #111827;
+        border-bottom-color: #2e3d55;
+    }
+
+    html[data-theme="dark"] .fd-dropdown {
+        background: rgba(255, 255, 255, .05);
+    }
+
+    html[data-theme="dark"] .fd-dropdown a {
+        color: #dce3f3;
+    }
+}
+
+/* ---- 680px: heading block font sizes step down ------------- */
+/* Matches the tpl's `.fdb-heading-wrap .fdb-heading-N` specificity so the
+   reduced sizes win (a media query adds no specificity). Mirrors the hero
+   headline responsive step-down. */
+@media (max-width: 680px) {
+    .fdb-heading-wrap .fdb-heading-1 { font-size: 30px !important; }
+    .fdb-heading-wrap .fdb-heading-2 { font-size: 26px !important; }
+}
+
+/* ---- 520px: path grid collapses to a single column --------- */
+/* !important required: the 900px rule setting 2-col is itself !important, so an
+   unmarked 1-col rule here would lose the importance tie. Mirrors the
+   gallery/kingdoms/events step-down to one column on phones. */
+@media (max-width: 520px) {
+    .fd-paths-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 420px) {
+    /* !important required: the <=680px 3-col rule above is itself !important, so
+       an unmarked 2-col rule here would lose the specificity/importance tie. */
+    .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ---- staff_roster block ---- */
+.fd-roster-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,260px));justify-content:center;gap:18px;max-width:1100px;margin:0 auto;}
+.fd-roster-card{display:flex;flex-direction:column;align-items:center;text-align:center;background:var(--fd-bg);border:1px solid #e6e8ef;border-radius:12px;padding:20px 16px;text-decoration:none;color:inherit;transition:box-shadow .15s ease,transform .15s ease;}
+a.fd-roster-card:hover{box-shadow:0 6px 18px rgba(20,30,60,.12);transform:translateY(-2px);}
+.fd-roster-photo{width:96px;height:96px;border-radius:50%;object-fit:cover;margin-bottom:12px;background:#eef0f6;}
+.fd-roster-photo-empty{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--gold);font-weight:700;font-size:32px;line-height:1;font-family:var(--fd-font-body);}
+/* Roster subheading (intro line under the section title). Light-mode value
+   matches the block's original #667; the dark override lifts it to a legible
+   muted tone once the blocks-tpl shard swaps the inline #667 for this class. */
+.fd-roster-sub{color:#667;margin:6px 0 0;font-size:15px;text-align:center;}
+html[data-theme="dark"] .fd-roster-sub{color:#9aa3b8;}
+.fd-roster-name{font-size:19px;font-weight:600;color:var(--fd-text);}
+.fd-roster-secondary{font-size:13px;color:#6b7488;margin-top:2px;}
+.fd-roster-role{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-top:6px;font-weight:600;}
+.fd-roster-bio{font-size:14px;color:#4a5168;margin-top:10px;line-height:1.5;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;}
+html[data-theme="dark"] .fd-roster-card{background:#1c2333;border-color:#2c3650;}
+html[data-theme="dark"] .fd-roster-name{color:#eef1f8;}
+html[data-theme="dark"] .fd-roster-secondary{color:#9aa3b8;}
+html[data-theme="dark"] .fd-roster-bio{color:#c3c9d8;}
+html[data-theme="dark"] .fd-roster-photo{background:#2c3650;}
+/* Keep the monogram tile navy+gold in dark mode (beats the generic photo bg). */
+html[data-theme="dark"] .fd-roster-photo-empty{background:var(--navy);color:var(--gold);}
+
+/* ---- kingdom_officers block (was per-render inline <style>) ----
+   Moved here so it is downloaded once, cacheable, and not duplicated when the
+   block repeats. Loaded in every context the block renders (frontdoor.css is
+   pulled in on the global front door AND layered under orgsite.css on org
+   sites). Kept byte-for-byte identical to the former inline rules. */
+.ko-block { background: var(--fd-bg); }
+.ko-head { margin-bottom: 18px; }
+.ko-title { margin: 0; font-size: 24px; }
+.ko-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.ko-card {
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-radius: 10px;
+    padding: 18px 14px; text-align: center;
+}
+.ko-avatar {
+    width: 72px; height: 72px; margin: 0 auto 10px; border-radius: 50%;
+    background: #eef1f6; border: 2px solid var(--gold, #d4af37); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.ko-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ko-avatar i { font-size: 28px; color: #b8bfce; }
+.ko-role { font-size: 12px; color: #8a6608; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ko-name { font-weight: 700; font-size: 15px; margin-top: 4px; color: var(--fd-text); }
+.ko-empty { color: var(--fd-text-muted); font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 900px) { .ko-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .ko-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .ko-block { background: transparent; }
+html[data-theme="dark"] .ko-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .ko-avatar { background: #232c42; }
+html[data-theme="dark"] .ko-name { color: #eef2fa; }
+html[data-theme="dark"] .ko-role { color: #c9940c; }
+html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
+
+/* ---- park_meeting block (PARK sites) ----
+   "When and where we meet" — the thing a newcomer actually came for, so it reads
+   as an information card rather than a marketing panel. park_officers reuses the
+   .ko-* grid above; only this block and .pe-* below need their own rules.
+   Kept here (not inline style-once) so both themes live in one place. */
+.pm-block { background: var(--fd-bg); }
+.pm-head { margin-bottom: 18px; }
+.pm-title { margin: 0; font-size: 24px; }
+.pm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.pm-card {
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-left: 4px solid var(--gold, #d4af37);
+    border-radius: 10px; padding: 16px 18px;
+}
+.pm-when { font-weight: 700; font-size: 15px; color: var(--fd-text); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.pm-when i { color: var(--gold, #d4af37); }
+.pm-time { font-weight: 600; font-size: 13px; color: var(--fd-text-muted); }
+.pm-online {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    background: #e8f0fe; color: var(--pk-link); border-radius: 999px; padding: 2px 8px;
+}
+.pm-purpose { font-size: 13px; color: var(--fd-text-muted); margin-top: 4px; }
+.pm-place { font-weight: 600; font-size: 14px; color: var(--fd-text); margin-top: 8px; }
+.pm-addr { font-size: 13px; color: var(--fd-text-muted); margin-top: 2px; }
+.pm-note { font-size: 13px; color: var(--fd-text-muted); margin-top: 8px; line-height: 1.5; }
+.pm-map { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--pk-link); text-decoration: none; }
+.pm-map:hover { text-decoration: underline; }
+.pm-map i { font-size: 11px; }
+.pm-empty { color: var(--fd-text-muted); font-style: italic; text-align: center; padding: 18px; }
+.pm-directions { margin-top: 18px; padding: 14px 16px; background: #f6f8fc; border-radius: 10px; }
+.pm-directions-h { font-weight: 700; font-size: 14px; color: var(--fd-text); margin-bottom: 6px; }
+.pm-directions-h i { color: var(--gold, #d4af37); }
+.pm-directions-b { font-size: 13px; color: var(--fd-text-muted); line-height: 1.6; }
+
+@media (max-width: 820px) { .pm-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .pm-block { background: transparent; }
+html[data-theme="dark"] .pm-card { background: #1b2233; border-color: #2c3650; border-left-color: var(--gold, #d4af37); }
+html[data-theme="dark"] .pm-when { color: #eef2fa; }
+html[data-theme="dark"] .pm-time { color: #b6c0d4; }
+html[data-theme="dark"] .pm-online { background: #24304a; color: #7ba7f2; }
+html[data-theme="dark"] .pm-purpose { color: #b6c0d4; }
+html[data-theme="dark"] .pm-place { color: #eef2fa; }
+html[data-theme="dark"] .pm-addr { color: #9aa6bd; }
+html[data-theme="dark"] .pm-note { color: #b6c0d4; }
+html[data-theme="dark"] .pm-map { color: #7ba7f2; }
+html[data-theme="dark"] .pm-directions { background: #1b2233; }
+html[data-theme="dark"] .pm-directions-h { color: #eef2fa; }
+html[data-theme="dark"] .pm-directions-b { color: #b6c0d4; }
+
+/* ---- park_events block (PARK sites) ----
+   Same date-card treatment as kingdom_events' .ke-*, in its own namespace so the
+   two blocks stay independently editable. They can never co-occur (each returns
+   early outside its own scope), so this is duplication on disk only. */
+.pe-block { background: var(--fd-bg); }
+.pe-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
+.pe-title { margin: 0; font-size: 24px; }
+.pe-more { color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.pe-more:hover { text-decoration: underline; }
+.pe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.pe-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-radius: 10px; overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.pe-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
+.pe-card-accent { height: 8px; background: var(--gold, #d4af37); }
+.pe-card-body { padding: 16px; }
+.pe-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.pe-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
+.pe-card-rsvp { font-size: 12px; color: var(--pk-link); margin-top: 6px; font-weight: 600; }
+.pe-empty { color: var(--fd-text-muted); font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 820px) { .pe-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .pe-block { background: transparent; }
+html[data-theme="dark"] .pe-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .pe-card-name { color: #eef2fa; }
+html[data-theme="dark"] .pe-card-date { color: #d8b74a; }
+html[data-theme="dark"] .pe-card-rsvp { color: #7ba7f2; }
+html[data-theme="dark"] .pe-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ---- kingdom_events block (was per-render inline <style>) ----
+   Moved verbatim out of kingdom_events.tpl for the same reason as .ko-* above:
+   downloaded once and cacheable rather than re-emitted per render.
+   NOT merged with the .pe-* set above even though the two look alike — they are
+   deliberately NOT identical. Kingdom cards show the park name (.ke-card-sub has
+   no .pe-* counterpart) and .pe-* carries a dark-mode .pe-card-date rule that
+   .ke-* intentionally does not. Merging would change this block's dark
+   appearance. The two can never co-occur (each returns early outside its own
+   scope), so this is duplication on disk only. */
+.ke-block { background: var(--fd-bg); }
+.ke-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
+.ke-title { margin: 0; font-size: 24px; }
+.ke-more { color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.ke-more:hover { text-decoration: underline; }
+.ke-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ke-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-radius: 10px; overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.ke-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
+.ke-card-accent { height: 8px; background: var(--gold, #d4af37); }
+.ke-card-body { padding: 16px; }
+.ke-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ke-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
+.ke-card-sub { font-size: 12px; color: var(--fd-text-muted); }
+.ke-card-rsvp { font-size: 12px; color: var(--pk-link); margin-top: 6px; font-weight: 600; }
+.ke-empty { color: var(--fd-text-muted); font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 820px) { .ke-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .ke-block { background: transparent; }
+html[data-theme="dark"] .ke-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .ke-card-name { color: #eef2fa; }
+html[data-theme="dark"] .ke-card-sub { color: #b6c0d4; }
+html[data-theme="dark"] .ke-card-rsvp { color: #7ba7f2; }
+html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ---- blog_feed block (was per-render inline <style>) ----
+   Same rationale as .ko-* above. blog_feed is a GLOBAL block (renders on the
+   front door too), so it lives here in frontdoor.css — which is loaded in both
+   contexts — rather than the org-only orgsite.css. */
+.bf-block { background: var(--fd-bg); }
+.bf-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
+.bf-title { margin: 0; font-size: 24px; }
+.bf-more { color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.bf-more:hover { text-decoration: underline; }
+.bf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.bf-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-radius: 10px; overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.bf-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
+.bf-card-accent { height: 6px; background: var(--gold, #d4af37); }
+.bf-card-body { padding: 14px 16px 16px; }
+.bf-card-date { font-size: 12px; color: #8a6608; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.bf-card-title { font-weight: 700; font-size: 15px; margin: 5px 0 6px; line-height: 1.3; color: var(--fd-text); }
+.bf-card-excerpt { font-size: 13px; color: var(--fd-text); line-height: 1.45; margin: 0; }
+.bf-empty { color: var(--fd-text-muted); font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 820px) { .bf-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .bf-block { background: transparent; }
+html[data-theme="dark"] .bf-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .bf-card-title { color: #eef2fa; }
+html[data-theme="dark"] .bf-card-date { color: #c9940c; }
+html[data-theme="dark"] .bf-card-excerpt { color: #b6c0d4; }
+html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ---- Blog feed page (Blog_index.tpl; scoped under .fd-page) -------------- */
+.blog-wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 56px; }
+.blog-head { display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
+.blog-title {
+    margin: 0; font-size: 30px; line-height: 1.1;
+}
+.blog-rss {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #8a6608; font-weight: 700; font-size: 13px; text-decoration: none;
+}
+.blog-rss:hover { text-decoration: underline; }
+.blog-tagnote { font-size: 13px; color: #667; margin: -14px 0 22px; }
+.blog-tagnote a { color: var(--pk-link); text-decoration: none; }
+.blog-tagnote a:hover { text-decoration: underline; }
+
+.blog-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+}
+.blog-card {
+    display: flex; flex-direction: column; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid var(--pk-line); border-radius: 12px;
+    overflow: hidden; transition: box-shadow .15s ease, transform .15s ease;
+}
+.blog-card:hover { box-shadow: 0 8px 24px rgba(20,30,60,.12); transform: translateY(-2px); }
+.blog-card-accent { height: 6px; background: var(--gold, #d4af37); }
+.blog-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.blog-card-meta { font-size: 12px; color: #8a93a6; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.blog-card-title { font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: var(--fd-text); }
+.blog-card-excerpt { font-size: 14px; color: var(--fd-text); line-height: 1.5; margin: 0; }
+.blog-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
+/* Tag pill — shared by the blog index (.blog-tag) and single-post (.blogp-tag)
+   chrome so the pill styling lives in one place; only size/padding differ. */
+.blog-tag, .blogp-tag {
+    font-weight: 600; color: #475063;
+    background: #eef1f7; border: 1px solid #dde2ec; border-radius: 999px;
+    text-decoration: none;
+}
+.blog-tag { font-size: 11px; padding: 2px 9px; }
+.blog-tag:hover, .blogp-tag:hover { background: #e3e8f3; }
+
+.blog-pager { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 36px; }
+.blog-pager-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid #d3d9e6; border-radius: 8px; padding: 8px 16px;
+    font-weight: 600; font-size: 14px; color: var(--fd-text); text-decoration: none; background: #fff;
+}
+.blog-pager-btn:hover { background: #f3f5fa; }
+.blog-pager-btn.is-disabled { opacity: .4; pointer-events: none; }
+.blog-pager-info { font-size: 13px; color: #667; }
+
+@media (max-width: 860px) { .blog-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .blog-grid { grid-template-columns: 1fr; } }
+
+/* :hover paired deliberately — .blog-rss is an <a>, and orkui.css's global
+   html[data-theme="dark"] a:hover (0,2,2) outranks a bare (0,2,1) rule here, which
+   would flip the link from gold to blue on hover in dark mode only. */
+html[data-theme="dark"] .blog-rss,
+html[data-theme="dark"] .blog-rss:hover { color: #c9940c; }
+html[data-theme="dark"] .blog-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .blog-card-title { color: #eef2fa; }
+html[data-theme="dark"] .blog-card-excerpt { color: #b6c0d4; }
+html[data-theme="dark"] .blog-card-meta { color: #8794ad; }
+html[data-theme="dark"] .blog-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+html[data-theme="dark"] .blog-tag,
+html[data-theme="dark"] .blogp-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
+html[data-theme="dark"] .blog-tag:hover,
+html[data-theme="dark"] .blogp-tag:hover { background: #2c3650; }
+html[data-theme="dark"] .blog-tagnote { color: #9aa6bd; }
+html[data-theme="dark"] .blog-pager-btn { background: #1b2233; border-color: #2c3650; color: #eef2fa; }
+html[data-theme="dark"] .blog-pager-btn:hover { background: #232c42; }
+html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
+
+/* ---- Blog entry — single post (was per-render inline <style> in Blog_post.tpl)
+   Scoped under .fd-page. Post bodies reuse the front-door block renderer, so
+   they inherit front-door block styling; these .blogp-* rules cover the chrome
+   (title/meta/tags/hero) around that body. */
+.blogp-wrap { max-width: 820px; margin: 0 auto; padding: 28px 20px 8px; }
+.blogp-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 20px;
+}
+.blogp-back:hover { text-decoration: underline; }
+.blogp-title {
+    margin: 0 0 10px; font-size: 34px; line-height: 1.15; color: #16203a;
+}
+.blogp-meta { font-size: 14px; color: #6b7488; margin-bottom: 14px; }
+.blogp-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+/* .blogp-tag shares the pill base with .blog-tag (grouped above); only the
+   slightly larger size/padding is post-specific. */
+.blogp-tag { font-size: 12px; padding: 3px 11px; }
+.blogp-hero {
+    margin: 18px 0 6px; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--pk-line); background: #f2f4f8;
+}
+.blogp-hero img { display: block; width: 100%; height: auto; }
+.blogp-body { margin-top: 8px; }
+.blogp-empty { padding: 2rem; text-align: center; color: var(--fd-text-muted); }
+.blogp-footer { max-width: 820px; margin: 0 auto; padding: 8px 20px 48px; }
+
+html[data-theme="dark"] .blogp-title { color: #eef2fa; }
+html[data-theme="dark"] .blogp-meta { color: #9aa6bd; }
+/* .blogp-tag dark styling is grouped with .blog-tag above. */
+html[data-theme="dark"] .blogp-hero { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }
