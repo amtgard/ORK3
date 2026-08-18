@@ -722,6 +722,7 @@
 												alt="">
 											<?php if ($isDraft): ?><span class="kn-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?>
 											<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+											<?php if (!empty($event['IsShared'])): ?><span class="kn-shared-pill" data-tip="Hosted by <?= htmlspecialchars($event['OwningKingdomName']) ?> — shared with this kingdom"><i class="fas fa-share-alt"></i> Shared<?php if (!empty($event['OwningKingdomName'])): ?> · <?= htmlspecialchars($event['OwningKingdomName']) ?><?php endif; ?></span><?php endif; ?>
 											<?php if (!empty($event['MonarchRsvp'])): ?><span class="kn-royal-badge kn-royal-monarch" data-tip="Kingdom Monarch in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
 											<?php if (!empty($event['RegentRsvp'])): ?><span class="kn-royal-badge kn-royal-regent" data-tip="Kingdom Regent in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
 										</td>
@@ -2235,6 +2236,12 @@ var KnBannerConfig = {
 .kn-cal-royal-crown.kn-crown-pm { color: #2c5f8b; }  /* principality monarch — steel blue (matches Pr map pins) */
 .kn-cal-royal-crown.kn-crown-pr { color: #7ba0c4; }  /* principality regent — light steel */
 
+/* ---- Shared (cross-kingdom) event pill ---- */
+.kn-shared-pill { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.02em;
+	padding:2px 7px; border-radius:10px; margin-left:5px; vertical-align:middle;
+	background:#e6f0fb; color:#1f5fa8; border:1px solid #b9d4f0; white-space:nowrap; }
+html[data-theme="dark"] .kn-shared-pill { background:#1c2e44; color:#7fb6ee; border-color:#2f5277; }
+
 /* ---- Copy-link icon ---- */
 .kn-copy-link {
 	display: inline-flex; align-items: center; justify-content: center;
@@ -2986,6 +2993,11 @@ function knBuildEventRow(e, fallbackHeraldry, uir) {
 	var nameHtml = detailHref
 		? '<a href="' + detailHref + '">' + knEscape(e.Name) + '</a>'
 		: knEscape(e.Name);
+	if (e.IsShared) {
+		var owner = e.OwningKingdomName ? (' \u00b7 ' + knEscape(e.OwningKingdomName)) : '';
+		var ownerTip = 'Hosted by ' + knEscapeAttr(e.OwningKingdomName || '') + ' — shared with this kingdom';
+		nameHtml += ' <span class="kn-shared-pill" data-tip="' + ownerTip + '"><i class="fas fa-share-alt"></i> Shared' + owner + '</span>';
+	}
 	var dateHtml = e.NextDateText ? knEscape(e.NextDateText) : '<span style="color:#a0aec0">&mdash;</span>';
 	var heraldry = e.HeraldryUrl || fallbackHeraldry;
 

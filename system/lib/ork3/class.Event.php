@@ -1257,4 +1257,199 @@ class Event extends Ork3
             return NoAuthorization();
         }
     }
+
+    // ---- Cross-kingdom event sharing -------------------------------------
+    // Sharing is a kingdom prerogative: requires AUTH_KINGDOM/edit over the
+    // TARGET kingdom (the one being shared INTO), not the event's owner. Park
+    // officers cannot share. Only published events are shareable, never the
+    // event's own owning kingdom (no-op). Display-only — never affects
+    // ownership, attendance, or reporting.
+
+    public function ShareEventToKingdom($request)
+    {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $event_id   = (int)($request['EventId'] ?? 0);
+        $kingdom_id = (int)($request['KingdomId'] ?? 0);
+        if ($mundane_id <= 0) {
+            return NoAuthorization();
+        }
+        if (!valid_id($event_id) || !valid_id($kingdom_id)) {
+            return InvalidParameter();
+        }
+
+        // Kingdom prerogative: AUTH_KINGDOM/edit over the TARGET kingdom. This
+        // gate runs BEFORE the event is loaded so an unauthorized caller can
+        // never distinguish "not found" / "draft" / "own kingdom" — otherwise
+        // the endpoint is an oracle for draft events and event ownership.
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        // Load the event: must exist, be published, and not already own this kingdom.
+        global $DB;
+        $DB->Clear();
+        $row = $DB->DataSet("SELECT kingdom_id, COALESCE(status,'published') AS status FROM " . DB_PREFIX . "event WHERE event_id = " . $event_id . " LIMIT 1");
+        if (!$row || !$row->Next()) {
+            return InvalidParameter('Event not found.');
+        }
+        $owning_kingdom = (int)$row->kingdom_id;
+        $status         = (string)$row->status;
+        if ($status !== 'published') {
+            return InvalidParameter('Only published events can be shared.');
+        }
+        if ($owning_kingdom === $kingdom_id) {
+            return InvalidParameter('Event already belongs to this kingdom.');
+        }
+
+        // Idempotent insert.
+        $DB->Clear();
+        $DB->Execute("INSERT IGNORE INTO " . DB_PREFIX . "event_kingdom_share (event_id, kingdom_id, shared_by_mundane_id, created) VALUES (" . $event_id . ", " . $kingdom_id . ", " . (int)$mundane_id . ", NOW())");
+        return Success();
+    }
+
+    public function UnshareEventFromKingdom($request)
+    {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $event_id   = (int)($request['EventId'] ?? 0);
+        $kingdom_id = (int)($request['KingdomId'] ?? 0);
+        if ($mundane_id <= 0) {
+            return NoAuthorization();
+        }
+        if (!valid_id($event_id) || !valid_id($kingdom_id)) {
+            return InvalidParameter();
+        }
+
+        // Either side of the association may revoke it: an officer of the TARGET
+        // kingdom (it is on their Events tab) or an officer of the event's OWNING
+        // kingdom (it is their event being co-listed). Loading the owner here is
+        // safe: unlike the share path, this reveals nothing to a caller who fails
+        // both checks — they get a plain NoAuthorization() either way.
+        global $DB;
+        $DB->Clear();
+        $ev = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = " . $event_id . " LIMIT 1");
+        $owning_kingdom = ($ev && $ev->Next()) ? (int)$ev->kingdom_id : 0;
+
+        $may_unshare = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
+            || (valid_id($owning_kingdom)
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $owning_kingdom, AUTH_EDIT));
+        if (!$may_unshare) {
+            return NoAuthorization();
+        }
+
+        $DB->Clear();
+        $DB->Execute("DELETE FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . $event_id . " AND kingdom_id = " . $kingdom_id);
+        return Success();
+    }
+
+    // Kingdoms the viewer may share this event INTO: every active kingdom for
+    // which HasAuthority(AUTH_KINGDOM, edit) holds (park grants do NOT qualify,
+    // and this is the same check the share write path makes). Excludes the
+    // event's own owning kingdom; each entry carries whether it is already shared.
+    public function GetShareableKingdomsForEvent($request)
+    {
+        $mundane_id     = (int)($request['MundaneId'] ?? 0);
+        $event_id       = (int)($request['EventId'] ?? 0);
+        $owning_kingdom = (int)($request['OwningKingdomId'] ?? 0);
+        if ($mundane_id <= 0 || !valid_id($event_id)) {
+            return ['Status' => Success(), 'Kingdoms' => []];
+        }
+
+        // Fast path: authority over ANY kingdom requires either a true
+        // all-zero-scope global-admin row, or some grant scoped to a kingdom
+        // (possibly an ancestor, which HasAuthority reaches by walking
+        // parent_kingdom_id). A viewer with neither cannot share anywhere, so
+        // skip the per-kingdom loop entirely rather than asking HasAuthority
+        // the same question once per kingdom. Most logged-in viewers of an
+        // event page are in exactly this case.
+        global $DB;
+        $DB->Clear();
+        $gate = $DB->DataSet(
+            "SELECT 1 FROM " . DB_PREFIX . "authorization
+             WHERE mundane_id = " . $mundane_id . "
+               AND (
+                     (kingdom_id > 0 AND role IN ('create','edit','admin'))
+                  OR (role = 'admin' AND park_id = 0 AND kingdom_id = 0 AND unit_id = 0 AND event_id = 0)
+                   )
+             LIMIT 1"
+        );
+        if (!$gate || !$gate->Next()) {
+            return ['Status' => Success(), 'Kingdoms' => []];
+        }
+
+        // Candidate set = every kingdom except the event's own. Each candidate
+        // is then filtered through the SAME HasAuthority() call the write path
+        // uses, so the rendered buttons cannot disagree with the gate: this
+        // picks up principality traversal (a grant on a parent kingdom confers
+        // authority over its children) and true global-admin grants, both of
+        // which a hand-rolled ork_authorization query missed. Deliberately NOT
+        // filtered on k.active — the write gate does not check it either, and
+        // any extra predicate here re-creates the display/enforcement split
+        // this method exists to close.
+        $DB->Clear();
+        $rows = $DB->DataSet(
+            "SELECT k.kingdom_id, k.name AS kingdom_name
+             FROM " . DB_PREFIX . "kingdom k
+             WHERE k.kingdom_id <> " . $owning_kingdom . "
+             ORDER BY k.name"
+        );
+        $candidates = [];
+        if ($rows) {
+            while ($rows->Next()) {
+                $candidates[] = [(int)$rows->kingdom_id, (string)$rows->kingdom_name];
+            }
+        }
+
+        $alreadyShared = [];
+        $DB->Clear();
+        $sh = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . $event_id);
+        if ($sh) {
+            while ($sh->Next()) {
+                $alreadyShared[(int)$sh->kingdom_id] = true;
+            }
+        }
+
+        $kingdoms = [];
+        foreach ($candidates as $candidate) {
+            list($kid, $kname) = $candidate;
+            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kid, AUTH_EDIT)) {
+                continue;
+            }
+            $kingdoms[] = [
+                'KingdomId'   => $kid,
+                'KingdomName' => $kname,
+                'IsShared'    => isset($alreadyShared[$kid]),
+            ];
+        }
+        return ['Status' => Success(), 'Kingdoms' => $kingdoms];
+    }
+
+    public function GetSharedKingdomsForEvent($request)
+    {
+        $event_id = (int)($request['EventId'] ?? 0);
+        if (!valid_id($event_id)) {
+            return ['Status' => InvalidParameter(), 'KingdomIds' => []];
+        }
+        global $DB;
+        $DB->Clear();
+        $rs = $DB->DataSet(
+            "SELECT s.kingdom_id, k.name AS kingdom_name
+             FROM " . DB_PREFIX . "event_kingdom_share s
+             LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = s.kingdom_id
+             WHERE s.event_id = " . $event_id . "
+             ORDER BY k.name"
+        );
+        $ids      = [];
+        $kingdoms = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $kid        = (int)$rs->kingdom_id;
+                $ids[]      = $kid;
+                $kingdoms[] = [
+                    'KingdomId'   => $kid,
+                    'KingdomName' => (string)$rs->kingdom_name,
+                ];
+            }
+        }
+        return ['Status' => Success(), 'KingdomIds' => $ids, 'Kingdoms' => $kingdoms];
+    }
 }

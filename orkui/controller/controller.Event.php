@@ -495,6 +495,43 @@ class Controller_Event extends Controller
         $_evtStatus = (string)($occurrencePage['EventStatus'] ?? 'published');
         $_evtCreator = (int)($occurrencePage['CreatorId'] ?? 0);
         $this->data['EventStatus']        = $_evtStatus;
+        // Cross-kingdom sharing control: kingdoms the viewer can share this event
+        // INTO. A kingdom prerogative — determined by HasAuthority(), which covers
+        // kingdom-level grants plus principality parent-chain traversal and global
+        // admins. Excludes the owning kingdom; only offered for published events.
+        $this->data['ShareableKingdoms'] = [];
+        $_owningKingdom = (int)($info['KingdomId'] ?? 0);
+        if ($uid > 0 && $_evtStatus === 'published') {
+            $this->data['ShareableKingdoms'] = $this->Event->get_shareable_kingdoms_for_event(
+                $uid,
+                (int)$event_id,
+                $_owningKingdom
+            );
+        }
+        // Kingdoms this event is currently shared INTO, so the owning kingdom's
+        // managers can see (and revoke) shares other kingdoms have created.
+        // Seeing the list follows CanManageEvent, but REVOKING is gated per-row on
+        // the same rule the unshare endpoint enforces — kingdom-edit over that
+        // target kingdom OR over the owning kingdom. CanManageEvent is broader
+        // (event creators, park officers and event staff all satisfy it), so
+        // gating the button on it alone would render a control that silently
+        // no-ops for those viewers.
+        $this->data['SharedIntoKingdoms'] = [];
+        if ($this->data['CanManageEvent']) {
+            $_sharedInto = $this->Event->get_shared_kingdom_list_for_event((int)$event_id);
+            $_ownerAuth  = $uid > 0 && valid_id($_owningKingdom)
+                && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $_owningKingdom, AUTH_EDIT);
+            foreach ($_sharedInto as $_sik) {
+                $_sik['CanRevoke'] = $_ownerAuth
+                    || ($uid > 0 && $this->Authorization->has_authority(
+                        $uid,
+                        AUTH_KINGDOM,
+                        (int)$_sik['KingdomId'],
+                        AUTH_EDIT
+                    ));
+                $this->data['SharedIntoKingdoms'][] = $_sik;
+            }
+        }
         $this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
         if ($this->Event->is_draft_blocked_for_viewer(
             $_evtStatus,
