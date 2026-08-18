@@ -32,19 +32,11 @@ class Controller_SignIn extends Controller
 
         $link = $link_result['Detail'];
 
-        // Resolve scope name + type. scope_type drives the page header so an
-        // event link doesn't read "Park Sign-in" with just the event name as
-        // the subtitle.
+        // Resolve scope name + type from enriched link info.
         $scope_name = 'your group';
-        $scope_type = 'park';
-        if (valid_id($link['EventId'] ?? 0)) {
-            $scope_type = 'event';
-            global $DB;
-            $DB->Clear();
-            $row = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$link['EventId'] . ' LIMIT 1');
-            if ($row && $row->Next()) {
-                $scope_name = $row->name ?: $scope_name;
-            }
+        $scope_type = (string)($link['ScopeType'] ?? 'park');
+        if ($scope_type === 'event') {
+            $scope_name = (string)($link['EventName'] ?? $scope_name);
         } elseif (valid_id($link['ParkId'])) {
             $scope_type = 'park';
             $this->load_model('Park');
@@ -95,15 +87,9 @@ class Controller_SignIn extends Controller
             }
         }
 
-        // Get player's last class.
-        // YapoMysql::DataSet() does NOT pre-call Next() — must call it manually to advance to the first row.
-        $last_class_id   = 0;
+        $last_class_id = (int)$this->Attendance->get_player_last_class((int)$this->session->user_id);
         $last_class_name = '';
-        global $DB;
-        $DB->Clear();
-        $last_row = $DB->DataSet('SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . (int)$this->session->user_id . ' ORDER BY date DESC, attendance_id DESC LIMIT 1');
-        if ($last_row && $last_row->Next() && (int)$last_row->class_id > 0) {
-            $last_class_id = (int)$last_row->class_id;
+        if ($last_class_id > 0) {
             foreach (array_values($classes) as $c) {
                 if ((int)$c['ClassId'] === $last_class_id) {
                     $last_class_name = $c['Name'];
@@ -112,57 +98,7 @@ class Controller_SignIn extends Controller
             }
         }
 
-        // Attach per-class progression: current credits (attendance + reconciled),
-        // current level, credits-to-next-level. Helps the player pick the class
-        // that will get the most out of this one credit. Thresholds mirror the
-        // client-side calc at Player_index.tpl:277-289 — L2=5, L3=12, L4=21,
-        // L5=34, L6=53.
-        $uid = (int)$this->session->user_id;
-        $per_class = array();
-        $DB->Clear();
-        $rs = $DB->DataSet('SELECT class_id, SUM(credits) AS c FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $uid . ' GROUP BY class_id');
-        if ($rs) {
-            while ($rs->Next()) {
-                $per_class[(int)$rs->class_id] = (float)$rs->c;
-            }
-        }
-        $DB->Clear();
-        $rs = $DB->DataSet('SELECT class_id, reconciled AS c FROM ' . DB_PREFIX . 'class_reconciliation WHERE mundane_id = ' . $uid);
-        if ($rs) {
-            while ($rs->Next()) {
-                $cid = (int)$rs->class_id;
-                $per_class[$cid] = (isset($per_class[$cid]) ? $per_class[$cid] : 0) + (float)$rs->c;
-            }
-        }
-        // Threshold at index N (0-based) = credits needed to reach Level N+2.
-        // Level 1 needs 0; hitting index 0 (=5) reaches Level 2, etc.
-        $LEVEL_THRESHOLDS = array(5, 12, 21, 34, 53);
-        $enriched = array();
-        foreach (array_values($classes) as $c) {
-            $cid = (int)$c['ClassId'];
-            $credits = isset($per_class[$cid]) ? $per_class[$cid] : 0.0;
-            $level = 1;
-            if ($credits >= 53) {
-                $level = 6;
-            } elseif ($credits >= 34) {
-                $level = 5;
-            } elseif ($credits >= 21) {
-                $level = 4;
-            } elseif ($credits >= 12) {
-                $level = 3;
-            } elseif ($credits >=  5) {
-                $level = 2;
-            }
-            $to_next = null;
-            if ($level < 6) {
-                $to_next = max(0, $LEVEL_THRESHOLDS[$level - 1] - $credits);
-            }
-            $c['Credits'] = $credits;
-            $c['Level']   = $level;
-            $c['ToNext']  = $to_next;
-            $enriched[] = $c;
-        }
-        $classes = $enriched;
+        $classes = $this->Attendance->enrich_classes_with_progress((int)$this->session->user_id, array_values($classes));
 
         $this->data['link']            = $link;
         $this->data['scope_name']      = $scope_name;

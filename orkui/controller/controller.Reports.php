@@ -74,7 +74,7 @@ class Controller_Reports extends Controller
     public function playerheraldry($kingdom_id = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && !valid_id($kingdom_id) && !valid_id($this->request->ParkId)) {
             header('Location: ' . UIR);
             exit;
@@ -104,7 +104,7 @@ class Controller_Reports extends Controller
     public function eventheraldry($kingdom_id = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && !valid_id($kingdom_id)) {
             header('Location: ' . UIR);
             exit;
@@ -122,7 +122,7 @@ class Controller_Reports extends Controller
     public function guilds($param = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!isset($this->request->KingdomId) && !isset($this->request->ParkId))) {
             header('Location: ' . UIR);
             exit;
@@ -156,7 +156,7 @@ class Controller_Reports extends Controller
         }
         $global = empty($type);
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $isOrkAdmin = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isOrkAdmin = $uid && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if ($global && !$isOrkAdmin && (!isset($ladder) || $ladder < 7)) {
             $ladder = 7;
         }
@@ -198,15 +198,15 @@ class Controller_Reports extends Controller
             $id = $this->request->ParkId;
         }
         $_scopeKingdomId = ($type ?? '') === 'Park'
-            ? (int)Ork3::$Lib->park->GetParkKingdomId((int)($id ?? 0))
+            ? $this->Reports->get_park_kingdom_id((int)($id ?? 0))
             : (int)($id ?? 0);
         $_knConfigs  = Common::get_configs($_scopeKingdomId, CFG_KINGDOM);
         $_recsPublic = isset($_knConfigs['AwardRecsPublic'])
             ? (bool)(int)$_knConfigs['AwardRecsPublic']['Value']
             : true;
-        $_isOrkAdmin    = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin    = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $_isKingdomUser = $_uid > 0 && $_scopeKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
+            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
         $_canAccess = $_isOrkAdmin || $_isKingdomUser || ($_recsPublic && $_uid > 0);
         if (!$_canAccess) {
             header('Location: ' . UIR);
@@ -218,6 +218,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_playerawardrecommendations.tpl';
         $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
         $this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
+        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid);
         $this->data[ 'page_title' ] = "Award Recommendations";
     }
 
@@ -334,7 +335,7 @@ class Controller_Reports extends Controller
     public function active($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -398,7 +399,7 @@ class Controller_Reports extends Controller
     public function masters($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -464,7 +465,7 @@ class Controller_Reports extends Controller
     public function roster($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -473,8 +474,8 @@ class Controller_Reports extends Controller
         $this->data['page_title'] = "Player Roster";
         $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
-        $this->data['canViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && Ork3::$Lib->authorization->HasAuthority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+        $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
+            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -529,32 +530,33 @@ class Controller_Reports extends Controller
     private function _test_results($type, $test_type, $test_label, $test_icon, $page_title)
     {
         $this->template = 'Reports_test_results.tpl';
+        $this->load_model('QualTest');
         $kingdom_id = ($type == 'Kingdom' && valid_id($this->request->id)) ? (int)$this->request->id : null;
         if (!$kingdom_id) {
             $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!$uid || !Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+        if (!$uid || !$this->QualTest->can_manage($uid, $kingdom_id)) {
             $this->data['Error'] = 'You do not have permission to view this report.';
             $this->data['page_title'] = 'Access Denied';
             return;
         }
-        $this->data['results']      = Ork3::$Lib->qualtest->getTestResults($kingdom_id, $test_type);
-        $this->data['stats']        = Ork3::$Lib->qualtest->getTestReportStats($kingdom_id, $test_type);
+        $this->data['results']      = $this->QualTest->test_results($kingdom_id, $test_type);
+        $this->data['stats']        = $this->QualTest->report_stats($kingdom_id, $test_type);
         $this->data['ScopeType']    = 'kingdom';
         $this->data['ScopeId']      = $kingdom_id;
         $this->data['TestType']     = $test_type;
         $this->data['test_label']   = $test_label;
         $this->data['test_icon']    = $test_icon;
-        $this->data['KingdomName']  = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
+        $this->data['KingdomName']  = $this->QualTest->kingdom_name($kingdom_id);
         $this->data['page_title']   = $page_title;
     }
 
     public function inactive($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -569,7 +571,7 @@ class Controller_Reports extends Controller
     public function waivered($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -582,7 +584,7 @@ class Controller_Reports extends Controller
     public function unwaivered($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -633,12 +635,19 @@ class Controller_Reports extends Controller
             $this->data['ScopeName'] = $this->Kingdom->get_kingdom_name($this->request->id);
         }
         $this->data['page_title'] = "Suspended Player Roster";
+        $auth = $this->roster_suspension_remove_auth(
+            $this->data['roster'],
+            $this->data['ScopeType'],
+            $this->data['ScopeId']
+        );
+        $this->data['RosterCanRemoveAny'] = $auth['canRemoveAny'];
+        $this->data['RosterCanRemoveMap'] = $auth['canRemoveMap'];
     }
 
     public function voting_eligible($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, ['Kingdom', 'Park']) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -993,7 +1002,7 @@ class Controller_Reports extends Controller
         $this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
         $this->data['OfficerDirectoryPrincipalities'] = $result['Principalities'] ?? [];
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['IsOrkAdmin'] = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['IsOrkAdmin'] = $uid && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
     }
 
     public function event_attendance($params = null)
@@ -1071,7 +1080,6 @@ class Controller_Reports extends Controller
             header('Location: ' . UIR);
             exit;
         }
-        global $DB;
 
         $kingdom_id = 0;
         $park_id    = 0;
@@ -1093,22 +1101,8 @@ class Controller_Reports extends Controller
         $this->data['report_type'] = $type;
         $this->data['report_id']   = $id;
 
-        // Fetch scope name(s) for title and filename
-        $scopeName = '';
-        if ($park_id > 0) {
-            $nr = $DB->DataSet("SELECT p.name AS park_name, k.name AS kingdom_name
-			                    FROM " . DB_PREFIX . "park p
-			                    LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
-			                    WHERE p.park_id = {$park_id} LIMIT 1");
-            if ($nr && $nr->Size() > 0 && $nr->Next()) {
-                $scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
-            }
-        } elseif ($kingdom_id > 0) {
-            $nr = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdom_id} LIMIT 1");
-            if ($nr && $nr->Size() > 0 && $nr->Next()) {
-                $scopeName = $nr->name;
-            }
-        }
+        $assembly = $this->Reports->ladder_award_grid($type, $kingdom_id, $park_id);
+        $scopeName = $assembly['ScopeName'] ?? '';
         $this->data['page_title'] = ($scopeName ?: ($type === 'Park' ? 'Park' : 'Kingdom')) . ' Ladder Awards Grid';
         $this->data['scope_name'] = $scopeName;
 
@@ -1118,223 +1112,8 @@ class Controller_Reports extends Controller
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $kingdom_id . '&tab=reports';
         }
 
-        // 1. Get ladder awards for this kingdom (columns)
-        if ($kingdom_id > 0) {
-            $kSql = "SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
-			         FROM ork_kingdomaward ka
-			         JOIN ork_award a ON a.award_id = ka.award_id
-			         WHERE ka.kingdom_id = {$kingdom_id}
-			           AND a.is_ladder = 1
-			           AND a.award_id != 31
-			         ORDER BY IFNULL(ka.name, a.name)";
-        } else {
-            $kSql = "SELECT DISTINCT a.award_id, a.name AS award_name, a.title_class
-			         FROM ork_award a
-			         WHERE a.is_ladder = 1
-			           AND a.award_id != 31
-			         ORDER BY a.name";
-        }
-
-        $awardResult = $DB->DataSet($kSql);
-        $awardCols = [];
-        // Canonical award name → knighthood group
-        $knightGroupMap = [
-            'Order of Battle'              => 'Battle',
-            'Order of the Warrior'         => 'Sword',
-            'Order of the Crown'           => 'Crown',
-            'Order of the Lion'            => 'Flame',
-            'Order of the Rose'            => 'Flame',
-            'Order of the Smith'           => 'Flame',
-            'Order of the Dragon'          => 'Serpent',
-            'Order of the Garber'          => 'Serpent',
-            'Order of the Owl'             => 'Serpent',
-        ];
-        if ($awardResult && $awardResult->Size() > 0) {
-            do {
-                if (!$awardResult->award_id) {
-                    continue;
-                }
-                $name = $awardResult->award_name;
-                $display = preg_replace('/^Order of (?:the )?/i', '', $name);
-                $awardCols[(int)$awardResult->award_id] = [
-                    'Name'        => $name,
-                    'DisplayName' => $display,
-                    'KnightGroup' => $knightGroupMap[$name] ?? '',
-                ];
-            } while ($awardResult->Next());
-        }
-
-        $this->data['LadderAwards'] = $awardCols;
-
-        if (empty($awardCols)) {
-            $this->data['GridRows'] = [];
-            return;
-        }
-
-        $awardIds  = implode(',', array_keys($awardCols));
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
-        $cachedGrid   = Ork3::$Lib->ghettocache->get(__CLASS__ . '.ladder_grid', $gridCacheKey, 1200);
-        if ($cachedGrid !== false) {
-            $this->data['GridRows'] = $cachedGrid;
-            return;
-        }
-
-        // Location clause for players
-        if ($park_id > 0) {
-            $locationClause = "AND m.park_id = {$park_id}";
-        } elseif ($kingdom_id > 0) {
-            $locationClause = "AND m.kingdom_id = {$kingdom_id}";
-        } else {
-            $locationClause = '';
-        }
-
-        // 2. Get players and their max rank per ladder award
-        $dataSql = "SELECT m.mundane_id, m.persona, p.park_id, p.name AS park_name, a.award_id,
-			           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
-			         FROM ork_mundane m
-			         LEFT JOIN ork_park p ON p.park_id = m.park_id
-			         JOIN ork_awards ma ON ma.mundane_id = m.mundane_id
-			         JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			         JOIN ork_award a ON a.award_id = ka.award_id
-			         WHERE m.active = 1
-			           AND a.is_ladder = 1
-			           AND a.award_id IN ({$awardIds})
-			           AND (ma.revoked = 0 OR ma.revoked IS NULL)
-			           {$locationClause}
-			         GROUP BY m.mundane_id, a.award_id
-			         ORDER BY m.persona";
-
-        $dataResult = $DB->DataSet($dataSql);
-        $playerData = [];
-        if ($dataResult && $dataResult->Size() > 0) {
-            do {
-                $mid = (int)$dataResult->mundane_id;
-                $aid = (int)$dataResult->award_id;
-                if (!$mid || !$aid) {
-                    continue;
-                }
-                if (!isset($playerData[$mid])) {
-                    $playerData[$mid] = [
-                        'MundaneId' => $mid,
-                        'Persona'   => $dataResult->persona,
-                        'ParkId'    => (int)$dataResult->park_id,
-                        'ParkName'  => $dataResult->park_name ?? '',
-                        'Awards'    => [],
-                    ];
-                }
-                $val = (int)$dataResult->award_count;
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
-            } while ($dataResult->Next());
-        }
-
-        if (empty($playerData)) {
-            $this->data['GridRows'] = [];
-            return;
-        }
-
-        $mundaneIds = implode(',', array_keys($playerData));
-
-        // 3. Mark Master/Paragon — hardcoded ladder→master award_id map
-        // Keys are ladder award_ids; values are master award_ids that confirm mastery
-        $ladderToMasterMap = [
-            21  => [1],   // Order of the Rose       → Master Rose
-            22  => [2],   // Order of the Smith       → Master Smith
-            23  => [3],   // Order of the Lion        → Master Lion
-            24  => [4],   // Order of the Owl         → Master Owl
-            25  => [5],   // Order of the Dragon      → Master Dragon
-            26  => [6],   // Order of the Garber      → Master Garber
-            27  => [12],  // Order of the Warrior     → Warlord
-            239 => [240], // Order of the Crown       → Master Crown
-            243 => [244], // Order of Battle          → Battlemaster
-        ];
-
-        $masterAwardIds = [];
-        foreach (array_keys($awardCols) as $lid) {
-            if (isset($ladderToMasterMap[$lid])) {
-                foreach ($ladderToMasterMap[$lid] as $mid_award) {
-                    $masterAwardIds[$mid_award] = $lid;
-                }
-            }
-        }
-
-        if (!empty($masterAwardIds)) {
-            $masterIds = implode(',', array_keys($masterAwardIds));
-            $masterSql = "SELECT ma.mundane_id, ka.award_id AS master_award_id
-			             FROM ork_awards ma
-			             JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			             WHERE ma.mundane_id IN ({$mundaneIds})
-			               AND ka.award_id IN ({$masterIds})
-			               AND (ma.revoked = 0 OR ma.revoked IS NULL)
-			             GROUP BY ma.mundane_id, ka.award_id";
-
-            $masterResult = $DB->DataSet($masterSql);
-            if ($masterResult && $masterResult->Size() > 0) {
-                do {
-                    $mid        = (int)$masterResult->mundane_id;
-                    if (!$mid) {
-                        continue;
-                    }
-                    $masterAid  = (int)$masterResult->master_award_id;
-                    $ladderAid  = $masterAwardIds[$masterAid] ?? null;
-                    if ($ladderAid !== null && isset($playerData[$mid]['Awards'][$ladderAid])) {
-                        $playerData[$mid]['Awards'][$ladderAid]['IsMaster'] = true;
-                    }
-                } while ($masterResult->Next());
-            }
-        }
-
-        // 4. Mark players with a sign-in within the past 12 months
-        $recentSql = "SELECT DISTINCT mundane_id FROM ork_attendance
-			          WHERE mundane_id IN ({$mundaneIds})
-			            AND date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)";
-        $recentResult = $DB->DataSet($recentSql);
-        $recentIds = [];
-        if ($recentResult && $recentResult->Size() > 0) {
-            do {
-                $rmid = (int)$recentResult->mundane_id;
-                if ($rmid) {
-                    $recentIds[$rmid] = true;
-                }
-            } while ($recentResult->Next());
-        }
-        foreach ($playerData as $mid => &$pRow) {
-            $pRow['RecentSignIn'] = isset($recentIds[$mid]);
-            $pRow['KnightGroups'] = [];
-        }
-        unset($pRow);
-
-        // 5. Get knighthood memberships for players in the grid
-        // COALESCE(alias.*, a.*) so Custom Titles aliased to a Knight branch
-        // (Knight of the Sword / Flame / etc.) count toward this player's
-        // knighthood memberships.
-        $knightSql = "SELECT ma.mundane_id, COALESCE(alias.name, a.name) AS knight_name
-		              FROM " . DB_PREFIX . "awards ma
-		              JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-		              JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
-		              LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
-		              WHERE ma.mundane_id IN ({$mundaneIds})
-		                AND COALESCE(alias.peerage, a.peerage) = 'Knight'
-		                AND (ma.revoked = 0 OR ma.revoked IS NULL)
-		              GROUP BY ma.mundane_id, COALESCE(alias.award_id, a.award_id)";
-        $knightResult = $DB->DataSet($knightSql);
-        if ($knightResult && $knightResult->Size() > 0) {
-            $knightTypeMap = ['Battle' => 'Battle', 'Sword' => 'Sword', 'Crown' => 'Crown', 'Flame' => 'Flame', 'Serpent' => 'Serpent'];
-            do {
-                $mid = (int)$knightResult->mundane_id;
-                if (!isset($playerData[$mid])) {
-                    continue;
-                }
-                // "Knight of the Flame" → "Flame", "Knight of the Crown" → "Crown", etc.
-                $type = ucfirst(strtolower(preg_replace('/^knight(?:hood)? of (?:the )?/i', '', $knightResult->knight_name)));
-                if (isset($knightTypeMap[$type])) {
-                    $playerData[$mid]['KnightGroups'][$type] = true;
-                }
-            } while ($knightResult->Next());
-        }
-
-        $gridRows = array_values($playerData);
-        Ork3::$Lib->ghettocache->cache(__CLASS__ . '.ladder_grid', $gridCacheKey, $gridRows);
-        $this->data['GridRows'] = $gridRows;
+        $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
+        $this->data['GridRows'] = $assembly['GridRows'] ?? [];
     }
 
     public function park_distance_matrix($type = null)
@@ -1374,7 +1153,7 @@ class Controller_Reports extends Controller
     public function player_status_reconciliation($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -1392,9 +1171,9 @@ class Controller_Reports extends Controller
         if ($_isOrkAdmin) {
             $can_edit = true;
         } elseif ($type === 'Park' && valid_id($this->request->id)) {
-            $can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+            $can_edit = $this->Authorization->has_authority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
         } elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
-            $can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+            $can_edit = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
         }
         $this->data['can_edit'] = $can_edit;
 
@@ -1418,19 +1197,8 @@ class Controller_Reports extends Controller
             echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
             exit;
         }
-        $scope_type = $_POST['ScopeType'] ?? '';
-        $scope_id   = (int)($_POST['ScopeId'] ?? 0);
         $r = $this->Reports->set_player_active_status($this->session->token, $mundane_id, $active);
         if ($r['Status'] == 0) {
-            $bustKey = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-            Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $bustKey);
-            if ($scope_type === 'Park' && valid_id($scope_id)) {
-                $reportKey = Ork3::$Lib->ghettocache->key(['ParkId' => $scope_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetPlayerStatusReconciliation', $reportKey);
-            } elseif ($scope_type === 'Kingdom' && valid_id($scope_id)) {
-                $reportKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $scope_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetPlayerStatusReconciliation', $reportKey);
-            }
             echo json_encode(['status' => 0]);
         } else {
             echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -1441,7 +1209,7 @@ class Controller_Reports extends Controller
     public function release_utilization($params = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin) {
             header('Location: ' . UIR);
             exit;
@@ -1451,6 +1219,55 @@ class Controller_Reports extends Controller
         $this->data['Report'] = $result;
         $this->data['page_title'] = 'Release Feature Utilization';
         $this->template = 'Reports_release_utilization.tpl';
+    }
+
+    private function award_rec_can_delete(int $uid): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+            return true;
+        }
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function roster_suspension_remove_auth(array $roster, ?string $scopeType, $scopeId): array
+    {
+        $_canRemoveAny = false;
+        $_canRemoveMap = [];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if ($_uid <= 0 || !is_array($roster)) {
+            return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
+        }
+        if ($this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            $_canRemoveAny = true;
+            foreach ($roster as $player) {
+                $_canRemoveMap[(int)$player['MundaneId']] = true;
+            }
+
+            return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
+        }
+        $_scopeKingdomAuth = $scopeType === 'kingdom' && valid_id($scopeId)
+            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$scopeId, AUTH_EDIT);
+        foreach ($roster as $player) {
+            $mid = (int)$player['MundaneId'];
+            $can = $_scopeKingdomAuth
+                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
+            $_canRemoveMap[$mid] = $can;
+            if ($can) {
+                $_canRemoveAny = true;
+            }
+        }
+
+        return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
     }
 
 }

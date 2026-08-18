@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "id": "home-logo-stats-bar",
+  "workstream": "feature/new-logo-add",
+  "createdAt": "2026-08-18T15:30:00Z",
+  "basedOnSetpoint": "pin-after-restore",
+  "entries": [
+    {
+      "id": "masthead-structure",
+      "class": "intentional",
+      "layer": "dom",
+      "profiles": ["test", "mirror"],
+      "pages": ["home-authenticated"],
+      "dom": { "pathPrefix": "/html[0]/body[0]/div[1]/div[1]", "match": "subtree" },
+      "rationale": "New ORK logo masthead + four-widget stats bar restructures the home header container.",
+      "requirementRef": "docs/superpowers/specs/2026-08-08-home-logo-stats-bar-design.md",
+      "source": "manual"
+    },
+    {
+      "id": "masthead-inline-css",
+      "class": "intentional",
+      "layer": "assets",
+      "profiles": ["test", "mirror"],
+      "pages": ["home-authenticated"],
+      "assets": {
+        "ids": [
+          "inline:css:cb1c28624058c43d23ea557b7d8345543193d62c1aa93cb7ea16a626516097b5",
+          "inline:css:ad99d662df96ab3db9cb0e8a72518adf4ecc95ca0a5330f7588bbda629194213"
+        ]
+      },
+      "rationale": "Masthead/stats-bar restyle changes the two inline style blocks on the home template.",
+      "requirementRef": "docs/superpowers/specs/2026-08-08-home-logo-stats-bar-design.md",
+      "source": "manual"
+    }
+  ]
+}

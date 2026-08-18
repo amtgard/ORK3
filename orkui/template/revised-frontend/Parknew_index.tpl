@@ -373,7 +373,7 @@
 	<?php
 		// Forecast for the next park day (when within the 7-day cache window)
 		$nextPdForecast = ($nextParkDayDate && $park_weather)
-			? Ork3::$Lib->weather->forecast_for_date($park_id, $nextParkDayDate)
+			? wx_forecast_for_date($park_id, $nextParkDayDate)
 			: null;
 	?>
 	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
@@ -405,7 +405,7 @@
 						if ($nextPdForecast['lo_f'] !== null) echo ' · <span style="opacity:.7">L ' . round($nextPdForecast['lo_f']) . '/' . $fcLoC . '°</span>';
 						if (!empty($nextPdForecast['precip_pct']) && $nextPdForecast['precip_pct'] >= 20) echo ' · ' . (int)$nextPdForecast['precip_pct'] . '% rain';
 					?>
-					<?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $nextParkDayDate) as $_b): ?>
+					<?php foreach (wx_badges_for_date($park_id, $nextParkDayDate) as $_b): ?>
 						<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
 					<?php endforeach; ?>
 				</div>
@@ -784,7 +784,7 @@
 								// Forecast for the next occurrence of THIS park day, when in-person and within the 7-day cache window
 								$_pdNext = $pdNextDateById[(int)$day['ParkDayId']] ?? null;
 								$_pdFC   = (empty($day['Online']) && $_pdNext)
-									? Ork3::$Lib->weather->forecast_for_date($park_id, $_pdNext)
+									? wx_forecast_for_date($park_id, $_pdNext)
 									: null;
 								if ($_pdFC && $_pdFC['hi_f'] !== null):
 									$c = (int)$_pdFC['code'];
@@ -792,7 +792,7 @@
 									$hiC = round(($_pdFC['hi_f']-32)*5/9);
 									$loC = $_pdFC['lo_f'] !== null ? round(($_pdFC['lo_f']-32)*5/9) : null;
 							?>
-								<?php $_pdBadges = Ork3::$Lib->weather->badges_for_date($park_id, $_pdNext); ?>
+								<?php $_pdBadges = wx_badges_for_date($park_id, $_pdNext); ?>
 								<div class="pk-schedule-forecast" style="margin-top:6px;padding:6px 8px;background:var(--ork-bg-secondary,#f7fafc);border-radius:4px;font-size:11px;color:var(--ork-text-muted,#718096)">
 									<?php if ($_pdNext !== $parkLocalToday): ?><em style="opacity:.75;margin-right:3px">forecast</em><?php endif; ?>
 									<span style="font-size:13px"><?= $ic ?></span>
@@ -913,7 +913,7 @@
 												// Forecast badge when the event date is within the 7-day cache window
 												$evDateStr = substr($event['NextDate'], 0, 10);
 												$evFC = (strtotime($event['NextDate']) >= time() && $park_weather)
-													? Ork3::$Lib->weather->forecast_for_date($park_id, $evDateStr)
+													? wx_forecast_for_date($park_id, $evDateStr)
 													: null;
 												if ($evFC && $evFC['hi_f'] !== null):
 													$c = (int)$evFC['code'];
@@ -922,7 +922,7 @@
 											?>
 											<br><span style="font-size:11px;color:var(--ork-text-muted,#718096)"><?php if ($evDateStr !== $parkLocalToday): ?><em style="opacity:.7;margin-right:2px">forecast</em> <?php endif; ?><?= $ic ?> <?= round($evFC['hi_f']) ?>/<?= $hiC ?>°<?php
 												if (!empty($evFC['precip_pct']) && $evFC['precip_pct'] >= 20) echo ' · ' . (int)$evFC['precip_pct'] . '%';
-											?><?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?></span><?php endforeach; ?></span>
+											?><?php foreach (wx_badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?></span><?php endforeach; ?></span>
 											<?php endif; ?>
 										<?php endif; ?>
 									</td>

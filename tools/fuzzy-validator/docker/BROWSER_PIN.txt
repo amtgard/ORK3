@@ -1,0 +1,7 @@
+playwright=1.61.1
+playwright_browsers_path=/ms-playwright
+chromium_cache=chromium-1228, chromium_headless_shell-1228, ffmpeg-1011
+node=v22.22.1
+base_image=ubuntu:resolute-20260707
+recorded_at=2026-07-20T14:25:56.380Z
+note=Generated at image build; regenerate via docker compose build if Playwright pin changes.
