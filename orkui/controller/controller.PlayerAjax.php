@@ -215,13 +215,20 @@ class Controller_PlayerAjax extends Controller
             // starts POSTing it in Phase 3.
             $new_award_id = (int)($r['AwardId'] ?? 0);
             $rec_id       = (int)($_POST['RecommendationsId'] ?? 0);
+            // The officer's "leave on court" / "remove from court" choice decides the
+            // terminal status of the reconciled lines. Whitelisted; anything else
+            // (including a missing value) means leave-on-court.
+            $court_action = ($_POST['CourtAction'] ?? '') === 'remove' ? 'remove' : 'leave';
+            $court_lines  = 0;
             if ($rec_id > 0) {
                 // Pass the cluster key too so a court line under a sibling/older
                 // representative rec id (or an ad-hoc line for the same
                 // person+award+rank) is still reconciled and can't re-grant.
-                Ork3::$Lib->court->reconcileGrantForRecommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id);
+                $court_lines = Ork3::$Lib->court->reconcileGrantForRecommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id, $court_action);
             }
-            echo json_encode(['status' => 0]);
+            // courtLines lets the client repaint the row's court badges from what the
+            // server actually did, instead of issuing its own follow-up court calls.
+            echo json_encode(['status' => 0, 'awardId' => $new_award_id, 'courtLines' => $court_lines, 'courtAction' => $court_action]);
             exit;
 
         } elseif ($action === 'addnote') {

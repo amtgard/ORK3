@@ -240,10 +240,13 @@ class Court
                      ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
                      \'' . $this->esc($public_comment) . '\')'
         );
+        // LAST_INSERT_ID() is connection-scoped, so it is the ONLY safe way to name
+        // the row we just wrote. A "highest id for this court" re-query is not: two
+        // officers adding to the same court (the multi-reeve case this tool is built
+        // for) would each read back whichever INSERT committed last, and every
+        // follow-up action keyed off that id would mutate the other officer's award.
         $this->db->Clear();
-        $idr = $this->db->DataSet('SELECT court_award_id FROM ' . DB_PREFIX . 'court_award
-                              WHERE court_id = ' . $court_id . '
-                              ORDER BY court_award_id DESC LIMIT 1');
+        $idr = $this->db->DataSet('SELECT LAST_INSERT_ID() AS court_award_id');
         $court_award_id = ($idr && $idr->Next()) ? (int)$idr->court_award_id : 0;
 
         // Fetch persona + award_name for response
@@ -300,6 +303,15 @@ class Court
             'RegaliaStatus'     => 0,
             'Artisans'          => [],
         ];
+    }
+
+    /** Persona for a mundane id (presence/roster display), or '' if unknown. */
+    public function getPersona($mundane_id)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
+                            WHERE mundane_id = ' . (int)$mundane_id . ' LIMIT 1');
+        return ($r && $r->Next()) ? (string)$r->persona : '';
     }
 
     /** court_id owning a court_award row, or 0 if the award does not exist. */
@@ -477,18 +489,16 @@ class Court
              VALUES (' . $court_award_id . ', ' . $mundane_id . ',
                      \'' . $this->esc($contribution) . '\')'
         );
+        // Connection-scoped id (see addAward) — a "highest id for this court_award"
+        // re-query hands back another officer's artisan row under concurrent adds.
         $this->db->Clear();
-        $idr = $this->db->DataSet('SELECT caa.court_award_artisan_id, m.persona
-                              FROM ' . DB_PREFIX . 'court_award_artisan caa
-                              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
-                              WHERE caa.court_award_id = ' . $court_award_id . '
-                              ORDER BY caa.court_award_artisan_id DESC LIMIT 1');
-        $artisan_id = 0;
-        $persona    = '';
-        if ($idr && $idr->Next()) {
-            $artisan_id = (int)$idr->court_award_artisan_id;
-            $persona    = $idr->persona;
-        }
+        $idr = $this->db->DataSet('SELECT LAST_INSERT_ID() AS court_award_artisan_id');
+        $artisan_id = ($idr && $idr->Next()) ? (int)$idr->court_award_artisan_id : 0;
+
+        $this->db->Clear();
+        $pr = $this->db->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
+                              WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
+        $persona = ($pr && $pr->Next()) ? (string)$pr->persona : '';
         return [
             'CourtAwardArtisanId' => $artisan_id,
             'MundaneId'           => $mundane_id,
@@ -788,9 +798,15 @@ class Court
 
         $event_id = $this->getEventIdFromCalendarDetail($row['EventCalendarDetailId']);
         $date     = $row['CourtDate'] ?: date('Y-m-d');
+        // Public citation precedence, per spec 6.1: the officer's public comment,
+        // else the originating recommendation's reason, else nothing. `Notes` is the
+        // INTERNAL officer note ("hold until the drama settles", "Regent objects") —
+        // it is never a citation. ork_awards.note renders on the recipient's public
+        // profile to every visitor, and post-finalize undo is out of scope, so a
+        // leak here is permanent and hand-editable only by an award admin.
         $note     = $row['PublicComment'] !== ''
             ? $row['PublicComment']
-            : ($row['RecReason'] !== '' ? $row['RecReason'] : $row['Notes']);
+            : $row['RecReason'];
 
         // (3) Throw-safe player-record write. add_player_award returns the FLAT
         // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).
@@ -853,9 +869,19 @@ class Court
      * sibling/older cluster-representative rec id, or an ad-hoc line for the same
      * person+award+rank, is still reconciled and cannot be re-granted at finalize.
      * This mirrors the cluster-wide resolve the finalize path already performs.
+     *
+     * $court_action carries the officer's choice from the Recs-Manager grant modal
+     * and decides the terminal status of the reconciled lines:
+     *   'leave'  -> 'given'     (the award is announced at that court)
+     *   'remove' -> 'cancelled' (granted outside court; drop it from the running
+     *                            order, but soft-cancel — never hard-DELETE, so the
+     *                            audit trace of the planned line survives)
+     * Either way the awards row and giver are linked for provenance, and the line
+     * leaves the open set so finalize cannot re-grant it.
+     *
      * Returns the number of court lines reconciled.
      */
-    public function reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0)
+    public function reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0, $court_action = 'leave')
     {
         $recommendations_id = (int)$recommendations_id;
         $mundane_id         = (int)$mundane_id;
@@ -881,7 +907,8 @@ class Court
         $award_id = (int)$awards_id;
         $giver    = (int)$given_by_mundane_id;
 
-        $sets = 'status = \'given\', row_version = row_version + 1';
+        $terminal = ($court_action === 'remove') ? 'cancelled' : 'given';
+        $sets = 'status = \'' . $terminal . '\', row_version = row_version + 1';
         if ($award_id > 0) {
             $sets .= ', award_id = ' . $award_id;
         }

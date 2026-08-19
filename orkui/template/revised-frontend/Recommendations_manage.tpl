@@ -1148,11 +1148,19 @@ function rmTodayYMD() {
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 
-// Core grant: write the award via the JSON grantaward endpoint, optionally reconcile
-// the linked court award(s), then resolve the whole cluster + drop the row.
-// opts = { date, givenById, note, courtStep }. Resolves on full success; rejects with
-// an Error carrying `.granted` (did the award itself land?) so the caller can tell a
-// real grant failure from a post-grant cleanup failure.
+// Core grant: write the award via the JSON grantaward endpoint, then resolve the
+// whole cluster + drop the row.
+//
+// Court lines are reconciled SERVER-side inside grantaward (S1 cross-path reconcile),
+// driven by the CourtAction we send here. The client must NOT also call
+// CourtAjax/remove_award or set_award_status afterwards: the reconcile has already
+// moved those lines out of the open set, so the guards on those endpoints (which
+// correctly refuse to touch a 'given' row) would reject the follow-up call and abort
+// the chain before the cluster is ever resolved.
+//
+// opts = { date, givenById, note, courtAction }. Resolves on full success; rejects
+// with an Error carrying `.granted` (did the award itself land?) so the caller can
+// tell a real grant failure from a post-grant resolve failure.
 function rmDoGrant(rec, tr, opts) {
     opts = opts || {};
     var granted = false;
@@ -1166,16 +1174,15 @@ function rmDoGrant(rec, tr, opts) {
     fd.append('Note', opts.note != null ? opts.note : (rec.Reason || ''));
     fd.append('Rank', opts.rank != null ? opts.rank : (rec.Rank || 0));
     // Thread the granted recommendation id so the server can reconcile the matching
-    // court line (mark it given) and a later court finalize can't double-grant it.
+    // court line and a later court finalize can't double-grant it.
     var recId = (opts.recommendationsId != null) ? opts.recommendationsId : rec.RepRecId;
     if (recId) { fd.append('RecommendationsId', recId); }
+    // 'remove' cancels the court line, 'leave' marks it given. Server-side only.
+    fd.append('CourtAction', opts.courtAction === 'remove' ? 'remove' : 'leave');
     return rmPost(RmConfig.uir + 'PlayerAjax/player/' + rec.MundaneId + '/grantaward', fd)
         .then(function (j) {
             if (!rmJsonOk(j)) { var e = new Error(j && j.error ? j.error : 'Could not grant the award.'); e.granted = false; throw e; }
             granted = true;
-            return opts.courtStep ? opts.courtStep() : null;
-        }).then(function (courtRes) {
-            if (courtRes && Array.isArray(courtRes) && !rmAllOk(courtRes)) { var e = new Error('court cleanup failed'); e.granted = true; throw e; }
             var fd2 = new FormData();
             fd2.append('MundaneId', rec.MundaneId);
             fd2.append('KingdomAwardId', rec.KingdomAwardId);
@@ -1256,21 +1263,15 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
     rmGrantErr('');
     var submitBtn = rmGid('rm-grant-submit');
     submitBtn.disabled = true;
-    var courtStep = null;
-    if (ctx.courts.length) {
-        var choice = (document.querySelector('input[name="rm-grant-court"]:checked') || {}).value;
-        courtStep = function () {
-            return Promise.all(ctx.courts.map(function (c) {
-                var fd = new FormData();
-                fd.append('CourtAwardId', c.CourtAwardId);
-                if (choice === 'leave') { fd.append('Status', 'given'); return rmPost(RmConfig.uir + 'CourtAjax/set_award_status', fd); }
-                return rmPost(RmConfig.uir + 'CourtAjax/remove_award', fd);
-            }));
-        };
-    }
+    // The court lines are reconciled server-side by grantaward; we only forward the
+    // officer's choice. Issuing our own CourtAjax calls here would hit the given-row
+    // guards and abort the chain before the recommendation is resolved.
+    var courtAction = ctx.courts.length
+        ? ((document.querySelector('input[name="rm-grant-court"]:checked') || {}).value || 'remove')
+        : 'leave';
     var rankVal = rmGid('rm-grant-rank-val').value;
     rmDoGrant(ctx.rec, ctx.tr, {
-        date: date, givenById: givenById, note: note, courtStep: courtStep,
+        date: date, givenById: givenById, note: note, courtAction: courtAction,
         rank: (rankVal !== '' ? rankVal : (ctx.rec.Rank || 0)),
         parkId: rmGid('rm-grant-park-id').value || '0',
         kingdomId: rmGid('rm-grant-kingdom-id').value || '0',
@@ -1279,9 +1280,12 @@ rmGid('rm-grant-submit').addEventListener('click', function () {
         .then(function () { rmCloseGrantModal(); })
         .catch(function (err) {
             if (err && err.granted) {
-                // Award landed but cleanup failed — closing + refresh guidance avoids a retry double-grant.
+                // The award row landed. Player::AddAward has no duplicate guard, so a
+                // retry would write a SECOND permanent award — retire the row here
+                // rather than leaving a live Grant button on an already-granted rec.
+                rmRemoveRow(ctx.tr);
                 rmCloseGrantModal();
-                rmToast('Granted, but the court/rec cleanup failed — refresh before retrying.', true);
+                rmToast('Granted — but the recommendation could not be cleared. Refresh to confirm; do not grant it again.', true);
             } else {
                 submitBtn.disabled = false;
                 rmGrantErr((err && err.message) ? err.message : 'Grant failed.');
