@@ -2361,6 +2361,7 @@ $_total_awards = count($courtAwards ?? []);
 
     // ---- Reorder ----
     window.cpMoveAward = function(caid, dir) {
+        if (cpReorderBlocked()) return;
         var list  = gid('cp-award-list');
         var rows  = Array.from(list.querySelectorAll('.cp-award-row'));
         var idx   = rows.findIndex(function(r) { return parseInt(r.dataset.courtAwardId, 10) === caid; });
@@ -2373,6 +2374,7 @@ $_total_awards = count($courtAwards ?? []);
     };
 
     window.cpSortByOrders = function() {
+        if (cpReorderBlocked()) return;
         const awardsByMundane = {};
         courtAwards.forEach(aw => {
             if (!awardsByMundane[aw.MundaneId]) {
@@ -2403,6 +2405,7 @@ $_total_awards = count($courtAwards ?? []);
     }
 
     window.cpSortTitlesLast = function() {
+        if (cpReorderBlocked()) return;
         const awardsByMundane = {};
         courtAwards.forEach(aw => {
             if (!awardsByMundane[aw.MundaneId]) {
@@ -2442,6 +2445,18 @@ $_total_awards = count($courtAwards ?? []);
 
     // ---- Printing List toggle ----
     var cpPrintingListActive = false;
+
+    // The Printing List is a temporary VIEW: it physically reorders the DOM (scroll-
+    // tracked rows moved to the end, red before green) and display:none's the rest.
+    // cpSaveOrder() serialises every .cp-award-row including the hidden ones, so a
+    // reorder saved while this view is active would overwrite the court's real
+    // running order with the filtered arrangement — rows the officer never saw,
+    // in an order they never chose. Refuse and say why.
+    function cpReorderBlocked() {
+        if (!cpPrintingListActive) return false;
+        cpAlert('Turn off the Printing List view before reordering. It shows a filtered view, not the court running order.');
+        return true;
+    }
     var cpPrintingListSavedOrder = null;
 
     window.cpTogglePrintingList = function() {
@@ -3217,6 +3232,16 @@ $_total_awards = count($courtAwards ?? []);
             return;
         }
         gid('cp-rec-error').style.display = 'none';
+        // Lock the button for the duration of the in-flight POSTs. Without this a
+        // double-click runs the whole batch twice against the same selectedRecs, and
+        // add_award has no per-court dedup, so one recommendation ends up on two
+        // court lines — each of which finalizes independently into ork_awards.
+        var addBtn = gid('cp-rm-add-btn');
+        if (addBtn) {
+            if (addBtn.disabled) return;
+            addBtn.disabled = true;
+        }
+        var cpRecsDone = function() { if (addBtn) addBtn.disabled = false; };
         // Keep each rec id paired with its result so we only mark successful adds as "In Plan".
         var promises = selectedRecs.map(function(rid) {
             var el = gid('cp-rec-' + rid);
@@ -3231,6 +3256,7 @@ $_total_awards = count($courtAwards ?? []);
             return post('CourtAjax/add_award', fd).then(function(d) { return { rid: rid, d: d }; });
         });
         Promise.all(promises).then(function(results) {
+            cpRecsDone();
             var succeeded = results.filter(function(x) { return x.d.status === 0; });
             var failed    = results.filter(function(x) { return x.d.status !== 0; });
             // Append rows and mark ONLY the successful recs as already planned.
@@ -3256,7 +3282,7 @@ $_total_awards = count($courtAwards ?? []);
             } else {
                 cpCloseRecModal();
             }
-        });
+        }).catch(function() { cpRecsDone(); });
     };
 
     // ---- Ad-hoc award modal ----
@@ -3309,6 +3335,17 @@ $_total_awards = count($courtAwards ?? []);
         var input = gid('cp-adhoc-award-search');
         var drop  = gid('cp-adhoc-award-ac');
         var q     = (input.value || '').trim().toLowerCase();
+        // Drop a previous selection as soon as the text stops matching it. Without
+        // this, picking "Order of the Rose" and then editing the box to something
+        // else still submits the ROSE id — the visible text and the posted award
+        // disagree and the wrong award lands on the court plan. Compared against the
+        // remembered name rather than cleared unconditionally because this handler is
+        // also wired to onfocus, where the selection must survive. cpAcSearch (the
+        // player field) already clears its hidden id the same way.
+        if ((input.value || '').trim() !== (input.dataset.selectedName || '')) {
+            gid('cp-adhoc-award-id').value = '';
+            input.dataset.selectedName = '';
+        }
         var wantTitle  = cpAdhocMode === 'title';
         var groupOrder = wantTitle ? CP_TITLE_GROUPS : CP_AWARD_GROUPS;
 
@@ -3354,6 +3391,7 @@ $_total_awards = count($courtAwards ?? []);
     window.cpSelectAdhocAward = function(o) {
         var input = gid('cp-adhoc-award-search');
         input.value = o.name;
+        input.dataset.selectedName = o.name;
         input.dataset.ladder = o.ladder ? '1' : '0';
         gid('cp-adhoc-award-id').value = o.id;
         var drop = gid('cp-adhoc-award-ac');
@@ -3438,6 +3476,13 @@ $_total_awards = count($courtAwards ?? []);
     function cpAppendAwardRow(aw) {
         var empty = gid('cp-award-empty');
         if (empty) empty.remove();
+        // Never render the same court line twice. add_award is idempotent for a
+        // recommendation-backed line (a repeat add returns the EXISTING row with
+        // AlreadyOnCourt), and the delta-sync/heartbeat can also replay an add another
+        // officer already put on screen. Without this guard those paths paint a second
+        // DOM row for one court_award_id, and the duplicate's buttons act on a row the
+        // officer thinks is separate.
+        if (gid('cp-aw-' + aw.CourtAwardId)) { return; }
         // Register in the client model so grant/skip/reconcile can find the row (walk-on
         // adds must be grantable without a reload). Idempotent.
         if (!courtAwards.some(function(x) { return String(x.CourtAwardId) === String(aw.CourtAwardId); })) {
@@ -4131,7 +4176,7 @@ $_total_awards = count($courtAwards ?? []);
             cpDrag.row.classList.remove('cp-cp-dragging');
             try { cpDrag.handle.releasePointerCapture(cpDrag.pointerId); } catch (err) {}
             cpDrag = null;
-            if (moved) { cpSaveOrder(); cpRenumberRows(); }
+            if (moved && !cpReorderBlocked()) { cpSaveOrder(); cpRenumberRows(); }
         }
         list.addEventListener('pointerup', endDrag);
         list.addEventListener('pointercancel', endDrag);

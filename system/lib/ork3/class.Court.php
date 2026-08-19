@@ -222,32 +222,89 @@ class Court
             return false;
         }
 
-        // Next sort_order
-        $this->db->Clear();
-        $sor = $this->db->DataSet('SELECT MAX(sort_order) AS m FROM ' . DB_PREFIX . 'court_award
+        // Idempotent add for a recommendation-backed line. One recommendation is one
+        // honor, so a court carries it at most once. Without this, a double-click on
+        // "Add Selected" (or a retry after a flaky response) creates two court_award
+        // rows for the same rec. Per-line idempotency does not help there —
+        // claimStagedForGrant guarantees each LINE commits once, so two lines finalize
+        // into two ork_awards rows for one recommendation.
+        // 'cancelled' is excluded on purpose: an officer who skipped a rec and then
+        // deliberately re-adds it must get a fresh, live line.
+        $existing = null;
+        if ($rec_id > 0) {
+            $this->db->Clear();
+            $dup = $this->db->DataSet(
+                'SELECT court_award_id, rank, sort_order, pass_to_local, notes,
+                        public_comment, status, scroll_status, regalia_status
+                   FROM ' . DB_PREFIX . "court_award
+                  WHERE court_id = " . $court_id . '
+                    AND recommendations_id = ' . $rec_id . "
+                    AND status != 'cancelled'
+                  ORDER BY court_award_id LIMIT 1"
+            );
+            if ($dup && $dup->Next()) {
+                $existing = [
+                    'court_award_id' => (int)$dup->court_award_id,
+                    'rank'           => (int)$dup->rank,
+                    'sort_order'     => (int)$dup->sort_order,
+                    'pass_to_local'  => (int)$dup->pass_to_local,
+                    'notes'          => (string)($dup->notes ?? ''),
+                    'public_comment' => (string)($dup->public_comment ?? ''),
+                    'status'         => (string)$dup->status,
+                    'scroll_status'  => (int)$dup->scroll_status,
+                    'regalia_status' => (int)$dup->regalia_status,
+                ];
+            }
+        }
+
+        // Defaults for a freshly-inserted line; overwritten below when we are handing
+        // back the line that already exists for this recommendation.
+        $status         = 'planned';
+        $scroll_status  = 0;
+        $regalia_status = 0;
+
+        if ($existing !== null) {
+            // Repeat add — return the live line as-is. Deliberately does NOT overwrite
+            // its notes/public_comment/rank with the incoming values: the officer may
+            // have edited them since, and a stray double-submit must never clobber
+            // real edits.
+            $court_award_id = $existing['court_award_id'];
+            $rank           = $existing['rank'];
+            $sort           = $existing['sort_order'];
+            $pass_to_local  = $existing['pass_to_local'];
+            $notes          = $existing['notes'];
+            $public_comment = $existing['public_comment'];
+            $status         = $existing['status'];
+            $scroll_status  = $existing['scroll_status'];
+            $regalia_status = $existing['regalia_status'];
+        } else {
+            // Next sort_order
+            $this->db->Clear();
+            $sor = $this->db->DataSet('SELECT MAX(sort_order) AS m FROM ' . DB_PREFIX . 'court_award
                               WHERE court_id = ' . $court_id);
-        $sort = ($sor && $sor->Next()) ? (int)$sor->m + 10 : 10;
+            $sort = ($sor && $sor->Next()) ? (int)$sor->m + 10 : 10;
 
-        $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
-        $notes_val = "'" . $this->esc($notes) . "'";
+            $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
+            $notes_val = "'" . $this->esc($notes) . "'";
 
-        $this->db->Clear();
-        $this->db->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'court_award
+            $this->db->Clear();
+            $this->db->Execute(
+                'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, recommendations_id,
               sort_order, pass_to_local, notes, public_comment)
              VALUES (' . $court_id . ', ' . $mundane_id . ', ' . $kingdomaward_id . ', ' . $rank . ',
                      ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
                      \'' . $this->esc($public_comment) . '\')'
-        );
-        // LAST_INSERT_ID() is connection-scoped, so it is the ONLY safe way to name
-        // the row we just wrote. A "highest id for this court" re-query is not: two
-        // officers adding to the same court (the multi-reeve case this tool is built
-        // for) would each read back whichever INSERT committed last, and every
-        // follow-up action keyed off that id would mutate the other officer's award.
-        $this->db->Clear();
-        $idr = $this->db->DataSet('SELECT LAST_INSERT_ID() AS court_award_id');
-        $court_award_id = ($idr && $idr->Next()) ? (int)$idr->court_award_id : 0;
+            );
+            // LAST_INSERT_ID() is connection-scoped, so it is the ONLY safe way to name
+            // the row we just wrote. A "highest id for this court" re-query is not: two
+            // officers adding to the same court (the multi-reeve case this tool is built
+            // for) would each read back whichever INSERT committed last, and every
+            // follow-up action keyed off that id would mutate the other officer's award.
+            $this->db->Clear();
+            $idr = $this->db->DataSet('SELECT LAST_INSERT_ID() AS court_award_id');
+            $court_award_id = ($idr && $idr->Next()) ? (int)$idr->court_award_id : 0;
+        }
 
         // Fetch persona + award_name for response
         $this->db->Clear();
@@ -298,11 +355,37 @@ class Court
             'Notes'             => $notes,
             'PublicComment'     => $public_comment,
             'RecReason'         => $rec_reason,
-            'Status'            => 'planned',
-            'ScrollStatus'      => 0,
-            'RegaliaStatus'     => 0,
-            'Artisans'          => [],
+            'Status'            => $status,
+            'ScrollStatus'      => $scroll_status,
+            'RegaliaStatus'     => $regalia_status,
+            'Artisans'          => $existing !== null ? $this->getArtisans($court_award_id) : [],
+            'AlreadyOnCourt'    => $existing !== null,
         ];
+    }
+
+    /** Artisans credited on one court_award, in insertion order. */
+    public function getArtisans($court_award_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT caa.court_award_artisan_id, caa.mundane_id, caa.contribution, m.persona
+             FROM ' . DB_PREFIX . 'court_award_artisan caa
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
+             WHERE caa.court_award_id = ' . (int)$court_award_id . '
+             ORDER BY caa.court_award_artisan_id'
+        );
+        $out = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $out[] = [
+                    'CourtAwardArtisanId' => (int)$rs->court_award_artisan_id,
+                    'MundaneId'           => (int)$rs->mundane_id,
+                    'Persona'             => $rs->persona,
+                    'Contribution'        => $rs->contribution,
+                ];
+            }
+        }
+        return $out;
     }
 
     /** Persona for a mundane id (presence/roster display), or '' if unknown. */
