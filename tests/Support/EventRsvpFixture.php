@@ -209,6 +209,8 @@ final class EventRsvpFixture
                 'DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ?'
             );
             $stmt->execute([$mundaneId]);
+            $stmt = $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ?');
+            $stmt->execute([$mundaneId]);
             $stmt = $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ?');
             $stmt->execute([$mundaneId]);
         }
@@ -292,6 +294,7 @@ final class EventRsvpFixture
         $id = (int) $this->pdo->lastInsertId();
         $this->mundaneIds[] = $id;
         $this->mundaneTokens[$id] = $token;
+        $this->seedSession($id, $token);
 
         return $id;
     }
@@ -344,5 +347,20 @@ final class EventRsvpFixture
         $this->detailIds[] = $id;
 
         return $id;
+    }
+
+    /**
+     * Multi-device sessions (ork_session) are the authoritative token store;
+     * seed a session row for fixture tokens (mirrors the migration backfill).
+     */
+    private function seedSession(int $mundaneId, string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
     }
 }
