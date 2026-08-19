@@ -34,18 +34,27 @@ class JSONService {
 		$action = $_GET['Action'];
 		$c = null;
 		if ('Reflection/Parameters' == $action) {
-			if (array_key_exists('Method', $_REQUEST) && array_key_exists($_REQUEST['Method'], $this->calls)) {
+			$method_key = isset($_REQUEST['Method']) ? $_REQUEST['Method'] : '';
+			$ref_call = null;
+			foreach ($this->calls as $ck => $cv) {
+				if ($ck === $method_key) { $ref_call = $cv; break; }
+			}
+			if ($ref_call !== null) {
 				$ref = array(); $i = 0;
-				foreach ($this->calls[$_REQUEST['Method']][2] as $k => $validator) {
+				foreach ($ref_call[2] as $k => $validator) {
 					$ref[$i++] = array($validator[0], $validator[3]);
 				}
 				echo json_encode($ref);
 			} else {
-				echo json_encode(array("Success"=>false, "Detail"=>"Method does not exist or no method was specified: " . $_REQUEST['Method']));
+				echo json_encode(array("Success"=>false, "Detail"=>"Method does not exist or no method was specified."));
 			}
 		} else if (array_key_exists($action, $this->calls)) {
+			$call_def = null;
+			foreach ($this->calls as $call_key => $call_val) {
+				if ($call_key === $action) { $call_def = $call_val; break; }
+			}
 			$param = array();
-			foreach ($this->calls[$action][2] as $k => $validator) {
+			foreach ($call_def[2] as $k => $validator) {
 				switch (strtoupper($validator[1])) {
 					case 'POST': 
 						if (!$validator[2] && !array_key_exists($validator[0], $_POST)) echo json_encode(array("Success"=>false, "Detail"=>"Could not find required POST parameter. $validator[0]"));
@@ -71,27 +80,29 @@ class JSONService {
 				}
 				$param[] = $v;
 			}
-			if (count($this->calls[$action][1]) == 1) {
-				$func = $this->calls[$action][1][0];
-				if (!function_exists($func)) {
-					echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching function call for signature. $method:".$this->calls[$action]));
+			if (count($call_def[1]) == 1) {
+				$func = $call_def[1][0];
+				if (!is_callable($func)) {
+					echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching function call for signature."));
+					return;
 				}
 				echo json_encode(call_user_func_array($func, $param));
 			} else {
-				$class = $this->calls[$action][1][0];
+				$class = $call_def[1][0];
 				if (class_exists($class)) {
 					$c = new $class();
-					$method = $this->calls[$action][1][1];
-					if (!method_exists($c, $method)) {
-						echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching method for signature. $action:$class->$method"));
+					$method = $call_def[1][1];
+					if (!is_callable(array($c, $method))) {
+						echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching method for signature."));
+						return;
 					}
 					echo json_encode(call_user_func_array(array($c, $method), $param));
 				} else {
-					echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching class for signature. $action:$class"));
+					echo json_encode(array("Success"=>false, "Detail"=>"Could not find matching class for signature."));
 				}
 			}
 		} else {
-			echo json_encode(array("Success"=>false, "Detail"=>"Action does not exist. $action"));
+			echo json_encode(array("Success"=>false, "Detail"=>"Action does not exist."));
 		}
 	}
 }
