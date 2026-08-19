@@ -10,7 +10,11 @@ class Dangeraudit extends Ork3
 
     public function audit($call, $parameters, $entity, $entity_id, $prior_state = null, $post_state = null)
     {
-        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($_SESSION['is_authorized_mundane_id']);
+        // Read the cached actor id directly. IsAuthorized() expects a TOKEN, not a
+        // mundane_id; this used to work only because IsAuthorized_h short-circuited
+        // on the $_SESSION cache. That short-circuit was removed so eviction takes
+        // effect on every request, so read the cache here instead of round-tripping.
+        $mundane_id = (int)($_SESSION['is_authorized_mundane_id'] ?? 0);
         $this->audit->clear();
         $this->audit->method_call = $call;
         $this->audit->parameters = json_encode($parameters);
