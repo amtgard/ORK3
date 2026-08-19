@@ -30,6 +30,9 @@ html[data-theme="dark"] .qt-derived-value { color:#e2e8f0; }
 html[data-theme="dark"] .qt-derived-empty { color:#718096; }
 html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
 .qt-config-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; display: flex; flex-direction: column; }
+/* Was an inline style on the wrapper div — inline, no media query could reach it, so the two
+   cards stayed on fixed min-content tracks and the second one sat off a phone screen. */
+.qt-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
 .qt-config-card h3 { margin: 0 0 6px; font-size: 1.05rem; color: #2d3748; }
 .qt-config-card h3 i { margin-right: 6px; color: #2b6cb0; }
 .qt-stat-row { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -46,13 +49,13 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .qt-form-row:last-child { margin-bottom: 0; }
 .qt-form-row label { font-size: 0.82rem; font-weight: 600; color: var(--rp-text-muted); min-width: 160px; text-transform: uppercase; letter-spacing: 0.04em; }
-.qt-form-row input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
+.qt-form-row input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
 .qt-hint-inline { font-size: 0.78rem; color: var(--rp-text-muted); }
 .qt-form-row.qt-stack { align-items: flex-start; }
 .qt-form-row.qt-stack > label { padding-top: 6px; }
 .qt-field-grow { flex: 1; min-width: 0; }
 .qt-text-input { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
-.qt-textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; font-family: inherit; resize: vertical; }
+.qt-textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; }
 .qt-help-text { font-size: 0.75rem; color: var(--rp-text-muted); margin-top: 3px; }
 .qt-required { color: #e53e3e; margin-left: 2px; }
 
@@ -65,7 +68,7 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-segmented label.qt-radio-opt:last-child { border-right: none; }
 .qt-segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
 .qt-segmented label.qt-radio-opt.qt-active { background: #2b6cb0; color: #fff; }
-.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
+.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
 .qt-validity-days { width: 100px; }
 .qt-validity-until { width: 170px; }
 .qt-validity-warn { display: none; align-items: flex-start; gap: 8px; background: #fff8e1; border: 1px solid #ffc107; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 9px 12px; font-size: 0.82rem; line-height: 1.4; color: #78350f; }
@@ -74,13 +77,17 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 /* ── Toggle switch (label .... [switch]) ───────────────── */
 .qt-switch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .qt-switch-row:last-child { margin-bottom: 0; }
-.qt-switch-row .qt-switch-label { flex: 1; font-size: 0.88rem; font-weight: 600; color: #4a5568; cursor: pointer; }
+.qt-switch-row .qt-switch-label { flex: 0 1 auto; font-size: 0.88rem; font-weight: 600; color: #4a5568; cursor: pointer; }
 .qt-switch { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; flex-shrink: 0; background: #cbd5e0; border-radius: 999px; cursor: pointer; transition: background 0.18s; border: none; outline: none; margin: 0; padding: 0; }
 .qt-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.18s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 .qt-switch:checked { background: #2b6cb0; }
 .qt-switch:checked::after { transform: translateX(16px); }
 .qt-switch:focus-visible { box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
 .qt-switch-help { margin-left: 6px; }
+/* The help icon is now a sibling of the label (it must not live inside label[for=…]), so the
+   free space has to be absorbed here instead of by the label — otherwise the "?" is flung to
+   the right edge of the card and its centred tooltip box overhangs the card. */
+.qt-switch-row .qt-switch-help { margin-right: auto; }
 
 /* ── Save / actions ────────────────────────────────────── */
 .qt-save-row { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rp-border); }
@@ -95,10 +102,13 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-link-btn-ghost:hover { background: #ebf4ff; }
 
 /* ── Tooltips (existing pattern) ───────────────────────── */
-.qt-tooltip-wrap { position:relative; display:inline-block; }
-.qt-tooltip-icon { cursor:pointer; color:#718096; font-size:0.82rem; margin-left:4px; }
-.qt-tooltip-box { display:none; position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:280px; background:#2d3748; color:#fff; font-size:0.78rem; line-height:1.45; padding:8px 10px; border-radius:5px; z-index:100; pointer-events:none; }
+.qt-tooltip-wrap { position:relative; display:inline-block; flex-shrink:0; }
+.qt-tooltip-icon { display:inline-flex; align-items:center; justify-content:center; background:none; border:none; padding:0; cursor:pointer; color:#718096; font-size:0.82rem; margin-left:4px; }
+.qt-tooltip-box { display:none; position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:max-content; max-width:min(280px, calc(100vw - 24px)); background:#2d3748; color:#fff; font-size:0.78rem; line-height:1.45; padding:8px 10px; border-radius:5px; z-index:100; pointer-events:none; }
 .qt-tooltip-wrap:hover .qt-tooltip-box, .qt-tooltip-wrap:focus-within .qt-tooltip-box { display:block; }
+/* Touch has no :hover and the icon is not focusable by tap, so the help text was unreadable on a
+   phone. Click-toggled class; pointer-events restored so tapping the box cannot fall through. */
+.qt-tooltip-wrap.qt-tip-open .qt-tooltip-box { display:block; pointer-events:auto; }
 
 /* ── Dark mode ─────────────────────────────────────────── */
 html[data-theme="dark"] .qt-nav-link {
@@ -182,6 +192,10 @@ html[data-theme="dark"] #qt-manager-ac-results {
 }
 html[data-theme="dark"] .qt-ac-item { border-bottom-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
 html[data-theme="dark"] .qt-ac-item:hover { background: #4a5568; }
+/* Keyboard/pointer highlight is a class, not an inline background — an inline hex cannot be
+   reached by the dark rule and measured 1.11:1 against the dark text. */
+.qt-ac-item.qt-ac-active { background: #ebf4ff; }
+html[data-theme="dark"] .qt-ac-item.qt-ac-active { background: #4a5568; color: var(--ork-text, #e2e8f0); }
 html[data-theme="dark"] .qt-manager-row { border-bottom-color: var(--ork-border, #4a5568) !important; }
 html[data-theme="dark"] .qt-reset-retakes-btn {
 	background: #44337a !important;
@@ -193,7 +207,7 @@ html[data-theme="dark"] #qt-manager-error { color: #fc8181 !important; }
 /* ── In-product confirm/alert modal (replaces native confirm/alert) ── */
 .qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
 .qt-confirm-overlay.qt-open { display:flex; }
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 /* orkui.css paints every h1..h6 as a grey "chip" (background + border + white text-shadow).
    On a modal title that reads as a pale box — a glaring white box in dark mode. The config-card
@@ -216,9 +230,69 @@ html[data-theme="dark"] .qt-confirm-title { color: var(--ork-text, #e2e8f0); }
 html[data-theme="dark"] .qt-confirm-body { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .qt-confirm-cancel { background: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
+
+/* ── Press / keyboard feedback ─────────────────────────── */
+/* Paired with the :hover rules above, not a replacement — on touch a tap otherwise gets no
+   acknowledgement at all until the AJAX round-trip lands. */
+.qt-save-btn:active, .qt-link-btn:active, .qt-confirm-btn:active, .qt-nav-link:active, .qt-rm-manager-btn:active { filter: brightness(0.88); transform: scale(0.97); }
+.qt-save-btn:focus-visible, .qt-link-btn:focus-visible, .qt-confirm-btn:focus-visible, .qt-tooltip-icon:focus-visible { outline: 2px solid #2b6cb0; outline-offset: 2px; }
+html[data-theme="dark"] .qt-save-btn:focus-visible,
+html[data-theme="dark"] .qt-link-btn:focus-visible,
+html[data-theme="dark"] .qt-confirm-btn:focus-visible,
+html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed; }
+/* WebKit synthesises a hover on tap and leaves it applied, latching data-tip boxes open. */
+@media (hover: none) {
+	[data-tip]:hover::after { opacity: 0; }
+}
+
+/* ── Reduced motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+	.qt-nav-link, .qt-segmented label.qt-radio-opt, .qt-switch, .qt-switch::after, [data-tip]::after { transition: none !important; animation: none !important; }
+	.qt-save-btn:active, .qt-link-btn:active, .qt-confirm-btn:active, .qt-nav-link:active, .qt-rm-manager-btn:active { transform: none !important; }
+}
+
+/* ── Narrow viewports ──────────────────────────────────── */
+@media (max-width: 900px) {
+	/* Anchor the help box to the switch row so it can never leave the screen; the wrap itself is
+	   only ~13px wide, which is what pushed the box up to 180px off the right edge. */
+	.qt-switch-row { position: relative; }
+	.qt-tooltip-wrap { position: static; }
+	.qt-tooltip-box { left: 0; right: 0; width: auto; max-width: none; transform: none; }
+	.qt-tooltip-icon { min-width: 44px; min-height: 44px; margin-left: 0; }
+}
+@media (max-width: 768px) {
+	.qt-config-grid { grid-template-columns: 1fr; gap: 14px; }
+	.qt-form-row { flex-direction: column; align-items: stretch; gap: 6px; }
+	.qt-form-row > label { min-width: 0; width: 100%; text-transform: none; letter-spacing: 0; }
+	.qt-form-row.qt-stack > label { padding-top: 0; }
+	.qt-field-grow, .qt-textarea { width: 100%; }
+	.qt-field-grow { flex: none; }
+	/* Direct children only — the base `.qt-form-row input[type=number]` rule also reaches the
+	   Days input nested in `.qt-validity-toggle`, which is handled by its own rule below. */
+	.qt-form-row > input[type=number] { width: 120px; min-height: 44px; }
+	.qt-validity-toggle { flex-direction: column; align-items: stretch; gap: 8px; }
+	/* `input.qt-validity-days` matches the base `.qt-form-row input[type=number]` specificity and
+	   comes later, so this actually wins; a bare class selector would silently lose to it. */
+	.qt-form-row input.qt-validity-days, .qt-form-row input.qt-validity-until { width: 100%; min-height: 44px; }
+	.qt-segmented { width: 100%; }
+	/* No `white-space: nowrap` — `.qt-segmented` is `overflow:hidden` and the option has
+	   `min-width:0`, so a nowrap label is clipped ("Days from passing" loses ~28px at 320). */
+	.qt-segmented label.qt-radio-opt { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 44px; }
+}
+@media (max-width: 600px) {
+	.qt-confirm-overlay { padding: 12px; }
+	/* column-reverse puts the destructive action furthest from the resting thumb. */
+	.qt-confirm-footer { flex-direction: column-reverse; gap: 12px; }
+	.qt-confirm-btn { width: 100%; min-height: 44px; }
+	.qt-save-btn, .qt-link-btn, #qt-add-manager-btn, #qt-manager-search { min-height: 44px; }
+	.qt-link-btn { display: inline-flex; align-items: center; justify-content: center; }
+	.qt-switch { width: 52px; height: 30px; }
+	.qt-switch::after { width: 26px; height: 26px; }
+	.qt-switch:checked::after { transform: translateX(22px); }
+}
 </style>
 
-<div class="rp-root">
+<div class="rp-root qt-page">
 
 	<!-- Header -->
 	<div class="rp-header">
@@ -265,7 +339,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		<!-- Main content -->
 		<div class="rp-table-area">
 
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
+			<div class="qt-config-grid">
 			<?php foreach (['reeve' => $ReeveConfig, 'corpora' => $CorporaConfig] as $type => $cfg): ?>
 			<?php
 				$count = ($type === 'reeve') ? $ReeveCount : $CorporaCount;
@@ -343,13 +417,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					<div class="qt-section">
 						<div class="qt-section-header">Player Experience</div>
 						<div class="qt-switch-row">
-							<label class="qt-switch-label" for="qt-show-correct-<?= $type ?>">
-								Display correct answer on incorrect
-								<span class="qt-tooltip-wrap qt-switch-help">
-									<i class="fas fa-question-circle qt-tooltip-icon"></i>
-									<span class="qt-tooltip-box">When enabled, players who pick the wrong answer will see the correct answer highlighted in green. When disabled, only their incorrect choice is marked.</span>
-								</span>
-							</label>
+							<?php // The help icon must sit OUTSIDE the label: inside it, tapping "?" activates the switch. ?>
+							<label class="qt-switch-label" for="qt-show-correct-<?= $type ?>">Display correct answer on incorrect</label>
+							<span class="qt-tooltip-wrap qt-switch-help">
+								<button type="button" class="qt-tooltip-icon" aria-expanded="false" aria-label="More information about displaying the correct answer"><i class="fas fa-question-circle"></i></button>
+								<span class="qt-tooltip-box">When enabled, players who pick the wrong answer will see the correct answer highlighted in green. When disabled, only their incorrect choice is marked.</span>
+							</span>
 							<input type="checkbox" class="qt-switch" name="ShowCorrectOnIncorrect" id="qt-show-correct-<?= $type ?>" value="1" <?= !empty($cfg['ShowCorrectOnIncorrect']) ? 'checked' : '' ?>>
 						</div>
 						<div class="qt-form-row qt-stack">
@@ -395,13 +468,11 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							</div>
 						</div>
 						<div class="qt-switch-row">
-							<label class="qt-switch-label" for="qt-share-<?= $type ?>">
-								Opt-in to share questions
-								<span class="qt-tooltip-wrap qt-switch-help">
-									<i class="fas fa-question-circle qt-tooltip-icon"></i>
-									<span class="qt-tooltip-box">By checking this box and saving, you agree to share your active Reeve's questions with other kingdoms and you gain access to the library of questions from other kingdoms. You will still need to add any given question to your database.</span>
-								</span>
-							</label>
+							<label class="qt-switch-label" for="qt-share-<?= $type ?>">Opt-in to share questions</label>
+							<span class="qt-tooltip-wrap qt-switch-help">
+								<button type="button" class="qt-tooltip-icon" aria-expanded="false" aria-label="More information about sharing questions"><i class="fas fa-question-circle"></i></button>
+								<span class="qt-tooltip-box">By checking this box and saving, you agree to share your active Reeve's questions with other kingdoms and you gain access to the library of questions from other kingdoms. You will still need to add any given question to your database.</span>
+							</span>
 							<input type="checkbox" class="qt-switch" name="ShareQuestions" id="qt-share-<?= $type ?>" value="1" <?= !empty($cfg['ShareQuestions']) ? 'checked' : '' ?>>
 						</div>
 					</div>
@@ -535,6 +606,37 @@ var qtConfirm = (function() {
 })();
 function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); }
 
+// ----- Help tooltips -----
+// :hover / :focus-within can never fire on touch, so the help text was unreachable on a phone.
+// Click toggles a class; the CSS :hover rule is untouched, so desktop behaviour is unchanged.
+(function() {
+	function closeAll(except) {
+		document.querySelectorAll('.qt-tooltip-wrap.qt-tip-open').forEach(function(w) {
+			if (w === except) return;
+			w.classList.remove('qt-tip-open');
+			var b = w.querySelector('.qt-tooltip-icon');
+			if (b) b.setAttribute('aria-expanded', 'false');
+		});
+	}
+	document.querySelectorAll('.qt-tooltip-icon').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.preventDefault();
+			var wrap = btn.closest('.qt-tooltip-wrap');
+			if (!wrap) return;
+			closeAll(wrap);
+			var open = wrap.classList.toggle('qt-tip-open');
+			btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+		});
+	});
+	document.addEventListener('click', function(e) {
+		if (e.target.closest && e.target.closest('.qt-tooltip-wrap')) return;
+		closeAll(null);
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') closeAll(null);
+	});
+})();
+
 (function() {
 	document.querySelectorAll('.qt-config-form').forEach(function(form) {
 		// Wire validity mode radio toggles
@@ -646,7 +748,7 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 	function acClose() { acDrop.style.display = 'none'; _acItems = []; _acIndex = -1; }
 	function acHighlight(idx) {
 		_acIndex = idx;
-		_acItems.forEach(function(el, i) { el.style.background = (i === idx) ? '#ebf4ff' : ''; });
+		_acItems.forEach(function(el, i) { el.classList.toggle('qt-ac-active', i === idx); });
 		if (idx >= 0 && _acItems[idx] && _acItems[idx].scrollIntoView) {
 			_acItems[idx].scrollIntoView({ block: 'nearest' });
 		}
