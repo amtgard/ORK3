@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-knights-and-masters",
+  "calibratedAt": "2026-08-01T21:23:15Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:48:51Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -4,9 +4,12 @@
 #
 # Does two things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
-#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer.phar,
+#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar,
 #      then re-stages them. Only files that are FULLY staged are touched — a file with both
 #      staged and unstaged changes is skipped, so unstaged hunks are never swept into the commit.
+#      --path-mode=intersection makes the fixer honor the excludes in .php-cs-fixer.dist.php
+#      (vendor, tools, import, db-migrations, ...); without it, explicitly-passed paths bypass
+#      the config Finder and third-party code staged with `git add -f` gets reformatted.
 #
 # It never blocks a commit because of the formatter (missing php / fixer errors only warn).
 
@@ -30,7 +33,7 @@ fi
 # ---------------------------------------------------------------------------
 # 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
-PHAR="tools/php-cs-fixer.phar"
+PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
 CONFIG=".php-cs-fixer.dist.php"
 
 # Find a PHP runtime; if none, skip formatting silently-ish (do not block the commit).
@@ -72,7 +75,7 @@ TO_FIX=$(printf '%s' "$TO_FIX" | sed '/^$/d')
 
 # Run the fixer on just those files. setUnsupportedPhpVersionAllowed handles newer PHP.
 echo "$TO_FIX" | tr '\n' '\0' | \
-    xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --quiet --using-cache=yes
+    xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --path-mode=intersection --quiet --using-cache=yes
 FIX_STATUS=$?
 
 if [ "$FIX_STATUS" -ne 0 ]; then
@@ -81,5 +84,7 @@ if [ "$FIX_STATUS" -ne 0 ]; then
 fi
 
 # Re-stage anything the fixer rewrote (no-op for unchanged files).
-echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add --
+# -f because every path here was already staged by the user; without it, a
+# gitignored-but-force-added file (e.g. vendor/) makes git print "paths are ignored" noise.
+echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add -f --
 exit 0

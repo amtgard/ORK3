@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "pageId": "unit-index",
+  "imageWidth": 1280,
+  "imageHeight": 2161,
+  "calibratedAt": "2026-08-01T22:10:06Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 311,
+      "y": 438,
+      "width": 904,
+      "height": 37,
+      "source": "refuzz"
+    },
+    {
+      "x": 204,
+      "y": 439,
+      "width": 16,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 285,
+      "y": 439,
+      "width": 16,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 113,
+      "y": 442,
+      "width": 63,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 229,
+      "y": 442,
+      "width": 54,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 61,
+      "y": 472,
+      "width": 50,
+      "height": 50,
+      "source": "refuzz"
+    },
+    {
+      "x": 124,
+      "y": 482,
+      "width": 259,
+      "height": 30,
+      "source": "refuzz"
+    },
+    {
+      "x": 434,
+      "y": 484,
+      "width": 55,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 641,
+      "y": 487,
+      "width": 31,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 60,
+      "y": 528,
+      "width": 52,
+      "height": 254,
+      "source": "refuzz"
+    },
+    {
+      "x": 506,
+      "y": 532,
+      "width": 625,
+      "height": 134,
+      "source": "refuzz"
+    },
+    {
+      "x": 125,
+      "y": 539,
+      "width": 276,
+      "height": 46,
+      "source": "refuzz"
+    },
+    {
+      "x": 434,
+      "y": 544,
+      "width": 55,
+      "height": 39,
+      "source": "refuzz"
+    },
+    {
+      "x": 124,
+      "y": 596,
+      "width": 162,
+      "height": 30,
+      "source": "refuzz"
+    },
+    {
+      "x": 357,
+      "y": 601,
+      "width": 27,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 435,
+      "y": 601,
+      "width": 30,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 124,
+      "y": 628,
+      "width": 257,
+      "height": 55,
+      "source": "refuzz"
+    },
+    {
+      "x": 463,
+      "y": 630,
+      "width": 26,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 435,
+      "y": 658,
+      "width": 33,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 124,
+      "y": 685,
+      "width": 220,
+      "height": 55,
+      "source": "refuzz"
+    },
+    {
+      "x": 463,
+      "y": 687,
+      "width": 26,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 642,
+      "y": 690,
+      "width": 33,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 357,
+      "y": 715,
+      "width": 27,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 435,
+      "y": 715,
+      "width": 33,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 208,
+      "y": 742,
+      "width": 171,
+      "height": 40,
+      "source": "refuzz"
+    },
+    {
+      "x": 463,
+      "y": 744,
+      "width": 26,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 642,
+      "y": 747,
+      "width": 33,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T17:07:07Z",
+  "refuzzedFromCommit": "05389516"
+}

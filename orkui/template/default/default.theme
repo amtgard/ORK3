@@ -148,8 +148,8 @@
 // Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
 // Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
 $downtime_start = ''; // set to a UTC ISO string (e.g. '2026-07-16T02:00:00Z') to show the banner
-$downtime_end   = '2026-07-16T03:00:00Z'; // 2026-07-15 11:00 PM EDT (UTC-4)
-$downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release.';
+$downtime_end   = '2026-08-18T14:00:00Z'; // 2026-08-18 10:00 AM EDT (UTC-4)
+$downtime_note  = 'Potential Downtime for an upgrade';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
@@ -178,6 +178,90 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 [data-wx-safety]:hover { filter: brightness(1.05); }
 [data-wx-safety]:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }
 </style>
+<?php
+// ── Log Out Everywhere confirm — house-styled dialog matching wx-safety. ──
+// Renders only when the nav link does (>1 live session); shows each session
+// with a friendly client label, source IP, and last activity.
+if (!function_exists('nav_session_client_label')) {
+	function nav_session_client_label($ua)
+	{
+		$ua = (string)$ua;
+		if ($ua === '') return 'Unknown client';
+		// Self-identified clients (X-ORK-Client) and CLI tools first.
+		if (stripos($ua, 'mork') === 0) return $ua;                    // "mORK/2.4 (iOS…)"
+		if (stripos($ua, 'jsork') !== false) return $ua;
+		if (stripos($ua, 'curl') === 0) return 'API client (curl)';
+		if (stripos($ua, 'Mozilla') === false) return substr($ua, 0, 40);
+		$browser = 'Browser';
+		if (stripos($ua, 'Edg/') !== false) $browser = 'Edge';
+		elseif (stripos($ua, 'OPR/') !== false) $browser = 'Opera';
+		elseif (stripos($ua, 'Chrome/') !== false) $browser = 'Chrome';
+		elseif (stripos($ua, 'Firefox/') !== false) $browser = 'Firefox';
+		elseif (stripos($ua, 'Safari/') !== false) $browser = 'Safari';
+		$os = '';
+		if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) $os = 'iOS';
+		elseif (stripos($ua, 'Android') !== false) $os = 'Android';
+		elseif (stripos($ua, 'Macintosh') !== false) $os = 'Mac';
+		elseif (stripos($ua, 'Windows') !== false) $os = 'Windows';
+		elseif (stripos($ua, 'Linux') !== false) $os = 'Linux';
+		return $os !== '' ? "$browser on $os" : $browser;
+	}
+}
+if (!function_exists('nav_session_ago')) {
+	function nav_session_ago($datetime)
+	{
+		$s = time() - strtotime((string)$datetime);
+		if ($s < 90) return 'just now';
+		if ($s < 5400) return floor($s / 60) . ' min ago';
+		if ($s < 129600) return round($s / 3600) . ' hr ago';
+		return round($s / 86400) . ' days ago';
+	}
+}
+// Computed here (renders before the nav); the nav dropdown reuses it.
+$__laSessions = Ork3::$Lib->authorization->ListSessionsForToken((string)($this->__session->token ?? ''));
+if (count($__laSessions) > 1) : ?>
+<div id="logout-all-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeLogoutAllDialog();">
+	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
+		<div style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1;color:#c53030;"><i class="fas fa-power-off"></i></div>
+		<div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--ork-text,#2d3748);">Log Out Everywhere?</div>
+		<div style="font-size:14px;line-height:1.55;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);text-align:center;">
+			You&rsquo;re signed in on <strong><?=count($__laSessions)?></strong> devices &amp; apps. This signs you out of all of them.
+		</div>
+		<div style="border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;margin-bottom:18px;overflow:hidden;">
+<?php foreach ($__laSessions as $__i => $__s) : ?>
+			<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;<?=$__i > 0 ? 'border-top:1px solid var(--ork-border,#e2e8f0);' : ''?><?=$__s['current'] ? 'background:rgba(66,153,225,0.08);' : ''?>">
+				<span style="color:var(--ork-text,#2d3748);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+					<?=htmlspecialchars(nav_session_client_label($__s['user_agent']))?><?=$__s['current'] ? ' <span style="font-weight:400;color:#4299e1;">(this one)</span>' : ''?>
+				</span>
+				<span style="color:var(--ork-text-secondary,#718096);white-space:nowrap;">
+					<?=htmlspecialchars($__s['ip'])?> &middot; <?=htmlspecialchars(nav_session_ago($__s['last_seen']))?>
+				</span>
+			</div>
+<?php endforeach; ?>
+		</div>
+		<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+			<button type="button" onclick="closeLogoutAllDialog()" style="background:transparent;color:var(--ork-text-secondary,#4a5568);border:1px solid var(--ork-border,#cbd5e0);border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+			<button type="button" onclick="window.location.href='<?=UIR?>Login/logout_all';" style="background:#c53030;color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;"><i class="fas fa-power-off" style="margin-right:6px;"></i>Log Out All <?=count($__laSessions)?></button>
+		</div>
+	</div>
+</div>
+<script>
+function navLogoutAllConfirm(ev) {
+	ev.preventDefault();
+	var o = document.getElementById('logout-all-overlay');
+	o.style.display = 'flex';
+	return false;
+}
+function closeLogoutAllDialog() {
+	var o = document.getElementById('logout-all-overlay');
+	if (o) o.style.display = 'none';
+}
+document.addEventListener('keydown', function (e) {
+	if (e.key === 'Escape') closeLogoutAllDialog();
+});
+</script>
+<?php endif; ?>
+
 <div id="wx-safety-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
 	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
 		<div id="wx-safety-icon" style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1"></div>
@@ -350,21 +434,8 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 			<!-- Home Kingdom / Home Park quick-links -->
 <?php if ($this->__session->token != null) : ?>
 <?php
-	global $DB;
 	$__huid = (int)$this->__session->user_id;
-	$DB->Clear();
-	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, pk.name as parent_kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id LEFT JOIN ork_kingdom pk ON k.parent_kingdom_id = pk.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
-	$__home = null;
-	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {
-		$__home = [
-			'park_id'             => $__homeResult->park_id,
-			'park_name'           => $__homeResult->park_name,
-			'kingdom_id'          => $__homeResult->kingdom_id,
-			'kingdom_name'        => $__homeResult->kingdom_name,
-			'parent_kingdom_id'   => (int)$__homeResult->parent_kingdom_id,
-			'parent_kingdom_name' => $__homeResult->parent_kingdom_name,
-		];
-	}
+	$__home = nav_home_context($__huid);
 ?>
 <?php if ($__home) : ?>
 <?php if ($__home['parent_kingdom_id'] > 0) : ?>
@@ -414,11 +485,7 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 	$__navUid      = (int)$this->__session->user_id;
 	$__navImgName  = sprintf('%06d', $__navUid);
 	$__navHasPhoto = file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.png') || file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.jpg');
-	$DB->Clear();
-	$__personaRow  = $DB->DataSet("SELECT persona FROM ork_mundane WHERE mundane_id = $__navUid LIMIT 1");
-	$__navPersona  = ($__personaRow && $__personaRow->Next() && $__personaRow->persona)
-		? $__personaRow->persona
-		: $this->__session->user_name;
+	$__navPersona  = nav_persona($__navUid, $this->__session->user_name);
 ?>
 			<div class='nav-dropdown-wrap' id='nav-avatar-wrap'>
 				<button class='nav-avatar-btn' onclick="document.getElementById('nav-avatar-wrap').classList.toggle('open')">
@@ -438,12 +505,20 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
-<?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
+<?php if ($NavIsOrkAdmin): ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
 <?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
+<?php
+					// "Log Out Everywhere" only appears when there is actually
+					// somewhere else to log out of (>1 live session). Session
+					// details render inside the modal (computed there, above).
+					if (!empty($__laSessions) && count($__laSessions) > 1) : ?>
+					<a href='<?=UIR?>Login/logout_all' class='nav-dropdown-danger' id='nav-logout-all'
+					   onclick="return navLogoutAllConfirm(event);"><i class='fas fa-power-off'></i> Log Out Everywhere</a>
+<?php				endif; ?>
 				</div>
 			</div>
 <?php endif; ?>
@@ -671,17 +746,11 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 <?php if ($this->__session->token != null) : ?>
 <?php
 // --- What's New modal ---
-$__wnUid = (int)$this->__session->user_id;
-$DB->Clear();
-$__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " . $__wnUid . " AND version = '" . WHATS_NEW_VERSION . "' LIMIT 1");
-$__wnShow = !($__wnRow && $__wnRow->Next());
-$DB->Clear();
-?>
-<?php
-$__currentRelease = null;
-foreach ($WHATS_NEW_ITEMS as $__release) {
-    if ($__release['date'] === WHATS_NEW_VERSION) { $__currentRelease = $__release; break; }
-}
+// ShowWhatsNew + WhatsNewRelease are set on Controller::$data and exposed via View::$__data.
+// Do not re-read $WHATS_NEW_ITEMS here: Controller already require_once'd whats_new_content.php
+// in a different scope, so require_once in this theme would leave $WHATS_NEW_ITEMS unset.
+$__wnShow = !empty($this->__data['ShowWhatsNew']);
+$__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
 ?>
 <?php if ($__wnShow && $__currentRelease): ?>
 <div class="wn-overlay wn-open" id="wn-overlay">
@@ -732,9 +801,7 @@ document.getElementById('wn-overlay').addEventListener('click', function(e) {
 // Show once per browser session (sessionStorage) to players with no email.
 if ($this->__session->token != null):
 	$__empUid = (int)$this->__session->user_id;
-	$DB->Clear();
-	$__empRow = $DB->DataSet("SELECT email FROM ork_mundane WHERE mundane_id = $__empUid LIMIT 1");
-	$__showEmailPrompt = $__empRow && $__empRow->Next() && empty(trim($__empRow->email ?? ''));
+	$__showEmailPrompt = nav_needs_email_prompt($__empUid);
 endif;
 ?>
 <?php if (!empty($__showEmailPrompt)): ?>
@@ -884,7 +951,7 @@ endif;
 <?php
     // Pre-render today's E.P. summary so opening the popover doesn't need
     // a network round-trip. Same shape as /EraPhoenice/today JSON.
-    $_epToday    = new DateTimeImmutable('today');
+    $_epToday    = EraPhoenice::today();
     $_epLastHol  = EraPhoenice::lastHoliday($_epToday);
     $_epNextHol  = EraPhoenice::nextHoliday($_epToday);
 ?>

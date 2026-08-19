@@ -1,0 +1,4 @@
+DOM fuzz discovery report
+============================
+
+(no volatile paths discovered)
