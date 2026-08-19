@@ -12,6 +12,26 @@ I have no apologies for the following code.  It works well enough.
 
 class Report extends Ork3
 {
+    /**
+     * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
+     *
+     * Every Order ladder ends in a masterhood, and most are classified correctly
+     * (Rose, Smith, Lion, Owl, Dragon, Garber, Warlord, Master Crown, Battlemaster
+     * all carry peerage='Master'). These five do not, so filtering on peerage alone
+     * silently drops them from the weekly recap:
+     *
+     *     7 Master Jovius   8 Master Zodiac   9 Master Mask
+     *    10 Master Hydra   11 Master Griffin
+     *
+     * Reported 2026-08-08 ("Week in review missing non-ladder masterhoods").
+     *
+     * This is a recap-scoped compensation, NOT a fix for the underlying data:
+     * ork_award.peerage is deliberately left alone, so the Masters report, the
+     * Knights & Masters report and the State of Amtgard totals still omit these.
+     * Reclassifying the awards would make all of those consistent in one move.
+     */
+    private const RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS = array(7, 8, 9, 10, 11);
+
     public function __construct()
     {
         parent::__construct();
@@ -4778,10 +4798,23 @@ class Report extends Ork3
         $start = mysql_real_escape_string($win['WeekStart']);
         $end   = mysql_real_escape_string($win['WeekEnd']);
         $kid_clause = $kingdom_id ? ' AND m.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
+
+        // Resolve peerage and award id through the same alias-then-kingdomaward
+        // precedence, so both agree on which award a grant actually represents.
+        $peerage_expr  = 'COALESCE(alias.peerage, a.peerage)';
+        $award_expr    = 'COALESCE(alias.award_id, ka.award_id)';
+        $peerage_where = "$peerage_expr IN ($list)";
+        if (in_array('Master', $peerages, true)) {
+            // Pick up the masterhoods ork_award.peerage does not flag as such.
+            $unflagged     = implode(',', array_map('intval', self::RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS));
+            $peerage_where = "($peerage_where OR $award_expr IN ($unflagged))";
+            // Report them as masterhoods so the returned DTO is self-consistent.
+            $peerage_expr  = "CASE WHEN $award_expr IN ($unflagged) THEN 'Master' ELSE $peerage_expr END";
+        }
         $sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
-					   COALESCE(alias.peerage, a.peerage) AS peerage,
+					   $peerage_expr AS peerage,
 					   COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) AS award_name
 				FROM " . DB_PREFIX . "awards ma
 					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
@@ -4790,7 +4823,7 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
 					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-				WHERE COALESCE(alias.peerage, a.peerage) IN ($list)
+				WHERE $peerage_where
 				  AND ma.revoked = 0
 				  AND ma.date >= '$start' AND ma.date <= '$end'
 				  $kid_clause

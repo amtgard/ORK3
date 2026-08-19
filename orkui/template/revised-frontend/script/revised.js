@@ -2549,6 +2549,12 @@ window.knInitMap = async function() {
     }
 
     var infowindow = new google.maps.InfoWindow();
+    // Local escaper, matching the knCiEsc/pkCiEsc convention elsewhere in this file —
+    // park names are user-entered and land in InfoWindow HTML.
+    function knMapEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
             var pinBg = loc.prinz ? '#2C5F8B' : '#8B1A1A';
@@ -2561,8 +2567,16 @@ window.knInitMap = async function() {
             });
             google.maps.event.addListener(marker, 'click', function() {
                 var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
-                var tipHtml = '<b><a href="' + KnConfig.uir + 'Park/profile/' + loc.id + '" style="color:#2b6cb0">' + loc.name + '</a></b>'
-                    + (locLine ? '<div style="font-size:12px;color:#718096;margin-top:3px"><i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:3px"></i>' + locLine + '</div>' : '');
+                // Styling lives in .kn-map-popover (revised.css) rather than inline, so the
+                // popover picks up dark mode and stays readable on the dark InfoWindow chrome.
+                var tipHtml = '<div class="kn-map-popover' + (loc.prinz ? ' kn-map-popover-prinz' : '') + '">'
+                    + '<a class="kn-map-popover-name" href="' + KnConfig.uir + 'Park/profile/' + loc.id + '">'
+                    + knMapEsc(loc.name) + '</a>'
+                    + (locLine
+                        ? '<div class="kn-map-popover-meta"><i class="fas fa-map-marker-alt"></i><span>'
+                          + knMapEsc(locLine) + '</span></div>'
+                        : '')
+                    + '</div>';
                 infowindow.setContent(tipHtml);
                 infowindow.open(map, marker);
                 knRenderMapSidebar(loc);

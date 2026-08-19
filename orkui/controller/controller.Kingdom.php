@@ -484,10 +484,26 @@ class Controller_Kingdom extends Controller
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
-        $this->data['IcsUrl'] = UIR . 'Kingdom/ics/' . $kingdom_id;
+        $this->data['IcsUrl'] = self::ics_feed_url((int)$kingdom_id);
     }
 
     // ------------------------------------------------------------------ ICS Feed
+
+    /**
+     * Canonical public URL for a kingdom's calendar subscription feed.
+     *
+     * Served from a clean path (/ics/kingdom/{id}.ics) rather than the ?Route=
+     * front controller so the CDN/WAF can exempt automated calendar fetchers
+     * from the browser challenge with a simple URI-path match. Requires the
+     * matching rewrite in nginx.ork3.config; the ?Route= form still works for
+     * anyone already subscribed to it.
+     */
+    private static function ics_feed_url(int $kingdom_id): string
+    {
+        // HTTP_UI_REMOTE ends in 'orkui/'; the feed is served from the site root.
+        return preg_replace('#orkui/$#', '', HTTP_UI_REMOTE) . 'ics/kingdom/' . $kingdom_id . '.ics';
+    }
+
     public function ics($kingdom_id = null)
     {
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
@@ -500,7 +516,8 @@ class Controller_Kingdom extends Controller
         $icsBody = $this->KingdomProfile->export_ics($kid, $knName);
         $safeName = preg_replace('/[^a-z0-9]/i', '-', $knName);
         header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $safeName . '-events.ics"');
+        // inline, not attachment: this URL is subscribed to, not downloaded.
+        header('Content-Disposition: inline; filename="' . $safeName . '-events.ics"');
         header('Cache-Control: no-cache, must-revalidate');
         echo $icsBody;
         exit();
