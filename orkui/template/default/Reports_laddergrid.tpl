@@ -343,7 +343,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 /* ── Clickable stat card filter ─────────────────────────────── */
 .rp-stat-card-filter { cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; border: 1px dashed var(--rp-border); }
 .rp-stat-card-filter:hover { box-shadow: 0 0 0 2px var(--rp-accent-mid); border-color: var(--rp-accent-mid); }
-.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 5 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
+.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 7 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
 .rp-stat-card-filter.lg-stat-active {
 	background: var(--rp-accent);
 	color: #fff;
