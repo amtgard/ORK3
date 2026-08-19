@@ -8,6 +8,17 @@ class Model_Login extends Model
         $this->Authorization = new APIModel('Authorization');
     }
 
+    // Destroys every session on the account (all devices), then clears this
+    // browser's login state via the normal logout path.
+    public function logout_all($userid)
+    {
+        $_tok = $this->session->token;
+        if (trimlen($_tok) > 0) {
+            $this->Authorization->DestroySessionsForUser(array('Token' => $_tok, 'KeepCurrent' => false));
+        }
+        $this->logout($userid);
+    }
+
     public function logout($userid)
     {
         $_tok = $this->session->token;

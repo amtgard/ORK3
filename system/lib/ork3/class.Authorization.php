@@ -867,11 +867,22 @@ class Authorization extends Ork3
 		return $sufficient;
 	}
 
+	/**
+	 * Per-request memo: a page render fans out to many service calls, each
+	 * gating on IsAuthorized(); without this, every call is a DB round-trip.
+	 * Scope is a single PHP request, so cross-request revocation (logout,
+	 * eviction, suspension) still takes effect on the very next request.
+	 * Invalidated by DestroySession / DestroySessionsForUser / RotateSession.
+	 */
+	private static $token_memo = array();
+
 	public function IsAuthorized_h($token)
 	{
 		logtrace("IsAuthorized_h($token)", null);
 		if (strlen($token) != self::TOKEN_LENGTH)
 			return 0;
+		if (isset(self::$token_memo[$token]))
+			return self::$token_memo[$token];
 		$mundane_id = $this->ValidateSessionByToken($token);
 		if ($mundane_id === 0) {
 			if (isset($_SESSION['is_authorized_mundane_id']))
@@ -885,6 +896,7 @@ class Authorization extends Ork3
 		}
 		logtrace("IsAuthorized(): authorized", null);
 		$_SESSION['is_authorized_mundane_id'] = $mundane_id;
+		self::$token_memo[$token] = $mundane_id;
 		return $mundane_id;
 	}
 
@@ -951,12 +963,34 @@ class Authorization extends Ork3
 		// confusing self-evicting login loop. Read the row back; retry once
 		// with a fresh token on failure (also covers the astronomically rare
 		// UNIQUE(token) collision).
+		// Device metadata: lets the session UI label entries ("Chrome on Mac
+		// from 203.0.x.x") and lets ops trace a hijacked token. Clients that
+		// can't (jsork, in-browser) or don't want to change their User-Agent
+		// may self-identify with an X-ORK-Client header, which wins.
+		$user_agent = substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+		// Client IP: behind Cloudflare + the host nginx proxy, REMOTE_ADDR is
+		// just the docker bridge gateway — same value for every visitor.
+		// Prefer Cloudflare's CF-Connecting-IP (trustworthy because all prod
+		// traffic is CF-fronted), then the first X-Forwarded-For hop, then
+		// REMOTE_ADDR (correct when hit directly, e.g. local dev curl).
+		// Display/forensics metadata only — never used for authorization.
+		$ip = (string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
+		if ($ip === '' && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+			$ip = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+		}
+		if ($ip === '') {
+			$ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+		}
+		$ip = substr($ip, 0, 45);
+
 		for ($attempt = 0; $attempt < 2; $attempt++) {
 			$token = md5(openssl_random_pseudo_bytes(16) . microtime());
 			$DB->Clear();
 			$DB->token = $token;
-			$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires) "
-				. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "')");
+			$DB->user_agent = $user_agent;
+			$DB->ip = $ip;
+			$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires, user_agent, ip) "
+				. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "', :user_agent, :ip)");
 			$DB->Clear();
 			$DB->token = $token;
 			$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
@@ -975,6 +1009,25 @@ class Authorization extends Ork3
 		global $DB;
 		$mundane_id = (int)$mundane_id;
 		$keep = (int)self::MAX_SESSIONS_PER_USER;
+		// Memo coherence: fetch the tokens about to be evicted and drop them
+		// from the per-request memo, so an eviction triggered mid-request
+		// (SOAP flows, tests) can't authorize through a stale memo entry.
+		// Only runs at login time, and only when the user is over the cap.
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT token FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " AND session_id NOT IN ("
+			. "SELECT session_id FROM ("
+			. "SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " "
+			. "ORDER BY last_seen DESC, session_id DESC LIMIT " . $keep
+			. ") keepers)"
+		);
+		if ($rs) {
+			while ($rs->Next()) {
+				unset(self::$token_memo[$rs->token]);
+			}
+		}
 		// Delete this user's sessions that are NOT among the $keep most-recent
 		// by last_seen. Derived-table wrapper is required: MariaDB forbids a
 		// direct subselect on the table being deleted from.
@@ -1043,6 +1096,7 @@ class Authorization extends Ork3
 		$DB->new_token = $new_token;
 		$DB->Execute("UPDATE " . DB_PREFIX . "session SET token = :new_token, last_seen = '" . $now . "', expires = '" . $exp . "' "
 			. "WHERE session_id = " . $session_id);
+		unset(self::$token_memo[$old_token]);
 		return $new_token;
 	}
 
@@ -1062,6 +1116,92 @@ class Authorization extends Ork3
 		$DB->Clear();
 		$DB->token = $token;
 		$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' WHERE token = :token");
+		unset(self::$token_memo[$token]);
+	}
+
+	/**
+	 * Destroy every session belonging to the caller's account ("log out
+	 * everywhere"). The presented token must itself be a live session — the
+	 * caller proves account ownership by holding one.
+	 *
+	 * KeepCurrent=true destroys every session EXCEPT the presented one
+	 * ("log out everywhere else"); false (default) destroys them all,
+	 * including the caller's.
+	 */
+	public function DestroySessionsForUser($request)
+	{
+		global $DB;
+		$token = is_array($request) ? ($request['Token'] ?? '') : $request;
+		$keep_current = is_array($request) && !empty($request['KeepCurrent']);
+		if (strlen($token) != self::TOKEN_LENGTH) {
+			return NoAuthorization();
+		}
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			return NoAuthorization();
+		}
+		if ($keep_current) {
+			$DB->Clear();
+			$DB->token = $token;
+			$DB->Execute("DELETE FROM " . DB_PREFIX . "session "
+				. "WHERE mundane_id = " . (int)$mundane_id . " AND token <> :token");
+		} else {
+			// No bound params here — a stray binding on a placeholder-free
+			// query fails silently under ERRMODE_WARNING (yapo poison).
+			$DB->Clear();
+			$DB->Execute("DELETE FROM " . DB_PREFIX . "session "
+				. "WHERE mundane_id = " . (int)$mundane_id);
+			// Vestigial pointer cleanup, same rationale as DestroySession.
+			$DB->Clear();
+			$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' "
+				. "WHERE mundane_id = " . (int)$mundane_id);
+		}
+		// Cross-request revocation is handled by the deleted rows; the memo
+		// only spans this request, but clear it for coherence.
+		self::$token_memo = array();
+		logtrace("DestroySessionsForUser()", array('mundane_id' => $mundane_id, 'keep_current' => $keep_current));
+		return Success();
+	}
+
+	/**
+	 * List the caller's live sessions (for the logout-everywhere modal and,
+	 * eventually, a session-management page). The presented token must itself
+	 * be a live session. Rows ordered most-recently-active first; 'current'
+	 * marks the presented token's own row.
+	 *
+	 * @return array<int, array{session_id:int, created:string, last_seen:string, user_agent:string, ip:string, current:bool}>
+	 */
+	public function ListSessionsForToken($token)
+	{
+		global $DB;
+		if (strlen((string)$token) != self::TOKEN_LENGTH) {
+			return array();
+		}
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			return array();
+		}
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT session_id, token, created, last_seen, user_agent, ip "
+			. "FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . (int)$mundane_id . " AND expires > NOW() "
+			. "ORDER BY last_seen DESC, session_id DESC"
+		);
+		$sessions = array();
+		if ($rs) {
+			while ($rs->Next()) {
+				$sessions[] = array(
+					'session_id' => (int)$rs->session_id,
+					'created'    => (string)$rs->created,
+					'last_seen'  => (string)$rs->last_seen,
+					'user_agent' => (string)$rs->user_agent,
+					'ip'         => (string)$rs->ip,
+					'current'    => ((string)$rs->token === (string)$token),
+				);
+			}
+		}
+		return $sessions;
 	}
 
 	// Writes the vestigial ork_mundane.token pointer (ork_session is authoritative).

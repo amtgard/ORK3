@@ -575,6 +575,8 @@ CREATE TABLE IF NOT EXISTS `ork_session` (
   `created`    DATETIME     NOT NULL,
   `last_seen`  DATETIME     NOT NULL,
   `expires`    DATETIME     NOT NULL,
+  `user_agent` VARCHAR(255) NOT NULL DEFAULT '',
+  `ip`         VARCHAR(45)  NOT NULL DEFAULT '',
   PRIMARY KEY (`session_id`),
   UNIQUE KEY `token` (`token`),
   KEY `mundane_id` (`mundane_id`),
