@@ -388,15 +388,6 @@ class Court
         return $out;
     }
 
-    /** Persona for a mundane id (presence/roster display), or '' if unknown. */
-    public function getPersona($mundane_id)
-    {
-        $this->db->Clear();
-        $r = $this->db->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
-                            WHERE mundane_id = ' . (int)$mundane_id . ' LIMIT 1');
-        return ($r && $r->Next()) ? (string)$r->persona : '';
-    }
-
     /** court_id owning a court_award row, or 0 if the award does not exist. */
     public function getCourtAwardCourtId($court_award_id)
     {
@@ -1630,6 +1621,43 @@ class Court
     private function validDate($d)
     {
         return (is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) ? $d : null;
+    }
+
+    /**
+     * Resolve the heading/scope for a court report request.
+     * Park scope ($park_id > 0): the park's name, plus its owning kingdom when the
+     * caller did not already supply one. Kingdom scope: the kingdom's name.
+     * Returns ['Name' => string, 'KingdomId' => int]; Name is '' and KingdomId is
+     * echoed back unchanged when the row does not exist.
+     */
+    public function getCourtReportScope($kingdom_id, $park_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+        $name       = '';
+
+        if ($park_id > 0) {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name, kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1'
+            );
+            if ($r && $r->Next()) {
+                $name = $r->name;
+                if (!$kingdom_id) {
+                    $kingdom_id = (int)$r->kingdom_id;
+                }
+            }
+        } else {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1'
+            );
+            if ($r && $r->Next()) {
+                $name = $r->name;
+            }
+        }
+
+        return ['Name' => $name, 'KingdomId' => $kingdom_id];
     }
 
     /**

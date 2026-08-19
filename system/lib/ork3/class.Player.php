@@ -4491,6 +4491,47 @@ class Player extends Ork3
     }
 
     /**
+     * Live (non-deleted) recommendations by OTHER people for the same player/award/rank,
+     * used to warn a submitter that someone already recommended this. Anonymous ("mask
+     * giver") recommendations are reported without the recommender's name. Capped at 5.
+     */
+    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    {
+        $mundane_id         = (int)$mundane_id;
+        $kingdomaward_id    = (int)$kingdomaward_id;
+        $rank               = (int)$rank;
+        $exclude_mundane_id = (int)$exclude_mundane_id;
+
+        $rank_clause = $rank > 0 ? ' AND r.rank = ' . $rank : ' AND r.rank = 0';
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.date_recommended, r.mask_giver, rbi.persona AS recommender_persona
+			 FROM ' . DB_PREFIX . 'recommendations r
+			 LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
+			 WHERE r.mundane_id = ' . $mundane_id .
+             ' AND r.kingdomaward_id = ' . $kingdomaward_id .
+             $rank_clause .
+             ' AND (r.deleted_by IS NULL OR r.deleted_by = 0)
+			 AND r.recommended_by_id != ' . $exclude_mundane_id .
+            ' LIMIT 5'
+        );
+
+        $existing = array();
+        if ($rs && $rs->Size() > 0) {
+            while ($rs->Next()) {
+                $isAnon = (int)$rs->mask_giver === 1;
+                $existing[] = array(
+                    'DateRecommended'   => $rs->date_recommended,
+                    'IsAnonymous'       => $isAnon,
+                    'RecommendedByName' => $isAnon ? null : $rs->recommender_persona,
+                );
+            }
+        }
+        return $existing;
+    }
+
+    /**
      * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
      * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
      * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.

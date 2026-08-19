@@ -5,6 +5,7 @@ class Controller_CourtAjax extends Controller
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
+        $this->load_model('Court');
     }
 
     // -----------------------------------------------------------------------
@@ -29,11 +30,11 @@ class Controller_CourtAjax extends Controller
     private function requireCourtAuth($court_id)
     {
         $uid   = $this->requireLogin();
-        $court = Ork3::$Lib->court->getCourtDetail($court_id);
+        $court = $this->Court->get_court_detail($court_id);
         if (!$court) {
             $this->jsonOut(['status' => 1, 'error' => 'Court not found.']);
         }
-        if (!Ork3::$Lib->court->canManage($uid, $court['KingdomId'], $court['ParkId'])) {
+        if (!$this->Court->can_manage($uid, $court['KingdomId'], $court['ParkId'])) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
         return [$uid, $court];
@@ -59,7 +60,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
         }
 
-        if (!Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id)) {
+        if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
 
@@ -71,12 +72,12 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'A name is required.']);
         }
 
-        $court_id = Ork3::$Lib->court->createCourt($kingdom_id, $park_id, $name, $court_date, $event_cd, $uid);
+        $court_id = $this->Court->create_court($kingdom_id, $park_id, $name, $court_date, $event_cd, $uid);
 
         // Optional initial run-vs-plan intent (spec 5.2); defaults to 'run'. The
         // lib rejects anything but run/plan, so an unexpected value is a no-op.
         $mode = ($_POST['Mode'] ?? 'run') === 'plan' ? 'plan' : 'run';
-        Ork3::$Lib->court->setCourtMode($court_id, $mode);
+        $this->Court->set_court_mode($court_id, $mode);
 
         $this->jsonOut(['status' => 0, 'court_id' => $court_id, 'name' => $name, 'mode' => $mode]);
     }
@@ -111,10 +112,10 @@ class Controller_CourtAjax extends Controller
         // Leaving draft sets the run-vs-plan mode (spec 5.2); only run/plan are honored.
         if ($status === 'published') {
             $mode = ($_POST['Mode'] ?? 'run') === 'plan' ? 'plan' : 'run';
-            Ork3::$Lib->court->setCourtMode($court_id, $mode);
+            $this->Court->set_court_mode($court_id, $mode);
         }
 
-        Ork3::$Lib->court->updateCourtStatus($court_id, $status);
+        $this->Court->update_court_status($court_id, $status);
         $this->jsonOut(['status' => 0, 'new_status' => $status]);
     }
 
@@ -145,7 +146,7 @@ class Controller_CourtAjax extends Controller
 
         // The lib enforces object-level auth: the kingdomaward must belong to this
         // court's own kingdom (else an officer could attach another kingdom's id).
-        $award = Ork3::$Lib->court->addAward(
+        $award = $this->Court->add_award(
             $court_id,
             (int)$court['KingdomId'],
             $mundane_id,
@@ -175,7 +176,7 @@ class Controller_CourtAjax extends Controller
         }
 
         // Look up court_id for auth
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -184,7 +185,7 @@ class Controller_CourtAjax extends Controller
 
         // QW#5: removeAward refuses to hard-DELETE a committed ('given') row, so a
         // finalized grant's audit trace can't be destroyed. false => already granted.
-        if (!Ork3::$Lib->court->removeAward($court_award_id)) {
+        if (!$this->Court->remove_award($court_award_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Cannot remove a granted award.']);
         }
 
@@ -205,7 +206,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $info = Ork3::$Lib->court->getCourtAwardForPass($court_award_id);
+        $info = $this->Court->get_court_award_for_pass($court_award_id);
         if (!$info) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -229,7 +230,7 @@ class Controller_CourtAjax extends Controller
         }
 
         // QW#5: never hard-DELETE a committed ('given') row. false => already granted.
-        if (!Ork3::$Lib->court->removeAward($court_award_id)) {
+        if (!$this->Court->remove_award($court_award_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'This award was already granted and cannot be removed from the court.']);
         }
 
@@ -262,7 +263,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid status.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -274,7 +275,7 @@ class Controller_CourtAjax extends Controller
             ? (int)$_POST['RowVersion'] : null;
 
         // QW#5: setAwardStatus refuses a committed ('given') row and returns false.
-        if (!Ork3::$Lib->court->setAwardStatus($court_award_id, $status, $expectedRowVersion)) {
+        if (!$this->Court->set_award_status($court_award_id, $status, $expectedRowVersion)) {
             if ($expectedRowVersion !== null) {
                 // status 9 = optimistic-lock conflict (see update_award); the token
                 // was stale (or the row is now given). Non-destructive reload.
@@ -298,7 +299,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -318,7 +319,7 @@ class Controller_CourtAjax extends Controller
         $expectedRowVersion = (isset($_POST['RowVersion']) && $_POST['RowVersion'] !== '')
             ? (int)$_POST['RowVersion'] : null;
 
-        $ok = Ork3::$Lib->court->updateAward(
+        $ok = $this->Court->update_award(
             $court_award_id,
             $notes,
             $public_comment,
@@ -355,7 +356,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid order.']);
         }
 
-        Ork3::$Lib->court->reorderAwards($court_id, $order);
+        $this->Court->reorder_awards($court_id, $order);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -370,7 +371,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -382,7 +383,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Artisan required.']);
         }
 
-        $artisan = Ork3::$Lib->court->addArtisan($court_award_id, $mundane_id, $contribution);
+        $artisan = $this->Court->add_artisan($court_award_id, $mundane_id, $contribution);
 
         $this->jsonOut(['status' => 0, 'artisan' => $artisan]);
     }
@@ -398,13 +399,13 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid artisan.']);
         }
 
-        $court_id = Ork3::$Lib->court->getArtisanCourtId($artisan_id);
+        $court_id = $this->Court->get_artisan_court_id($artisan_id);
         if ($court_id === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Artisan not found.']);
         }
         $this->requireCourtAuth((int)$court_id);
 
-        Ork3::$Lib->court->removeArtisan($artisan_id);
+        $this->Court->remove_artisan($artisan_id);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -423,13 +424,13 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $ca = Ork3::$Lib->court->getCourtAwardForGrant($court_award_id);
+        $ca = $this->Court->get_court_award_for_grant($court_award_id);
         if (!$ca) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
 
         $uid = $this->requireLogin();
-        if (!Ork3::$Lib->court->canManage($uid, $ca['KingdomId'], $ca['ParkId'])) {
+        if (!$this->Court->can_manage($uid, $ca['KingdomId'], $ca['ParkId'])) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
 
@@ -443,15 +444,15 @@ class Controller_CourtAjax extends Controller
 
         // Atomic stage: won't touch a row already given/cancelled/staged, so a
         // double-submit can't double-stage. Loser gets "already resolved".
-        if (!Ork3::$Lib->court->stageAward($court_award_id, $given_by_id, $public_comment, $rank)) {
+        if (!$this->Court->stage_award($court_award_id, $given_by_id, $public_comment, $rank)) {
             $this->jsonOut(['status' => 1, 'error' => 'Award already resolved.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         $this->jsonOut([
             'status'       => 0,
             'award_status' => 'staged',
-            'staged_count' => Ork3::$Lib->court->countStagedAwards($court_id),
+            'staged_count' => $this->Court->count_staged_awards($court_id),
         ]);
     }
 
@@ -467,7 +468,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -478,12 +479,12 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to un-stage awards.']);
         }
 
-        Ork3::$Lib->court->unstageAward($court_award_id);
+        $this->Court->unstage_award($court_award_id);
 
         $this->jsonOut([
             'status'       => 0,
             'award_status' => 'planned',
-            'staged_count' => Ork3::$Lib->court->countStagedAwards($court_id),
+            'staged_count' => $this->Court->count_staged_awards($court_id),
         ]);
     }
 
@@ -507,12 +508,12 @@ class Controller_CourtAjax extends Controller
         // Complete-court "Skip Remaining" path (spec 6.6): cancel every still-
         // unresolved row first, then finalize the staged ones.
         if ((int)($_POST['SkipRemaining'] ?? 0) === 1) {
-            Ork3::$Lib->court->cancelUnresolved($court_id);
+            $this->Court->cancel_unresolved($court_id);
         }
 
         $this->load_model('Player');
 
-        $staged    = Ork3::$Lib->court->getStagedAwards($court_id);
+        $staged    = $this->Court->get_staged_awards($court_id);
         $committed = 0;
         $failed    = [];
 
@@ -523,7 +524,7 @@ class Controller_CourtAjax extends Controller
             // linking award_id from the RETURNED insert id (no date heuristic). The
             // giver backstop now lives inside it, so a double-click / concurrent
             // finalize is a safe no-op.
-            $res = Ork3::$Lib->court->commitStagedAward(
+            $res = $this->Court->commit_staged_award(
                 $row['CourtAwardId'],
                 ['Token' => $this->session->token]
             );
@@ -557,7 +558,7 @@ class Controller_CourtAjax extends Controller
         // published so the officer can retry the failed rows.
         $completed = empty($failed);
         if ($completed) {
-            Ork3::$Lib->court->setCourtFinalized($court_id, $uid);
+            $this->Court->set_court_finalized($court_id, $uid);
         }
 
         $this->jsonOut([
@@ -582,19 +583,19 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to record grants.']);
         }
 
-        $givers        = Ork3::$Lib->court->getCourtGiverOptions($court_id);
+        $givers        = $this->Court->get_court_giver_options($court_id);
         $default_giver = (int)($givers['default']['mundane_id'] ?? 0);
 
         if ($default_giver <= 0) {
             $this->jsonOut(['status' => 1, 'error' => 'No Monarch is set for this court, so awards can\'t be bulk-recorded under a giver. Grant awards individually (choosing a giver), or set the Monarch officer for this ' . ($court['ParkId'] ? 'park' : 'kingdom') . '.']);
         }
 
-        $staged = Ork3::$Lib->court->bulkStagePlanned($court_id, $default_giver);
+        $staged = $this->Court->bulk_stage_planned($court_id, $default_giver);
 
         $this->jsonOut([
             'status'       => 0,
             'staged'       => $staged,
-            'staged_count' => Ork3::$Lib->court->countStagedAwards($court_id),
+            'staged_count' => $this->Court->count_staged_awards($court_id),
         ]);
     }
 
@@ -609,15 +610,15 @@ class Controller_CourtAjax extends Controller
         $court_id = (int)($_POST['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
 
-        $rows = Ork3::$Lib->court->getUngrantedFromLastCourt($court['KingdomId'], $court['ParkId']);
+        $rows = $this->Court->get_ungranted_from_last_court($court['KingdomId'], $court['ParkId']);
 
         $added = 0;
         foreach ($rows as $row) {
             // Skip anything already carried on this court (same recipient/award/rank).
-            if (Ork3::$Lib->court->courtHasAward($court_id, $row['MundaneId'], $row['KingdomAwardId'], $row['Rank'])) {
+            if ($this->Court->court_has_award($court_id, $row['MundaneId'], $row['KingdomAwardId'], $row['Rank'])) {
                 continue;
             }
-            $res = Ork3::$Lib->court->addAward(
+            $res = $this->Court->add_award(
                 $court_id,
                 (int)$court['KingdomId'],
                 $row['MundaneId'],
@@ -655,12 +656,12 @@ class Controller_CourtAjax extends Controller
         $court_id = (int)($_POST['CourtId'] ?? $_GET['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
 
-        $state = Ork3::$Lib->court->getCourtState($court_id);
+        $state = $this->Court->get_court_state($court_id);
 
         // Full per-award payload for a FULL-FIELD client reconcile (the same shape
         // the initial page render uses), so the heartbeat can add/remove rows and
         // pick up field edits — not just status/giver/sort.
-        $state['awards_full'] = Ork3::$Lib->court->getCourtAwards($court_id);
+        $state['awards_full'] = $this->Court->get_court_awards($court_id);
 
         // Presence (S5): record this officer's heartbeat and return the roster.
         $state['presence'] = $this->recordCourtPresence($court_id, $uid);
@@ -715,7 +716,7 @@ class Controller_CourtAjax extends Controller
     /** Persona for a mundane id (presence display), or '' if unknown. */
     private function lookupPersona($uid)
     {
-        return Ork3::$Lib->court->getPersona($uid);
+        return Ork3::$Lib->player->GetPersona((int)$uid);
     }
 
     // -----------------------------------------------------------------------
@@ -729,7 +730,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
         if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
@@ -746,7 +747,7 @@ class Controller_CourtAjax extends Controller
 
         // QW#5: skipAward (soft-cancel) refuses a committed ('given') row and bumps
         // row_version on a match, so false => already granted / stale / gone.
-        if (!Ork3::$Lib->court->skipAward($court_award_id, $expectedRowVersion)) {
+        if (!$this->Court->skip_award($court_award_id, $expectedRowVersion)) {
             if ($expectedRowVersion !== null) {
                 // status 9 = optimistic-lock conflict; non-destructive reload.
                 $this->jsonOut(['status' => 9, 'stale' => true, 'message' => 'This row changed — reload.']);
@@ -768,8 +769,8 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
-        if ($court_id <= 0) {
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
+        if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
 
@@ -777,7 +778,7 @@ class Controller_CourtAjax extends Controller
 
         $type = $_POST['Type'] ?? '';
 
-        $result = Ork3::$Lib->court->updateAwardTrackingStatus($court_award_id, $type);
+        $result = $this->Court->update_award_tracking_status($court_award_id, $type);
         $this->jsonOut($result);
     }
 

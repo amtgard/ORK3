@@ -252,6 +252,11 @@ class Model_Player extends Model
         return $this->Player->DeleteAwardRecommendation($request);
     }
 
+    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    {
+        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id);
+    }
+
     public function restore_player_recommendation($request)
     {
         return $this->Player->RestoreAwardRecommendation($request);

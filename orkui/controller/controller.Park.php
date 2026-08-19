@@ -189,12 +189,13 @@ class Controller_Park extends Controller
         $this->data['ViewerCircleAwardIds'] = $uid > 0 ? $this->Player->get_circle_award_ids($uid) : array();
         $this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
 
-        $this->data['CanManageCourt']      = $uid > 0 && Ork3::$Lib->court->canManage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        $this->load_model('Court');
+        $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {
-            $this->data['CourtList']           = Ork3::$Lib->court->getCourtList((int)$this->session->kingdom_id, (int)$park_id);
-            $this->data['CourtUpcomingEvents'] = Ork3::$Lib->court->getUpcomingEvents((int)$this->session->kingdom_id);
+            $this->data['CourtList']           = $this->Court->get_court_list((int)$this->session->kingdom_id, (int)$park_id);
+            $this->data['CourtUpcomingEvents'] = $this->Court->get_upcoming_events((int)$this->session->kingdom_id);
         }
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
