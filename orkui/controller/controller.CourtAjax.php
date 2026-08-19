@@ -245,7 +245,16 @@ class Controller_CourtAjax extends Controller
     {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
         $status         = trim($_POST['Status'] ?? '');
-        $allowed        = ['planned', 'announced', 'staged', 'given', 'cancelled'];
+        // 'given' is deliberately NOT client-settable. setAwardStatus() only writes
+        // the status column — it never links award_id — so a POST of Status=given
+        // would produce `status='given' AND award_id IS NULL`, the one state the
+        // grant-safety spec forbids outright. That row is then invisible to finalize
+        // (getStagedAwards selects status='staged' only), so the recipient never gets
+        // the ork_awards row, and setAwardStatus's own `AND status != 'given'` guard
+        // means nothing can move it back. A line reaches 'given' only through
+        // commitStagedAward() or reconcileGrantForRecommendation(), both of which
+        // link the real awards id in the same statement.
+        $allowed        = ['planned', 'announced', 'staged', 'cancelled'];
         if (!valid_id($court_award_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
