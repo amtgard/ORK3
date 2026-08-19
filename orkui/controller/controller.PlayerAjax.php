@@ -225,7 +225,9 @@ class Controller_PlayerAjax extends Controller
                 // representative rec id (or an ad-hoc line for the same
                 // person+award+rank) is still reconciled and can't re-grant.
                 $this->load_model('Court');
-                $court_lines = $this->Court->reconcile_grant_for_recommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id, $court_action);
+                // The acting officer's id scopes the reconcile: only court lines on
+                // courts they can manage, and never on a completed court.
+                $court_lines = $this->Court->reconcile_grant_for_recommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id, $court_action, (int)$this->session->user_id);
             }
             // courtLines lets the client repaint the row's court badges from what the
             // server actually did, instead of issuing its own follow-up court calls.

@@ -232,13 +232,24 @@ class Court
         // deliberately re-adds it must get a fresh, live line.
         $existing = null;
         if ($rec_id > 0) {
+            // Match on the rec id OR on the HONOR itself. The honor is the cluster
+            // (mundane_id + kingdomaward_id + rank), not the recommendation: several
+            // people routinely recommend the same person for the same award, and each
+            // of those sibling recs has its own recommendations_id. Keying the probe
+            // on the rec id alone let every sibling add its own court line, and at
+            // finalize each line is its own idempotency key — claimStagedForGrant
+            // succeeds once per line, so one honor reached ork_awards N times. This is
+            // the same match reconcileGrantForRecommendation uses to close court lines.
             $this->db->Clear();
             $dup = $this->db->DataSet(
                 'SELECT court_award_id, rank, sort_order, pass_to_local, notes,
                         public_comment, status, scroll_status, regalia_status
                    FROM ' . DB_PREFIX . "court_award
                   WHERE court_id = " . $court_id . '
-                    AND recommendations_id = ' . $rec_id . "
+                    AND (recommendations_id = ' . $rec_id . '
+                         OR (mundane_id = ' . $mundane_id . '
+                             AND kingdomaward_id = ' . $kingdomaward_id . '
+                             AND rank = ' . $rank . "))
                     AND status != 'cancelled'
                   ORDER BY court_award_id LIMIT 1"
             );
@@ -692,13 +703,25 @@ class Court
         return $rs && $rs->Size() == 1;
     }
 
-    /** Undo a stage: 'staged' -> 'planned'. No player-record trace to reverse. */
+    /**
+     * Undo a stage: 'staged' -> 'planned'. No player-record trace to reverse.
+     *
+     * Also clears the capture the stage made — giver and public citation. Leaving
+     * them behind meant an undone grant kept the giver the officer had just
+     * withdrawn, and any later route back to 'staged' would let finalize commit that
+     * rejected giver and citation to the permanent record: commitStagedAward's
+     * backstop only refuses a row with NO giver, and this row would still have one.
+     * Assigns '' rather than null because yapo drops nulls from an UPDATE.
+     */
     public function unstageAward($court_award_id)
     {
         $this->db->Clear();
         $this->db->Execute(
             'UPDATE ' . DB_PREFIX . 'court_award
-                SET status = \'planned\', row_version = row_version + 1
+                SET status = \'planned\',
+                    given_by_mundane_id = 0,
+                    public_comment = \'\',
+                    row_version = row_version + 1
               WHERE court_award_id = ' . (int)$court_award_id . ' AND status = \'staged\''
         );
     }
@@ -953,9 +976,25 @@ class Court
      * Either way the awards row and giver are linked for provenance, and the line
      * leaves the open set so finalize cannot re-grant it.
      *
+     * SCOPE. recommendations_id is a global primary key and the cluster key matches
+     * across every court in the database, so the match alone names rows this officer
+     * may have no authority over — and rows on courts that are already history. Two
+     * guards, both required:
+     *   - `c.status <> 'complete'`. A finalized court's line is the public record of a
+     *     ceremony that already happened. Finalize's "Leave As-Is and Close" path
+     *     legitimately leaves 'planned' lines behind on a completed court, so without
+     *     this a grant months later would flip one to 'given', stamp it with today's
+     *     award id and giver, and publish an honor on the Court Report that was never
+     *     read from the throne. Those reports are served without a login.
+     *   - canManage($actor_uid, ...) re-derived per candidate row from ITS OWN court's
+     *     kingdom/park. Nothing else in the grantaward request path authorizes against
+     *     the court_award rows being mutated.
+     * Candidates are therefore selected, filtered, and only then updated by explicit
+     * id. An $actor_uid of 0 authorizes nothing and reconciles nothing.
+     *
      * Returns the number of court lines reconciled.
      */
-    public function reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0, $court_action = 'leave')
+    public function reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0, $court_action = 'leave', $actor_uid = 0)
     {
         $recommendations_id = (int)$recommendations_id;
         $mundane_id         = (int)$mundane_id;
@@ -978,6 +1017,41 @@ class Court
             return 0;
         }
 
+        $actor_uid = (int)$actor_uid;
+        if ($actor_uid <= 0) {
+            return 0;
+        }
+
+        // Candidates: open lines matching the honor, on a court that is not already
+        // finalized history.
+        $this->db->Clear();
+        $cand = $this->db->DataSet(
+            'SELECT ca.court_award_id, c.kingdom_id, c.park_id
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+              WHERE (' . implode(' OR ', $matches) . ')
+                AND ca.status IN (\'planned\', \'announced\', \'staged\')
+                AND c.status <> \'complete\''
+        );
+        $ids = [];
+        if ($cand) {
+            $authCache = [];
+            while ($cand->Next()) {
+                $kid = (int)$cand->kingdom_id;
+                $pid = (int)$cand->park_id;
+                $key = $kid . ':' . $pid;
+                if (!array_key_exists($key, $authCache)) {
+                    $authCache[$key] = $this->canManage($actor_uid, $kid, $pid);
+                }
+                if ($authCache[$key]) {
+                    $ids[] = (int)$cand->court_award_id;
+                }
+            }
+        }
+        if (!$ids) {
+            return 0;
+        }
+
         $award_id = (int)$awards_id;
         $giver    = (int)$given_by_mundane_id;
 
@@ -993,7 +1067,7 @@ class Court
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'UPDATE ' . DB_PREFIX . 'court_award SET ' . $sets . '
-              WHERE (' . implode(' OR ', $matches) . ')
+              WHERE court_award_id IN (' . implode(',', $ids) . ')
                 AND status IN (\'planned\', \'announced\', \'staged\')'
         );
         return $rs ? (int)$rs->Size() : 0;
@@ -1445,6 +1519,13 @@ class Court
 
         $curCourt = (int)$court_id;
         $out = [];
+        // One row per HONOR, not per recommendation. Several people recommending the
+        // same person for the same award is routine — the production data has clusters
+        // of fifteen — and emitting one row each showed the officer a wall of visually
+        // identical entries, every one of which added its own court line. Collapse them
+        // on (mundane_id, kingdomaward_id, rank), the same key the grant and reconcile
+        // paths treat as the honor, and carry a support count instead.
+        $clusterIndex = [];
         foreach ($rawRecs as $r) {
             $rid = (int)$r['RecommendationsId'];
             $plans = $onCourt[$rid] ?? [];
@@ -1455,6 +1536,30 @@ class Court
             if ($isOnThis) {
                 continue;
             }
+            $clusterKey = (int)$r['MundaneId'] . ':' . (int)$r['KingdomAwardId'] . ':' . (int)$r['Rank'];
+            if (isset($clusterIndex[$clusterKey])) {
+                // Fold the sibling into the row already emitted: keep the OLDEST
+                // recommendation as the representative (it is the one whose reason and
+                // date the officer is reading), and let any sibling's on-another-court
+                // flag light the badge.
+                $i = $clusterIndex[$clusterKey];
+                $out[$i]['SupportCount']++;
+                $out[$i]['SiblingRecIds'][] = $rid;
+                if ($isOnOther) {
+                    $out[$i]['IsOnOtherCourt'] = true;
+                }
+                if (($r['DateRecommended'] ?? '') !== ''
+                    && ($out[$i]['DateRecommended'] === '' || $r['DateRecommended'] < $out[$i]['DateRecommended'])) {
+                    $out[$i]['RecommendationsId'] = $rid;
+                    $out[$i]['Reason']            = $r['Reason'];
+                    $out[$i]['DateRecommended']   = $r['DateRecommended'];
+                    $out[$i]['AgeDays']           = (int)($r['AgeDays'] ?? 0);
+                    $out[$i]['IsAnonymous']       = !empty($r['IsAnonymous']);
+                    $out[$i]['RecommendedByName'] = $r['RecommendedByName'] ?? null;
+                }
+                continue;
+            }
+            $clusterIndex[$clusterKey] = count($out);
             $out[] = [
                 'RecommendationsId' => $rid,
                 'MundaneId'         => (int)$r['MundaneId'],
@@ -1478,6 +1583,9 @@ class Court
                 'SecondsCount'      => (int)($r['SecondsCount'] ?? 0),
                 'IsAnonymous'       => !empty($r['IsAnonymous']),
                 'RecommendedByName' => $r['RecommendedByName'] ?? null,
+                // How many people recommended this honor (1 = just the representative).
+                'SupportCount'      => 1,
+                'SiblingRecIds'     => [],
             ];
         }
         return $out;

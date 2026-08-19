@@ -246,6 +246,14 @@ class Controller_CourtAjax extends Controller
     {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
         $status         = trim($_POST['Status'] ?? '');
+        // Neither 'given' nor 'staged' is client-settable.
+        //
+        // 'staged' because setAwardStatus() writes the status column and nothing else,
+        // so it can move a row into the commit set WITHOUT the giver/rank/citation
+        // capture that stageAward() performs. Combined with an earlier un-stage that
+        // left stale values behind, that let finalize commit a giver the officer had
+        // already withdrawn. Staging happens only through grant_award/bulk_record_grants.
+        //
         // 'given' is deliberately NOT client-settable. setAwardStatus() only writes
         // the status column — it never links award_id — so a POST of Status=given
         // would produce `status='given' AND award_id IS NULL`, the one state the
@@ -255,7 +263,7 @@ class Controller_CourtAjax extends Controller
         // means nothing can move it back. A line reaches 'given' only through
         // commitStagedAward() or reconcileGrantForRecommendation(), both of which
         // link the real awards id in the same statement.
-        $allowed        = ['planned', 'announced', 'staged', 'cancelled'];
+        $allowed        = ['planned', 'announced', 'cancelled'];
         if (!valid_id($court_award_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
@@ -516,8 +524,30 @@ class Controller_CourtAjax extends Controller
         $staged    = $this->Court->get_staged_awards($court_id);
         $committed = 0;
         $failed    = [];
+        // Second line of defence against committing one honor twice. addAward now
+        // collapses sibling recommendations onto a single court line, but a court
+        // planned before that fix — or two lines built by different routes — can still
+        // carry the same (recipient, award, rank) twice. $staged is read once up
+        // front, so the post-commit cluster resolve cannot stop the duplicate: it
+        // soft-deletes the recommendations, not the already-loaded court line. Track
+        // what this run has committed and cancel any later line for the same honor.
+        $committedClusters = [];
+        $duplicates        = [];
 
         foreach ($staged as $row) {
+            $clusterKey = (int)$row['MundaneId'] . ':' . (int)$row['KingdomAwardId'] . ':' . (int)$row['Rank'];
+            if (isset($committedClusters[$clusterKey])) {
+                // Already committed under a sibling line in this same finalize. Cancel
+                // rather than leave it staged, or it would simply commit on the next
+                // finalize and produce the duplicate a run later.
+                $this->Court->skip_award($row['CourtAwardId']);
+                $duplicates[] = [
+                    'court_award_id' => $row['CourtAwardId'],
+                    'granted_as'     => $committedClusters[$clusterKey],
+                ];
+                continue;
+            }
+
             // S1 single idempotent commit sink. commitStagedAward owns the whole
             // per-row flow: atomic claim 'staged'->'given' (court-line identity IS
             // the idempotency key), throw-safe AddAward, revert-on-failure, and
@@ -531,6 +561,7 @@ class Controller_CourtAjax extends Controller
 
             if ($res['status'] === 'ok') {
                 $committed++;
+                $committedClusters[$clusterKey] = $res['court_award_id'] ?? $row['CourtAwardId'];
 
                 // Best-effort rec-cluster resolve: soft-delete parallel recs + notify
                 // advocates. Fed from the committed row; never fails finalize.
@@ -562,10 +593,13 @@ class Controller_CourtAjax extends Controller
         }
 
         $this->jsonOut([
-            'status'    => 0,
-            'committed' => $committed,
-            'failed'    => $failed,
-            'completed' => $completed,
+            'status'     => 0,
+            'committed'  => $committed,
+            'failed'     => $failed,
+            // Lines cancelled because a sibling line for the same honor committed in
+            // this run. Surfaced so the count the officer sees matches the ledger.
+            'duplicates' => $duplicates,
+            'completed'  => $completed,
         ]);
     }
 

@@ -718,7 +718,6 @@ class Report extends Ork3
 			order by m.persona, a.name, recs.rank, m.persona";
         $r = $this->db->query($sql);
         $response = array();
-        $viewerIsAdmin = $viewer_id > 0 && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
         if ($r !== false && $r->size() > 0) {
             // First pass: collect raw rows + rec_ids/meta (for seconds wiring below)
             // plus the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
@@ -816,8 +815,13 @@ class Report extends Ork3
                         }
                     }
                 }
-                $isAnon        = ((int)$row->mask_giver === 1);
-                $hideSubmitter = $isAnon && !$viewerIsAdmin;
+                // NOTE: masking is deliberately NOT applied here. This response is
+                // cached for 300s under a key with no viewer dimension, so folding a
+                // per-viewer decision into it leaks across viewers: an admin warming
+                // the cache would expose every anonymous recommender to non-admins for
+                // the life of the entry. The unmasked identity is cached and
+                // applyViewerFlags() masks per call, alongside the other viewer flags.
+                $isAnon = ((int)$row->mask_giver === 1);
                 $isSnoozed     = $row->snoozed_monarch_id !== null
                     && (int)$row->snoozed_monarch_id === (int)$row->current_monarch_id
                     && (int)$row->snoozed_regent_id  === (int)$row->current_regent_id;
@@ -837,8 +841,8 @@ class Report extends Ork3
                     'AwardName' => $row->award_name,
                     'Reason' => $row->reason,
                     'IsAnonymous' => $isAnon,
-                    'RecommendedByName' => $hideSubmitter ? null : $row->recommended_by_persona,
-                    'RecommendedById'   => $hideSubmitter ? null : $row->recommended_by_id,
+                    'RecommendedByName' => $row->recommended_by_persona,
+                    'RecommendedById'   => $row->recommended_by_id,
                     'MaskGiver' => $row->mask_giver,
                     'KingdomAwardId' => $row->ka_kaward_id,
                     'AwardId' => $recAwardId,
@@ -1084,9 +1088,41 @@ class Report extends Ork3
     // Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
     // response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
     // two lightweight IN-list lookups.
+    /**
+     * Hide an anonymous recommender's identity from everyone but an admin.
+     *
+     * Must run per REQUEST, never at cache-write time: the recommendations response
+     * is cached under a viewer-agnostic key, so a decision made for whoever warmed
+     * the cache would be served to every other viewer for the rest of the TTL.
+     * Callers must derive any viewer flag that depends on the recommender's identity
+     * (ViewerCanEditReason, ViewerCanSecond) BEFORE calling this — afterwards the id
+     * is gone. Consumers treat a null RecommendedById as "masked" and render a dash.
+     */
+    private function maskAnonymousRecommender(array &$rec, bool $viewerIsAdmin): void
+    {
+        if (empty($rec['IsAnonymous']) || $viewerIsAdmin) {
+            return;
+        }
+        $rec['RecommendedByName'] = null;
+        $rec['RecommendedById']   = null;
+    }
+
     private function applyViewerFlags(array $response, int $viewer_id): array
     {
-        if ($viewer_id <= 0 || empty($response['AwardRecommendations'])) {
+        if (empty($response['AwardRecommendations'])) {
+            return $response;
+        }
+
+        $viewerIsAdmin = $viewer_id > 0
+            && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
+
+        // Logged-out / no viewer: skip the per-viewer lookups, but masking still has
+        // to happen — a signed-out visitor is emphatically not an admin.
+        if ($viewer_id <= 0) {
+            foreach ($response['AwardRecommendations'] as &$anonRec) {
+                $this->maskAnonymousRecommender($anonRec, $viewerIsAdmin);
+            }
+            unset($anonRec);
             return $response;
         }
 
@@ -1131,6 +1167,9 @@ class Report extends Ork3
         foreach ($response['AwardRecommendations'] as &$rec) {
             $rid    = (int)$rec['RecommendationsId'];
             $ownKey = $rec['MundaneId'] . '|' . $rec['KingdomAwardId'] . '|' . (int)($rec['Rank'] ?? 0);
+            // Derived from the UNMASKED id on purpose: the person who filed an
+            // anonymous recommendation is still its author and may edit their own
+            // reason. Masking below then removes the id from what the viewer sees.
             $rec['ViewerCanEditReason'] = ($viewer_id === (int)$rec['RecommendedById']);
             $rec['ViewerCanSecond'] = (
                 $viewer_id !== (int)$rec['MundaneId']
@@ -1142,6 +1181,7 @@ class Report extends Ork3
                 $second['IsMine'] = ((int)$second['SupporterMundaneId'] === $viewer_id);
             }
             unset($second);
+            $this->maskAnonymousRecommender($rec, $viewerIsAdmin);
         }
         unset($rec);
         return $response;

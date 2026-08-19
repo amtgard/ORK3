@@ -165,9 +165,9 @@ class Model_Court extends Model
         return $this->_court()->cancelUnresolved($court_id);
     }
 
-    public function reconcile_grant_for_recommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0, $court_action = 'leave')
+    public function reconcile_grant_for_recommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0, $court_action = 'leave', $actor_uid = 0)
     {
-        return $this->_court()->reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank, $mundane_id, $kingdomaward_id, $court_action);
+        return $this->_court()->reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank, $mundane_id, $kingdomaward_id, $court_action, $actor_uid);
     }
 
     // -----------------------------------------------------------------------

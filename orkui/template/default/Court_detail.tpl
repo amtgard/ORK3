@@ -1522,9 +1522,16 @@ $_total_awards = count($courtAwards ?? []);
         <?php $_rowIndex = 0; foreach ($courtAwards as $aw): $_rowIndex++; ?>
         <?php
             $ast  = $aw['Status'];
-            $albl = $awardStatusLabel[$ast] ?? $ast;
-            $aclr = $awardStatusColor[$ast] ?? '#4a5568';
-            $abg  = $awardStatusBg[$ast]    ?? '#edf2f7';
+            // Spec S2: Run mode shows a granted row as Given with an Undo, and hides the
+            // "staged" vocabulary entirely — the row really is only staged underneath
+            // (nothing reaches the permanent record until finalize), but the officer
+            // running a live ceremony is told the award was given, which is what the
+            // one-tap-confirmation flow promises. Plan mode keeps the explicit staged
+            // framing. Display only: $ast stays the true lifecycle value.
+            $adisp = ($ast === 'staged' && $courtMode === 'run') ? 'given' : $ast;
+            $albl = $awardStatusLabel[$adisp] ?? $adisp;
+            $aclr = $awardStatusColor[$adisp] ?? '#4a5568';
+            $abg  = $awardStatusBg[$adisp]    ?? '#edf2f7';
             // Type badge
             if ($aw['IsTitle']) {
                 $typeClass = 'cp-type-title';  $typeLabel = 'Title';
@@ -1537,7 +1544,7 @@ $_total_awards = count($courtAwards ?? []);
                 $typeTip   = 'Standard award — a one-off honor, not ranked.';
             }
         ?>
-        <div class="cp-award-row<?= $ast === 'given' ? ' cp-granted' : ($ast === 'cancelled' ? ' cp-skipped' : ($ast === 'staged' ? ' cp-staged' : '')) ?> cp-aw-type-<?= $aw['IsTitle'] ? 'title' : ($aw['IsLadder'] ? 'ladder' : 'award') ?>"
+        <div class="cp-award-row<?= $adisp === 'given' ? ' cp-granted' : ($adisp === 'cancelled' ? ' cp-skipped' : ($adisp === 'staged' ? ' cp-staged' : '')) ?> cp-aw-type-<?= $aw['IsTitle'] ? 'title' : ($aw['IsLadder'] ? 'ladder' : 'award') ?>"
              id="cp-aw-<?= (int)$aw['CourtAwardId'] ?>"
              data-court-award-id="<?= (int)$aw['CourtAwardId'] ?>"
              data-rowversion="<?= (int)($aw['RowVersion'] ?? 0) ?>"
@@ -1579,7 +1586,12 @@ $_total_awards = count($courtAwards ?? []);
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
                     <?php if ($courtSt === 'published' && $ast === 'staged'): ?>
                     <div class="cp-grant-actions" onclick="event.stopPropagation()">
+                        <?php if ($courtMode === 'run'): ?>
+                        <span class="cp-grant-static" style="font-size:12px;color:#276749;font-weight:700"><i class="fas fa-check-circle"></i> Given</span>
+                        <button class="cp-btn-undo" onclick="cpUnstageAward(<?= (int)$aw['CourtAwardId'] ?>)" data-tip="Undo this grant"><i class="fas fa-undo"></i> Undo</button>
+                        <?php else: ?>
                         <button class="cp-btn-undo" onclick="cpUnstageAward(<?= (int)$aw['CourtAwardId'] ?>)" data-tip="Un-stage — return to planned (nothing is recorded until finalize)"><i class="fas fa-undo"></i> Undo</button>
+                        <?php endif; ?>
                     </div>
                     <?php elseif ($courtSt === 'published' && !in_array($ast, ['given','cancelled'])): ?>
                     <div class="cp-grant-actions" onclick="event.stopPropagation()">
@@ -1826,6 +1838,10 @@ $_total_awards = count($courtAwards ?? []);
                             <?php if (!empty($rec['SecondsCount'])): ?>
                             <span class="cp-rm-sep">&middot;</span>
                             <span class="cp-rm-seconds" data-tip="<?= (int)$rec['SecondsCount'] ?> supporting <?= (int)$rec['SecondsCount'] === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= (int)$rec['SecondsCount'] ?></span>
+                            <?php endif; ?>
+                            <?php if ((int)($rec['SupportCount'] ?? 1) > 1): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-seconds" data-tip="<?= (int)$rec['SupportCount'] ?> separate people recommended this same award. Adding it once records the honor once."><i class="fas fa-users"></i><?= (int)$rec['SupportCount'] ?> recs</span>
                             <?php endif; ?>
                             <?php if ($isOnOther): ?>
                             <span class="cp-rm-sep">&middot;</span>
@@ -2112,6 +2128,13 @@ $_total_awards = count($courtAwards ?? []);
         given:     { bg: '#f0fff4', color: '#276749', label: 'Given' },
         cancelled: { bg: '#fff5f5', color: '#c53030', label: 'Skipped' }
     };
+
+    // Spec S2 display mapping, mirroring the PHP above: in Run mode a 'staged' row
+    // reads as Given. The underlying status is untouched — Undo still un-stages, and
+    // nothing reaches the permanent record until finalize.
+    function cpDisplayStatus(status) {
+        return (status === 'staged' && cpMode === 'run') ? 'given' : status;
+    }
 
     // ---- Utilities ----
     function esc(s) {
@@ -2795,6 +2818,11 @@ $_total_awards = count($courtAwards ?? []);
     // Rebuilds the published-mode action controls for a row from its status.
     function cpStatusActionsHtml(caid, status) {
         if (status === 'staged') {
+            if (cpMode === 'run') {
+                return '<div class="cp-grant-actions" onclick="event.stopPropagation()">' +
+                    '<span class="cp-grant-static" style="font-size:12px;color:#276749;font-weight:700"><i class="fas fa-check-circle"></i> Given</span>' +
+                    '<button class="cp-btn-undo" onclick="cpUnstageAward(' + caid + ')" data-tip="Undo this grant"><i class="fas fa-undo"></i> Undo</button></div>';
+            }
             return '<div class="cp-grant-actions" onclick="event.stopPropagation()">' +
                 '<button class="cp-btn-undo" onclick="cpUnstageAward(' + caid + ')" data-tip="Un-stage — return to planned (nothing is recorded until finalize)"><i class="fas fa-undo"></i> Undo</button></div>';
         }
@@ -2816,22 +2844,19 @@ $_total_awards = count($courtAwards ?? []);
     window.cpSetRowStatus = function(caid, status) {
         var row = gid('cp-aw-' + caid);
         if (row) {
+            var disp = cpDisplayStatus(status);
             row.classList.remove('cp-granted', 'cp-skipped', 'cp-staged');
-            if (status === 'given')          row.classList.add('cp-granted');
-            else if (status === 'cancelled') row.classList.add('cp-skipped');
-            else if (status === 'staged')    row.classList.add('cp-staged');
+            if (disp === 'given')          row.classList.add('cp-granted');
+            else if (disp === 'cancelled') row.classList.add('cp-skipped');
+            else if (disp === 'staged')    row.classList.add('cp-staged');
             var badge = row.querySelector('.cp-aw-badge');
-            var b = CP_AW_BADGE[status] || CP_AW_BADGE.planned;
+            var b = CP_AW_BADGE[disp] || CP_AW_BADGE.planned;
             if (badge) { badge.style.background = b.bg; badge.style.color = b.color; badge.textContent = b.label; }
             var statusCell = row.querySelector('.cp-cell-status');
             if (statusCell) {
                 statusCell.querySelectorAll('.cp-grant-actions, .cp-grant-static').forEach(function(e) { e.remove(); });
                 if (courtStatus === 'published') statusCell.insertAdjacentHTML('beforeend', cpStatusActionsHtml(caid, status));
             }
-            // QW#4: keep the expand-panel status <select> in sync with the lifecycle so a
-            // later field-save can't resurrect a stale planned/announced value from the DOM.
-            var statusSel = gid('cp-status-' + caid);
-            if (statusSel && statusSel.value !== status) statusSel.value = status;
         }
         var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
         if (a) a.Status = status;
@@ -3894,10 +3919,23 @@ $_total_awards = count($courtAwards ?? []);
                 lockOpts(false);
                 return;
             }
-            if (d.completed) { location.reload(); return; }
+            var dupes = (d.duplicates || []).length;
+            if (d.completed) {
+                // A duplicate line is cancelled, not committed, so without this the
+                // officer just finds an unexplained "Skipped" row after the reload.
+                if (dupes) {
+                    cpAlert(dupes + ' award line' + (dupes === 1 ? ' was' : 's were') +
+                        ' skipped because the same recipient, award and rank had already been ' +
+                        'granted by another line in this court — the honor is recorded once.',
+                        'Duplicate lines skipped');
+                }
+                location.reload();
+                return;
+            }
             // Partial failure: committed some, others stay staged. Surface which and stay put.
             var f = gid('cp-complete-fail');
-            var msg = '<strong>' + (d.committed || 0) + ' grant' + (d.committed === 1 ? '' : 's') + ' recorded</strong>, but ' +
+            var msg = '<strong>' + (d.committed || 0) + ' grant' + (d.committed === 1 ? '' : 's') + ' recorded</strong>' +
+                (dupes ? ', ' + dupes + ' duplicate line' + (dupes === 1 ? '' : 's') + ' skipped' : '') + ', but ' +
                 (d.failed ? d.failed.length : 0) + ' could not be committed and remain staged:';
             msg += '<ul style="margin:6px 0 0;padding-left:18px">';
             (d.failed || []).forEach(function(fl) {
