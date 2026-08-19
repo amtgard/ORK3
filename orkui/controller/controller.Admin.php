@@ -978,6 +978,7 @@ class Controller_Admin extends Controller
                                     $face_im = file_get_contents(DIR_TMP . sprintf("fi_%06d", $id));
                                     $face_imdata = base64_encode($face_im);
                                     $one = $this->Player->one_shot([
+                                        'Token' => $this->session->token,
                                         'MundaneId' => $id,
                                         'Base64FaceImage' => $face_imdata
                                         ]);
