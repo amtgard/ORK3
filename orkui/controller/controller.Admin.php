@@ -1137,6 +1137,7 @@ class Controller_Admin extends Controller
                             break;
                         }
                         $r = $this->Player->add_dues(array(
+                                'Token' => $this->session->token,
                                 'MundaneId' => $id,
                                 'ParkId' => valid_id($this->request->Admin_player->ParkId) ? $this->request->Admin_player->ParkId : 0,
                                 'KingdomId' => valid_id($this->request->Admin_player->KingdomId) ? $this->request->Admin_player->KingdomId : 0,
