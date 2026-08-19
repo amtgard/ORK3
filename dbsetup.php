@@ -32,13 +32,8 @@ if (DO_SETUP == true) {
 
 	$sql = str_replace('ork_', DB_PREFIX, $sql);
 	
-	file_put_contents('orksetup.sql', $sql);
-	
-	$command = "mysql -u " . DB_USERNAME . " -p" . DB_PASSWORD . " -h " . DB_HOSTNAME . " -D " . DB_DATABASE . " < orksetup.sql";
-	
-	print_r(array(shell_exec($command)));
-	
-	unlink('orksetup.sql');
+	$mysqli = new mysqli(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE, DB_PORT);
+	$mysqli->multi_query($sql);
 	
 	$clear = array( 'account', 'application', 'application_auth', 'attendance', 'authorization', 'awardlimit', 'award', 'awards', 'bracket', 'bracket_officiant', 'class_reconciliation', 'configuration', 'credential', 'event', 
 	'event_calendardetail', 'glicko2', 'kingdom', 'kingdomaward', 'log', 'match', 'mundane', 'officer', 'park', 'parkday', 'parktitle', 'participant', 'participant_mundane', 'seed', 'split', 'team', 'tournament', 'transaction', 
