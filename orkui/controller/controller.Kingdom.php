@@ -321,6 +321,8 @@ class Controller_Kingdom extends Controller
         $this->data['knEventMapNoLocCount'] = $eventBundle['knEventMapNoLocCount'];
         $this->data['HasMoreEvents']        = $eventBundle['HasMoreEvents'];
         $this->data['kingdom_park_days']    = $this->KingdomProfile->park_days($kid);
+        // Heatmap weights: per-park active player counts (participation + residents)
+        $this->data['HeatmapWeights']       = $this->KingdomProfile->heatmap_weights($kid);
 
         $uid = $kn_uid;
         $this->data['IsLoggedIn']       = $uid > 0;

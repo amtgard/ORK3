@@ -775,6 +775,19 @@
 						Loading map&hellip;
 					</div>
 					<div id="kn-map-container" style="display:none">
+						<?php if (!empty($HeatmapWeights)): ?>
+						<div class="kn-hm-toggle-row" id="kn-hm-toggle-row">
+							<span class="kn-hm-toggle-label"><i class="fas fa-fire" style="margin-right:5px;color:#e53e3e"></i>Heatmap:</span>
+							<div class="kn-hm-toggle">
+								<button class="kn-hm-btn kn-hm-active" id="kn-hm-btn-participation" onclick="knHeatmapMode('participation')">
+									<i class="fas fa-sign-in-alt" style="margin-right:4px"></i>By Participation
+								</button>
+								<button class="kn-hm-btn" id="kn-hm-btn-residents" onclick="knHeatmapMode('residents')">
+									<i class="fas fa-home" style="margin-right:4px"></i>By Residents
+								</button>
+							</div>
+						</div>
+						<?php endif; ?>
 						<div class="kn-map-layout">
 							<div class="kn-map-wrap">
 								<div id="kn-map"></div>
@@ -1024,6 +1037,7 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	heatmapWeights:   <?= json_encode(array_values(array_map(function($pid, $w) { return ['id' => (int)$pid, 'participation' => (int)$w['participation'], 'residents' => (int)$w['residents']]; }, array_keys($HeatmapWeights ?? []), array_values($HeatmapWeights ?? []))), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -2254,8 +2268,36 @@ tr:hover .kn-copy-link { opacity: 1; }
 	0%,70% { opacity: 1; } 100% { opacity: 0; }
 }
 </style>
-<!-- Move Player Modal -->
+<!-- Heatmap toggle + Move Player Modal -->
 <style>
+/* ---- Heatmap mode toggle ---- */
+.kn-hm-toggle-row {
+	display:flex; align-items:center; gap:10px; padding:8px 12px;
+	background:#f7fafc; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;
+}
+.kn-hm-toggle-label { font-size:12px; font-weight:700; color:#4a5568; white-space:nowrap; }
+.kn-hm-toggle {
+	display:flex; background:#edf2f7; border-radius:20px; padding:3px; gap:3px;
+}
+.kn-hm-btn {
+	padding:5px 14px; border:none; border-radius:17px; font-size:11px; font-weight:600;
+	cursor:pointer; background:transparent; color:#718096;
+	transition:background 0.15s,color 0.15s,box-shadow 0.15s; white-space:nowrap;
+}
+.kn-hm-btn.kn-hm-active { background:#fff; color:#c53030; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.kn-hm-btn:hover:not(.kn-hm-active) { color:#4a5568; background:rgba(255,255,255,0.5); }
+
+/* Heatmap mode toggle — dark mode. The active pill must stay LIGHTER than the
+   track it sits in, so the recessed/raised relationship survives the flip:
+   track drops to the page background, the active pill rises to bg-tertiary. */
+html[data-theme="dark"] .kn-hm-toggle-row { background:var(--ork-bg-secondary); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-hm-toggle-label { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-hm-toggle-label i { color:#fc8181 !important; }
+html[data-theme="dark"] .kn-hm-toggle { background:var(--ork-bg); }
+html[data-theme="dark"] .kn-hm-btn { color:var(--ork-text-muted); }
+html[data-theme="dark"] .kn-hm-btn.kn-hm-active { background:var(--ork-bg-tertiary); color:#feb2b2; box-shadow:0 1px 3px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .kn-hm-btn:hover:not(.kn-hm-active) { color:var(--ork-text); background:rgba(255,255,255,0.06); }
+
 .kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
 .kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
 .kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
