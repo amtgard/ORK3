@@ -140,6 +140,14 @@ class Controller_KingdomAjax extends Controller
                 'KingdomId'            => $kingdom_id,
                 'KingdomConfiguration' => $configList,
             ]);
+            if ($r['Status'] == 0) {
+                // Kingdom config can change which kingdoms roll up into stats
+                // (IncludePrincipalityInStatistics) and a lot of other derived
+                // values across reports / averages / recap. Cheapest correct
+                // fix is a full memcached flush — config saves are infrequent
+                // admin actions, not worth enumerating every dependent cache key.
+                Ork3::$Lib->ghettocache->memcache->flush();
+            }
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -430,6 +438,7 @@ class Controller_KingdomAjax extends Controller
             $award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
             $rank       = (int)($_POST['Rank']            ?? 0);
             $reason     = trim($_POST['Reason']           ?? '');
+            $anonymous  = !empty($_POST['Anonymous'])     ? 1 : 0;
             if (!valid_id($mundane_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
                 exit;
@@ -449,6 +458,7 @@ class Controller_KingdomAjax extends Controller
                 'Rank'           => $rank > 0 ? $rank : null,
                 'GivenById'      => $this->session->user_id,
                 'Reason'         => $reason,
+                'Anonymous'      => $anonymous,
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
@@ -465,6 +475,7 @@ class Controller_KingdomAjax extends Controller
                 'Token'             => $this->session->token,
                 'RecommendationsId' => $rec_id,
                 'RequestedBy'       => $this->session->user_id,
+                'Granted'           => !empty($_POST['Granted']) ? 1 : 0,
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
@@ -480,6 +491,37 @@ class Controller_KingdomAjax extends Controller
             $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
             echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
 
+		} elseif ($action === 'passtolocalrecommendation') {
+			$this->load_model('Player');
+			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
+			$r = $this->Player->set_recommendation_passed_to_local([
+				'Token'             => $this->session->token,
+				'RecommendationsId' => $rec_id,
+				'Passed'            => !empty($_POST['Passed']) ? 1 : 0,
+				'RequestedBy'       => $this->session->user_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'resolverecommendationcluster') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$this->load_model('Player');
+			$r = $this->Player->resolve_player_recommendation_cluster([
+				'Token'          => $this->session->token,
+				'MundaneId'      => (int)($_POST['MundaneId']      ?? 0),
+				'KingdomAwardId' => (int)($_POST['KingdomAwardId'] ?? 0),
+				'Rank'           => (int)($_POST['Rank']           ?? 0),
+				'RequestedBy'    => $this->session->user_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'resolved' => (int)($r['Resolved'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
             if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
@@ -493,6 +535,36 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
             $r = $this->Player->restore_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'snoozerecommendation') {
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->snooze_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'unsnoozerecommendation') {
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->unsnooze_recommendation([
                 'Token'             => $this->session->token,
                 'RecommendationsId' => $rec_id,
             ]);

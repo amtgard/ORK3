@@ -192,6 +192,7 @@ class Controller_Kingdom extends Controller
             exit;
         }
         $this->load_model('Award');
+        $this->load_model('Court');
         $this->load_model('Reports');
         $this->load_model('Pronoun');
         $this->load_model('Recap');
@@ -471,6 +472,15 @@ class Controller_Kingdom extends Controller
                 });
             }
             $this->data['SystemAwards'] = $sysAwards;
+        }
+
+        $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
+        $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$kingdom_id, 0);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = $this->Court->get_court_list((int)$kingdom_id, 0);
+            $this->data['CourtUpcomingEvents'] = $this->Court->get_upcoming_events((int)$kingdom_id);
         }
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();

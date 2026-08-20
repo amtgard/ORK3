@@ -163,6 +163,7 @@ class Controller_Park extends Controller
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
             : true;
         $this->data['AwardRecsPublic'] = $recsPublic;
+        $this->data['CallerIsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;
@@ -187,6 +188,15 @@ class Controller_Park extends Controller
         $this->load_model('Player');
         $this->data['ViewerCircleAwardIds'] = $uid > 0 ? $this->Player->get_circle_award_ids($uid) : array();
         $this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
+
+        $this->load_model('Court');
+        $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = $this->Court->get_court_list((int)$this->session->kingdom_id, (int)$park_id);
+            $this->data['CourtUpcomingEvents'] = $this->Court->get_upcoming_events((int)$this->session->kingdom_id);
+        }
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
