@@ -805,7 +805,12 @@ class Player extends Ork3
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
             $this->notes->note         = $request['Note'];
             $this->notes->description  = $request['Description'];
-            $this->notes->date         = date('Y-m-d', strtotime($request['Date']));
+            // Same epoch trap AddNote guards against: strtotime('') is false and
+            // date('Y-m-d', false) is 1969-12-31. date_complete was already
+            // guarded here, but `date` was not, so clearing a note's date in the
+            // edit form still stamped the epoch. The two fields -- and the two
+            // methods -- now agree.
+            $this->notes->date         = ($request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : '');
             $this->notes->date_complete = ($request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '');
             $this->notes->save();
             return Success($this->notes->mundane_note_id);

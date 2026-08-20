@@ -45,7 +45,13 @@ class Dangeraudit extends Ork3
                 $clean[$k] = '[redacted]';
                 continue;
             }
-            $clean[$k] = is_array($v) ? $this->scrub($v, $depth + 1) : $v;
+            // Recurse into objects as well as arrays. Only the TOP-LEVEL value
+            // was being normalized from an object, so a state snapshot that
+            // nested a stdClass (a DataSet row, a decoded config blob) carried
+            // its Token/Password/secret straight into the audit table. scrub()
+            // returns scalars and JsonSerializable objects untouched, so this is
+            // safe to call on every value.
+            $clean[$k] = (is_array($v) || is_object($v)) ? $this->scrub($v, $depth + 1) : $v;
         }
         return $clean;
     }
