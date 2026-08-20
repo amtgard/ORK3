@@ -595,7 +595,8 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 
 	<div class="recap-foot">
 		Computed <?=htmlspecialchars($recap['ComputedAt'] ?? '')?> ·
-		<a href="<?=UIR ?><?=$url_json?><?=urlencode($recap['WeekStart'])?>">JSON</a>
+		<a href="<?=UIR ?><?=$url_json?><?=urlencode($recap['WeekStart'])?>">JSON</a> ·
+		<a href="<?=UIR ?>Recap/trends">Trends</a>
 	</div>
 
 <?php endif; // $has_recap ?>
