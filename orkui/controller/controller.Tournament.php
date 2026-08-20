@@ -49,6 +49,7 @@ class Controller_Tournament extends Controller
             $this->request->save('Tournament_worksheet', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Tournament/worksheet');
+                exit;
             } else {
                 switch ($this->request->Action) {
                     case 'addbracket':
@@ -67,7 +68,11 @@ class Controller_Tournament extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Tournament_worksheet');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Tournament/worksheet');
+                    // Reached only from inside the logged-in branch: Status 5 is
+                    // NoAuthorization. The bare redirect both mislabelled it as a
+                    // logout and, lacking an exit(), served the worksheet body
+                    // behind the 302.
+                    $this->no_authorization('Tournament/worksheet/' . $tournament_id);
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }
@@ -83,6 +88,7 @@ class Controller_Tournament extends Controller
             $this->request->save('Tournament_create', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Tournament/create');
+                exit;
             } else {
                 switch ($post) {
                     case 'create':
@@ -102,7 +108,9 @@ class Controller_Tournament extends Controller
                     $this->request->clear('Tournament_create');
                     //					$this->data['Message'] = "Player is ".($this->request->Tournament_create->Ban?"banned.":"free.");
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Tournament/create');
+                    // See worksheet(): NoAuthorization, reported rather than
+                    // disguised as a logout, and no page body behind a 302.
+                    $this->no_authorization('Tournament/create');
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }

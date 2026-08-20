@@ -2039,8 +2039,13 @@ class Controller_Admin extends Controller
         if ($r['Status'] == 0) {
             $this->data['Message'] = $r['Detail'];
         } elseif ($r['Status'] == 5) {
-            header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
-            return;
+            // Status 5 is NoAuthorization. The bare redirect sent a signed-in
+            // officer to a login page, and `return` (not exit) handed index.php
+            // back to $C->view(), so the 302 still carried a page body.
+            // no_authorization() redirects only genuinely logged-out callers;
+            // everyone else falls through and the kingdom/park page below
+            // renders with the message.
+            $this->no_authorization("Admin/resetwaivers/$type/$id");
         } else {
             $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
         }

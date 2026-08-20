@@ -69,7 +69,7 @@ class Controller_Player extends Controller
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         if (strlen($action) > 0) {
@@ -311,7 +311,7 @@ class Controller_Player extends Controller
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name];
