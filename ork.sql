@@ -564,6 +564,28 @@ CREATE TABLE IF NOT EXISTS `ork_mundane` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `ork_session`
+--
+
+DROP TABLE IF EXISTS `ork_session`;
+CREATE TABLE IF NOT EXISTS `ork_session` (
+  `session_id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `mundane_id` INT UNSIGNED NOT NULL,
+  `token`      VARCHAR(35)  NOT NULL,
+  `created`    DATETIME     NOT NULL,
+  `last_seen`  DATETIME     NOT NULL,
+  `expires`    DATETIME     NOT NULL,
+  `user_agent` VARCHAR(255) NOT NULL DEFAULT '',
+  `ip`         VARCHAR(45)  NOT NULL DEFAULT '',
+  PRIMARY KEY (`session_id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `mundane_id` (`mundane_id`),
+  KEY `expires` (`expires`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `ork_mundane_note`
 --
 

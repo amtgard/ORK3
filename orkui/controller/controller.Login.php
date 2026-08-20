@@ -19,7 +19,7 @@ class Controller_Login extends Controller
             }
         }
         if (($_GET['msg'] ?? '') === 'session_replaced') {
-            $this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+            $this->data['session_message'] = 'You\'ve been signed out on this device. Please log in again.';
         }
     }
 
@@ -31,11 +31,21 @@ class Controller_Login extends Controller
         exit;
     }
 
+    // "Log out everywhere" — destroys all of the account's sessions (all
+    // devices/apps), then completes the normal local logout.
+    public function logout_all($userid = null)
+    {
+        $this->session->location = null;
+        $this->Login->logout_all($userid);
+        header('Location: ' . UIR);
+        exit;
+    }
+
     public function login($location = null)
     {
         $this->template = '../revised-frontend/Login_index.tpl';
         if (($_GET['msg'] ?? '') === 'session_replaced') {
-            $this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+            $this->data['session_message'] = 'You\'ve been signed out on this device. Please log in again.';
         }
         if (!empty($_GET['return'])) {
             $_ret = trim($_GET['return']);

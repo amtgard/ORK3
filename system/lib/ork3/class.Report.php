@@ -12,6 +12,26 @@ I have no apologies for the following code.  It works well enough.
 
 class Report extends Ork3
 {
+    /**
+     * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
+     *
+     * Every Order ladder ends in a masterhood, and most are classified correctly
+     * (Rose, Smith, Lion, Owl, Dragon, Garber, Warlord, Master Crown, Battlemaster
+     * all carry peerage='Master'). These five do not, so filtering on peerage alone
+     * silently drops them from the weekly recap:
+     *
+     *     7 Master Jovius   8 Master Zodiac   9 Master Mask
+     *    10 Master Hydra   11 Master Griffin
+     *
+     * Reported 2026-08-08 ("Week in review missing non-ladder masterhoods").
+     *
+     * This is a recap-scoped compensation, NOT a fix for the underlying data:
+     * ork_award.peerage is deliberately left alone, so the Masters report, the
+     * Knights & Masters report and the State of Amtgard totals still omit these.
+     * Reclassifying the awards would make all of those consistent in one move.
+     */
+    private const RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS = array(7, 8, 9, 10, 11);
+
     public function __construct()
     {
         parent::__construct();
@@ -4188,6 +4208,7 @@ class Report extends Ork3
             'ReturningPlayers' => $this->_RecapReturningPlayers($win, 90),
             'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25),
             'PlatformStats'    => $this->_RecapCloudflareStats($win),
+            'HumanUsers'       => $this->_RecapGaHumanUsers($win),
         );
     }
 
@@ -4297,6 +4318,125 @@ class Report extends Ork3
         return json_decode($resp, true);
     }
 
+    /**
+     * Unique human visitors for the recap week, from Google Analytics (GA4).
+     *
+     * This is the only honest "how many people use the site" number we have:
+     * GA only counts clients that execute its JS, which excludes essentially all
+     * bots. (Cloudflare's edge "uniques" counts distinct IPs and is ~99% bot
+     * traffic — see PlatformStats, which is a traffic/security metric, not a
+     * user count. GA undercounts humans somewhat instead: ad-blockers.)
+     *
+     * Auth is a Google service account (GA4 property Viewer) — the JWT-bearer
+     * flow, signed locally with openssl, no SDK. Config lives beside the CF
+     * keys: GA4_PROPERTY_ID (numeric, GA Admin > Property settings) and
+     * GA4_SA_KEY_PATH (the service account's JSON key file, NOT in git).
+     * Returns null on any failure so the recap still ships without it.
+     *
+     * @return int|null distinct activeUsers over the week, or null
+     */
+    private function _RecapGaHumanUsers($win)
+    {
+        return $this->GaActiveUsers($win['WeekStart'], $win['WeekEnd']);
+    }
+
+    /**
+     * Distinct GA4 activeUsers between two Y-m-d dates (inclusive). Public so
+     * ad-hoc callers (bin/ga-probe.php, "how many users this month?") share the
+     * exact plumbing the weekly recap uses. Null on any failure or missing config.
+     *
+     * @param string $start_date Y-m-d
+     * @param string $end_date   Y-m-d
+     * @return int|null
+     */
+    public function GaActiveUsers($start_date, $end_date)
+    {
+        $property = (defined('GA4_PROPERTY_ID') && GA4_PROPERTY_ID !== '') ? GA4_PROPERTY_ID : getenv('GA4_PROPERTY_ID');
+        $key_path = (defined('GA4_SA_KEY_PATH') && GA4_SA_KEY_PATH !== '') ? GA4_SA_KEY_PATH : getenv('GA4_SA_KEY_PATH');
+        if (empty($property) || empty($key_path) || !is_readable($key_path)) {
+            return null;
+        }
+        $token = $this->_gaAccessToken($key_path);
+        if ($token === null) {
+            return null;
+        }
+
+        $ch = curl_init('https://analyticsdata.googleapis.com/v1beta/properties/' . rawurlencode($property) . ':runReport');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode(array(
+                'dateRanges' => array(array('startDate' => $start_date, 'endDate' => $end_date)),
+                'metrics'    => array(array('name' => 'activeUsers')),
+            )),
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 5,
+        ));
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($resp === false || $http !== 200) {
+            return null;
+        }
+        $json = json_decode($resp, true);
+        $value = $json['rows'][0]['metricValues'][0]['value'] ?? null;
+        return $value === null ? null : (int)$value;
+    }
+
+    /**
+     * OAuth2 access token for the GA service account (JWT-bearer grant).
+     * Scope is read-only analytics. Returns null on any failure.
+     */
+    private function _gaAccessToken($key_path)
+    {
+        $key = json_decode((string)file_get_contents($key_path), true);
+        if (!is_array($key) || empty($key['client_email']) || empty($key['private_key'])) {
+            return null;
+        }
+
+        $b64 = function ($data) {
+            return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+        };
+        $now = time();
+        $unsigned = $b64(json_encode(array('alg' => 'RS256', 'typ' => 'JWT')))
+            . '.' . $b64(json_encode(array(
+                'iss'   => $key['client_email'],
+                'scope' => 'https://www.googleapis.com/auth/analytics.readonly',
+                'aud'   => 'https://oauth2.googleapis.com/token',
+                'iat'   => $now,
+                'exp'   => $now + 3600,
+            )));
+        $signature = '';
+        if (!openssl_sign($unsigned, $signature, $key['private_key'], OPENSSL_ALGO_SHA256)) {
+            return null;
+        }
+        $jwt = $unsigned . '.' . $b64($signature);
+
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query(array(
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion'  => $jwt,
+            )),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 5,
+        ));
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($resp === false || $http !== 200) {
+            return null;
+        }
+        $json = json_decode($resp, true);
+        return isset($json['access_token']) ? (string)$json['access_token'] : null;
+    }
+
     // Count of firewall events that actually stopped traffic: outright blocks plus
     // challenges (managed/JS/classic). Excludes "skip", "allow", "log", and the
     // *_solved/*_bypassed actions where the request ultimately got through.
@@ -4378,6 +4518,8 @@ class Report extends Ork3
             'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25, $kingdom_id),
             // PlatformStats stays global — CF doesn't tell us per-kingdom traffic.
             'PlatformStats'    => $global['PlatformStats'] ?? null,
+            // Ditto HumanUsers — GA4 counts site visitors, not kingdom members.
+            'HumanUsers'       => $global['HumanUsers'] ?? null,
             'ComputedAt'       => $computed_at,
         );
         return Ork3::$Lib->ghettocache->cache($call, $key, $payload);
@@ -4461,10 +4603,23 @@ class Report extends Ork3
         $start = mysql_real_escape_string($win['WeekStart']);
         $end   = mysql_real_escape_string($win['WeekEnd']);
         $kid_clause = $kingdom_id ? ' AND m.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
+
+        // Resolve peerage and award id through the same alias-then-kingdomaward
+        // precedence, so both agree on which award a grant actually represents.
+        $peerage_expr  = 'COALESCE(alias.peerage, a.peerage)';
+        $award_expr    = 'COALESCE(alias.award_id, ka.award_id)';
+        $peerage_where = "$peerage_expr IN ($list)";
+        if (in_array('Master', $peerages, true)) {
+            // Pick up the masterhoods ork_award.peerage does not flag as such.
+            $unflagged     = implode(',', array_map('intval', self::RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS));
+            $peerage_where = "($peerage_where OR $award_expr IN ($unflagged))";
+            // Report them as masterhoods so the returned DTO is self-consistent.
+            $peerage_expr  = "CASE WHEN $award_expr IN ($unflagged) THEN 'Master' ELSE $peerage_expr END";
+        }
         $sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
-					   COALESCE(alias.peerage, a.peerage) AS peerage,
+					   $peerage_expr AS peerage,
 					   COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) AS award_name
 				FROM " . DB_PREFIX . "awards ma
 					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
@@ -4473,7 +4628,7 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
 					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-				WHERE COALESCE(alias.peerage, a.peerage) IN ($list)
+				WHERE $peerage_where
 				  AND ma.revoked = 0
 				  AND ma.date >= '$start' AND ma.date <= '$end'
 				  $kid_clause

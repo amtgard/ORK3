@@ -36,7 +36,7 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 		<?php if (!empty($ViewerDyslexiaFonts)) : ?>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
 		<style>
@@ -178,6 +178,90 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 [data-wx-safety]:hover { filter: brightness(1.05); }
 [data-wx-safety]:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }
 </style>
+<?php
+// ── Log Out Everywhere confirm — house-styled dialog matching wx-safety. ──
+// Renders only when the nav link does (>1 live session); shows each session
+// with a friendly client label, source IP, and last activity.
+if (!function_exists('nav_session_client_label')) {
+	function nav_session_client_label($ua)
+	{
+		$ua = (string)$ua;
+		if ($ua === '') return 'Unknown client';
+		// Self-identified clients (X-ORK-Client) and CLI tools first.
+		if (stripos($ua, 'mork') === 0) return $ua;                    // "mORK/2.4 (iOS…)"
+		if (stripos($ua, 'jsork') !== false) return $ua;
+		if (stripos($ua, 'curl') === 0) return 'API client (curl)';
+		if (stripos($ua, 'Mozilla') === false) return substr($ua, 0, 40);
+		$browser = 'Browser';
+		if (stripos($ua, 'Edg/') !== false) $browser = 'Edge';
+		elseif (stripos($ua, 'OPR/') !== false) $browser = 'Opera';
+		elseif (stripos($ua, 'Chrome/') !== false) $browser = 'Chrome';
+		elseif (stripos($ua, 'Firefox/') !== false) $browser = 'Firefox';
+		elseif (stripos($ua, 'Safari/') !== false) $browser = 'Safari';
+		$os = '';
+		if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) $os = 'iOS';
+		elseif (stripos($ua, 'Android') !== false) $os = 'Android';
+		elseif (stripos($ua, 'Macintosh') !== false) $os = 'Mac';
+		elseif (stripos($ua, 'Windows') !== false) $os = 'Windows';
+		elseif (stripos($ua, 'Linux') !== false) $os = 'Linux';
+		return $os !== '' ? "$browser on $os" : $browser;
+	}
+}
+if (!function_exists('nav_session_ago')) {
+	function nav_session_ago($datetime)
+	{
+		$s = time() - strtotime((string)$datetime);
+		if ($s < 90) return 'just now';
+		if ($s < 5400) return floor($s / 60) . ' min ago';
+		if ($s < 129600) return round($s / 3600) . ' hr ago';
+		return round($s / 86400) . ' days ago';
+	}
+}
+// Computed here (renders before the nav); the nav dropdown reuses it.
+$__laSessions = Ork3::$Lib->authorization->ListSessionsForToken((string)($this->__session->token ?? ''));
+if (count($__laSessions) > 1) : ?>
+<div id="logout-all-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeLogoutAllDialog();">
+	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
+		<div style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1;color:#c53030;"><i class="fas fa-power-off"></i></div>
+		<div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--ork-text,#2d3748);">Log Out Everywhere?</div>
+		<div style="font-size:14px;line-height:1.55;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);text-align:center;">
+			You&rsquo;re signed in on <strong><?=count($__laSessions)?></strong> devices &amp; apps. This signs you out of all of them.
+		</div>
+		<div style="border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;margin-bottom:18px;overflow:hidden;">
+<?php foreach ($__laSessions as $__i => $__s) : ?>
+			<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;<?=$__i > 0 ? 'border-top:1px solid var(--ork-border,#e2e8f0);' : ''?><?=$__s['current'] ? 'background:rgba(66,153,225,0.08);' : ''?>">
+				<span style="color:var(--ork-text,#2d3748);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+					<?=htmlspecialchars(nav_session_client_label($__s['user_agent']))?><?=$__s['current'] ? ' <span style="font-weight:400;color:#4299e1;">(this one)</span>' : ''?>
+				</span>
+				<span style="color:var(--ork-text-secondary,#718096);white-space:nowrap;">
+					<?=htmlspecialchars($__s['ip'])?> &middot; <?=htmlspecialchars(nav_session_ago($__s['last_seen']))?>
+				</span>
+			</div>
+<?php endforeach; ?>
+		</div>
+		<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+			<button type="button" onclick="closeLogoutAllDialog()" style="background:transparent;color:var(--ork-text-secondary,#4a5568);border:1px solid var(--ork-border,#cbd5e0);border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+			<button type="button" onclick="window.location.href='<?=UIR?>Login/logout_all';" style="background:#c53030;color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;"><i class="fas fa-power-off" style="margin-right:6px;"></i>Log Out All <?=count($__laSessions)?></button>
+		</div>
+	</div>
+</div>
+<script>
+function navLogoutAllConfirm(ev) {
+	ev.preventDefault();
+	var o = document.getElementById('logout-all-overlay');
+	o.style.display = 'flex';
+	return false;
+}
+function closeLogoutAllDialog() {
+	var o = document.getElementById('logout-all-overlay');
+	if (o) o.style.display = 'none';
+}
+document.addEventListener('keydown', function (e) {
+	if (e.key === 'Escape') closeLogoutAllDialog();
+});
+</script>
+<?php endif; ?>
+
 <div id="wx-safety-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
 	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
 		<div id="wx-safety-icon" style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1"></div>
@@ -427,6 +511,14 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 <?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
+<?php
+					// "Log Out Everywhere" only appears when there is actually
+					// somewhere else to log out of (>1 live session). Session
+					// details render inside the modal (computed there, above).
+					if (!empty($__laSessions) && count($__laSessions) > 1) : ?>
+					<a href='<?=UIR?>Login/logout_all' class='nav-dropdown-danger' id='nav-logout-all'
+					   onclick="return navLogoutAllConfirm(event);"><i class='fas fa-power-off'></i> Log Out Everywhere</a>
+<?php				endif; ?>
 				</div>
 			</div>
 <?php endif; ?>

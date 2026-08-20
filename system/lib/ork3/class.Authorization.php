@@ -11,6 +11,8 @@ define('AUTH_UNIT', 'Unit');
 
 class Authorization extends Ork3
 {
+	const MAX_SESSIONS_PER_USER = 3;
+	const TOKEN_LENGTH = 32; // md5 hex length — session tokens are md5(...) → 32 chars
 
 	public function __construct()
 	{
@@ -332,14 +334,17 @@ class Authorization extends Ork3
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
-						$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
-						$this->mundane->save();
-						$response['Status'] = Success();
-						$response['Token'] = $this->mundane->token;
-						$response['UserId'] = $mundane_id;
-						$response['Timeout'] = $this->mundane->token_expires;
-						$response['PasswordExpires'] = $this->mundane->password_expires;
+						$_sessionToken = $this->CreateSession($this->mundane->mundane_id);
+						if ($_sessionToken === '') {
+							$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
+						} else {
+							$this->persistVestigialToken($_sessionToken);
+							$response['Status'] = Success();
+							$response['Token'] = $this->mundane->token;
+							$response['UserId'] = $mundane_id;
+							$response['Timeout'] = $this->mundane->token_expires;
+							$response['PasswordExpires'] = $this->mundane->password_expires;
+						}
 					}
 				} else {
 					if (defined('UIR')) {
@@ -356,27 +361,36 @@ class Authorization extends Ork3
 				}
 			}
 		} else {
-			$this->mundane->clear();
-			$this->mundane->token = $request['Token'];
-			if ($this->mundane->find()) {
-				$mundane_id = $this->mundane->mundane_id;
-				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
-					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
-				} else if (strtotime($this->mundane->token_expires) > time()) {
-					$this->mundane->token = md5($this->mundane->token . microtime());
-					$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
-					$this->mundane->save();
-					$response['Status'] = Success();
-					$response['Token'] = $this->mundane->token;
-					$response['UserId'] = $mundane_id;
-					$response['Timeout'] = $this->mundane->token_expires;
-				} else {
-					$response['Status'] = InvalidParameter(null, "Token has expired: " . strtotime($this->mundane->token_expires) . ' <= ' . time());
-					$response['Status']['Detail'] = $request['Token'];
-				}
-			} else {
-				$response['Status'] = InvalidParameter(null, "Token could not be found.");
+			// Token-based re-auth (SOAP/mobile). Validate against ork_session so
+			// ANY of the user's live device tokens works — not just the most-recent
+			// one written to the single ork_mundane.token slot. ValidateSessionByToken
+			// also enforces expiry, so no separate token_expires gate is needed.
+			$mundane_id = $this->ValidateSessionByToken($request['Token']);
+			if ($mundane_id === 0) {
+				$response['Status'] = InvalidParameter(null, "Token could not be found or has expired.");
 				$response['Status']['Detail'] = $request['Token'];
+			} else {
+				$this->mundane->clear();
+				$this->mundane->mundane_id = $mundane_id;
+				if (!$this->mundane->find()) {
+					$response['Status'] = ProcessingError();
+				} else if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
+				} else {
+					$_rotated = $this->RotateSession($request['Token']);
+					if ($_rotated === '') {
+						$_rotated = $this->CreateSession($mundane_id);
+					}
+					if ($_rotated === '') {
+						$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
+					} else {
+						$this->persistVestigialToken($_rotated);
+						$response['Status'] = Success();
+						$response['Token'] = $_rotated;
+						$response['UserId'] = $mundane_id;
+						$response['Timeout'] = $this->mundane->token_expires;
+					}
+				}
 			}
 		}
 		return $response;
@@ -420,9 +434,11 @@ class Authorization extends Ork3
 			return ['Status' => NoAuthorization('Your access to the ORK has been restricted.')];
 		}
 
-		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
-		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
-		$this->mundane->save();
+		$_idpToken = $this->CreateSession($this->mundane->mundane_id);
+		if ($_idpToken === '') {
+			return ['Status' => ProcessingError("Could not establish a session. Please try again.")];
+		}
+		$this->persistVestigialToken($_idpToken);
 		error_log("AuthorizeIdp: Updated mundane token.");
 
 		// Update tokens
@@ -480,9 +496,11 @@ class Authorization extends Ork3
 		$this->idp_auth->save();
 		error_log("AuthorizeIdp: IDP link created.");
 
-		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
-		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
-		$this->mundane->save();
+		$_idpToken = $this->CreateSession($this->mundane->mundane_id);
+		if ($_idpToken === '') {
+			return ['Status' => ProcessingError("Could not establish a session. Please try again.")];
+		}
+		$this->persistVestigialToken($_idpToken);
 		error_log("AuthorizeIdp: Mundane token updated.");
 
 		return [
@@ -931,25 +949,37 @@ class Authorization extends Ork3
 		return $sufficient;
 	}
 
+	/**
+	 * Per-request memo: a page render fans out to many service calls, each
+	 * gating on IsAuthorized(); without this, every call is a DB round-trip.
+	 * Scope is a single PHP request, so cross-request revocation (logout,
+	 * eviction, suspension) still takes effect on the very next request.
+	 * Invalidated by DestroySession / DestroySessionsForUser / RotateSession.
+	 */
+	private static $token_memo = array();
+
 	public function IsAuthorized_h($token)
 	{
-		if (isset($_SESSION['is_authorized_mundane_id']))
-			return $_SESSION['is_authorized_mundane_id'];
 		logtrace("IsAuthorized_h($token)", null);
-		if (strlen($token) != 32)
+		if (strlen($token) != self::TOKEN_LENGTH)
 			return 0;
-		$this->mundane->clear();
-		$this->mundane->token = $token;
-		if ($this->mundane->find()) {
-			if ($this->mundane->penalty_box == 1)
-				return 0;
-			logtrace("IsAuthorized(): authorized", null);
-			$_SESSION['is_authorized_mundane_id'] = $this->mundane->mundane_id;
-			return $this->mundane->mundane_id;
+		if (isset(self::$token_memo[$token]))
+			return self::$token_memo[$token];
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			if (isset($_SESSION['is_authorized_mundane_id']))
+				unset($_SESSION['is_authorized_mundane_id']);
+			return 0;
 		}
-		if (isset($_SESSION['is_authorized_mundane_id']))
-			unset($_SESSION['is_authorized_mundane_id']);
-		return 0;
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $mundane_id;
+		if (!$this->mundane->find() || $this->mundane->penalty_box == 1) {
+			return 0;
+		}
+		logtrace("IsAuthorized(): authorized", null);
+		$_SESSION['is_authorized_mundane_id'] = $mundane_id;
+		self::$token_memo[$token] = $mundane_id;
+		return $mundane_id;
 	}
 
 	public function IsAuthorized_app($token)
@@ -995,6 +1025,273 @@ class Authorization extends Ork3
 		}
 		logtrace("Authorization():", $response);
 		return $response;
+	}
+
+	/*
+	 * Multi-device session store (ork_session). Authoritative for session
+	 * validity; ork_mundane.token is retained only as a vestigial pointer.
+	 */
+
+	public function CreateSession($mundane_id)
+	{
+		global $DB;
+		$mundane_id = (int)$mundane_id;
+		$now = date('Y-m-d H:i:s');
+		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+
+		// Insert the session and VERIFY it landed. YapoMysql runs under
+		// ERRMODE_WARNING and swallows most INSERT errors, so an unverified
+		// insert could return a token no validation will ever match — a
+		// confusing self-evicting login loop. Read the row back; retry once
+		// with a fresh token on failure (also covers the astronomically rare
+		// UNIQUE(token) collision).
+		// Device metadata: lets the session UI label entries ("Chrome on Mac
+		// from 203.0.x.x") and lets ops trace a hijacked token. Clients that
+		// can't (jsork, in-browser) or don't want to change their User-Agent
+		// may self-identify with an X-ORK-Client header, which wins.
+		$user_agent = substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+		// Client IP: behind Cloudflare + the host nginx proxy, REMOTE_ADDR is
+		// just the docker bridge gateway — same value for every visitor.
+		// Prefer Cloudflare's CF-Connecting-IP (trustworthy because all prod
+		// traffic is CF-fronted), then the first X-Forwarded-For hop, then
+		// REMOTE_ADDR (correct when hit directly, e.g. local dev curl).
+		// Display/forensics metadata only — never used for authorization.
+		$ip = (string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
+		if ($ip === '' && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+			$ip = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+		}
+		if ($ip === '') {
+			$ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+		}
+		$ip = substr($ip, 0, 45);
+
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			$token = md5(openssl_random_pseudo_bytes(16) . microtime());
+			$DB->Clear();
+			$DB->token = $token;
+			$DB->user_agent = $user_agent;
+			$DB->ip = $ip;
+			$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires, user_agent, ip) "
+				. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "', :user_agent, :ip)");
+			$DB->Clear();
+			$DB->token = $token;
+			$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
+			if ($rs && $rs->Next()) {
+				$this->evictLruSessions($mundane_id);
+				return $token;
+			}
+		}
+		logtrace("CreateSession(): FAILED to persist ork_session after retry", array('mundane_id' => $mundane_id));
+		error_log("CreateSession(): FAILED to persist ork_session for mundane_id=" . $mundane_id);
+		return '';
+	}
+
+	private function evictLruSessions($mundane_id)
+	{
+		global $DB;
+		$mundane_id = (int)$mundane_id;
+		$keep = (int)self::MAX_SESSIONS_PER_USER;
+		// Memo coherence: fetch the tokens about to be evicted and drop them
+		// from the per-request memo, so an eviction triggered mid-request
+		// (SOAP flows, tests) can't authorize through a stale memo entry.
+		// Only runs at login time, and only when the user is over the cap.
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT token FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " AND session_id NOT IN ("
+			. "SELECT session_id FROM ("
+			. "SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " "
+			. "ORDER BY last_seen DESC, session_id DESC LIMIT " . $keep
+			. ") keepers)"
+		);
+		if ($rs) {
+			while ($rs->Next()) {
+				unset(self::$token_memo[$rs->token]);
+			}
+		}
+		// Delete this user's sessions that are NOT among the $keep most-recent
+		// by last_seen. Derived-table wrapper is required: MariaDB forbids a
+		// direct subselect on the table being deleted from.
+		$DB->Clear();
+		$DB->Execute(
+			"DELETE FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " AND session_id NOT IN ("
+			. "SELECT session_id FROM ("
+			. "SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " "
+			. "ORDER BY last_seen DESC, session_id DESC LIMIT " . $keep
+			. ") keep)"
+		);
+		logtrace("evictLruSessions(): enforced session cap", array('mundane_id' => $mundane_id, 'keep' => $keep));
+	}
+
+	// NOTE: not a pure read — on a session older than 60s this also slides
+	// last_seen/expires forward (see the throttled UPDATE below).
+	public function ValidateSessionByToken($token)
+	{
+		global $DB;
+		if (strlen($token) != self::TOKEN_LENGTH) {
+			return 0;
+		}
+		$DB->Clear();
+		$DB->token = $token;
+		$rs = $DB->DataSet("SELECT session_id, mundane_id, last_seen FROM " . DB_PREFIX . "session "
+			. "WHERE token = :token AND expires > NOW() LIMIT 1");
+		if (!$rs || !$rs->Next()) {
+			return 0;
+		}
+		$session_id = (int)$rs->session_id;
+		$mundane_id = (int)$rs->mundane_id;
+		$last_seen  = strtotime($rs->last_seen);
+
+		// Slide expiry, throttled to at most once per 60s per session so a
+		// page that fires many API calls doesn't cause a write storm.
+		if ($last_seen < time() - 60) {
+			$now = date('Y-m-d H:i:s');
+			$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+			$DB->Clear();
+			$DB->Execute("UPDATE " . DB_PREFIX . "session SET last_seen = '" . $now . "', expires = '" . $exp . "' "
+				. "WHERE session_id = " . $session_id);
+		}
+		return $mundane_id;
+	}
+
+	public function RotateSession($old_token)
+	{
+		global $DB;
+		if (strlen($old_token) != self::TOKEN_LENGTH) {
+			return '';
+		}
+		$DB->Clear();
+		$DB->token = $old_token;
+		$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE token = :token AND expires > NOW() LIMIT 1");
+		if (!$rs || !$rs->Next()) {
+			return '';
+		}
+		$session_id = (int)$rs->session_id;
+		$new_token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$now = date('Y-m-d H:i:s');
+		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+		$DB->Clear();
+		$DB->new_token = $new_token;
+		$DB->Execute("UPDATE " . DB_PREFIX . "session SET token = :new_token, last_seen = '" . $now . "', expires = '" . $exp . "' "
+			. "WHERE session_id = " . $session_id);
+		unset(self::$token_memo[$old_token]);
+		return $new_token;
+	}
+
+	public function DestroySession($request)
+	{
+		global $DB;
+		$token = is_array($request) ? ($request['Token'] ?? '') : $request;
+		if (strlen($token) != self::TOKEN_LENGTH) {
+			return;
+		}
+		$DB->Clear();
+		$DB->token = $token;
+		$DB->Execute("DELETE FROM " . DB_PREFIX . "session WHERE token = :token");
+		// Also clear the vestigial ork_mundane.token pointer if it matches this
+		// token, so the legacy SOAP re-auth path (Authorize_h else-branch, which
+		// finds the user by ork_mundane.token) can't revive a logged-out session.
+		$DB->Clear();
+		$DB->token = $token;
+		$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' WHERE token = :token");
+		unset(self::$token_memo[$token]);
+	}
+
+	/**
+	 * Destroy every session belonging to the caller's account ("log out
+	 * everywhere"). The presented token must itself be a live session — the
+	 * caller proves account ownership by holding one.
+	 *
+	 * KeepCurrent=true destroys every session EXCEPT the presented one
+	 * ("log out everywhere else"); false (default) destroys them all,
+	 * including the caller's.
+	 */
+	public function DestroySessionsForUser($request)
+	{
+		global $DB;
+		$token = is_array($request) ? ($request['Token'] ?? '') : $request;
+		$keep_current = is_array($request) && !empty($request['KeepCurrent']);
+		if (strlen($token) != self::TOKEN_LENGTH) {
+			return NoAuthorization();
+		}
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			return NoAuthorization();
+		}
+		if ($keep_current) {
+			$DB->Clear();
+			$DB->token = $token;
+			$DB->Execute("DELETE FROM " . DB_PREFIX . "session "
+				. "WHERE mundane_id = " . (int)$mundane_id . " AND token <> :token");
+		} else {
+			// No bound params here — a stray binding on a placeholder-free
+			// query fails silently under ERRMODE_WARNING (yapo poison).
+			$DB->Clear();
+			$DB->Execute("DELETE FROM " . DB_PREFIX . "session "
+				. "WHERE mundane_id = " . (int)$mundane_id);
+			// Vestigial pointer cleanup, same rationale as DestroySession.
+			$DB->Clear();
+			$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' "
+				. "WHERE mundane_id = " . (int)$mundane_id);
+		}
+		// Cross-request revocation is handled by the deleted rows; the memo
+		// only spans this request, but clear it for coherence.
+		self::$token_memo = array();
+		logtrace("DestroySessionsForUser()", array('mundane_id' => $mundane_id, 'keep_current' => $keep_current));
+		return Success();
+	}
+
+	/**
+	 * List the caller's live sessions (for the logout-everywhere modal and,
+	 * eventually, a session-management page). The presented token must itself
+	 * be a live session. Rows ordered most-recently-active first; 'current'
+	 * marks the presented token's own row.
+	 *
+	 * @return array<int, array{session_id:int, created:string, last_seen:string, user_agent:string, ip:string, current:bool}>
+	 */
+	public function ListSessionsForToken($token)
+	{
+		global $DB;
+		if (strlen((string)$token) != self::TOKEN_LENGTH) {
+			return array();
+		}
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			return array();
+		}
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT session_id, token, created, last_seen, user_agent, ip "
+			. "FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . (int)$mundane_id . " AND expires > NOW() "
+			. "ORDER BY last_seen DESC, session_id DESC"
+		);
+		$sessions = array();
+		if ($rs) {
+			while ($rs->Next()) {
+				$sessions[] = array(
+					'session_id' => (int)$rs->session_id,
+					'created'    => (string)$rs->created,
+					'last_seen'  => (string)$rs->last_seen,
+					'user_agent' => (string)$rs->user_agent,
+					'ip'         => (string)$rs->ip,
+					'current'    => ((string)$rs->token === (string)$token),
+				);
+			}
+		}
+		return $sessions;
+	}
+
+	// Writes the vestigial ork_mundane.token pointer (ork_session is authoritative).
+	private function persistVestigialToken($token)
+	{
+		$this->mundane->token = $token;
+		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+		$this->mundane->save();
 	}
 }
 
