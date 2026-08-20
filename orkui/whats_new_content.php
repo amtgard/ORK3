@@ -1,11 +1,20 @@
 <?php
 
+// This file is included from more than one place in a single request (the base
+// Controller reads it for every logged-in user, and Controller_ReleaseNotes reads
+// it again for the full list), so it must be safe to include twice. Guard the
+// constants and let the array re-assign; see the note in controller.ReleaseNotes.php.
+
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
-define('WHATS_NEW_VERSION', '2026-08-20');
+if (!defined('WHATS_NEW_VERSION')) {
+    define('WHATS_NEW_VERSION', '2026-08-20');
+}
 
 // Application version — shown in the site footer. Change this if you change the above date.
-define('ORK_VERSION', '3.5.5 Hydra');
+if (!defined('ORK_VERSION')) {
+    define('ORK_VERSION', '3.5.5 Hydra');
+}
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
