@@ -2,10 +2,27 @@
 
 class Controller_Kingdom extends Controller
 {
+    // Data endpoints that must NOT repaint the visitor's navigation context.
+    // The kingdom profile page background-fetches several of these for each
+    // child principality (Kingdomnew_index.tpl ~line 2660), and the last async
+    // response to land was silently re-pointing session->kingdom_id at a
+    // principality — breadcrumbs and every session-scoped report (attendance
+    // explorer, knights list) then showed the principality instead of the
+    // kingdom the visitor was on. All of these take an explicit id argument
+    // and never read the session context they were overwriting.
+    private static $CONTEXT_FREE_METHODS = array(
+        'park_monthly_json', 'park_averages_json', 'players_json',
+        'events_more', 'recommendations_panel', 'ics',
+    );
+
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
         $id = preg_replace('/[^0-9]/', '', $id);
+
+        if (in_array($this->method, self::$CONTEXT_FREE_METHODS, true)) {
+            return;
+        }
 
         if ($id != $this->session->kingdom_id) {
             unset($this->session->kingdom_id);
