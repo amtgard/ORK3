@@ -334,7 +334,9 @@ class Authorization extends Ork3
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$_sessionToken = $this->CreateSession($this->mundane->mundane_id);
+						// jsork (and mORK, which embeds it) self-identifies via a
+						// Client field on the login request — see CreateSession.
+						$_sessionToken = $this->CreateSession($this->mundane->mundane_id, $request['Client'] ?? null);
 						if ($_sessionToken === '') {
 							$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
 						} else {
@@ -1032,7 +1034,20 @@ class Authorization extends Ork3
 	 * validity; ork_mundane.token is retained only as a vestigial pointer.
 	 */
 
-	public function CreateSession($mundane_id)
+	// Normalize a client-supplied session label: trimmed, control characters
+	// collapsed to spaces, capped at the column width. Returns null for an
+	// empty/absent value so callers can fall through to header/User-Agent.
+	private static function sanitizeClientLabel($value)
+	{
+		$value = trim((string)$value);
+		if ($value === '') {
+			return null;
+		}
+		$value = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
+		return substr($value, 0, 255);
+	}
+
+	public function CreateSession($mundane_id, $client_label = null)
 	{
 		global $DB;
 		$mundane_id = (int)$mundane_id;
@@ -1046,10 +1061,13 @@ class Authorization extends Ork3
 		// with a fresh token on failure (also covers the astronomically rare
 		// UNIQUE(token) collision).
 		// Device metadata: lets the session UI label entries ("Chrome on Mac
-		// from 203.0.x.x") and lets ops trace a hijacked token. Clients that
-		// can't (jsork, in-browser) or don't want to change their User-Agent
-		// may self-identify with an X-ORK-Client header, which wins.
-		$user_agent = substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+		// from 203.0.x.x") and lets ops trace a hijacked token. Clients may
+		// self-identify three ways, most-deliberate first: a Client field in
+		// the login request body (CORS-safe for embedded jsork — a custom
+		// header would force a preflight the service has never answered),
+		// an X-ORK-Client header (native clients, curl), then User-Agent.
+		$user_agent = self::sanitizeClientLabel($client_label)
+			?? substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 		// Client IP: behind Cloudflare + the host nginx proxy, REMOTE_ADDR is
 		// just the docker bridge gateway — same value for every visitor.
 		// Prefer Cloudflare's CF-Connecting-IP (trustworthy because all prod
