@@ -82,6 +82,11 @@
     "2026-07-01-mundane-design-show-feast-prefs.sql": { "class": "S", "render": "full" },
     "2026-07-07-add-prod-canary.sql": { "class": "PC", "render": "skip", "notes": "Dev mirror only" },
     "2026-07-13-add-ork-session-table.sql": { "class": "S", "render": "full", "notes": "Multi-device session table; backfill INSERT IGNORE is a no-op on synthetic data" },
+    "2026-08-07-unit-role-add-organizer.sql": { "class": "S", "render": "full", "notes": "Adds organizer (and catches up owner) in the unit role enum; blank-role backfill is least-privilege and harmless on synthetic data" },
+    "2026-08-07-scrub-audit-credentials.sql": { "class": "PB", "render": "skip", "notes": "Redacts credentials from real prod audit rows; manual, maintenance window (~800k rows)" },
+    "2026-08-07-repair-epoch-note-dates.sql": { "class": "PB", "render": "skip", "notes": "Resets 1969-12-31 note dates on real prod rows; manual" },
+    "2026-08-07-orphaned-attendance-diagnostic.sql": { "class": "PB", "render": "skip", "notes": "Read-only diagnostic; never applied anywhere — product decision pending on the 4,978 orphans" },
+    "README-2026-08-07-regression-fixes.md": { "class": "ES", "render": "skip", "notes": "Documentation for the 2026-08-07 regression-fix migrations; not a migration" },
     "2026-07-14-qualification-tests.sql": { "class": "S+RC", "render": "full", "notes": "Qualification test schema plus idempotent per-kingdom config defaults" },
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" }
   }
