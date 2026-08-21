@@ -15775,6 +15775,24 @@ window.orkInitDataTable = function($table, opts) {
     // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
     if ($table.closest('.dataTables_scroll').length) return null;
     if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    // Honor data-sorttype="numeric" headers explicitly. These columns can carry
+    // HTML around the number (trend arrows, spinners) and several are
+    // AJAX-filled after init, so neither DataTables' type sniffing nor the
+    // built-in html-num type gets a clean read. An orthogonal render runs at
+    // every draw against the CURRENT cell content and extracts the leading
+    // number; unfilled cells sort to the bottom.
+    var typeDefs = [];
+    $table.find('thead th').each(function(i) {
+        if ($(this).data('sorttype') === 'numeric') {
+            typeDefs.push({ targets: i, type: 'num', render: function(data, type) {
+                if (type === 'sort' || type === 'type') {
+                    var m = String(data).replace(/<[^>]*>/g, '').match(/-?\d+(\.\d+)?/);
+                    return m ? parseFloat(m[0]) : -Infinity;
+                }
+                return data;
+            } });
+        }
+    });
     var dt = $table.DataTable($.extend(true, {
         dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
         pageLength: 25,
@@ -15783,7 +15801,7 @@ window.orkInitDataTable = function($table, opts) {
         autoWidth: false,
         scrollX: true,
         order: (opts.order || []),
-        columnDefs: (opts.columnDefs || []),
+        columnDefs: (opts.columnDefs || []).concat(typeDefs),
         language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
     }, opts.dt || {}));
     var $top = $(dt.table().container()).find('.ork-dt-top');

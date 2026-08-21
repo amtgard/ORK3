@@ -2639,6 +2639,21 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
 		}
+		// DataTables cached the pre-AJAX placeholder cells at init, so without
+		// this, sorting the numeric columns reorders those stale empties — the
+		// table looks like only Park/Type respond. Re-read the DOM and redraw,
+		// keeping the current page and ordering.
+		if (window.jQuery && $.fn && $.fn.dataTable) {
+			$('.kn-parks-dt').each(function() {
+				// isDataTable() alone tells real tables from scrollX header clones:
+				// clones are never registered. (A closest('.dataTables_scroll')
+				// guard would skip the REAL tables too — post-init they're wrapped
+				// in the same scroll container as the clones.)
+				if ($.fn.dataTable.isDataTable(this)) {
+					$(this).DataTable().rows().invalidate().draw(false);
+				}
+			});
+		}
 	}
 
 	// Kingdom's own parks (stat cards + kingdom footer)
