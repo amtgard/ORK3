@@ -132,6 +132,21 @@ class Park extends Ork3
         } catch (Exception $e) {
             $this->db->RollbackTrans();
             logtrace("Parks NOT Merged: " . $e->getMessage(), null);
+            // Persist the pre-merge snapshot on the FAILURE path too. This is the
+            // one scenario where the snapshot is needed for recovery — a partial
+            // merge may have destroyed officer/authorization rows — and it was
+            // previously discarded here (only the success path audited).
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . "::" . __FUNCTION__,
+                $request,
+                'Park',
+                $from_park_id,
+                $prior_state,
+                [
+                    'outcome' => 'FAILED — rolled back',
+                    'error'   => $e->getMessage(),
+                ]
+            );
             return ProcessingError('The migration failed and was rolled back: ' . $e->getMessage());
         }
 
