@@ -383,8 +383,16 @@ class Heraldry extends Ork3
 
     public function SetEventHeraldry($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $eventId = (int)($request['EventId'] ?? 0);
+        // Same authority rule as RemoveEventHeraldry below: an ork_authorization
+        // event grant OR event-staff can_manage. The staff path was missing here,
+        // so a fully-granted event staffer could remove the event's logo (and set
+        // its banner — class.Banner accepts staff) but not upload a logo.
+        $planning = new EventPlanning();
+        if ($mundane_id > 0
+                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $eventId, AUTH_EDIT)
+                    || $planning->CanManageEventDetail($mundane_id, $eventId, 0, 'manage'))) {
             $this->event->clear();
             $this->event->event_id = $request['EventId'];
             if ($this->event->find()) {
