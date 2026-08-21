@@ -4232,6 +4232,87 @@ class Report extends Ork3
         return $payload;
     }
 
+    /**
+     * Weekly platform trend series for the public Recap/trends page: one entry
+     * per stored recap week with just the headline numbers, extracted from
+     * payload_json in SQL — the full payloads also carry peerage/event lists
+     * that a trends page has no business shipping.
+     *
+     * Values are null for weeks where a source wasn't available (GA not yet
+     * installed, CF beyond retention, deliberately blanked bot-wave weeks) —
+     * the chart renders those as gaps, which is the honest presentation.
+     *
+     * Cached 1h: the underlying table changes once a day (the 6am cron).
+     */
+    public function GetRecapTrendSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('recap-trend-series'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+            return $cache;
+        }
+        $sql = "SELECT week_start,
+					   JSON_EXTRACT(payload_json, '$.HumanUsers')                        AS visitors,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.Requests')            AS requests,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.BlockedOrChallenged') AS blocked,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.CacheHits')           AS cache_hits,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.Bytes')               AS bytes
+				FROM " . DB_PREFIX . "weekly_recap
+				ORDER BY week_start";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                // JSON_EXTRACT yields the string 'null' for JSON null and PHP
+                // null for a missing key; is_numeric() folds both to null here.
+                $out[] = array(
+                    'WeekStart' => $r->week_start,
+                    'Visitors'  => is_numeric($r->visitors) ? (int)$r->visitors : null,
+                    'Requests'  => is_numeric($r->requests) ? (int)$r->requests : null,
+                    'Blocked'   => is_numeric($r->blocked) ? (int)$r->blocked : null,
+                    'CacheHits' => is_numeric($r->cache_hits) ? (int)$r->cache_hits : null,
+                    'Bytes'     => is_numeric($r->bytes) ? (float)$r->bytes : null,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
+     * Distinct players credited with attendance per week (Monday-anchored,
+     * matching the recap window), across all recorded history — the long
+     * participation curve of the game itself, independent of web analytics.
+     *
+     * This is the expensive one (full aggregation over ork_attendance, ~2s),
+     * so it carries a 24h ghettocache: attendance only ever moves the current
+     * week, and a day of staleness on a decades-long chart is invisible.
+     */
+    public function GetWeeklyActivePlayersSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('weekly-active-players'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 86400)) !== false) {
+            return $cache;
+        }
+        // Date guards drop the stray garbage rows (far-future/ancient dates)
+        // that two decades of hand-entered data inevitably contain.
+        $sql = "SELECT DATE_SUB(date, INTERVAL WEEKDAY(date) DAY) AS wk,
+					   COUNT(DISTINCT mundane_id) AS players
+				FROM " . DB_PREFIX . "attendance
+				WHERE date >= '2005-01-01' AND date <= CURDATE()
+				GROUP BY wk
+				ORDER BY wk";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'WeekStart' => $r->wk,
+                    'Players'   => (int)$r->players,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
     // Fetches NA-only Cloudflare traffic totals for the week. Returns null on any
     // failure (missing credentials, HTTP error, malformed response, timeout) so the
     // rest of the recap still ships. CF retains ~30-90 days of analytics depending
