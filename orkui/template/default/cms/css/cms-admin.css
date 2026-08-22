@@ -32,11 +32,6 @@ html[data-theme="dark"] .cms-wrap {
     --cms-gold-deep: #caa23a;
     --cms-navy: #0b1120;
     --cms-navy2: #121a30;
-    /* The global #newmenu navbar is position:fixed at 48px tall (orkui.css).
-       Sticky elements below must clear it or they hide behind it on scroll.
-       Named --cms-* because a CMS stylesheet must not define into the CRM's
-       --ork-* namespace, even for a value the CRM originates. */
-    --cms-header-h: 48px;
 
     max-width: 1180px;
     margin: 0 auto;
@@ -119,6 +114,11 @@ html[data-theme="dark"] .cms-wrap {
     --cms-gold-deep: #caa23a;
     --cms-navy: #0b1120;
     --cms-navy2: #121a30;
+    /* The global #newmenu navbar is position:fixed at 48px tall (orkui.css).
+       Sticky elements below must clear it or they hide behind it on scroll.
+       Named --cms-* because a CMS stylesheet must not define into the CRM's
+       --ork-* namespace, even for a value the CRM originates. */
+    --cms-header-h: 48px;
 
     display: flex;
     align-items: stretch;
