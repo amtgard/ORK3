@@ -5240,6 +5240,12 @@ class Report extends Ork3
 			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 			  GROUP BY day ORDER BY day ASC"
         );
+        $signinClientBreak = $this->_rfuBreakdown(
+            "SELECT client AS k, SUM(signins) AS c
+			   FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+			  GROUP BY client ORDER BY c DESC LIMIT 14"
+        );
         // Client breakdown is labeled in PHP so the buckets match the session
         // list in the account menu (nav_session_client_label in the theme).
         $sessClientCounts = array();
@@ -5251,9 +5257,12 @@ class Report extends Ork3
             }
         }
         arsort($sessClientCounts);
+        // Self-identified API clients always keep their own bar, however small —
+        // this chart doubles as the adoption tracker for the Client field.
+        $alwaysShow = array('jsork', 'mORK');
         $sessClientBreak = array();
         foreach ($sessClientCounts as $label => $count) {
-            if (count($sessClientBreak) >= 9) {
+            if (count($sessClientBreak) >= 9 && !in_array($label, $alwaysShow, true)) {
                 $sessClientBreak['Other'] = ($sessClientBreak['Other'] ?? 0) + $count;
                 continue;
             }
@@ -5278,6 +5287,7 @@ class Report extends Ork3
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-sessions-client', 'bar', 'Active sessions by client', $sessClientRows, 'Sessions'),
                 $this->_rfuChartFromBreakdown('rfu-signins-day', 'bar', 'Sign-ins per day (last 30 days, all clients)', $signinDayBreak, 'Sign-ins'),
+                $this->_rfuChartFromBreakdown('rfu-signins-client', 'bar', 'Sign-ins by client (last 30 days)', $signinClientBreak, 'Sign-ins'),
             ),
         );
 
