@@ -71,16 +71,32 @@ pair) directly, on the `$IsOrgSite` branch. `cms-admin.css` is linked by
 surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
 `blog`/`post` mode).
 
+## What is in scope, and why it is a rule and not a list
+
+Every rule below used to name the files it applied to. That made the gate
+strongest on the files that already existed and blind to everything new — a
+static `<style>` could go straight back into any of the nine templates this
+refactor lifted CSS out of, a new partial one directory deeper defeated C4, and
+a new surface template or stylesheet was born with no coverage at all. Scope is
+now **derived**:
+
+| | Rule | Consequence |
+|---|---|---|
+| **R1** | Everything under `frontdoor/` is CMS **public** tier; everything under `cms/` is CMS **admin** tier — at any depth. | A new subdirectory or partial is covered on creation. |
+| **R2** | The router resolves `<Controller>/<action>` to `<Controller>_<action>.tpl`, so CMS page templates sit one directory up beside the CRM's. The **CMS controllers** are `Site`, `Page`, `Blog`, `Cms` — so `_index.tpl` (the front door, from the base controller) plus `Site_*.tpl`, `Page_*.tpl`, `Blog_*.tpl` are public tier, `Cms_preview*.tpl` is public tier (it renders the *public* page in preview chrome), and every other `Cms_*.tpl` is admin tier. | `Site_home.tpl`, `Blog_tag.tpl`, `Page_index.tpl`, `Cms_anything.tpl` are in scope the moment they land. **Adding a CMS controller means adding its name to `CMS_CONTROLLERS`** in the script — that is the one manual step, and it is per controller, not per file. |
+| **R3** | Any `.css` under `orkui/template/` that is **not** CMS-owned is CRM CSS. | A stylesheet dropped at `orkui/template/default/probe-tween.css`, in `orkremental/`, or in `revised-frontend/style/` is guarded as CRM CSS (C5) immediately — C5 no longer watches `style/` specifically. |
+| **R4** | `--all` unions `git ls-files` with `git ls-files --others --exclude-standard` and names the untracked files it pulled in. | An audit can no longer report a clean tree while an unguarded, not-yet-`git add`ed template sits in the working copy. |
+| **R5** | A symlink in an in-scope path is **rejected** (C0), never scanned. | `git show :path` on a symlink returns the *link target*, one short line that passes every rule — so a staged symlink used to be a way to ship arbitrary CSS through the gate. |
+
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
 - **C0 — the gate must be able to parse the file.** An unterminated `/*` or
   `<!--` leaves everything after it unscanned, so it is reported rather than
   passing silently. A gate that quietly disarms itself is worse than no gate.
+  A symlink in an in-scope path is reported here too (R5).
 - **C1 — no ORK shell selectors *or markup* on the public CMS side.** Don't name
-  `#theme_container`, `#newmenu` or `.ork-*` in `frontdoor/css/*.css`, in any
-  template under `frontdoor/`, or in the six public surface templates that sit
-  one directory up (`_index.tpl`, `Site_shell.tpl`, `Page_view.tpl`,
-  `Blog_index.tpl`, `Blog_post.tpl`, `Cms_preview.tpl`). **Markup counts**, not
+  `#theme_container`, `#newmenu` or `.ork-*` anywhere on the **public tier** —
+  R1's `frontdoor/**` plus R2's public surface templates. **Markup counts**, not
   just stylesheet selectors: `id="theme_container"` and a `class` token starting
   `ork-` are rejected in those templates too. So are the **attribute-selector
   spellings** of the same coupling — `[id="theme_container"]`,
@@ -97,10 +113,10 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   anywhere else. It is the one stylesheet a standalone org site loads globally,
   so a blanket exemption would let the whole quarantined override layer move
   back in with the gate green.
-  **The admin is out of C1's scope entirely** — `cms/css/cms-admin.css` and the
-  `cms/` + `Cms_*` templates are definitionally ORK-hosted application surfaces,
-  render inside the shell, and have no portability claim to protect. C2 still
-  applies to them.
+  **The admin tier is out of C1's scope entirely** — `cms/**` and the
+  non-preview `Cms_*` templates are definitionally ORK-hosted application
+  surfaces, render inside the shell, and have no portability claim to protect.
+  C2 still applies to them.
 - **C2 — don't *define* an `--ork-*` token.** Reading one with `var()` is fine;
   a `--ork-foo:` declaration is not. That includes every spelling of the
   definition: a formatter-wrapped colon on the next line, the *first*
@@ -109,25 +125,42 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   without ever writing `--ork-x:`), and a case variant such as `--ork-Brand` or
   `--ORK-brand`. Custom properties really are case-sensitive, so those are
   technically different tokens — but they are still CMS code writing into the
-  CRM's namespace, which is the thing C2 exists to stop. Applies to all CMS CSS
-  and templates, admin included.
+  CRM's namespace, which is the thing C2 exists to stop. Applies to every CMS
+  file, both tiers, CSS and templates.
 - **C3 — no *static* `<style>` block in a CMS template.** The CSS belongs in a
   stylesheet, where it is cacheable, lintable and visible to duplication
-  analysis, instead of being re-sent in the HTML of every render. A `<style>` is
-  legal only when it interpolates a PHP **variable** into a declaration
-  **value** — see the `columns.tpl` exception below. A PHP tag parked between
-  rules, or echoing a literal (`<?= '' ?>`), does not launder a static block,
-  and PHP that echoes a `<style>` tag built by string concatenation is rejected
-  too. Tag matching is case-insensitive — `<STYLE>` and `<Style>` are valid
-  HTML for the same element.
-  **Scope, and the destination for each half:**
-  - `frontdoor/blocks/*.tpl` → `frontdoor/css/blocks.css`.
-  - the OGRE admin templates — `cms/*.tpl` and `Cms_*.tpl` one directory up —
-    → `cms/css/cms-admin.css`, which `cms/_shell_top.tpl` links exactly once
-    for every admin surface. (`Cms_*.tpl` sits beside `Site_shell.tpl` rather
-    than under `cms/`, because the router resolves `Cms/media` to
-    `Cms_media.tpl`; the `cms/` glob never reached those files, which is how
-    they kept 185 lines of inline CSS through the original three phases.)
+  analysis, instead of being re-sent in the HTML of every render. A PHP tag
+  parked between rules, or echoing a literal (`<?= '' ?>`), does not launder a
+  static block, and PHP that echoes a `<style>` tag built by string
+  concatenation is rejected too. Tag matching is case-insensitive — `<STYLE>`
+  and `<Style>` are valid HTML for the same element.
+  **Scope: every CMS template** — R1's `frontdoor/**.tpl` and `cms/*.tpl`, and
+  R2's surface templates. It used to be `frontdoor/blocks/*.tpl` plus the `cms/`
+  and `Cms_*` globs, which left `_index.tpl`, `Site_shell.tpl`, `Page_view.tpl`,
+  `Blog_index.tpl`, `Blog_post.tpl`, `org_header.tpl`, `render_blocks.tpl`,
+  `_park_strip.tpl` and `org_blog_index.tpl` — precisely the templates this
+  project lifted inline CSS *out of* — free to take it straight back.
+  **A `<style>` is legal only if it passes both tests:**
+  1. it interpolates a PHP **variable** into a declaration **value**
+     (the `columns.tpl` exception below), and
+  2. it brings no more than **8 static declarations** with it, counted
+     cumulatively across the whole file.
+  Test 1 alone was all-or-nothing per element, so one interpolation laundered
+  an arbitrarily large static block — a single `repeat(<?= $n ?>, 1fr)` plus ten
+  static rules passed. Test 2 is the budget: `columns.tpl` declares 6 static
+  properties beside its interpolated one, so 8 leaves a genuine per-instance
+  block two declarations of headroom and stops well short of a lifted-out
+  stylesheet. It is per **file**, not per element, because N elements of 8 would
+  reopen the same hole. Tune it at `C3_MAX_STATIC` in the script.
+  **Residual gap, stated honestly:** up to 8 static declarations can still ride
+  along in a file that has a legitimate interpolating block, and the counter
+  only sees declarations — a `<style>` full of `@font-face` bodies or selectors
+  with no declarations is under-counted. The budget makes the laundering *small
+  and bounded*; it does not make it impossible.
+  **Destinations:** `frontdoor/blocks/*.tpl` → `frontdoor/css/blocks.css`; other
+  public-tier templates → the matching `frontdoor/css/` layer; every admin
+  template → `cms/css/cms-admin.css`, which `cms/_shell_top.tpl` links exactly
+  once for every admin surface.
   - **The one exemption is `Cms_deny.tpl`, and it is structural.**
     `Controller_Cms::_denyPermission()` `include`s that file directly and
     `exit`s: it never reaches the themed View pipeline, never includes
@@ -136,13 +169,36 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
     only styling it can have. If the deny page ever starts rendering through
     the shell, drop the exemption in `bin/check-css-boundaries.sh` and lift its
     CSS like everything else.
-- **C4 — markup a standalone org site renders must not link** `orkui.css`,
-  `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
-  `frontdoor/_assets_public.tpl`, the partial it includes.
+- **C4 — nothing a standalone org site renders may pull in CRM CSS.** Two
+  halves, and between them they need no include-graph walk to be reliable:
+  - **C4-link** — no file on the **public tier** may link (or `@import`)
+    `orkui.css`, `tokens.css` or `orkshell-interop.css`. Scope is the whole tier
+    — C1's scope, stylesheets included — with exactly **one** exemption:
+    `frontdoor/_assets_inshell.tpl`, the designated link point for the in-shell
+    surfaces. The old scope was a two-file list, so a *new* partial
+    (`frontdoor/_assets_extra.tpl` linking `orkui.css`, included from
+    `Site_shell.tpl`) was the same one-line detour C4 exists to close, one
+    directory deeper.
+  - **C4-path** — a file on the **org-site render path** (`Site_shell.tpl` and
+    everything under `frontdoor/`) may not include `_assets_inshell.tpl`, and
+    may not `include` a `.tpl` that resolves **outside `frontdoor/`**. That is
+    what makes C4-link's directory scope *sufficient* rather than merely likely:
+    the render path is confined to a region C4-link covers completely, so a new
+    partial has nowhere to hide. It resolves `$fdDir`-style bases by following
+    in-file assignments (`$fdDir = DIR_TEMPLATE . 'default/frontdoor/'`),
+    `__DIR__` and `DIR_TEMPLATE`, one variable hop at a time, reads PHP code
+    only (prose and string contents are not statements), and is **fail-closed**:
+    an include whose destination it cannot prove is reported.
+    *Why not walk `Site_shell.tpl`'s transitive include graph?* Because the
+    graph has a dynamic edge — `render_blocks.tpl` does `include $partial`, one
+    file per block type — that no static walk can enumerate, and a closure that
+    silently skips it has a hole in exactly the busiest directory. Bounding the
+    path to a fully-covered region needs no enumeration at all.
 - **C5 — CRM CSS must not name `.fd-*`, `.cms-*` or `.org-*`**, in the
   class-selector spelling or the attribute-selector one (`[class*="fd-"]`,
-  `[class^="cms-"]`). Scope: every `.css` under `style/`, as a directory — a new
-  CRM stylesheet is guarded the moment it lands.
+  `[class^="cms-"]`). Scope: R3 — every `.css` under `orkui/template/` that is
+  not CMS-owned, so a new CRM stylesheet is guarded wherever it lands, not only
+  in `style/`.
 - **C6 — `default.theme` may link CRM CSS only where `$IsOrgSite` is provably
   false.** This is the rule that decides what a standalone org site actually
   downloads: the `if (empty($IsOrgSite)):` gate at `default.theme:104-110` picks
@@ -176,7 +232,10 @@ variable names are case-sensitive.
 `frontdoor/blocks/columns.tpl` is the one block template that keeps an inline
 `<style>`, and C3 lets it through because its body interpolates PHP:
 `grid-template-columns: repeat(<?= (int) $fdbCount ?>, 1fr)`. A stylesheet
-cannot express a per-instance column count. Its `@media (max-width:760px)`
+cannot express a per-instance column count. It declares **6** static properties
+beside that one, against C3's budget of 8 — so if you add three more static
+declarations to that block, the gate will (correctly) tell you they belong in
+`blocks.css`. Its `@media (max-width:760px)`
 partner has to stay in that same `<style>` element, after the base rule, or a
 stylesheet copy loaded earlier would lose the same-specificity order tie and the
 phone breakpoint would stop collapsing to one column.
@@ -191,7 +250,7 @@ Both change rendering.
 ## Commands
 
 ```
-bin/check-css-boundaries.sh --all      # audit every tracked file in scope
+bin/check-css-boundaries.sh --all      # audit every file in scope, untracked included
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
 bin/check-css-boundaries.sh --files a.css b.tpl
 npm run lint:css                       # stylelint + tab-indent check + duplication ratchet

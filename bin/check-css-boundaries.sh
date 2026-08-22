@@ -20,7 +20,7 @@
 #   bin/check-css-boundaries.sh --staged              # staged blob content (pre-commit)
 #   bin/check-css-boundaries.sh --range master..HEAD  # files changed in a range (pre-push)
 #   bin/check-css-boundaries.sh --files a.css b.tpl   # explicit paths (editor hook)
-#   bin/check-css-boundaries.sh --all                 # every tracked file in scope (audit)
+#   bin/check-css-boundaries.sh --all                 # every file in scope (audit)
 #
 # Exit 0 = clean, 1 = violations found, 2 = bad invocation.
 #
@@ -28,11 +28,66 @@
 # honoured by the git hooks that call this script, not by the script itself.
 #
 # ---------------------------------------------------------------------------
+# SCOPE RULES — what is in scope is decided by RULE, never by a file list
+#
+# Every rule below used to name the files it applied to. That made the gate
+# strongest on the files that already existed and blind to everything new: a
+# static <style> block could be put straight back into any of the nine
+# templates whose inline CSS this refactor lifted out, a NEW partial one
+# directory deeper defeated C4, and a new public surface template or a new
+# stylesheet was born with no coverage at all. Scope is now derived:
+#
+#   R1  CMS-OWNED DIRECTORIES. Everything (at any depth) under
+#         orkui/template/default/frontdoor/    -> CMS, PUBLIC tier
+#         orkui/template/default/cms/          -> CMS, ADMIN tier
+#
+#   R2  CMS SURFACE TEMPLATES ONE DIRECTORY UP. The router resolves
+#       <Controller>/<action> to $TPL_ROOT/<Controller>_<action>.tpl, so the CMS
+#       controllers' page templates sit beside the CRM's rather than under
+#       frontdoor/. The CMS controllers are Site, Page, Blog and Cms
+#       (orkui/controller/controller.{Site,Page,Blog,Cms}.php), so the rule is:
+#
+#         $TPL_ROOT/_index.tpl                 front door (base Controller::index())
+#         $TPL_ROOT/Site_*.tpl                 standalone org sites   } PUBLIC
+#         $TPL_ROOT/Page_*.tpl                 authored CMS pages     } tier
+#         $TPL_ROOT/Blog_*.tpl                 blog index / post      }
+#         $TPL_ROOT/Cms_preview*.tpl           renders the PUBLIC page in preview chrome
+#         $TPL_ROOT/Cms_*.tpl                  OGRE admin  -> ADMIN tier
+#
+#       A new Site_home.tpl, Blog_tag.tpl, Page_index.tpl or Cms_anything.tpl is
+#       therefore in scope the moment it lands. Cms_preview* is the one
+#       public-tier exception inside the Cms_ prefix, and it is a naming
+#       contract: a Cms_ template that renders the public page must be named
+#       Cms_preview<something>. ADDING A CMS CONTROLLER means adding its name to
+#       CMS_CONTROLLERS below — that is the single manual step this design keeps,
+#       and it is a per-controller step, not a per-file one.
+#
+#   R3  EVERY OTHER STYLESHEET UNDER orkui/template/ IS CRM-OWNED. C5 no longer
+#       watches style/ specifically; it watches "a .css that is not CMS-owned",
+#       so a stylesheet dropped at orkui/template/default/probe-tween.css — or
+#       anywhere else outside the two CMS directories — is CRM code and is
+#       guarded as CRM code from the moment it lands.
+#
+#   R4  --all CONSIDERS UNTRACKED FILES. git ls-files alone cannot see a file
+#       that has not been `git add`ed yet, so an audit run used to declare a
+#       clean tree while an unguarded new template sat in the working copy.
+#       --all now unions `git ls-files` with `git ls-files --others
+#       --exclude-standard` over the same pathspecs and names the untracked
+#       files it pulled in.
+#
+#   R5  SYMLINKS ARE REJECTED, NOT SCANNED. In --staged mode `git show :path`
+#       on a symlink returns the LINK TARGET as its content — one short line
+#       that trivially passes every rule — so a symlink was a way to stage
+#       arbitrary CSS/markup into an in-scope path with the gate green. A
+#       symlink in an in-scope path is reported (C0) in every mode.
+#
+# ---------------------------------------------------------------------------
 # The rules
 #
 #   C0  The scanner must be able to parse the file. A comment opener that is
 #       never closed leaves every later line unscanned, so it is reported as a
 #       violation rather than passing silently. See "Comment handling" below.
+#       A symlink in an in-scope path is reported here too (R5).
 #   C1  CMS CSS/markup may not name an ORK application-shell selector
 #       (#theme_container, #newmenu, .ork-). BOTH stylesheet selectors and
 #       template markup (id="theme_container", a class token starting "ork-")
@@ -40,16 +95,14 @@
 #       ([id="theme_container"], [class~="ork-card"]) count as well; and CSS
 #       identifier escapes (#theme\_container, .ork\-x, #\74 heme_container)
 #       are decoded before matching.
-#       Scope: the PUBLIC CMS side only — frontdoor/css/*.css, every template
-#       under frontdoor/, and the public CMS surface templates that live one
-#       directory up (_index, Site_shell, Page_view, Blog_index, Blog_post,
-#       Cms_preview). One file is fully exempt: orkshell-interop.css, the
+#       Scope: the PUBLIC CMS tier — R1's frontdoor/** plus R2's public surface
+#       templates. One file is fully exempt: orkshell-interop.css, the
 #       designated coupling point. cms-base.css is NARROWLY exempt — it may
 #       name #theme_container (it has to neutralize the container default.theme
 #       emits on standalone org sites) and nothing else; #newmenu and .ork- are
 #       still rejected there.
-#       C1 does NOT cover cms/css/cms-admin.css or the cms/ + Cms_* admin
-#       templates: the OGRE admin is definitionally an ORK-hosted application
+#       C1 does NOT cover the ADMIN tier (cms/** and the non-preview Cms_*
+#       templates): the OGRE admin is definitionally an ORK-hosted application
 #       surface, renders inside the shell, and has no portability claim to
 #       protect. C2 still applies there.
 #   C2  CMS CSS may not DEFINE a token in the CRM's --ork-* namespace.
@@ -58,19 +111,29 @@
 #       FIRST declaration of an inline style attribute
 #       (<div style="--ork-card-bg:#f00">), and so does an @property
 #       registration (@property --ork-brand { initial-value: red }), which
-#       defines the token without ever writing "--ork-x:". Scope: all CMS
-#       css + templates.
+#       defines the token without ever writing "--ork-x:". Scope: every CMS
+#       file, both tiers, css and templates.
 #   C3  A CMS template may not carry a STATIC inline <style> block.
-#       A <style> is legal only if it interpolates a PHP VARIABLE in a
-#       declaration-value position — blocks/columns.tpl interpolates $fdbCount
-#       into grid-template-columns and therefore cannot be a static stylesheet.
-#       A PHP tag parked outside any declaration, or one echoing a literal,
-#       does not launder a static block. PHP that echoes a <style> tag built by
-#       string concatenation is rejected too.
-#       Scope: frontdoor/blocks/**.tpl (destination frontdoor/css/blocks.css)
-#       AND the OGRE admin templates — cms/*.tpl and $TPL_ROOT/Cms_*.tpl
-#       (destination cms/css/cms-admin.css, which cms/_shell_top.tpl links
-#       exactly once for every admin surface).
+#       Scope: EVERY CMS template — R1's frontdoor/**.tpl and cms/*.tpl, and
+#       R2's surface templates. It used to be frontdoor/blocks/*.tpl plus the
+#       cms/ and Cms_* globs, which left _index.tpl, Site_shell.tpl,
+#       Page_view.tpl, Blog_index.tpl, Blog_post.tpl, org_header.tpl,
+#       render_blocks.tpl, _park_strip.tpl and org_blog_index.tpl — precisely
+#       the templates whose inline CSS this project lifted out — free to take
+#       it straight back.
+#       A <style> is legal only if it BOTH:
+#         (a) interpolates a PHP VARIABLE in a declaration-value position, and
+#         (b) brings no more than C3_MAX_STATIC static declarations with it,
+#             counted cumulatively over the whole file.
+#       (a) alone was all-or-nothing per element, so ONE interpolation
+#       laundered an arbitrarily large static block (1 interpolation + 10
+#       static rules passed). (b) is the budget: blocks/columns.tpl
+#       interpolates $fdbCount into grid-template-columns and declares 6 static
+#       properties beside it (display, gap, align-items, min-width, and the two
+#       in its @media partner), so the budget is 8 — enough headroom for a
+#       genuine per-instance block, far short of a lifted-out stylesheet. It is
+#       per FILE, not per element, because N elements of 8 would be the same
+#       hole reopened.
 #       ONE EXEMPTION, and it is structural rather than stylistic:
 #       Cms_deny.tpl. Controller_Cms::_denyPermission() include()s that file
 #       directly and exit()s — it never goes through the themed View pipeline,
@@ -79,16 +142,38 @@
 #       inline <style> is the only styling it can have. If that ever changes
 #       (the deny page starts rendering through the shell), delete the
 #       exemption below and lift its CSS like everything else.
-#   C4  A partial a standalone org site renders may not link orkui.css,
-#       tokens.css or orkshell-interop.css. Scope: Site_shell.tpl and
-#       frontdoor/_assets_public.tpl — the shell and the one stylesheet partial
-#       it includes. Guarding only the shell would leave the partial as a
-#       one-line detour to the same regression.
+#   C4  Nothing a standalone org site renders may pull in CRM CSS. Two halves,
+#       and between them they need no include-graph walk to be reliable:
+#       C4-LINK  No file on the PUBLIC CMS tier may link orkui.css, tokens.css
+#                or orkshell-interop.css. Scope is the whole tier (C1's scope,
+#                stylesheets included so an @import cannot smuggle one in) with
+#                exactly ONE exemption: frontdoor/_assets_inshell.tpl, the
+#                designated link point for the in-shell surfaces. The old scope
+#                was a two-file list, so a NEW partial — frontdoor/
+#                _assets_extra.tpl linking orkui.css, included from
+#                Site_shell.tpl — was the same one-line detour C4 exists to
+#                close, one directory deeper.
+#       C4-PATH  A file on the ORG-SITE RENDER PATH (Site_shell.tpl and
+#                everything under frontdoor/) may not include the in-shell
+#                partial, and may not include a .tpl that resolves OUTSIDE
+#                frontdoor/. That is what makes C4-LINK's directory scope
+#                sufficient instead of merely likely: the render path is
+#                confined to a region C4-LINK covers completely, so a new
+#                partial has nowhere to hide. It resolves $fdDir-style bases by
+#                following in-file assignments ($fdDir = DIR_TEMPLATE .
+#                'default/frontdoor/'), __DIR__, and DIR_TEMPLATE, one variable
+#                hop at a time, and is fail-closed: an include whose
+#                destination it cannot prove is reported.
+#                Chosen over walking Site_shell.tpl's transitive include graph
+#                because the graph has a dynamic edge (render_blocks.tpl does
+#                `include $partial`, one file per block type) that no static
+#                walk can enumerate — a closure that silently skips it is a
+#                closure with a hole in exactly the busiest directory. Bounding
+#                the path to a fully-covered region needs no enumeration at all.
 #   C5  CRM CSS may not name a CMS selector (.fd-, .cms-, .org-), in either the
 #       class-selector or the attribute-selector spelling ([class*="fd-"],
 #       [class^="cms-"]).
-#       Scope: every .css under style/, as a DIRECTORY — a new CRM stylesheet
-#       is in scope the moment it is added.
+#       Scope: R3 — every .css under orkui/template/ that is not CMS-owned.
 #   C6  default.theme may link a CRM stylesheet (anything under style/, plus
 #       orkshell-interop.css) only from a branch where $IsOrgSite is provably
 #       falsy. This is the rule that actually decides what a standalone org
@@ -174,31 +259,40 @@ done
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
-TPL_ROOT="orkui/template/default"
+TPL_BASE="orkui/template"
+TPL_ROOT="$TPL_BASE/default"
 CMS_PUBLIC="$TPL_ROOT/frontdoor"
 CMS_ADMIN="$TPL_ROOT/cms"
-CRM_STYLE="$TPL_ROOT/style"
 INTEROP="$CMS_PUBLIC/css/orkshell-interop.css"
 CMS_BASE="$CMS_PUBLIC/css/cms-base.css"
 SITE_SHELL="$TPL_ROOT/Site_shell.tpl"
-ASSETS_PUBLIC="$CMS_PUBLIC/_assets_public.tpl"
+ASSETS_INSHELL="$CMS_PUBLIC/_assets_inshell.tpl"
 # Standalone bare-chrome page: included directly by the controller, renders its
 # own <html>/<head>/<body>, never includes cms/_shell_top.tpl and so links no
 # stylesheet whatsoever. Exempt from C3 — see the rule text above.
 CMS_DENY="$TPL_ROOT/Cms_deny.tpl"
 
-# The public CMS surfaces do not live under frontdoor/ — the router resolves a
-# controller action to $TPL_ROOT/<Controller>_<action>.tpl, so the front door,
-# the org-site shell, authored pages, the blog and the CMS preview all sit one
-# directory up. They are public CMS markup all the same and C1/C2 cover them.
-# Cms_preview.tpl is listed here on purpose: it renders the PUBLIC page inside
-# a preview chrome, unlike the rest of the Cms_* admin screens.
-CMS_SURFACES="$TPL_ROOT/_index.tpl
-$SITE_SHELL
-$TPL_ROOT/Page_view.tpl
-$TPL_ROOT/Blog_index.tpl
-$TPL_ROOT/Blog_post.tpl
-$TPL_ROOT/Cms_preview.tpl"
+# R2. The controllers whose page templates are CMS surfaces. This is the one
+# list the design keeps, and it is per CONTROLLER: every template a listed
+# controller can ever render ($TPL_ROOT/<Name>_<action>.tpl) is in scope
+# automatically. Add a CMS controller here when you add one.
+CMS_CONTROLLERS="Site Page Blog Cms"
+
+# The static-declaration budget an interpolating <style> may carry (C3, per file).
+C3_MAX_STATIC=8
+
+# Pathspecs that describe the whole in-scope region, for --all. Globs are passed
+# to git literally (see `set -f` below), because git matches `*` across `/` and
+# the shell does not.
+ALL_PATHSPECS="$CMS_PUBLIC
+$CMS_ADMIN
+$TPL_ROOT/*.theme
+$TPL_ROOT/_index.tpl
+$TPL_BASE/*.css"
+for c in $CMS_CONTROLLERS; do
+    ALL_PATHSPECS="$ALL_PATHSPECS
+$TPL_ROOT/${c}_*.tpl"
+done
 
 case "$MODE" in
     staged) CANDIDATES=$(git diff --cached --name-only --diff-filter=ACM) ;;
@@ -210,12 +304,17 @@ case "$MODE" in
         CANDIDATES=$(printf '%s\n' $FILES | sed "s|^$REPO_ROOT/||")
         ;;
     all)
-        # $TPL_ROOT/*.theme is in scope for C6: default.theme is the file that
-        # decides which stylesheets a standalone org site gets.
-        # $TPL_ROOT/Cms_*.tpl are the OGRE admin surface templates. They sit one
-        # directory above cms/ (the router resolves Cms/media to Cms_media.tpl),
-        # so the $CMS_ADMIN glob never reached them and C2/C3 could not see them.
-        CANDIDATES=$(git ls-files "$CMS_PUBLIC/*" "$CMS_ADMIN/*" "$CRM_STYLE/*" "$TPL_ROOT/*.theme" "$TPL_ROOT/Cms_*.tpl" $CMS_SURFACES)
+        # R4: an audit that only knows about tracked files declares victory
+        # while an unguarded, not-yet-added template sits in the working copy.
+        set -f
+        TRACKED=$(git ls-files -- $ALL_PATHSPECS)
+        UNTRACKED=$(git ls-files --others --exclude-standard -- $ALL_PATHSPECS)
+        set +f
+        CANDIDATES=$(printf '%s\n%s\n' "$TRACKED" "$UNTRACKED" | sed '/^$/d' | sort -u)
+        if [ -n "$UNTRACKED" ]; then
+            echo "  note: also scanning untracked file(s) in scope:"
+            printf '%s\n' "$UNTRACKED" | sed 's/^/          /'
+        fi
         ;;
 esac
 
@@ -234,6 +333,13 @@ if [ -t 1 ]; then
 else
     C_RED=""; C_DIM=""; C_OFF=""
 fi
+
+# Same shape as the awk report() below, for findings the shell decides (R5).
+shell_report() {
+    printf "  %s%s%s  %s:%d\n" "$C_RED" "$1" "$C_OFF" "$2" 0
+    printf "        %s\n" "$3"
+    printf "        %s-> %s%s\n" "$C_DIM" "$4" "$C_OFF"
+}
 
 cat > "$AWKPROG" <<'AWKEOF'
 function report(rule, lineno, msg, fix) {
@@ -394,7 +500,19 @@ function css_unescape(s,    out, i, n, c, j, hx, v, k, ch) {
 }
 
 # ---------------------------------------------------------------------------
-# C3 — static inline <style> in a content-block template
+# C3 — static inline <style> in a CMS template
+#
+# Two things are measured, because either one alone is a hole:
+#
+#   style_php     did the element interpolate a PHP VARIABLE into a
+#                 declaration VALUE? A tag parked between rules, or one echoing
+#                 a literal, does not count.
+#   style_static  how many STATIC declarations rode along with it. This is the
+#                 half that was missing: staticness was decided per element,
+#                 all-or-nothing, so a single interpolation laundered an
+#                 arbitrarily large block. The budget (C3_MAX_STATIC) is
+#                 cumulative over the FILE, since per-element budgets just move
+#                 the hole to "emit more elements".
 # ---------------------------------------------------------------------------
 
 # Text since the last {, } or ; — i.e. the declaration we are currently inside.
@@ -406,24 +524,70 @@ function last_seg(s,    i, c) {
     return substr(s, i + 1)
 }
 
+# One declaration has ended (at ; or }). Count it as static or interpolated.
+# Only inside a rule body: at brace depth 0 we are in a selector or an at-rule
+# prelude, and `a:hover` there is not a declaration. A segment terminated by {
+# is a prelude and is discarded by decl_feed rather than reaching here.
+function decl_flush(    seg) {
+    seg = tolower(dc_seg)
+    dc_seg = ""
+    if (dc_depth < 1) return
+    if (seg !~ /^[ \t]*(--)?[-a-z_][-a-z0-9_]*[ \t]*:/) return
+    if (index(seg, PHPMARK) > 0) style_interp++
+    else style_static++
+}
+
+function decl_feed(t,    i, n, c) {
+    n = length(t)
+    for (i = 1; i <= n; i++) {
+        c = substr(t, i, 1)
+        if (c == "{")      { dc_depth++; dc_seg = "" }
+        else if (c == "}") { decl_flush(); if (dc_depth > 0) dc_depth--; dc_seg = "" }
+        else if (c == ";") { decl_flush() }
+        else if (length(dc_seg) < 400) { dc_seg = dc_seg c }
+    }
+}
+
 # Consume style-element text, deciding whether the block genuinely interpolates
 # PHP. It counts only when the PHP tag sits in a declaration-VALUE position and
 # the expression references a PHP variable — `grid-template-columns: repeat(<?=
 # (int) $fdbCount ?>, 1fr)` counts; `<?= '' ?>` parked between rules does not.
-function style_consume(seg,    p, e, expr, tail) {
+# Every PHP expression is also fed to the declaration counter as a single
+# marker character, so the declaration that contains it reads as interpolated
+# and every other declaration reads as static.
+function style_consume(seg,    p, e, expr, tail, lit) {
     while (1) {
         p = index(seg, "<?")
-        if (p == 0) { style_tail = style_tail seg; break }
-        style_tail = style_tail substr(seg, 1, p - 1)
+        if (p == 0) { style_tail = style_tail seg; decl_feed(seg); break }
+        lit = substr(seg, 1, p - 1)
+        style_tail = style_tail lit
+        decl_feed(lit)
         e = index(substr(seg, p), "?>")
         if (e == 0) { expr = substr(seg, p + 2); seg = "" }
         else        { expr = substr(seg, p + 2, e - 3); seg = substr(seg, p + e + 1) }
         tail = last_seg(style_tail)
         if (index(expr, "$") > 0 && tail ~ /[-a-zA-Z][-a-zA-Z0-9]*[ \t]*:/) style_php = 1
+        decl_feed(PHPMARK)
         style_tail = style_tail " "
         if (seg == "") break
     }
     if (length(style_tail) > 400) style_tail = substr(style_tail, length(style_tail) - 399)
+}
+
+# Close out one <style> element: report it, or charge its static declarations
+# to the file's budget.
+function style_close(    ) {
+    if (!style_php) {
+        report("C3", style_line, C3_MSG, C3_FIX)
+        return
+    }
+    file_static += style_static
+    if (file_static > C3_MAX_STATIC && !budget_hit) {
+        budget_hit = 1
+        report("C3", style_line, \
+               "Inline <style> interpolates PHP, but carries " file_static " static declarations (budget " C3_MAX_STATIC ").", \
+               "One interpolated value does not make a stylesheet inline-worthy. Keep the interpolated declaration here and move the static declarations to " C3_DEST ".")
+    }
 }
 
 # `s` is the real text (style_consume needs its case for PHP), `ls` the same
@@ -439,7 +603,11 @@ function scan_style(s, ls,    p, q, seg) {
             in_style = 1
             style_line = FNR
             style_php = 0
+            style_static = 0
+            style_interp = 0
             style_tail = ""
+            dc_depth = 0
+            dc_seg = ""
             s = substr(s, p + 6)
             ls = substr(ls, p + 6)
             continue
@@ -448,11 +616,142 @@ function scan_style(s, ls,    p, q, seg) {
         if (q == 0) { style_consume(s); return }
         seg = substr(s, 1, q - 1)
         style_consume(seg)
-        if (!style_php) report("C3", style_line, C3_MSG, C3_FIX)
+        style_close()
         in_style = 0
         s = substr(s, q + 7)
         ls = substr(ls, q + 7)
     }
+}
+
+# ---------------------------------------------------------------------------
+# C4-PATH — keep the org-site render path inside frontdoor/
+#
+# C4-LINK covers every file on the public CMS tier, so a new stylesheet partial
+# under frontdoor/ is guarded the moment it lands. What makes that scope
+# SUFFICIENT rather than merely likely is this: nothing the org-site shell
+# renders may live outside that directory. So instead of enumerating the
+# include graph (which has a dynamic edge — render_blocks.tpl does
+# `include $partial`, one file per block type — that no static walk can
+# follow), we bound it.
+#
+# Bases are resolved one variable hop at a time from in-file assignments, which
+# is exactly how the templates are written:
+#     $fdDir      = DIR_TEMPLATE . 'default/frontdoor/';
+#     $fdBlockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
+#     $partial    = $fdBlockDir . $type . '.tpl';
+# ---------------------------------------------------------------------------
+function norm_path(p,    n, i, parts, out, k, r) {
+    gsub(/\/\/+/, "/", p)
+    n = split(p, parts, "/")
+    k = 0
+    for (i = 1; i <= n; i++) {
+        if (parts[i] == "" || parts[i] == ".") continue
+        if (parts[i] == "..") { if (k > 0) k--; continue }
+        out[++k] = parts[i]
+    }
+    r = ""
+    for (i = 1; i <= k; i++) r = (i == 1) ? out[i] : r "/" out[i]
+    return r
+}
+
+# Same string with every quoted string's CONTENT replaced by a filler byte, the
+# quotes and the length left alone so offsets still line up with the original.
+# The `include`/`require` keyword is searched for in this view, so `$msg =
+# 'include this'` is prose, not a statement — while the real text is what the
+# path resolution below reads its literals out of.
+function mask_strings(s,    out, i, n, c, e) {
+    out = ""
+    i = 1
+    n = length(s)
+    while (i <= n) {
+        c = substr(s, i, 1)
+        if (c == "\"" || c == "'") {
+            e = str_end(s, i, c)
+            if (e > 0) {
+                out = out c
+                while (++i < e) out = out STRMARK
+                out = out c
+                i = e + 1
+                continue
+            }
+        }
+        out = out c
+        i++
+    }
+    return out
+}
+
+# The last quoted string literal on the (already decommented) expression.
+function last_literal(s,    i, n, c, e, lit) {
+    lit = ""
+    i = 1
+    n = length(s)
+    while (i <= n) {
+        c = substr(s, i, 1)
+        if (c == "\"" || c == "'") {
+            e = str_end(s, i, c)
+            if (e > 0) { lit = substr(s, i + 1, e - i - 1); i = e + 1; continue }
+        }
+        i++
+    }
+    return lit
+}
+
+# Remember what a variable's value starts with, when it is a path under
+# frontdoor/ (or under __DIR__, which for an in-scope file is frontdoor/ too).
+function track_base(s,    seg, vn, rhs, b, ov) {
+    if (!match(s, /\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*[^=]/)) return
+    seg = substr(s, RSTART + 1)
+    vn = seg
+    sub(/[ \t]*=.*$/, "", vn)
+    rhs = seg
+    sub(/^[^=]*=/, "", rhs)
+    if (index(rhs, "DIR_TEMPLATE") > 0 && index(rhs, "default/frontdoor/") > 0) {
+        b = rhs
+        sub(/^.*default\/frontdoor\//, "", b)
+        sub(/["'].*$/, "", b)
+        pathbase[vn] = TPL_ROOT "/frontdoor/" b
+        return
+    }
+    if (index(rhs, "__DIR__") > 0) { pathbase[vn] = filedir "/"; return }
+    if (match(rhs, /\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
+        ov = substr(rhs, RSTART + 1, RLENGTH - 1)
+        if (ov in pathbase) pathbase[vn] = pathbase[ov]
+    }
+}
+
+function check_include(s,    expr, p, lit, base, vn, tgt) {
+    if (!match(tolower(mask_strings(s)), /(^|[^a-z0-9_$])(include|require)(_once)?[ \t(]/)) return
+    expr = substr(s, RSTART + RLENGTH - 1)
+    p = index(expr, ";")
+    if (p > 0) expr = substr(expr, 1, p - 1)
+
+    if (index(expr, "_assets_inshell") > 0) {
+        report("C4", FNR, "The org-site render path includes the in-shell stylesheet partial.", \
+               "_assets_inshell.tpl links orkshell-interop.css, which exists only to fight ORK chrome a standalone org site never renders. Only the in-shell surfaces (_index, Page_view, Blog_index, Blog_post, Cms_preview) may include it.")
+        return
+    }
+
+    lit = last_literal(expr)
+    if (lit != "" && lit !~ /\.tpl$/) return   # a PHP library, not a template
+
+    base = ""
+    if (index(expr, "__DIR__") > 0)           base = filedir "/"
+    else if (index(expr, "DIR_TEMPLATE") > 0) base = TPL_BASE "/"
+    else if (match(expr, /\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
+        vn = substr(expr, RSTART + 1, RLENGTH - 1)
+        if (vn in pathbase) base = pathbase[vn]
+    }
+
+    if (base == "") {
+        report("C4", FNR, "Cannot prove where this include on the org-site render path lands.", \
+               "Everything a standalone org site renders must live under " TPL_ROOT "/frontdoor/, where C4 covers it. Build the path from $fdDir, __DIR__ or DIR_TEMPLATE . 'default/frontdoor/…' so the gate can follow it.")
+        return
+    }
+    tgt = norm_path(base "/" lit)
+    if (index(tgt, TPL_ROOT "/frontdoor/") != 1)
+        report("C4", FNR, "The org-site render path includes a template outside frontdoor/ (" tgt ").", \
+               "Everything a standalone org site renders must live under " TPL_ROOT "/frontdoor/, where C4 covers it. A partial parked elsewhere is a one-line detour around the rule.")
 }
 
 # ---------------------------------------------------------------------------
@@ -550,6 +849,8 @@ function org_track(code,    t, k, ne, cond, st) {
 }
 
 BEGIN {
+    PHPMARK = sprintf("%c", 1)
+    STRMARK = sprintf("%c", 2)
     C3_MSG = "Static inline <style> block in a CMS template."
     C3_FIX = "This CSS belongs in " C3_DEST " so it is cacheable, lintable and visible to duplication analysis, instead of being re-sent in the HTML of every render. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
@@ -635,6 +936,9 @@ BEGIN {
     }
 
     if (C3) {
+        # A style element that spans lines: the newline is a token separator,
+        # so feed one before this line's text joins the previous line's.
+        if (in_style) decl_feed(" ")
         scan_style(line, lraw)
         # PHP that echoes a <style> tag assembled from string fragments —
         # '<st' . 'yle>' — never reaches scan_style as a literal tag.
@@ -647,8 +951,17 @@ BEGIN {
     }
 
     if (C4 && lraw ~ /(orkui\.css|tokens\.css|orkshell-interop\.css)/)
-        report("C4", FNR, "A standalone org site's markup links a stylesheet it must not load.", \
-               "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. Remove the link.")
+        report("C4", FNR, "Public CMS markup links a stylesheet a standalone org site must not load.", \
+               "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. The in-shell surfaces get the interop layer from frontdoor/_assets_inshell.tpl, which is the only file allowed to link it.")
+
+    # C4-PATH reads PHP CODE ONLY. Body text ("include the map below") and
+    # string contents are not statements, and treating them as one would turn
+    # ordinary prose into a boundary violation.
+    if (C4_PATH) {
+        phpcode = php_extract(line)
+        track_base(phpcode)
+        check_include(phpcode)
+    }
 
     if (C5 && (lline ~ /(\.fd-|\.cms-|\.org-)/ ||
                attr_sel_class(lline, "fd-") || attr_sel_class(lline, "cms-") ||
@@ -665,8 +978,9 @@ BEGIN {
     }
 }
 END {
-    # An unterminated <style> is still an inline block, and a static one.
-    if (C3 && in_style && !style_php) report("C3", style_line, C3_MSG, C3_FIX)
+    # An unterminated <style> is still an inline block, and its content still
+    # ships. Judge it on the same two tests.
+    if (C3 && in_style) style_close()
 
     # C0. A comment opener that never closes leaves everything after it
     # unscanned. Failing loudly beats a gate that silently disarms itself.
@@ -701,67 +1015,126 @@ for f in $CANDIDATES; do
         */vendor/*|*/node_modules/*) continue ;;
     esac
 
-    C1=0; C2=0; C3=0; C4=0; C5=0; C6=0; C1_TC=0
+    # -----------------------------------------------------------------------
+    # Classify by RULE (R1-R3). IS_CMS covers both tiers; IS_PUBLIC is the
+    # standalone-capable public tier, which is what C1 and C4 are about.
+    # -----------------------------------------------------------------------
+    IS_CMS=0; IS_PUBLIC=0; IS_TPL=0
 
     case "$f" in
-        # The designated coupling point: fully exempt from C1.
-        "$INTEROP") C2=1 ;;
-        # cms-base.css is NARROWLY exempt — it must neutralize the
-        # #theme_container default.theme emits on standalone org sites, and
-        # that is the whole allowance. #newmenu and .ork- are still rejected:
-        # it is the one stylesheet a standalone org site loads globally, so an
-        # unbounded exemption would let the quarantined override layer migrate
-        # straight back in with the gate green.
-        "$CMS_BASE") C1=1; C1_TC=1; C2=1 ;;
-        # Public CMS side: must be able to stand alone -> C1 + C2.
-        "$CMS_PUBLIC"/*.css|"$CMS_PUBLIC"/*.tpl) C1=1; C2=1 ;;
-        # OGRE admin: definitionally in-shell, so C1 does not apply. C2 does.
-        "$CMS_ADMIN"/*.css|"$CMS_ADMIN"/*.tpl) C2=1 ;;
+        *.tpl|*.theme) IS_TPL=1 ;;
     esac
-    # OGRE admin page templates (Cms_media.tpl, Cms_nav.tpl, ...). Same tier as
-    # cms/*.tpl: C1 does not apply, C2 does. Cms_preview.tpl is deliberately NOT
-    # excluded here — $CMS_SURFACES below turns C1 on for it as well, because it
-    # renders the PUBLIC page inside a preview chrome.
+
+    # R1 — the CMS-owned directories, at any depth.
     case "$f" in
-        "$TPL_ROOT"/Cms_*.tpl) C2=1 ;;
+        "$CMS_PUBLIC"/*.css|"$CMS_PUBLIC"/*.tpl) IS_CMS=1; IS_PUBLIC=1 ;;
+        "$CMS_ADMIN"/*.css|"$CMS_ADMIN"/*.tpl)   IS_CMS=1 ;;
     esac
-    # Public CMS surface templates, which sit one directory above frontdoor/.
-    for s in $CMS_SURFACES; do
-        [ "$f" = "$s" ] && { C1=1; C2=1; break; }
-    done
-    # C3. Content blocks lift to frontdoor/css/blocks.css; every OGRE admin
-    # template lifts to cms/css/cms-admin.css, which cms/_shell_top.tpl links
-    # exactly once for the whole admin. Cms_deny.tpl is the one exemption: it
-    # bypasses the shell entirely and loads no stylesheet, so inline is all it
-    # has. C3_DEST names the destination in the fix hint.
+
+    # R2 — CMS surface templates one directory up, by controller prefix. The
+    # front door is the base controller's _index.tpl; Cms_preview* renders the
+    # PUBLIC page inside a preview chrome and so belongs to the public tier,
+    # while every other Cms_* is OGRE admin.
+    case "$f" in
+        "$TPL_ROOT"/_index.tpl)       IS_CMS=1; IS_PUBLIC=1 ;;
+        "$TPL_ROOT"/Cms_preview*.tpl) IS_CMS=1; IS_PUBLIC=1 ;;
+        "$TPL_ROOT"/Cms_*.tpl)        IS_CMS=1 ;;
+        *)
+            for c in $CMS_CONTROLLERS; do
+                case "$f" in
+                    "$TPL_ROOT"/"$c"_*.tpl) IS_CMS=1; IS_PUBLIC=1; break ;;
+                esac
+            done
+            ;;
+    esac
+
+    C1=0; C2=0; C3=0; C4=0; C4_PATH=0; C5=0; C6=0; C1_TC=0
+
+    # C1 — public tier only, with the two documented exemptions.
+    if [ "$IS_PUBLIC" = 1 ]; then
+        case "$f" in
+            # The designated coupling point: fully exempt from C1.
+            "$INTEROP") : ;;
+            # cms-base.css is NARROWLY exempt — it must neutralize the
+            # #theme_container default.theme emits on standalone org sites, and
+            # that is the whole allowance. #newmenu and .ork- are still
+            # rejected: it is the one stylesheet a standalone org site loads
+            # globally, so an unbounded exemption would let the quarantined
+            # override layer migrate straight back in with the gate green.
+            "$CMS_BASE") C1=1; C1_TC=1 ;;
+            *) C1=1 ;;
+        esac
+    fi
+
+    # C2 — every CMS file, both tiers.
+    [ "$IS_CMS" = 1 ] && C2=1
+
+    # C3 — every CMS TEMPLATE, both tiers. Cms_deny.tpl is the one exemption
+    # (structural: it bypasses the shell and links no stylesheet at all).
+    # C3_DEST names the destination in the fix hint.
     C3_DEST=""
+    if [ "$IS_CMS" = 1 ] && [ "$IS_TPL" = 1 ] && [ "$f" != "$CMS_DENY" ]; then
+        C3=1
+        if [ "$IS_PUBLIC" = 1 ]; then
+            case "$f" in
+                "$CMS_PUBLIC"/blocks/*.tpl) C3_DEST="frontdoor/css/blocks.css" ;;
+                *) C3_DEST="frontdoor/css/ (blocks.css for a content block, blog.css for blog markup, orgsite.css for standalone-site chrome, frontdoor.css otherwise — see frontdoor/css/README.md)" ;;
+            esac
+        else
+            C3_DEST="cms/css/cms-admin.css"
+        fi
+    fi
+
+    # C4-LINK — the whole public tier, minus the one designated link point.
+    if [ "$IS_PUBLIC" = 1 ] && [ "$f" != "$ASSETS_INSHELL" ]; then
+        C4=1
+    fi
+    # C4-PATH — the org-site render path: the shell plus everything under
+    # frontdoor/, which is where the shell's includes are confined to.
     case "$f" in
-        "$CMS_PUBLIC"/blocks/*.tpl) C3=1; C3_DEST="frontdoor/css/blocks.css" ;;
-        "$CMS_DENY")                : ;;
-        "$CMS_ADMIN"/*.tpl|"$TPL_ROOT"/Cms_*.tpl) C3=1; C3_DEST="cms/css/cms-admin.css" ;;
+        "$SITE_SHELL"|"$CMS_PUBLIC"/*.tpl) C4_PATH=1 ;;
     esac
-    # C4 covers the org-site shell AND the stylesheet partial it includes;
-    # otherwise the partial is a one-line detour around the same rule.
+
+    # C5 — R3: a .css under orkui/template/ that is not CMS-owned is CRM CSS.
     case "$f" in
-        "$SITE_SHELL"|"$ASSETS_PUBLIC") C4=1 ;;
+        "$CMS_PUBLIC"/*|"$CMS_ADMIN"/*) : ;;
+        "$TPL_BASE"/*.css) C5=1 ;;
     esac
-    # C5 is scoped to the CRM style DIRECTORY, not a filename list: a new
-    # stylesheet dropped in style/ is guarded from the moment it lands.
-    case "$f" in
-        "$CRM_STYLE"/*.css) C5=1 ;;
-    esac
+
     # C6 guards the theme file that chooses org-site vs CRM stylesheets.
     case "$f" in
         "$TPL_ROOT"/*.theme) C6=1 ;;
     esac
 
-    [ "$C1$C2$C3$C4$C5$C6" = "000000" ] && continue
+    [ "$C1$C2$C3$C4$C4_PATH$C5$C6" = "0000000" ] && continue
+
+    # R5 — a symlink is never scanned. `git show :path` on one returns the link
+    # TARGET, not the content it resolves to, so a staged symlink used to sail
+    # through every rule while pointing at anything at all.
+    if [ "$MODE" = "staged" ]; then
+        SMODE=$(git ls-files --stage -- "$f" 2>/dev/null | awk 'NR==1{print $1}')
+        if [ "$SMODE" = "120000" ]; then
+            shell_report "C0" "$f" \
+                "in-scope path is a symlink, so its content cannot be checked." \
+                "git show :$f returns the link target, not the CSS/markup that ships. Commit a real file, or move the link outside the CMS/CRM style directories."
+            TOTAL=$((TOTAL + 1))
+            continue
+        fi
+    elif [ -L "$f" ]; then
+        shell_report "C0" "$f" \
+            "in-scope path is a symlink, so its content cannot be checked." \
+            "The gate refuses to vouch for a file whose content lives somewhere else (and whose staged form is just the link target). Commit a real file, or move the link outside the CMS/CRM style directories."
+        TOTAL=$((TOTAL + 1))
+        continue
+    fi
 
     # Templates carry // and <!-- --> comments on top of /* */; stylesheets do not.
     TPL=0
     case "$f" in
         *.tpl|*.theme) TPL=1 ;;
     esac
+
+    FILEDIR=$(dirname "$f")
 
     if [ "$MODE" = "staged" ]; then
         git show ":$f" > "$CONTENT" 2>/dev/null || continue
@@ -770,10 +1143,12 @@ for f in $CANDIDATES; do
         cat "$f" > "$CONTENT" 2>/dev/null || continue
     fi
 
-    awk -v file="$f" -v tpl="$TPL" \
+    awk -v file="$f" -v tpl="$TPL" -v filedir="$FILEDIR" \
+        -v TPL_BASE="$TPL_BASE" -v TPL_ROOT="$TPL_ROOT" \
         -v C_RED="$C_RED" -v C_DIM="$C_DIM" -v C_OFF="$C_OFF" \
-        -v C1="$C1" -v C2="$C2" -v C3="$C3" -v C4="$C4" -v C5="$C5" -v C6="$C6" \
-        -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" \
+        -v C1="$C1" -v C2="$C2" -v C3="$C3" -v C4="$C4" -v C4_PATH="$C4_PATH" \
+        -v C5="$C5" -v C6="$C6" \
+        -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" -v C3_MAX_STATIC="$C3_MAX_STATIC" \
         -v C1_FIX="Standalone org sites do not load orkui.css, so this rule is dead there and couples the layers everywhere else. Move it to frontdoor/css/orkshell-interop.css." \
         -v C1_FIX_BASE="cms-base.css may name #theme_container and nothing else. Move anything more into frontdoor/css/orkshell-interop.css — org sites never load it, so a rule placed here would ship to every one of them." \
         -v C2_FIX="Rename it to --cms-* or --fd-* and scope it to the CMS root. Reading an --ork-* token with var() is fine; defining one is not." \
