@@ -91,7 +91,10 @@ patterns in prose.
   template *markup* are checked — `id="theme_container"`, and a `class`
   attribute whose token list starts a token with `ork-` — and CSS identifier
   escapes (`#theme\_container`, `.ork\-x`, `#\74 heme_container`) are decoded
-  before matching, because they are semantically identical CSS.
+  before matching, because they are semantically identical CSS. So are the
+  **attribute-selector** spellings — `[id="theme_container"]`,
+  `[class~="ork-card"]`, `[class^="ork-"]` — which are different CSS syntax for
+  the same coupling, not a different rule.
   *Scope, as built:* the **public** CMS side only — `frontdoor/css/*.css`, every
   template under `frontdoor/`, and the six public surface templates that the
   router resolves one directory up (`_index.tpl`, `Site_shell.tpl`,
@@ -110,9 +113,16 @@ patterns in prose.
   renders inside the shell, and has no portability claim to protect. C2 still
   applies there.
 - **C2** CMS CSS may not *define* a token in the CRM's `--ork-*` namespace.
-  Reading one with `var()` is fine — `cms-admin.css` does so ~269 times. A
-  declaration whose colon has been wrapped onto the following line counts as a
-  definition (postcss parses it as one, and formatters produce it). Scope:
+  Reading one with `var()` is fine — `cms-admin.css` does so ~269 times. Every
+  spelling of the definition counts: a declaration whose colon has been wrapped
+  onto the following line (postcss parses it as one, and formatters produce it);
+  the **first** declaration of an inline style attribute,
+  `<div style="--ork-card-bg:#f00">`, which a quote rather than a `;` or `{`
+  precedes; an `@property --ork-brand { … }` registration, which defines the
+  token without the string `--ork-x:` appearing anywhere; and case variants
+  (`--ork-Brand`, `--ORK-brand`). Custom properties *are* case-sensitive, so
+  those last are technically distinct tokens — but they are still CMS code
+  writing into the CRM's namespace, which is the property C2 protects. Scope:
   all CMS CSS and templates, admin included.
 - **C3** A content-block template may not carry a **static** inline `<style>`
   block. *As built the rule is about staticness, not novelty:* a `<style>` is
@@ -121,7 +131,9 @@ patterns in prose.
   into `grid-template-columns` and therefore genuinely cannot become a
   stylesheet. A PHP tag parked between rules, or one echoing a literal
   (`<?= '' ?>`), does not launder a static block. PHP that echoes a `<style>`
-  tag assembled from string fragments (`'<st' . 'yle>'`) is rejected too.
+  tag assembled from string fragments (`'<st' . 'yle>'`) is rejected too, and
+  the tag match is case-insensitive — `<STYLE>` and `<Style>` are valid HTML for
+  the same element.
   Scope, **as extended by F4**: `frontdoor/blocks/**.tpl` (destination
   `frontdoor/css/blocks.css`) **and** the OGRE admin templates — `cms/*.tpl`
   and the `Cms_*.tpl` surfaces one directory up (destination
@@ -139,7 +151,9 @@ patterns in prose.
   `frontdoor/_assets_public.tpl`, the stylesheet partial the shell includes —
   guarding only the shell leaves the partial as a one-line detour to the same
   regression.
-- **C5** CRM CSS may not name a CMS selector (`.fd-`, `.cms-`, `.org-`). Scope:
+- **C5** CRM CSS may not name a CMS selector (`.fd-`, `.cms-`, `.org-`), in the
+  class-selector spelling or the attribute-selector one (`[class*="fd-"]`,
+  `[class^="cms-"]`). Scope:
   every `.css` under `style/`, as a **directory** — a new CRM stylesheet is in
   scope the moment it lands, rather than only the three files that existed when
   the rule was written.
@@ -157,6 +171,21 @@ patterns in prose.
   structure it cannot follow is reported, not assumed safe. Scope:
   `orkui/template/default/*.theme`.
 
+**Case and line endings.** Two normalisations run before any rule sees a line,
+and both close holes a developer could open without trying to. **CR is
+stripped**: on a CRLF file the trailing `\r` matches none of the `[ \t]*$`
+anchors these rules are built on, so C2's wrapped-colon detection and C6's
+branch tracker went quiet on exactly the files a Windows editor produces —
+`--ork-probe` with its colon on the next line passed as CRLF and failed as LF.
+**Matching is case-folded**: the scanner runs under `LC_ALL=C` against lowercase
+literals, and HTML tag and attribute names are case-insensitive, so `<STYLE>`,
+`<Style>`, `ID="theme_container"` and `CLASS="ork-card"` are ordinary markup
+rather than obfuscation and used to walk straight past C1 and C3. The anchors
+are kept — a class token must still *start* with `ork-` — so folding cannot make
+`.ork-` match inside an unrelated word such as `[class*="network-item"]`.
+`$IsOrgSite` is exempt from the folding, because PHP variable names are
+case-sensitive.
+
 **Comment handling.** Comment text is stripped before the rules run, because
 every file in scope discusses these patterns in prose. The stripper is
 **string-aware**: a quoted string that closes on its own line is copied through
@@ -169,8 +198,11 @@ leaves a comment open at EOF is reported as **C0** rather than silently
 disarming the scanner.
 
 **Liveness.** The property that matters is that no in-scope file is *blind*.
-Append a rule-appropriate violation to the end of each of the 66 in-scope files
-in turn and every one is detected, by the intended rule.
+Append a rule-appropriate violation to the end of each of the **76** in-scope
+files in turn and every one is detected, by the intended rule. (76, not the 66
+of Phase 3: F4 pulled the `Cms_*.tpl` admin surfaces and the `style/` directory
+into scope.) Re-run the sweep after any change to the scanner — a hole closed
+by tightening a pattern is worth nothing if the same edit blinds a file.
 
 Plus stylelint (`npm run lint:css` — stylelint 16 + a tab-indent check) over the
 CMS CSS directories only, so the CMS can adopt a stricter standard than the CRM

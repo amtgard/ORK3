@@ -36,8 +36,10 @@
 #   C1  CMS CSS/markup may not name an ORK application-shell selector
 #       (#theme_container, #newmenu, .ork-). BOTH stylesheet selectors and
 #       template markup (id="theme_container", a class token starting "ork-")
-#       are checked, and CSS identifier escapes (#theme\_container, .ork\-x,
-#       #\74 heme_container) are decoded before matching.
+#       are checked; the ATTRIBUTE-SELECTOR spellings of the same coupling
+#       ([id="theme_container"], [class~="ork-card"]) count as well; and CSS
+#       identifier escapes (#theme\_container, .ork\-x, #\74 heme_container)
+#       are decoded before matching.
 #       Scope: the PUBLIC CMS side only — frontdoor/css/*.css, every template
 #       under frontdoor/, and the public CMS surface templates that live one
 #       directory up (_index, Site_shell, Page_view, Blog_index, Blog_post,
@@ -52,7 +54,11 @@
 #       protect. C2 still applies there.
 #   C2  CMS CSS may not DEFINE a token in the CRM's --ork-* namespace.
 #       Reading one with var() is fine. A declaration whose colon has been
-#       wrapped onto the following line counts as a definition. Scope: all CMS
+#       wrapped onto the following line counts as a definition, so does the
+#       FIRST declaration of an inline style attribute
+#       (<div style="--ork-card-bg:#f00">), and so does an @property
+#       registration (@property --ork-brand { initial-value: red }), which
+#       defines the token without ever writing "--ork-x:". Scope: all CMS
 #       css + templates.
 #   C3  A CMS template may not carry a STATIC inline <style> block.
 #       A <style> is legal only if it interpolates a PHP VARIABLE in a
@@ -78,7 +84,9 @@
 #       frontdoor/_assets_public.tpl — the shell and the one stylesheet partial
 #       it includes. Guarding only the shell would leave the partial as a
 #       one-line detour to the same regression.
-#   C5  CRM CSS may not name a CMS selector (.fd-, .cms-, .org-).
+#   C5  CRM CSS may not name a CMS selector (.fd-, .cms-, .org-), in either the
+#       class-selector or the attribute-selector spelling ([class*="fd-"],
+#       [class^="cms-"]).
 #       Scope: every .css under style/, as a DIRECTORY — a new CRM stylesheet
 #       is in scope the moment it is added.
 #   C6  default.theme may link a CRM stylesheet (anything under style/, plus
@@ -91,6 +99,22 @@
 #       if/elseif/else/endif nesting and what each branch implies about
 #       $IsOrgSite) and fail-closed: an unbalanced structure it cannot follow is
 #       reported rather than assumed safe. Scope: $TPL_ROOT/*.theme.
+#
+# Case and line endings. The scanner runs under LC_ALL=C and matches lowercase
+# literals, so every rule matches against a tolower() view of the line. That is
+# not an anti-evasion measure — HTML tag and attribute names are
+# case-insensitive, so <STYLE>, <Style>, ID="theme_container" and
+# CLASS="ork-card" are ordinary markup an unsuspecting developer writes, and
+# each one used to walk past C1/C3. CSS custom properties are genuinely
+# case-sensitive, so --ork-Brand is a different token from --ork-brand, but it
+# is still CMS code defining into the CRM's namespace and C2 folds it too. The
+# anchored patterns are kept (a class token must still START with "ork-"), so
+# folding cannot make .ork- match inside an unrelated word. $IsOrgSite is
+# excluded from the folding: PHP variable names are case-sensitive.
+# Carriage returns are stripped from every line before anything else looks at
+# it. On a CRLF file the trailing \r matches none of the [ \t]*$ anchors these
+# rules use, which silently disarmed C2's wrapped-colon detection and C6's
+# branch tracker on exactly the files a Windows editor produces.
 #
 # Comment handling. Comment text is stripped before the rules run — the files
 # in scope discuss these very patterns in prose (including the literal string
@@ -317,6 +341,28 @@ function hexval(ch,    p) {
     return p - 1
 }
 
+# ---------------------------------------------------------------------------
+# Attribute-selector forms of the couplings C1 and C5 look for
+#
+# `[id="theme_container"] a {}` and `[class~="ork-card"] {}` are the same
+# coupling as `#theme_container a {}` and `.ork-card {}`, just written with a
+# different piece of CSS syntax; `[class*="fd-"]` is the same coupling C5
+# forbids. All three run on the CASE-FOLDED line, because an HTML attribute
+# name is case-insensitive. The operator is optional and may be any of
+# ~ ^ $ * | (CSS has no others).
+# ---------------------------------------------------------------------------
+function attr_sel_id(s, name) {
+    return (s ~ ("\\[[ \t]*id[ \t]*[~^$*|]?=[ \t]*[\"']?" name))
+}
+
+# A class attribute selector naming the ORK namespace. The value must START a
+# whitespace-separated token with "ork-": requiring that boundary is what keeps
+# [class*="work-item"] from reading as an ORK class.
+function attr_sel_class(s, want) {
+    if (s ~ ("\\[[ \t]*class[ \t]*[~^$*|]?=[ \t]*[\"']?" want)) return 1
+    return (s ~ ("\\[[ \t]*class[ \t]*[~^$*|]?=[ \t]*[\"'][^\"']*[ \t]" want))
+}
+
 # Decode CSS identifier escapes so `#theme\_container`, `.ork\-btn` and
 # `#\74 heme_container` cannot walk past C1. They are all semantically
 # identical CSS to the unescaped form.
@@ -380,25 +426,32 @@ function style_consume(seg,    p, e, expr, tail) {
     if (length(style_tail) > 400) style_tail = substr(style_tail, length(style_tail) - 399)
 }
 
-function scan_style(s,    p, q, seg) {
+# `s` is the real text (style_consume needs its case for PHP), `ls` the same
+# text case-folded. tolower() preserves length, so positions found in `ls`
+# index `s` exactly — which is how <STYLE> and <Style> get found. HTML tag
+# names are case-insensitive, so uppercasing one is valid markup, not
+# obfuscation, and it used to walk straight past C3.
+function scan_style(s, ls,    p, q, seg) {
     while (1) {
         if (!in_style) {
-            p = index(s, "<style")
+            p = index(ls, "<style")
             if (p == 0) return
             in_style = 1
             style_line = FNR
             style_php = 0
             style_tail = ""
             s = substr(s, p + 6)
+            ls = substr(ls, p + 6)
             continue
         }
-        q = index(s, "</style")
+        q = index(ls, "</style")
         if (q == 0) { style_consume(s); return }
         seg = substr(s, 1, q - 1)
         style_consume(seg)
         if (!style_php) report("C3", style_line, C3_MSG, C3_FIX)
         in_style = 0
         s = substr(s, q + 7)
+        ls = substr(ls, q + 7)
     }
 }
 
@@ -502,24 +555,49 @@ BEGIN {
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
 }
 {
-    line = decomment($0)
+    # CR normalisation, before anything else looks at the text. A file with
+    # CRLF endings leaves a \r as the last character of every line, and \r
+    # matches none of the [ \t]*$ / ^[ \t]*$ anchors these rules are built on —
+    # which is how `--ork-probe` with its colon wrapped onto the next line used
+    # to pass on a CRLF file and fail on the identical LF file.
+    raw = $0
+    gsub(/\r/, "", raw)
+
+    line = decomment(raw)
     mline = css_unescape(line)
+
+    # Two case-folded views, because the whole scanner runs under LC_ALL=C and
+    # matches lowercase literals, and none of these couplings are only
+    # writable in lowercase:
+    #   lraw   decommented, folded          — HTML tag names (<STYLE>)
+    #   lline  + CSS escapes decoded, folded — selectors, attributes, tokens
+    # HTML tag and attribute names are case-insensitive, so <Style> and
+    # ID="theme_container" are ordinary markup a developer could write without
+    # trying to evade anything. CSS custom properties ARE case-sensitive, so
+    # --ork-Brand is technically a different token from --ork-brand — but it is
+    # still CMS code defining into the CRM's namespace, which is what C2 is
+    # about, so it is folded too.
+    lraw  = tolower(line)
+    lline = tolower(mline)
 
     if (C1) {
         if (C1_TC) {
-            if (mline ~ /(#newmenu|\.ork-)/)
+            if (lline ~ /(#newmenu|\.ork-)/ ||
+                attr_sel_id(lline, "newmenu") || attr_sel_class(lline, "ork-"))
                 report("C1", FNR, "CMS CSS names an ORK application-shell selector.", C1_FIX_BASE)
-        } else if (mline ~ /(#theme_container|#newmenu|\.ork-)/) {
+        } else if (lline ~ /(#theme_container|#newmenu|\.ork-)/ ||
+                   attr_sel_id(lline, "theme_container") || attr_sel_id(lline, "newmenu") ||
+                   attr_sel_class(lline, "ork-")) {
             report("C1", FNR, "CMS CSS names an ORK application-shell selector.", C1_FIX)
         }
         # Markup, not just stylesheet selectors: a public CMS template that
         # hangs ORK ids/classes on its own DOM is coupled just as hard.
         if (tpl && !C1_TC &&
-            (mline ~ /id[ \t]*=[ \t]*["']?theme_container/ ||
-             mline ~ /class[ \t]*=[ \t]*"[ \t]*ork-/ ||
-             mline ~ /class[ \t]*=[ \t]*'[ \t]*ork-/ ||
-             mline ~ /class[ \t]*=[ \t]*"[^"]*[ \t]ork-/ ||
-             mline ~ /class[ \t]*=[ \t]*'[^']*[ \t]ork-/))
+            (lline ~ /id[ \t]*=[ \t]*["']?theme_container/ ||
+             lline ~ /class[ \t]*=[ \t]*"[ \t]*ork-/ ||
+             lline ~ /class[ \t]*=[ \t]*'[ \t]*ork-/ ||
+             lline ~ /class[ \t]*=[ \t]*"[^"]*[ \t]ork-/ ||
+             lline ~ /class[ \t]*=[ \t]*'[^']*[ \t]ork-/))
             report("C1", FNR, "CMS markup carries an ORK application-shell id/class.", \
                    "Standalone org sites load no orkui.css, so the hook styles nothing there and couples the layers everywhere else. Give the element a .fd-/.cms-/.org- class instead.")
     }
@@ -529,15 +607,26 @@ BEGIN {
     # allowed to have been wrapped onto the next line — postcss parses that as
     # a real declaration, and formatters produce it.
     if (C2) {
-        if (mline ~ /(^|[;{ \t])--ork-[a-z0-9-]+[ \t]*:/) {
+        # @property registers a custom property without ever writing an
+        # `--ork-x:` declaration, so C2's declaration pattern cannot see it —
+        # but `@property --ork-brand { initial-value: red }` defines into the
+        # CRM namespace exactly like the declaration form does.
+        if (lline ~ /@property[ \t]+--ork-/) {
+            report("C2", FNR, "CMS CSS registers a token in the CRM's --ork-* namespace with @property.", C2_FIX)
+            ork_pend = 0
+        # A quote is a declaration boundary too: <div style="--ork-card-bg:#f00">
+        # is a definition, and before the quote joined this character class only
+        # a SECOND declaration in the same attribute — the one with a ';' in
+        # front of it — was caught.
+        } else if (lline ~ /(^|[;{ \t"'])--ork-[a-z0-9-]+[ \t]*:/) {
             report("C2", FNR, "CMS CSS defines a token in the CRM's --ork-* namespace.", C2_FIX)
             ork_pend = 0
-        } else if (ork_pend && mline ~ /^[ \t]*:/) {
+        } else if (ork_pend && lline ~ /^[ \t]*:/) {
             report("C2", ork_pend_line, "CMS CSS defines a token in the CRM's --ork-* namespace (colon wrapped onto the next line).", C2_FIX)
             ork_pend = 0
-        } else if (mline ~ /^[ \t]*$/) {
+        } else if (lline ~ /^[ \t]*$/) {
             # blank line: keep any pending wrap alive
-        } else if (mline ~ /(^|[;{ \t])--ork-[a-z0-9-]+[ \t]*$/) {
+        } else if (lline ~ /(^|[;{ \t"'])--ork-[a-z0-9-]+[ \t]*$/) {
             ork_pend = 1
             ork_pend_line = FNR
         } else {
@@ -546,28 +635,32 @@ BEGIN {
     }
 
     if (C3) {
-        scan_style(line)
+        scan_style(line, lraw)
         # PHP that echoes a <style> tag assembled from string fragments —
         # '<st' . 'yle>' — never reaches scan_style as a literal tag.
-        if (index(line, "<?") > 0 && line !~ /<style/) {
-            joined = line
+        if (index(line, "<?") > 0 && lraw !~ /<style/) {
+            joined = lraw
             gsub(/["'][ \t]*\.[ \t]*["']/, "", joined)
             if (joined ~ /<[ \t]*style/)
                 report("C3", FNR, "PHP emits a <style> tag assembled from string fragments.", C3_FIX)
         }
     }
 
-    if (C4 && line ~ /(orkui\.css|tokens\.css|orkshell-interop\.css)/)
+    if (C4 && lraw ~ /(orkui\.css|tokens\.css|orkshell-interop\.css)/)
         report("C4", FNR, "A standalone org site's markup links a stylesheet it must not load.", \
                "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. Remove the link.")
 
-    if (C5 && mline ~ /(\.fd-|\.cms-|\.org-)/)
+    if (C5 && (lline ~ /(\.fd-|\.cms-|\.org-)/ ||
+               attr_sel_class(lline, "fd-") || attr_sel_class(lline, "cms-") ||
+               attr_sel_class(lline, "org-")))
         report("C5", FNR, "CRM CSS names a CMS selector.", \
                "The CRM must not style CMS surfaces. Move the rule into the matching CMS stylesheet under frontdoor/css/ or cms/css/.")
 
     if (C6) {
+        # org_track deliberately gets the UNFOLDED code: $IsOrgSite is a PHP
+        # variable name and PHP variable names are case-sensitive.
         org_track(php_extract(line))
-        if (line ~ /(default\/style\/[A-Za-z0-9_.-]*\.css|orkshell-interop\.css)/ && org_effective() != "F")
+        if (lraw ~ /(default\/style\/[a-z0-9_.-]*\.css|orkshell-interop\.css)/ && org_effective() != "F")
             report("C6", FNR, "default.theme links CRM CSS on a path a standalone org site can reach.", C6_FIX)
     }
 }

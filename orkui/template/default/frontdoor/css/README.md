@@ -82,9 +82,14 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   one directory up (`_index.tpl`, `Site_shell.tpl`, `Page_view.tpl`,
   `Blog_index.tpl`, `Blog_post.tpl`, `Cms_preview.tpl`). **Markup counts**, not
   just stylesheet selectors: `id="theme_container"` and a `class` token starting
-  `ork-` are rejected in those templates too. CSS identifier escapes
-  (`#theme\_container`, `.ork\-x`, `#\74 heme_container`) are decoded first —
-  they are the same CSS.
+  `ork-` are rejected in those templates too. So are the **attribute-selector
+  spellings** of the same coupling — `[id="theme_container"]`,
+  `[class~="ork-card"]`, `[class^="ork-"]` — which are just different CSS
+  syntax for the same thing. CSS identifier escapes (`#theme\_container`,
+  `.ork\-x`, `#\74 heme_container`) are decoded first — they are the same CSS.
+  Matching is **case-insensitive**, so `<div ID="theme_container">` and
+  `<div CLASS="ork-card">` are caught: HTML attribute names are
+  case-insensitive and that markup is not a trick, it is just markup.
   **`orkshell-interop.css` is fully exempt**, being the designated coupling
   point. **`cms-base.css` is narrowly exempt:** it may name `#theme_container`
   (it has to neutralize the container `default.theme` emits on standalone org
@@ -97,9 +102,15 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   render inside the shell, and have no portability claim to protect. C2 still
   applies to them.
 - **C2 — don't *define* an `--ork-*` token.** Reading one with `var()` is fine;
-  a `--ork-foo:` declaration is not, including when a formatter has wrapped the
-  colon onto the next line. Applies to all CMS CSS and templates, admin
-  included.
+  a `--ork-foo:` declaration is not. That includes every spelling of the
+  definition: a formatter-wrapped colon on the next line, the *first*
+  declaration of an inline style attribute (`<div style="--ork-card-bg:#f00">`),
+  an `@property --ork-brand { … }` registration (which defines the token
+  without ever writing `--ork-x:`), and a case variant such as `--ork-Brand` or
+  `--ORK-brand`. Custom properties really are case-sensitive, so those are
+  technically different tokens — but they are still CMS code writing into the
+  CRM's namespace, which is the thing C2 exists to stop. Applies to all CMS CSS
+  and templates, admin included.
 - **C3 — no *static* `<style>` block in a CMS template.** The CSS belongs in a
   stylesheet, where it is cacheable, lintable and visible to duplication
   analysis, instead of being re-sent in the HTML of every render. A `<style>` is
@@ -107,7 +118,8 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   **value** — see the `columns.tpl` exception below. A PHP tag parked between
   rules, or echoing a literal (`<?= '' ?>`), does not launder a static block,
   and PHP that echoes a `<style>` tag built by string concatenation is rejected
-  too.
+  too. Tag matching is case-insensitive — `<STYLE>` and `<Style>` are valid
+  HTML for the same element.
   **Scope, and the destination for each half:**
   - `frontdoor/blocks/*.tpl` → `frontdoor/css/blocks.css`.
   - the OGRE admin templates — `cms/*.tpl` and `Cms_*.tpl` one directory up —
@@ -127,9 +139,10 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
 - **C4 — markup a standalone org site renders must not link** `orkui.css`,
   `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
   `frontdoor/_assets_public.tpl`, the partial it includes.
-- **C5 — CRM CSS must not name `.fd-*`, `.cms-*` or `.org-*`.** Scope: every
-  `.css` under `style/`, as a directory — a new CRM stylesheet is guarded the
-  moment it lands.
+- **C5 — CRM CSS must not name `.fd-*`, `.cms-*` or `.org-*`**, in the
+  class-selector spelling or the attribute-selector one (`[class*="fd-"]`,
+  `[class^="cms-"]`). Scope: every `.css` under `style/`, as a directory — a new
+  CRM stylesheet is guarded the moment it lands.
 - **C6 — `default.theme` may link CRM CSS only where `$IsOrgSite` is provably
   false.** This is the rule that decides what a standalone org site actually
   downloads: the `if (empty($IsOrgSite)):` gate at `default.theme:104-110` picks
@@ -147,6 +160,16 @@ stripper is string-aware: a quoted string that closes on its own line is never
 scanned for comment openers, so `content: "/*"` no longer blinds the rest of a
 file; and a quote that does *not* close on its line is not treated as a string,
 so an apostrophe in prose cannot swallow one. Anything still open at EOF is C0.
+
+Two normalisations run before any rule sees a line. **Carriage returns are
+stripped**, because on a CRLF file the trailing `\r` matches none of the
+`[ \t]*$` anchors these rules are built on — C2's wrapped-colon detection and
+C6's branch tracker used to go quiet on exactly the files a Windows editor
+produces. And **matching is case-folded**, because HTML tag and attribute names
+are case-insensitive; the anchors survive (a class token must still *start*
+with `ork-`), so folding cannot make `.ork-` match inside an unrelated word such
+as `[class*="network-item"]`. `$IsOrgSite` is exempt from the folding — PHP
+variable names are case-sensitive.
 
 ### The `columns.tpl` exception
 
