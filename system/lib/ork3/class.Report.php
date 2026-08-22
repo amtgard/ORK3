@@ -5270,7 +5270,7 @@ class Report extends Ork3
         $alwaysShow = array('jsork', 'mORK');
         $sessClientBreak = array();
         foreach ($sessClientCounts as $label => $count) {
-            if (count($sessClientBreak) >= 9 && !in_array($label, $alwaysShow, true)) {
+            if (count($sessClientBreak) >= 14 && !in_array($label, $alwaysShow, true)) {
                 $sessClientBreak['Other'] = ($sessClientBreak['Other'] ?? 0) + $count;
                 continue;
             }
