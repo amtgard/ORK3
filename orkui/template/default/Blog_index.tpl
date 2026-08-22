@@ -41,7 +41,7 @@ $blogPageHref = function ($p) use ($blogTag) {
     return $href;
 };
 ?>
-<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime($fdDir . 'css/frontdoor.css') ?>">
+<?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 
 <div class="fd-page">

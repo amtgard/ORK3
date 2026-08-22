@@ -17,7 +17,7 @@ $pvScopeQuery = isset($CmsScopeQuery) ? (string) $CmsScopeQuery : '';
 $pvPublishUrl = UIR . ($pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/publish') . $pvScopeQuery;
 $pvIdField    = ($pvKind === 'post') ? 'post_id' : 'page_id';
 ?>
-<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime($fdDir . 'css/frontdoor.css') ?>">
+<?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 <style>
 .cms-preview-banner{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:12px;

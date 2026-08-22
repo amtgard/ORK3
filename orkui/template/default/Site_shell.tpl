@@ -51,7 +51,7 @@ foreach ($fdBlocks as $__b) {
     }
 }
 ?>
-<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime($fdDir . 'css/frontdoor.css') ?>">
+<?php include $fdDir . '_assets_public.tpl'; ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/orgsite.css?v=<?= @filemtime($fdDir . 'css/orgsite.css') ?>">
 <div class="fd-page fd-org">
 <?php if (!empty($SitePreview)) : ?>

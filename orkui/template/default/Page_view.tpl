@@ -9,7 +9,7 @@ $fdDir       = DIR_TEMPLATE . 'default/frontdoor/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 $fdBlocks    = isset( $FrontDoor ) && is_array( $FrontDoor ) ? $FrontDoor : [];
 ?>
-<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime( $fdDir . 'css/frontdoor.css' ) ?>">
+<?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 
 <?php if ( ! empty( $Message ) && empty( $fdBlocks ) ) : ?>
