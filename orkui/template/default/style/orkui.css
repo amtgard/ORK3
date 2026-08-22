@@ -729,7 +729,6 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
    Application Base — body, html, h1-h6, links, #theme_container
    ========================================================================== */
 html, body {
-    height: 100%;
     /* Guard against horizontal overflow from any descendant. Without this, an
        element wider than the viewport makes the page scroll sideways, and on
        Android Chrome a position:fixed; width:100% bar (#newmenu) then spans the
@@ -739,6 +738,17 @@ html, body {
        fixed nav pinned to the device width on every platform. */
     overflow-x: hidden;
     max-width: 100%;
+}
+html {
+    height: 100%;
+}
+body {
+    /* min-height, NOT height: overflow-x:hidden above forces overflow-y from
+       visible to auto, so a body capped at 100% becomes its own scroll
+       container and the page shows two scrollbars (body's plus the html
+       element's). Letting the body grow with its content keeps the single
+       viewport scrollbar. */
+    min-height: 100%;
 }
 body {
     /*
