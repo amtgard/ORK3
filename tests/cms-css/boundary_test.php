@@ -28,6 +28,8 @@
 //   6. authored body-copy links carry a non-colour affordance on every tier;
 //   7. no org-site page serves ORK's own analytics payload (gtag.js, Google Tag
 //      Manager, Cloudflare Web Analytics) — and the in-shell tier still does.
+//   8. no org-site page loads orkui.js (jQuery + the 1 MB CRM app bundle) while it
+//      still loads its own frontdoor.js — and the in-shell tier still gets orkui.js.
 //
 // SAFE IN ANY ENVIRONMENT. If nothing answers at the base URL the script prints
 // a SKIP line and exits 0. Point it elsewhere with ORK_BASE_URL:
@@ -271,6 +273,14 @@ $ORK_ANALYTICS = array(
     'static.cloudflareinsights.com' => 'Cloudflare Web Analytics beacon',
     'GTM-5HZHGSLT'                  => 'Google Tag Manager container',
 );
+
+// The ORK application JS bundle — jQuery 1.7.1 + jQuery UI + tablesorter + the
+// CRM's app code, 1,032,786 bytes, render-blocking in <head>. Nothing a
+// standalone org site renders touches it (audited across every file on the
+// org-site render path), and it is 11x the CSS this separation removed. The
+// path is matched, not the basename, so a copy served from somewhere else is
+// still caught.
+$ORK_APP_JS = 'script/orkui.js';
 
 // ---------------------------------------------------------------------------
 // Reachability — the SKIP gate
@@ -555,6 +565,24 @@ foreach ($shellPages as $p) {
     foreach ($ORK_ANALYTICS as $needle => $what) {
         check("in-shell surface still serves the $what — {$p['label']}", strpos($p['body'], $needle) !== false);
     }
+}
+
+// ---------------------------------------------------------------------------
+// 8. A standalone org site is served none of the 1 MB ORK application JS.
+//
+//    Both directions again. The org-site half is the saving; the in-shell half
+//    is what stops it from being won by deleting the <script> outright, which
+//    would take jQuery away from the entire CRM.
+// ---------------------------------------------------------------------------
+foreach ($orgPages as $p) {
+    check("org site links no orkui.js — {$p['label']}", strpos($p['body'], $ORK_APP_JS) === false);
+    // "Serves no CRM JS" must not be achievable by serving no JS at all: the
+    // org tier's own behaviour layer (carousel, mobile nav, roster modal) has
+    // to still be there.
+    check("org site still links frontdoor.js — {$p['label']}", strpos($p['body'], 'frontdoor/js/frontdoor.js') !== false);
+}
+foreach ($shellPages as $p) {
+    check("in-shell surface still links orkui.js — {$p['label']}", strpos($p['body'], $ORK_APP_JS) !== false);
 }
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";

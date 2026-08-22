@@ -295,6 +295,15 @@ off a running app and asserts on the HTML that is served:
    four. This one is not about CSS, but it is the same property one layer out:
    a kingdom's or park's public marketing site is not an ORK application
    surface and must not report into ORK's analytics.
+8. **no org-site page loads `orkui.js`** — jQuery 1.7.1 + jQuery UI +
+   tablesorter + the CRM's app code, 1,032,786 bytes render-blocking in
+   `<head>`, 11x the CSS this separation removed — while it **does** still load
+   its own `frontdoor.js`, so "no CRM JS" cannot be won by serving no
+   behaviour at all. The in-shell tier still gets `orkui.js`. Nothing on the
+   org-site render path references jQuery or any orkui.js global; the block
+   templates' inline scripts (gallery lightbox, parks map) are plain DOM, and
+   `CmsSanitizer` strips `<script>` and every `on*` handler from authored
+   content, so an author cannot reintroduce the dependency.
 
 It is **safe in any environment**: if nothing answers it prints
 `SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)

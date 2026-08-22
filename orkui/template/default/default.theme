@@ -142,7 +142,28 @@
 		}
 		</style>
 		<?php endif; ?>
+<?php
+// The ORK application JS bundle: jQuery 1.7.1 + jQuery UI + tablesorter + the
+// CRM's own app code, 1,032,786 bytes, render-blocking in <head>. A standalone
+// public org site ($IsOrgSite, Controller_Site) uses none of it. Audited across
+// all 44 files on the org-site render path (Site_shell.tpl + everything under
+// frontdoor/, block templates and frontdoor/js/frontdoor.js included): zero
+// occurrences of `$(`, `jQuery`, `$.`, or any of orkui.js's top-level globals;
+// every inline script an org site serves (the gallery lightbox and the parks
+// map) is plain DOM; and orkui.js's three $(document).ready handlers bind
+// .info-container, .hasDatePicker and .restricted-image-type, none of which any
+// org-site template emits. Authored content cannot reintroduce the dependency
+// either: CmsSanitizer strips <script> and every on* handler from richtext /
+// raw_html before it is stored.
+//
+// Gate it with the shell it belongs to. This is the same argument as the CSS
+// gate above, one layer out, and it is 11x the CSS this separation removed.
+// If an org-site surface ever genuinely needs jQuery, do NOT ungate this —
+// nothing else on that path wants a 1 MB bundle. Load what that surface needs.
+if (empty($IsOrgSite)):
+?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+<?php endif; ?>
 <?php if (empty($IsOrgSite)): // ORK's own gtag.js + Cloudflare Web Analytics — do not load on standalone org sites ?>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
