@@ -146,6 +146,22 @@
 		</script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
 
+<?php
+// ---------------------------------------------------------------------------
+// ORK APPLICATION CHROME (CSS). Every rule below styles a piece of the ORK app
+// shell — the offline banner, the stacked app nav, the What's New modal, the
+// nav dark-mode toggle, .information-table, the maintenance popover. A
+// standalone public org site ($IsOrgSite, Controller_Site) renders none of that
+// markup: it is all gated off further down this file, so shipping the CSS was
+// dead weight AND actively harmful. In particular
+//
+//     html[data-theme="dark"] body { background-color:#1a202c; color:#e2e8f0; }
+//
+// is (0,1,2) and beat cms-base.css's own `body` (0,0,1), repainting a dark org
+// site in ORK slate instead of the site's own --fd-bg. Gate the CSS with the
+// markup it styles: both or neither.
+if (empty($IsOrgSite)):
+?>
 	<style>
 	/* Offline banner */
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
@@ -222,17 +238,16 @@
 	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
 	</style>
-<?php if (empty($IsOrgSite)): // ORK app dark chrome; a standalone org site paints its own surfaces from --fd-* and must not inherit the app's link blue at ID specificity. ?>
 	<style>
 	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	</style>
-<?php endif; ?>
 	<style>
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 
 	</style>
+<?php endif; // /ORK application chrome (CSS) ?>
 </head>
 	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : (!empty($IsCmsPage) ? 'cms-page' : '') ?>">
 <?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — omit on standalone org sites ?>
@@ -241,7 +256,9 @@
 		height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 		<!-- End Google Tag Manager (noscript) -->
 <?php endif; ?>
+<?php if (empty($IsOrgSite)): // ORK app offline banner. Its CSS is gated in <head> and its wiring JS at the foot of this file — gate all three together or none. ?>
 <div id="ork-offline-banner"><i class="fas fa-wifi" style="margin-right:6px;opacity:0.8"></i>You&rsquo;re currently offline &mdash; changes may not save until your connection is restored.</div>
+<?php endif; ?>
 <?php
 // -----------------------------------------------------------------------
 // SCHEDULED MAINTENANCE NOTICE
@@ -253,7 +270,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
-<?php if (!empty($downtime_start)): ?>
+<?php if (empty($IsOrgSite) && !empty($downtime_start)): // ORK app maintenance bar (mobile); the desktop half lives in the gated #newmenu nav ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;font-size:0.8rem;font-weight:600;">
 			<button type="button" aria-expanded="false" aria-controls="nm-mobile-detail" onclick="(function(btn){var d=document.getElementById('nm-mobile-detail');var open=d.style.display==='none';d.style.display=open?'block':'none';btn.setAttribute('aria-expanded',open?'true':'false');})(this)" style="display:block;width:100%;background:none;border:none;color:inherit;font:inherit;text-align:center;padding:6px 12px;cursor:pointer;">
 				<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
@@ -268,6 +285,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 		<style>@media (max-width:767px){#nav-maintenance-mobile{display:block!important;}}</style>
 <?php endif; ?>
 
+<?php if (empty($IsOrgSite)): // ORK app weather-safety dialog: only ORK event/weather badges carry data-wx-safety, and the overlay's inline styles read --ork-card-bg / --ork-text, whose dark values live in orkui.css — which org sites no longer load, so it would render light-on-dark. ?>
 <!-- Weather safety info dialog (Extreme heat / Frostbite risk).
      Defined BEFORE $CONTROLLER_CONTENTS so the wxSafetyDialog / wxSafetyAttrs
      / wxSafetyIconHtml JS globals exist before any content template's inline
@@ -380,6 +398,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 	};
 })();
 </script>
+<?php endif; // /weather-safety dialog (ORK app chrome) ?>
 
 <?php
 	echo $CONTROLLER_CONTENTS;
@@ -542,6 +561,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 <?php endif; // /IsOrgSite global-nav suppression ?>
 
 
+<?php if (empty($IsOrgSite)): // Wiring for the global #newmenu nav, gated away above: universal search, the avatar/resources dropdowns, the maintenance popover, and the ORK-documentation info dialog. Every element it touches is inside that nav, and the info dialog's inline styles read --ork-card-bg / --ork-text from orkui.css, which org sites no longer load. ?>
 	<script>
 	// ---- Search toggle ----
 	function nsToggle(btn) {
@@ -757,6 +777,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
 	}
 	</script>
+<?php endif; // /global-nav wiring + info dialog (ORK app chrome) ?>
 
 	
 <?php if (empty($IsOrgSite)): // global-only logged-in chrome (What's New + email prompt); org sites omit it — it uses base-Controller data ($DB / session / release constants) that Controller_Site does not set, and would fatal mid-render, truncating the page before the editor FAB. ?>
@@ -1129,6 +1150,7 @@ function orkCloseEpPopover() {
 <?php endif; // /Era Phoenice popover (global-only chrome) ?>
 
 <script>
+<?php if (empty($IsOrgSite)): // gated with the #ork-offline-banner div and its CSS ?>
 /* Offline banner */
 (function() {
   var banner = document.getElementById('ork-offline-banner');
@@ -1138,6 +1160,7 @@ function orkCloseEpPopover() {
   window.addEventListener('online',  update);
   update();
 })();
+<?php endif; ?>
 
 /* Global dark mode toggle — runs on every page.
    Skips init if revised.js already defined orkInitTheme (revised-frontend pages). */
@@ -1227,6 +1250,7 @@ function orkCloseEpPopover() {
   }
 })();
 
+<?php if (empty($IsOrgSite)): // Highcharts is an ORK app dependency; no org-site surface loads it ?>
 /* Highcharts dark mode — setOptions for backgroundColor (tooltip handled via CSS) */
 if (typeof Highcharts !== 'undefined') {
   (function() {
@@ -1240,6 +1264,7 @@ if (typeof Highcharts !== 'undefined') {
     }
   })();
 }
+<?php endif; // /Highcharts dark mode ?>
 </script>
 
 
