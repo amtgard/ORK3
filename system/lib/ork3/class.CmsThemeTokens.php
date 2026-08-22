@@ -288,9 +288,16 @@ class CmsThemeTokens
 
     private static function FontStack($family)
     {
+        // 'Open Sans' is the house fallback every other display face drops back
+        // to — but a family must never fall back to ITSELF. Without the extra
+        // branch, the DEFAULT body font emits `'Open Sans', 'Open Sans',
+        // sans-serif`: harmless to the cascade (a repeated family resolves the
+        // same) but a duplicate the CSS side cannot honestly mirror, and the
+        // reason frontdoor.css's static fallback could not be brought to parity
+        // with the authority. See tests/cms-theme/tokens_test.php.
         $fallback = ($family === 'MedievalSharp') ? 'cursive'
             : (($family === 'Georgia') ? 'serif'
-            : (($family === 'system-ui') ? 'sans-serif' : "'Open Sans', sans-serif"));
+            : (($family === 'system-ui' || $family === 'Open Sans') ? 'sans-serif' : "'Open Sans', sans-serif"));
         return ($family === 'system-ui') ? 'system-ui, sans-serif' : "'" . $family . "', " . $fallback;
     }
 

@@ -14,13 +14,21 @@
     --fd-text-muted: #5b6472;
     --fd-border:  #e2e6ec;
     --fd-primary-contrast: #ffffff;
-    /* Not a faux-medieval face. A new site seeds no theme row, so whatever is
+    /* These MUST match CmsThemeTokens::Defaults() as rendered by its FontStack()
+       helper. CmsThemeTokens is the authority — it is what the theme editor
+       writes and what "reset to default" restores — and these are the fallback
+       for a surface with NO ork_cms_theme row, which in practice means the front
+       door and the blog (global scope has no theme row, so they emit no
+       <style id="fd-theme-tokens"> block). When the two disagree, the front door
+       and a site saved at defaults render in different fonts.
+       tests/cms-theme/tokens_test.php fails if they drift again.
+       Not a faux-medieval face: a new site seeds no theme row, so whatever is
        defaulted here is what every org actually ships — and faux-medieval type
-       is exactly the cosplay the brand rule forbids. The old default remains
+       is exactly the cosplay the brand rule forbids. MedievalSharp remains
        selectable in the theme editor (see the PHP allowlist) for orgs that
        deliberately want it. */
-    --fd-font-heading: 'Archivo', 'Trebuchet MS', Georgia, serif;
-    --fd-font-body: system-ui, -apple-system, sans-serif;
+    --fd-font-heading: 'Archivo', 'Open Sans', sans-serif;
+    --fd-font-body: 'Open Sans', sans-serif;
     /* A LENGTH, not a ratio. CmsThemeTokens::Block() emits this token as
        `calc(1rem * <ratio>)`, so every consumer must multiply it by a UNITLESS
        number — `var(--fd-font-scale) * 0.6875rem` is rem x rem, which is invalid

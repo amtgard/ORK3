@@ -180,6 +180,18 @@ $cssGeorgia = CmsThemeTokens::ToCss(array('--fd-font-body' => 'Georgia'));
 check('Georgia body emitted with serif fallback', strpos($cssGeorgia, "--fd-font-body:'Georgia', serif") !== false);
 $cssSys = CmsThemeTokens::ToCss(array('--fd-font-body' => 'system-ui'));
 check('system-ui body emitted without quotes', strpos($cssSys, '--fd-font-body:system-ui, sans-serif') !== false);
+// A family must never fall back to ITSELF. 'Open Sans' is the house fallback for
+// every other display face, so without a guard the DEFAULT body font emits
+// `'Open Sans', 'Open Sans', sans-serif` — harmless to the cascade but a
+// duplicate frontdoor.css cannot honestly mirror, which is what blocked the
+// defaults-parity assertions below.
+$cssOs = CmsThemeTokens::ToCss(array('--fd-font-body' => 'Open Sans', '--fd-font-heading' => 'Open Sans'));
+check('Open Sans body does not fall back to itself', strpos($cssOs, "--fd-font-body:'Open Sans', sans-serif") !== false);
+check('Open Sans heading does not fall back to itself', strpos($cssOs, "--fd-font-heading:'Open Sans', sans-serif") !== false);
+check('no self-duplicated family anywhere in the emitted stack', strpos($cssOs, "'Open Sans', 'Open Sans'") === false);
+// The non-Open-Sans faces keep Open Sans as their fallback.
+$cssLex = CmsThemeTokens::ToCss(array('--fd-font-body' => 'Lexend'));
+check('Lexend body keeps the Open Sans fallback', strpos($cssLex, "--fd-font-body:'Lexend', 'Open Sans', sans-serif") !== false);
 
 // --- Derive dark-mode contract across extreme colors (converges within budget) ---
 $extremes = array('#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff', '#000000', '#ffffff', '#010203', '#fdfdfd', '#1b4d3e');
@@ -230,6 +242,91 @@ check('ToRootCss does not scope to .fd-page', strpos($rootCss, '.fd-page') === f
 // nothing at all and the dark half would silently never apply.
 check('ToRootCss dark selector is not a descendant of :root', strpos($rootCss, 'html[data-theme="dark"] :root') === false);
 check('ToRootCss carries the real tokens', strpos($rootCss, '--fd-bg:') !== false && strpos($rootCss, '--fd-primary:') !== false);
+
+// --- frontdoor.css default parity -------------------------------------------
+// The .fd-page defaults in frontdoor.css are the fallback for a surface with NO
+// ork_cms_theme row -- in practice the FRONT DOOR and the BLOG, since global
+// scope has no theme row and so emits no <style id="fd-theme-tokens"> block.
+// (Every org site in the DB does have a theme row, so its emitted block wins and
+// these fallbacks never render there.) CmsThemeTokens is the authority: it is
+// what the theme editor writes and what "reset to default" restores. If the two
+// disagree, the front door and a site saved at defaults render differently,
+// which is exactly the drift this test exists to catch.
+$cssPath = __DIR__ . '/../../orkui/template/default/frontdoor/css/frontdoor.css';
+$fdCss   = file_get_contents($cssPath);
+check('frontdoor.css is readable', $fdCss !== false);
+
+// The authoritative rendering of the defaults, as the theme engine emits them.
+$authoritative = CmsThemeTokens::ToCss(array());
+preg_match('/\.fd-page\{([^}]*)\}/', $authoritative, $m);
+check('ToCss() emitted a .fd-page block', !empty($m[1]));
+
+$want = array();
+foreach (explode(';', isset($m[1]) ? $m[1] : '') as $decl) {
+    if (strpos($decl, ':') === false) {
+        continue;
+    }
+    list($k, $v) = explode(':', $decl, 2);
+    $want[trim($k)] = trim($v);
+}
+
+// The static fallbacks declared on .fd-page in frontdoor.css, comments stripped.
+preg_match('/\.fd-page\s*\{(.*?)\n\}/s', (string) $fdCss, $c);
+check('frontdoor.css has a .fd-page block', !empty($c[1]));
+$cssBlock = preg_replace('#/\*.*?\*/#s', '', isset($c[1]) ? $c[1] : '');
+
+// Compare values semantically, not byte-for-byte: collapse whitespace runs AND
+// drop the space after a comma, so the stylesheet's readable
+// `0 12px 50px rgba(0, 0, 0, .4)` compares equal to the minified
+// `rgba(0,0,0,.4)` that Block() emits. Real drift -- a different family, a
+// different hex -- still fails.
+$norm = function ($v) {
+    return preg_replace('/,\s+/', ',', preg_replace('/\s+/', ' ', trim((string) $v)));
+};
+
+// Only the CATALOG tokens. Derive() also injects --fd-primary-h and
+// --fd-accent-on-primary, which are computed per-org and deliberately carry NO
+// static fallback here: every consumer supplies its own inline
+// `var(--fd-accent-on-primary, var(--fd-primary-contrast))`. Declaring them on
+// .fd-page would not be parity, it would be a rendering change (gold instead of
+// white on the unthemed front door's hero band). Pinned absent below.
+foreach (array_keys(CmsThemeTokens::Defaults()) as $token) {
+    // --fd-font-scale is emitted as calc(1rem * N) but declared as a bare length
+    // fallback; it is asserted separately below.
+    if ($token === '--fd-font-scale') {
+        continue;
+    }
+    check("CmsThemeTokens emitted a value for $token", isset($want[$token]));
+    if (!isset($want[$token])) {
+        continue;
+    }
+    if (!preg_match('/' . preg_quote($token, '/') . '\s*:\s*([^;]+);/', $cssBlock, $dm)) {
+        check("frontdoor.css declares a fallback for $token", false);
+        continue;
+    }
+    check(
+        "default for $token matches CmsThemeTokens",
+        $norm($dm[1]) === $norm($want[$token])
+    );
+}
+
+// --fd-font-scale MUST be a LENGTH, not a ratio: consumers multiply it by a
+// unitless number, so a fallback of `1` yields rem*rem, which is invalid at
+// computed-value time and silently drops the whole declaration.
+check(
+    '--fd-font-scale fallback is 1rem, not 1',
+    (bool) preg_match('/--fd-font-scale\s*:\s*1rem\s*;/', $cssBlock)
+);
+
+// The two Derive-only tokens stay UNdeclared on .fd-page -- see the note above.
+check(
+    '--fd-accent-on-primary has no static .fd-page fallback',
+    !preg_match('/--fd-accent-on-primary\s*:/', $cssBlock)
+);
+check(
+    '--fd-primary-h has no static .fd-page fallback',
+    !preg_match('/--fd-primary-h\s*:/', $cssBlock)
+);
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
