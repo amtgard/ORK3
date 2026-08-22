@@ -842,6 +842,24 @@ html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.odd > td,
 html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.even > td {
   background: var(--rp-bg-table);
 }
+/* The striping rule above outranks the theme-agnostic status-row rules (its
+   selector carries html[data-theme]), which left suspended/dues row tints
+   invisible in dark mode on every report using them. Re-assert them here at
+   matching specificity; the dark token values are defined in the block above. */
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.rp-row-suspended > td {
+  background-color: var(--rp-row-suspended-bg);
+  color: var(--rp-row-suspended-text);
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.rp-row-suspended:hover > td {
+  background-color: var(--rp-row-suspended-hover);
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.rp-row-dues > td {
+  background-color: var(--rp-row-dues-bg);
+  color: var(--rp-row-dues-text);
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.rp-row-dues:hover > td {
+  background-color: var(--rp-row-dues-hover);
+}
 html[data-theme="dark"] .rp-table-area table.dataTable {
   border-color: #4a5568;
 }
