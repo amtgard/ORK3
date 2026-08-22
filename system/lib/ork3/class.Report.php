@@ -435,7 +435,7 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank,
+              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -469,7 +469,8 @@ class Report extends Ork3
                         'AwardName' => $r->award_name,
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
-                        'EnteredById' => $r->by_whom_id
+                        'EnteredById' => $r->by_whom_id,
+                        'Suspended' => (int)$r->suspended
                     );
             }
             $response['Status'] = Success();
