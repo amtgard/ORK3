@@ -15,8 +15,9 @@
  * $SiteNavScopeId, set by Controller_Site::_bootShell). Renders NOTHING outside a
  * park scope — never errors, never fatals.
  *
- * Static .pe-* CSS lives in frontdoor.css (loaded under orgsite.css on org sites),
- * matching park_officers/park_meeting — no per-render inline <style>.
+ * Static .pe-* CSS lives in frontdoor/css/blocks.css (loaded on every CMS surface,
+ * org sites included), matching park_officers/park_meeting — this block emits no
+ * inline style element.
  *
  * Receives: $blockFields { kicker?, heading?, limit?, more_href? }, UIR, $SiteNavScope*.
  */

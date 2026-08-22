@@ -1,6 +1,6 @@
 <?php
 /**
- * Partial: image.tpl  (MEDIA block) — self-contained (own scoped <style>)
+ * Partial: image.tpl  (MEDIA block) — CSS lives in frontdoor/css/blocks.css.
  * Receives: $blockFields, shared $data, UIR
  *
  * Fields:
@@ -57,45 +57,6 @@ if (is_string($fdbHref) && $fdbHref !== '' && CmsSanitizer::IsSafeUrl($fdbHref))
     $fdbHrefSafe = $fdbHref;
 }
 ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['image'])) : $fdStyleOnce['image'] = true; ?>
-<style>
-/* scoped: fdb-img */
-.fdb-img-figure {
-    margin: 0;
-    width: 100%;
-}
-.fdb-img-frame {
-    display: block;
-    width: 100%;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #f1f3f8;
-}
-.fdb-img-frame img {
-    display: block;
-    width: 100%;
-    height: auto;
-    object-fit: cover;
-}
-.fdb-img-caption {
-    margin-top: 9px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #667;
-    text-align: center;
-}
-a.fdb-img-frame:hover {
-    opacity: .94;
-}
-html[data-theme="dark"] .fdb-img-frame {
-    background: #1b2236;
-}
-html[data-theme="dark"] .fdb-img-caption {
-    color: #9aa6c0;
-}
-</style>
-<?php endif; ?>
 <div class="fd-pad">
     <figure class="fdb-img-figure" style="<?= $fdbMaxWCss ?><?= $fdbFigAlign ?>">
         <?php if ($fdbHrefSafe !== ''): ?>

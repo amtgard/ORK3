@@ -90,17 +90,6 @@ if ($psWhen === '' && $psWhere === '') {
     return;
 }
 ?>
-<style>
-.pk-strip { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap;
-    align-items: center; gap: 6px 16px; padding: 9px clamp(14px, 3vw, 28px);
-    background: var(--fd-primary); color: var(--fd-primary-contrast);
-    /* --fd-font-scale is a LENGTH (`calc(1rem * ratio)`), so the multiplier here
-       must be unitless and the fallback must carry the unit. `* .9375rem` is
-       rem x rem: invalid, and the whole font-size declaration is dropped. */
-    font-size: calc(var(--fd-font-scale, 1rem) * .9375); }
-.pk-strip i { margin-right: 6px; opacity: .8; }
-@media (max-width: 520px) { .pk-strip { font-size: calc(var(--fd-font-scale, 1rem) * .875); } }
-</style>
 <div class="pk-strip">
     <?php if ($psWhen !== ''): ?>
         <span><i class="fas fa-clock" aria-hidden="true"></i><?= htmlspecialchars($psWhen, ENT_QUOTES) ?></span>

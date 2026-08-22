@@ -3,70 +3,13 @@
  * Partial: accordion.tpl
  * Receives: $blockFields (items[] each {q, a}), UIR
  * Collapsible Q&A using native <details>/<summary> — no JS required.
- * Self-contained scoped styles (light + dark).
+ * CSS (light + dark) lives in frontdoor/css/blocks.css.
  */
 $items = $blockFields['items'] ?? [];
 if (!is_array($items)) {
     $items = [];
 }
 ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['accordion'])) : $fdStyleOnce['accordion'] = true; ?>
-<style>
-.fdb-accordion {
-    max-width: 760px;
-    margin: 0 auto;
-}
-.fdb-accordion-item {
-    border: 1px solid #e2e6ef;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    background: var(--fd-bg);
-    overflow: hidden;
-}
-.fdb-accordion-item > summary {
-    cursor: pointer;
-    list-style: none;
-    padding: 14px 18px;
-    font-weight: 600;
-    font-size: 16px;
-    color: var(--ink, #1a2236);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-.fdb-accordion-item > summary::-webkit-details-marker { display: none; }
-.fdb-accordion-item > summary::after {
-    content: "+";
-    font-size: 20px;
-    line-height: 1;
-    color: var(--gold, #f0b429);
-    transition: transform .15s ease;
-}
-.fdb-accordion-item[open] > summary::after {
-    content: "\2212"; /* minus */
-}
-.fdb-accordion-answer {
-    padding: 0 18px 16px;
-    font-size: 15px;
-    line-height: 1.6;
-    color: #444c5e;
-    /* Preserve newlines authored in the textarea (answer is escaped, not HTML). */
-    white-space: pre-line;
-}
-html[data-theme="dark"] .fdb-accordion-item {
-    background: #161d2e;
-    border-color: #2a3450;
-}
-html[data-theme="dark"] .fdb-accordion-item > summary {
-    color: #eef2fb;
-}
-html[data-theme="dark"] .fdb-accordion-answer {
-    color: #c8d3ea;
-}
-</style>
-<?php endif; ?>
 <?php if (!empty($items)): ?>
 <div class="fd-pad">
     <div class="fdb-accordion">

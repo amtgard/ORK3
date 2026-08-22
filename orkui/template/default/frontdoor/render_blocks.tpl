@@ -23,11 +23,6 @@ $fdBlockDir  = DIR_TEMPLATE . 'default/frontdoor/blocks/';
 // Shared PLAIN-PHP helpers (fdFormatDate, …) — guarded, so a repeat include (e.g.
 // columns.tpl re-entering render_blocks) is a no-op. Blocks below rely on these.
 require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
-// Shared "emit this block's inline <style> at most once per request" flag.
-// Partials are include()d into this scope, so an assignment they make here
-// persists across the loop below (and dedupes repeated block types). Keyed by
-// block type, e.g. $fdStyleOnce['heading'].
-$fdStyleOnce = isset($fdStyleOnce) && is_array($fdStyleOnce) ? $fdStyleOnce : [];
 // #90: preview/admin surfaces (an authorized officer previewing an unpublished
 // site, or the CMS draft preview) get a visible placeholder when a block throws,
 // so authors can see something is wrong. Public visitors keep the silent swallow.

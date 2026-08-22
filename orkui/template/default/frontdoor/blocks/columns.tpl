@@ -15,15 +15,19 @@ $fdbColumns = is_array($fdbColumns) ? array_values(array_filter($fdbColumns, 'is
 $fdbCount   = count($fdbColumns);
 ?>
 <?php if ($fdbCount > 0): ?>
-<?php // NO $fdStyleOnce guard here, deliberately. Unlike every other block's
-      // static CSS, this <style> is NOT byte-identical across repeats: it
-      // interpolates $fdbCount into grid-template-columns, and .fdb-columns is a
+<?php // THE ONE BLOCK THAT KEEPS AN INLINE <style>. Every other block's CSS was
+      // lifted into frontdoor/css/blocks.css; this one cannot be, because it
+      // interpolates $fdbCount into grid-template-columns. .fdb-columns is a
       // single global selector, so with several columns blocks on one page the
-      // LAST emission wins and sets the column count for all of them. Deduping
-      // by block type would drop later emissions and silently re-flow earlier
-      // blocks; deduping by count would reorder which emission is last. Both
-      // change rendering. Fix properly (per-count class, or an inline style on
-      // the wrapper) before adding a guard. ?>
+      // LAST emission wins and sets the column count for all of them — and its
+      // @media partner has to stay in this same <style> element, after the base
+      // rule, or a stylesheet copy loaded earlier would lose the order tie and
+      // the phone breakpoint would stop collapsing to one column.
+      //
+      // Deliberately NOT deduped: deduping by block type would drop later
+      // emissions and silently re-flow earlier blocks; deduping by count would
+      // reorder which emission is last. Both change rendering. Fix properly
+      // (a per-count class, or an inline style on the wrapper) first. ?>
 <style>
 /* scoped: fdb-columns */
 .fdb-columns {

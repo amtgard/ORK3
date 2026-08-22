@@ -1015,15 +1015,6 @@ html[data-theme="dark"] .fd-btn-ghost {
     }
 }
 
-/* ---- 680px: heading block font sizes step down ------------- */
-/* Matches the tpl's `.fdb-heading-wrap .fdb-heading-N` specificity so the
-   reduced sizes win (a media query adds no specificity). Mirrors the hero
-   headline responsive step-down. */
-@media (max-width: 680px) {
-    .fdb-heading-wrap .fdb-heading-1 { font-size: 30px !important; }
-    .fdb-heading-wrap .fdb-heading-2 { font-size: 26px !important; }
-}
-
 /* ---- 520px: path grid collapses to a single column --------- */
 /* !important required: the 900px rule setting 2-col is itself !important, so an
    unmarked 1-col rule here would lose the importance tie. Mirrors the

@@ -117,7 +117,7 @@ $people       = $blockFields['people']       ?? [];
 </div>
 
 <?php
-// Contact-card modal chrome + styles + behavior. Emitted ONCE per request even
+// Contact-card modal chrome. Emitted ONCE per request even
 // when several staff_roster blocks appear on a page (a single shared dialog,
 // populated from the clicked card's data-* attributes).
 if (empty($GLOBALS['__fd_roster_modal_emitted'])):
@@ -135,27 +135,4 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
         <a class="fd-rmodal-profile" id="fdRModalProfile" hidden><i class="fas fa-external-link-alt"></i> View full profile &rarr;</a>
     </div>
 </div>
-<style>
-.fd-roster-card-modal { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
-.fd-roster-card-modal:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 30px rgba(0,0,0,.28); }
-.fd-roster-card-modal:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-.fd-roster-more { margin-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--gold); }
-.fd-rmodal { position: fixed; inset: 0; z-index: 1200; display: none; align-items: center; justify-content: center; padding: 22px; }
-.fd-rmodal.is-open { display: flex; }
-.fd-rmodal-backdrop { position: absolute; inset: 0; background: rgba(6,10,20,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-.fd-rmodal-card { position: relative; z-index: 1; width: 100%; max-width: 540px; max-height: 88vh; overflow-y: auto; background: var(--fd-surface, #fff); color: var(--fd-text, #1a2236); border: 1px solid var(--fd-border, #e2e6ec); border-radius: 18px; padding: 34px 32px 30px; box-shadow: 0 28px 80px rgba(0,0,0,.55); text-align: center; animation: fdRModalIn .18s ease-out; }
-@keyframes fdRModalIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
-.fd-rmodal-close { position: absolute; top: 12px; right: 14px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: none; border: none; font-size: 26px; line-height: 1; color: var(--fd-text-muted, #5b6472); cursor: pointer; border-radius: 9px; transition: background .15s, color .15s; }
-.fd-rmodal-close:hover { color: var(--fd-text, #1a2236); background: rgba(127,127,127,.14); }
-.fd-rmodal-avatar { width: 110px; height: 110px; border-radius: 50%; margin: 4px auto 18px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--navy, #0b1120); color: var(--gold, #f0b429); font-weight: 700; font-size: 40px; line-height: 1; font-family: var(--fd-font-body, sans-serif); }
-.fd-rmodal-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.fd-rmodal-name { font-size: 27px; margin: 0 0 4px; line-height: 1.15; }
-.fd-rmodal-secondary { color: var(--fd-text-muted, #5b6472); font-size: 14px; margin: 0 0 8px; }
-.fd-rmodal-role { text-transform: uppercase; letter-spacing: .09em; font-size: 12.5px; font-weight: 700; color: var(--gold, #f0b429); margin: 0 0 20px; }
-.fd-rmodal-bio { text-align: left; font-size: 15.5px; line-height: 1.7; color: var(--fd-text, #1a2236); white-space: pre-line; border-top: 1px solid var(--fd-border, #e2e6ec); padding-top: 18px; }
-.fd-rmodal-profile { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; padding: 10px 20px; background: var(--navy, #0b1120); color: var(--gold, #f0b429); text-decoration: none; font-weight: 700; font-size: 14px; letter-spacing: .02em; border-radius: 9px; transition: filter .15s; }
-.fd-rmodal-profile:hover { filter: brightness(1.12); color: var(--gold, #f0b429); }
-.fd-rmodal-profile:focus-visible { outline: 2px solid var(--gold, #f0b429); outline-offset: 3px; }
-@media (max-width: 520px) { .fd-rmodal-card { padding: 28px 20px 24px; } .fd-rmodal-name { font-size: 23px; } }
-</style>
 <?php endif; ?>

@@ -8,7 +8,7 @@
  * which sources $EventSummary). No controller injects blog posts onto arbitrary
  * pages, so this partial sources them itself via the CmsPost model pass-through
  * (new APIModel('CmsPost') — the same forward Model_CmsPost uses; the lib is
- * eagerly loaded at startup). Self-contained scoped style; dark-mode aware.
+ * eagerly loaded at startup). CSS lives in frontdoor/css/blocks.css; dark-mode aware.
  */
 $bfHeading = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Latest News';
 $bfLimit   = fdClampLimit($blockFields['limit'] ?? null, 3, 12);
@@ -48,8 +48,8 @@ if ($bfScopeType !== 'global' && $bfSiteSlug !== '') {
 } else {
     $bfMoreHref = UIR . 'Blog/index' . ($bfTag !== '' ? ('&tag=' . rawurlencode($bfTag)) : '');
 }
-// Static .bf-* CSS lives in frontdoor.css (loaded on the front door AND under
-// orgsite.css on org sites) — no per-render inline <style>.
+// Static .bf-* CSS lives in frontdoor/css/blocks.css (loaded on every CMS
+// surface, org sites included) — this block emits no inline style element.
 ?>
 <div class="fd-pad fd-section-light bf-block">
     <div class="bf-head">

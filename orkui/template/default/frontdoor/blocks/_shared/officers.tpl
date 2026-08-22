@@ -142,8 +142,9 @@ $fdOffRoleLabels = [
     'gmr'            => 'GMR',
 ];
 ?>
-<?php // Static .ko-* CSS lives in frontdoor.css (loaded under orgsite.css on org
-      // sites) — one card grid shared by both blocks, no per-render inline <style>. ?>
+<?php // Static .ko-* CSS lives in frontdoor/css/blocks.css (loaded on every CMS
+      // surface, org sites included) — one card grid shared by both blocks, and no
+      // inline style element. ?>
 <div class="fd-pad fd-section-light ko-block">
     <div class="ko-head">
         <?php if ($fdOffKicker !== ''): ?>

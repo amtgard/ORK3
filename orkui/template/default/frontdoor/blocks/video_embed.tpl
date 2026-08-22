@@ -1,6 +1,6 @@
 <?php
 /**
- * Partial: video_embed.tpl  (MEDIA block) — self-contained (own scoped <style>)
+ * Partial: video_embed.tpl  (MEDIA block) — CSS lives in frontdoor/css/blocks.css.
  * Receives: $blockFields, shared $data, UIR
  *
  * Fields:
@@ -81,39 +81,6 @@ if ($fdbUserTitle !== '') {
     $fdbTitle = $fdbUserTitle;
 }
 ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['video_embed'])) : $fdStyleOnce['video_embed'] = true; ?>
-<style>
-/* scoped: fdb-video */
-.fdb-video-wrap {
-    max-width: 880px;
-    margin: 0 auto;
-}
-.fdb-video-frame {
-    position: relative;
-    width: 100%;
-    padding-top: 56.25%; /* 16:9 */
-    border-radius: 10px;
-    overflow: hidden;
-    background: #000;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, .25);
-}
-.fdb-video-frame iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-}
-.fdb-video-cap {
-    margin-top: 10px;
-    text-align: center;
-    font-size: 13px;
-    color: #667;
-}
-html[data-theme="dark"] .fdb-video-cap { color: #9aa6c0; }
-</style>
-<?php endif; ?>
 <div class="fd-pad">
     <div class="fdb-video-wrap">
         <div class="fdb-video-frame">

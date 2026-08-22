@@ -1,6 +1,7 @@
 <?php
 /**
- * Partial: gallery.tpl  (MEDIA block) — self-contained (own scoped <style> + <script>)
+ * Partial: gallery.tpl  (MEDIA block) — CSS lives in frontdoor/css/blocks.css;
+ * the lightbox behaviour ships as a scoped inline <script>.
  * Receives: $blockFields, shared $data, UIR
  *
  * Fields:
@@ -9,7 +10,7 @@
  *   caption? string — optional gallery caption (escaped)
  *
  * Responsive thumbnail grid; clicking a thumb opens a self-contained lightbox
- * (inline <script> + overlay markup scoped to this block, no external library).
+ * (inline script + overlay markup scoped to this block, no external library).
  * ESC / click-outside / × to close, prev/next nav. Uses ref.thumb in the grid
  * and ref.src in the lightbox.
  *
@@ -46,119 +47,6 @@ if (empty($fdbItems)) {
 // Unique id so multiple gallery blocks on one page don't collide.
 $fdbGid = 'fdbgal-' . substr(md5(uniqid('', true)), 0, 8);
 ?>
-<?php // Emit this block's generic static CSS at most once per request (dedupes
-      // repeats), matching kingdom_parks.tpl / kingdom_events.tpl. The per-instance
-      // column count rides on a --fdb-cols custom property set inline on each grid,
-      // so the shared rule stays static AND the responsive breakpoints still win. ?>
-<?php if (empty($fdStyleOnce['gallery'])) : $fdStyleOnce['gallery'] = true; ?>
-<style>
-/* scoped: fdb-gallery */
-.fdb-gallery-grid {
-    display: grid;
-    grid-template-columns: repeat(var(--fdb-cols, 3), 1fr);
-    gap: 10px;
-}
-@media (max-width: 760px) {
-    .fdb-gallery-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 460px) {
-    .fdb-gallery-grid { grid-template-columns: 1fr; }
-}
-.fdb-gallery-thumb {
-    display: block;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    border: 0;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #f1f3f8;
-}
-.fdb-gallery-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform .25s ease;
-}
-.fdb-gallery-thumb:hover img { transform: scale(1.05); }
-.fdb-gallery-cap {
-    margin-top: 12px;
-    text-align: center;
-    font-size: 13px;
-    color: #667;
-}
-/* Lightbox overlay */
-.fdb-gallery-lb {
-    position: fixed;
-    inset: 0;
-    z-index: 100000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(6, 9, 18, .92);
-}
-.fdb-gallery-lb.fdb-gallery-open { display: flex; }
-.fdb-gallery-lb img {
-    max-width: 90vw;
-    max-height: 84vh;
-    object-fit: contain;
-    border-radius: 6px;
-    box-shadow: 0 10px 50px rgba(0, 0, 0, .6);
-}
-.fdb-gallery-lb-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(255, 255, 255, .12);
-    color: #fff;
-    border: 0;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    font-size: 26px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.fdb-gallery-lb-btn:hover { background: rgba(255, 255, 255, .25); }
-.fdb-gallery-lb-prev { left: 18px; }
-.fdb-gallery-lb-next { right: 18px; }
-.fdb-gallery-lb-close {
-    position: absolute;
-    top: 16px;
-    right: 18px;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 0;
-    color: #fff;
-    font-size: 34px;
-    line-height: 1;
-    cursor: pointer;
-    opacity: .8;
-}
-.fdb-gallery-lb-close:hover { opacity: 1; }
-.fdb-gallery-lb-count {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: #cdd5e6;
-    font-size: 13px;
-}
-html[data-theme="dark"] .fdb-gallery-thumb { background: #1b2236; }
-html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
-</style>
-<?php endif; ?>
 <div class="fd-pad">
     <div class="fdb-gallery-grid" id="<?= htmlspecialchars($fdbGid, ENT_QUOTES) ?>" style="--fdb-cols:<?= (int) $fdbCols ?>;">
         <?php foreach ($fdbItems as $fdbIdx => $fdbItem): ?>

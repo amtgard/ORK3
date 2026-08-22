@@ -154,44 +154,6 @@ $kpResolved = fdBlockCache(
     }
 );
 ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['kingdom_parks'])) : $fdStyleOnce['kingdom_parks'] = true; ?>
-<style>
-.kp-block { background: var(--fd-bg); }
-.kp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
-.kp-title { margin: 0; font-size: 24px; }
-.kp-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
-.kp-more:hover { text-decoration: underline; }
-.kp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.kp-card {
-    display: flex; flex-direction: column; text-decoration: none; color: inherit;
-    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px; overflow: hidden;
-    transition: box-shadow .15s ease, transform .15s ease;
-}
-.kp-card:hover { box-shadow: 0 8px 22px rgba(20,30,60,.14); transform: translateY(-3px); }
-.kp-card-accent { height: 6px; background: var(--gold, #d4af37); }
-.kp-card-body { padding: 14px 16px 16px; display: flex; gap: 13px; align-items: flex-start; }
-.kp-crest { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 8px; background: #f2f4f9; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.kp-crest img { width: 100%; height: 100%; object-fit: contain; }
-.kp-crest i { color: #b8860b; font-size: 20px; }
-.kp-card-main { min-width: 0; flex: 1 1 auto; }
-.kp-card-name { font-weight: 700; font-size: 16px; margin: 0 0 3px; color: var(--fd-text); }
-.kp-badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: #7a5b12; background: #fbf3dc; border: 1px solid #eeddb0; border-radius: 999px; padding: 1px 9px; margin: 0 0 5px; }
-.kp-card-loc { font-size: 13px; color: #50596e; line-height: 1.4; }
-.kp-card-loc i { color: #b8860b; margin-right: 5px; }
-.kp-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
-
-@media (max-width: 820px) { .kp-grid { grid-template-columns: 1fr; } }
-
-html[data-theme="dark"] .kp-block { background: transparent; }
-html[data-theme="dark"] .kp-card { background: #1b2233; border-color: #2c3650; }
-html[data-theme="dark"] .kp-card-name { color: #eef2fa; }
-html[data-theme="dark"] .kp-card-loc { color: #b6c0d4; }
-html[data-theme="dark"] .kp-crest { background: #222c42; }
-html[data-theme="dark"] .kp-badge { color: #e6cf92; background: #33291140; border-color: #5c4a1f; }
-html[data-theme="dark"] .kp-card:hover { box-shadow: 0 8px 22px rgba(0,0,0,.5); }
-</style>
-<?php endif; ?>
 <div class="fd-pad fd-section-light kp-block">
     <div class="kp-head">
         <div>

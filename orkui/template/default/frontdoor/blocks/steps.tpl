@@ -41,13 +41,6 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
     </div>
 
     <?php if (!empty($steps)): ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['steps'])) : $fdStyleOnce['steps'] = true; ?>
-        <style>
-            @media (max-width:760px){.fdb-steps-grid{grid-template-columns:repeat(2,1fr) !important;}}
-            @media (max-width:480px){.fdb-steps-grid{grid-template-columns:1fr !important;}}
-        </style>
-<?php endif; ?>
         <div class="fdb-steps-grid" style="display:grid;grid-template-columns:repeat(<?= count($steps) ?>,1fr);gap:20px;">
             <?php foreach ($steps as $step): ?>
                 <?php
