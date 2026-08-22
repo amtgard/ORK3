@@ -461,9 +461,17 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-textarea { resize: vertical; min-height: 46px; line-height: 1.4; }
 .cms-input::placeholder,
 .cms-textarea::placeholder { color: var(--ork-text-lighter); }
+/* One gold focus ring for every text-ish control in the admin, including the
+   DataTables length/filter widgets down in the table section — those were a
+   byte-identical copy of this rule and are grouped here rather than restated.
+   The DataTables selectors are more specific than the generic .cms-table-wrap
+   rules that style the same elements, so hoisting them here does not change
+   which rule wins. */
 .cms-input:focus,
 .cms-select:focus,
-.cms-textarea:focus {
+.cms-textarea:focus,
+.cms-table-wrap .dataTables_length select:focus,
+.cms-table-wrap .dataTables_filter input:focus {
     outline: none;
     border-color: var(--cms-gold, #f0b429);
     box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
@@ -1370,12 +1378,8 @@ html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); 
     box-sizing: border-box;
 }
 .cms-table-wrap .dataTables_filter input { min-width: 200px; }
-.cms-table-wrap .dataTables_length select:focus,
-.cms-table-wrap .dataTables_filter input:focus {
-    outline: none;
-    border-color: var(--cms-gold, #f0b429);
-    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
-}
+/* Their :focus ring is grouped onto .cms-input:focus in the form-controls
+   section above — same declarations, stated once. */
 /* The DataTables-managed table keeps the .cms-table look; kill DT borders. */
 .cms-table-wrap table.cms-table.dataTable {
     border-collapse: collapse;
@@ -1968,7 +1972,10 @@ html[data-theme="dark"] .te-preset:hover {
     gap: 7px;
 }
 .te-group-title i { font-size: 11px; }
-.te-group-body {
+/* Token-group and Advanced bodies are the same stacked list; grouped rather than
+   renamed so the theme-editor markup is untouched. */
+.te-group-body,
+.te-advanced-body {
     padding: 10px 14px;
     display: flex;
     flex-direction: column;
@@ -2026,7 +2033,13 @@ html[data-theme="dark"] .te-token-label { color: #c0cad8; }
     color: var(--ork-text, #1b2a4a);
 }
 html[data-theme="dark"] .te-color { border-color: #2c3650; }
-html[data-theme="dark"] .te-color-hex {
+/* Dark surface for every theme-editor input control. The hex field, the select
+   and the number field carried three byte-identical copies; grouped here at the
+   first copy's position. Each still beats its own light rule on specificity
+   (html + [data-theme] + class), so the hoist changes nothing. */
+html[data-theme="dark"] .te-color-hex,
+html[data-theme="dark"] .te-select,
+html[data-theme="dark"] .te-number {
     background: #111827;
     border-color: #2c3650;
     color: #c0cad8;
@@ -2044,11 +2057,7 @@ html[data-theme="dark"] .te-color-hex::placeholder { color: #6b7585; }
     color: var(--ork-text, #1b2a4a);
     font-size: 13px;
 }
-html[data-theme="dark"] .te-select {
-    background: #111827;
-    border-color: #2c3650;
-    color: #c0cad8;
-}
+/* Its dark surface is grouped onto html[data-theme="dark"] .te-color-hex above. */
 
 /* Range + number */
 .te-range-wrap {
@@ -2075,11 +2084,7 @@ html[data-theme="dark"] .te-select {
     font-size: 12px;
     color: var(--ork-text-muted, #8a93a6);
 }
-html[data-theme="dark"] .te-number {
-    background: #111827;
-    border-color: #2c3650;
-    color: #c0cad8;
-}
+/* Its dark surface is grouped onto html[data-theme="dark"] .te-color-hex above. */
 
 /* ---- Advanced details ---- */
 .te-advanced {
@@ -2106,12 +2111,8 @@ html[data-theme="dark"] .te-number {
     transition: transform .15s;
 }
 .te-advanced[open] .te-advanced-summary::before { transform: rotate(90deg); }
-.te-advanced-body {
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+/* .te-advanced-body is grouped onto .te-group-body in the token-group section
+   above — same stacked-list body, stated once. */
 .te-advanced-note {
     font-size: 12px;
     color: var(--ork-text-muted, #8a93a6);
@@ -2181,7 +2182,11 @@ html[data-theme="dark"] .te-preview-bar {
     border-radius: 5px;
     padding: 3px 9px;
 }
-html[data-theme="dark"] .te-contrast-warn {
+/* Dark amber for both contrast warnings — the panel-level chip and the per-token
+   inline chip appended by JS further down. Grouped at the first copy's position;
+   each still outranks its own light rule on specificity, so nothing moves. */
+html[data-theme="dark"] .te-contrast-warn,
+html[data-theme="dark"] .te-contrast-warn-inline {
     color: #fbbf24;
     background: #27200a;
     border-color: #78500a;
@@ -2303,11 +2308,7 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
     margin-left: auto;
     flex-shrink: 0;
 }
-html[data-theme="dark"] .te-contrast-warn-inline {
-    color: #fbbf24;
-    background: #27200a;
-    border-color: #78500a;
-}
+/* Its dark amber is grouped onto html[data-theme="dark"] .te-contrast-warn above. */
 
 /* ============================================================================
    Dashboard (Cms_dashboard.tpl) — moved out of the page's inline <style> so the
