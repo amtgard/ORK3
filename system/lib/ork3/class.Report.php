@@ -5271,7 +5271,7 @@ class Report extends Ork3
             'kpis' => array(
                 $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
                 $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
-                $this->_rfuKpi('Players on 2+ devices', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players actually using the multi-device allowance', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Players with 2+ sessions', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players holding concurrent sessions — distinct devices, apps, or a re-login; the cap is three sessions', null, null, 'of signed-in players'),
                 $this->_rfuKpi('Sign-ins (7 days)', $signins7, null, null, 'sessions created in the last 7 days — anonymous daily tally, no player attribution'),
                 $this->_rfuKpi('Sign-ins (30 days)', $signins30, null, null, 'sessions created in the last 30 days — anonymous daily tally, no player attribution'),
             ),

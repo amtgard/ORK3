@@ -105,8 +105,17 @@ function ork_session_client_label($ua)
     if (stripos($ua, 'Mozilla') === false) {
         return substr($ua, 0, 40);
     }
+    // iOS browsers use distinct UA tokens (CriOS/FxiOS/EdgiOS) AND append a
+    // compat "Safari/" token — check them before the desktop names so iOS
+    // Chrome/Firefox/Edge don't all mislabel as "Safari on iOS".
     $browser = 'Browser';
-    if (stripos($ua, 'Edg/') !== false) {
+    if (stripos($ua, 'CriOS/') !== false) {
+        $browser = 'Chrome';
+    } elseif (stripos($ua, 'FxiOS/') !== false) {
+        $browser = 'Firefox';
+    } elseif (stripos($ua, 'EdgiOS/') !== false) {
+        $browser = 'Edge';
+    } elseif (stripos($ua, 'Edg/') !== false) {
         $browser = 'Edge';
     } elseif (stripos($ua, 'OPR/') !== false) {
         $browser = 'Opera';
@@ -128,6 +137,13 @@ function ork_session_client_label($ua)
         $os = 'Windows';
     } elseif (stripos($ua, 'Linux') !== false) {
         $os = 'Linux';
+    }
+    // In-app webviews: iOS WebViews omit the "Safari/" token; Android's ships
+    // a "; wv)" marker. These are ORK links opened inside Discord/Facebook/etc.
+    if ($browser === 'Browser' && $os === 'iOS') {
+        $browser = 'In-app browser';
+    } elseif (stripos($ua, '; wv)') !== false) {
+        $browser = 'In-app browser';
     }
     return $os !== '' ? "$browser on $os" : $browser;
 }
