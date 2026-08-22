@@ -92,8 +92,22 @@
 		?>
 		<link rel="alternate" type="application/rss+xml" title="<?= htmlspecialchars(!empty($rss_feed_title) ? (string)$rss_feed_title : 'RSS', ENT_QUOTES) ?>" href="<?= htmlspecialchars((string)$rss_feed_url, ENT_QUOTES) ?>">
 		<?php endif; ?>
+		<?php
+		// The CRM application stylesheets are for the ORK app shell. A standalone
+		// public org site ($IsOrgSite, Controller_Site) renders no ORK nav, no ORK
+		// footer and no ORK components — it got 91 KB of CSS it never used, whose
+		// global element rules (the h1-h6 gray pill, p{text-align:justify},
+		// a{color:#333}) then had to be undone in 37 places across the CMS CSS.
+		// Org sites get the minimal cms-base.css instead. Every other surface —
+		// the front door, CMS pages, the blog, and the OGRE admin — genuinely
+		// renders inside the ORK shell and keeps the CRM stylesheets.
+		if (empty($IsOrgSite)):
+		?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
+		<?php else: ?>
+		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/frontdoor/css/cms-base.css?v=<?=filemtime(DIR_TEMPLATE.'default/frontdoor/css/cms-base.css')?>" rel="stylesheet" />
+		<?php endif; ?>
 
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -204,12 +218,18 @@
 
 	/* Dark mode global overrides */
 	html[data-theme="dark"] body { background-color: #1a202c; color: #e2e8f0; }
-	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] .information-table { background-color: #2d3748; border-color: #4a5568; }
 	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
+	</style>
+<?php if (empty($IsOrgSite)): // ORK app dark chrome; a standalone org site paints its own surfaces from --fd-* and must not inherit the app's link blue at ID specificity. ?>
+	<style>
+	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
+	</style>
+<?php endif; ?>
+	<style>
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 
 	</style>
