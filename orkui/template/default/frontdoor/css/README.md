@@ -265,6 +265,31 @@ now **derived**:
   - a **CRM stylesheet name or a `style/<…>.css` path shape**, so an href
     assembled into a variable is caught one step before it reaches a tag.
 
+  **Escape-encoded tags are decoded first.** These two both put a `<style>`
+  element on the page without ever writing a `<`, and both used to score exit 0:
+
+  ```js
+  '\x3cstyle\x3e.fd-page{color:red}\x3c/style\x3e'   // + insertAdjacentHTML()
+  String.fromCharCode(60) + 'sty' + 'le' + String.fromCharCode(62)
+  ```
+
+  The first is **not just an attack** — `\x3c` is the routine idiom for keeping a
+  literal `</script>` out of an inline script, so it is a plausible accident.
+  `\xHH`, `\uHHHH`, `\u{H…}` and `String.fromCharCode`/`fromCodePoint` are folded
+  into the characters they denote before any C7 net reads the line;
+  `fromCharCode` becomes a *quoted* literal so the concatenation-joining pass
+  can splice `'<' + 'sty' + 'le' + '>'` into `'<style>'`. C3's PHP-fragment net
+  decodes the same way on lines with a PHP open tag — `echo "\x3cstyle\x3e"` in
+  a `.tpl` was the same hole one rule over. An **escaped** backslash is
+  preserved, so `'\\x3cstyle\\x3e'` in prose stays prose, and the CSS rules do
+  not decode these forms on purpose: in CSS `\x3c` is the letter *x* then `3c`,
+  so decoding there would invent violations.
+  **Residual, stated honestly:** octal escapes, `atob()`/base64, `charCodeAt`
+  arithmetic, computed template literals, `String.raw`, a tag assembled through
+  an array join — anything rebuilt at runtime from data — are not decoded. A line
+  scanner cannot close that; `boundary_test.php` is the backstop that reads what
+  a live surface actually serves.
+
   **Why this is not a false-positive engine — the whole difficulty.** Three
   files in scope handle CSS legitimately, as *data*: `class.CmsThemeTokens.php`
   **builds** CSS text (`Block()`, `ToCss()`, `ToRootCss()`),

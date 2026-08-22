@@ -328,10 +328,36 @@
 #       for these files EVERY stylesheet link is a violation whatever it points
 #       at, so there is nothing to resolve and nothing to be fail-open about.
 #
-#       Not covered, stated honestly: CSS reached by a route that names none of
-#       the above — a stylesheet URL fetched from the database and handed to a
-#       template that links it, say. tests/cms-css/boundary_test.php remains the
-#       backstop that reads what a live surface actually serves.
+#       ESCAPE-ENCODED TAGS ARE DECODED FIRST. C7's nets read "<style" and
+#       "<link", and two ordinary JS spellings put a <style> element on the page
+#       without ever writing a "<":
+#
+#         '\x3cstyle\x3e.fd-page{color:red}\x3c/style\x3e' + insertAdjacentHTML
+#         String.fromCharCode(60) + 'sty' + 'le' + String.fromCharCode(62)
+#
+#       Both used to score exit 0. The first is not merely an attack — \x3c is
+#       the routine idiom for keeping a literal </script> out of an inline
+#       script, so it is a plausible ACCIDENT, which is why it is decoded rather
+#       than argued about. esc_decode() and fcc_decode() (see above the rules)
+#       fold \xHH, \uHHHH, \u{H…} and String.fromCharCode/fromCodePoint into the
+#       characters they denote before every C7 net looks at the line, and
+#       fromCharCode is emitted as a QUOTED literal so the existing
+#       concatenation-joining pass splices '<' + 'sty' + 'le' + '>' into
+#       '<style>'. C3's PHP-fragment net decodes the same way, on the lines that
+#       contain a PHP open tag — `echo "\x3cstyle\x3e"` in a .tpl was the same
+#       hole. The CSS rules do NOT decode these forms, deliberately: in CSS a
+#       backslash escape means something else (`\x3c` is the letter x then "3c"),
+#       and css_unescape() already handles the CSS spelling.
+#
+#       Not covered, stated honestly: obfuscation beyond those forms — octal
+#       escapes, atob()/base64, charCodeAt arithmetic, a computed template
+#       literal, String.raw, a tag assembled through an array join, anything
+#       rebuilt at runtime from data. A line scanner cannot close that and
+#       claiming otherwise would be worse than saying so. Likewise CSS reached
+#       by a route that names none of the above — a stylesheet URL fetched from
+#       the database and handed to a template that links it, say.
+#       tests/cms-css/boundary_test.php remains the backstop that reads what a
+#       live surface actually serves.
 #
 # Case and line endings. The scanner runs under LC_ALL=C and matches lowercase
 # literals, so every rule matches against a tolower() view of the line. That is
@@ -747,6 +773,108 @@ function decomment(s,    out, i, n, c, q, p) {
 function hexval(ch,    p) {
     p = index("0123456789abcdef", tolower(ch))
     return p - 1
+}
+
+# ---------------------------------------------------------------------------
+# JS/PHP STRING-ESCAPE DECODING — for C7 only (the PHP and JS sources)
+#
+# C7's tag nets look for "<style" and "<link". Neither of these ever writes a
+# "<", and both put a <style> element on the page:
+#
+#   '\x3cstyle\x3e.fd-page{color:red}\x3c/style\x3e'   + insertAdjacentHTML()
+#   String.fromCharCode(60) + 'sty' + 'le' + String.fromCharCode(62)
+#
+# The first is not only an attack. \x3c is the routine JS idiom for keeping a
+# literal "</script>" out of an inline script, and a developer reaches for it
+# without trying to evade anything — which is exactly why it has to be decoded
+# rather than argued about.
+#
+# Scope is deliberately C7 (PHP and JS) and NOT the CSS/template rules. In CSS
+# a backslash escape means something else — `\x3c` is the CSS escape for the
+# LETTER x followed by "3c", not for "<" — so decoding it there would invent
+# violations. css_unescape() already handles the CSS spelling, on the CSS files.
+#
+# RESIDUAL, STATED HONESTLY. This decodes the forms people actually write:
+# \xHH, \uHHHH, \u{H…}, and String.fromCharCode/fromCodePoint with a decimal
+# argument list. It does NOT decode octal escapes, atob()/base64,
+# charCodeAt arithmetic, computed template-literal parts, String.raw, a tag
+# assembled through an array join, or anything reconstructed at runtime from
+# data. That is not a solvable problem in a line scanner and pretending
+# otherwise would be worse than saying so: tests/cms-css/boundary_test.php
+# remains the backstop that reads what a live surface actually serves.
+# ---------------------------------------------------------------------------
+
+# \xHH, \uHHHH and \u{H…} -> the character. Runs on the case-folded view, so
+# the hex digits are already lowercase.
+function esc_decode(s,    out, i, n, c, c2, hx, v, j, k) {
+    if (index(s, "\\") == 0) return s
+    out = ""
+    i = 1
+    n = length(s)
+    while (i <= n) {
+        c = substr(s, i, 1)
+        if (c != "\\") { out = out c; i++; continue }
+        c2 = substr(s, i + 1, 1)
+        if (c2 == "x" && substr(s, i + 2, 2) ~ /^[0-9a-f][0-9a-f]$/) {
+            v = hexval(substr(s, i + 2, 1)) * 16 + hexval(substr(s, i + 3, 1))
+            out = out ((v > 0 && v < 256) ? sprintf("%c", v) : " ")
+            i += 4
+            continue
+        }
+        if (c2 == "u" && substr(s, i + 2, 4) ~ /^[0-9a-f][0-9a-f][0-9a-f][0-9a-f]$/) {
+            hx = substr(s, i + 2, 4)
+            v = 0
+            for (k = 1; k <= 4; k++) v = v * 16 + hexval(substr(hx, k, 1))
+            out = out ((v > 0 && v < 256) ? sprintf("%c", v) : " ")
+            i += 6
+            continue
+        }
+        if (c2 == "u" && substr(s, i + 2, 1) == "{") {
+            j = index(substr(s, i + 3), "}")
+            hx = (j > 1) ? substr(s, i + 3, j - 1) : ""
+            if (hx ~ /^[0-9a-f]+$/) {
+                v = 0
+                for (k = 1; k <= length(hx); k++) v = v * 16 + hexval(substr(hx, k, 1))
+                out = out ((v > 0 && v < 256) ? sprintf("%c", v) : " ")
+                i += 3 + j
+                continue
+            }
+        }
+        # Any other escape — "\\" very much included — copies BOTH characters
+        # and steps past them, so \\x3c (an escaped backslash followed by the
+        # literal text x3c) does not decode, and a CSS escape that reached here
+        # (\74 ) is passed through untouched for css_unescape to handle.
+        out = out c c2
+        i += 2
+    }
+    return out
+}
+
+# String.fromCharCode(60) / .fromCodePoint(60, 115, …) -> a QUOTED literal, so
+# the concatenation-joining pass downstream can splice it onto the fragments
+# beside it: '<' + 'sty' + 'le' + '>' becomes '<style>'. Emitting a bare "<"
+# would leave the " + '" between it and "sty" and the tag net would still miss.
+function fcc_decode(s,    out, pre, lit, args, n, arr, i, v, q) {
+    out = ""
+    while (match(s, /(string[ \t]*\.[ \t]*)?from(charcode|codepoint)[ \t]*\([ \t]*[0-9][0-9 \t,]*\)/)) {
+        pre = substr(s, 1, RSTART - 1)
+        lit = substr(s, RSTART, RLENGTH)
+        s   = substr(s, RSTART + RLENGTH)
+        args = lit
+        sub(/^[^(]*\([ \t]*/, "", args)
+        sub(/[ \t]*\)$/, "", args)
+        n = split(args, arr, /[ \t]*,[ \t]*/)
+        v = ""
+        for (i = 1; i <= n; i++) {
+            if (arr[i] !~ /^[0-9]+$/ || arr[i] + 0 < 1 || arr[i] + 0 > 255) { v = ""; break }
+            v = v sprintf("%c", arr[i] + 0)
+        }
+        if (v == "") { out = out pre lit; continue }
+        # Quote with whichever quote the decoded text does not itself contain.
+        q = (index(v, "'") == 0) ? "'" : ((index(v, "\"") == 0) ? "\"" : "")
+        out = out pre q v q
+    }
+    return out s
 }
 
 # ---------------------------------------------------------------------------
@@ -1773,9 +1901,13 @@ BEGIN {
         if (in_style) decl_feed(" ")
         scan_style(line, lraw)
         # PHP that echoes a <style> tag assembled from string fragments —
-        # '<st' . 'yle>' — never reaches scan_style as a literal tag.
+        # '<st' . 'yle>' — never reaches scan_style as a literal tag. The same
+        # escape spellings C7 decodes work here too (`echo "\x3cstyle\x3e"`),
+        # so decode before joining. This is confined to lines that contain a
+        # PHP open tag, which is why applying a PHP/JS escape rule cannot
+        # misread a CSS escape: there is no CSS on this branch.
         if (index(line, "<?") > 0 && lraw !~ /<style/) {
-            joined = lraw
+            joined = fcc_decode(esc_decode(lraw))
             gsub(/["'][ \t]*\.[ \t]*["']/, "", joined)
             if (joined ~ /<[ \t]*style/)
                 report("C3", FNR, "PHP emits a <style> tag assembled from string fragments.", C3_FIX)
@@ -1810,14 +1942,22 @@ BEGIN {
 
     # C7 — R8. A CMS PHP source or CMS script may not inject CSS into a page.
     if (C7) {
+        # Decode the escape forms that spell a tag without ever writing a "<"
+        # (\x3c, <, String.fromCharCode(60)) BEFORE anything else looks at
+        # the line, then join concatenations on the decoded view — the two have
+        # to compose, because fromCharCode(60) + 'sty' + 'le' needs both passes.
         # PHP joins with ".", JS with "+", so '<sty' . 'le>' and '<sty' + 'le>'
         # are one string here before the tag nets look at the line.
-        j7line = lraw
+        d7line = fcc_decode(esc_decode(lraw))
+        # css_unescape on top, for the selector and token nets below, which read
+        # CSS syntax rather than tag syntax.
+        l7line = css_unescape(d7line)
+        j7line = d7line
         gsub(/["'][ \t]*[.+][ \t]*["']/, "", j7line)
 
         # The tag OPENER "<style", never the tag NAME "style": CmsSanitizer's
         # blocklist is array('script', 'style', … ) and must stay clean.
-        if (lraw ~ /<[ \t]*style/ || j7line ~ /<[ \t]*style/)
+        if (d7line ~ /<[ \t]*style/ || j7line ~ /<[ \t]*style/)
             report("C7", FNR, "CMS PHP/JS emits a <style> tag.", C7_STYLE_FIX)
         # The DOM spellings that build the same element without ever writing the
         # tag. createElement('div') and el.style are untouched — the name must
@@ -1827,10 +1967,13 @@ BEGIN {
                  j7line ~ /new[ \t]+cssstylesheet/)
             report("C7", FNR, "CMS PHP/JS builds a stylesheet in the DOM.", C7_STYLE_FIX)
 
-        if (lraw ~ /@import/)
+        if (d7line ~ /@import/)
             report("C7", FNR, "CMS PHP/JS emits an @import.", C7_IMPORT_FIX)
 
-        c7_links(line)
+        # The decoded view here too, so \x3clink … and its fromCharCode spelling
+        # reach the <link> analyser. It is already case-folded, which the
+        # analyser wants anyway (rel and href are case-insensitive).
+        c7_links(d7line)
 
         # The COARSE net, shared with C4/C6: a CRM stylesheet name or a
         # style/<…>.css path shape assembled anywhere in the file, caught one
@@ -1842,25 +1985,25 @@ BEGIN {
         # MARKUP C1 also reads (a controller echoing <div class="ork-card"> is
         # coupled exactly as hard as a template writing it), and in the two DOM
         # spellings that reach the same elements without any CSS syntax at all.
-        if (lline ~ /(#theme_container|#newmenu|\.ork-)/ ||
-            attr_sel_id(lline, "theme_container") || attr_sel_id(lline, "newmenu") ||
-            attr_sel_class(lline, "ork-") ||
-            lline ~ /id[ \t]*=[ \t]*["']?theme_container/ ||
-            lline ~ /class[ \t]*=[ \t]*"[ \t]*ork-/ ||
-            lline ~ /class[ \t]*=[ \t]*'[ \t]*ork-/ ||
-            lline ~ /class[ \t]*=[ \t]*"[^"]*[ \t]ork-/ ||
-            lline ~ /class[ \t]*=[ \t]*'[^']*[ \t]ork-/ ||
-            lline ~ /classname[ \t]*=[ \t]*["'`][ \t]*ork-/ ||
-            lline ~ /classlist[ \t]*\.[ \t]*[a-z]+[ \t]*\([ \t]*["'`][ \t]*ork-/ ||
-            lline ~ /getelementbyid[ \t]*\([ \t]*["'`][ \t]*(theme_container|newmenu)[ \t]*["'`]/)
+        if (l7line ~ /(#theme_container|#newmenu|\.ork-)/ ||
+            attr_sel_id(l7line, "theme_container") || attr_sel_id(l7line, "newmenu") ||
+            attr_sel_class(l7line, "ork-") ||
+            l7line ~ /id[ \t]*=[ \t]*["']?theme_container/ ||
+            l7line ~ /class[ \t]*=[ \t]*"[ \t]*ork-/ ||
+            l7line ~ /class[ \t]*=[ \t]*'[ \t]*ork-/ ||
+            l7line ~ /class[ \t]*=[ \t]*"[^"]*[ \t]ork-/ ||
+            l7line ~ /class[ \t]*=[ \t]*'[^']*[ \t]ork-/ ||
+            l7line ~ /classname[ \t]*=[ \t]*["'`][ \t]*ork-/ ||
+            l7line ~ /classlist[ \t]*\.[ \t]*[a-z]+[ \t]*\([ \t]*["'`][ \t]*ork-/ ||
+            l7line ~ /getelementbyid[ \t]*\([ \t]*["'`][ \t]*(theme_container|newmenu)[ \t]*["'`]/)
             report("C7", FNR, "CMS PHP/JS names an ORK application-shell selector.", C7_SHELL_FIX)
 
         # C2's namespace, plus the JS spelling of a definition that C2 has no
         # reason to know about. --fd-* and --cms-* are the CMS's own namespaces
         # and are never touched, which is why CmsThemeTokens passes on merit.
-        if (lline ~ /@property[ \t]+--ork-/ ||
-            lline ~ /(^|[;{(, \t"'`])--ork-[a-z0-9-]+[ \t]*:/ ||
-            lline ~ /setproperty[ \t]*\([ \t]*["'`][ \t]*--ork-/)
+        if (l7line ~ /@property[ \t]+--ork-/ ||
+            l7line ~ /(^|[;{(, \t"'`])--ork-[a-z0-9-]+[ \t]*:/ ||
+            l7line ~ /setproperty[ \t]*\([ \t]*["'`][ \t]*--ork-/)
             report("C7", FNR, "CMS PHP/JS defines a token in the CRM's --ork-* namespace.", C7_TOKEN_FIX)
     }
 

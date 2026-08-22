@@ -380,6 +380,37 @@ stylesheet was born with no coverage at all. The scope rules now are:
   the href out of it, but the attribute is demonstrably *present*, and present
   is all C7 needs.
 
+  **Escape-encoded tags are decoded before the nets run.** C7 reads `<style` and
+  `<link`, and two ordinary JS spellings put a `<style>` element on the page
+  without ever writing a `<`. Both scored **exit 0**:
+
+  ```js
+  '\x3cstyle\x3e.fd-page{color:red}\x3c/style\x3e'   // + insertAdjacentHTML()
+  String.fromCharCode(60) + 'sty' + 'le' + String.fromCharCode(62)
+  ```
+
+  The first is **not merely an attack**: `\x3c` is the routine idiom for keeping
+  a literal `</script>` out of an inline script, so this is a plausible
+  *accident* — which is the reason to decode it rather than argue about intent.
+  `esc_decode()` folds `\xHH`, `\uHHHH` and `\u{H…}`; `fcc_decode()` folds
+  `String.fromCharCode` / `fromCodePoint` with a decimal argument list, emitting
+  a **quoted** literal so the existing concatenation-joining pass splices
+  `'<' + 'sty' + 'le' + '>'` into `'<style>'` — the two passes have to compose,
+  because that payload needs both. C3's PHP-fragment net decodes the same way on
+  lines carrying a PHP open tag: `<?php echo "\x3cstyle\x3e…"; ?>` in a `.tpl`
+  was the identical hole one rule over. Escaped backslashes are preserved
+  (`'\\x3cstyle\\x3e'` in prose stays prose), and the CSS rules deliberately do
+  **not** decode these forms — in CSS a backslash escape means something else
+  (`\x3c` is the letter *x* then `3c`), so decoding there would invent
+  violations; `css_unescape()` already handles the CSS spelling.
+
+  *Residual, stated honestly:* obfuscation beyond those forms — octal escapes,
+  `atob()`/base64, `charCodeAt` arithmetic, a computed template literal,
+  `String.raw`, a tag assembled through an array join, anything rebuilt at
+  runtime from data. A line scanner cannot close that, and claiming otherwise
+  would be worse than saying so. `tests/cms-css/boundary_test.php` remains the
+  backstop that reads what a live surface actually serves.
+
 
 **Which stylesheet a path names.** C4-link and C6 originally asked "is the
 literal `default/style/…css`, or one of three basenames, on this line?". A
