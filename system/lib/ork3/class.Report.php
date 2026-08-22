@@ -6678,10 +6678,10 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Dates' => []];
         }
 
-        $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', $type, $id);
-        if ($auth !== null) {
-            return ['Status' => $auth, 'Dates' => []];
-        }
+        // Deliberately UNGATED (C-22 over-gating, fixed 2026-08-22): this
+        // backs the PUBLIC attendance report (Controller_Reports public list);
+        // it returns only the distinct park-day dates that report already
+        // displays to anonymous visitors.
 
         $col = ($type === 'Kingdom') ? 'kingdom_id' : 'park_id';
         $this->db->Clear();
@@ -6704,19 +6704,11 @@ class Report extends Ork3
     public function GetKingdomOfficerDirectoryMerged($request)
     {
         $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : null;
-        if ($kingdomId === null) {
-            $auth = $this->_authorizeGlobalAdmin($request['Token'] ?? '');
-        } else {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
-        }
-        if ($auth !== null) {
-            return [
-                'Status' => $auth,
-                'Rows' => [],
-                'Mode' => 'kingdoms',
-                'Principalities' => [],
-            ];
-        }
+        // Deliberately UNGATED (C-22 over-gating, fixed 2026-08-22): the
+        // officer directory is on Controller_Reports' PUBLIC report list and
+        // officer identities are already public on every kingdom/park page.
+        // The C-22 gate made the public directory render empty for everyone
+        // but ORK admins.
 
         $r = $this->KingdomOfficerDirectory($request);
         if (($r['Status']['Status'] ?? 1) != 0) {
@@ -6764,11 +6756,7 @@ class Report extends Ork3
         $type = $parkId > 0 ? 'Park' : 'Kingdom';
         $id = $parkId > 0 ? $parkId : $kingdomId;
 
-        if ($parkId > 0) {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_PARK, $parkId);
-        } elseif ($kingdomId > 0) {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
-        } else {
+        if ($parkId <= 0 && $kingdomId <= 0) {
             return [
                 'Status' => InvalidParameter(),
                 'ScopeName' => '',
@@ -6776,9 +6764,14 @@ class Report extends Ork3
                 'GridRows' => [],
             ];
         }
-        if ($auth !== null) {
+        // Any valid session, no officer authority (C-22 over-gating, fixed
+        // 2026-08-22): the kingdom/park Reports tab offers this grid to EVERY
+        // logged-in player, and it shows only award data that is public on
+        // player profiles. The officer-scope gate made it render empty for
+        // ordinary players.
+        if (!valid_id(Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? ''))) {
             return [
-                'Status' => $auth,
+                'Status' => BadToken(),
                 'ScopeName' => '',
                 'LadderAwards' => [],
                 'GridRows' => [],
