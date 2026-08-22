@@ -54,7 +54,7 @@ class Controller_Event extends Controller
                 $this->Event->toggle_rsvp($detail_id, $uid, (string)($this->session->token ?? ''));
             }
             header('Location: ' . UIR . 'Event/index/' . $event_id);
-            return;
+            exit;
         }
 
         $can_manage = $uid > 0 && valid_id($event_id)
@@ -294,18 +294,18 @@ class Controller_Event extends Controller
         if ($action === 'rsvp' && $uid > 0) {
             if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                 header('Location: ' . UIR . 'Event/index/' . $event_id);
-                return;
+                exit;
             }
             $cdCheck = $this->Attendance->get_eventdetail_info($detail_id);
             $_refDate = $cdCheck['EventEnd'] ?: ($cdCheck['EventStart'] ?? '');
             if ($_refDate && strtotime(date('Y-m-d', strtotime($_refDate))) < strtotime(date('Y-m-d'))) {
                 header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
-                return;
+                exit;
             }
             $status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
             $this->Event->set_rsvp($detail_id, $uid, $status, (string)($this->session->token ?? ''));
             header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
-            return;
+            exit;
         }
 
         $cdInfo = $this->Attendance->get_eventdetail_info($detail_id);
@@ -386,7 +386,14 @@ class Controller_Event extends Controller
                     }
                     $new_detail_id = $this->Event->reconcile_past_attendance($this->session->token, $event_id, $detail_id);
                     if ($new_detail_id > 0) {
-                        header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '?reconciled=1');
+                        // UIR is "index.php?Route=", so a '?' here is swallowed
+                        // into the Route value: the detail id parsed out of
+                        // "9014?reconciled=1" became 90141 and the officer
+                        // landed on an occurrence that does not exist,
+                        // rendering TBD/0/0 with an Edit form pointed at the
+                        // bogus id and no success message. Query parameters
+                        // appended to a UIR link must use '&'.
+                        header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '&reconciled=1');
                         exit;
                     }
                     $attData = $this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
@@ -591,7 +598,7 @@ class Controller_Event extends Controller
 
         if (!$uid || !$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
             header('Location: ' . UIR . 'Login');
-            return;
+            exit;
         }
 
         if (!empty($_POST)) {
@@ -654,7 +661,7 @@ class Controller_Event extends Controller
                     $this->data['Error'] = 'New occurrence created, but failed to save ' . implode(' and ', $_failed) . '. Please edit the occurrence to retry.';
                 }
                 header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
-                return;
+                exit;
             } elseif ($this->Event->event_api_status($r) != 5) {
                 $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
             }

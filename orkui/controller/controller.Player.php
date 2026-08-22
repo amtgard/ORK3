@@ -69,7 +69,7 @@ class Controller_Player extends Controller
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         if (strlen($action) > 0) {
@@ -77,6 +77,7 @@ class Controller_Player extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Player/profile/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'updateclasses':
@@ -193,7 +194,7 @@ class Controller_Player extends Controller
                     }
                     $this->request->clear('Player_index');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Player/profile/$id");
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -310,7 +311,7 @@ class Controller_Player extends Controller
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name];
@@ -335,11 +336,18 @@ class Controller_Player extends Controller
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         } elseif ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            // This case always ends the request with a redirect, so
+                            // carry the authorization message back on the query string
+                            // rather than setting an Error on a page never rendered.
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
+                            exit;
                         } else {
                             $msg = urlencode(!empty($r['Detail']) ? $r['Detail'] : $r['Error']);
                             header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
+                            exit;
                         }
                         exit;
                     case 'deleterecommendation':
@@ -350,9 +358,12 @@ class Controller_Player extends Controller
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
+                            exit;
                         } else {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         }
                         exit;
                     case 'quitunit':
@@ -367,8 +378,7 @@ class Controller_Player extends Controller
                     $this->data['Message'] = $r['Detail'] ?: 'Updated successfully.';
                     $this->request->clear('Player_profile');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: ' . UIR . "Login/login/Player/profile/$id");
-                    exit;
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = $r['Error'] . ': ' . $r['Detail'];
                 }

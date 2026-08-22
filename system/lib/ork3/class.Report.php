@@ -282,7 +282,7 @@ class Report extends Ork3
         $masters_clause = "or a.award_id IN (select aw.award_id from " . DB_PREFIX . "award aw where aw.peerage = 'Paragon')";
         $attendance = "(SELECT max(att.date) FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = m.mundane_id) as last_attended";
 
-        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, $attendance
+        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, m.suspended, $attendance
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -309,7 +309,8 @@ class Report extends Ork3
                         'KingdomName' => $r->kingdom_name,
                         'Rank' => $r->rank,
                         'AwardName' => $r->award_name,
-                        'LastAttended' => $r->last_attended
+                        'LastAttended' => $r->last_attended,
+                        'Suspended' => (int)$r->suspended
                     );
             }
             $response['Status'] = Success();
@@ -435,7 +436,7 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank,
+              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -469,7 +470,8 @@ class Report extends Ork3
                         'AwardName' => $r->award_name,
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
-                        'EnteredById' => $r->by_whom_id
+                        'EnteredById' => $r->by_whom_id,
+                        'Suspended' => (int)$r->suspended
                     );
             }
             $response['Status'] = Success();
@@ -6748,7 +6750,7 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, p.park_id, p.name AS park_name, a.award_id,
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
                            GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
@@ -6778,6 +6780,7 @@ class Report extends Ork3
                         'Persona' => $dataResult->persona,
                         'ParkId' => (int) $dataResult->park_id,
                         'ParkName' => $dataResult->park_name ?? '',
+                        'Suspended' => (int) $dataResult->suspended,
                         'Awards' => [],
                     ];
                 }

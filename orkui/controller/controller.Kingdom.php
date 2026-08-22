@@ -2,10 +2,27 @@
 
 class Controller_Kingdom extends Controller
 {
+    // Data endpoints that must NOT repaint the visitor's navigation context.
+    // The kingdom profile page background-fetches several of these for each
+    // child principality (Kingdomnew_index.tpl ~line 2660), and the last async
+    // response to land was silently re-pointing session->kingdom_id at a
+    // principality — breadcrumbs and every session-scoped report (attendance
+    // explorer, knights list) then showed the principality instead of the
+    // kingdom the visitor was on. All of these take an explicit id argument
+    // and never read the session context they were overwriting.
+    private static $CONTEXT_FREE_METHODS = array(
+        'park_monthly_json', 'park_averages_json', 'players_json',
+        'events_more', 'recommendations_panel', 'ics',
+    );
+
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
         $id = preg_replace('/[^0-9]/', '', $id);
+
+        if (in_array($this->method, self::$CONTEXT_FREE_METHODS, true)) {
+            return;
+        }
 
         if ($id != $this->session->kingdom_id) {
             unset($this->session->kingdom_id);
@@ -332,8 +349,12 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
+        // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
+        // must mirror that check exactly; gating it on kingdom authority showed
+        // monarchy an Add Park button whose submit the service always refused.
         $this->data['CanAddPark'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 

@@ -62,6 +62,7 @@ class Controller_Attendance extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Attendance/park/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'new':
@@ -84,7 +85,13 @@ class Controller_Attendance extends Controller
                     $this->data['AttendanceDate'] = $this->request->Attendance_kingdom->AttendanceDate;
                     $this->request->clear('Attendance_kingdom');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Attendance/park/$id");
+                    // Status 5 is NoAuthorization, not "session expired", and this
+                    // branch is already inside the logged-in else -- so the old
+                    // bare redirect dropped a signed-in officer on a login page
+                    // AND, having no exit(), emitted the whole attendance page
+                    // behind the 302. no_authorization() reports what actually
+                    // happened and the page renders the message normally.
+                    $this->no_authorization("Attendance/kingdom/$id");
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }
@@ -197,6 +204,7 @@ class Controller_Attendance extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Attendance/park/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'new':
@@ -223,7 +231,9 @@ class Controller_Attendance extends Controller
                     $this->data['AttendanceDate'] = $this->request->Attendance_park->AttendanceDate;
                     $this->request->clear('Attendance_park');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Attendance/park/$id");
+                    // See kingdom(): NoAuthorization, reported rather than
+                    // disguised as a logout, and no page body behind a 302.
+                    $this->no_authorization("Attendance/park/$id");
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }

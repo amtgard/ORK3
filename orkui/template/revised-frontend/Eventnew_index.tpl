@@ -1962,11 +1962,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<?php endforeach; ?>
 						</tbody>
 					</table>
-				<?php elseif ($loggedIn): ?>
-				<div class="ev-empty">
-					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
-				</div>
 				<?php elseif ($rsvpCount === 0): ?>
+				<?php // Keyed on the COUNT, not the list: the roster list is only
+				      // populated for attendance managers, so a plain player on an
+				      // event with RSVPs used to see the counts contradicted by a
+				      // "No RSVPs yet" empty state right below them. ?>
 				<div class="ev-empty">
 					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
 				</div>

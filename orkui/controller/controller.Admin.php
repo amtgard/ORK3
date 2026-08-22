@@ -7,9 +7,9 @@ class Controller_Admin extends Controller
         parent::__construct($call, $id);
         $_publicMethods = array('topparks');
         if (!isset($this->session->user_id) && !in_array($call, $_publicMethods)) {
-            error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
             header('X-Robots-Tag: noindex, nofollow');
             header('Location: '.UIR."Login");
+            exit;
         } else {
             $this->load_model('Park');
             $this->load_model('Kingdom');
@@ -50,8 +50,8 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_mergepark');
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
-                error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
                 header('Location: '.UIR."Login/login/Admin/mergepark");
+                exit;
             } else {
                 $r = $this->Park->mergeparks(array(
                         'Token' => $this->session->token,
@@ -62,8 +62,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/profile/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
                     $this->request->clear('Admin_mergepark');
                 } elseif ($r['Status'] == 5) {
-                    error_log('ORK_DEBUG Header redirect: bad status: ' . json_encode($r));
-                    header('Location: '.UIR."Login/login/Admin/mergepark");
+                    $this->no_authorization("Admin/mergepark");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -79,6 +78,7 @@ class Controller_Admin extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Admin/mergeunit");
+                exit;
             } else {
                 $r = $this->Unit->merge(array(
                         'Token' => $this->session->token,
@@ -89,7 +89,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Units merged.  <a href="' . UIR . 'Unit/index/' . $this->request->Admin_mergeunit->ToUnitId . '">View your abomination here.</a>';
                     $this->request->clear('Admin_mergeunit');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/mergeunit");
+                    $this->no_authorization("Admin/mergeunit");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -106,6 +106,7 @@ class Controller_Admin extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Admin/transferpark/$kingdom_id");
+                exit;
             } else {
                 $r = $this->Park->TransferPark(array(
                         'Token' => $this->session->token,
@@ -116,7 +117,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Park transferred to  ' . $this->data['KingdomName'];
                     $this->request->clear('Admin_transferpark');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/transferpark/$kingdom_id");
+                    $this->no_authorization("Admin/transferpark/$kingdom_id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -137,6 +138,7 @@ class Controller_Admin extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Admin/unit/$unit_id");
+                exit;
             } else {
                 switch ($this->request->Action) {
                     case 'details':
@@ -240,6 +242,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_editpark', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/editpark/' . $park_id);
+                exit;
             } elseif (isset($this->request->Admin_editpark)) {
                 switch ($this->request->Action) {
                     case 'details':
@@ -306,7 +309,7 @@ class Controller_Admin extends Controller
                 }
                 $error = false;
                 if ($Status['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/editpark/' . $park_id);
+                    $this->no_authorization('Admin/editpark/' . $park_id);
                 } elseif ($Status['Status'] != 0) {
                     $this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
                     $error = true;
@@ -336,6 +339,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_editparks', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/editparks/' . $kingdom_id);
+                exit;
             } else {
                 $request = array();
                 foreach ($this->request->Admin_editparks->ParkTitle as $park_id => $title_id) {
@@ -351,7 +355,7 @@ class Controller_Admin extends Controller
                 $error = false;
                 foreach ($r as $k => $Status) {
                     if ($Status['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/editparks/' . $kingdom_id);
+                        $this->no_authorization('Admin/editparks/' . $kingdom_id);
                     } elseif ($Status['Status'] != 0) {
                         $this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
                         $error = true;
@@ -378,6 +382,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_setofficers', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/setkingdomofficers');
+                exit;
             } else {
                 $officers = array();
                 if (valid_id($this->request->Admin_setofficers->MonarchId)) {
@@ -402,7 +407,7 @@ class Controller_Admin extends Controller
                         $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
                         $error = true;
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/setkingdomofficers');
+                        $this->no_authorization('Admin/setkingdomofficers');
                     }
                 }
                 if (!$error) {
@@ -432,6 +437,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_setofficers', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/setparkofficers');
+                exit;
             } else {
                 $officers = array();
                 if (valid_id($this->request->Admin_setofficers->MonarchId)) {
@@ -456,7 +462,7 @@ class Controller_Admin extends Controller
                         $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
                         $error = true;
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/setparkofficers');
+                        $this->no_authorization('Admin/setparkofficers');
                     }
                 }
                 if (!$error) {
@@ -484,6 +490,7 @@ class Controller_Admin extends Controller
         $kingdom_id = $this->request->KingdomId;
         if (!isset($this->session->user_id)) {
             header('Location: ' . UIR . 'Login/login/Admin/setkingdomofficers');
+            exit;
         } else {
             $role = $this->request->Role;
             $r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
@@ -510,6 +517,7 @@ class Controller_Admin extends Controller
         $park_id = $this->request->ParkId;
         if (!isset($this->session->user_id)) {
             header('Location: ' . UIR . 'Login/login/Admin/setparkofficers');
+            exit;
         } else {
             $role = $this->request->Role;
             $r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
@@ -546,6 +554,7 @@ class Controller_Admin extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Admin/event/$event_id");
+                exit;
             } else {
                 logtrace("index($p)", $FILES);
                 if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
@@ -609,7 +618,7 @@ class Controller_Admin extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_event');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/event/$event_id");
+                    $this->no_authorization("Admin/event/$event_id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -636,6 +645,7 @@ class Controller_Admin extends Controller
         if (strlen($post) > 0) {
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/event');
+                exit;
             } else {
                 $r = $this->Event->create_event(
                     $this->session->token,
@@ -650,6 +660,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_manageevent');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -715,6 +726,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_authorization', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/authorization');
+                exit;
             } else {
                 switch ($post) {
                     case 'Add':
@@ -738,6 +750,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_authorization');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -891,6 +904,30 @@ class Controller_Admin extends Controller
             $detail_param = $params[3];
         }
 
+        // Page-level authority gate. This page had none at all: it renders the
+        // dues Add form, the Player Details form (Password / Username / Active /
+        // Restricted) and live Revoke links against another player's dues, and
+        // any visitor -- logged out or a plain non-officer -- was shown the whole
+        // administrative surface for any player. The individual POSTs were
+        // rejected server-side, so this was exposure and a misleading affordance
+        // rather than a breach, but the page should never have rendered.
+        //
+        // The bare redirect below also had no exit(), so an unauthenticated
+        // request received a 302 *and* the entire 136 KB admin page body --
+        // given name, surname, email. A browser follows the redirect and hides
+        // it; curl gets everything.
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if ($_uid <= 0) {
+            header('Location: ' . UIR . "Login/login/Admin/player/$id");
+            exit;
+        }
+        $_target = $this->Player->fetch_player($id);
+        $_target_park = (int)($_target['ParkId'] ?? 0);
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
+            && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
+            header('Location: ' . UIR . 'Player/profile/' . $id);
+            exit;
+        }
 
         $thePlayerDetails = $this->Player->fetch_player_details($id);
         if (strlen($action) > 0) {
@@ -898,6 +935,7 @@ class Controller_Admin extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Admin/player/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'updateclasses':
@@ -982,7 +1020,6 @@ class Controller_Admin extends Controller
                                         'MundaneId' => $id,
                                         'Base64FaceImage' => $face_imdata
                                         ]);
-                                    error_log('ORK_DEBUG One Shot.: ' . json_encode($one));
                                     unlink(DIR_TMP . sprintf("fi_%06d", $id));
                                 }
                             }
@@ -1161,7 +1198,7 @@ class Controller_Admin extends Controller
                         $this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
                         $this->request->clear('Admin_player');
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR."Login/login/Admin/player/$id");
+                        $this->no_authorization("Admin/player/$id");
                     } else {
                         $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                     }
@@ -1252,6 +1289,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_mergeplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/mergeplayer');
+                exit;
             } else {
                 $r = $this->Player->merge_player(array(
                         'Token' => $this->session->token,
@@ -1263,6 +1301,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_mergeplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1291,6 +1330,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_claimplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/moveplayer');
+                exit;
             } else {
                 $r = $this->Player->move_player(array(
                         'Token' => $this->session->token,
@@ -1302,6 +1342,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_claimplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1320,6 +1361,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_suspendplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/suspendplayer');
+                exit;
             } elseif (isset($this->request->Admin_suspendplayer->MundaneId)) {
                 $suspended = isset($this->request->Admin_suspendplayer->Suspended) ? false : true;
                 $r = $this->Player->suspend_player(array(
@@ -1340,6 +1382,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_suspendplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1359,6 +1402,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_moveplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/moveplayer');
+                exit;
             } else {
                 $r = $this->Player->move_player(array(
                         'Token' => $this->session->token,
@@ -1370,6 +1414,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_moveplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1393,12 +1438,12 @@ class Controller_Admin extends Controller
             $kingdom_id = $params[1];
             $this->data['KingdomId'] = $kingdom_id;
         }
-        error_log('ORK_DEBUG createplayer: ' . json_encode($_FILES));
         $this->load_model('Player');
         if (strlen($post) > 0) {
             $this->request->save('Admin_createplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/createplayer');
+                exit;
             } elseif ($_FILES["Heraldry"]["size"] > 0 && $_FILES["Heraldry"]["error"] > 0) {
                 $this->data['Error'] = $_FILES["Heraldry"]["error"];
             } elseif ($_FILES["Waiver"]["size"] > 0 && $_FILES["Waiver"]["error"] > 0) {
@@ -1443,6 +1488,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_createplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1461,6 +1507,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_banplayer', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/banplayer');
+                exit;
             } else {
                 $r = $this->Player->set_ban(array(
                         'Token' => $this->session->token,
@@ -1472,6 +1519,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_banplayer');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1489,6 +1537,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_createkingdom', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/createkingdom');
+                exit;
             } else {
                 if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
                     if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("k_%04d", $id))) {
@@ -1515,8 +1564,10 @@ class Controller_Admin extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_createkingdom');
                     header('Location: '.UIR.'Kingdom/profile/'.$r['Detail']);
+                    exit;
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login');
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1537,6 +1588,7 @@ class Controller_Admin extends Controller
             $this->request->save('Admin_editkingdom', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/editkingdom/' . $id);
+                exit;
             } else {
                 switch ($this->request->Action) {
                     case 'details':
@@ -1628,7 +1680,9 @@ class Controller_Admin extends Controller
                                     (isset($this->request->Admin_editkingdom->TitleClass[$AwardId]) && $this->request->Admin_editkingdom->TitleClass[$AwardId] != $KAwards['Awards'][$AwardId]['TitleClass'])
                                     )
                                 ) {
-                                    $this->Kingdom->EditAward(array(
+                                    // Keep the first failure so a rejected edit is
+                                    // reported rather than silently swallowed.
+                                    $_er = $this->Kingdom->EditAward(array(
                                         'Token' => $this->session->token,
                                         'KingdomId' => $id,
                                         'KingdomAwardId' => $AwardId,
@@ -1638,6 +1692,9 @@ class Controller_Admin extends Controller
                                         'IsTitle' => $this->request->Admin_editkingdom->IsTitle[$AwardId],
                                         'TitleClass' => $this->request->Admin_editkingdom->TitleClass[$AwardId]
                                     ));
+                                    if (!isset($r) && is_array($_er) && ($_er['Status'] ?? 0) != 0) {
+                                        $r = $_er;
+                                    }
                                 }
                             }
                         }
@@ -1655,17 +1712,26 @@ class Controller_Admin extends Controller
                         }
                         break;
                     case 'deleteaward': {
-                        $this->Kingdom->RemoveAward(array(
+                        // Return value was discarded, so the shared status check
+                        // below inspected whatever $r happened to hold and a
+                        // denied delete reported success.
+                        $r = $this->Kingdom->RemoveAward(array(
                             'Token' => $this->session->token,
                             'KingdomId' => $id,
                             'KingdomAwardId' => $this->request->Admin_editkingdom->KingdomAwardId,
                         ));
+                        break;
                     }
+                }
+                // Not every branch above sets $r; without this the status check
+                // dereferenced an undefined variable.
+                if (!isset($r) || !is_array($r)) {
+                    $r = Success();
                 }
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_editkingdom');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/editkingdom/' . $id);
+                    $this->no_authorization('Admin/editkingdom/' . $id);
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1699,11 +1765,11 @@ class Controller_Admin extends Controller
             $kingdom_id = $params[1];
             $this->data['KingdomId'] = $kingdom_id;
         }
-        error_log('ORK_DEBUG createpark: ' . json_encode($params));
         if (strlen($post) > 0) {
             $this->request->save('Admin_createpark', true);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR.'Login/login/Admin/createpark' . (($post != null) ? ('/'.$post) : ''));
+                exit;
             } elseif (trimlen($this->request->Admin_createpark->Name) == 0) {
                 $this->data['Error'] = "Park must have a name.";
             } elseif (trimlen($this->request->Admin_createpark->Abbreviation) == 0) {
@@ -1724,7 +1790,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_createpark');
                     //header( 'Location: '.UIR.'Park/profile/'.$r['Detail'] );
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/createpark' . (($post != null) ? ('/'.$post) : ''));
+                    $this->no_authorization('Admin/createpark' . (($post != null) ? ('/'.$post) : ''));
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1973,8 +2039,13 @@ class Controller_Admin extends Controller
         if ($r['Status'] == 0) {
             $this->data['Message'] = $r['Detail'];
         } elseif ($r['Status'] == 5) {
-            header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
-            return;
+            // Status 5 is NoAuthorization. The bare redirect sent a signed-in
+            // officer to a login page, and `return` (not exit) handed index.php
+            // back to $C->view(), so the 302 still carried a page body.
+            // no_authorization() redirects only genuinely logged-out callers;
+            // everyone else falls through and the kingdom/park page below
+            // renders with the message.
+            $this->no_authorization("Admin/resetwaivers/$type/$id");
         } else {
             $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
         }
@@ -2097,7 +2168,7 @@ class Controller_Admin extends Controller
             // SetPlayerSuspension returns null on success (no explicit return Success() in service layer)
             echo ($r === null || $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'] ?? 1, 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'banplayer') {
             $this->load_model('Player');
@@ -2114,7 +2185,7 @@ class Controller_Admin extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'mergepark') {
             $this->load_model('Park');
@@ -2135,7 +2206,7 @@ class Controller_Admin extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'checkparkabbr') {
             $park_id    = (int)($_POST['ParkId']    ?? 0);
@@ -2166,7 +2237,7 @@ class Controller_Admin extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'mergeunit') {
             $this->load_model('Unit');
@@ -2187,7 +2258,7 @@ class Controller_Admin extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'checkabbr') {
             $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
@@ -2230,7 +2301,7 @@ class Controller_Admin extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'kingdomId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'serverhealth_stats') {
             $fpm_data = null;

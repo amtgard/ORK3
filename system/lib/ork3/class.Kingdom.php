@@ -217,50 +217,73 @@ class Kingdom extends Ork3
 
     public function EditAward($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-            $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
-            $this->kingdomaward->clear();
-            $this->kingdomaward->kingdom_id = $request['KingdomId'];
-            $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
-            if ($this->kingdomaward->find()) {
-                $this->kingdomaward->name = $request['Name'];
-                $this->kingdomaward->reign_limit = $request['ReignLimit'];
-                $this->kingdomaward->month_limit = $request['MonthLimit'];
-                $this->kingdomaward->is_title = $request['IsTitle'];
-                $this->kingdomaward->title_class = $request['TitleClass'];
-                $this->kingdomaward->save();
-            } else {
-                return InvalidParameter();
-            }
-        } else {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) <= 0) {
             return NoAuthorization();
         }
+
+        // Load the award FIRST, then authorize against the kingdom that actually
+        // owns it. Authorizing against the caller-supplied KingdomId is not a
+        // guard: yapo drops every non-PK field from the WHERE clause once the
+        // primary key is set, so seeding kingdom_id before find() filters
+        // nothing and the row is fetched by kingdomaward_id alone.
+        $this->kingdomaward->clear();
+        $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+        if (!$this->kingdomaward->find()) {
+            return InvalidParameter();
+        }
+        $owning_kingdom_id = (int)$this->kingdomaward->kingdom_id;
+
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $owning_kingdom_id, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
+        // kingdom_id is deliberately NOT reassigned -- an edit must never
+        // re-parent an award into another kingdom.
+        $this->kingdomaward->name = $request['Name'];
+        $this->kingdomaward->reign_limit = $request['ReignLimit'];
+        $this->kingdomaward->month_limit = $request['MonthLimit'];
+        $this->kingdomaward->is_title = $request['IsTitle'];
+        $this->kingdomaward->title_class = $request['TitleClass'];
+        $this->kingdomaward->save();
+        return Success();
     }
 
     public function RemoveAward($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-            $this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
-            $this->kingdomaward->kingdom_id = $request['KingdomId'];
-            $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
-            if ($this->kingdomaward->find()) {
-                $prior_state = [
-                    'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
-                    'kingdom_id'      => (int)$this->kingdomaward->kingdom_id,
-                    'name'            => $this->kingdomaward->name,
-                    'award_id'        => (int)$this->kingdomaward->award_id,
-                    'is_title'        => (int)$this->kingdomaward->is_title,
-                    'reign_limit'     => (int)$this->kingdomaward->reign_limit,
-                    'month_limit'     => (int)$this->kingdomaward->month_limit,
-                ];
-                $this->kingdomaward->delete();
-                Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', (int)$request['KingdomId'], $prior_state);
-            }
-            return Success();
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) <= 0) {
+            return NoAuthorization();
         }
-        return NoAuthorization();
+
+        // Same ownership rule as EditAward: authorize against the award's own
+        // kingdom, read from the row, not against the caller-supplied KingdomId.
+        $this->kingdomaward->clear();
+        $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+        if (!$this->kingdomaward->find()) {
+            return InvalidParameter();
+        }
+        $owning_kingdom_id = (int)$this->kingdomaward->kingdom_id;
+
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $owning_kingdom_id, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        $this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
+        // prior_state is captured off the found row, so the audit records the
+        // kingdom the award really belonged to rather than one supplied by the
+        // caller.
+        $prior_state = [
+            'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
+            'kingdom_id'      => $owning_kingdom_id,
+            'name'            => $this->kingdomaward->name,
+            'award_id'        => (int)$this->kingdomaward->award_id,
+            'is_title'        => (int)$this->kingdomaward->is_title,
+            'reign_limit'     => (int)$this->kingdomaward->reign_limit,
+            'month_limit'     => (int)$this->kingdomaward->month_limit,
+        ];
+        $this->kingdomaward->delete();
+        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', $owning_kingdom_id, $prior_state);
+        return Success();
     }
 
     public function create_kingdom_awards($kingdom_id)
@@ -565,6 +588,15 @@ class Kingdom extends Ork3
             $this->kingdom->clear();
             $this->kingdom->kingdom_id = $request['KingdomId'];
             if ($this->kingdom->find()) {
+                // Park-level record edits audit; their kingdom-level equivalent did
+                // not. Snapshot before/after so the two are symmetrical.
+                $prior_state = [
+                    'kingdom_id'   => (int)$this->kingdom->kingdom_id,
+                    'name'         => $this->kingdom->name,
+                    'abbreviation' => $this->kingdom->abbreviation,
+                    'description'  => $this->kingdom->description,
+                    'url'          => $this->kingdom->url,
+                ];
                 $this->kingdom->name = strlen($request['Name']) > 0 ? $request['Name'] : $this->kingdom->name;
                 $this->kingdom->abbreviation = strlen($request['Abbreviation']) > 0 ? $request['Abbreviation'] : $this->kingdom->abbreviation;
                 if (isset($request['Description'])) {
@@ -575,6 +607,23 @@ class Kingdom extends Ork3
                 }
                 $this->kingdom->modified = date("Y-m-d H:i:s", time());
                 $this->kingdom->save();
+
+                $_audit_req = $request;
+                unset($_audit_req['Heraldry']);
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $_audit_req,
+                    'Kingdom',
+                    (int)$this->kingdom->kingdom_id,
+                    $prior_state,
+                    [
+                        'kingdom_id'   => (int)$this->kingdom->kingdom_id,
+                        'name'         => $this->kingdom->name,
+                        'abbreviation' => $this->kingdom->abbreviation,
+                        'description'  => $this->kingdom->description,
+                        'url'          => $this->kingdom->url,
+                    ]
+                );
 
                 Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
 
