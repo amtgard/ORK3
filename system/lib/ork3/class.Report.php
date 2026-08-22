@@ -5217,10 +5217,18 @@ class Report extends Ork3
         $sessPlayers = $this->_rfuScalar(
             "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}session` WHERE expires > NOW()"
         );
-        $sessMulti = $this->_rfuScalar(
+        $sessMulti2 = $this->_rfuScalar(
             "SELECT COUNT(*) AS c FROM (
 			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
-			     GROUP BY mundane_id HAVING COUNT(*) >= 2) m"
+			     GROUP BY mundane_id HAVING COUNT(*) = 2) m"
+        );
+        // At the cap: one more login silently evicts their oldest session. A
+        // persistently large number here is the signal the 3-session cap is
+        // too tight.
+        $sessAtCap = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM (
+			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
+			     GROUP BY mundane_id HAVING COUNT(*) >= 3) m"
         );
         // Accumulating sign-in counts come from ork_signin_tally (anonymous
         // per-day/per-client counters bumped in CreateSession) — ork_session
@@ -5280,7 +5288,8 @@ class Report extends Ork3
             'kpis' => array(
                 $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
                 $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
-                $this->_rfuKpi('Players with 2+ sessions', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players holding concurrent sessions — distinct devices, apps, or a re-login; the cap is three sessions', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Players with 2 sessions', $sessMulti2, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti2 / $sessPlayers) * 100, 1) : null, 'signed-in players holding exactly two concurrent sessions — distinct devices, apps, or a re-login', null, null, 'of signed-in players'),
+                $this->_rfuKpi('At the 3-session cap', $sessAtCap, $sessPlayers, $sessPlayers > 0 ? round(($sessAtCap / $sessPlayers) * 100, 1) : null, 'players whose next sign-in silently evicts their oldest session — if this stays high, the cap may be too tight', null, null, 'of signed-in players'),
                 $this->_rfuKpi('Sign-ins (7 days)', $signins7, null, null, 'sessions created in the last 7 days — anonymous daily tally, no player attribution'),
                 $this->_rfuKpi('Sign-ins (30 days)', $signins30, null, null, 'sessions created in the last 30 days — anonymous daily tally, no player attribution'),
             ),
