@@ -96,6 +96,8 @@
 
 	/* What's New dark mode */
 	html[data-theme="dark"] .wn-overlay { background: rgba(0,0,0,0.7); }
+	/* Never print the What's New modal over report/page content. */
+	@media print { .wn-overlay { display: none !important; } }
 	html[data-theme="dark"] .wn-modal { background: #2d3748; color: #e2e8f0; }
 	html[data-theme="dark"] .wn-title { color: #e2e8f0; }
 	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
