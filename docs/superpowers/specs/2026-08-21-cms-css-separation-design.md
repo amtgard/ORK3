@@ -122,8 +122,18 @@ patterns in prose.
   stylesheet. A PHP tag parked between rules, or one echoing a literal
   (`<?= '' ?>`), does not launder a static block. PHP that echoes a `<style>`
   tag assembled from string fragments (`'<st' . 'yle>'`) is rejected too.
-  Scope: `frontdoor/blocks/**.tpl`. It is the only surviving inline block, down
-  from 20.
+  Scope, **as extended by F4**: `frontdoor/blocks/**.tpl` (destination
+  `frontdoor/css/blocks.css`) **and** the OGRE admin templates — `cms/*.tpl`
+  and the `Cms_*.tpl` surfaces one directory up (destination
+  `cms/css/cms-admin.css`, which `cms/_shell_top.tpl` links exactly once per
+  admin surface). The admin half was never in scope during Phases 1–3 and kept
+  185 lines of inline CSS in `Cms_sites.tpl`, `Cms_media.tpl`, `Cms_nav.tpl`
+  and `cms/_block_editor.tpl`; F4 lifted all of it. `frontdoor/blocks/columns.tpl`
+  is the only surviving inline block, down from 20 — plus one **structural**
+  exemption: `Cms_deny.tpl`, which `Controller_Cms::_denyPermission()` includes
+  directly and `exit`s from. It bypasses the View pipeline, never includes
+  `cms/_shell_top.tpl`, emits its own `<!doctype html>`/`<head>`/`<body>` and
+  links no stylesheet at all, so inline is the only styling available to it.
 - **C4** Markup a standalone org site renders may not link `orkui.css`,
   `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
   `frontdoor/_assets_public.tpl`, the stylesheet partial the shell includes —
@@ -179,8 +189,13 @@ to the count on the day they were last measured:
 
 | Budget | Today | Counts |
 |---|---|---|
-| `MAX_GROUPS_2PLUS` | 22 | duplicate bodies with ≥ 2 declarations — the real DRY signal |
-| `MAX_GROUPS_ANY` | 78 | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_2PLUS` | 26 | duplicate bodies with ≥ 2 declarations — the real DRY signal |
+| `MAX_GROUPS_ANY` | 90 | every duplicate body, single-declaration coincidences included |
+
+The 22→26 / 78→90 step (F4) was a **coverage** re-baseline: lifting the admin
+templates' inline CSS into `cms-admin.css` authored no new duplicate body, it
+made pre-existing byte-identical copies visible to the analyser for the first
+time. The four newly visible groups are enumerated at the constants.
 
 Duplication may fall, never rise. The at-rule context is the part that is easy
 to get wrong — two identical bodies in two *different* `@media` blocks are not

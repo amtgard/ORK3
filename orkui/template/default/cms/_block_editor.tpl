@@ -82,63 +82,12 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
     </div>
 </div>
 
-<?php /* ---- Block-editor enhancement styles (inline alt editor + Load-more).
-        Uses ORK theme vars so light/dark are handled without extra overrides.
-        Scoped to #cmsMediaGrid so it only affects THIS picker. ---- */ ?>
-<style>
-/* Widen picker tiles enough to hold the inline alt editor comfortably. */
-#cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-#cmsMediaGrid .cms-media-tile { cursor: default; }
-#cmsMediaGrid .cms-media-tile img,
-#cmsMediaGrid .cms-media-tile .cms-media-cap { cursor: pointer; }
-.cms-media-alt {
-    padding: 7px 8px;
-    border-top: 1px solid var(--ork-border);
-    background: var(--ork-bg-tertiary);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.cms-media-alt-row { display: flex; gap: 6px; align-items: center; }
-.cms-media-alt-input { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 4px 6px; }
-.cms-media-alt-save { flex: 0 0 auto; }
-.cms-media-alt-deco { font-size: 11px; color: var(--ork-text-secondary); display: flex; align-items: center; gap: 4px; }
-.cms-media-alt-deco input { margin: 0; }
-.cms-media-more { display: block; margin: 12px auto 2px; }
-</style>
+<?php // Media-picker styling (#cmsMediaGrid inline alt editor + Load-more) lives
+      // in the shared, cacheable cms-admin.css, loaded once by cms/_shell_top.tpl
+      // which every including surface pulls in first — no per-render inline block. ?>
 
-<?php /* ---- Columns visual splitter (enh #16) — theme-aware via ORK vars. ---- */ ?>
-<style>
-.cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
-.cms-cols-countrow .cms-label { margin: 0; }
-.cms-cols-seg { display: inline-flex; gap: 6px; }
-.cms-cols-seg .cms-btn { min-width: 42px; justify-content: center; }
-.cms-cols-seg .cms-cols-seg-active {
-    background: var(--cms-gold, #f0b429);
-    border-color: var(--cms-gold, #f0b429);
-    color: #1a1205;
-}
-.cms-cols-grid { display: grid; gap: 12px; align-items: start; }
-.cms-cols-grid-2 { grid-template-columns: 1fr 1fr; }
-.cms-cols-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-@media (max-width: 720px) { .cms-cols-grid-2, .cms-cols-grid-3 { grid-template-columns: 1fr; } }
-.cms-cols-col {
-    border: 1px dashed var(--ork-border-dark);
-    border-radius: 8px;
-    padding: 8px;
-    background: var(--ork-bg-secondary);
-    min-width: 0;
-}
-.cms-cols-col-head {
-    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-    color: var(--ork-text-secondary); margin-bottom: 8px;
-}
-.cms-cols-childlist { display: flex; flex-direction: column; gap: 8px; }
-.cms-cols-childcard { margin: 0; background: var(--ork-bg); }
-.cms-cols-childcard .cms-block-body { padding: 8px 10px; }
-.cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
-.cms-cols-add { align-self: flex-start; }
-</style>
+<?php // Columns visual-splitter styling (.cms-cols-*) lives in the shared,
+      // cacheable cms-admin.css — no per-render inline block. ?>
 
 <?php /* ---- Media picker modal ---- */ ?>
 <div class="cms-modal-overlay" id="cmsMediaModal">

@@ -101,18 +101,9 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 };
 ?>
 
-<style>
-/* Navigation manager — small layout tweaks on top of cms-admin.css. */
-.cms-nav-item { margin-bottom: 8px; }
-.cms-nav-children { margin: 4px 0 12px 28px; border-left: 2px solid var(--ork-border); padding-left: 12px; }
-.cms-nav-children .cms-nav-item { margin-bottom: 6px; }
-.cms-block-type { display: flex; align-items: center; gap: 8px; }
-.cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
-.cms-nav-label { font-weight: 600; color: var(--ork-text); }
-.cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
-.cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
-.cms-nav-addchild-row { margin: 0 0 16px 28px; }
-</style>
+<?php // Navigation-manager styling (.cms-nav-*) lives in the shared, cacheable
+      // cms-admin.css (section "Navigation manager"), loaded once by
+      // cms/_shell_top.tpl below — no per-render inline block. ?>
 
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */

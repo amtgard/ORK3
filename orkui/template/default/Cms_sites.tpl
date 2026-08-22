@@ -53,94 +53,9 @@ $fmtDate = function ($raw) {
 $totalSites = count($kSites) + count($pSites);
 ?>
 
-<style>
-/* ---- CMS Sites overview (scoped). Dark mode via html[data-theme="dark"]. ---- */
-.cms-sites-wrap { display: flex; flex-direction: column; gap: 26px; }
-
-/* Global h1–h6 in orkui.css get a gray pill box — reset the ones we own. */
-.cms-sites-wrap h2 {
-    background: transparent; border: none; padding: 0; border-radius: 0;
-    text-shadow: none; margin: 0; font-size: 16px; font-weight: 700;
-    color: var(--ork-text);
-}
-
-/* Pinned front-door card */
-.cms-fd-card {
-    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-    padding: 18px 20px; border-radius: 14px;
-    border: 1px solid var(--cms-gold-deep, #caa23a); border-left-width: 5px;
-    background: linear-gradient(180deg, #fffaec, #fff6dd);
-}
-html[data-theme="dark"] .cms-fd-card {
-    background: rgba(240, 180, 41, .08);
-    border-color: var(--cms-gold, #f0b429);
-}
-.cms-fd-mark {
-    flex: 0 0 auto; width: 54px; height: 54px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--cms-gold, #f0b429); color: #1a1205; font-size: 24px;
-}
-.cms-fd-text { flex: 1 1 220px; min-width: 0; }
-.cms-fd-name { font-size: 18px; font-weight: 700; color: var(--ork-text); }
-.cms-fd-sub  { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 2px; }
-.cms-fd-stats { display: flex; gap: 22px; flex: 0 0 auto; flex-wrap: wrap; }
-.cms-fd-stat { text-align: center; }
-.cms-fd-stat-num { font-size: 19px; font-weight: 700; color: var(--ork-text); line-height: 1.1; }
-.cms-fd-stat-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ork-text-muted); }
-.cms-fd-actions { display: flex; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
-
-/* Section blocks */
-.cms-sites-section-head {
-    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
-}
-.cms-sites-count { font-size: 12.5px; color: var(--ork-text-muted); }
-
-/* Table (reuses .cms-table; a couple of overview-specific tweaks) */
-.cms-sites-table td, .cms-sites-table th { vertical-align: middle; }
-.cms-sites-org { font-weight: 600; color: var(--ork-text); }
-.cms-sites-slug {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; color: var(--ork-text-muted); text-decoration: none;
-}
-a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
-html[data-theme="dark"] a.cms-sites-slug:hover { color: var(--cms-gold, #f0b429); }
-.cms-sites-metric { white-space: nowrap; font-variant-numeric: tabular-nums; }
-
-/* Status badges: green / amber / gray */
-.cms-site-badge {
-    display: inline-block; padding: 2px 9px; border-radius: 999px;
-    font-size: 11.5px; font-weight: 600; line-height: 1.5; white-space: nowrap;
-}
-.cms-site-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
-.cms-site-badge-draft { background: var(--ork-badge-orange-bg); color: var(--ork-badge-orange-text); }
-.cms-site-badge-unbuilt { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
-
-.cms-sites-rowactions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
-
-/* Provision panel */
-.cms-provision {
-    padding: 18px 20px; border-radius: 12px;
-    border: 1px solid var(--ork-border-dark); background: var(--ork-bg-secondary);
-}
-.cms-provision-grid {
-    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
-}
-.cms-provision-col { flex: 1 1 260px; min-width: 220px; }
-.cms-provision-label {
-    display: block; font-size: 12.5px; font-weight: 600;
-    color: var(--ork-text-secondary); margin-bottom: 6px;
-}
-.cms-provision-row { display: flex; gap: 8px; }
-.cms-provision-row .cms-select { flex: 1 1 auto; }
-.cms-provision-hint { font-size: 12px; color: var(--ork-text-muted); margin-top: 8px; }
-.cms-optnosite { font-weight: 700; }
-
-@media (max-width: 640px) {
-    .cms-fd-stats { width: 100%; justify-content: space-between; }
-    .cms-fd-actions { width: 100%; }
-    .cms-fd-actions .cms-btn { flex: 1 1 auto; justify-content: center; }
-}
-</style>
+<?php // Sites-overview styling (.cms-sites-*/.cms-fd-*/.cms-provision-*) lives in
+      // the shared, cacheable cms-admin.css (section "CMS Sites overview"), loaded
+      // once by cms/_shell_top.tpl below — no per-render inline block. ?>
 
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */

@@ -22,62 +22,9 @@ $h = function ($v) {
 };
 ?>
 
-<style>
-/* ---- Media-page styling (reuses .cms-media-* tile tokens; dark-mode via vars) ---- */
-.cms-media-page-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px;
-}
-.cms-media-card {
-    position: relative;
-    border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden;
-    background: var(--ork-bg-secondary); display: flex; flex-direction: column;
-}
-.cms-media-card.cms-media-selected {
-    border-color: var(--ork-accent, #c9a24b);
-    box-shadow: 0 0 0 2px var(--ork-accent, #c9a24b) inset;
-}
-.cms-media-card-thumb {
-    width: 100%; height: 130px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
-}
-/* #95: broken-image fallback — same 130px footprint, centered fa-image, so it
-   never overlaps the top-left bulk-select checkbox or the caption below. */
-.cms-media-card-thumb.cms-empty-thumb {
-    display: flex; align-items: center; justify-content: center;
-    color: var(--ork-text-lighter, #9aa2ad); font-size: 30px;
-}
-.cms-media-card-body { padding: 10px 12px; }
-.cms-media-card-name {
-    font-weight: 600; font-size: 13px; color: var(--ork-text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.cms-media-card-title { font-size: 12px; color: var(--ork-text); margin-top: 2px; font-weight: 500;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cms-media-card-alt { font-size: 12px; color: var(--ork-text-muted); margin-top: 3px; min-height: 1em; }
-.cms-media-card-alt.cms-media-noalt { font-style: italic; }
-.cms-media-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-.cms-media-card-usage { font-size: 11px; color: var(--ork-text-muted); margin-top: 6px; min-height: 1em; }
-.cms-media-card-usage.cms-media-inuse { color: var(--cms-warn, #b8860b); font-weight: 600; }
-/* Per-card bulk-select checkbox (top-left overlay on the thumb) */
-.cms-media-card-sel {
-    position: absolute; top: 7px; left: 7px; z-index: 2;
-    background: rgba(0,0,0,.45); border-radius: 6px; padding: 3px 4px; line-height: 0;
-}
-.cms-media-card-sel input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--ork-accent, #c9a24b); }
-/* Inline edit form (rename + alt + title) */
-.cms-media-edit-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.cms-media-edit-form .cms-label { font-size: 11px; margin-bottom: 2px; }
-/* Bulk action bar — appears when 1+ cards are selected */
-.cms-media-bulkbar {
-    display: none; align-items: center; gap: 12px; flex-wrap: wrap;
-    margin-bottom: 12px; padding: 10px 14px; border-radius: 10px;
-    border: 1px solid var(--ork-border); background: var(--ork-bg-secondary);
-}
-.cms-media-bulkbar.cms-show { display: flex; }
-.cms-media-bulkbar-count { font-weight: 600; font-size: 13px; color: var(--ork-text); }
-.cms-usage-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ork-text-muted); }
-/* Upload drop-zone sits below the library; slimmer than the primary surface */
-.cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
-</style>
+<?php // Media-page styling (.cms-media-card-*/.cms-media-bulkbar) lives in the
+      // shared, cacheable cms-admin.css (section "Media library page"), loaded
+      // once by cms/_shell_top.tpl below — no per-render inline block. ?>
 
 <script>
 // #95: swap a broken media thumbnail for the fa-image placeholder. Defined up front

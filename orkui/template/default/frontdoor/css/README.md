@@ -100,13 +100,30 @@ surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
   a `--ork-foo:` declaration is not, including when a formatter has wrapped the
   colon onto the next line. Applies to all CMS CSS and templates, admin
   included.
-- **C3 — no *static* `<style>` block in `frontdoor/blocks/*.tpl`.** Block CSS
-  belongs in `blocks.css`, where it is cacheable, lintable and visible to
-  duplication analysis. A `<style>` is legal only when it interpolates a PHP
-  **variable** into a declaration **value** — see the `columns.tpl` exception
-  below. A PHP tag parked between rules, or echoing a literal (`<?= '' ?>`),
-  does not launder a static block, and PHP that echoes a `<style>` tag built by
-  string concatenation is rejected too.
+- **C3 — no *static* `<style>` block in a CMS template.** The CSS belongs in a
+  stylesheet, where it is cacheable, lintable and visible to duplication
+  analysis, instead of being re-sent in the HTML of every render. A `<style>` is
+  legal only when it interpolates a PHP **variable** into a declaration
+  **value** — see the `columns.tpl` exception below. A PHP tag parked between
+  rules, or echoing a literal (`<?= '' ?>`), does not launder a static block,
+  and PHP that echoes a `<style>` tag built by string concatenation is rejected
+  too.
+  **Scope, and the destination for each half:**
+  - `frontdoor/blocks/*.tpl` → `frontdoor/css/blocks.css`.
+  - the OGRE admin templates — `cms/*.tpl` and `Cms_*.tpl` one directory up —
+    → `cms/css/cms-admin.css`, which `cms/_shell_top.tpl` links exactly once
+    for every admin surface. (`Cms_*.tpl` sits beside `Site_shell.tpl` rather
+    than under `cms/`, because the router resolves `Cms/media` to
+    `Cms_media.tpl`; the `cms/` glob never reached those files, which is how
+    they kept 185 lines of inline CSS through the original three phases.)
+  - **The one exemption is `Cms_deny.tpl`, and it is structural.**
+    `Controller_Cms::_denyPermission()` `include`s that file directly and
+    `exit`s: it never reaches the themed View pipeline, never includes
+    `cms/_shell_top.tpl`, and emits its own `<!doctype html>` / `<head>` /
+    `<body>`. It links **no stylesheet at all**, so its inline `<style>` is the
+    only styling it can have. If the deny page ever starts rendering through
+    the shell, drop the exemption in `bin/check-css-boundaries.sh` and lift its
+    CSS like everything else.
 - **C4 — markup a standalone org site renders must not link** `orkui.css`,
   `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
   `frontdoor/_assets_public.tpl`, the partial it includes.
@@ -191,14 +208,26 @@ were last measured, so duplication can fall but not rise:
 
 | Budget | Today | What it counts |
 |---|---|---|
-| `MAX_GROUPS_2PLUS` | **22** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
-| `MAX_GROUPS_ANY` | **78** | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_2PLUS` | **26** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
+| `MAX_GROUPS_ANY` | **90** | every duplicate body, single-declaration coincidences included |
 
 Both numbers live as constants at the top of `bin/check-css-duplication.php`.
 **To re-baseline**: run `npm run lint:css:dupes:report`, take the two printed
 counts, edit the two constants, and say why in the same commit. Lower them
 freely after a cleanup — that is the ratchet tightening. Do not raise one just
 to get a commit through.
+
+The 22→26 / 78→90 step was a **coverage** re-baseline, not a duplication one:
+lifting the admin templates' inline `<style>` blocks into `cms-admin.css`
+(C3's admin half, above) did not author a single duplicate body — it moved 185
+lines that had always been byte-identical to rules already in `cms-admin.css`
+out of `<style>` elements no analyser could read and into the file the analyser
+reads. Four `≥ 2`-declaration groups became *visible*, all of them
+`cms-admin.css` against itself (`.cms-sites-org`/`.cms-nav-label` vs
+`.cms-table .cms-pg-title`; the two badge bodies; `.cms-sites-count` vs
+`.cms-quick-text span`), plus a third member on the existing gold-`:hover`
+group. They are collapsible by selector grouping and are the obvious next
+cleanup. The constants carry the same note.
 
 **How to collapse a group**: selector grouping, never a class rename — block
 templates and authored pages depend on the existing names. Put the selectors on

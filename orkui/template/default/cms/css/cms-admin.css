@@ -2455,3 +2455,222 @@ html[data-theme="dark"] .cms-scope-banner {
     color: var(--ork-text, #e8e2d0);
 }
 html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }
+
+/* ---- CMS Sites overview (was inline style element in Cms_sites.tpl) ----
+   Moved verbatim: the template emitted this <style> BEFORE it included
+   cms/_shell_top.tpl, so cms-admin.css already won every same-specificity
+   tie against it. Nothing in this file sets any of these (selector, property)
+   pairs, so position here is free; appended at the end for readability. ---- */
+.cms-sites-wrap { display: flex; flex-direction: column; gap: 26px; }
+
+/* Global h1–h6 in orkui.css get a gray pill box — reset the ones we own. */
+.cms-sites-wrap h2 {
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none; margin: 0; font-size: 16px; font-weight: 700;
+    color: var(--ork-text);
+}
+
+/* Pinned front-door card */
+.cms-fd-card {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 18px 20px; border-radius: 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a); border-left-width: 5px;
+    background: linear-gradient(180deg, #fffaec, #fff6dd);
+}
+html[data-theme="dark"] .cms-fd-card {
+    background: rgba(240, 180, 41, .08);
+    border-color: var(--cms-gold, #f0b429);
+}
+.cms-fd-mark {
+    flex: 0 0 auto; width: 54px; height: 54px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cms-gold, #f0b429); color: #1a1205; font-size: 24px;
+}
+.cms-fd-text { flex: 1 1 220px; min-width: 0; }
+.cms-fd-name { font-size: 18px; font-weight: 700; color: var(--ork-text); }
+.cms-fd-sub  { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 2px; }
+.cms-fd-stats { display: flex; gap: 22px; flex: 0 0 auto; flex-wrap: wrap; }
+.cms-fd-stat { text-align: center; }
+.cms-fd-stat-num { font-size: 19px; font-weight: 700; color: var(--ork-text); line-height: 1.1; }
+.cms-fd-stat-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ork-text-muted); }
+.cms-fd-actions { display: flex; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
+
+/* Section blocks */
+.cms-sites-section-head {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+}
+.cms-sites-count { font-size: 12.5px; color: var(--ork-text-muted); }
+
+/* Table (reuses .cms-table; a couple of overview-specific tweaks) */
+.cms-sites-table td, .cms-sites-table th { vertical-align: middle; }
+.cms-sites-org { font-weight: 600; color: var(--ork-text); }
+.cms-sites-slug {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--ork-text-muted); text-decoration: none;
+}
+a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+html[data-theme="dark"] a.cms-sites-slug:hover { color: var(--cms-gold, #f0b429); }
+.cms-sites-metric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Status badges: green / amber / gray */
+.cms-site-badge {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+.cms-site-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.cms-site-badge-draft { background: var(--ork-badge-orange-bg); color: var(--ork-badge-orange-text); }
+.cms-site-badge-unbuilt { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+
+.cms-sites-rowactions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Provision panel */
+.cms-provision {
+    padding: 18px 20px; border-radius: 12px;
+    border: 1px solid var(--ork-border-dark); background: var(--ork-bg-secondary);
+}
+.cms-provision-grid {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
+}
+.cms-provision-col { flex: 1 1 260px; min-width: 220px; }
+.cms-provision-label {
+    display: block; font-size: 12.5px; font-weight: 600;
+    color: var(--ork-text-secondary); margin-bottom: 6px;
+}
+.cms-provision-row { display: flex; gap: 8px; }
+.cms-provision-row .cms-select { flex: 1 1 auto; }
+.cms-provision-hint { font-size: 12px; color: var(--ork-text-muted); margin-top: 8px; }
+.cms-optnosite { font-weight: 700; }
+
+@media (max-width: 640px) {
+    .cms-fd-stats { width: 100%; justify-content: space-between; }
+    .cms-fd-actions { width: 100%; }
+    .cms-fd-actions .cms-btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---- Media library page (was inline style element in Cms_media.tpl) ---- */
+.cms-media-page-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px;
+}
+.cms-media-card {
+    position: relative;
+    border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden;
+    background: var(--ork-bg-secondary); display: flex; flex-direction: column;
+}
+.cms-media-card.cms-media-selected {
+    border-color: var(--ork-accent, #c9a24b);
+    box-shadow: 0 0 0 2px var(--ork-accent, #c9a24b) inset;
+}
+.cms-media-card-thumb {
+    width: 100%; height: 130px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
+}
+/* #95: broken-image fallback — same 130px footprint, centered fa-image, so it
+   never overlaps the top-left bulk-select checkbox or the caption below. */
+.cms-media-card-thumb.cms-empty-thumb {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ork-text-lighter, #9aa2ad); font-size: 30px;
+}
+.cms-media-card-body { padding: 10px 12px; }
+.cms-media-card-name {
+    font-weight: 600; font-size: 13px; color: var(--ork-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cms-media-card-title { font-size: 12px; color: var(--ork-text); margin-top: 2px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-media-card-alt { font-size: 12px; color: var(--ork-text-muted); margin-top: 3px; min-height: 1em; }
+.cms-media-card-alt.cms-media-noalt { font-style: italic; }
+.cms-media-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.cms-media-card-usage { font-size: 11px; color: var(--ork-text-muted); margin-top: 6px; min-height: 1em; }
+.cms-media-card-usage.cms-media-inuse { color: var(--cms-warn, #b8860b); font-weight: 600; }
+/* Per-card bulk-select checkbox (top-left overlay on the thumb) */
+.cms-media-card-sel {
+    position: absolute; top: 7px; left: 7px; z-index: 2;
+    background: rgba(0,0,0,.45); border-radius: 6px; padding: 3px 4px; line-height: 0;
+}
+.cms-media-card-sel input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--ork-accent, #c9a24b); }
+/* Inline edit form (rename + alt + title) */
+.cms-media-edit-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.cms-media-edit-form .cms-label { font-size: 11px; margin-bottom: 2px; }
+/* Bulk action bar — appears when 1+ cards are selected */
+.cms-media-bulkbar {
+    display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 12px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--ork-border); background: var(--ork-bg-secondary);
+}
+.cms-media-bulkbar.cms-show { display: flex; }
+.cms-media-bulkbar-count { font-weight: 600; font-size: 13px; color: var(--ork-text); }
+.cms-usage-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ork-text-muted); }
+/* Upload drop-zone sits below the library; slimmer than the primary surface */
+.cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
+
+/* ---- Navigation manager (was inline style element in Cms_nav.tpl) ---- */
+.cms-nav-item { margin-bottom: 8px; }
+.cms-nav-children { margin: 4px 0 12px 28px; border-left: 2px solid var(--ork-border); padding-left: 12px; }
+.cms-nav-children .cms-nav-item { margin-bottom: 6px; }
+/* Nav rows only. This was a bare `.cms-block-type` while it lived inline on
+   Cms_nav.tpl; as a global rule it would also hit the block editor's
+   .cms-block-type <span> (cms-block-editor.js) and turn it into a flex box.
+   Scoped to .cms-nav-item, which exists only on the nav page. The generic
+   .cms-block-type rule above sets font only, so nothing ties. */
+.cms-nav-item .cms-block-type { display: flex; align-items: center; gap: 8px; }
+.cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
+.cms-nav-label { font-weight: 600; color: var(--ork-text); }
+.cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
+.cms-nav-addchild-row { margin: 0 0 16px 28px; }
+
+/* ---- Block-editor media picker: inline alt editor + Load-more
+   (was inline style element in cms/_block_editor.tpl). Uses ORK theme vars so
+   light/dark are handled without extra overrides. Scoped to #cmsMediaGrid so
+   it only affects THAT picker. ---- */
+/* Widen picker tiles enough to hold the inline alt editor comfortably. */
+#cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+#cmsMediaGrid .cms-media-tile { cursor: default; }
+#cmsMediaGrid .cms-media-tile img,
+#cmsMediaGrid .cms-media-tile .cms-media-cap { cursor: pointer; }
+.cms-media-alt {
+    padding: 7px 8px;
+    border-top: 1px solid var(--ork-border);
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cms-media-alt-row { display: flex; gap: 6px; align-items: center; }
+.cms-media-alt-input { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 4px 6px; }
+.cms-media-alt-save { flex: 0 0 auto; }
+.cms-media-alt-deco { font-size: 11px; color: var(--ork-text-secondary); display: flex; align-items: center; gap: 4px; }
+.cms-media-alt-deco input { margin: 0; }
+.cms-media-more { display: block; margin: 12px auto 2px; }
+
+/* ---- Block-editor columns visual splitter (enh #16) — theme-aware via ORK
+   vars (was the second inline style element in cms/_block_editor.tpl). ---- */
+.cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+.cms-cols-countrow .cms-label { margin: 0; }
+.cms-cols-seg { display: inline-flex; gap: 6px; }
+.cms-cols-seg .cms-btn { min-width: 42px; justify-content: center; }
+.cms-cols-seg .cms-cols-seg-active {
+    background: var(--cms-gold, #f0b429);
+    border-color: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+.cms-cols-grid { display: grid; gap: 12px; align-items: start; }
+.cms-cols-grid-2 { grid-template-columns: 1fr 1fr; }
+.cms-cols-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+@media (max-width: 720px) { .cms-cols-grid-2, .cms-cols-grid-3 { grid-template-columns: 1fr; } }
+.cms-cols-col {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--ork-bg-secondary);
+    min-width: 0;
+}
+.cms-cols-col-head {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ork-text-secondary); margin-bottom: 8px;
+}
+.cms-cols-childlist { display: flex; flex-direction: column; gap: 8px; }
+.cms-cols-childcard { margin: 0; background: var(--ork-bg); }
+.cms-cols-childcard .cms-block-body { padding: 8px 10px; }
+.cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
+.cms-cols-add { align-self: flex-start; }

@@ -42,10 +42,29 @@
 
 // ---------------------------------------------------------------------------
 // The ratchet. See RE-BASELINING above before touching either number.
-// Last set: 2026-08-22, after the F2 dark-mode feed-block collapse.
+// Last set: 2026-08-22, after F4 lifted the OGRE admin templates' inline <style>
+// blocks into cms-admin.css (22 -> 26 and 78 -> 90).
+//
+// This is a COVERAGE re-baseline, not a duplication re-baseline. Not one
+// duplicate body was authored: 185 lines of CSS that had always been byte-
+// identical to rules in cms-admin.css were sitting inside <style> elements in
+// Cms_sites.tpl / Cms_media.tpl / Cms_nav.tpl / cms/_block_editor.tpl, where no
+// stylesheet analyser could see them. Moving them into the stylesheet is what
+// made the pre-existing duplication visible; the ratchet is being told what the
+// directory actually contained all along. The four newly VISIBLE >= 2-decl
+// groups, all of them cms-admin.css against itself:
+//   font-weight:600;color:var(--ork-text)                    .cms-table .cms-pg-title / .cms-sites-org / .cms-nav-label
+//   background:var(--ork-badge-green-bg);color:...-green-text  .cms-badge-published / .cms-site-badge-published
+//   background:var(--ork-badge-gray-bg);color:...-gray-text    .cms-badge-draft / .cms-site-badge-unbuilt
+//   font-size:12.5px;color:var(--ork-text-muted)             .cms-quick-text span / .cms-sites-count
+// (A fifth existing group, the gold :hover link body, gained a third member:
+// a.cms-sites-slug:hover.) They are collapsible by selector grouping and are
+// the obvious next cleanup — deliberately NOT done here, because collapsing
+// them means moving rules across ~2,000 lines of a file this task was scoped
+// to leave working, and F4's contract was no rendering change.
 // ---------------------------------------------------------------------------
-const MAX_GROUPS_2PLUS = 22;
-const MAX_GROUPS_ANY   = 78;
+const MAX_GROUPS_2PLUS = 26;
+const MAX_GROUPS_ANY   = 90;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(

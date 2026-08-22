@@ -54,13 +54,25 @@
 #       Reading one with var() is fine. A declaration whose colon has been
 #       wrapped onto the following line counts as a definition. Scope: all CMS
 #       css + templates.
-#   C3  A content-block template may not carry a STATIC inline <style> block.
+#   C3  A CMS template may not carry a STATIC inline <style> block.
 #       A <style> is legal only if it interpolates a PHP VARIABLE in a
 #       declaration-value position — blocks/columns.tpl interpolates $fdbCount
 #       into grid-template-columns and therefore cannot be a static stylesheet.
 #       A PHP tag parked outside any declaration, or one echoing a literal,
 #       does not launder a static block. PHP that echoes a <style> tag built by
-#       string concatenation is rejected too. Scope: frontdoor/blocks/**.tpl.
+#       string concatenation is rejected too.
+#       Scope: frontdoor/blocks/**.tpl (destination frontdoor/css/blocks.css)
+#       AND the OGRE admin templates — cms/*.tpl and $TPL_ROOT/Cms_*.tpl
+#       (destination cms/css/cms-admin.css, which cms/_shell_top.tpl links
+#       exactly once for every admin surface).
+#       ONE EXEMPTION, and it is structural rather than stylistic:
+#       Cms_deny.tpl. Controller_Cms::_denyPermission() include()s that file
+#       directly and exit()s — it never goes through the themed View pipeline,
+#       never includes cms/_shell_top.tpl, and emits its own <!doctype
+#       html>/<head>/<body>. It therefore loads NO stylesheet at all, and its
+#       inline <style> is the only styling it can have. If that ever changes
+#       (the deny page starts rendering through the shell), delete the
+#       exemption below and lift its CSS like everything else.
 #   C4  A partial a standalone org site renders may not link orkui.css,
 #       tokens.css or orkshell-interop.css. Scope: Site_shell.tpl and
 #       frontdoor/_assets_public.tpl — the shell and the one stylesheet partial
@@ -146,6 +158,10 @@ INTEROP="$CMS_PUBLIC/css/orkshell-interop.css"
 CMS_BASE="$CMS_PUBLIC/css/cms-base.css"
 SITE_SHELL="$TPL_ROOT/Site_shell.tpl"
 ASSETS_PUBLIC="$CMS_PUBLIC/_assets_public.tpl"
+# Standalone bare-chrome page: included directly by the controller, renders its
+# own <html>/<head>/<body>, never includes cms/_shell_top.tpl and so links no
+# stylesheet whatsoever. Exempt from C3 — see the rule text above.
+CMS_DENY="$TPL_ROOT/Cms_deny.tpl"
 
 # The public CMS surfaces do not live under frontdoor/ — the router resolves a
 # controller action to $TPL_ROOT/<Controller>_<action>.tpl, so the front door,
@@ -172,7 +188,10 @@ case "$MODE" in
     all)
         # $TPL_ROOT/*.theme is in scope for C6: default.theme is the file that
         # decides which stylesheets a standalone org site gets.
-        CANDIDATES=$(git ls-files "$CMS_PUBLIC/*" "$CMS_ADMIN/*" "$CRM_STYLE/*" "$TPL_ROOT/*.theme" $CMS_SURFACES)
+        # $TPL_ROOT/Cms_*.tpl are the OGRE admin surface templates. They sit one
+        # directory above cms/ (the router resolves Cms/media to Cms_media.tpl),
+        # so the $CMS_ADMIN glob never reached them and C2/C3 could not see them.
+        CANDIDATES=$(git ls-files "$CMS_PUBLIC/*" "$CMS_ADMIN/*" "$CRM_STYLE/*" "$TPL_ROOT/*.theme" "$TPL_ROOT/Cms_*.tpl" $CMS_SURFACES)
         ;;
 esac
 
@@ -478,8 +497,8 @@ function org_track(code,    t, k, ne, cond, st) {
 }
 
 BEGIN {
-    C3_MSG = "Static inline <style> block in a content-block template."
-    C3_FIX = "Block CSS belongs in frontdoor/css/blocks.css so it is cacheable, lintable and visible to duplication analysis. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
+    C3_MSG = "Static inline <style> block in a CMS template."
+    C3_FIX = "This CSS belongs in " C3_DEST " so it is cacheable, lintable and visible to duplication analysis, instead of being re-sent in the HTML of every render. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
 }
 {
@@ -606,12 +625,27 @@ for f in $CANDIDATES; do
         # OGRE admin: definitionally in-shell, so C1 does not apply. C2 does.
         "$CMS_ADMIN"/*.css|"$CMS_ADMIN"/*.tpl) C2=1 ;;
     esac
+    # OGRE admin page templates (Cms_media.tpl, Cms_nav.tpl, ...). Same tier as
+    # cms/*.tpl: C1 does not apply, C2 does. Cms_preview.tpl is deliberately NOT
+    # excluded here — $CMS_SURFACES below turns C1 on for it as well, because it
+    # renders the PUBLIC page inside a preview chrome.
+    case "$f" in
+        "$TPL_ROOT"/Cms_*.tpl) C2=1 ;;
+    esac
     # Public CMS surface templates, which sit one directory above frontdoor/.
     for s in $CMS_SURFACES; do
         [ "$f" = "$s" ] && { C1=1; C2=1; break; }
     done
+    # C3. Content blocks lift to frontdoor/css/blocks.css; every OGRE admin
+    # template lifts to cms/css/cms-admin.css, which cms/_shell_top.tpl links
+    # exactly once for the whole admin. Cms_deny.tpl is the one exemption: it
+    # bypasses the shell entirely and loads no stylesheet, so inline is all it
+    # has. C3_DEST names the destination in the fix hint.
+    C3_DEST=""
     case "$f" in
-        "$CMS_PUBLIC"/blocks/*.tpl) C3=1 ;;
+        "$CMS_PUBLIC"/blocks/*.tpl) C3=1; C3_DEST="frontdoor/css/blocks.css" ;;
+        "$CMS_DENY")                : ;;
+        "$CMS_ADMIN"/*.tpl|"$TPL_ROOT"/Cms_*.tpl) C3=1; C3_DEST="cms/css/cms-admin.css" ;;
     esac
     # C4 covers the org-site shell AND the stylesheet partial it includes;
     # otherwise the partial is a one-line detour around the same rule.
@@ -646,7 +680,7 @@ for f in $CANDIDATES; do
     awk -v file="$f" -v tpl="$TPL" \
         -v C_RED="$C_RED" -v C_DIM="$C_DIM" -v C_OFF="$C_OFF" \
         -v C1="$C1" -v C2="$C2" -v C3="$C3" -v C4="$C4" -v C5="$C5" -v C6="$C6" \
-        -v C1_TC="$C1_TC" \
+        -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" \
         -v C1_FIX="Standalone org sites do not load orkui.css, so this rule is dead there and couples the layers everywhere else. Move it to frontdoor/css/orkshell-interop.css." \
         -v C1_FIX_BASE="cms-base.css may name #theme_container and nothing else. Move anything more into frontdoor/css/orkshell-interop.css — org sites never load it, so a rule placed here would ship to every one of them." \
         -v C2_FIX="Rename it to --cms-* or --fd-* and scope it to the CMS root. Reading an --ork-* token with var() is fine; defining one is not." \
