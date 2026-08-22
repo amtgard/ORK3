@@ -14,8 +14,10 @@
 // So this test does not read source. It fetches the real surfaces off a running
 // app and asserts on the HTML that is actually served:
 //
-//   1. no org-site page links tokens.css / orkui.css / reports.css /
-//      cms-admin.css / orkshell-interop.css;
+//   1. no org-site page links a CRM stylesheet — by NAME (the set is derived
+//      from what actually exists in orkui/template/default/style/, plus
+//      cms-admin.css and orkshell-interop.css) and by SHAPE (nothing served out
+//      of a style/ directory, however the href is spelled);
 //   2. the IN-SHELL surfaces (front door, Blog/index) still link orkui.css +
 //      tokens.css + orkshell-interop.css — so "fixing" (1) by breaking the shell
 //      fails here instead of shipping;
@@ -161,6 +163,54 @@ function stylesheets($html)
     return $out;
 }
 
+/**
+ * Every stylesheet href/@import a surface emits, as WRITTEN (query kept off,
+ * but the directories intact). stylesheets() reduces to a basename, which is
+ * blind to "a file called blocks.css that is served out of style/". This is
+ * what the shape assertion in section 1 reads.
+ */
+function stylesheet_hrefs($html)
+{
+    $out = array();
+    if (preg_match_all('#<link\b[^>]*>#i', $html, $m)) {
+        foreach ($m[0] as $tag) {
+            if (!preg_match('#\brel\s*=\s*["\']?[^"\'>]*stylesheet#i', $tag)) {
+                continue;
+            }
+            if (preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#i', $tag, $h)) {
+                $out[] = html_entity_decode($h[2], ENT_QUOTES);
+            }
+        }
+    }
+    if (preg_match_all('#@import\s+(?:url\()?\s*["\']?([^"\')\s;]+)#i', $html, $m2)) {
+        foreach ($m2[1] as $href) {
+            $out[] = html_entity_decode($href, ENT_QUOTES);
+        }
+    }
+    return $out;
+}
+
+/** Collapse "//" and resolve ".." so a path is judged by where it LANDS. */
+function norm_url_path($url)
+{
+    $p = preg_replace('/[?#].*$/', '', trim((string) $url));
+    $p = preg_replace('#^[a-z][a-z0-9+.-]*://[^/]*#i', '', $p);
+    $p = preg_replace('#^//[^/]*#', '', $p);
+    $p = preg_replace('#/{2,}#', '/', $p);
+    $out = array();
+    foreach (explode('/', $p) as $seg) {
+        if ($seg === '' || $seg === '.') {
+            continue;
+        }
+        if ($seg === '..') {
+            array_pop($out);
+            continue;
+        }
+        $out[] = $seg;
+    }
+    return implode('/', $out);
+}
+
 function css_basename($url)
 {
     $url = preg_replace('/[?#].*$/', '', trim((string) $url));
@@ -247,7 +297,31 @@ function class_tokens($html)
 // CRM CSS: the bytes a standalone org site must never receive. orkshell-interop
 // is CMS-authored but exists only to fight ORK chrome, so it belongs on this
 // list for exactly the same reason.
-$CRM_CSS = array('tokens.css', 'orkui.css', 'reports.css', 'cms-admin.css', 'orkshell-interop.css');
+//
+// DERIVED, not listed. The hardcoded trio this list used to be (tokens, orkui,
+// reports) silently omitted custom.css and the two stylesheets under style/css/,
+// and would have omitted whatever lands in style/ next. Everything in the CRM's
+// style directory is CRM CSS by definition, so ask the filesystem — the same
+// derivation bin/check-css-boundaries.sh makes for its C4/C6 name set. The
+// hand-written entries stay because they are NOT under style/: cms-admin.css is
+// the OGRE admin's, orkshell-interop.css is the CMS's ORK-shell layer, and
+// neither belongs on a standalone org site either.
+$CRM_CSS = array('cms-admin.css', 'orkshell-interop.css');
+$styleDir = __DIR__ . '/../../orkui/template/default/style';
+$derived  = array();
+$rii = @new RecursiveIteratorIterator(new RecursiveDirectoryIterator($styleDir, FilesystemIterator::SKIP_DOTS));
+foreach ($rii as $f) {
+    if ($f->isFile() && strtolower($f->getExtension()) === 'css') {
+        $derived[] = strtolower($f->getFilename());
+    }
+}
+sort($derived);
+$CRM_CSS = array_values(array_unique(array_merge($CRM_CSS, $derived)));
+if (!$derived) {
+    echo "  note: no stylesheets found under $styleDir — the CRM set is the hand-written pair only\n";
+} else {
+    echo '  note: CRM stylesheet set derived from style/: ' . implode(', ', $derived) . "\n";
+}
 
 // The in-shell tier must keep these three. Asserting it is what stops someone
 // from satisfying the org-site rule by unlinking the CRM stylesheets globally.
@@ -386,6 +460,23 @@ foreach ($orgPages as $p) {
     foreach ($CRM_CSS as $crm) {
         check("org site links no $crm — {$p['label']}", !in_array($crm, $sheets, true));
     }
+    // By SHAPE as well as by name: a stylesheet served out of the CRM's style/
+    // directory is CRM CSS whatever it is called, and a name list only ever
+    // knows about the files that existed when it was written. Mirrors the
+    // path-shape rule bin/check-css-boundaries.sh applies to the source.
+    $inStyleDir = array();
+    foreach (stylesheet_hrefs($p['body']) as $href) {
+        $norm = norm_url_path($href);
+        if (preg_match('#(^|/)style/.*\.css$#i', $norm)) {
+            $inStyleDir[] = $href;
+        }
+    }
+    check(
+        "org site links nothing out of a style/ directory — {$p['label']}"
+            . ($inStyleDir ? ' [' . implode(', ', $inStyleDir) . ']' : ''),
+        !$inStyleDir
+    );
+
     // The org tier's own base layer must be there, or "no CRM CSS" is being
     // achieved by serving no CSS at all.
     check("org site still links cms-base.css — {$p['label']}", in_array('cms-base.css', $sheets, true));

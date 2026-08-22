@@ -114,6 +114,27 @@ stylesheet was born with no coverage at all. The scope rules now are:
   `--staged` mode `git show :path` on a symlink returns the **link target**, one
   short line that trivially passes every rule, so a staged symlink was a way to
   ship arbitrary CSS/markup into an in-scope path with the gate green.
+- **R6** The **CRM stylesheet set is derived from the filesystem** — every
+  `.css` under `orkui/template/default/style/`, at any depth, plus
+  `orkshell-interop.css`. C4-link and C6 hardcoded three names
+  (`orkui.css`, `tokens.css`, `orkshell-interop.css`), which meant `reports.css`
+  (55 KB) and `custom.css` — both of which had been sitting in `style/` the
+  whole time — were unknown to the gate, and so would tomorrow's CRM stylesheet
+  be. Everything under `style/` is CRM CSS by R3, so the shell asks the
+  filesystem, the way `check-layering.sh` derives `DOMAIN_CLASSES` from
+  `system/lib/ork3/`. Consequence to know: a CMS stylesheet must not reuse a CRM
+  stylesheet's basename.
+- **R7** **Asset-base seeds are derived too.** A partial does not assign the
+  base it is handed — `_assets_public.tpl` documents *"Expects `$fdDir` and
+  `$fdAssetBase` already in scope"* and its six includers assign them — so read
+  on its own its href is unresolvable, and C4's fail-closed rule would fire on
+  the one file whose entire job is linking the CMS stylesheets. Every in-scope
+  file is therefore scanned once for `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'`,
+  and a name the tree assigns a **provable** prefix to resolves to that prefix
+  in a file that does not assign it itself. In-file assignment always wins; an
+  assignment the scanner cannot resolve seeds nothing. This is not a loophole —
+  it works in the dangerous direction too: point one of those names at `style/`
+  anywhere in the tree and every partial that consumes it starts reporting.
 
 - **C0** The scanner must be able to parse the file. A comment opener that is
   never closed leaves every later line unscanned, so it is reported instead of
@@ -192,9 +213,10 @@ stylesheet was born with no coverage at all. The scope rules now are:
   from string fragments (`'<st' . 'yle>'`) is rejected too; and the tag match is
   case-insensitive — `<STYLE>` and `<Style>` are valid HTML for the same element.
 - **C4** Nothing a standalone org site renders may pull in CRM CSS. Two halves:
-  - **C4-link** — no file on the **public tier** may link (or `@import`)
-    `orkui.css`, `tokens.css` or `orkshell-interop.css`. Scope: the whole tier,
-    C1's scope with stylesheets included, minus exactly one exemption —
+  - **C4-link** — no file on the **public tier** may link (or `@import`) a CRM
+    stylesheet (R6's derived set, and any path landing in a `style/`
+    directory — see *Which stylesheet a path names* below). Scope: the whole
+    tier, C1's scope with stylesheets included, minus exactly one exemption —
     `frontdoor/_assets_inshell.tpl`, the designated link point for the in-shell
     surfaces. The old scope was a two-file hardcoded list, so a **new** partial
     (`frontdoor/_assets_extra.tpl` linking `orkui.css`, included from
@@ -233,9 +255,52 @@ stylesheet was born with no coverage at all. The scope rules now are:
   guarded nothing. The check is **branch-aware** — it tracks PHP
   alternative-syntax `if`/`elseif`/`else`/`endif` nesting and what each branch
   implies about `$IsOrgSite`, so the legitimate `if (empty($IsOrgSite))` branch
-  that *must* link them is not a false positive — and **fail-closed**: a
-  structure it cannot follow is reported, not assumed safe. Scope:
+  that *must* link them is not a false positive — and **fail-closed** twice
+  over: a structure it cannot follow is reported, and so is a stylesheet href on
+  an org-reachable branch whose destination it cannot prove. Scope:
   `orkui/template/default/*.theme`.
+
+**Which stylesheet a path names.** C4-link and C6 originally asked "is the
+literal `default/style/…css`, or one of three basenames, on this line?". A
+verifier defeated both with spellings that are **idiomatic in this codebase**,
+not obfuscation: `HTTP_TEMPLATE . "default/style/" . "orkui.css"` (the literal
+split at the quote), `"default/sty" . "le/orkui.css"` (split anywhere),
+`default/frontdoor/../style/orkui.css` (a `..` hop), `../style/orkui.css`,
+`default/style//orkui.css`, an `href` split across two lines,
+`default/style/reports.css` and `custom.css` (not among the three names), and
+`@import url("../../style/reports.css")` from a CMS stylesheet. All eight are
+one defect — a *literal* prefix and a *name list* — so the fix is one rule:
+
+1. **Resolve the path.** PHP is evaluated as far as string values go: adjacent
+   literals are joined, `HTTP_TEMPLATE` / `DIR_TEMPLATE` / `__DIR__` are known,
+   a variable is followed through in-file assignments (R7 supplies the base a
+   partial is handed), an array literal and the `foreach ($fdCssSet as
+   $fdCssFile)` in `_assets_public.tpl` are **enumerated** so each of its three
+   values is classified separately, and a `<link>` tag is accumulated across
+   lines so a split attribute is one string again.
+2. **Judge it by shape.** Normalise (`..` resolved, `//` collapsed, query and
+   scheme+authority stripped), then classify: any path landing in a `style/`
+   directory, or naming one of R6's derived basenames, is CRM CSS however it was
+   spelled.
+3. **Fail closed.** A stylesheet `href` or `@import` still carrying an
+   unresolved variable or call is reported: the gate cannot prove where it
+   lands, which is exactly the state C4-path already refuses to accept for an
+   include.
+
+The scope is deliberately narrow, because a fail-closed rule pointed at
+everything is a false-positive engine: only the two vectors that make a browser
+download a stylesheet are examined — a `<link>` whose `rel` could be one (`rel`
+absent, `stylesheet`, `preload`, an unknown `rel`, or one built in PHP; the
+known non-stylesheet `rel`s are skipped) and an `@import`. An `<img src>`, a
+`<script src>` and an `<a href>` are not stylesheets and are left alone, which is
+what keeps the dynamic hrefs all over the CMS templates — and `default.theme`'s
+own dynamic `rel="canonical"` / `rel="alternate"` links — from reading as
+violations. A coarse name/shape net still runs over the whole (concatenation-
+joined) line, for spellings that never reach a `<link>` at all.
+*Not covered, stated honestly:* a stylesheet injected by JavaScript.
+`frontdoor/js/` is not in this gate's scope and no text scanner can follow it;
+`tests/cms-css/boundary_test.php` reads what a live surface actually serves and
+is the backstop for that.
 
 **Case and line endings.** Two normalisations run before any rule sees a line,
 and both close holes a developer could open without trying to. **CR is

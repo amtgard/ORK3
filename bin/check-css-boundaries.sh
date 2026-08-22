@@ -81,6 +81,28 @@
 #       arbitrary CSS/markup into an in-scope path with the gate green. A
 #       symlink in an in-scope path is reported (C0) in every mode.
 #
+#   R6  THE CRM STYLESHEET SET COMES FROM THE FILESYSTEM. C4 and C6 used to
+#       name three stylesheets (orkui.css, tokens.css, orkshell-interop.css),
+#       so reports.css (55 KB) and custom.css — both of which have sat in
+#       style/ the whole time — were invisible to them, and tomorrow's CRM
+#       stylesheet would have been too. Everything under $TPL_ROOT/style/ is
+#       CRM CSS by R3, so the shell asks the filesystem and hands the list to
+#       the scanner. A CMS stylesheet must therefore not reuse a CRM
+#       stylesheet's basename.
+#
+#   R7  ASSET-BASE SEEDS, ALSO DERIVED. A partial does not assign the base it
+#       is handed — _assets_public.tpl documents "Expects $fdDir and
+#       $fdAssetBase already in scope" and its six includers assign them — so
+#       reading it alone, its href is unresolvable, and the fail-closed rule
+#       below would fire on the one file whose job is linking the CMS
+#       stylesheets. Every in-scope file is therefore scanned once for
+#       `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'`, and a name the tree assigns
+#       a PROVABLE prefix to resolves to that prefix when the file being
+#       scanned does not assign it itself. In-file assignment always wins; an
+#       assignment that cannot be resolved seeds nothing. This works in the
+#       dangerous direction too: point one of those names at style/ anywhere
+#       and every partial that consumes it starts reporting.
+#
 # ---------------------------------------------------------------------------
 # The rules
 #
@@ -144,15 +166,25 @@
 #       exemption below and lift its CSS like everything else.
 #   C4  Nothing a standalone org site renders may pull in CRM CSS. Two halves,
 #       and between them they need no include-graph walk to be reliable:
-#       C4-LINK  No file on the PUBLIC CMS tier may link orkui.css, tokens.css
-#                or orkshell-interop.css. Scope is the whole tier (C1's scope,
-#                stylesheets included so an @import cannot smuggle one in) with
-#                exactly ONE exemption: frontdoor/_assets_inshell.tpl, the
-#                designated link point for the in-shell surfaces. The old scope
-#                was a two-file list, so a NEW partial — frontdoor/
-#                _assets_extra.tpl linking orkui.css, included from
-#                Site_shell.tpl — was the same one-line detour C4 exists to
-#                close, one directory deeper.
+#       C4-LINK  No file on the PUBLIC CMS tier may link a CRM stylesheet.
+#                Scope is the whole tier (C1's scope, stylesheets included so an
+#                @import cannot smuggle one in) with exactly ONE exemption:
+#                frontdoor/_assets_inshell.tpl, the designated link point for
+#                the in-shell surfaces. The old scope was a two-file list, so a
+#                NEW partial — frontdoor/_assets_extra.tpl linking orkui.css,
+#                included from Site_shell.tpl — was the same one-line detour C4
+#                exists to close, one directory deeper.
+#                WHAT COUNTS AS A CRM STYLESHEET IS A PATH SHAPE, not a name
+#                list: any path that lands in a style/ directory, plus the
+#                basenames R6 derived from the filesystem. See "WHICH
+#                STYLESHEET A PATH ACTUALLY NAMES" below for why — a literal
+#                prefix missed `HTTP_TEMPLATE . "default/sty" . "le/orkui.css"`,
+#                `../style/orkui.css`, `default/frontdoor/../style/orkui.css`
+#                and an href split across two lines, all of them spellings this
+#                codebase writes without trying to evade anything. And it is
+#                FAIL-CLOSED: a stylesheet href or @import whose destination
+#                cannot be proved is reported, exactly as C4-PATH already does
+#                for an include it cannot resolve.
 #       C4-PATH  A file on the ORG-SITE RENDER PATH (Site_shell.tpl and
 #                everything under frontdoor/) may not include the in-shell
 #                partial, and may not include a .tpl that resolves OUTSIDE
@@ -174,16 +206,20 @@
 #       class-selector or the attribute-selector spelling ([class*="fd-"],
 #       [class^="cms-"]).
 #       Scope: R3 — every .css under orkui/template/ that is not CMS-owned.
-#   C6  default.theme may link a CRM stylesheet (anything under style/, plus
-#       orkshell-interop.css) only from a branch where $IsOrgSite is provably
-#       falsy. This is the rule that actually decides what a standalone org
-#       site downloads: the $IsOrgSite gate around lines 104-110 is the whole
-#       point of the separation, and a link added to its ELSE branch — or added
-#       unconditionally — reintroduces 91 KB of CRM CSS on public org sites.
-#       The check is branch-aware (it tracks PHP alternative-syntax
+#   C6  default.theme may link a CRM stylesheet (anything landing in style/,
+#       plus orkshell-interop.css) only from a branch where $IsOrgSite is
+#       provably falsy. This is the rule that actually decides what a standalone
+#       org site downloads: the $IsOrgSite gate around lines 104-110 is the
+#       whole point of the separation, and a link added to its ELSE branch — or
+#       added unconditionally — reintroduces 91 KB of CRM CSS on public org
+#       sites. The check is branch-aware (it tracks PHP alternative-syntax
 #       if/elseif/else/endif nesting and what each branch implies about
-#       $IsOrgSite) and fail-closed: an unbalanced structure it cannot follow is
-#       reported rather than assumed safe. Scope: $TPL_ROOT/*.theme.
+#       $IsOrgSite) and fail-closed twice over: an unbalanced structure it
+#       cannot follow is reported rather than assumed safe, and so is a
+#       stylesheet href on an org-reachable branch whose destination it cannot
+#       prove. It matches the same PATH SHAPE C4-LINK does, so every spelling
+#       listed under "WHICH STYLESHEET A PATH ACTUALLY NAMES" below is one
+#       rule, not eight. Scope: $TPL_ROOT/*.theme.
 #
 # Case and line endings. The scanner runs under LC_ALL=C and matches lowercase
 # literals, so every rule matches against a tolower() view of the line. That is
@@ -281,6 +317,26 @@ CMS_CONTROLLERS="Site Page Blog Cms"
 # The static-declaration budget an interpolating <style> may carry (C3, per file).
 C3_MAX_STATIC=8
 
+# R6 — THE CRM STYLESHEET SET IS DERIVED FROM THE FILESYSTEM, not listed here.
+# C4-link and C6 used to hardcode "orkui.css|tokens.css|orkshell-interop.css",
+# which meant the two other stylesheets that have sat in style/ all along —
+# reports.css (55 KB) and custom.css — were unknown to the gate, and a CRM
+# stylesheet added tomorrow would be unknown to it too. Everything under
+# $TPL_ROOT/style/ is CRM CSS by R3, so ask the filesystem what is there. Same
+# idea as check-layering.sh deriving DOMAIN_CLASSES from system/lib/ork3/.
+#
+# orkshell-interop.css is appended because it is CMS-authored but exists only to
+# fight ORK chrome, so a standalone org site must not load it either.
+#
+# The set is a SAFETY NET on top of the path-shape rule below, not the primary
+# check: a stylesheet is CRM because of WHERE IT LIVES (any `style/<…>.css`
+# path, however spelled), and the name list additionally catches a copy served
+# from somewhere else. A CMS stylesheet must therefore not reuse a CRM
+# stylesheet's basename — name it for the CMS layer it belongs to.
+CRM_SHEETS=$(find "$TPL_ROOT/style" -type f -name '*.css' 2>/dev/null |
+    sed 's#.*/##' | sort -u | tr '\n' ' ')
+CRM_SHEETS="$CRM_SHEETS orkshell-interop.css"
+
 # Pathspecs that describe the whole in-scope region, for --all. Globs are passed
 # to git literally (see `set -f` below), because git matches `*` across `/` and
 # the shell does not.
@@ -325,7 +381,35 @@ esac
 # ---------------------------------------------------------------------------
 AWKPROG=$(mktemp) || exit 2
 CONTENT=$(mktemp) || exit 2
-trap 'rm -f "$AWKPROG" "$CONTENT"' EXIT INT TERM
+trap 'rm -f "$AWKPROG" "$CONTENT" "$SEEDS"' EXIT INT TERM
+
+# R7 — ASSET-BASE SEEDS, derived from the tree.
+#
+# A partial does not assign the base it is handed: _assets_public.tpl documents
+# "Expects $fdDir (filesystem) and $fdAssetBase (URL) already in scope" and its
+# six includers each assign them. Reading that partial alone, the base is
+# unresolvable — and a fail-closed rule that reports it is a false positive on
+# the one file whose whole job is linking the CMS stylesheets.
+#
+# So the seed is derived the same way everything else here is: every in-scope
+# file is scanned for `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'`, and a name the
+# tree assigns a PROVABLE prefix to resolves to that prefix (all of them, if a
+# name is assigned more than one) when the file being scanned does not assign it
+# itself. An in-file assignment always wins; an assignment the scanner cannot
+# resolve seeds nothing, so the variable stays unprovable.
+#
+# This is not a loophole: it works in the dangerous direction too. Point any of
+# these names at style/ anywhere in the tree and every partial that consumes it
+# starts reporting.
+SEEDS=$(mktemp) || exit 2
+set -f
+{ git ls-files -- $ALL_PATHSPECS; git ls-files --others --exclude-standard -- $ALL_PATHSPECS; } |
+    sed '/^$/d' | sort -u |
+    grep -E '\.(css|tpl|theme)$' |
+    tr '\n' '\0' |
+    xargs -0 grep -hE '\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*(HTTP_TEMPLATE|DIR_TEMPLATE)[ \t]*\.' \
+    > "$SEEDS" 2>/dev/null
+set +f
 
 # Colour only when writing to a terminal — hook and CI callers capture plain text.
 if [ -t 1 ]; then
@@ -755,6 +839,427 @@ function check_include(s,    expr, p, lit, base, vn, tgt) {
 }
 
 # ---------------------------------------------------------------------------
+# C4-LINK / C6 — WHICH STYLESHEET A PATH ACTUALLY NAMES
+#
+# Both rules used to ask "does this line contain the literal `default/style/…css`
+# or one of three hardcoded basenames?". Every spelling below is idiomatic in
+# this codebase rather than obfuscation, and each one walked straight past:
+#
+#   HTTP_TEMPLATE . "default/style/" . "orkui.css"     the literal is split
+#   HTTP_TEMPLATE . "default/sty" . "le/orkui.css"     …anywhere, including mid-dir
+#   default/frontdoor/../style/orkui.css               a `..` hop
+#   ../style/orkui.css                                 a relative spelling
+#   default/style//orkui.css                           a doubled slash
+#   href split across two lines                        the regex is per-line
+#   default/style/reports.css                          not one of the three names
+#   @import url("../../style/reports.css")             ditto, from a stylesheet
+#
+# The replacement matches PATH SHAPE, on a resolved path:
+#
+#   1. PHP is evaluated as far as string values go. Adjacent literals are
+#      joined, HTTP_TEMPLATE / DIR_TEMPLATE / __DIR__ are known, and a variable
+#      is followed through in-file assignments — including array literals and
+#      the `foreach ($fdCssSet as $fdCssFile)` in _assets_public.tpl, whose
+#      three values are enumerated and each one classified. A `<link>` tag is
+#      accumulated across lines, so a split attribute is one string again.
+#   2. The result is normalised (`..` resolved, `//` collapsed, query stripped,
+#      scheme+authority removed) and then classified: any path landing in a
+#      `style/` directory, or naming one of the CRM stylesheets the shell
+#      derived from the filesystem, is CRM CSS however it was spelled.
+#   3. FAIL CLOSED. A stylesheet href or @import that still contains an
+#      unresolved variable or call is REPORTED — the gate cannot prove where it
+#      lands, and "cannot prove" is exactly the state C4-PATH already refuses to
+#      accept for an include.
+#
+# Scope is deliberately narrow, because fail-closed is a false-positive engine
+# if it is pointed at everything: only the two vectors that make a browser
+# download a stylesheet are examined — a <link> whose rel could be one (rel
+# absent, or a rel that is not one of the known non-stylesheet ones) and an
+# @import. An <img src>, a <script src> and an <a href> are not stylesheets and
+# are left alone, which is what keeps the dynamic hrefs all over the CMS
+# templates (and default.theme's own dynamic rel="canonical" / rel="alternate"
+# links) from reading as violations.
+#
+# Not covered, stated honestly: a stylesheet injected by JavaScript. frontdoor/
+# js/ is not scanned by this gate at all, and no text scanner can follow it —
+# tests/cms-css/boundary_test.php is the backstop that reads what a live surface
+# actually serves.
+# ---------------------------------------------------------------------------
+
+# A value SET: SETSEP-separated candidate strings. A candidate that contains UNK
+# has a piece the scanner could not resolve.
+# Deduplicate, or the six identical `$fdAssetBase = HTTP_TEMPLATE . '…'`
+# assignments the tree carries become six identical candidates and the next
+# cross product blows the cap for no reason.
+function set_dedup(S,    n, a, i, seen, out, m) {
+    n = split(S, a, SETSEP)
+    if (n <= 1) return S
+    out = ""; m = 0
+    for (i = 1; i <= n; i++) {
+        if (a[i] in seen) continue
+        seen[a[i]] = 1
+        out = (m++ == 0) ? a[i] : out SETSEP a[i]
+    }
+    return out
+}
+
+function set_cross(A, B,    na, nb, i, j, arrA, arrB, out, n) {
+    A = set_dedup(A); B = set_dedup(B)
+    na = split(A, arrA, SETSEP); if (na == 0) { na = 1; arrA[1] = "" }
+    nb = split(B, arrB, SETSEP); if (nb == 0) { nb = 1; arrB[1] = "" }
+    if (na * nb > SETCAP) return UNK
+    out = ""; n = 0
+    for (i = 1; i <= na; i++)
+        for (j = 1; j <= nb; j++)
+            out = (n++ == 0) ? arrA[i] arrB[j] : out SETSEP arrA[i] arrB[j]
+    return set_dedup(out)
+}
+
+function set_union(A, B,    S, tmp) {
+    if (A == "") return B
+    if (B == "") return A
+    S = set_dedup(A SETSEP B)
+    if (split(S, tmp, SETSEP) > SETCAP) return UNK
+    return S
+}
+
+# Split a PHP expression on TOP-LEVEL "." (the concatenation operator), leaving
+# quoted strings and parenthesised argument lists intact.
+function expr_terms(e, terms,    i, n, c, depth, cur, k, q) {
+    n = length(e); depth = 0; cur = ""; k = 0
+    for (i = 1; i <= n; i++) {
+        c = substr(e, i, 1)
+        if (c == "\"" || c == "'") {
+            q = str_end(e, i, c)
+            if (q > 0) { cur = cur substr(e, i, q - i + 1); i = q; continue }
+            cur = cur c
+            continue
+        }
+        if (c == "(" || c == "[") { depth++; cur = cur c; continue }
+        if (c == ")" || c == "]") { depth--; cur = cur c; continue }
+        if (c == "." && depth == 0) { terms[++k] = cur; cur = ""; continue }
+        cur = cur c
+    }
+    terms[++k] = cur
+    return k
+}
+
+# The value set of ONE concatenation term.
+function term_value(t,    c, q, vn) {
+    gsub(/^[ \t@]+/, "", t)
+    gsub(/[ \t]+$/, "", t)
+    if (t == "") return ""
+    c = substr(t, 1, 1)
+    if (c == "\"" || c == "'") {
+        q = str_end(t, 1, c)
+        if (q == length(t)) return substr(t, 2, q - 2)
+        return UNK
+    }
+    # The two constants every asset path in this codebase is built from, plus
+    # __DIR__. HTTP_TEMPLATE is a URL prefix and DIR_TEMPLATE a filesystem one,
+    # but both land on the same tree, so both resolve to the repo-relative root.
+    if (t == "HTTP_TEMPLATE" || t == "DIR_TEMPLATE") return TPL_BASE "/"
+    if (t == "__DIR__") return filedir
+    if (t ~ /^\$[a-zA-Z_][a-zA-Z0-9_]*$/) {
+        vn = substr(t, 2)
+        if (vn in vals) return vals[vn]      # what THIS file assigns wins
+        if (vn in seed) return seed[vn]      # R7: what the tree assigns it
+        return UNK
+    }
+    return UNK
+}
+
+# R7. One `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'` line from anywhere in the
+# in-scope tree. Only fully provable right-hand sides are kept — a seed the
+# scanner had to guess at would be worse than no seed.
+function seed_track(s,    vn, rhs, v, p) {
+    if (!match(s, /\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*(HTTP_TEMPLATE|DIR_TEMPLATE)[ \t]*\./)) return
+    vn = substr(s, RSTART + 1)
+    sub(/[ \t]*=.*$/, "", vn)
+    rhs = substr(s, RSTART)
+    sub(/^[^=]*=/, "", rhs)
+    p = index(rhs, ";")
+    if (p > 0) rhs = substr(rhs, 1, p - 1)
+    v = php_value(rhs)
+    if (v == "" || index(v, UNK) > 0) return
+    seed[vn] = set_union(seed[vn], v)
+}
+
+function php_value(e, terms, k, i, out) {
+    k = expr_terms(e, terms)
+    out = ""
+    for (i = 1; i <= k; i++) out = set_cross(out, term_value(terms[i]))
+    return out
+}
+
+# Every quoted literal in an array literal, as a set. Anything non-literal in
+# there (a variable, a call) contributes UNK, so the set stays an
+# over-approximation rather than a lie.
+function array_value(rhs,    i, n, c, q, out, rest) {
+    sub(/^array[ \t]*\(/, "", rhs)
+    sub(/^\[/, "", rhs)
+    sub(/[ \t]*[)\]][ \t]*$/, "", rhs)
+    out = ""; rest = ""
+    i = 1; n = length(rhs)
+    while (i <= n) {
+        c = substr(rhs, i, 1)
+        if (c == "\"" || c == "'") {
+            q = str_end(rhs, i, c)
+            if (q > 0) { out = set_union(out, substr(rhs, i + 1, q - i - 1)); i = q + 1; continue }
+        }
+        rest = rest c
+        i++
+    }
+    # Whatever was NOT a literal — a variable, a call — is an element the
+    # scanner cannot name, so the set stays honest by carrying UNK.
+    if (rest ~ /\$/ || rest ~ /[a-zA-Z_][a-zA-Z0-9_]*[ \t]*\(/) out = set_union(out, UNK)
+    return (out == "") ? UNK : out
+}
+
+# Follow string-valued variables through in-file assignments. Assignment UNIONS
+# rather than replaces: a variable written on both sides of an if/else holds
+# either value, and over-approximating is the safe direction for a gate.
+function track_vals(code,    seg, vn, rhs, p) {
+    # foreach ($set as [$k =>] $v) — the loop variable takes every value in the set.
+    if (match(code, /foreach[ \t]*\([ \t]*\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]+as[ \t]+/)) {
+        seg = substr(code, RSTART, RLENGTH)
+        sub(/^foreach[ \t]*\([ \t]*\$/, "", seg)
+        sub(/[ \t]+as[ \t]+$/, "", seg)
+        rhs = substr(code, RSTART + RLENGTH)
+        sub(/^\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=>[ \t]*/, "", rhs)
+        if (match(rhs, /^\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
+            vn = substr(rhs, RSTART + 1, RLENGTH - 1)
+            vals[vn] = set_union(vals[vn], (seg in vals) ? vals[seg] : UNK)
+        }
+        return
+    }
+    # $x[] = expr;  and  $x = expr;
+    if (match(code, /\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*(\[[ \t]*\])?[ \t]*=[ \t]*[^=]/)) {
+        seg = substr(code, RSTART + 1)
+        vn = seg
+        sub(/[ \t]*(\[[ \t]*\])?[ \t]*=.*$/, "", vn)
+        rhs = seg
+        sub(/^[^=]*=/, "", rhs)
+        p = index(rhs, ";")
+        if (p > 0) rhs = substr(rhs, 1, p - 1)
+        gsub(/^[ \t]+|[ \t]+$/, "", rhs)
+        if (rhs ~ /^array[ \t]*\(/ || rhs ~ /^\[/) vals[vn] = set_union(vals[vn], array_value(rhs))
+        else                                       vals[vn] = set_union(vals[vn], php_value(rhs))
+    }
+}
+
+# Build the MARKUP VIEW of a line: every PHP region replaced by a token that
+# stands for the string it echoes, so attribute parsing is not confused by the
+# quotes inside `<?= HTTP_TEMPLATE . "default/style/" . "orkui.css" ?>`. The PHP
+# code itself is handed to track_vals. State is carried across lines, because a
+# PHP region (and a <link> tag) may span them.
+function mview_build(s,    out, p, q, code, val) {
+    out = ""
+    while (length(s) > 0) {
+        if (!mv_open) {
+            p = index(s, "<?")
+            if (p == 0) { out = out s; break }
+            out = out substr(s, 1, p - 1)
+            mv_open = 1
+            mv_expr = ""
+            s = substr(s, p + 2)
+            if (substr(s, 1, 3) == "php")    { mv_echo = 0; s = substr(s, 4) }
+            else if (substr(s, 1, 1) == "=") { mv_echo = 1; s = substr(s, 2) }
+            else                             { mv_echo = 0 }
+            continue
+        }
+        q = index(s, "?>")
+        if (q == 0) { mv_expr = mv_expr " " s; track_vals(s); break }
+        code = substr(s, 1, q - 1)
+        mv_expr = mv_expr " " code
+        track_vals(code)
+        mv_open = 0
+        phpn++
+        phpval[phpn] = region_value(mv_expr)
+        out = out TOK phpn TOK
+        s = substr(s, q + 2)
+    }
+    return out
+}
+
+# What a closed PHP region ECHOES. `<?= expr ?>` echoes expr; `<?php … ?>`
+# echoes only through echo/print; anything else (an if:, a foreach:, an
+# assignment) contributes nothing to the markup.
+function region_value(e,    t, p) {
+    gsub(/^[ \t]+|[ \t]+$/, "", e)
+    t = e
+    if (mv_echo) {
+        sub(/;[ \t]*$/, "", t)
+        return php_value(t)
+    }
+    if (match(t, /(^|;)[ \t]*(echo|print)[ \t]/)) {
+        t = substr(t, RSTART + RLENGTH)
+        p = index(t, ";")
+        if (p > 0) t = substr(t, 1, p - 1)
+        return php_value(t)
+    }
+    return ""
+}
+
+# Expand a markup string containing region tokens into its candidate values.
+function expand_tokens(v,    out, lit, i, n, c, j, k) {
+    out = ""; lit = ""
+    i = 1; n = length(v)
+    while (i <= n) {
+        c = substr(v, i, 1)
+        if (c == TOK) {
+            j = index(substr(v, i + 1), TOK)
+            if (j == 0) { lit = lit UNK; i++; continue }
+            k = substr(v, i + 1, j - 1) + 0
+            out = set_cross(set_cross(out, lit), (k in phpval) ? phpval[k] : UNK)
+            lit = ""
+            i = i + j + 1
+            continue
+        }
+        lit = lit c
+        i++
+    }
+    return set_cross(out, lit)
+}
+
+# One attribute's raw value (tokens included), or NOATTR.
+function attr_value(buf, name,    lb, rest, c, e, v) {
+    lb = tolower(buf)
+    if (!match(lb, "(^|[ \t/\"'])" name "[ \t]*=[ \t]*")) return NOATTR
+    rest = substr(buf, RSTART + RLENGTH)
+    c = substr(rest, 1, 1)
+    if (c == "\"" || c == "'") {
+        e = index(substr(rest, 2), c)
+        return (e == 0) ? substr(rest, 2) : substr(rest, 2, e - 1)
+    }
+    v = rest
+    sub(/[ \t>].*$/, "", v)
+    return v
+}
+
+# Classify every candidate a stylesheet URL can resolve to.
+#   allowed=1  this position is provably unreachable by a standalone org site
+#              (C6's `if (empty($IsOrgSite))` branch), so nothing is reported.
+function classify_url(v, rule, ctx, lineno, allowed,    set, n, arr, i, u, path, norm, bn) {
+    set = expand_tokens(v)
+    n = split(set, arr, SETSEP)
+    for (i = 1; i <= n; i++) {
+        u = arr[i]
+        path = u
+        sub(/[?#].*$/, "", path)
+        gsub(/[ \t]/, "", path)
+        if (path == "") continue
+        if (index(path, UNK) > 0) {
+            if (!allowed) report_unprovable(rule, lineno, ctx)
+            continue
+        }
+        if (path ~ /^[a-z][a-z0-9+.-]*:\/\//) {
+            sub(/^[a-z][a-z0-9+.-]*:\/\//, "", path)
+            sub(/^[^\/]*/, "", path)
+        } else if (path ~ /^\/\//) {
+            sub(/^\/\//, "", path)
+            sub(/^[^\/]*/, "", path)
+        } else if (!tpl && path !~ /^\// && index(path, TPL_BASE "/") != 1) {
+            # An @import inside a stylesheet resolves against that stylesheet's
+            # own directory, which is knowable. A URL in a template resolves
+            # against the request URL, which is not — the shape test below
+            # covers it either way.
+            path = filedir "/" path
+        }
+        norm = norm_path(path)
+        bn = norm
+        sub(/^.*\//, "", bn)
+        if (norm ~ /(^|\/)style\/.*\.css$/ || (bn in crmsheet)) {
+            if (!allowed) report_crm(rule, lineno)
+        }
+    }
+}
+
+# The COARSE net: a CRM stylesheet NAME or a `style/<…>.css` path shape anywhere
+# on the line, after adjacent string literals have been joined. It catches the
+# spellings that never reach a <link>/@import at all — a name assembled into a
+# PHP variable, a path built in JS — where the resolver has nothing to resolve.
+function crm_mentioned(j) {
+    if (CRM_NAME_RE != "" && j ~ CRM_NAME_RE) return 1
+    return (j ~ /(^|[^a-z0-9_-])style\/[a-z0-9_.\/-]*\.css/)
+}
+
+function report_crm(rule, lineno) {
+    if ((rule ":" lineno) in crm_done) return
+    crm_done[rule ":" lineno] = 1
+    if (rule == "C6") report("C6", lineno, "default.theme links CRM CSS on a path a standalone org site can reach.", C6_FIX)
+    else              report("C4", lineno, "Public CMS markup links a stylesheet a standalone org site must not load.", C4_FIX)
+}
+
+function report_unprovable(rule, lineno, ctx) {
+    if ((rule ":" lineno) in unp_done) return
+    unp_done[rule ":" lineno] = 1
+    report(rule, lineno, "Cannot prove where this stylesheet " ctx " lands.", \
+           "A stylesheet path built from an unresolvable variable or call could name any file, orkui.css included, so the gate cannot vouch for it. Build it from a literal, or from a variable this file assigns (HTTP_TEMPLATE / DIR_TEMPLATE / __DIR__ / an array of names), the way _assets_public.tpl does.")
+}
+
+# @import, in a stylesheet or inside a template's <style>.
+function scan_imports(mv, rule, allowed,    lmv, p, rest, c, e, v) {
+    lmv = tolower(mv)
+    while ((p = index(lmv, "@import")) > 0) {
+        rest = substr(mv, p + 7)
+        mv   = rest
+        lmv  = tolower(rest)
+        sub(/^[ \t]+/, "", rest)
+        if (tolower(substr(rest, 1, 4)) == "url(") {
+            rest = substr(rest, 5)
+            sub(/^[ \t]+/, "", rest)
+        }
+        c = substr(rest, 1, 1)
+        if (c == "\"" || c == "'") {
+            e = index(substr(rest, 2), c)
+            v = (e == 0) ? substr(rest, 2) : substr(rest, 2, e - 1)
+        } else {
+            v = rest
+            sub(/[ \t;)].*$/, "", v)
+        }
+        if (v != "") classify_url(v, rule, "@import", FNR, allowed)
+    }
+}
+
+# <link> tags, accumulated across lines so a split attribute is one string.
+function analyze_link(buf, rule,    rel, parts, i, n, v) {
+    rel = attr_value(buf, "rel")
+    if (rel != NOATTR && index(rel, TOK) == 0) {
+        n = split(tolower(rel), parts, /[ \t]+/)
+        for (i = 1; i <= n; i++)
+            if (parts[i] in noncss_rel) return
+    }
+    v = attr_value(buf, "href")
+    if (v == NOATTR || v == "") return
+    classify_url(v, rule, "href", lk_line, lk_allowed)
+}
+
+function scan_sheets(mv, rule, allowed,    lmv, p, q) {
+    scan_imports(mv, rule, allowed)
+    lmv = tolower(mv)
+    while (1) {
+        if (!lk_open) {
+            p = index(lmv, "<link")
+            if (p == 0) return
+            lk_open = 1; lk_buf = ""; lk_line = FNR; lk_rule = rule; lk_allowed = allowed
+            mv = substr(mv, p + 5); lmv = substr(lmv, p + 5)
+            continue
+        }
+        q = index(lmv, ">")
+        if (q == 0) {
+            lk_buf = lk_buf " " mv
+            if (length(lk_buf) > 4000) { analyze_link(lk_buf, lk_rule); lk_open = 0 }
+            return
+        }
+        lk_buf = lk_buf " " substr(mv, 1, q - 1)
+        analyze_link(lk_buf, lk_rule)
+        lk_open = 0
+        mv = substr(mv, q + 1); lmv = substr(lmv, q + 1)
+    }
+}
+
+# ---------------------------------------------------------------------------
 # C6 — $IsOrgSite branch awareness in default.theme
 # ---------------------------------------------------------------------------
 
@@ -851,9 +1356,42 @@ function org_track(code,    t, k, ne, cond, st) {
 BEGIN {
     PHPMARK = sprintf("%c", 1)
     STRMARK = sprintf("%c", 2)
+    UNK     = sprintf("%c", 3)      # "this piece could not be resolved"
+    TOK     = sprintf("%c", 4)      # brackets a PHP region's index in the markup view
+    SETSEP  = sprintf("%c", 5)      # separates candidate values in a value set
+    NOATTR  = sprintf("%c", 6)      # attribute absent (distinct from present-and-empty)
+    SETCAP  = 16                    # candidate explosion guard: beyond this, unprovable
+
+    # rel values that CANNOT load a stylesheet. Everything else — rel absent,
+    # rel="stylesheet", rel="preload", an unknown rel, a rel built in PHP — is
+    # analysed. Fail-closed on the rel, narrow on the tag.
+    split("icon shortcut apple-touch-icon mask-icon manifest canonical alternate " \
+          "preconnect dns-prefetch author license help search me next prev " \
+          "pingback profile amphtml modulepreload image_src publisher", relarr, " ")
+    for (ri in relarr) noncss_rel[relarr[ri]] = 1
+
+    # R6: the CRM stylesheet basenames the shell derived from the filesystem.
+    n = split(CRM_SHEETS, sharr, /[ \t]+/)
+    CRM_NAME_RE = ""
+    for (si = 1; si <= n; si++) {
+        if (sharr[si] == "") continue
+        crmsheet[tolower(sharr[si])] = 1
+        esc = tolower(sharr[si])
+        gsub(/\./, "\\.", esc)
+        CRM_NAME_RE = (CRM_NAME_RE == "") ? esc : CRM_NAME_RE "|" esc
+    }
+    if (CRM_NAME_RE != "") CRM_NAME_RE = "(^|[^a-z0-9_-])(" CRM_NAME_RE ")"
+
+    # R7: asset-base seeds the shell collected from the whole in-scope tree.
+    if (SEEDFILE != "") {
+        while ((getline seedline < SEEDFILE) > 0) seed_track(seedline)
+        close(SEEDFILE)
+    }
+
     C3_MSG = "Static inline <style> block in a CMS template."
     C3_FIX = "This CSS belongs in " C3_DEST " so it is cacheable, lintable and visible to duplication analysis, instead of being re-sent in the HTML of every render. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
+    C4_FIX = "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. The in-shell surfaces get the interop layer from frontdoor/_assets_inshell.tpl, which is the only file allowed to link it."
 }
 {
     # CR normalisation, before anything else looks at the text. A file with
@@ -950,9 +1488,16 @@ BEGIN {
         }
     }
 
-    if (C4 && lraw ~ /(orkui\.css|tokens\.css|orkshell-interop\.css)/)
-        report("C4", FNR, "Public CMS markup links a stylesheet a standalone org site must not load.", \
-               "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. The in-shell surfaces get the interop layer from frontdoor/_assets_inshell.tpl, which is the only file allowed to link it.")
+    # The concatenation-joined view: `'default/sty' . 'le/orkui.css'` and
+    # `'orkui' . '.css'` are one string to PHP, so they are one string here too
+    # before the name/shape nets look at the line.
+    jline = lraw
+    gsub(/["'][ \t]*\.[ \t]*["']/, "", jline)
+
+    if (C4) {
+        if (crm_mentioned(jline)) report_crm("C4", FNR)
+        scan_sheets(mview_build(line), "C4", 0)
+    }
 
     # C4-PATH reads PHP CODE ONLY. Body text ("include the map below") and
     # string contents are not statements, and treating them as one would turn
@@ -973,14 +1518,21 @@ BEGIN {
         # org_track deliberately gets the UNFOLDED code: $IsOrgSite is a PHP
         # variable name and PHP variable names are case-sensitive.
         org_track(php_extract(line))
-        if (lraw ~ /(default\/style\/[a-z0-9_.-]*\.css|orkshell-interop\.css)/ && org_effective() != "F")
-            report("C6", FNR, "default.theme links CRM CSS on a path a standalone org site can reach.", C6_FIX)
+        # allowed = this line sits on a branch where $IsOrgSite is provably
+        # falsy, i.e. the one branch that MUST link the CRM stylesheets.
+        c6allowed = (org_effective() == "F")
+        if (!c6allowed && crm_mentioned(jline)) report_crm("C6", FNR)
+        scan_sheets(mview_build(line), "C6", c6allowed)
     }
 }
 END {
     # An unterminated <style> is still an inline block, and its content still
     # ships. Judge it on the same two tests.
     if (C3 && in_style) style_close()
+
+    # A <link> tag left open at EOF is still a link. Judge what we have rather
+    # than letting an unclosed tag be a place to park an href.
+    if (lk_open) analyze_link(lk_buf, lk_rule)
 
     # C0. A comment opener that never closes leaves everything after it
     # unscanned. Failing loudly beats a gate that silently disarms itself.
@@ -1149,6 +1701,7 @@ for f in $CANDIDATES; do
         -v C1="$C1" -v C2="$C2" -v C3="$C3" -v C4="$C4" -v C4_PATH="$C4_PATH" \
         -v C5="$C5" -v C6="$C6" \
         -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" -v C3_MAX_STATIC="$C3_MAX_STATIC" \
+        -v CRM_SHEETS="$CRM_SHEETS" -v SEEDFILE="$SEEDS" \
         -v C1_FIX="Standalone org sites do not load orkui.css, so this rule is dead there and couples the layers everywhere else. Move it to frontdoor/css/orkshell-interop.css." \
         -v C1_FIX_BASE="cms-base.css may name #theme_container and nothing else. Move anything more into frontdoor/css/orkshell-interop.css — org sites never load it, so a rule placed here would ship to every one of them." \
         -v C2_FIX="Rename it to --cms-* or --fd-* and scope it to the CMS root. Reading an --ork-* token with var() is fine; defining one is not." \

@@ -95,6 +95,8 @@ now **derived**:
 | **R3** | Any `.css` under `orkui/template/` that is **not** CMS-owned is CRM CSS. | A stylesheet dropped at `orkui/template/default/probe-tween.css`, in `orkremental/`, or in `revised-frontend/style/` is guarded as CRM CSS (C5) immediately — C5 no longer watches `style/` specifically. |
 | **R4** | `--all` unions `git ls-files` with `git ls-files --others --exclude-standard` and names the untracked files it pulled in. | An audit can no longer report a clean tree while an unguarded, not-yet-`git add`ed template sits in the working copy. |
 | **R5** | A symlink in an in-scope path is **rejected** (C0), never scanned. | `git show :path` on a symlink returns the *link target*, one short line that passes every rule — so a staged symlink used to be a way to ship arbitrary CSS through the gate. |
+| **R6** | The **CRM stylesheet set is read off the filesystem** — every `.css` under `style/`, at any depth, plus `orkshell-interop.css`. | C4/C6 named three files and so were blind to `reports.css` (55 KB) and `custom.css`, which had been sitting in `style/` all along. A CRM stylesheet added tomorrow is covered the day it lands — and a CMS stylesheet must not reuse a CRM stylesheet's basename. |
+| **R7** | **Asset-base seeds** are derived too: every in-scope file is scanned for `$name = HTTP_TEMPLATE\|DIR_TEMPLATE . '…'`, and a name the tree assigns a provable prefix to resolves to it in files that do not assign it themselves. | `_assets_public.tpl` is handed `$fdAssetBase` by its six includers, so read alone its href is unresolvable and C4's fail-closed rule would fire on the one file whose job is linking the CMS stylesheets. In-file assignment always wins; an unresolvable assignment seeds nothing. It cuts the other way too — point one of those names at `style/` anywhere and every partial consuming it starts reporting. |
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
@@ -179,14 +181,17 @@ now **derived**:
     CSS like everything else.
 - **C4 — nothing a standalone org site renders may pull in CRM CSS.** Two
   halves, and between them they need no include-graph walk to be reliable:
-  - **C4-link** — no file on the **public tier** may link (or `@import`)
-    `orkui.css`, `tokens.css` or `orkshell-interop.css`. Scope is the whole tier
-    — C1's scope, stylesheets included — with exactly **one** exemption:
-    `frontdoor/_assets_inshell.tpl`, the designated link point for the in-shell
-    surfaces. The old scope was a two-file list, so a *new* partial
-    (`frontdoor/_assets_extra.tpl` linking `orkui.css`, included from
-    `Site_shell.tpl`) was the same one-line detour C4 exists to close, one
-    directory deeper.
+  - **C4-link** — no file on the **public tier** may link (or `@import`) a CRM
+    stylesheet. Scope is the whole tier — C1's scope, stylesheets included —
+    with exactly **one** exemption: `frontdoor/_assets_inshell.tpl`, the
+    designated link point for the in-shell surfaces. The old scope was a
+    two-file list, so a *new* partial (`frontdoor/_assets_extra.tpl` linking
+    `orkui.css`, included from `Site_shell.tpl`) was the same one-line detour C4
+    exists to close, one directory deeper.
+    **What counts as a CRM stylesheet is a path *shape*, not a name** — see
+    [Which stylesheet a path names](#which-stylesheet-a-path-names) below — and
+    an href or `@import` whose destination cannot be proved is **reported**,
+    the same fail-closed stance C4-path takes on an include.
   - **C4-path** — a file on the **org-site render path** (`Site_shell.tpl` and
     everything under `frontdoor/`) may not include `_assets_inshell.tpl`, and
     may not `include` a `.tpl` that resolves **outside `frontdoor/`**. That is
@@ -214,9 +219,46 @@ now **derived**:
   sites. A link added to its `else:` branch — or added unconditionally — brings
   back the 91 KB this whole separation exists to remove. The check is
   branch-aware (it follows PHP alternative-syntax `if`/`elseif`/`else`/`endif`
-  nesting, so the legitimate branch is not a false positive) and fail-closed: a
-  structure it cannot follow is reported, not waved through. If you restructure
-  that gate, expect to teach `bin/check-css-boundaries.sh` the new shape.
+  nesting, so the legitimate branch is not a false positive) and fail-closed
+  twice over: a structure it cannot follow is reported, and so is a stylesheet
+  href on an org-reachable branch whose destination it cannot prove. It reads
+  the same path shapes C4-link does. If you restructure that gate, expect to
+  teach `bin/check-css-boundaries.sh` the new shape.
+
+### Which stylesheet a path names
+
+C4-link and C6 used to ask "is the literal `default/style/…css`, or one of three
+basenames, on this line?". Every spelling below is idiomatic in this codebase
+rather than obfuscation, and each one walked straight past:
+
+| Spelling | Why it got through |
+|---|---|
+| `HTTP_TEMPLATE . "default/style/" . "orkui.css"` | the literal is split at the quote |
+| `HTTP_TEMPLATE . "default/sty" . "le/orkui.css"` | …and can be split anywhere |
+| `default/frontdoor/../style/orkui.css` | a `..` hop |
+| `../style/orkui.css` | a relative spelling |
+| `default/style//orkui.css` | a doubled slash |
+| an `href` split across two lines | the regex was per line |
+| `default/style/reports.css`, `custom.css` | not one of the three names |
+| `@import url("../../style/reports.css")` | ditto, from a stylesheet |
+
+Now the path is **resolved, then judged by shape**. PHP is evaluated as far as
+string values go — adjacent literals joined, `HTTP_TEMPLATE` / `DIR_TEMPLATE` /
+`__DIR__` known, variables followed through in-file assignments, array literals
+and `foreach ($fdCssSet as $fdCssFile)` **enumerated** so each of the three
+values is classified — a `<link>` is accumulated across lines, and the result is
+normalised (`..` resolved, `//` collapsed, query and scheme stripped). Anything
+landing in a `style/` directory, or matching a basename R6 derived, is CRM CSS.
+Anything still unresolved is **reported**, because "cannot prove" is not "safe".
+
+Only the two vectors that actually make a browser fetch a stylesheet are read
+this way — a `<link>` whose `rel` could be one, and an `@import`. An `<img src>`,
+a `<script src>` and an `<a href>` are left alone; that narrowness is what keeps
+fail-closed from firing on the dynamic hrefs all over the CMS templates.
+**Not covered, stated honestly:** a stylesheet injected by JavaScript.
+`frontdoor/js/` is not scanned by this gate at all and no text scanner can
+follow it — `tests/cms-css/boundary_test.php` reads what a live surface actually
+serves, and is the backstop for that.
 
 Comment text is stripped before the rules run, so discussing these patterns in
 prose — as this directory's files do constantly — is not a violation. The
@@ -266,9 +308,13 @@ protects is observable at runtime and cannot be spelled around:
 `tests/cms-css/boundary_test.php` reads no source. It fetches the real surfaces
 off a running app and asserts on the HTML that is served:
 
-1. no org-site page links `tokens.css`, `orkui.css`, `reports.css`,
-   `cms-admin.css` or `orkshell-interop.css` — and still links `cms-base.css` +
-   `orgsite.css`, so "zero CRM CSS" cannot be won by serving no CSS at all;
+1. no org-site page links a CRM stylesheet — by **name**, over a set derived at
+   run time from what is actually in `style/` (so `custom.css` and anything
+   added later count, not just the three the list used to hold) plus
+   `cms-admin.css` and `orkshell-interop.css`, and by **shape**, so nothing
+   served out of a `style/` directory reaches an org site whatever it is called.
+   It must still link `cms-base.css` + `orgsite.css`, so "zero CRM CSS" cannot
+   be won by serving no CSS at all;
 2. the **in-shell** surfaces (front door, `Blog/index`, a discovered
    `Blog/post`) still link `orkui.css` + `tokens.css` + `orkshell-interop.css`,
    so satisfying (1) by unlinking the CRM stylesheets globally fails here
