@@ -1096,6 +1096,17 @@ class Authorization extends Ork3
 			$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
 			if ($rs && $rs->Next()) {
 				$this->evictLruSessions($mundane_id);
+				// Anonymous sign-in tally: one (day, client-bucket) counter,
+				// deliberately WITHOUT mundane_id/ip/token — per-player login
+				// tracking is an overreach; daily counts by client are the
+				// usage signal (Release Feature Utilization report). If the
+				// table doesn't exist yet (code deployed before migration),
+				// ERRMODE_WARNING swallows the failure and login is unaffected.
+				$DB->Clear();
+				$DB->client = ork_session_client_label($user_agent);
+				$DB->Execute("INSERT INTO " . DB_PREFIX . "signin_tally (day, client, signins) "
+					. "VALUES (CURDATE(), :client, 1) "
+					. "ON DUPLICATE KEY UPDATE signins = signins + 1");
 				return $token;
 			}
 		}
