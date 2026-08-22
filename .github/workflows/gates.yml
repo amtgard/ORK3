@@ -111,35 +111,113 @@ jobs:
       # failure AND prints a `FAIL  <label>` line; both are checked, because a
       # script that one day forgets to exit non-zero must not pass silently.
       #
-      # tests/cms-css/boundary_test.php IS EXPECTED TO SKIP HERE, and that is a
-      # deliberate decision, not an oversight. It fetches real surfaces off a
-      # running app. Standing one up in the runner is possible (docker compose
-      # is in the repo) but pointless: the repo carries incremental
-      # db-migrations/ and no baseline schema or data dump, so the app would
-      # come up against an empty database with no ork_cms_site rows, no
-      # kingdoms and no parks — every org-site surface would 404 and the test
-      # would assert on not-found pages. A green run off an empty database is
-      # worse than an honest skip. So it skips, and the skip is REPORTED: the
-      # step prints a banner, emits a ::notice annotation and writes to the job
-      # summary, so a reviewer sees "1 skipped" instead of an unqualified green.
-      # The runtime backstop is run by hand against local docker on :19080 —
-      # see orkui/template/default/frontdoor/css/README.md.
       # ----------------------------------------------------------------------
-      - name: 'Gate 4 — CMS test scripts (tests/cms-*/): any FAIL line or non-zero exit fails the job'
+      # A SKIPPED SURFACE IS NOT A GREEN RUN.
+      #
+      # tests/cms-css/boundary_test.php is the RUNTIME backstop: the check that
+      # catches what the static scanner cannot. It used to be able to lose a
+      # third of itself in silence. With the park org site unpublished the run
+      # dropped from 227 assertions to 194 — the whole park tier and the only
+      # &_pfx=p coverage — and still printed "ALL PASS", still exited 0, and this
+      # job still reported an unqualified green, because the only skip signal it
+      # looked for was a line starting "SKIP:" and a per-surface skip printed
+      # "  note: surface not available, skipped — …" instead.
+      #
+      # The test now ends every run with a machine-readable summary, and this
+      # step parses THAT rather than grepping for a human-facing prefix:
+      #
+      #   RESULT: PASS | PASS-WITH-SKIPS | FAIL
+      #   SKIP-KIND: NONE | WHOLE-RUN | PARTIAL
+      #   SURFACES: <n> EXPECTED, <n> COVERED, <n> SKIPPED
+      #   ASSERTIONS: <n> RAN, <n> FAILED
+      #
+      # and the two kinds of skip are treated differently, deliberately:
+      #
+      #   PARTIAL  — the app ANSWERED and a named surface still did not run.
+      #              That is real coverage loss with a real cause, and it is
+      #              the exact defect above. It FAILS THE JOB, red.
+      #   WHOLE-RUN— nothing answered at all: no app, no assertions, nothing to
+      #              be falsely confident about. It emits a ::warning annotation
+      #              (visible on the PR, not buried in a log), a job-summary
+      #              line and a banner, and the job stays green.
+      #
+      # Why WHOLE-RUN is a warning and not red: in this repo it is the EXPECTED
+      # state of every CI run (see below), so making it red would paint every PR
+      # red forever, and a check that is always red is a check nobody reads. The
+      # honest signal is "this ran 0 of 9 surfaces", stated where a reviewer sees
+      # it. PARTIAL, by contrast, should never happen and is never expected, so
+      # it gets the strongest signal available.
+      #
+      # A missing summary is itself a failure: if the backstop ever stops
+      # printing RESULT:, this step cannot tell what ran, and "cannot tell" is
+      # treated as broken rather than fine.
+      #
+      # ----------------------------------------------------------------------
+      # WHY CI DOES NOT STAND THE APP UP — decided, not defaulted.
+      #
+      # docker compose files ARE in the repo (docker-compose.php8.yml et al), so
+      # standing up php + mariadb in the runner is mechanically possible. It is
+      # not worth it, and the reason is data, not containers:
+      #
+      #   * every tracked .sql file except one is an INCREMENTAL migration under
+      #     db-migrations/ (88 of 89);
+      #   * the one exception, ork.sql, is a 2013 phpMyAdmin SCHEMA dump: 38
+      #     CREATE TABLEs, ZERO INSERTs, and not one ork_cms_* table in it — the
+      #     entire CMS schema postdates it.
+      #
+      # So an app stood up in CI would come up against a database with no
+      # ork_cms_site rows, no kingdoms, no parks and no posts. Every org-site
+      # surface would 404, and the backstop — which asserts on what a REAL org
+      # site serves — would have nothing to assert against. It would report
+      # 0 covered surfaces: the same WHOLE-RUN skip, after ten minutes of
+      # container startup. Worse, if anyone later "fixed" that by relaxing the
+      # surface checks, CI would go green off an empty database, which is the
+      # false confidence this whole gate exists to prevent.
+      #
+      # The moment CI does have a populated app, this needs no rewrite: set
+      # ORK_BASE_URL for the job and the loop below runs the backstop with
+      # --strict, in which ANY skip is a failure.
+      #
+      # Until then the runtime backstop is run BY HAND against local docker on
+      # :19080 before merging — `php tests/cms-css/boundary_test.php --strict` —
+      # and this step says so in its own output, in the job summary and in a PR
+      # annotation, so the check never reads as an unqualified green.
+      # See orkui/template/default/frontdoor/css/README.md.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 4 — CMS test scripts (tests/cms-*/): a FAIL line, a non-zero exit, or a skipped runtime surface fails the job'
         shell: bash
         run: |
           set -uo pipefail
 
+          BACKSTOP="tests/cms-css/boundary_test.php"
+
           failed=""
-          skipped=""
           ran=0
+          backstop_seen=0
+          backstop_line="did not run (script not found in tests/cms-*/)"
+          backstop_note=""
 
           for t in $(git ls-files 'tests/cms-*/*.php' | sort); do
-              echo "::group::php $t"
-              if out=$(php "$t" 2>&1); then rc=0; else rc=$?; fi
+              # The runtime backstop runs STRICT the moment CI actually has an
+              # app to point it at. Plain string, not an array: "--strict" has no
+              # spaces, and an empty unquoted expansion is simply no argument.
+              args=""
+              if [ "$t" = "$BACKSTOP" ] && [ -n "${ORK_BASE_URL:-}" ]; then
+                  args="--strict"
+              fi
+
+              echo "::group::php $t $args"
+              # shellcheck disable=SC2086
+              if out=$(php "$t" $args 2>&1); then rc=0; else rc=$?; fi
               printf '%s\n' "$out"
               echo "::endgroup::"
               ran=$((ran + 1))
+
+              # The machine-readable summary, if this script emits one.
+              result=$(printf '%s\n'   "$out" | sed -n 's/^RESULT: *//p'     | tail -n 1)
+              skipkind=$(printf '%s\n' "$out" | sed -n 's/^SKIP-KIND: *//p'  | tail -n 1)
+              surfaces=$(printf '%s\n' "$out" | sed -n 's/^SURFACES: *//p'   | tail -n 1)
+              asserts=$(printf '%s\n'  "$out" | sed -n 's/^ASSERTIONS: *//p' | tail -n 1)
 
               bad=0
               if [ "$rc" -ne 0 ]; then
@@ -151,29 +229,86 @@ jobs:
                   printf '%s\n' "$out" | grep -E '^[[:space:]]*FAIL' | sed 's/^/    /'
                   bad=1
               fi
-              [ "$bad" -eq 1 ] && failed="$failed $t"
-
-              if printf '%s\n' "$out" | grep -q '^SKIP:'; then
-                  skipped="$skipped $t"
+              if [ "$result" = "FAIL" ]; then
+                  echo "::error file=$t,title=CMS test reported RESULT: FAIL::$t — $surfaces"
+                  bad=1
               fi
+
+              if [ "$t" = "$BACKSTOP" ]; then
+                  backstop_seen=1
+                  if [ -z "$result" ]; then
+                      # It printed no summary at all: this step cannot tell how
+                      # much of the backstop ran. "Cannot tell" is broken.
+                      echo "::error file=$t,title=Runtime backstop printed no machine-readable summary::$t emitted no 'RESULT:' line, so CI cannot tell which surfaces ran. Restore the summary block (see the header of $t)."
+                      backstop_line="UNKNOWN — no RESULT: line; CI cannot tell what ran"
+                      bad=1
+                  else
+                      backstop_line="$result — $surfaces; $asserts"
+                      case "$result" in
+                          PASS)
+                              ;;
+                          PASS-WITH-SKIPS)
+                              if [ "$skipkind" = "WHOLE-RUN" ]; then
+                                  echo ""
+                                  echo "=============================================================="
+                                  echo "RUNTIME BACKSTOP DID NOT RUN."
+                                  echo "  $t"
+                                  echo "  $surfaces"
+                                  echo "  $asserts"
+                                  echo "Nothing answered at the base URL, so ZERO of the CMS surfaces"
+                                  echo "were checked. This job is NOT a full green: run the backstop"
+                                  echo "by hand against local docker before merging —"
+                                  echo "    php tests/cms-css/boundary_test.php --strict"
+                                  echo "=============================================================="
+                                  echo "::warning file=$t,title=Runtime CSS backstop did not run in CI::$surfaces. No app answered, so the runtime half of the CMS/CRM CSS separation was NOT checked by this job. Run 'php tests/cms-css/boundary_test.php --strict' against local docker on :19080 before merging."
+                                  backstop_note="whole-run skip"
+                              else
+                                  # The app answered and a named surface still did
+                                  # not run. That is coverage loss, and it is what
+                                  # used to pass silently.
+                                  echo ""
+                                  echo "=============================================================="
+                                  echo "RUNTIME BACKSTOP RAN PARTIALLY — this is a FAILURE."
+                                  echo "  $surfaces"
+                                  echo "  $asserts"
+                                  printf '%s\n' "$out" | grep '^SURFACE: .* SKIPPED ' | sed 's/^/    /'
+                                  echo "=============================================================="
+                                  echo "::error file=$t,title=Runtime CSS backstop skipped a surface::$surfaces — the app answered but a named surface did not run, so part of the backstop silently did not execute. Fix the surface or the environment; do not merge on a partial run."
+                                  backstop_note="PARTIAL skip — failed"
+                                  bad=1
+                              fi
+                              ;;
+                          FAIL)
+                              backstop_note="failed"
+                              ;;
+                          *)
+                              echo "::error file=$t,title=Runtime backstop reported an unknown RESULT::$t printed 'RESULT: $result', which this workflow does not know how to interpret."
+                              backstop_line="UNKNOWN RESULT: $result"
+                              bad=1
+                              ;;
+                      esac
+                  fi
+              fi
+
+              [ "$bad" -eq 1 ] && failed="$failed $t"
           done
 
-          echo "### CMS test scripts" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Ran \`$ran\` script(s) from \`tests/cms-*/\`." >> "$GITHUB_STEP_SUMMARY"
-
-          if [ -n "$skipped" ]; then
-              echo ""
-              echo "=============================================================="
-              echo "SKIPPED (needs a running ORK app, not available in CI):"
-              for s in $skipped; do echo "    $s"; done
-              echo "This job is NOT fully green: run the skipped script by hand"
-              echo "against local docker — ORK_BASE_URL=http://localhost:19080"
-              echo "=============================================================="
-              echo "::notice title=CMS runtime backstop skipped in CI::$skipped needs a running ORK app with a populated CMS database; CI has neither. Run it by hand against local docker before merging."
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-              echo "**Skipped (needs a running app):**$skipped — CI cannot supply a populated CMS database, so this one is run by hand against local docker on :19080." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$backstop_seen" -eq 0 ]; then
+              echo "::error title=Runtime backstop missing::$BACKSTOP was not found by 'git ls-files tests/cms-*/*.php'. The runtime half of the CSS separation has no coverage in CI."
+              failed="$failed $BACKSTOP(missing)"
           fi
+
+          {
+              echo "### CMS test scripts"
+              echo ""
+              echo "Ran \`$ran\` script(s) from \`tests/cms-*/\`."
+              echo ""
+              echo "**Runtime CSS backstop (\`$BACKSTOP\`):** $backstop_line"
+              if [ "$backstop_note" = "whole-run skip" ]; then
+                  echo ""
+                  echo "> :warning: **The runtime backstop did not run in this job.** No app answered, so 0 CMS surfaces were checked. CI has no populated CMS database (the repo carries incremental \`db-migrations/\` and a 2013 schema-only \`ork.sql\` with no \`ork_cms_*\` tables), so this is expected — but it means the static scanner is the only CSS gate this job actually exercised. Run \`php tests/cms-css/boundary_test.php --strict\` against local docker on :19080 before merging."
+              fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -n "$failed" ]; then
               echo ""
@@ -184,4 +319,9 @@ jobs:
           fi
 
           echo ""
-          echo "All $ran CMS test script(s) passed (skips listed above, if any)."
+          if [ "$backstop_note" = "whole-run skip" ]; then
+              echo "$ran CMS test script(s) passed — but the RUNTIME BACKSTOP DID NOT RUN."
+          else
+              echo "All $ran CMS test script(s) passed."
+          fi
+          echo "Runtime CSS backstop: $backstop_line"

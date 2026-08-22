@@ -39,10 +39,63 @@
 //      mirror of C7 in bin/check-css-boundaries.sh: sections 1-4 read the served
 //      HTML, and a stylesheet a script appends after load is not in it.
 //
-// SAFE IN ANY ENVIRONMENT. If nothing answers at the base URL the script prints
-// a SKIP line and exits 0. Point it elsewhere with ORK_BASE_URL:
+// ---------------------------------------------------------------------------
+// SKIPS ARE ACCOUNTED FOR, NOT SWALLOWED
+//
+// This file used to skip in two ways, and BOTH of them exited 0 with no machine-
+// readable trace:
+//
+//   * whole run — nothing answers at the base URL: it printed "SKIP: …" and
+//     "SKIPPED (0 assertions run)" and exited 0;
+//   * per surface — a surface did not render a CMS page: it printed
+//     "  note: surface not available, skipped — org home (park ambient-forest)"
+//     and carried on to print ALL PASS.
+//
+// The second one is the dangerous one. With the park site unpublished the run
+// dropped from 227 assertions to 194 — the entire park tier and the only
+// &_pfx=p coverage gone — and still printed ALL PASS, still exited 0, and CI
+// (which detected a skip by grepping for a leading "SKIP:") reported an
+// unqualified green. A backstop that can lose a third of itself without a
+// signal is worse than no backstop: it produces false confidence.
+//
+// So every exit path now ends with a MACHINE-READABLE SUMMARY, always printed:
+//
+//     SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
+//     SURFACE: org home (kingdom burning-lands) COVERED 33
+//     SURFACE: org post (discovered) SKIPPED 0 — <why>
+//     ASSERTIONS: 194 RAN, 0 FAILED
+//     MODE: LENIENT
+//     SKIP-KIND: PARTIAL
+//     RESULT: PASS-WITH-SKIPS
+//
+//   RESULT is one of PASS | PASS-WITH-SKIPS | FAIL, and it is the line to parse.
+//   SKIP-KIND is NONE | WHOLE-RUN (nothing answered; no surface ran) | PARTIAL
+//   (the app answered and some named surface still did not run) — the two mean
+//   very different things to a caller, so they are reported separately.
+//
+// THE EXPECTED SURFACE SET IS DERIVED, NOT PINNED. It is $surfaces below plus
+// one single-post surface per tier that list covers, so adding a surface to the
+// list extends the contract automatically and no constant can go stale. A total
+// assertion count is deliberately NOT pinned: the per-surface count legitimately
+// varies with how many stylesheets and same-origin scripts a surface serves, so
+// a pinned total would be a false-failure engine. What is asserted instead is
+// that every expected surface ran, and that each one ran at least one assertion;
+// the per-surface counts are printed so a drop is visible in a diff of the log.
+//
+// TWO MODES:
+//
+//   LENIENT (default) — a skip is reported, RESULT is PASS-WITH-SKIPS, exit 0.
+//     Keeps the script usable on a laptop with the app down, and safe to drop
+//     into a for-loop over tests/cms-*/.
+//   STRICT (--strict, or CMS_CSS_STRICT=1) — ANY skip, whole-run or per-surface,
+//     is a FAILURE: RESULT is FAIL and the exit status is 1. This is the mode to
+//     run anywhere that is supposed to have a fully populated CMS database.
+//
+// Point it at another host with ORK_BASE_URL:
 //
 //     ORK_BASE_URL=http://localhost:19080 php tests/cms-css/boundary_test.php
+//     CMS_CSS_STRICT=1 php tests/cms-css/boundary_test.php
+//     php tests/cms-css/boundary_test.php --strict
 //
 // Design: docs/superpowers/specs/2026-08-21-cms-css-separation-design.md
 // Working reference: orkui/template/default/frontdoor/css/README.md
@@ -54,10 +107,47 @@ if ($BASE === '') {
 $BASE = rtrim($BASE, '/');
 $UI   = $BASE . '/orkui/index.php?Route=';
 
-$fails = 0;
+// ---------------------------------------------------------------------------
+// Mode
+// ---------------------------------------------------------------------------
+$STRICT = ((string) getenv('CMS_CSS_STRICT') === '1');
+foreach (array_slice(isset($argv) ? $argv : array(), 1) as $arg) {
+    if ($arg === '--strict') {
+        $STRICT = true;
+    } elseif ($arg === '--lenient') {
+        $STRICT = false;
+    } else {
+        fwrite(STDERR, "usage: php tests/cms-css/boundary_test.php [--strict|--lenient]\n");
+        exit(2);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accounting. Every assertion is attributed to the surface it was made against,
+// so a surface that did not run is visible as an absence rather than inferred
+// from a total that nobody knows the right value of.
+// ---------------------------------------------------------------------------
+$fails    = 0;
+$ran      = 0;
+$SURFACE  = '(setup)';          // the surface check() attributes to right now
+$COVERED  = array();            // label => assertions run against it
+$SKIPPED  = array();            // label => why it did not run
+
+/** Attribute every following check() to $label. */
+function surface($label)
+{
+    global $SURFACE, $COVERED;
+    $SURFACE = $label;
+    if (!array_key_exists($label, $COVERED)) {
+        $COVERED[$label] = 0;
+    }
+}
+
 function check($label, $cond)
 {
-    global $fails;
+    global $fails, $ran, $SURFACE, $COVERED;
+    $ran++;
+    $COVERED[$SURFACE] = (isset($COVERED[$SURFACE]) ? $COVERED[$SURFACE] : 0) + 1;
     if ($cond) {
         echo "PASS  $label\n";
     } else {
@@ -66,12 +156,105 @@ function check($label, $cond)
     }
 }
 
-/** Print a SKIP banner and leave with a success status. */
-function skip($why)
+/** Record a surface that could not be exercised, and why. */
+function skip_surface($label, $why)
 {
+    global $SKIPPED;
+    $SKIPPED[$label] = $why;
+    echo "  note: surface not available, skipped — $label ($why)\n";
+}
+
+/**
+ * The machine-readable summary, and the ONLY exit from this script.
+ *
+ * $skipKind is NONE, WHOLE-RUN (nothing answered at the base URL, so no surface
+ * could run at all) or PARTIAL (the app answered and a named surface still did
+ * not run). They are reported separately because a caller treats them
+ * differently: WHOLE-RUN is an environment fact, PARTIAL is coverage loss.
+ */
+function finish($skipKind = 'NONE')
+{
+    global $fails, $ran, $STRICT, $EXPECTED_SURFACES, $COVERED, $SKIPPED;
+
+    // Fail closed: an expected surface that is neither registered as covered nor
+    // recorded as skipped is counted as SKIPPED, so a future edit that forgets to
+    // account for one cannot make it disappear from the tally.
+    $expected = count($EXPECTED_SURFACES);
+    $covered  = 0;
+    foreach ($EXPECTED_SURFACES as $label => $_meta) {
+        if (isset($SKIPPED[$label])) {
+            continue;
+        }
+        if (array_key_exists($label, $COVERED)) {
+            $covered++;
+        } else {
+            $SKIPPED[$label] = 'surface was never attempted (unaccounted for)';
+        }
+    }
+    $skipped = $expected - $covered;
+    if ($skipped > 0 && $skipKind === 'NONE') {
+        $skipKind = ($covered === 0) ? 'WHOLE-RUN' : 'PARTIAL';
+    }
+
+    $result = 'PASS';
+    if ($fails > 0) {
+        $result = 'FAIL';
+    } elseif ($skipped > 0) {
+        $result = $STRICT ? 'FAIL' : 'PASS-WITH-SKIPS';
+    }
+
+    // The human verdict. "ALL PASS" is reserved for a run that actually covered
+    // everything: printing it over a run that quietly lost a third of its
+    // surfaces is the exact defect this accounting exists to end.
+    if ($fails > 0) {
+        echo "\n$fails FAILED\n";
+    } elseif ($ran === 0) {
+        echo "\nNOTHING RAN — 0 assertions, $skipped of $expected SURFACE(S) SKIPPED\n";
+    } elseif ($skipped > 0) {
+        echo "\nALL $ran RAN ASSERTIONS PASSED — but $skipped of $expected SURFACE(S) DID NOT RUN\n";
+    } else {
+        echo "\nALL PASS\n";
+    }
+
+    echo "\n--- machine-readable summary (parsed by .github/workflows/gates.yml) ---\n";
+    echo "SURFACES: $expected EXPECTED, $covered COVERED, $skipped SKIPPED\n";
+    foreach ($EXPECTED_SURFACES as $label => $_meta) {
+        if (isset($SKIPPED[$label])) {
+            echo "SURFACE: $label SKIPPED 0 — {$SKIPPED[$label]}\n";
+        } else {
+            echo "SURFACE: $label COVERED " . (isset($COVERED[$label]) ? $COVERED[$label] : 0) . "\n";
+        }
+    }
+    echo "ASSERTIONS: $ran RAN, $fails FAILED\n";
+    echo 'MODE: ' . ($STRICT ? 'STRICT' : 'LENIENT') . "\n";
+    echo "SKIP-KIND: $skipKind\n";
+    echo "RESULT: $result\n";
+
+    if ($result === 'FAIL' && $fails === 0) {
+        echo "\nSTRICT: $skipped expected surface(s) did not run. In strict mode that is a\n";
+        echo "failure, not a note — a backstop that quietly covers less than it claims is\n";
+        echo "worse than one that is honestly absent. Run without --strict (and without\n";
+        echo "CMS_CSS_STRICT=1) to treat these as notes.\n";
+    }
+
+    exit($result === 'FAIL' ? 1 : 0);
+}
+
+/**
+ * A skip that ends the run: nothing more can be asserted. Every expected
+ * surface that has not already been accounted for is recorded as skipped, so
+ * the summary is complete rather than empty.
+ */
+function skip($why, $kind)
+{
+    global $EXPECTED_SURFACES, $SKIPPED, $COVERED;
     echo "SKIP: $why\n";
-    echo "\nSKIPPED (0 assertions run) — this test needs a running ORK app.\n";
-    exit(0);
+    foreach ($EXPECTED_SURFACES as $label => $_meta) {
+        if (!isset($SKIPPED[$label]) && !array_key_exists($label, $COVERED)) {
+            $SKIPPED[$label] = $why;
+        }
+    }
+    finish($kind);
 }
 
 // ---------------------------------------------------------------------------
@@ -412,19 +595,16 @@ $ORK_ANALYTICS = array(
 $ORK_APP_JS = 'script/orkui.js';
 
 // ---------------------------------------------------------------------------
-// Reachability — the SKIP gate
-// ---------------------------------------------------------------------------
-$probe = http_get($BASE . '/', 5);
-if ($probe === null) {
-    skip("app not reachable at $BASE (set ORK_BASE_URL to point elsewhere)");
-}
-
-// ---------------------------------------------------------------------------
 // Surfaces
 // ---------------------------------------------------------------------------
 // tier: 'org'   standalone public org site  — zero CRM CSS
 //       'shell' renders inside the ORK shell — CRM CSS required
 // blog: does this surface emit .blog-* / .blogp-* markup, and so need blog.css?
+//
+// Declared BEFORE the reachability probe on purpose: the expected surface set is
+// derived from this list, and the summary has to be able to report "9 expected,
+// 0 covered" when nothing answers. A whole-run skip that reports no expectation
+// at all is indistinguishable from a run with nothing to do.
 $surfaces = array(
     array('label' => 'org home (kingdom burning-lands)',  'url' => $UI . 'Site/view/burning-lands',         'tier' => 'org',   'blog' => false),
     array('label' => 'org home (kingdom-17)',             'url' => $UI . 'Site/view/kingdom-17',            'tier' => 'org',   'blog' => false),
@@ -435,31 +615,70 @@ $surfaces = array(
     array('label' => 'blog index (Blog/index)',           'url' => $UI . 'Blog/index',                       'tier' => 'shell', 'blog' => true),
 );
 
-/** Fetch a surface; null when it did not render a CMS page (404, login wall, empty DB). */
+// The single-post surfaces are DISCOVERED from the index pages rather than
+// hardcoded (a post slug is data, not configuration) — but they are expected all
+// the same: the single-post render path is the only place .blogp-* / .org-post*
+// is exercised, and "no post in the database" is a coverage hole whether or not
+// anyone chose it. One per tier the list above covers, so this derives too.
+function post_surface_label($tier)
+{
+    return ($tier === 'org') ? 'org post (discovered)' : 'blog post (discovered)';
+}
+
+$EXPECTED_SURFACES = array();
+foreach ($surfaces as $s) {
+    $EXPECTED_SURFACES[$s['label']] = array('tier' => $s['tier'], 'kind' => 'listed');
+}
+foreach (array_unique(array_column($surfaces, 'tier')) as $tier) {
+    $EXPECTED_SURFACES[post_surface_label($tier)] = array('tier' => $tier, 'kind' => 'discovered');
+}
+
+// ---------------------------------------------------------------------------
+// Reachability — the whole-run skip gate
+// ---------------------------------------------------------------------------
+$probe = http_get($BASE . '/', 5);
+if ($probe === null) {
+    skip("app not reachable at $BASE (set ORK_BASE_URL to point elsewhere)", 'WHOLE-RUN');
+}
+
+/**
+ * Fetch a surface. Returns array(body, null), or array(null, why) — a reason
+ * precise enough to act on, because "not available" was exactly the shrug that
+ * let a whole tier disappear from a green run.
+ */
 function fetch_surface($url)
 {
     $r = http_get($url);
-    if ($r === null || $r[0] !== 200 || strpos($r[1], 'fd-page') === false) {
-        return null;
+    if ($r === null) {
+        return array(null, "no HTTP response from $url");
     }
-    return $r[1];
+    if ($r[0] !== 200) {
+        return array(null, "HTTP {$r[0]} from $url");
+    }
+    if (strpos($r[1], 'fd-page') === false) {
+        return array(null, "200 but no .fd-page — not a rendered CMS page — $url");
+    }
+    return array($r[1], null);
 }
 
 $pages = array();
 foreach ($surfaces as $s) {
-    $body = fetch_surface($s['url']);
+    list($body, $why) = fetch_surface($s['url']);
     if ($body === null) {
-        echo "  note: surface not available, skipped — {$s['label']} ({$s['url']})\n";
+        skip_surface($s['label'], $why);
         continue;
     }
+    surface($s['label']);   // registers it as covered, with 0 assertions so far
     $s['body']  = $body;
     $pages[]    = $s;
 }
 
-// Post surfaces need a published post to exist, so they are discovered from the
-// index pages rather than hardcoded — no post in the DB simply means one fewer
-// surface, not a red suite.
+// Post surfaces need a published post to exist, so they are discovered by
+// following a post link off an index page. A tier with no discoverable post is
+// a SKIPPED surface — reported in the summary and fatal under --strict — not a
+// silent "one fewer surface".
 $found = array('org' => false, 'shell' => false);
+$whyNot = array('org' => '', 'shell' => '');
 foreach ($pages as $p) {
     if ($found[$p['tier']]) {
         continue;
@@ -469,14 +688,17 @@ foreach ($pages as $p) {
         continue;
     }
 
-    $url  = $UI . $m[1];
-    $body = fetch_surface($url);
+    $url = $UI . $m[1];
+    list($body, $why) = fetch_surface($url);
     if ($body === null) {
+        $whyNot[$p['tier']] = $why;
         continue;
     }
     $found[$p['tier']] = true;
+    $label             = post_surface_label($p['tier']);
+    surface($label);
     $pages[]           = array(
-        'label' => ($p['tier'] === 'org' ? 'org post (discovered)' : 'blog post (discovered)'),
+        'label' => $label,
         'url'   => $url,
         'tier'  => $p['tier'],
         // A single post renders .blogp-* only in the ORK shell; the org-site post
@@ -486,9 +708,15 @@ foreach ($pages as $p) {
     );
 }
 foreach ($found as $tier => $ok) {
-    if (!$ok) {
-        echo "  note: no published $tier post to discover — that surface is not covered on this run\n";
+    if ($ok) {
+        continue;
     }
+    skip_surface(
+        post_surface_label($tier),
+        $whyNot[$tier] !== ''
+            ? $whyNot[$tier]
+            : "no published $tier post linked from any covered $tier index page"
+    );
 }
 
 $orgPages   = array_values(array_filter($pages, function ($p) {
@@ -498,11 +726,14 @@ $shellPages = array_values(array_filter($pages, function ($p) {
     return $p['tier'] === 'shell';
 }));
 
+// PARTIAL, not WHOLE-RUN: the app answered, so an empty tier is coverage loss
+// rather than an absent environment, and a caller must be able to tell them
+// apart.
 if (!$orgPages) {
-    skip("app answered at $BASE but served no standalone org site — nothing to assert against");
+    skip("app answered at $BASE but served no standalone org site — nothing to assert against", 'PARTIAL');
 }
 if (!$shellPages) {
-    skip("app answered at $BASE but served no in-shell CMS surface — nothing to assert against");
+    skip("app answered at $BASE but served no in-shell CMS surface — nothing to assert against", 'PARTIAL');
 }
 
 echo "Base: $BASE — " . count($orgPages) . " org surface(s), " . count($shellPages) . " in-shell surface(s)\n\n";
@@ -511,6 +742,7 @@ echo "Base: $BASE — " . count($orgPages) . " org surface(s), " . count($shellP
 // 1. A standalone public org site serves ZERO bytes of ORK CRM CSS.
 // ---------------------------------------------------------------------------
 foreach ($orgPages as $p) {
+    surface($p['label']);
     $sheets = stylesheets($p['body']);
     foreach ($CRM_CSS as $crm) {
         check("org site links no $crm — {$p['label']}", !in_array($crm, $sheets, true));
@@ -544,6 +776,7 @@ foreach ($orgPages as $p) {
 //    suite green while breaking every page inside the ORK shell.
 // ---------------------------------------------------------------------------
 foreach ($shellPages as $p) {
+    surface($p['label']);
     $sheets = stylesheets($p['body']);
     foreach ($SHELL_REQUIRED as $need) {
         check("in-shell surface links $need — {$p['label']}", in_array($need, $sheets, true));
@@ -557,6 +790,7 @@ foreach ($shellPages as $p) {
 //    reordered set renders differently while linking exactly the same files.
 // ---------------------------------------------------------------------------
 foreach ($pages as $p) {
+    surface($p['label']);
     $sheets = stylesheets($p['body']);
     $seen   = array();
     foreach ($CASCADE as $name) {
@@ -594,6 +828,7 @@ foreach ($pages as $p) {
 //    "blog-"/"blogp-" — "org-blog-card" is orgsite.css, not blog.css).
 // ---------------------------------------------------------------------------
 foreach ($pages as $p) {
+    surface($p['label']);
     $sheets  = stylesheets($p['body']);
     $linked  = in_array('blog.css', $sheets, true);
     $usesIt  = false;
@@ -617,6 +852,7 @@ foreach ($pages as $p) {
 //    is a rule naming the ORK application shell.
 // ---------------------------------------------------------------------------
 foreach ($orgPages as $p) {
+    surface($p['label']);
     $bad = array();
     foreach (inline_styles($p['body']) as $css) {
         $lc = strtolower($css);
@@ -650,6 +886,7 @@ foreach ($orgPages as $p) {
 //    stop being served, and it must never go back to being org-only.
 // ---------------------------------------------------------------------------
 foreach ($pages as $p) {
+    surface($p['label']);
     $urls  = stylesheet_urls($p['body'], $BASE);
     $all   = '';
     $unread = array();
@@ -703,11 +940,13 @@ foreach ($pages as $p) {
 //    snippets out globally — the in-shell tier still has to serve them.
 // ---------------------------------------------------------------------------
 foreach ($orgPages as $p) {
+    surface($p['label']);
     foreach ($ORK_ANALYTICS as $needle => $what) {
         check("org site serves no $what — {$p['label']}", strpos($p['body'], $needle) === false);
     }
 }
 foreach ($shellPages as $p) {
+    surface($p['label']);
     foreach ($ORK_ANALYTICS as $needle => $what) {
         check("in-shell surface still serves the $what — {$p['label']}", strpos($p['body'], $needle) !== false);
     }
@@ -721,6 +960,7 @@ foreach ($shellPages as $p) {
 //    would take jQuery away from the entire CRM.
 // ---------------------------------------------------------------------------
 foreach ($orgPages as $p) {
+    surface($p['label']);
     check("org site links no orkui.js — {$p['label']}", strpos($p['body'], $ORK_APP_JS) === false);
     // "Serves no CRM JS" must not be achievable by serving no JS at all: the
     // org tier's own behaviour layer (carousel, mobile nav, roster modal) has
@@ -728,6 +968,7 @@ foreach ($orgPages as $p) {
     check("org site still links frontdoor.js — {$p['label']}", strpos($p['body'], 'frontdoor/js/frontdoor.js') !== false);
 }
 foreach ($shellPages as $p) {
+    surface($p['label']);
     check("in-shell surface still links orkui.js — {$p['label']}", strpos($p['body'], $ORK_APP_JS) !== false);
 }
 
@@ -776,6 +1017,7 @@ foreach ($CRM_CSS as $sheet) {
 }
 
 foreach ($orgPages as $p) {
+    surface($p['label']);
     $bodies = array();
     foreach (script_urls($p['body'], $BASE) as $u) {
         $js = js_body($u);
@@ -810,5 +1052,25 @@ foreach ($orgPages as $p) {
     }
 }
 
-echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
-exit($fails === 0 ? 0 : 1);
+// ---------------------------------------------------------------------------
+// 10. The accounting itself.
+//
+//     A surface that was fetched but had nothing asserted against it is the same
+//     failure as one that was never fetched, one step further along: the run
+//     would report it COVERED while covering nothing. And a surface that ran but
+//     is not in the expected set means the derivation above and the loops below
+//     have drifted apart, which would let a future surface run un-tallied.
+// ---------------------------------------------------------------------------
+surface('(accounting)');
+foreach ($pages as $p) {
+    check(
+        "surface is in the expected set — {$p['label']}",
+        isset($EXPECTED_SURFACES[$p['label']])
+    );
+    check(
+        "surface ran at least one assertion — {$p['label']} (" . (isset($COVERED[$p['label']]) ? $COVERED[$p['label']] : 0) . ')',
+        !empty($COVERED[$p['label']])
+    );
+}
+
+finish();

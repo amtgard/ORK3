@@ -491,6 +491,88 @@ correctly does **not** count, the same body in one `@media` context does, a
 reflowed/re-cased copy still matches, and duplication placed after a
 `content: "/*"` string is still seen.
 
+### The runtime backstop, and why a skipped surface is now a failure
+
+`tests/cms-css/boundary_test.php` is the runtime half of the contract: it reads
+no source, fetches the real surfaces off a running app and asserts on what is
+actually served. Being the check that catches what the scanner cannot, it is the
+one place where a silent skip is *most* damaging — and it had two.
+
+1. **Per-surface skip.** A surface that did not render printed
+   `  note: surface not available, skipped — org home (park ambient-forest)` and
+   the run carried on. Demonstrated with the park site unpublished: **227
+   assertions became 194** — the entire park tier and the only `&_pfx=p`
+   coverage — and the run still printed `ALL PASS`, still exited 0, and CI still
+   reported an unqualified green, because the workflow detected a skip by
+   grepping for a line starting `SKIP:`.
+2. **Whole-run skip.** An unreachable app printed `SKIPPED (0 assertions run)`
+   and exited 0, with nothing machine-readable saying how much had not run.
+
+Both are closed the same way: **the run is accounted for, and the accounting is
+machine-readable.** Every exit path — including both skips — ends with
+
+```
+SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
+SURFACE: <label> COVERED <n> | SKIPPED 0 — <why>
+ASSERTIONS: <n> RAN, <n> FAILED
+MODE: LENIENT|STRICT
+SKIP-KIND: NONE|WHOLE-RUN|PARTIAL
+RESULT: PASS|PASS-WITH-SKIPS|FAIL
+```
+
+`ALL PASS` is reserved for a run that covered everything.
+
+**The expected set is derived, not pinned.** It is the `$surfaces` list plus one
+single-post surface per tier that list covers — nine today — so adding a surface
+extends the contract automatically and no constant can go stale. The post
+surfaces are *discovered* (a slug is data), but they are **expected** all the
+same: the single-post render path is the only place `.blogp-*` / `.org-post*` is
+exercised, and "no post in the database" is a coverage hole whether or not
+anyone chose it. A **total assertion count is deliberately not pinned**: the
+per-surface count legitimately varies with how many stylesheets and same-origin
+scripts a surface serves, so a pinned total would be a false-failure engine.
+Section 10 asserts the property that *is* stable — every covered surface ran at
+least one assertion, and every surface that ran is in the expected set — and the
+per-surface counts are printed so a drop shows up in a log diff.
+
+**Two modes.** Lenient (default) reports a skip as `RESULT: PASS-WITH-SKIPS` and
+exits 0, so the script stays usable with the app down. Strict (`--strict` or
+`CMS_CSS_STRICT=1`) makes **any** skip, whole-run or per-surface, a `RESULT:
+FAIL` with exit 1.
+
+**`SKIP-KIND` is the discriminator CI acts on**, and the two kinds are not the
+same event. `PARTIAL` means the app *answered* and a named surface still did not
+run — real coverage loss, with a real cause — so it fails the job red.
+`WHOLE-RUN` means nothing answered at all: no assertions, and nothing to be
+falsely confident about. That is the expected state of every CI run in this repo
+(below), so it produces a `::warning` annotation, a `RUNTIME BACKSTOP DID NOT
+RUN` banner and a job-summary block rather than red — a check that is always red
+is a check nobody reads, and the honest signal is "this ran 0 of 9 surfaces",
+stated where a reviewer sees it. A run that prints **no** summary is red too:
+CI cannot tell what ran, and "cannot tell" is treated as broken.
+
+**CI does not stand the app up, deliberately.** The docker compose files are in
+the repo, so booting php + mariadb in the runner is mechanically possible; the
+blocker is data. 88 of the 89 tracked `.sql` files are incremental migrations
+under `db-migrations/`, and the one exception — `ork.sql` — is a 2013 phpMyAdmin
+**schema** dump: 38 `CREATE TABLE`s, zero `INSERT`s, and not one `ork_cms_*`
+table, the whole CMS schema postdating it. An app in CI would therefore come up
+with no `ork_cms_site` rows, no kingdoms, no parks and no posts; every org-site
+surface would 404 and the backstop would assert against not-found pages — the
+same `WHOLE-RUN` skip, ten minutes later. Worse, "fixing" that by relaxing the
+surface checks would make CI green off an empty database, which is precisely the
+false confidence this gate exists to prevent. The day CI does have a populated
+app, no rewrite is needed: setting `ORK_BASE_URL` for the job makes Gate 4 run
+the backstop with `--strict`.
+
+Verified end to end against local docker: lenient + full app → `RESULT: PASS`,
+9/9 surfaces, 278 assertions; a surface made unavailable by a reversible DB
+change → the skip named in `SURFACES:`/`SURFACE:` with `SKIP-KIND: PARTIAL`,
+exit 0 lenient and **exit 1 strict**; app unreachable → `SKIP-KIND: WHOLE-RUN`,
+exit 0 lenient and **exit 1 strict**; and the workflow's own Gate 4 script,
+extracted from the YAML and run locally, reproduced all four plus the
+no-summary case.
+
 ## What changed
 
 Measured across `67ff338d..HEAD` (Phases 1–3), before → after:

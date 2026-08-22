@@ -427,15 +427,76 @@ off a running app and asserts on the HTML that is served:
    rather than one per spelling, so a clean run does not bury the rest of the
    output; a failure names every spelling that hit.
 
-It is **safe in any environment**: if nothing answers it prints
-`SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)
-that the local DB cannot supply — post surfaces are discovered from the index
-pages rather than hardcoded. Point it elsewhere with `ORK_BASE_URL`.
+### A skipped surface is accounted for, not shrugged off
+
+The backstop used to be able to lose a third of itself in silence. With the park
+org site unpublished the run dropped from **227 assertions to 194** — the whole
+park tier and the only `&_pfx=p` coverage — and still printed `ALL PASS`, still
+exited 0, and CI still reported an unqualified green, because a per-surface skip
+printed `  note: surface not available, skipped — …` and the only skip signal
+anything looked for was a line starting `SKIP:`. A backstop that can vanish
+without a signal is worse than no backstop: it manufactures confidence.
+
+So **every run now ends with a machine-readable summary**, on every exit path:
+
+```
+SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
+SURFACE: org home (kingdom burning-lands) COVERED 33
+SURFACE: org post (discovered) SKIPPED 0 — no published org post linked from any covered org index page
+ASSERTIONS: 243 RAN, 0 FAILED
+MODE: LENIENT
+SKIP-KIND: PARTIAL
+RESULT: PASS-WITH-SKIPS
+```
+
+| Line | Means |
+|---|---|
+| `RESULT:` | `PASS` \| `PASS-WITH-SKIPS` \| `FAIL` — **the line to parse** |
+| `SKIP-KIND:` | `NONE` \| `WHOLE-RUN` (nothing answered; no surface ran) \| `PARTIAL` (the app answered and a named surface still did not run) |
+| `SURFACES:` / `SURFACE:` | the expected set, and per-surface coverage with the assertion count or the reason it did not run |
+| `ASSERTIONS:` | how much actually executed |
+
+`ALL PASS` is now reserved for a run that covered everything; a run that lost a
+surface says so in the human line as well.
+
+**The expected surface set is derived, not pinned.** It is the `$surfaces` list
+plus one single-post surface per tier that list covers, so adding a surface
+extends the contract automatically and no constant can go stale. A total
+assertion count is deliberately *not* pinned — the per-surface count legitimately
+varies with how many stylesheets and same-origin scripts a surface serves, so a
+pinned total would be a false-failure engine. What is asserted instead is that
+every expected surface ran and that each one ran at least one assertion (section
+10), with the per-surface counts printed so a drop is visible in a log diff.
+
+### Two modes
+
+| Mode | A skip is | Exit |
+|---|---|---|
+| **lenient** (default) | reported — `RESULT: PASS-WITH-SKIPS` | 0 |
+| **strict** (`--strict`, or `CMS_CSS_STRICT=1`) | a **failure** — `RESULT: FAIL` | 1 |
+
+Lenient keeps the script usable on a laptop with the app down and safe to drop
+into a `for` loop. Strict is the mode for anywhere that is supposed to have a
+fully populated CMS database — **run it by hand before merging**:
+
+```
+php tests/cms-css/boundary_test.php --strict
+```
+
+Strict needs a **published post on each tier** as well as the seven listed
+surfaces: the single-post render path is the only place `.blogp-*` / `.org-post*`
+is exercised, so a tier with no discoverable post is a coverage hole whether or
+not anyone chose it. A local database with no kingdom- or park-scoped published
+post will report `org post (discovered) SKIPPED` — that is the gap being
+reported, not a bug in the test.
+
+Point it at another host with `ORK_BASE_URL`.
 
 ## Commands
 
 ```
-php tests/cms-css/boundary_test.php    # runtime backstop; SKIPs cleanly if the app is down
+php tests/cms-css/boundary_test.php            # runtime backstop, lenient: skips are reported, exit 0
+php tests/cms-css/boundary_test.php --strict   # ANY skipped surface is a failure (exit 1) — run this before merging
 php tests/cms-css/duplication_ratchet_test.php   # the duplication ratchet, both directions
 bin/check-css-boundaries.sh --all      # audit every file in scope, untracked included
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
@@ -468,8 +529,15 @@ done
 
 Every one of them exits non-zero on failure, so that loop is itself the gate —
 do not pipe the run through `tail`, which would throw the status away.
-`boundary_test.php` is the only one that needs the app up; it SKIPs (exit 0)
-when it is not, so the loop is safe to run anywhere as written.
+`boundary_test.php` is the only one that needs the app up; in its default
+lenient mode it reports skips and still exits 0, so the loop is safe to run
+anywhere as written. **With local docker up, run it again with `--strict`** —
+that is the run that proves every surface was actually exercised, and it is the
+one that catches a surface quietly dropping out of the suite:
+
+```
+php tests/cms-css/boundary_test.php --strict
+```
 
 Both gates block `git commit` and `git push`. stylelint runs on pre-push too,
 but is advisory and never blocks. Deliberate exception, shared by both gates:
@@ -489,7 +557,7 @@ and every `push`:
 | Gate 1 | `bin/check-layering.sh --all` |
 | Gate 2 | `bin/check-css-boundaries.sh --all` |
 | Gate 3 | `npm run lint:css` — stylelint + the tab check + the duplication ratchet, **blocking** here, unlike the advisory pre-push run |
-| Gate 4 | every `tests/cms-*/` script; a non-zero exit **or** a printed `FAIL` line fails the job |
+| Gate 4 | every `tests/cms-*/` script; a non-zero exit, a printed `FAIL` line, **or a `RESULT: PASS-WITH-SKIPS` with `SKIP-KIND: PARTIAL`** fails the job |
 
 The hooks stay the fast path — they fail in seconds, on the staged blob, before
 the commit exists — and none of this replaces them. CI exists because a hook is
@@ -506,18 +574,46 @@ A red check on the PR is therefore the last word, and the escape hatch
 `ORK3_ALLOW_LAYER_VIOLATION=1` is honoured by the hooks only — it is not
 plumbed into CI, by design.
 
-**`tests/cms-css/boundary_test.php` is expected to SKIP in CI, deliberately.**
-It fetches real surfaces off a running app, and standing one up in the runner
-would prove nothing: the repo carries incremental `db-migrations/` and no
-baseline schema or data dump, so the app would come up against an empty
-database with no `ork_cms_site` rows, no kingdoms and no parks — every org-site
-surface would 404 and the test would be asserting on not-found pages. A green
-run off an empty database is worse than an honest skip. So Gate 4 lets it skip
-and **reports the skip out loud**: a banner in the log, a `::notice`
-annotation, and a line in the job summary, so the check never reads as an
-unqualified green. Run it by hand against local docker before merging —
-`ORK_BASE_URL=http://localhost:19080 php tests/cms-css/boundary_test.php`; it
-is the only one of the nine that needs the app.
+### The runtime backstop in CI
+
+Gate 4 no longer detects a skip by grepping for a human-facing `SKIP:` prefix —
+that is exactly what let a per-surface skip through. It **parses the
+machine-readable summary**, and treats the two kinds of skip differently:
+
+| `SKIP-KIND` | What happened | CI |
+|---|---|---|
+| `PARTIAL` | the app **answered** and a named surface still did not run | **job red** — `::error`, a banner naming every skipped surface, and a `Failed:` line in the job summary |
+| `WHOLE-RUN` | nothing answered; **0 of 9** surfaces ran | job green, but a `::warning` annotation on the PR, a `RUNTIME BACKSTOP DID NOT RUN` banner, and a warning block in the job summary |
+
+`PARTIAL` should never happen and gets the strongest signal available.
+`WHOLE-RUN` is the *expected* state of every CI run here (below), so making it
+red would paint every PR red forever, and a check that is always red is a check
+nobody reads — the honest signal is "this ran 0 of 9 surfaces", stated where a
+reviewer sees it. A backstop that prints **no** summary at all is also red: CI
+cannot tell what ran, and "cannot tell" is treated as broken.
+
+**Why CI does not stand the app up — decided, not defaulted.** The docker
+compose files *are* in the repo, so booting php + mariadb in the runner is
+mechanically possible. It is not worth it, and the reason is data, not
+containers: 88 of the 89 tracked `.sql` files are incremental migrations under
+`db-migrations/`, and the one exception — `ork.sql` — is a 2013 phpMyAdmin
+**schema** dump with 38 `CREATE TABLE`s, **zero** `INSERT`s and **not one
+`ork_cms_*` table** (the entire CMS schema postdates it). An app stood up in CI
+would come up with no `ork_cms_site` rows, no kingdoms, no parks and no posts;
+every org-site surface would 404 and the backstop would have nothing to assert
+against — the same `WHOLE-RUN` skip, after ten minutes of container startup. And
+if anyone later "fixed" that by relaxing the surface checks, CI would go green
+off an empty database, which is the false confidence this gate exists to
+prevent.
+
+The moment CI *does* have a populated app this needs no rewrite: **set
+`ORK_BASE_URL` for the job** and Gate 4 runs the backstop with `--strict`, in
+which any skip at all is a failure.
+
+Until then the runtime backstop is run **by hand** against local docker before
+merging — `php tests/cms-css/boundary_test.php --strict` — and Gate 4 says so in
+its own step output, in the job summary and in a PR annotation, so the check
+never reads as an unqualified green.
 
 ## The duplication ratchet
 
