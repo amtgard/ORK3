@@ -17,27 +17,55 @@
  * collapsed onto one selector list. An earlier pass got that wrong; this script is
  * the reason it cannot happen quietly again.
  *
- * Two ratchets, both enforced:
+ * Two budgets:
  *   MAX_GROUPS_2PLUS  bodies with >= 2 declarations. The real DRY signal: a copied
  *                     component almost always shares more than one declaration.
  *   MAX_GROUPS_ANY    every duplicate body, single-declaration coincidences
  *                     included (two unrelated rules that both say `display:flex`).
  *                     Noisier, so it gets its own, larger budget.
- * Either number growing fails the run. Neither shrinking does — tighten the
- * constant when you collapse a group, and the ratchet holds the new floor.
+ *
+ * A RATCHET, NOT A FREEZE — enforced in BOTH directions.
+ *   observed >  budget   FAIL. New duplication. Collapse it, or justify it and
+ *                        raise the constant in the same commit.
+ *   observed <  budget   FAIL, with a different message and a different remedy:
+ *                        duplication IMPROVED and the budget has to be tightened
+ *                        so the improvement is permanent.
+ *   observed == budget   pass.
+ *
+ * The second case is the whole point of this file's rewrite. The budgets are set
+ * EQUAL to the observed counts and only ever moved by hand, so a gate that failed
+ * upward alone was a freeze: collapse a group today, the count drops, the gate
+ * stays green, and the slack sits there for the next commit to spend on a fresh
+ * copy — with the gate green the whole time. Duplication could never improve on
+ * paper, because nothing ever lowered the number. Making slack itself a failure
+ * captures every improvement the moment it happens.
  *
  * Usage:
  *   bin/check-css-duplication.php               # the CMS CSS set; enforce both budgets
  *   bin/check-css-duplication.php --verbose     # ... and list every group with locations
  *   bin/check-css-duplication.php --report      # list + counts, never fails (exit 0)
+ *   bin/check-css-duplication.php --rebaseline  # pin the observed counts (see below)
  *   bin/check-css-duplication.php --min-decls=3 # only bodies with >= 3 declarations
  *   bin/check-css-duplication.php --files a.css b.css
  *
- * RE-BASELINING. When you deliberately add duplication (or add a stylesheet that
- * arrives with some), run with --report, take the two printed counts, and edit the
- * two constants below — in the same commit, with the reason in the commit message.
- * Lowering them after a cleanup needs no ceremony. Do not raise them to get a
- * commit through; that is what the numbers are for.
+ * RE-BASELINING IS ONE COMMAND:
+ *
+ *     npm run lint:css:dupes:rebaseline
+ *
+ * It rewrites the two constants below to the observed counts and prints the
+ * before/after. It LOWERS them freely; it refuses to RAISE either one unless you
+ * also pass --allow-raise, because raising a budget is how duplication gets
+ * laundered through a gate and should cost a deliberate keystroke and a sentence
+ * in the commit message. Either way the edit lands in your working tree — commit
+ * it with the change that moved the number, never on its own.
+ *
+ * ESCAPE HATCH, mirroring the layering gate's ORK3_ALLOW_LAYER_VIOLATION=1:
+ *
+ *     CSS_DUP_ALLOW_SLACK=1 npm run lint:css
+ *
+ * forgives "observed below budget" for one run, for a work-in-progress branch
+ * that is mid-cleanup and not ready to pin a floor. It forgives ONLY that
+ * direction — it can never let duplication rise.
  */
 
 // ---------------------------------------------------------------------------
@@ -78,8 +106,32 @@
 // interop file exists to hold, the same shape cms-admin.css already carries for
 // .cms-btn-primary. Both rules carry a comment saying so.
 // ---------------------------------------------------------------------------
+//
+// 2026-08-22, P3 (ratchet tightens as well as holds): ANY 91 -> 90, 2PLUS
+// unchanged at 26. The first TIGHTENING step, and the first one this gate would
+// have demanded on its own. The largest duplicate body in the CMS CSS was seven
+// copies of `color:var(--cms-gold,#f0b429)` scattered across ~2,300 lines of
+// cms-admin.css; they are now one grouped rule under a "Gold accent text"
+// comment, placed at the position of .cms-editbar-hint-dirty — the one member
+// whose cascade position is load-bearing, because it overrides .cms-editbar-hint
+// at EQUAL specificity and only source order makes it win.
+//
+// Equivalence was proved, not assumed. Specificity is unchanged by a move, so
+// the only way a move can change a rendered value on any DOM is by flipping a
+// cascade pair that shares a property at equal specificity in the same at-rule
+// context. All 54,778 such ordered pairs in the file were enumerated before and
+// after; exactly 4 flipped, and all 4 are between class pairs that never appear
+// together on one element in any of the 4,203 distinct class attributes the repo
+// emits (.cms-rail-icon vs .cms-crumb / .cms-icon-danger, .cms-dash-livelink vs
+// .kn-ac-item / .te-btn-ghost). Resolving every property for 4,558 modelled
+// elements gave a byte-identical 215,133-line snapshot before and after.
+//
+// The next-largest group, 6 copies of `display:flex`, is NOT collapsible: four
+// live in cms-admin.css and two in blocks.css, and a selector list lives in
+// exactly one file, so no grouping can take that group below two members.
+// ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 26;
-const MAX_GROUPS_ANY   = 91;
+const MAX_GROUPS_ANY   = 90;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(
@@ -226,14 +278,76 @@ function cssNormalizeBody($body)
     return $out;
 }
 
+/**
+ * Locate a constant's definition in THIS file.
+ *
+ * The failure message prints the exact line to edit, so it has to FIND the line
+ * rather than quote a number that goes stale the first time anyone adds a
+ * paragraph to the comment above it.
+ *
+ * @return array{line:int, text:string}|null
+ */
+function dupConstantLine($name)
+{
+    foreach (file(__FILE__) as $i => $text) {
+        if (preg_match('/^\s*const\s+' . preg_quote($name, '/') . '\s*=/', $text)) {
+            return array('line' => $i + 1, 'text' => rtrim($text, "\r\n"));
+        }
+    }
+    return null;
+}
+
+/**
+ * Rewrite this file's budget constants in place.
+ *
+ * Lowers freely; refuses to raise unless $allowRaise, because raising a budget
+ * is how new duplication gets laundered through the gate and should never be
+ * something a convenience command does on its own.
+ *
+ * @param  array<string,int> $values  constant name => observed count
+ * @param  bool              $allowRaise
+ * @return array{changed:array<string,array{0:int,1:int}>, refused:array<string,array{0:int,1:int}>}
+ */
+function dupRebaseline(array $values, $allowRaise)
+{
+    $src     = (string) file_get_contents(__FILE__);
+    $changed = array();
+    $refused = array();
+    foreach ($values as $name => $new) {
+        $src = preg_replace_callback(
+            '/^([ \t]*const[ \t]+' . preg_quote($name, '/') . '[ \t]*=[ \t]*)(\d+)([ \t]*;)/m',
+            function ($m) use (&$changed, &$refused, $name, $new, $allowRaise) {
+                $old = (int) $m[2];
+                if ($old === $new) {
+                    return $m[0];
+                }
+                if ($new > $old && !$allowRaise) {
+                    $refused[$name] = array($old, $new);
+                    return $m[0];
+                }
+                $changed[$name] = array($old, $new);
+                return $m[1] . $new . $m[3];
+            },
+            $src,
+            1
+        );
+    }
+    if ($changed) {
+        file_put_contents(__FILE__, $src);
+    }
+    return array('changed' => $changed, 'refused' => $refused);
+}
+
 // ---------------------------------------------------------------------------
 // Arguments
 // ---------------------------------------------------------------------------
-$verbose  = false;
-$report   = false;
-$minDecls = 1;
-$files    = array();
-$mode     = 'all';
+$verbose    = false;
+$report     = false;
+$rebaseline = false;
+$allowRaise = false;
+$minDecls   = 1;
+$files      = array();
+$mode       = 'all';
 
 $argvRest = array_slice($argv, 1);
 for ($i = 0; $i < count($argvRest); $i++) {
@@ -243,6 +357,10 @@ for ($i = 0; $i < count($argvRest); $i++) {
     } elseif ($a === '--report') {
         $report  = true;
         $verbose = true;
+    } elseif ($a === '--rebaseline') {
+        $rebaseline = true;
+    } elseif ($a === '--allow-raise') {
+        $allowRaise = true;
     } elseif ($a === '--all') {
         $mode = 'all';
     } elseif (strpos($a, '--min-decls=') === 0) {
@@ -252,7 +370,14 @@ for ($i = 0; $i < count($argvRest); $i++) {
         $files = array_slice($argvRest, $i + 1);
         break;
     } elseif ($a === '--help' || $a === '-h') {
-        echo "usage: bin/check-css-duplication.php [--all|--files a.css …] [--verbose|--report] [--min-decls=N]\n";
+        echo "usage: bin/check-css-duplication.php [--all|--files a.css …] [--verbose|--report]\n";
+        echo "                                     [--min-decls=N] [--rebaseline [--allow-raise]]\n";
+        echo "\n";
+        echo "  The budgets are a two-sided ratchet: observed above the budget fails (new\n";
+        echo "  duplication), observed below it fails too (an improvement nobody pinned).\n";
+        echo "  --rebaseline pins the observed counts; it lowers freely and refuses to raise\n";
+        echo "  without --allow-raise. CSS_DUP_ALLOW_SLACK=1 forgives the below-budget\n";
+        echo "  direction for one run, and only that direction.\n";
         exit(0);
     } else {
         fwrite(STDERR, "unknown argument: $a\n");
@@ -337,30 +462,104 @@ if ($verbose) {
     echo "\n";
 }
 
-if ($report || $mode === 'files' || $minDecls !== 1) {
+$partial = ($mode === 'files' || $minDecls !== 1);
+
+if ($rebaseline && $partial) {
+    fwrite(STDERR, "\n--rebaseline needs the WHOLE CMS CSS set — the budgets describe all of it.\n");
+    fwrite(STDERR, "Drop --files / --min-decls and run: npm run lint:css:dupes:rebaseline\n");
+    exit(2);
+}
+
+// ---------------------------------------------------------------------------
+// The ratchet. Both budgets are compared in BOTH directions:
+//   observed >  budget   duplication ROSE   -> fail, collapse it
+//   observed <  budget   duplication FELL   -> fail, pin the improvement
+//   observed == budget   held               -> pass
+// ---------------------------------------------------------------------------
+$budgets = array(
+    'MAX_GROUPS_2PLUS' => array(
+        'observed' => $dup2Plus,
+        'budget'   => MAX_GROUPS_2PLUS,
+        'label'    => 'duplicate groups with >= 2 declarations',
+    ),
+    'MAX_GROUPS_ANY' => array(
+        'observed' => $dupAny,
+        'budget'   => MAX_GROUPS_ANY,
+        'label'    => 'duplicate groups (any size)',
+    ),
+);
+
+if ($rebaseline) {
+    $wanted = array();
+    foreach ($budgets as $name => $b) {
+        $wanted[$name] = $b['observed'];
+    }
+    $res = dupRebaseline($wanted, $allowRaise);
+    foreach ($res['changed'] as $name => $ch) {
+        printf("REBASELINED  %-17s %d -> %d  (%s)\n", $name, $ch[0], $ch[1], $ch[1] < $ch[0] ? 'tightened' : 'RAISED');
+    }
+    foreach ($res['refused'] as $name => $ch) {
+        printf("REFUSED      %-17s %d -> %d  would RAISE the budget.\n", $name, $ch[0], $ch[1]);
+    }
+    if ($res['refused']) {
+        echo "\n";
+        echo "Raising a budget is how new duplication gets laundered through this gate, so\n";
+        echo "it is not something a convenience command does silently. Collapse the new\n";
+        echo "group instead — or, if the duplication is genuinely deliberate, put a comment\n";
+        echo "on the rule saying why and re-run:\n";
+        echo "\n";
+        echo "    php bin/check-css-duplication.php --rebaseline --allow-raise\n";
+        echo "\n";
+        exit(1);
+    }
+    if (!$res['changed']) {
+        echo "REBASELINE   nothing to do — both budgets already match the observed counts.\n";
+        exit(0);
+    }
+    echo "\n";
+    echo "Constants updated in bin/check-css-duplication.php. Commit that edit TOGETHER\n";
+    echo "with the change that moved the numbers, and say why in the commit message.\n";
+    exit(0);
+}
+
+if ($report || $partial) {
     // Ad-hoc / partial runs are informational: the budgets describe the whole set.
     exit(0);
 }
 
-$fail = false;
-if ($dup2Plus > MAX_GROUPS_2PLUS) {
-    printf(
-        "FAIL  duplicate groups with >= 2 declarations: %d, budget %d.\n",
-        $dup2Plus,
-        MAX_GROUPS_2PLUS
-    );
-    $fail = true;
-}
-if ($dupAny > MAX_GROUPS_ANY) {
-    printf(
-        "FAIL  duplicate groups (any size): %d, budget %d.\n",
-        $dupAny,
-        MAX_GROUPS_ANY
-    );
-    $fail = true;
+$rose = array();
+$fell = array();
+foreach ($budgets as $name => $b) {
+    if ($b['observed'] > $b['budget']) {
+        $rose[$name] = $b;
+    } elseif ($b['observed'] < $b['budget']) {
+        $fell[$name] = $b;
+    }
 }
 
-if ($fail) {
+foreach ($rose as $name => $b) {
+    printf(
+        "FAIL  ^ DUPLICATION ROSE   %-40s %d, pinned budget %d  (+%d).\n",
+        $b['label'] . ':',
+        $b['observed'],
+        $b['budget'],
+        $b['observed'] - $b['budget']
+    );
+}
+foreach ($fell as $name => $b) {
+    printf(
+        "FAIL  v DUPLICATION FELL   %-40s %d, pinned budget %d  (%d).\n",
+        $b['label'] . ':',
+        $b['observed'],
+        $b['budget'],
+        $b['observed'] - $b['budget']
+    );
+}
+
+if ($rose) {
+    echo "\n";
+    echo "Duplication went UP. A copied declaration body is the defect this gate exists\n";
+    echo "for, so the budget did not move for you.\n";
     echo "\n";
     echo "Collapse the new group by SELECTOR GROUPING — put the selectors on one rule at\n";
     echo "the position of the FIRST member. Do not rename classes: block templates and\n";
@@ -369,10 +568,54 @@ if ($fail) {
     echo "  - the grouped rule must still sit AFTER any base rule it overrides at the\n";
     echo "    same specificity, which is not always the first member's position.\n";
     echo "Run with --verbose to see every group and where its copies live.\n";
-    echo "If the duplication is deliberate, say why in a comment on the rule and raise\n";
-    echo "the constant in this file in the same commit.\n";
+    echo "\n";
+    echo "If the duplication is genuinely deliberate — the copies serve tiers that can\n";
+    echo "never share a selector list — say so in a comment on BOTH rules and run:\n";
+    echo "\n";
+    echo "    php bin/check-css-duplication.php --rebaseline --allow-raise\n";
+    echo "\n";
+    echo "CSS_DUP_ALLOW_SLACK=1 does NOT forgive this direction. It never will.\n";
+    echo "\n";
+}
+
+if ($fell) {
+    if (getenv('CSS_DUP_ALLOW_SLACK') === '1' && !$rose) {
+        echo "\n";
+        echo "!  CSS_DUP_ALLOW_SLACK=1 — running below the pinned budget without tightening it.\n";
+        echo "   Fine mid-cleanup; pin the floor before this branch merges:\n";
+        echo "       npm run lint:css:dupes:rebaseline\n";
+        printf("OK    slack allowed (%d / %d groups with >= 2 declarations, %d / %d overall)\n", $dup2Plus, MAX_GROUPS_2PLUS, $dupAny, MAX_GROUPS_ANY);
+        exit(0);
+    }
+    echo "\n";
+    echo "Duplication went DOWN — that is the GOOD direction, and this is not a complaint\n";
+    echo "about your CSS. It is a complaint about the constant. A budget nobody lowers is\n";
+    echo "a floor duplication bounces off forever: the slack you just created is slack the\n";
+    echo "next commit can spend on a fresh copy with this gate green the whole time.\n";
+    echo "Pin the improvement and it can never be given back silently.\n";
+    echo "\n";
+    echo "One command:\n";
+    echo "\n";
+    echo "    npm run lint:css:dupes:rebaseline\n";
+    echo "\n";
+    echo "or edit this file by hand:\n";
+    echo "\n";
+    foreach ($fell as $name => $b) {
+        $at = dupConstantLine($name);
+        printf("    bin/check-css-duplication.php:%d\n", $at ? $at['line'] : 0);
+        printf("      - %s\n", $at ? ltrim($at['text']) : "const $name = {$b['budget']};");
+        printf("      + %s\n", preg_replace('/=\s*\d+\s*;/', '= ' . $b['observed'] . ';', $at ? ltrim($at['text']) : "const $name = {$b['observed']};"));
+        echo "\n";
+    }
+    echo "Mid-cleanup and not ready to pin a floor? For one run only:\n";
+    echo "\n";
+    echo "    CSS_DUP_ALLOW_SLACK=1 npm run lint:css\n";
+    echo "\n";
+}
+
+if ($rose || $fell) {
     exit(1);
 }
 
-printf("OK    within budget (%d / %d groups with >= 2 declarations, %d / %d overall)\n", $dup2Plus, MAX_GROUPS_2PLUS, $dupAny, MAX_GROUPS_ANY);
+printf("OK    ratchet held (%d / %d groups with >= 2 declarations, %d / %d overall)\n", $dup2Plus, MAX_GROUPS_2PLUS, $dupAny, MAX_GROUPS_ANY);
 exit(0);

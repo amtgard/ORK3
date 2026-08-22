@@ -220,7 +220,7 @@ html[data-theme="dark"] .cms-wrap {
     text-align: center;
     font-size: 15px;
 }
-.cms-rail-item.active .cms-rail-icon { color: var(--cms-gold, #f0b429); }
+/* .cms-rail-item.active .cms-rail-icon is gold — see "Gold accent text" below. */
 .cms-rail-label { min-width: 0; }
 .cms-rail-item-quiet { color: rgba(226, 232, 240, .6); font-weight: 500; }
 .cms-rail-item-quiet:hover { color: #fff; }
@@ -287,8 +287,7 @@ html[data-theme="dark"] .cms-wrap {
 .cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
 .cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
 .cms-crumb-sep { color: var(--ork-text-lighter); }
-
-html[data-theme="dark"] .cms-crumb[href]:hover { color: var(--cms-gold, #f0b429); }
+/* dark .cms-crumb[href]:hover is gold — see "Gold accent text" below. */
 
 /* ---- Responsive: collapse the rail to a top horizontal bar ------------- */
 @media (max-width: 900px) {
@@ -1152,7 +1151,7 @@ html[data-theme="dark"] .cms-note-live { background: rgba(184, 134, 11, .14); }
 .cms-dyninfo-body { font-size: 13px; line-height: 1.45; color: var(--ork-text-secondary); }
 
 html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
-html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
+/* dark .cms-note a is gold — see "Gold accent text" below. */
 
 /* media picker field control */
 .cms-media-field {
@@ -1646,7 +1645,33 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
     text-overflow: ellipsis;
 }
 .cms-editbar-hint .cms-spin { border-top-color: var(--cms-gold, #f0b429); }
-.cms-editbar-hint-dirty { color: var(--cms-gold, #f0b429); }
+
+/* ---- Gold accent text -----------------------------------------------------
+ * One declaration that seven unrelated places need. It used to be copied seven
+ * times across ~2,300 lines — the largest duplicate declaration body in the CMS
+ * CSS — and bin/check-css-duplication.php now holds it at one.
+ *
+ * WHY IT LIVES HERE, in the middle of the edit bar rather than in a tidy
+ * accent section: .cms-editbar-hint-dirty is the only member whose position in
+ * the cascade is load-bearing. It overrides .cms-editbar-hint immediately above
+ * at EQUAL specificity (0,1,0), so source order is the only thing that makes it
+ * win, and the grouped rule inherits that constraint for the whole list. The
+ * other six each outrank what they override on specificity alone, so they are
+ * order-independent and follow the one member that is not. Moving this block
+ * earlier silently un-golds the "Unsaved changes…" hint.
+ *
+ * Each of the six former sites keeps a one-line pointer back here.
+ * ------------------------------------------------------------------------- */
+.cms-rail-item.active .cms-rail-icon,
+html[data-theme="dark"] .cms-crumb[href]:hover,
+html[data-theme="dark"] .cms-note a,
+.cms-editbar-hint-dirty,
+html[data-theme="dark"] .cms-frontdoor-text strong,
+html[data-theme="dark"] .cms-dash-livelink:hover,
+html[data-theme="dark"] a.cms-sites-slug:hover {
+    color: var(--cms-gold, #f0b429);
+}
+
 .cms-editbar-hint-saved { color: #8be8a8; }
 .cms-editbar-actions {
     display: flex;
@@ -1700,7 +1725,7 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
 .cms-frontdoor-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cms-frontdoor-text strong { color: var(--ork-text); font-size: 14px; }
 .cms-frontdoor-text span { color: var(--ork-text-muted); font-size: 12.5px; }
-html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b429); }
+/* dark .cms-frontdoor-text strong is gold — see "Gold accent text" above. */
 
 /* ============================================================================
  * Editor — in-context preview pane
@@ -2417,7 +2442,7 @@ html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
 
 .cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
 .cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
-html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
+/* dark .cms-dash-livelink:hover is gold — see "Gold accent text" above. */
 
 @media (max-width: 560px) {
     /* Collapse the label visually but keep the accessible name. */
@@ -2509,7 +2534,7 @@ html[data-theme="dark"] .cms-fd-card {
     font-size: 12px; color: var(--ork-text-muted); text-decoration: none;
 }
 a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
-html[data-theme="dark"] a.cms-sites-slug:hover { color: var(--cms-gold, #f0b429); }
+/* dark a.cms-sites-slug:hover is gold — see "Gold accent text" above. */
 .cms-sites-metric { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Status badges: green / amber / gray */

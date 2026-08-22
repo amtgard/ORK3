@@ -314,12 +314,14 @@ pages rather than hardcoded. Point it elsewhere with `ORK_BASE_URL`.
 
 ```
 php tests/cms-css/boundary_test.php    # runtime backstop; SKIPs cleanly if the app is down
+php tests/cms-css/duplication_ratchet_test.php   # the duplication ratchet, both directions
 bin/check-css-boundaries.sh --all      # audit every file in scope, untracked included
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
 bin/check-css-boundaries.sh --files a.css b.tpl
 npm run lint:css                       # stylelint + tab-indent check + duplication ratchet
 npm run lint:css:fix                   # autofix what stylelint can
 npm run lint:css:dupes:report          # list every duplicate group, never fails
+npm run lint:css:dupes:rebaseline      # pin the observed counts (lowers freely, refuses to raise)
 bin/check-css-duplication.php -v       # the same list, direct
 bin/check-layering.sh --all            # the PHP layering gate, for comparison
 ```
@@ -331,7 +333,8 @@ Run the set by hand; this is the sign-off loop, and `boundary_test.php` belongs
 in it:
 
 ```
-for t in tests/cms-css/boundary_test.php tests/cms-theme/tokens_test.php \
+for t in tests/cms-css/boundary_test.php tests/cms-css/duplication_ratchet_test.php \
+         tests/cms-theme/tokens_test.php \
          tests/cms-site/site_test.php tests/cms-fields/allowlist_test.php \
          tests/cms-fields/officers_vacancy_test.php \
          tests/cms-sanitizer/sanitizer_test.php tests/cms-tenancy/tenancy_test.php \
@@ -371,19 +374,82 @@ body inside two *different* `@media` blocks are not duplicates and cannot be
 collapsed onto one selector list. Its comment stripper is string-aware, so a
 `content: "/*"` cannot blind it to everything below.
 
-`npm run lint:css` enforces two budgets, both set to the count on the day they
-were last measured, so duplication can fall but not rise:
+`npm run lint:css` enforces two budgets, both pinned to the count on the day they
+were last measured:
 
 | Budget | Today | What it counts |
 |---|---|---|
 | `MAX_GROUPS_2PLUS` | **26** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
-| `MAX_GROUPS_ANY` | **91** | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_ANY` | **90** | every duplicate body, single-declaration coincidences included |
 
 Both numbers live as constants at the top of `bin/check-css-duplication.php`.
-**To re-baseline**: run `npm run lint:css:dupes:report`, take the two printed
-counts, edit the two constants, and say why in the same commit. Lower them
-freely after a cleanup — that is the ratchet tightening. Do not raise one just
-to get a commit through.
+
+### It is a ratchet, not a freeze — both directions fail
+
+| Observed vs budget | Verdict | Remedy |
+|---|---|---|
+| **above** | `FAIL ^ DUPLICATION ROSE` | collapse the new group, or justify it and `--rebaseline --allow-raise` |
+| **below** | `FAIL v DUPLICATION FELL` | `npm run lint:css:dupes:rebaseline` — pin the improvement |
+| **equal** | `OK ratchet held` | — |
+
+The below-budget failure is the part people find surprising, so it is worth
+being blunt about why it exists. The budgets were set *equal* to the observed
+counts, and only ever moved by hand. So a one-sided gate meant: collapse a group
+today, the count drops, the gate stays green, and the slack you just created
+sits there for the next commit to spend on a fresh copy — with the gate green the
+whole time. Duplication could never improve **on paper**, because nothing ever
+lowered the number. An improvement that is not pinned is an improvement the next
+commit may silently give back. Now it costs one command to make it permanent,
+and you cannot forget.
+
+**Re-baselining is one command:**
+
+```
+npm run lint:css:dupes:rebaseline
+```
+
+It rewrites both constants to the observed counts and prints the before/after.
+It **lowers freely** and **refuses to raise** either one unless you also pass
+`--allow-raise` — raising a budget is how duplication gets laundered through a
+gate, so it costs a deliberate keystroke and a sentence in the commit message.
+Either way the edit lands in your working tree; commit it *with* the change that
+moved the number, never on its own. The failure message also prints the exact
+`file:line` and the exact replacement line if you would rather edit by hand.
+
+**Mid-cleanup and not ready to pin a floor?** The one-run escape hatch mirrors
+the layering gate's `ORK3_ALLOW_LAYER_VIOLATION=1`:
+
+```
+CSS_DUP_ALLOW_SLACK=1 npm run lint:css
+```
+
+It forgives **only** the below-budget direction. It can never let duplication
+rise, and it does not print a plain `OK` — it says `slack allowed` and tells you
+to pin the floor before the branch merges.
+
+All of this is pinned by `tests/cms-css/duplication_ratchet_test.php`, which
+drives a copy of the gate over a throwaway stylesheet in `/tmp` — including
+`--rebaseline` rewriting the copy's own constants, so the real repo is never
+touched.
+
+### The steps taken so far
+
+The 91→90 step (2026-08-22) is the first **tightening**, and the first one the
+gate demanded on its own. The largest duplicate body in the CMS CSS was seven
+copies of `color: var(--cms-gold, #f0b429)` scattered across ~2,300 lines of
+`cms-admin.css`; they are now one grouped rule under a `Gold accent text`
+comment, sitting at the position of `.cms-editbar-hint-dirty` — the one member
+whose cascade position is load-bearing, because it overrides `.cms-editbar-hint`
+at equal specificity and only source order makes it win. Equivalence was proved,
+not assumed: specificity is unchanged by a move, so the only way a move can
+change a rendered value is by flipping a cascade pair that shares a property at
+**equal** specificity in the same at-rule context. All 54,778 such ordered pairs
+in the file were enumerated before and after; exactly 4 flipped, and all 4 are
+between class pairs that never appear together on one element in any of the
+4,203 distinct class attributes the repo emits. The next-biggest group — 6 copies
+of `display: flex` — is **not** collapsible: four live in `cms-admin.css` and two
+in `blocks.css`, and a selector list lives in exactly one file, so no grouping
+takes that group below two members.
 
 The 90→91 step (2026-08-22) is the one-declaration
 `color:var(--pk-link, var(--fd-accent))` shared by frontdoor.css's dark

@@ -283,31 +283,73 @@ stylelint has no rule for the defect this directory actually accumulates: a
 duplicate declaration **body** — N different selectors carrying byte-identical
 declarations, one component copied N times under N class prefixes. `lint:css`
 therefore also runs `bin/check-css-duplication.php`, which groups rules by
-**(at-rule context, normalized declaration body)** and enforces two budgets set
-to the count on the day they were last measured:
+**(at-rule context, normalized declaration body)** and enforces two budgets
+pinned to the count on the day they were last measured:
 
 | Budget | Today | Counts |
 |---|---|---|
 | `MAX_GROUPS_2PLUS` | 26 | duplicate bodies with ≥ 2 declarations — the real DRY signal |
-| `MAX_GROUPS_ANY` | 91 | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_ANY` | 90 | every duplicate body, single-declaration coincidences included |
+
+**Both directions fail.** The first build of this gate failed only when
+duplication *rose*, with the budgets set exactly equal to the observed counts.
+That is a freeze, not a ratchet: collapse a group and the count drops, the gate
+stays green, and the slack sits there for the next commit to spend on a fresh
+copy — with the gate green throughout. Duplication could never improve on paper
+because nothing ever lowered the number. So:
+
+| Observed vs budget | Verdict | Remedy |
+|---|---|---|
+| above | `FAIL ^ DUPLICATION ROSE` | collapse the group, or justify it and `--rebaseline --allow-raise` |
+| below | `FAIL v DUPLICATION FELL` | `npm run lint:css:dupes:rebaseline` — pin the improvement |
+| equal | `OK ratchet held` | — |
+
+Re-baselining is one command, `npm run lint:css:dupes:rebaseline`, which
+rewrites both constants and prints the before/after. It **lowers freely** and
+**refuses to raise** without an explicit `--allow-raise`, because raising a
+budget is how duplication gets laundered through a gate. The failure message
+also prints the exact `file:line` and replacement line for a hand edit, computed
+at runtime so it cannot go stale. The one-run escape hatch
+`CSS_DUP_ALLOW_SLACK=1` mirrors `ORK3_ALLOW_LAYER_VIOLATION=1` and forgives
+**only** the below-budget direction — it can never let duplication rise.
+
+The at-rule context is the part that is easy to get wrong — two identical bodies
+in two *different* `@media` blocks are not duplicates and cannot be collapsed —
+and the comment stripper is string-aware so a `content: "/*"` cannot blind it.
 
 The 22→26 / 78→90 step (F4) was a **coverage** re-baseline: lifting the admin
 templates' inline CSS into `cms-admin.css` authored no new duplicate body, it
 made pre-existing byte-identical copies visible to the analyser for the first
 time. The four newly visible groups are enumerated at the constants.
 
-Duplication may fall, never rise. The at-rule context is the part that is easy
-to get wrong — two identical bodies in two *different* `@media` blocks are not
-duplicates and cannot be collapsed — and the comment stripper is string-aware so
-a `content: "/*"` cannot blind it. Re-baseline with
-`npm run lint:css:dupes:report` and edit the two constants at the top of the
-script, in the same commit as the change that moved them.
+The 91→90 step (P3) is the first **tightening**, and the first one the gate would
+have demanded on its own. The largest duplicate body in the CMS CSS — seven
+copies of `color: var(--cms-gold, #f0b429)` spread over ~2,300 lines of
+`cms-admin.css` — is now one grouped rule, placed at the position of
+`.cms-editbar-hint-dirty`: the only member whose cascade position is
+load-bearing, because it overrides `.cms-editbar-hint` at equal specificity and
+nothing but source order makes it win. Equivalence was **proved**: specificity is
+unchanged by a move, so the only way a move can change a rendered value on any
+DOM is by flipping a cascade pair that shares a property at equal specificity in
+the same at-rule context. All 54,778 such ordered pairs were enumerated before
+and after; exactly 4 flipped, and all 4 sit between class pairs that never appear
+together on one element in any of the 4,203 distinct class attributes the repo
+emits (`.cms-rail-icon` vs `.cms-crumb` / `.cms-icon-danger`,
+`.cms-dash-livelink` vs `.kn-ac-item` / `.te-btn-ghost`). Resolving every
+property for 4,558 modelled elements produced a byte-identical 215,133-line
+snapshot before and after. The next-largest group, 6 copies of `display: flex`,
+is **not** collapsible — four members in `cms-admin.css`, two in `blocks.css`,
+and a selector list lives in exactly one file.
 
-Proven live in an isolated copy of the tree: a new 2-declaration duplicate
-fails both budgets, a new 1-declaration duplicate fails the any-size budget, the
-same body in two different `@media` contexts correctly does **not** count, the
-same body in one `@media` context does, a reflowed/re-cased copy still matches,
-and duplication placed after a `content: "/*"` string is still seen.
+Proven live in an isolated copy of the tree, and now permanently by
+`tests/cms-css/duplication_ratchet_test.php` (37 assertions, no DB, no app): a
+new 2-declaration duplicate fails both budgets, a new 1-declaration duplicate
+fails the any-size budget, a *removed* duplicate fails the tighten-me direction,
+`--rebaseline` lowers but will not raise, `CSS_DUP_ALLOW_SLACK=1` forgives one
+direction and not the other, the same body in two different `@media` contexts
+correctly does **not** count, the same body in one `@media` context does, a
+reflowed/re-cased copy still matches, and duplication placed after a
+`content: "/*"` string is still seen.
 
 ## What changed
 
