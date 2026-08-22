@@ -5,7 +5,13 @@
 
 /* ---- Palette & base ---------------------------------------- */
 .fd-page {
-    /* Theme tokens (overridable by the theme engine) */
+    /* Theme tokens (overridable by the theme engine).
+       stylelint's color-hex-length is off for this block ONLY: these values are
+       compared BYTE-FOR-BYTE against CmsThemeTokens::Defaults() by
+       tests/cms-theme/tokens_test.php, and that authority emits the long form.
+       Shortening #ffffff to #fff here is the same colour but breaks the parity
+       test, which is the whole point of the block. */
+    /* stylelint-disable color-hex-length */
     --fd-primary: #0b1120;
     --fd-accent:  #f0b429;
     --fd-bg:      #ffffff;
@@ -14,12 +20,13 @@
     --fd-text-muted: #5b6472;
     --fd-border:  #e2e6ec;
     --fd-primary-contrast: #ffffff;
+    /* stylelint-enable color-hex-length */
     /* These MUST match CmsThemeTokens::Defaults() as rendered by its FontStack()
        helper. CmsThemeTokens is the authority — it is what the theme editor
        writes and what "reset to default" restores — and these are the fallback
        for a surface with NO ork_cms_theme row, which in practice means the front
        door and the blog (global scope has no theme row, so they emit no
-       <style id="fd-theme-tokens"> block). When the two disagree, the front door
+       "fd-theme-tokens" style element). When the two disagree, the front door
        and a site saved at defaults render in different fonts.
        tests/cms-theme/tokens_test.php fails if they drift again.
        Not a faux-medieval face: a new site seeds no theme row, so whatever is
@@ -125,7 +132,11 @@
     color: var(--ink);
 }
 
-.fd-body-text { color: var(--fd-text); }
+/* overflow-wrap is folded in here (it used to be a second .fd-body-text rule
+   further down, next to the media clamps) — no rule between the two sets
+   color or overflow-wrap on .fd-body-text at equal specificity, so merging
+   them is cascade-neutral. */
+.fd-body-text { color: var(--fd-text); overflow-wrap: anywhere; }
 
 /* Lists keep left-aligned contents even inside a center-aligned rich_text block
    (otherwise bullets ragged-center). */
@@ -141,7 +152,6 @@
 
 /* Clamp embedded media/tables/code so pasted rich-text (richtext + its rich_text
    alias) can't force horizontal scroll on phones. */
-.fd-body-text { overflow-wrap: anywhere; }
 .fd-body-text img { max-width: 100%; height: auto; }
 .fd-body-text table { display: block; max-width: 100%; overflow-x: auto; }
 .fd-body-text pre { overflow-x: auto; max-width: 100%; }
@@ -813,7 +823,7 @@ html[data-theme="dark"] .fd-link:hover {
 
 /* Empty state */
 html[data-theme="dark"] .fd-empty {
-    color: #8899aa;
+    color: #89a;
 }
 
 /* Buttons: gold stays, ghost border brightens slightly */

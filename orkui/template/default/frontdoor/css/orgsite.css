@@ -2,7 +2,7 @@
  * orgsite.css — standalone per-org CMS site chrome.
  * Layered ON TOP of frontdoor.css; everything is scoped under .fd-org
  * (a .fd-page) so it inherits the front-door theme tokens (--fd-*) and the
- * per-org theme injected as <style id="fd-theme-tokens"> by default.theme.
+ * per-org theme injected as the "fd-theme-tokens" style element by default.theme.
  * Dark mode via html[data-theme="dark"]; responsive to match the front door.
  * ============================================================ */
 
@@ -309,7 +309,7 @@
 }
 
 /* ============================================================
- * SITE SHELL CHROME — lifted out of Site_shell.tpl's inline <style> blocks.
+ * SITE SHELL CHROME — lifted out of Site_shell.tpl's inline style elements.
  *
  * These four groups are 100% static (no authored/per-instance value is
  * interpolated), so they were re-parsed on every request and were invisible to
@@ -434,6 +434,8 @@ html[data-theme="dark"] .org-home-warning strong {
    glyph point \f105 (angle-right) is unchanged across 5/6/7. */
 .org-breadcrumbs li:not(:first-child)::before {
     content: "\f105";
+    /* stylelint-disable-next-line font-family-no-missing-generic-family-keyword --
+       icon font: a generic fallback would render a wrong glyph, not a fallback face. */
     font-family: "Font Awesome 5 Free";
     font-weight: 900;
     font-size: .72rem;

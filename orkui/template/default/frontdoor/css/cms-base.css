@@ -5,7 +5,7 @@
  * rendering with $IsOrgSite set (Controller_Site). It supplies only the global
  * element normalization a public marketing site genuinely needs; everything
  * visual comes from frontdoor.css / orgsite.css / blocks.css scoped under
- * .fd-page, and from the per-org theme tokens injected as <style id="fd-theme-tokens">.
+ * .fd-page, and from the per-org theme tokens injected as the "fd-theme-tokens" style element.
  *
  * DO NOT add component styling here. This file is a base, not a stylesheet.
  * DO NOT reference #theme_container, #newmenu or any .ork-* class beyond the
@@ -28,7 +28,7 @@ body {
     margin: 0;
     padding: 0;
     overflow-x: clip;
-    background: var(--fd-bg, #ffffff);
+    background: var(--fd-bg, #fff);
     color: var(--fd-text, #1a2236);
     font-family: var(--fd-font-body, system-ui, -apple-system, sans-serif);
     font-size: 16px;
@@ -103,7 +103,7 @@ html[data-theme="dark"] {
 }
 
 /* Dark-mode partner for the body FALLBACKS above. When the org has a theme,
-   <style id="fd-theme-tokens-root"> defines --fd-bg / --fd-text at :root for both
+   the "fd-theme-tokens-root" style element defines --fd-bg / --fd-text at :root for both
    themes and these var() reads resolve, so this rule changes nothing. It matters
    only when there is NO active theme row (a fresh site, or an officer using the
    theme editor's reset): without it the var() fallbacks are the LIGHT values, and a

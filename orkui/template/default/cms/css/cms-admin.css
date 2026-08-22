@@ -600,6 +600,11 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
 }
+/* The flex tile layout (icon chip + text column) is folded in here; it used to
+   be a second .cms-typecard rule ~95 lines down. Nothing between the two rules
+   sets display/align-items/gap on .cms-typecard at equal specificity
+   (.cms-typecard:hover and .cms-typecard strong are more specific / a different
+   subject), so merging them is cascade-neutral. */
 .cms-typecard {
     border: 1px solid var(--ork-border-dark);
     border-radius: 9px;
@@ -609,6 +614,9 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     text-align: left;
     color: var(--ork-text);
     transition: border-color .12s, background .12s;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
 }
 .cms-typecard:hover { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-typecard strong { display: block; font-size: 14px; margin-bottom: 3px; }
@@ -694,12 +702,8 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-link-btn:hover { color: var(--cms-gold, #f0b429); text-decoration: underline; }
 .cms-link-btn i { font-size: 11px; }
 
-/* Tile layout: icon chip + text column */
-.cms-typecard {
-    display: flex;
-    align-items: flex-start;
-    gap: 11px;
-}
+/* Tile layout: icon chip + text column. The .cms-typecard flex rule itself lives
+   with the rest of the .cms-typecard base above. */
 .cms-typecard-icon {
     flex: 0 0 auto;
     width: 30px;
@@ -879,6 +883,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 
 /* Brief highlight when jumping the author to a save-blocking (invalid-JSON) block. */
 .cms-block-card.cms-block-error-flash { animation: cmsErrFlash 1.4s ease; }
+
 @keyframes cmsErrFlash {
     0%, 100% { box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
     30% { box-shadow: 0 0 0 4px rgba(192, 57, 43, .5); }
@@ -1283,7 +1288,7 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
     font-size: 13px;
 }
 .cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
-.cms-upload-drop input[type=file] { display: none; }
+.cms-upload-drop input[type="file"] { display: none; }
 
 /* ============================================================================
  * Toast
@@ -1321,6 +1326,7 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
     animation: cms-spin .7s linear infinite;
     vertical-align: -2px;
 }
+
 @keyframes cms-spin { to { transform: rotate(360deg); } }
 
 /* ============================================================================
@@ -1396,16 +1402,16 @@ html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); 
     cursor: pointer;
     position: relative;
 }
-.cms-table-wrap table.cms-table.dataTable thead th.sorting:after,
-.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after,
-.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after {
+.cms-table-wrap table.cms-table.dataTable thead th.sorting::after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc::after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc::after {
     content: "\2195"; /* up-down arrow */
     margin-left: 6px;
     opacity: .35;
     font-size: 11px;
 }
-.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after { content: "\2191"; opacity: .9; color: var(--cms-gold, #f0b429); }
-.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after { content: "\2193"; opacity: .9; color: var(--cms-gold, #f0b429); }
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc::after { content: "\2191"; opacity: .9; color: var(--cms-gold, #f0b429); }
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc::after { content: "\2193"; opacity: .9; color: var(--cms-gold, #f0b429); }
 /* Remove DataTables' default PNG sprite background on sortable headers. */
 .cms-table-wrap table.cms-table.dataTable thead .sorting,
 .cms-table-wrap table.cms-table.dataTable thead .sorting_asc,
@@ -1806,6 +1812,7 @@ html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b
         max-height: 70vh;
     }
 }
+
 @media (max-width: 860px) {
     .cms-editor { grid-template-columns: 1fr; }
     .cms-editor-haspreview.cms-preview-active { grid-template-columns: 1fr; }
@@ -1813,6 +1820,7 @@ html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b
     .cms-editbar-actions { width: 100%; margin-left: 0; }
     .cms-editbar-status { flex: 1 1 100%; }
 }
+
 @media (max-width: 620px) {
     .cms-grid2 { grid-template-columns: 1fr; }
     .cms-typegrid { grid-template-columns: 1fr; }
@@ -1839,7 +1847,7 @@ html[data-theme="dark"] .cms-persona-chip{background:#1e293b;border-color:#33415
    surface + scroll so results never bleed through onto the fields beneath. */
 .cms-persona-ac {
     box-sizing: border-box;
-    background: var(--ork-card-bg, #ffffff);
+    background: var(--ork-card-bg, #fff);
     border: 1px solid var(--ork-border, #d8dde6);
     border-radius: 8px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
@@ -1934,6 +1942,7 @@ html[data-theme="dark"] .te-preset:hover {
     align-items: start;
     min-height: 0;
 }
+
 @media (max-width: 900px) {
     .te-layout { grid-template-columns: 1fr; }
 }
@@ -2311,7 +2320,7 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
 /* Its dark amber is grouped onto html[data-theme="dark"] .te-contrast-warn above. */
 
 /* ============================================================================
-   Dashboard (Cms_dashboard.tpl) — moved out of the page's inline <style> so the
+   Dashboard (Cms_dashboard.tpl) — moved out of the page's inline style element so the
    rules are fetched once and cached across CMS admin views. Reuses cms-/ork-
    tokens; dark-mode via those vars + explicit html[data-theme] overrides.
    ============================================================================ */
@@ -2424,7 +2433,7 @@ html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b42
 
 /* ============================================================================
    Scope-context banner (cms/_shell_top.tpl) — moved out of the shell's inline
-   <style> so it isn't duplicated on every scoped admin render. Dark-mode via
+   style element so it isn't duplicated on every scoped admin render. Dark-mode via
    html[data-theme].
    ============================================================================ */
 .cms-scope-banner {

@@ -58,6 +58,7 @@
 .blog-pager-info { font-size: 13px; color: #667; }
 
 @media (max-width: 860px) { .blog-grid { grid-template-columns: repeat(2, 1fr); } }
+
 @media (max-width: 560px) { .blog-grid { grid-template-columns: 1fr; } }
 
 /* :hover paired deliberately — .blog-rss is an <a>, and orkui.css's global
@@ -79,7 +80,7 @@ html[data-theme="dark"] .blog-pager-btn { background: #1b2233; border-color: #2c
 html[data-theme="dark"] .blog-pager-btn:hover { background: #232c42; }
 html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 
-/* ---- Blog entry — single post (was per-render inline <style> in Blog_post.tpl)
+/* ---- Blog entry — single post (was per-render inline style element in Blog_post.tpl)
    Scoped under .fd-page. Post bodies reuse the front-door block renderer, so
    they inherit front-door block styling; these .blogp-* rules cover the chrome
    (title/meta/tags/hero) around that body. */
