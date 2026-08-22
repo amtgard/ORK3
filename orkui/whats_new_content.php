@@ -8,7 +8,7 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-08-20');
+    define('WHATS_NEW_VERSION', '2026-08-22');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
@@ -19,7 +19,7 @@ if (!defined('ORK_VERSION')) {
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
-    ['version' => '3.5.5 Hydra', 'date' => '2026-08-20', 'items' => [
+    ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
         ['icon' => 'fas fa-laptop', 'title' => 'Stay Signed In on Three Devices', 'body' => 'Signing in on your phone no longer signs you out on your laptop. The ORK now keeps up to three devices signed in at once, so you can check the calendar on your phone at the park, take attendance on a tablet, and still have your reeve reports open on a desktop at home — no more getting bounced back to the login page every time you switch.'],
         ['icon' => 'fas fa-power-off', 'title' => 'Log Out Everywhere', 'body' => 'Left yourself signed in on a shared computer? A new "Log Out Everywhere" option in your account menu ends every session at once. Before it does, it shows you exactly what is signed in — the browser, the device, and when each one was last used — so you can see whether anything looks unfamiliar. It only appears when you actually have more than one session running.'],
@@ -37,7 +37,8 @@ $WHATS_NEW_ITEMS = [
         ['icon' => 'fas fa-clock', 'title' => 'Late-Night Schedule Items Read Clearly', 'notes_only' => true, 'body' => 'A schedule item that runs past midnight now shows the weekday on its end time, so a bardic that ends at 1 AM Sunday no longer looks like it ran backwards through Saturday.'],
         ['icon' => 'fas fa-chart-line', 'title' => 'Real Visitor Numbers in the Week in Review', 'notes_only' => true, 'body' => 'The Week in Review now reports how many actual people visited the ORK, rather than a raw hit count inflated by bots and crawlers — so the number means something when you compare one week to the next.'],
         ['icon' => 'fas fa-palette', 'title' => 'A Real Design System for Color', 'notes_only' => true, 'body' => 'Colors, spacing and layering across the site now come from one shared set of design tokens that understands light and dark mode, instead of being written out by hand on every page. That is why the dark-mode fixes above were one-line changes rather than a hunt through thousands of lines of stylesheet, and it is what will keep dark mode from drifting out of true again.'],
-        ['icon' => 'fas fa-tools', 'title' => 'And a Large Number of Bugfixes and Polishing!', 'notes_only' => true, 'body' => 'Plus a long tail of smaller fixes, performance work and cleanup across the whole ORK.'],
+        ['icon' => 'fas fa-user-slash', 'title' => 'Suspended Players Stand Out in Award Reports', 'notes_only' => true, 'body' => 'The Knights, Masters, Class Masters, and Ladder Awards Grid reports now tint a player\'s row red while they\'re under suspension, with a note explaining why — in both light and dark mode. Dark mode had also been hiding the suspended and dues-paid row colors on several other reports; those now show correctly again.'],
+        ['icon' => 'fas fa-tools', 'title' => 'And a Large Number of Bugfixes and Polishing!', 'notes_only' => true, 'body' => 'A long tail of fixes across the whole ORK: browsing a principality no longer quietly switches which kingdom your session is working in, number columns in park tables sort correctly again, event pages no longer show officer-only RSVP prompts to every visitor, and event staff granted the manage capability can update their event\'s artwork.'],
     ]],
     ['version' => '3.5.4 Walker', 'date' => '2026-07-15', 'items' => [
         ['icon' => 'fas fa-graduation-cap', 'title' => 'Qualification Tests Arrive', 'body' => 'Kingdoms can now run the Reeve\'s Test and the Corpora Test right inside the ORK. Build your own multiple-choice question banks, set the pass score and how long a pass stays valid, and let players test on their own time with instant auto-grading. A passing score writes straight back into the player\'s official qualifications, so every existing report keeps working — the record-keeping just does itself. Each test type is opt-in per kingdom, so nothing appears until your kingdom turns it on.'],
