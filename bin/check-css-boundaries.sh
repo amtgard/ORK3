@@ -114,18 +114,28 @@
 #       was 31 files. It is now in scope, derived the same way everything else
 #       here is:
 #
-#         orkui/controller/controller.<C>*.php   for <C> in CMS_CONTROLLERS —
-#                                                so controller.CmsAjax.php and
-#                                                any future controller.SiteAjax
-#                                                are covered without a list
-#         orkui/model/model.Cms*.php             the model membrane
+#         orkui/controller/controller.<C>*.php   ONE derivation, <C> in
+#         orkui/controller/trait.<C>*.php        CMS_CONTROLLERS, applied to
+#         orkui/model/model.<C>*.php             every directory a CMS PHP
+#         system/lib/ork3/class.<C>*.php         source lives in
 #         orkui/model/model.FrontDoor.php        the front door's membrane; the
 #                                                one name that has to be spelled
 #                                                out, because the front door is
 #                                                rendered by the BASE controller
-#                                                and so has no Cms/Site prefix
-#         system/lib/ork3/class.Cms*.php         the CMS domain layer
+#                                                and so has no CMS prefix
 #         frontdoor/**.js, cms/**.js             R1, extended to scripts
+#
+#       The model and domain sets used to be matched on a literal "Cms" prefix
+#       while the controllers were derived, which made the model set NARROWER
+#       than the controller set — and the gap was reachable. Blog and Site are
+#       CMS controllers, so model.BlogZz.php echoing a <style> and a CRM
+#       stylesheet <link>, and model.SiteZz.php defining --ork-brand, both
+#       passed at exit 0. trait.*.php was blind from the other direction:
+#       trait.CmsScope.php sits in the controller directory and is mixed into the
+#       CMS controllers, but the glob only said "controller.". Deriving all four
+#       from CMS_CONTROLLERS means the halves cannot drift, and it adds exactly
+#       one file that exists today (trait.CmsScope.php, clean) — the rest is
+#       coverage for the model.Blog.php that does not exist yet.
 #
 #       Only C7 runs on these files. C1-C6 are about how CSS is declared and
 #       linked in stylesheets and templates, and applying them to PHP source
@@ -416,16 +426,42 @@ CMS_DENY="$TPL_ROOT/Cms_deny.tpl"
 # automatically. Add a CMS controller here when you add one.
 CMS_CONTROLLERS="Site Page Blog Cms"
 
-# R8 — the CMS PHP source set, for C7. Controllers are derived from
-# CMS_CONTROLLERS (the `*` picks up controller.CmsAjax.php and any future
-# controller.SiteAjax.php without a second list); models and domain classes come
-# from their Cms prefix. model.FrontDoor.php is the one name that has to be
-# written out: the front door is rendered by the BASE controller, so its
-# membrane carries no Cms/Site prefix to derive from.
+# R8 — the CMS PHP source set, for C7. ONE derivation, applied to all three
+# directories, so the halves cannot drift apart.
+#
+# Controllers were already derived from CMS_CONTROLLERS, but models and domain
+# classes were matched on a literal "Cms" prefix instead. That is a NARROWER set
+# than the controller set, and the gap was reachable: Blog and Site are CMS
+# controllers, so orkui/model/model.BlogZz.php echoing a <style> and a CRM
+# stylesheet <link>, and orkui/model/model.SiteZz.php defining --ork-brand, both
+# passed at exit 0 — CMS-owned membranes for CMS surfaces, injecting exactly what
+# C7 exists to stop, invisible because nobody had written "Cms" in the filename.
+# orkui/controller/trait.*.php was blind for the same reason from the other
+# direction: trait.CmsScope.php sits in the controller directory and is mixed
+# into the CMS controllers, but the glob only said "controller.".
+#
+# So every CMS PHP source is now <prefix>.<C>*.php for <C> in CMS_CONTROLLERS,
+# in the directory that prefix belongs to:
+#
+#   orkui/controller/controller.<C>*.php   controller.CmsAjax.php, a future
+#   orkui/controller/trait.<C>*.php        controller.SiteAjax.php, trait.CmsScope.php
+#   orkui/model/model.<C>*.php             model.CmsPage.php, a future model.Blog.php
+#   system/lib/ork3/class.<C>*.php         class.CmsThemeTokens.php, a future class.Site*.php
+#
+# Widening the model and domain sets to Site/Page/Blog adds no file that exists
+# today (there is no model.Site*.php, model.Page*.php, model.Blog*.php or
+# class.{Site,Page,Blog}*.php), so it costs nothing now and covers the next one
+# on the day it lands. It is also the right rule in its own terms for the domain
+# directory: a system/lib/ork3/ class emitting CSS is a layering violation
+# whoever owns it.
+#
+# model.FrontDoor.php is the one name that still has to be written out: the front
+# door is rendered by the BASE controller, so its membrane carries no CMS
+# controller prefix to derive from.
 CMS_MODEL_FRONTDOOR="orkui/model/model.FrontDoor.php"
-CMS_MODEL_GLOB="orkui/model/model.Cms"
-CMS_DOMAIN_GLOB="system/lib/ork3/class.Cms"
 CMS_CONTROLLER_DIR="orkui/controller"
+CMS_MODEL_DIR="orkui/model"
+CMS_DOMAIN_DIR="system/lib/ork3"
 
 # The static-declaration budget an interpolating <style> may carry (C3, per file).
 C3_MAX_STATIC=8
@@ -495,13 +531,14 @@ $CMS_ADMIN
 $TPL_ROOT/*.theme
 $TPL_ROOT/_index.tpl
 $TPL_BASE/*.css
-$CMS_MODEL_FRONTDOOR
-$CMS_MODEL_GLOB*.php
-$CMS_DOMAIN_GLOB*.php"
+$CMS_MODEL_FRONTDOOR"
 for c in $CMS_CONTROLLERS; do
     ALL_PATHSPECS="$ALL_PATHSPECS
 $TPL_ROOT/${c}_*.tpl
-$CMS_CONTROLLER_DIR/controller.${c}*.php"
+$CMS_CONTROLLER_DIR/controller.${c}*.php
+$CMS_CONTROLLER_DIR/trait.${c}*.php
+$CMS_MODEL_DIR/model.${c}*.php
+$CMS_DOMAIN_DIR/class.${c}*.php"
 done
 
 case "$MODE" in
@@ -1931,11 +1968,15 @@ for f in $CANDIDATES; do
     case "$f" in
         "$CMS_PUBLIC"/*.js|"$CMS_ADMIN"/*.js)      IS_CMS_SRC=1 ;;
         "$CMS_MODEL_FRONTDOOR")                    IS_CMS_SRC=1; IS_PHP_SRC=1 ;;
-        "$CMS_MODEL_GLOB"*.php|"$CMS_DOMAIN_GLOB"*.php) IS_CMS_SRC=1; IS_PHP_SRC=1 ;;
         *.php)
+            # ONE derivation from CMS_CONTROLLERS across all three directories,
+            # so the controller half and the model/domain half cannot drift.
             for c in $CMS_CONTROLLERS; do
                 case "$f" in
-                    "$CMS_CONTROLLER_DIR"/controller."$c"*.php)
+                    "$CMS_CONTROLLER_DIR"/controller."$c"*.php|\
+                    "$CMS_CONTROLLER_DIR"/trait."$c"*.php|\
+                    "$CMS_MODEL_DIR"/model."$c"*.php|\
+                    "$CMS_DOMAIN_DIR"/class."$c"*.php)
                         IS_CMS_SRC=1; IS_PHP_SRC=1; break ;;
                 esac
             done

@@ -149,10 +149,26 @@ stylesheet was born with no coverage at all. The scope rules now are:
   | Derived from | Files |
   |---|---|
   | `CMS_CONTROLLERS`, as `controller.<C>*.php` | `controller.{Site,Page,Blog,Cms}.php` + `controller.CmsAjax.php` — the `*` means an Ajax sibling needs no second list |
-  | the `Cms` prefix on the model membrane | `orkui/model/model.Cms*.php` |
-  | the `Cms` prefix in the domain layer | `system/lib/ork3/class.Cms*.php` |
+  | `CMS_CONTROLLERS`, as `trait.<C>*.php` | `orkui/controller/trait.CmsScope.php` — mixed into the CMS controllers, and a trait can `echo` anything a controller can |
+  | `CMS_CONTROLLERS`, as `model.<C>*.php` | `orkui/model/model.Cms*.php` today, `model.Blog*.php` / `model.Site*.php` / `model.Page*.php` on the day one lands |
+  | `CMS_CONTROLLERS`, as `class.<C>*.php` | `system/lib/ork3/class.Cms*.php` today, the same widening for the rest |
   | R1, extended to scripts | `frontdoor/**.js`, `cms/**.js` |
-  | **named explicitly** | `orkui/model/model.FrontDoor.php` — the front door is rendered by the **base** controller, so its membrane carries no `Cms`/`Site` prefix to derive from. The second manual step in the design, beside `CMS_CONTROLLERS`. |
+  | **named explicitly** | `orkui/model/model.FrontDoor.php` — the front door is rendered by the **base** controller, so its membrane carries no CMS controller prefix to derive from. The second manual step in the design, beside `CMS_CONTROLLERS`. |
+
+  **All four rows derive from the same list, and that is the point.** The model
+  and domain rows used to match a literal `Cms` prefix while only the controller
+  row was derived, which made the model set *narrower than the controller set* —
+  and the gap was reachable, because `Blog` and `Site` are CMS controllers.
+  Proven: `orkui/model/model.BlogZz.php` echoing a `<style>` and a CRM stylesheet
+  `<link>`, and `orkui/model/model.SiteZz.php` defining `--ork-brand`, both
+  passed at **exit 0** — CMS-owned membranes for CMS surfaces, injecting exactly
+  what C7 exists to stop, invisible only because nobody had written `Cms` in the
+  filename. `trait.*.php` was blind from the other direction for the same reason.
+  Deriving all four from `CMS_CONTROLLERS` means the halves cannot drift; it adds
+  exactly **one** file that exists today (`trait.CmsScope.php`, which passes
+  clean), and the rest is coverage waiting for the file that has not been written
+  yet. It is also the right rule in its own terms for the domain row: a
+  `system/lib/ork3/` class emitting CSS is a layering violation whoever owns it.
 
   Only C7 runs on these files. C1–C6 are about how CSS is *declared and linked*
   in stylesheets and templates, and applying them to PHP source would be a

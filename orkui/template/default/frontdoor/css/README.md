@@ -97,7 +97,7 @@ now **derived**:
 | **R5** | A symlink in an in-scope path is **rejected** (C0), never scanned. | `git show :path` on a symlink returns the *link target*, one short line that passes every rule — so a staged symlink used to be a way to ship arbitrary CSS through the gate. |
 | **R6** | The **CRM stylesheet set is read off the filesystem** — every `.css` under `style/`, at any depth, plus `orkshell-interop.css`. | C4/C6 named three files and so were blind to `reports.css` (55 KB) and `custom.css`, which had been sitting in `style/` all along. A CRM stylesheet added tomorrow is covered the day it lands — and a CMS stylesheet must not reuse a CRM stylesheet's basename. |
 | **R7** | **Asset-base seeds** are derived too: every in-scope file is scanned for `$name = HTTP_TEMPLATE\|DIR_TEMPLATE . '…'`, and a name the tree assigns a provable prefix to resolves to it in files that do not assign it themselves. | `_assets_public.tpl` is handed `$fdAssetBase` by its six includers, so read alone its href is unresolvable and C4's fail-closed rule would fire on the one file whose job is linking the CMS stylesheets. In-file assignment always wins; an unresolvable assignment seeds nothing. It cuts the other way too — point one of those names at `style/` anywhere and every partial consuming it starts reporting. |
-| **R8** | **The CMS PHP and JS sources are in scope too**, for C7 only: `controller.<C>*.php` for each CMS controller (so `controller.CmsAjax.php` comes along without a second list), `model.Cms*.php` + `model.FrontDoor.php`, `class.Cms*.php`, and `frontdoor/**.js` / `cms/**.js`. | C1–C6 read `.css`, `.tpl` and `.theme` — every file that can *declare* CSS, and none that can *inject* it. A verifier put a stylesheet `<link>` and a `<style>#theme_container{}</style>` onto a live org-site page from two directions — `frontdoor/js/frontdoor.js` via `document.head.insertAdjacentHTML()`, and `controller.Site.php` echoing the markup — and **both** this gate and the layering gate returned exit 0. The blind set was **31 files**. |
+| **R8** | **The CMS PHP and JS sources are in scope too**, for C7 only. **One** derivation from `CMS_CONTROLLERS`, applied to every directory a CMS PHP source lives in: `controller.<C>*.php` and `trait.<C>*.php` in `orkui/controller/`, `model.<C>*.php` in `orkui/model/`, `class.<C>*.php` in `system/lib/ork3/` — plus `model.FrontDoor.php` by name and `frontdoor/**.js` / `cms/**.js`. | C1–C6 read `.css`, `.tpl` and `.theme` — every file that can *declare* CSS, and none that can *inject* it. A verifier put a stylesheet `<link>` and a `<style>#theme_container{}</style>` onto a live org-site page from two directions — `frontdoor/js/frontdoor.js` via `document.head.insertAdjacentHTML()`, and `controller.Site.php` echoing the markup — and **both** this gate and the layering gate returned exit 0. The blind set was **31 files**. The model and domain sets then matched a literal `Cms` prefix while the controllers were *derived*, so the model set was **narrower than the controller set**: `model.BlogZz.php` echoing a `<style>` and a CRM `<link>` passed at exit 0, and `trait.CmsScope.php` was uncovered because the glob said `controller.`. Deriving all four from one list means they cannot drift. |
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
@@ -239,8 +239,9 @@ now **derived**:
   the same path shapes C4-link does. If you restructure that gate, expect to
   teach `bin/check-css-boundaries.sh` the new shape.
 
-- **C7 — CMS PHP and CMS JS may not inject CSS into a page.** Scope: R8's 31
-  files. **One flat rule, no tiers, no exemption list.** CSS enters a CMS page
+- **C7 — CMS PHP and CMS JS may not inject CSS into a page.** Scope: R8's derived
+  set (31 files when R8 landed, 32 once `trait.<C>*.php` joined it).
+  **One flat rule, no tiers, no exemption list.** CSS enters a CMS page
   through three sanctioned channels — the two link partials, `cms/_shell_top.tpl`
   for the admin, and `default.theme`'s `$IsOrgSite` gate — and it *lives* in a
   stylesheet under `frontdoor/css/` or `cms/css/`. A controller, a model, a
