@@ -14,6 +14,10 @@ class Model_CmsTheme extends Model
     {
         return $this->CmsTheme->GetActiveCss($scopeType, $scopeId);
     }
+    public function get_active_root_css($scopeType = 'global', $scopeId = 0)
+    {
+        return $this->CmsTheme->GetActiveRootCss($scopeType, $scopeId);
+    }
     public function save_theme($scopeType, $scopeId, $name, $tokens, $uid)
     {
         return $this->CmsTheme->SaveTheme($scopeType, $scopeId, $name, $tokens, $uid);

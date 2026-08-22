@@ -851,6 +851,15 @@ class Controller_Site extends Controller
         if ($css !== '') {
             $this->data['fdThemeCss'] = $css;
         }
+        // ...and the same tokens again at :root. <html>/<body> are ANCESTORS of
+        // .fd-page and custom properties inherit downward only, so cms-base.css's
+        // `body { background: var(--fd-bg) }` cannot see the scoped block — without
+        // this a dark-themed org site paints a white body behind the page. Org
+        // sites only; default.theme gates the emit on $IsOrgSite.
+        $rootCss = (string) $this->CmsTheme->get_active_root_css($scopeType, $scopeId);
+        if ($rootCss !== '') {
+            $this->data['fdThemeCssRoot'] = $rootCss;
+        }
 
         // RSS auto-discovery: every org-site page advertises the org's scoped
         // feed (Site/rss/{slug} → /k|/p/{slug}/rss) so readers/aggregators can

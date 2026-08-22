@@ -57,6 +57,29 @@ canvas {
     height: auto;
 }
 
+/* Authored-copy block spacing. Restores ONLY the margin from orkui.css:778
+   (`p { margin: 0px 0px 12px 0px; text-align: justify; }`) — the justify is
+   deliberately left behind. Without this, org-site body copy falls back to the
+   UA's 1em and every authored page silently re-spaces. */
+p {
+    margin: 0 0 12px 0;
+}
+
+/* Same deal for headings: restores ONLY the margin from orkui.css:767
+   (`h1,h2,h3,h4,h5,h6 { ... margin: 0px 0px 12px 0px; ... }`). The gray pill box
+   that rule also paints (background/border/text-shadow/padding/radius/color) is
+   deliberately NOT carried over — every hero and card heading had to reset it
+   anyway. UA heading margins are em-based (0.67em–2.33em), so omitting this
+   changes spacing on every org page. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin: 0 0 12px 0;
+}
+
 /* iOS zooms the viewport when a focused control's text is under 16px. Carried
    over from orkui.css:2180 — the one global form rule an org site still needs
    (contact/RSVP forms inside authored pages). */

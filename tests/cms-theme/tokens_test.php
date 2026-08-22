@@ -218,5 +218,18 @@ check('default heading font is Archivo, not MedievalSharp', ($dv['--fd-font-head
 check('MedievalSharp is still selectable for orgs that want it', in_array('MedievalSharp', CmsThemeTokens::FontAllowlist(), true));
 check('the default heading font is itself allowlisted', in_array($dv['--fd-font-heading'] ?? '', CmsThemeTokens::FontAllowlist(), true));
 
+// --- ToRootCss: the token pair standalone org sites publish at :root ---------
+// body/html are ANCESTORS of .fd-page and custom properties inherit downward
+// only, so the .fd-page block ToCss() emits is invisible to cms-base.css's
+// `body { background: var(--fd-bg) }`. ToRootCss() is the copy that fixes that.
+$rootCss = CmsThemeTokens::ToRootCss(array('--fd-primary' => '#0b4d3e'));
+check('ToRootCss emits a :root block', strpos($rootCss, ':root{') !== false);
+check('ToRootCss emits an html[data-theme="dark"] block', strpos($rootCss, 'html[data-theme="dark"]{') !== false);
+check('ToRootCss does not scope to .fd-page', strpos($rootCss, '.fd-page') === false);
+// :root IS the <html> element, so a descendant combinator here would match
+// nothing at all and the dark half would silently never apply.
+check('ToRootCss dark selector is not a descendant of :root', strpos($rootCss, 'html[data-theme="dark"] :root') === false);
+check('ToRootCss carries the real tokens', strpos($rootCss, '--fd-bg:') !== false && strpos($rootCss, '--fd-primary:') !== false);
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

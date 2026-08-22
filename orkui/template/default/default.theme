@@ -1291,6 +1291,9 @@ html[data-theme="dark"] .cms-fab[data-tip]::after{background:#0b1220;}
     <?php endif; ?>
 </div>
 <?php endif; ?>
+<?php if (!empty($IsOrgSite) && !empty($fdThemeCssRoot)): // Standalone org sites only: body/html sit OUTSIDE .fd-page and cannot inherit tokens scoped to it, so cms-base.css's body rule needs a :root copy. MUST stay BEFORE the .fd-page block below — equal specificity, so source order decides, and the scoped block has to keep winning inside the page. ?>
+<style id="fd-theme-tokens-root"><?= $fdThemeCssRoot ?></style>
+<?php endif; ?>
 <?php if (!empty($fdThemeCss)): ?>
 <style id="fd-theme-tokens"><?= $fdThemeCss ?></style>
 <?php endif; ?>

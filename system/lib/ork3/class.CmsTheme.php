@@ -75,6 +75,42 @@ class CmsTheme extends CmsBase
     }
 
     /**
+     * The same active-theme CSS as GetActiveCss(), but scoped to :root instead of
+     * .fd-page, or '' when there is no active theme.
+     *
+     * Standalone public org sites only. <html>/<body> sit OUTSIDE .fd-page and
+     * custom properties inherit downward only, so cms-base.css's body rule can
+     * never see the .fd-page token block; without a root-scoped copy a dark org
+     * site paints a white body. See CmsThemeTokens::ToRootCss().
+     *
+     * Caching mirrors GetActiveCss() exactly — same (scope, updated_at, id) key
+     * material, so a theme write self-busts both — but under its OWN namespace
+     * (__CLASS__ . '.GetActiveRootCss'). The namespace MUST differ from
+     * GetActiveCss()'s or the two would collide and serve each other's CSS.
+     */
+    public function GetActiveRootCss($scopeType = 'global', $scopeId = 0)
+    {
+        $t = $this->GetActiveTheme($scopeType, $scopeId);
+        if ($t === null) {
+            return '';
+        }
+
+        $cache = $this->_ghettoCache();
+        if ($cache !== null) {
+            $key    = $this->_normalizeScopeType($scopeType) . '.' . (int)$scopeId
+                . '.' . (string)($t['updated_at'] ?? '') . '.' . (int)($t['id'] ?? 0);
+            $cached = $cache->get(__CLASS__ . '.GetActiveRootCss', $key, 1800);
+            if ($cached !== false) {
+                return (string)$cached;
+            }
+            $css = CmsThemeTokens::ToRootCss($t['tokens']);
+            return (string)$cache->cache(__CLASS__ . '.GetActiveRootCss', $key, $css);
+        }
+
+        return CmsThemeTokens::ToRootCss($t['tokens']);
+    }
+
+    /**
      * The id of the theme stored under (scope, name), or 0 when there is none.
      *
      * Runs its own Clear() + binds, so it must never be called with binds already

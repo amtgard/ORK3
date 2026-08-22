@@ -314,4 +314,26 @@ class CmsThemeTokens
         return self::Block('.fd-page', $d['light'])
             . ' ' . self::Block('html[data-theme="dark"] .fd-page', $d['dark']);
     }
+
+    /**
+     * The same token pair as ToCss(), but published at :root instead of .fd-page.
+     *
+     * Why this exists: custom properties inherit DOWNWARD only. <html> and <body>
+     * are ANCESTORS of .fd-page, so a token set scoped to .fd-page is invisible to
+     * them — cms-base.css's `body { background: var(--fd-bg, #fff) }` would always
+     * take the hardcoded fallback and a dark-themed org site would paint a white
+     * body on overscroll and on short pages. Standalone org sites therefore emit
+     * this ROOT-scoped copy as well, ahead of the .fd-page copy so the scoped one
+     * still wins inside the page itself.
+     *
+     * The dark selector is 'html[data-theme="dark"]' with NO descendant part:
+     * :root IS the <html> element, so 'html[data-theme="dark"] :root' would match
+     * nothing at all.
+     */
+    public static function ToRootCss($userTokens)
+    {
+        $d = self::Derive($userTokens);
+        return self::Block(':root', $d['light'])
+            . ' ' . self::Block('html[data-theme="dark"]', $d['dark']);
+    }
 }
