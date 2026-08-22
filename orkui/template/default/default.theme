@@ -143,6 +143,7 @@
 		</style>
 		<?php endif; ?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+<?php if (empty($IsOrgSite)): // ORK's own gtag.js + Cloudflare Web Analytics — do not load on standalone org sites ?>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
 		<script>
@@ -152,6 +153,7 @@
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
+<?php endif; ?>
 
 <?php
 // ---------------------------------------------------------------------------

@@ -24,7 +24,10 @@
 //      blog.css were split off the END of frontdoor.css and several of their
 //      rules win same-specificity ties against it;
 //   4. blog.css is linked on exactly the blog surfaces and nowhere else;
-//   5. no org-site page carries an inline <style> naming an ORK shell selector.
+//   5. no org-site page carries an inline <style> naming an ORK shell selector;
+//   6. authored body-copy links carry a non-colour affordance on every tier;
+//   7. no org-site page serves ORK's own analytics payload (gtag.js, Google Tag
+//      Manager, Cloudflare Web Analytics) — and the in-shell tier still does.
 //
 // SAFE IN ANY ENVIRONMENT. If nothing answers at the base URL the script prints
 // a SKIP line and exits 0. Point it elsewhere with ORK_BASE_URL:
@@ -255,6 +258,19 @@ $CASCADE = array('frontdoor.css', 'blocks.css', 'blog.css', 'orgsite.css', 'orks
 
 // ORK application-shell selectors, the same three C1 forbids on the public tier.
 $ORK_SELECTORS = array('#theme_container', '#newmenu', '.ork-');
+
+// ORK's OWN analytics. A standalone org site is a kingdom's or park's public
+// marketing site: it must not report pageviews into the ORK's Google Analytics
+// property, its Tag Manager container, or its Cloudflare Web Analytics token.
+// GTM was gated on $IsOrgSite from the start; the gtag.js pair and the
+// Cloudflare beacon were missed, and shipped from every org site until F2.
+// Substrings, not selectors — what matters is that the bytes are not served.
+$ORK_ANALYTICS = array(
+    'G-PVQCKENY0M'                  => 'gtag.js measurement id',
+    'googletagmanager.com/gtag/js'  => 'gtag.js loader',
+    'static.cloudflareinsights.com' => 'Cloudflare Web Analytics beacon',
+    'GTM-5HZHGSLT'                  => 'Google Tag Manager container',
+);
 
 // ---------------------------------------------------------------------------
 // Reachability — the SKIP gate
@@ -517,6 +533,27 @@ foreach ($pages as $p) {
         check("dark-mode #theme_container armour is served — {$p['label']}", (bool) preg_match($armour, $css));
     } else {
         check("org site is served no #theme_container armour — {$p['label']}", !preg_match($armour, $css));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 7. A standalone org site serves none of ORK's own analytics payload.
+//
+//    Same shape as rule 1, one layer out: the separation is not only about CSS
+//    bytes. A kingdom's or park's public site is not an ORK application surface
+//    and has no business reporting into ORK's Google Analytics property, Tag
+//    Manager container or Cloudflare Web Analytics token. Checked in BOTH
+//    directions, so the org-site half cannot be satisfied by ripping the
+//    snippets out globally — the in-shell tier still has to serve them.
+// ---------------------------------------------------------------------------
+foreach ($orgPages as $p) {
+    foreach ($ORK_ANALYTICS as $needle => $what) {
+        check("org site serves no $what — {$p['label']}", strpos($p['body'], $needle) === false);
+    }
+}
+foreach ($shellPages as $p) {
+    foreach ($ORK_ANALYTICS as $needle => $what) {
+        check("in-shell surface still serves the $what — {$p['label']}", strpos($p['body'], $needle) !== false);
     }
 }
 

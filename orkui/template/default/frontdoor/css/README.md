@@ -289,6 +289,12 @@ off a running app and asserts on the HTML that is served:
    carries the dark-mode `#theme_container` armour on the in-shell surfaces and
    **not** on an org site. This one fetches the linked stylesheets rather than
    only reading the HTML.
+7. **no org-site page serves ORK's own analytics payload** — the gtag.js
+   measurement id, the gtag.js loader, the Google Tag Manager container or the
+   Cloudflare Web Analytics beacon — and the in-shell tier still serves all
+   four. This one is not about CSS, but it is the same property one layer out:
+   a kingdom's or park's public marketing site is not an ORK application
+   surface and must not report into ORK's analytics.
 
 It is **safe in any environment**: if nothing answers it prints
 `SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)
