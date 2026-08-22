@@ -5222,9 +5222,11 @@ class Report extends Ork3
 			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
 			     GROUP BY mundane_id HAVING COUNT(*) >= 2) m"
         );
-        $sessNew30 = $this->_rfuScalar(
-            "SELECT COUNT(*) AS c FROM `{$p}session` WHERE created >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
-        );
+        // NOTE: no "sign-ins over time" KPI on purpose. Logout, Log Out
+        // Everywhere, and the three-session cap all DELETE rows, so counting
+        // surviving rows by created-date silently undercounts — and login is
+        // not otherwise recorded anywhere. An accumulating sign-in metric
+        // needs its own counter first.
         // Client breakdown is labeled in PHP so the buckets match the session
         // list in the account menu (nav_session_client_label in the theme).
         $sessClientCounts = array();
@@ -5252,12 +5254,11 @@ class Report extends Ork3
         $featSessions = array(
             'key'         => 'multi_sessions',
             'title'       => 'Multi-Device Sessions',
-            'description' => 'Up to three concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu.',
+            'description' => 'Up to three concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu. Live snapshot: these numbers reflect sessions open right now, not a running total.',
             'kpis' => array(
                 $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
                 $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
                 $this->_rfuKpi('Players on 2+ devices', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players actually using the multi-device allowance', null, null, 'of signed-in players'),
-                $this->_rfuKpi('Sign-ins (30 days)', $sessNew30, null, null, 'sessions created in the last 30 days'),
             ),
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-sessions-client', 'bar', 'Active sessions by client', $sessClientRows, 'Sessions'),
