@@ -292,21 +292,11 @@
     color: var(--fd-primary-contrast);
 }
 
-/* ---- Authored body copy links ------------------------------
-   orkui.css supplied the only `a { color }` an org site ever had; standalone sites
-   no longer load it and cms-base.css deliberately omits it, which left links inside
-   authored richtext/raw_html blocks at the UA default (#0000EE, and #551A8B once
-   visited) — about 1.3:1 on a dark org theme. Scoped to .fd-org so the front door,
-   which still renders inside the ORK shell, keeps the colour orkui.css gives it. */
-.fd-org .fd-body-text a {
-    color: var(--pk-link, var(--fd-primary));
-    text-decoration: underline;
-}
-
-.fd-org .fd-body-text a:hover,
-.fd-org .fd-body-text a:focus-visible {
-    color: var(--fd-text);
-}
+/* Authored body-copy links used to be styled here, scoped to `.fd-org` so the
+   rule could not reach the front door. Every tier renders authored body copy and
+   every tier needs the affordance, so the rule now lives once in frontdoor.css
+   as `.fd-body-text a` — see the "Authored body-copy links" block there. Nothing
+   org-specific replaces it: --pk-link already carries the org's own link ink. */
 
 /* ============================================================
  * SITE SHELL CHROME — lifted out of Site_shell.tpl's inline style elements.
@@ -489,10 +479,6 @@ html[data-theme="dark"] .org-home-warning strong {
  * ============================================================ */
 html[data-theme="dark"] .fd-org-name {
     color: var(--fd-text);
-}
-
-html[data-theme="dark"] .fd-org .fd-body-text a {
-    color: var(--pk-link, var(--fd-accent));
 }
 
 html[data-theme="dark"] .org-notice-card,

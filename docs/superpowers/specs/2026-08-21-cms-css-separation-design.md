@@ -289,7 +289,7 @@ to the count on the day they were last measured:
 | Budget | Today | Counts |
 |---|---|---|
 | `MAX_GROUPS_2PLUS` | 26 | duplicate bodies with ≥ 2 declarations — the real DRY signal |
-| `MAX_GROUPS_ANY` | 90 | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_ANY` | 91 | every duplicate body, single-declaration coincidences included |
 
 The 22→26 / 78→90 step (F4) was a **coverage** re-baseline: lifting the admin
 templates' inline CSS into `cms-admin.css` authored no new duplicate body, it

@@ -162,6 +162,51 @@ function css_basename($url)
     return strtolower(basename($url));
 }
 
+/**
+ * basename => absolute href, for the SAME-ORIGIN stylesheets a surface links.
+ * Section 6 asserts on the CSS bytes a surface actually serves, which means
+ * fetching them; Google Fonts and the FontAwesome CDN are skipped because they
+ * are not ours and are not on any boundary.
+ */
+function stylesheet_urls($html, $base)
+{
+    $out = array();
+    if (!preg_match_all('#<link\b[^>]*>#i', $html, $m)) {
+        return $out;
+    }
+    foreach ($m[0] as $tag) {
+        if (!preg_match('#\brel\s*=\s*["\']?[^"\'>]*stylesheet#i', $tag)) {
+            continue;
+        }
+        if (!preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#i', $tag, $h)) {
+            continue;
+        }
+        $href = html_entity_decode($h[2], ENT_QUOTES);
+        if (preg_match('#^https?://#i', $href)) {
+            if (strpos($href, $base) !== 0) {
+                continue;   // third-party CDN — not ours, not on a boundary
+            }
+        } elseif ($href !== '' && $href[0] === '/') {
+            $href = $base . $href;
+        } else {
+            continue;       // relative to an unknown directory; not emitted here
+        }
+        $out[css_basename($href)] = $href;
+    }
+    return $out;
+}
+
+/** Fetched stylesheet bodies, memoised — a run touches the same files repeatedly. */
+function css_body($url)
+{
+    static $cache = array();
+    if (!array_key_exists($url, $cache)) {
+        $r = http_get($url);
+        $cache[$url] = ($r === null || $r[0] !== 200) ? null : $r[1];
+    }
+    return $cache[$url];
+}
+
 /** The bodies of every inline <style> element. */
 function inline_styles($html)
 {
@@ -413,6 +458,66 @@ foreach ($orgPages as $p) {
         "no inline <style> names an ORK selector — {$p['label']}" . ($bad ? ' [' . implode(', ', array_keys($bad)) . ']' : ''),
         !$bad
     );
+}
+
+// ---------------------------------------------------------------------------
+// 6. Authored body-copy links carry a non-colour affordance on EVERY tier.
+//
+//    A link an author writes inside a richtext / raw_html block is a
+//    .fd-body-text descendant. It used to be styled only for standalone org
+//    sites (`.fd-org .fd-body-text a` in orgsite.css), so in the ORK shell it
+//    fell through to orkui.css's `a { color: #333; text-decoration: none }` —
+//    #333 against .fd-body-text's own #1a2236 is ~1.15:1 with no underline,
+//    i.e. WCAG 1.4.1 (use of colour): colour was the only signal and it was
+//    effectively the same colour. The underline is what satisfies 1.4.1
+//    independently of colour, so it is the thing worth asserting.
+//
+//    Asserted on the CSS BYTES each surface serves, not on source, and on the
+//    property the fix is FOR (an underline reaching authored body copy) rather
+//    than on one file's contents — the rule may move again, but it must never
+//    stop being served, and it must never go back to being org-only.
+// ---------------------------------------------------------------------------
+foreach ($pages as $p) {
+    $urls  = stylesheet_urls($p['body'], $BASE);
+    $all   = '';
+    $unread = array();
+    foreach ($urls as $name => $u) {
+        $b = css_body($u);
+        if ($b === null) {
+            $unread[] = $name;
+            continue;
+        }
+        $all .= "\n" . $b;
+    }
+    check("every linked stylesheet was readable — {$p['label']}" . ($unread ? ' [' . implode(', ', $unread) . ']' : ''), !$unread);
+
+    // Comments discuss these selectors at length; strip them before matching.
+    $css = preg_replace('#/\*.*?\*/#s', ' ', $all);
+
+    check(
+        "authored body-copy links are underlined — {$p['label']}",
+        (bool) preg_match('#(^|[,}])\s*\.fd-body-text\s+a\s*\{[^}]*text-decoration\s*:\s*underline#is', $css)
+    );
+    check(
+        "authored body-copy links take --pk-link — {$p['label']}",
+        (bool) preg_match('#(^|[,}])\s*\.fd-body-text\s+a\s*\{[^}]*color\s*:\s*var\(\s*--pk-link#is', $css)
+    );
+    // One home for the rule: the `.fd-org`-scoped copy is gone and must not
+    // come back, or the two tiers can drift apart again.
+    check(
+        "no .fd-org-scoped copy of the rule is served — {$p['label']}",
+        !preg_match('#\.fd-org\s+\.fd-body-text\s+a\b#is', $css)
+    );
+
+    // The dark-mode ID armour is ORK-shell-only by construction: it names
+    // #theme_container, so it may exist ONLY in orkshell-interop.css, which a
+    // standalone org site never loads. Checked in both directions.
+    $armour = '#html\[data-theme="dark"\]\s+\#theme_container\s+\.fd-body-text\s+a\b#is';
+    if ($p['tier'] === 'shell') {
+        check("dark-mode #theme_container armour is served — {$p['label']}", (bool) preg_match($armour, $css));
+    } else {
+        check("org site is served no #theme_container armour — {$p['label']}", !preg_match($armour, $css));
+    }
 }
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";

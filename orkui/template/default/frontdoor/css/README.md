@@ -281,7 +281,14 @@ off a running app and asserts on the HTML that is served:
    present iff the layer is linked (`org-blog-card` is `orgsite.css`, not a
    `blog.css` hook);
 5. no org-site page carries an inline `<style>` naming `#theme_container`,
-   `#newmenu` or `.ork-`.
+   `#newmenu` or `.ork-`;
+6. **authored body copy carries a non-colour link affordance on every tier** —
+   the CSS each surface actually serves contains a `.fd-body-text a` rule with
+   `text-decoration: underline` and a `--pk-link` colour, contains no `.fd-org`-
+   scoped copy of it (one home, so the tiers cannot drift apart again), and
+   carries the dark-mode `#theme_container` armour on the in-shell surfaces and
+   **not** on an org site. This one fetches the linked stylesheets rather than
+   only reading the HTML.
 
 It is **safe in any environment**: if nothing answers it prints
 `SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)
@@ -355,13 +362,22 @@ were last measured, so duplication can fall but not rise:
 | Budget | Today | What it counts |
 |---|---|---|
 | `MAX_GROUPS_2PLUS` | **26** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
-| `MAX_GROUPS_ANY` | **90** | every duplicate body, single-declaration coincidences included |
+| `MAX_GROUPS_ANY` | **91** | every duplicate body, single-declaration coincidences included |
 
 Both numbers live as constants at the top of `bin/check-css-duplication.php`.
 **To re-baseline**: run `npm run lint:css:dupes:report`, take the two printed
 counts, edit the two constants, and say why in the same commit. Lower them
 freely after a cleanup — that is the ratchet tightening. Do not raise one just
 to get a commit through.
+
+The 90→91 step (2026-08-22) is the one-declaration
+`color:var(--pk-link, var(--fd-accent))` shared by frontdoor.css's dark
+authored-link rule and orkshell-interop.css's `#theme_container` armour for the
+same links. It is deliberate and **not collapsible by selector grouping**, the
+only collapse this gate accepts: a selector list lives in one file, frontdoor.css
+may not name `#theme_container` (C1), and a standalone org site never loads the
+interop sheet but still needs the declaration. Both rules carry a comment saying
+so, and `cms-admin.css` already holds the same shape for `.cms-btn-primary`.
 
 The 22→26 / 78→90 step was a **coverage** re-baseline, not a duplication one:
 lifting the admin templates' inline `<style>` blocks into `cms-admin.css`
@@ -397,6 +413,14 @@ earlier `.pm-grid` one, because it has to follow the base grid rule.)
 - **New block CSS goes in `blocks.css`**, new blog CSS in `blog.css`, new
   standalone-site chrome in `orgsite.css`. `frontdoor.css` is the shared `.fd-*`
   layer — anything you add there ships to every public CMS surface.
+- **Anything that styles *authored* content belongs in the shared layer, not in
+  one tier's.** `.fd-body-text` is what a richtext / raw_html block renders on
+  all three tiers, so its rules live in `frontdoor.css`. The link rule was
+  briefly `.fd-org`-scoped in `orgsite.css`, which fixed standalone sites and
+  left the front door and the blog serving orkui.css's `a { color:#333;
+  text-decoration:none }` — ~1.15:1 against the body copy around it, with colour
+  as the only signal (WCAG 1.4.1). Scope by *what renders it*, not by which tier
+  you happened to be looking at.
 - **An override only belongs in `orkshell-interop.css` if an ORK rule outranks a
   CMS rule.** If you are putting a rule there for any other reason, it belongs in
   `frontdoor.css`.

@@ -69,6 +69,32 @@ html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
     color: #fff !important;
 }
 
+/* Authored body-copy links. frontdoor.css styles them once for all three tiers
+   (`.fd-body-text a`, plus a dark partner at (0,2,1) that clears orkui.css's
+   `html[data-theme="dark"] a` at (0,1,1)). In the ORK shell that is not enough:
+   default.theme's own dark chrome emits
+   `html[data-theme="dark"] #theme_container a { color: #63b3ed; }` at (1,1,2),
+   which outranks any class-only selector, so an authored link rendered in-shell
+   went ORK link-blue in dark mode while the same link on a standalone org site
+   took the org's --pk-link. Restate the CMS value at (1,2,2).
+
+   No :hover partner is needed, and adding one would be wrong: (1,2,2) already
+   outranks `#theme_container a:hover` (1,1,2), so this colour holds through
+   hover — which is exactly what a standalone org site does in dark mode, where
+   the dark rule outranks the light `:hover` rule the same way. Light mode is
+   untouched here: default.theme sets no light `#theme_container a`, so
+   frontdoor.css's `.fd-body-text a:hover` lands on its own.
+
+   DELIBERATE DUPLICATE of frontdoor.css's dark partner, and it cannot be
+   collapsed by selector grouping: one selector list has to live in one file,
+   frontdoor.css may not name `#theme_container` (C1), and a standalone org site
+   never loads this file — so the two copies are needed on disjoint tiers. This
+   is the +1 on MAX_GROUPS_ANY in bin/check-css-duplication.php; the same
+   ID-armour pattern already exists at .cms-btn-primary in cms-admin.css. */
+html[data-theme="dark"] #theme_container .fd-body-text a {
+    color: var(--pk-link, var(--fd-accent));
+}
+
 /* #86 — the front door hides the ORK application top bar outright. Without this
    the internal #newmenu bar stacks directly beneath the front-door marketing nav
    (.fd-nav), showing anonymous visitors two navbars; the front-door nav already

@@ -143,6 +143,38 @@
 .fd-body-text ul,
 .fd-body-text ol { text-align: left; }
 
+/* ---- Authored body-copy links ------------------------------
+   A link an author writes inside a richtext / raw_html block must be
+   distinguishable from the copy around it. Neither tier managed that on its own:
+   a standalone org site loads no `a { color }` at all (cms-base.css deliberately
+   omits one), so those links fell to the UA default; and in the ORK shell
+   orkui.css's `a { color: #333; text-decoration: none }` landed instead, ~1.15:1
+   against .fd-body-text's own #1a2236 with nothing but colour to go on — a WCAG
+   1.4.1 failure, because colour was the only signal and it was the same colour.
+
+   The underline is the part that satisfies 1.4.1 *independently of colour*; keep
+   it. --pk-link is the org's own link ink (--fd-primary light, --fd-accent dark,
+   see the .fd-page token blocks), so a themed site tints its links and the front
+   door — which has no theme row — gets the token defaults.
+
+   This lives in frontdoor.css, not orgsite.css, because all three surface tiers
+   render authored body copy. `.fd-body-text a` is (0,1,1) and beats orkui.css's
+   `a` (0,0,1) on specificity alone, so the light case needs no #theme_container
+   armour. Dark mode does: default.theme emits
+   `html[data-theme="dark"] #theme_container a` at (1,1,2), which outranks the
+   partner below — the matching override is in orkshell-interop.css, where an
+   ORK-outranks-CMS fix belongs, and a standalone org site (no ORK shell, no
+   interop sheet) never needs it. */
+.fd-body-text a {
+    color: var(--pk-link, var(--fd-primary));
+    text-decoration: underline;
+}
+
+.fd-body-text a:hover,
+.fd-body-text a:focus-visible {
+    color: var(--fd-text);
+}
+
 /* Outbound-link affordance on off-site links in body copy. */
 .fd-body-text a[href^="http"]::after {
     content: " \2197";
@@ -807,6 +839,25 @@ html[data-theme="dark"] .fd-sec-title {
 }
 
 html[data-theme="dark"] .fd-body-text { color: #c8d3ea; }
+
+/* Dark partner of the authored body-copy link rule above. --pk-link is remapped
+   to --fd-accent by the dark .fd-page token block, so it names no second colour;
+   it restates the token so the (0,2,1) selector can outrank orkui.css's
+   `html[data-theme="dark"] a` (0,1,1).
+
+   It is also what holds the HOVER colour in dark mode: (0,2,1) outranks the
+   `.fd-body-text a:hover` rule above at (0,1,1), so a dark link keeps --pk-link
+   on hover instead of dropping to --fd-text. That is the behaviour standalone
+   org sites have always had (the rule was `.fd-org`-scoped before it moved
+   here), and deleting this block silently changes it — measured: org dark hover
+   goes #f0b429 -> #e8ecf1. Do not "simplify" it away.
+
+   In the ORK shell it is outranked in turn by default.theme's
+   `html[data-theme="dark"] #theme_container a` (1,1,2); orkshell-interop.css
+   carries that override. */
+html[data-theme="dark"] .fd-body-text a {
+    color: var(--pk-link, var(--fd-accent));
+}
 
 html[data-theme="dark"] .fd-kicker-d {
     color: #c9940c;

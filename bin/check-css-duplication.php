@@ -63,8 +63,23 @@
 // them means moving rules across ~2,000 lines of a file this task was scoped
 // to leave working, and F4's contract was no rendering change.
 // ---------------------------------------------------------------------------
+//
+// 2026-08-22, P1 (authored body-copy links): ANY 90 -> 91, 2PLUS unchanged at 26.
+// One new group, one declaration wide:
+//   color:var(--pk-link, var(--fd-accent))
+//     frontdoor.css   html[data-theme="dark"] .fd-body-text a
+//     orkshell-interop.css  html[data-theme="dark"] #theme_container .fd-body-text a
+// It is deliberate and NOT collapsible by selector grouping, which is the only
+// collapse this gate accepts: a selector list lives in exactly one file, and
+// these two selectors cannot share one. frontdoor.css is public-tier and may not
+// name #theme_container (C1 in bin/check-css-boundaries.sh); orkshell-interop.css
+// is never loaded by a standalone org site, which still needs the declaration.
+// The copies therefore serve disjoint tiers — the ORK-outranks-CMS armour the
+// interop file exists to hold, the same shape cms-admin.css already carries for
+// .cms-btn-primary. Both rules carry a comment saying so.
+// ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 26;
-const MAX_GROUPS_ANY   = 90;
+const MAX_GROUPS_ANY   = 91;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(
