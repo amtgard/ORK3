@@ -272,12 +272,52 @@
     margin-left: 3px;
 }
 
+/* ---- Park meeting strip links ------------------------------
+   _park_strip.tpl is included ONLY from Site_shell.tpl, i.e. only on standalone
+   org sites, so these belong here — NOT in orkshell-interop.css. They lived there
+   briefly during the CSS separation and were dead the whole time: org sites never
+   load the interop layer, so the "Directions" link rendered UA-default purple on
+   the strip's --fd-primary field at 1.45:1.
+
+   Plain class selectors, no #theme_container prefix: an org site does not load
+   orkui.css, so nothing competes for these links and the ID-specificity arms race
+   the interop file exists for simply does not apply here. */
+.pk-strip-link {
+    color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
+    font-weight: 600;
+}
+
+.pk-strip-link:hover,
+.pk-strip-link:focus-visible {
+    color: var(--fd-primary-contrast);
+}
+
+/* ---- Authored body copy links ------------------------------
+   orkui.css supplied the only `a { color }` an org site ever had; standalone sites
+   no longer load it and cms-base.css deliberately omits it, which left links inside
+   authored richtext/raw_html blocks at the UA default (#0000EE, and #551A8B once
+   visited) — about 1.3:1 on a dark org theme. Scoped to .fd-org so the front door,
+   which still renders inside the ORK shell, keeps the colour orkui.css gives it. */
+.fd-org .fd-body-text a {
+    color: var(--pk-link, var(--fd-primary));
+    text-decoration: underline;
+}
+
+.fd-org .fd-body-text a:hover,
+.fd-org .fd-body-text a:focus-visible {
+    color: var(--fd-text);
+}
+
 /* ============================================================
  * DARK MODE — html[data-theme="dark"] (tokens already flip via
  * frontdoor.css's dark .fd-page block; these tighten a few edges).
  * ============================================================ */
 html[data-theme="dark"] .fd-org-name {
     color: var(--fd-text);
+}
+
+html[data-theme="dark"] .fd-org .fd-body-text a {
+    color: var(--pk-link, var(--fd-accent));
 }
 
 html[data-theme="dark"] .org-notice-card,

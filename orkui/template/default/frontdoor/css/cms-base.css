@@ -102,6 +102,17 @@ html[data-theme="dark"] {
     color-scheme: dark;
 }
 
+/* Dark-mode partner for the body FALLBACKS above. When the org has a theme,
+   <style id="fd-theme-tokens-root"> defines --fd-bg / --fd-text at :root for both
+   themes and these var() reads resolve, so this rule changes nothing. It matters
+   only when there is NO active theme row (a fresh site, or an officer using the
+   theme editor's reset): without it the var() fallbacks are the LIGHT values, and a
+   dark-mode visitor gets a white page behind the content. */
+html[data-theme="dark"] body {
+    background: var(--fd-bg, #12161f);
+    color: var(--fd-text, #e6eaf2);
+}
+
 html[data-theme="light"] {
     color-scheme: light;
 }

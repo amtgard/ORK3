@@ -68,37 +68,3 @@ html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
 #theme_container a.fd-path .fd-serif {
     color: #fff !important;
 }
-
-/* Park strip links (moved from _park_strip.tpl's inline <style>). The dark-mode
-   `html[data-theme="dark"] #theme_container a` rule is (1,1,2) — one notch above
-   the plain `#theme_container a.pk-strip-link` rule — so the dark pair below is
-   required, not redundant. */
-#theme_container a.pk-strip-link {
-    color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
-    font-weight: 600;
-}
-#theme_container a.pk-strip-link:hover {
-    color: var(--fd-primary-contrast);
-}
-html[data-theme="dark"] #theme_container a.pk-strip-link {
-    color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
-}
-html[data-theme="dark"] #theme_container a.pk-strip-link:hover {
-    color: var(--fd-primary-contrast);
-}
-
-/* Front door only. The front door hides #newmenu outright (display:none, height 0)
-   and ships its own marketing nav, so orkui.css's 48px body clearance reserves
-   space for a bar that is never painted; together with the UA's default 8px body
-   margin that pushed the marketing nav down 56px of dead space. #theme_container's
-   own 10px/6px inset is deliberate — it gives the rounded nav bar its gutter — so
-   it stays.
-
-   This lives here, not in orkui.css, because it is a CMS rule: the CRM must not
-   style CMS surfaces (bin/check-css-boundaries.sh C5). It still wins over
-   orkui.css's `body { padding-top:48px }` — `body.fd-home` is (0,1,1) against
-   (0,0,1) — and this file is linked after orkui.css on every in-shell surface. */
-body.fd-home {
-    padding-top: 0;
-    margin-top: 0;
-}
