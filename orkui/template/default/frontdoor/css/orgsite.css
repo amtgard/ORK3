@@ -309,6 +309,179 @@
 }
 
 /* ============================================================
+ * SITE SHELL CHROME — lifted out of Site_shell.tpl's inline <style> blocks.
+ *
+ * These four groups are 100% static (no authored/per-instance value is
+ * interpolated), so they were re-parsed on every request and were invisible to
+ * stylelint and to duplication analysis. Site_shell.tpl is rendered only by
+ * Controller_Site — the standalone org sites — and those sites link orgsite.css
+ * last, so the rules keep the same cascade position they had when they were
+ * emitted in the body.
+ *
+ * Each group keeps its dark-mode and print partners next to its base rules,
+ * matching how the block CSS is organised, rather than being split into the
+ * DARK MODE section below.
+ * ============================================================ */
+
+/* ---- Draft-preview banner ($SitePreview) ---- */
+.org-preview-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #b8862b;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.org-preview-banner i {
+    font-size: 15px;
+    opacity: .9;
+}
+
+html[data-theme="dark"] .org-preview-banner {
+    background: #8a6420;
+}
+
+@media print {
+    .org-preview-banner {
+        display: none;
+    }
+}
+
+/* ---- Manager preview warning ($SiteHomeWarning) ---- */
+.org-home-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 1120px;
+    margin: 16px auto 0;
+    padding: 12px 16px;
+    background: #fff4e0;
+    border: 1px solid #e6b866;
+    border-left: 4px solid #b8862b;
+    border-radius: var(--fd-radius, 8px);
+    color: #5a4210;
+    font-family: var(--fd-font-body);
+    font-size: .9rem;
+    line-height: 1.45;
+}
+
+.org-home-warning i {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    color: #b8862b;
+    font-size: 1rem;
+}
+
+.org-home-warning strong {
+    color: #7a5710;
+}
+
+html[data-theme="dark"] .org-home-warning {
+    background: #3a2f14;
+    border-color: #6b5220;
+    border-left-color: #caa03e;
+    color: #f0e2c2;
+}
+
+html[data-theme="dark"] .org-home-warning i {
+    color: #caa03e;
+}
+
+html[data-theme="dark"] .org-home-warning strong {
+    color: #f7ecca;
+}
+
+@media print {
+    .org-home-warning {
+        display: none;
+    }
+}
+
+/* ---- Breadcrumb trail (C13, page mode) ---- */
+.org-breadcrumbs {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 18px 20px 0;
+}
+
+.org-breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-family: var(--fd-font-body);
+    font-size: .86rem;
+    line-height: 1.4;
+}
+
+.org-breadcrumbs li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fd-text-muted);
+}
+
+/* FontAwesome chevron between crumbs. The family name is the FA5 string on
+   purpose — FA7 still resolves it through its compatibility alias, and the
+   glyph point \f105 (angle-right) is unchanged across 5/6/7. */
+.org-breadcrumbs li:not(:first-child)::before {
+    content: "\f105";
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: .72rem;
+    opacity: .6;
+}
+
+.org-breadcrumbs a {
+    color: var(--fd-text-muted);
+    text-decoration: none;
+}
+
+.org-breadcrumbs a:hover,
+.org-breadcrumbs a:focus-visible {
+    color: var(--fd-accent);
+    text-decoration: underline;
+}
+
+.org-breadcrumbs .is-current {
+    color: var(--fd-text);
+    font-weight: 600;
+}
+
+/* ---- Fallback page-title <h1> (C26) ----
+   The background/border/padding/border-radius/text-shadow resets restate what
+   frontdoor.css's `.fd-page h1..h6` group already sets; they are kept so the
+   heading is self-contained if it is ever rendered outside a .fd-page. The
+   `margin: 0` is the one that does real work — it beats cms-base.css's
+   `h1..h6 { margin: 0 0 12px 0 }` on specificity, as it did inline. */
+.org-page-title-wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 14px 20px 0;
+}
+
+.org-page-title {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    text-shadow: none;
+    font-family: var(--fd-font-heading);
+    font-size: 2rem;
+    line-height: 1.15;
+    color: var(--fd-text);
+}
+
+/* ============================================================
  * DARK MODE — html[data-theme="dark"] (tokens already flip via
  * frontdoor.css's dark .fd-page block; these tighten a few edges).
  * ============================================================ */

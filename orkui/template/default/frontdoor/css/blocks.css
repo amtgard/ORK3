@@ -916,6 +916,92 @@ html[data-theme="dark"] .fdb-rawhtml-empty code { background: rgba(255,255,255,.
 @media (max-width: 760px) { .fdb-steps-grid { grid-template-columns: repeat(2, 1fr) !important; } }
 @media (max-width: 480px) { .fdb-steps-grid { grid-template-columns: 1fr !important; } }
 
+/* ---- CMS draft-preview banner (was inline <style> in Cms_preview.tpl) ----
+   Cms_preview is an in-shell CMS surface: it includes _assets_public.tpl
+   (frontdoor.css, blocks.css, blog.css) and _assets_inshell.tpl
+   (orkshell-interop.css), and nothing else. It does NOT link orgsite.css — that
+   file is added by Site_shell.tpl alone — so the org-site chrome sheet is not an
+   option here. orkshell-interop.css is reserved for rules that exist only to
+   out-specify an ORK selector, and this banner names none, so of the sheets
+   Cms_preview actually serves, blocks.css is the one that fits: it is the
+   render_blocks.tpl companion, and the preview page's whole job is to render
+   those blocks with this banner pinned above them.
+
+   Deliberately NOT scoped under .fd-page: the banner is a sibling of the
+   .fd-page wrapper, not a descendant. */
+.cms-preview-banner {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: #92400e;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+
+html[data-theme="dark"] .cms-preview-banner {
+    background: #78350f;
+}
+
+.cms-preview-banner .cms-preview-badge {
+    background: rgba(0, 0, 0, .25);
+    border-radius: 5px;
+    padding: 2px 10px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-size: 11px;
+}
+
+.cms-preview-banner .cms-preview-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: .92;
+    font-weight: 500;
+}
+
+.cms-preview-banner .cms-preview-publish {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 6px 14px;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    transition: background .12s ease;
+}
+
+.cms-preview-banner .cms-preview-publish:hover {
+    background: #15803d;
+}
+
+.cms-preview-banner .cms-preview-publish:disabled {
+    opacity: .65;
+    cursor: default;
+}
+
+html[data-theme="dark"] .cms-preview-banner .cms-preview-publish {
+    background: #15803d;
+}
+
+html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover {
+    background: #166534;
+}
+
 /* ============================================================
  * The one block whose CSS is NOT here: frontdoor/blocks/columns.tpl.
  *

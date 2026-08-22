@@ -19,22 +19,10 @@ $pvIdField    = ($pvKind === 'post') ? 'post_id' : 'page_id';
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
-<style>
-.cms-preview-banner{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:12px;
-  padding:10px 18px;background:#92400e;color:#fff;font-size:14px;font-weight:600;
-  box-shadow:0 2px 8px rgba(0,0,0,.25);}
-.cms-preview-banner .cms-preview-badge{background:rgba(0,0,0,.25);border-radius:5px;padding:2px 10px;
-  text-transform:uppercase;letter-spacing:.06em;font-size:11px;}
-.cms-preview-banner .cms-preview-title{opacity:.92;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-html[data-theme="dark"] .cms-preview-banner{background:#78350f;}
-.cms-preview-banner .cms-preview-publish{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:7px;
-  background:#16a34a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;
-  cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:background .12s ease;}
-.cms-preview-banner .cms-preview-publish:hover{background:#15803d;}
-.cms-preview-banner .cms-preview-publish:disabled{opacity:.65;cursor:default;}
-html[data-theme="dark"] .cms-preview-banner .cms-preview-publish{background:#15803d;}
-html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{background:#166534;}
-</style>
+<?php
+// .cms-preview-* styling lives in frontdoor/css/blocks.css, which the
+// _assets_public.tpl include above links.
+?>
 
 <div class="cms-preview-banner">
 	<span class="cms-preview-badge"><?= $pvStatus === 'published' ? 'Published' : 'Unpublished' ?> · Preview</span>

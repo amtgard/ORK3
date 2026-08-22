@@ -68,3 +68,21 @@ html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
 #theme_container a.fd-path .fd-serif {
     color: #fff !important;
 }
+
+/* #86 — the front door hides the ORK application top bar outright. Without this
+   the internal #newmenu bar stacks directly beneath the front-door marketing nav
+   (.fd-nav), showing anonymous visitors two navbars; the front-door nav already
+   carries the single clearly-labelled Record Keeper / Log in entry point.
+
+   This lives here, and not inline in _index.tpl where it started, because it is
+   CMS CSS naming an ORK shell selector — exactly the coupling this file exists
+   to hold in one greppable place, and exactly what the C1 rule of
+   bin/check-css-boundaries.sh forbids everywhere else on the public side. The
+   front door already links this stylesheet via frontdoor/_assets_inshell.tpl.
+
+   !important because orkui.css paints #newmenu at ID specificity and the bar is
+   the ORK shell's, not ours, to restyle; `display` is the only property either
+   side sets on it, so nothing here is being overridden in turn. */
+body.fd-home #newmenu {
+    display: none !important;
+}

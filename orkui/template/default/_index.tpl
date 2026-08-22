@@ -11,15 +11,12 @@ $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
-<style>
-/*
- * #86: On the public front door the internal ORK application top bar (#newmenu)
- * would stack directly beneath the front-door marketing nav (.fd-nav), showing
- * anonymous visitors two navbars. Suppress the app bar here — the front-door nav
- * already carries the single clearly-labelled Record Keeper / Log in entry point.
- */
-body.fd-home #newmenu { display: none !important; }
-</style>
+<?php
+// #86 — the front door suppresses the ORK application top bar (#newmenu) so
+// anonymous visitors do not see two stacked navbars. That rule names an ORK
+// shell selector, so it lives in frontdoor/css/orkshell-interop.css (linked by
+// _assets_inshell.tpl above), the one file allowed to name one.
+?>
 
 <div class="fd-page">
 <?php include $fdDir . 'render_blocks.tpl'; ?>
