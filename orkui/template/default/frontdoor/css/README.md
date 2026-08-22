@@ -51,32 +51,63 @@ pair) directly, on the `$IsOrgSite` branch. `cms-admin.css` is linked by
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
-- **C1 — no ORK shell selectors on the public CMS side.** Don't name
+- **C0 — the gate must be able to parse the file.** An unterminated `/*` or
+  `<!--` leaves everything after it unscanned, so it is reported rather than
+  passing silently. A gate that quietly disarms itself is worse than no gate.
+- **C1 — no ORK shell selectors *or markup* on the public CMS side.** Don't name
   `#theme_container`, `#newmenu` or `.ork-*` in `frontdoor/css/*.css`, in any
   template under `frontdoor/`, or in the six public surface templates that sit
   one directory up (`_index.tpl`, `Site_shell.tpl`, `Page_view.tpl`,
-  `Blog_index.tpl`, `Blog_post.tpl`, `Cms_preview.tpl`).
-  **Two files are exempt:** `orkshell-interop.css`, the designated coupling
-  point, and `cms-base.css`, which has to neutralize the `#theme_container`
-  `default.theme` emits on standalone org sites.
+  `Blog_index.tpl`, `Blog_post.tpl`, `Cms_preview.tpl`). **Markup counts**, not
+  just stylesheet selectors: `id="theme_container"` and a `class` token starting
+  `ork-` are rejected in those templates too. CSS identifier escapes
+  (`#theme\_container`, `.ork\-x`, `#\74 heme_container`) are decoded first —
+  they are the same CSS.
+  **`orkshell-interop.css` is fully exempt**, being the designated coupling
+  point. **`cms-base.css` is narrowly exempt:** it may name `#theme_container`
+  (it has to neutralize the container `default.theme` emits on standalone org
+  sites) and nothing else — `#newmenu` and `.ork-` are rejected there like
+  anywhere else. It is the one stylesheet a standalone org site loads globally,
+  so a blanket exemption would let the whole quarantined override layer move
+  back in with the gate green.
   **The admin is out of C1's scope entirely** — `cms/css/cms-admin.css` and the
   `cms/` + `Cms_*` templates are definitionally ORK-hosted application surfaces,
   render inside the shell, and have no portability claim to protect. C2 still
   applies to them.
 - **C2 — don't *define* an `--ork-*` token.** Reading one with `var()` is fine;
-  a `--ork-foo:` declaration is not. Applies to all CMS CSS and templates,
-  admin included.
+  a `--ork-foo:` declaration is not, including when a formatter has wrapped the
+  colon onto the next line. Applies to all CMS CSS and templates, admin
+  included.
 - **C3 — no *static* `<style>` block in `frontdoor/blocks/*.tpl`.** Block CSS
   belongs in `blocks.css`, where it is cacheable, lintable and visible to
-  duplication analysis. A `<style>` whose body interpolates PHP is legal — see
-  the `columns.tpl` exception below.
-- **C4 — `Site_shell.tpl` must not link** `orkui.css`, `tokens.css` or
-  `orkshell-interop.css`.
-- **C5 — CRM CSS must not name `.fd-*`, `.cms-*` or `.org-*`.** Scope:
-  `style/orkui.css`, `style/tokens.css`, `style/reports.css`.
+  duplication analysis. A `<style>` is legal only when it interpolates a PHP
+  **variable** into a declaration **value** — see the `columns.tpl` exception
+  below. A PHP tag parked between rules, or echoing a literal (`<?= '' ?>`),
+  does not launder a static block, and PHP that echoes a `<style>` tag built by
+  string concatenation is rejected too.
+- **C4 — markup a standalone org site renders must not link** `orkui.css`,
+  `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
+  `frontdoor/_assets_public.tpl`, the partial it includes.
+- **C5 — CRM CSS must not name `.fd-*`, `.cms-*` or `.org-*`.** Scope: every
+  `.css` under `style/`, as a directory — a new CRM stylesheet is guarded the
+  moment it lands.
+- **C6 — `default.theme` may link CRM CSS only where `$IsOrgSite` is provably
+  false.** This is the rule that decides what a standalone org site actually
+  downloads: the `if (empty($IsOrgSite)):` gate at `default.theme:104-110` picks
+  `tokens.css` + `orkui.css` for in-shell surfaces and `cms-base.css` for org
+  sites. A link added to its `else:` branch — or added unconditionally — brings
+  back the 91 KB this whole separation exists to remove. The check is
+  branch-aware (it follows PHP alternative-syntax `if`/`elseif`/`else`/`endif`
+  nesting, so the legitimate branch is not a false positive) and fail-closed: a
+  structure it cannot follow is reported, not waved through. If you restructure
+  that gate, expect to teach `bin/check-css-boundaries.sh` the new shape.
 
 Comment text is stripped before the rules run, so discussing these patterns in
-prose — as this directory's files do constantly — is not a violation.
+prose — as this directory's files do constantly — is not a violation. The
+stripper is string-aware: a quoted string that closes on its own line is never
+scanned for comment openers, so `content: "/*"` no longer blinds the rest of a
+file; and a quote that does *not* close on its line is not treated as a string,
+so an apostrophe in prose cannot swallow one. Anything still open at EOF is C0.
 
 ### The `columns.tpl` exception
 

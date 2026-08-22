@@ -4,7 +4,7 @@
 **Branch:** `feature/front-door`
 **Status:** implemented 2026-08-21
 **Working reference:** `orkui/template/default/frontdoor/css/README.md` — the
-day-to-day guide to the layout, the load order and the five rules.
+day-to-day guide to the layout, the load order and the enforced rules.
 
 ## Problem
 
@@ -83,35 +83,84 @@ gates block; exit 0 = clean, 1 = violations, 2 = bad invocation. Comment text is
 stripped before the rules run, because every file in scope discusses these very
 patterns in prose.
 
+- **C0** The scanner must be able to parse the file. A comment opener that is
+  never closed leaves every later line unscanned, so it is reported instead of
+  passing silently. See "Comment handling" below.
 - **C1** CMS CSS/markup may not name an ORK application-shell selector
-  (`#theme_container`, `#newmenu`, `.ork-`).
+  (`#theme_container`, `#newmenu`, `.ork-`). **Both** stylesheet selectors and
+  template *markup* are checked — `id="theme_container"`, and a `class`
+  attribute whose token list starts a token with `ork-` — and CSS identifier
+  escapes (`#theme\_container`, `.ork\-x`, `#\74 heme_container`) are decoded
+  before matching, because they are semantically identical CSS.
   *Scope, as built:* the **public** CMS side only — `frontdoor/css/*.css`, every
   template under `frontdoor/`, and the six public surface templates that the
   router resolves one directory up (`_index.tpl`, `Site_shell.tpl`,
   `Page_view.tpl`, `Blog_index.tpl`, `Blog_post.tpl`, `Cms_preview.tpl`;
   `Cms_preview` is listed deliberately — it renders the *public* page inside a
   preview chrome, unlike the rest of the `Cms_*` screens).
-  *Exempt:* `orkshell-interop.css` (the designated coupling point) **and**
-  `cms-base.css` — it has to neutralize the `#theme_container` that
-  `default.theme` emits on standalone org sites, so it is a second, narrower
-  allowlist entry than the spec originally assumed.
+  *Exempt:* `orkshell-interop.css` (the designated coupling point) fully, and
+  `cms-base.css` **narrowly** — it may name `#theme_container`, because it has
+  to neutralize the container `default.theme` emits on standalone org sites,
+  and nothing else. `#newmenu` and `.ork-` are still rejected there. That
+  narrowness matters: `cms-base.css` is the one stylesheet a standalone org
+  site loads globally, so an unbounded exemption would let the whole
+  quarantined override layer migrate back into it with the gate green.
   *Out of scope:* `cms/css/cms-admin.css` and the `cms/` + `Cms_*` admin
   templates. The OGRE admin is definitionally an ORK-hosted application surface,
   renders inside the shell, and has no portability claim to protect. C2 still
   applies there.
 - **C2** CMS CSS may not *define* a token in the CRM's `--ork-*` namespace.
-  Reading one with `var()` is fine — `cms-admin.css` does so ~269 times. Scope:
+  Reading one with `var()` is fine — `cms-admin.css` does so ~269 times. A
+  declaration whose colon has been wrapped onto the following line counts as a
+  definition (postcss parses it as one, and formatters produce it). Scope:
   all CMS CSS and templates, admin included.
 - **C3** A content-block template may not carry a **static** inline `<style>`
-  block. *As built the rule is about staticness, not novelty:* a `<style>` whose
-  body interpolates PHP is legal, because `frontdoor/blocks/columns.tpl`
-  interpolates `$fdbCount` into `grid-template-columns` and therefore genuinely
-  cannot become a stylesheet. Scope: `frontdoor/blocks/**.tpl`. It is the only
-  surviving inline block, down from 20.
-- **C4** `Site_shell.tpl` may not link `orkui.css`, `tokens.css` or
-  `orkshell-interop.css`.
+  block. *As built the rule is about staticness, not novelty:* a `<style>` is
+  legal only when it interpolates a PHP **variable** in a declaration-**value**
+  position, because `frontdoor/blocks/columns.tpl` interpolates `$fdbCount`
+  into `grid-template-columns` and therefore genuinely cannot become a
+  stylesheet. A PHP tag parked between rules, or one echoing a literal
+  (`<?= '' ?>`), does not launder a static block. PHP that echoes a `<style>`
+  tag assembled from string fragments (`'<st' . 'yle>'`) is rejected too.
+  Scope: `frontdoor/blocks/**.tpl`. It is the only surviving inline block, down
+  from 20.
+- **C4** Markup a standalone org site renders may not link `orkui.css`,
+  `tokens.css` or `orkshell-interop.css`. Scope: `Site_shell.tpl` **and**
+  `frontdoor/_assets_public.tpl`, the stylesheet partial the shell includes —
+  guarding only the shell leaves the partial as a one-line detour to the same
+  regression.
 - **C5** CRM CSS may not name a CMS selector (`.fd-`, `.cms-`, `.org-`). Scope:
-  `style/orkui.css`, `style/tokens.css`, `style/reports.css`.
+  every `.css` under `style/`, as a **directory** — a new CRM stylesheet is in
+  scope the moment it lands, rather than only the three files that existed when
+  the rule was written.
+- **C6** `default.theme` may link a CRM stylesheet (anything under `style/`,
+  plus `orkshell-interop.css`) only from a branch where `$IsOrgSite` is provably
+  falsy. **This is the rule that actually decides what a standalone org site
+  downloads** — the `$IsOrgSite` gate at `default.theme:104-110` is the whole
+  point of the separation, and a link added to its `else:` branch, or added
+  unconditionally, reintroduces the original 91 KB regression. C4 never covered
+  it: `Site_shell.tpl` has never linked `orkui.css`, so guarding the shell
+  guarded nothing. The check is **branch-aware** — it tracks PHP
+  alternative-syntax `if`/`elseif`/`else`/`endif` nesting and what each branch
+  implies about `$IsOrgSite`, so the legitimate `if (empty($IsOrgSite))` branch
+  that *must* link them is not a false positive — and **fail-closed**: a
+  structure it cannot follow is reported, not assumed safe. Scope:
+  `orkui/template/default/*.theme`.
+
+**Comment handling.** Comment text is stripped before the rules run, because
+every file in scope discusses these patterns in prose. The stripper is
+**string-aware**: a quoted string that closes on its own line is copied through
+verbatim and never scanned for comment openers, so `content: "/*"` or
+`var s = "<!-- x"` cannot open a phantom comment that blinds the rest of the
+file. A quote that does *not* close on its line is not treated as a string at
+all, so an apostrophe in prose ("don't") cannot swallow a line either. A PHP
+`//` comment is ended by `?>`, not merely by end of line. Anything that still
+leaves a comment open at EOF is reported as **C0** rather than silently
+disarming the scanner.
+
+**Liveness.** The property that matters is that no in-scope file is *blind*.
+Append a rule-appropriate violation to the end of each of the 66 in-scope files
+in turn and every one is detected, by the intended rule.
 
 Plus stylelint (`npm run lint:css` — stylelint 16 + a tab-indent check) over the
 CMS CSS directories only, so the CMS can adopt a stricter standard than the CRM

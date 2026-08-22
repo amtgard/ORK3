@@ -101,6 +101,13 @@
 		// Org sites get the minimal cms-base.css instead. Every other surface —
 		// the front door, CMS pages, the blog, and the OGRE admin — genuinely
 		// renders inside the ORK shell and keeps the CRM stylesheets.
+		//
+		// GUARDED: bin/check-css-boundaries.sh rule C6 fails the build if a
+		// stylesheet under default/style/ (or orkshell-interop.css) is linked
+		// anywhere in this file that a standalone org site can reach — the
+		// else: branch below, or outside this conditional altogether. C6 is
+		// branch-aware and fail-closed, so restructuring this gate means
+		// teaching the checker the new shape.
 		if (empty($IsOrgSite)):
 		?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />

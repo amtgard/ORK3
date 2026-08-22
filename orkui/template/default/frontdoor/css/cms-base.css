@@ -8,9 +8,14 @@
  * .fd-page, and from the per-org theme tokens injected as the "fd-theme-tokens" style element.
  *
  * DO NOT add component styling here. This file is a base, not a stylesheet.
- * DO NOT reference #theme_container, #newmenu or any .ork-* class beyond the
- * single container-neutralizing rule below — bin/check-css-boundaries.sh (C1)
- * rejects it.
+ *
+ * This is the ONE stylesheet a standalone org site loads globally, so its C1
+ * exemption is deliberately narrow: bin/check-css-boundaries.sh lets this file
+ * name #theme_container — that is what the container-neutralizing rule below is
+ * for — and rejects #newmenu and .ork-* here exactly as it does everywhere else
+ * on the public CMS side. Keep the #theme_container footprint to that one rule
+ * anyway; anything more is an ORK-shell override and belongs in
+ * orkshell-interop.css, which org sites never load.
  *
  * Every rule here is deliberate; see the plan's Task 1.1 table for the
  * orkui.css rule each one replaces (or intentionally omits).
