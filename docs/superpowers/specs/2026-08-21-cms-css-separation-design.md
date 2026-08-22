@@ -99,10 +99,29 @@ stylesheet was born with no coverage at all. The scope rules now are:
   `_index.tpl` + `Site_*.tpl` + `Page_*.tpl` + `Blog_*.tpl` + `Cms_preview*.tpl`
   as the public tier and every other `Cms_*.tpl` as the admin tier. A new
   `Site_home.tpl` / `Blog_tag.tpl` / `Page_index.tpl` is in scope on creation.
-  The one manual step the design keeps is adding a **controller** name to
-  `CMS_CONTROLLERS` when a CMS controller is added — per controller, not per
-  file. `Cms_preview*` is a naming contract: a `Cms_` template that renders the
+  `Cms_preview*` is a naming contract: a `Cms_` template that renders the
   public page must be named that way to land on the public tier.
+
+  **The controller set is derived, not listed (R9/R10/C8).** This was originally
+  documented as "the one manual step the design keeps" — add a controller name
+  to `CMS_CONTROLLERS` when you add a CMS controller. A manual step is a step
+  someone forgets, and forgetting it was **silent**: a new `Ogre_view.tpl`
+  linking `orkui.css`, carrying a static `<style>` *and* writing
+  `id="theme_container" class="ork-card"` passed at **exit 0**, because no rule
+  was switched on for it at all. A brand-new surface got zero coverage and the
+  gate said nothing. Three mechanisms now close it, each covering the one before:
+
+  | | Mechanism | What it catches |
+  |---|---|---|
+  | **R9** | `CMS_CONTROLLERS` is derived from the filesystem — the controllers using the **`CmsScopeContext`** trait (`controller.{Site,Page,Blog,Cms,CmsAjax}.php`: 5 of 44, exactly the CMS set), unioned with the historical list as a **floor** so derivation can only *add*. Same idea as `check-layering.sh` deriving `DOMAIN_CLASSES` from `system/lib/ork3/class.*.php`. | The new CMS controller nobody added to the list. Proven: with `controller.Ogre.php` using the trait, `Ogre_view.tpl` reports C1 + C3 + C4. |
+  | **R10** | A `$TPL_ROOT` template that **renders CMS chrome** — includes a `frontdoor/` or `cms/` partial, links a stylesheet from either — is a CMS surface template whatever its prefix and whoever owns its controller. Direct evidence, not inference. `frontdoor/` ⇒ public tier, `cms/`-only ⇒ admin. | The new CMS controller that never used the trait. Proven: with the trait removed, `Ogre_view.tpl` including `frontdoor/render_blocks.tpl` still reports C1 + C3 + C4. Adds **no** file today — 13 of the 15 existing CMS surface templates already qualify on content alone, and **none** of the other 99 templates under `$TPL_ROOT` reference either directory. |
+  | **C8** | A `$TPL_ROOT/<X>_<action>.tpl` with no `controller.<X>.php` is **reported**. "No rule matched" and "no rule ran" look identical from outside, and only one is safe. | The surface with nothing behind it. Zero today: all 23 distinct prefixes resolve to a controller that exists, so it costs nothing and fires on the first one that does not. |
+
+  *Residual, stated honestly:* a controller with no CMS marker whose template
+  renders no CMS chrome is, on every piece of available evidence, a **CRM**
+  surface — and a CRM surface linking `orkui.css` and naming `#theme_container`
+  is doing its job, not violating anything. There is nothing left to detect in
+  that case, which makes this residual principled rather than a gap.
 - **R3** Any `.css` under `orkui/template/` that is not CMS-owned is CRM CSS, so
   C5 guards a stylesheet dropped at `default/probe-tween.css`, in `orkremental/`
   or in `revised-frontend/style/` — not only the ones under `style/`.

@@ -58,9 +58,32 @@
 #       therefore in scope the moment it lands. Cms_preview* is the one
 #       public-tier exception inside the Cms_ prefix, and it is a naming
 #       contract: a Cms_ template that renders the public page must be named
-#       Cms_preview<something>. ADDING A CMS CONTROLLER means adding its name to
-#       CMS_CONTROLLERS below — that is the single manual step this design keeps,
-#       and it is a per-controller step, not a per-file one.
+#       Cms_preview<something>.
+#
+#       THE CONTROLLER SET IS NO LONGER A HAND-MAINTAINED LIST. It used to be,
+#       documented as "the single manual step this design keeps" — and a manual
+#       step is a step someone forgets, silently: a new Ogre_view.tpl linking
+#       orkui.css, carrying a static <style> AND writing id="theme_container"
+#       class="ork-card" passed at exit 0, with no rule switched on for it at
+#       all. Three things now close that, and each covers the one before it:
+#
+#         DERIVED (R9)  CMS_CONTROLLERS is read off the filesystem — the
+#                       controllers that use the CmsScopeContext trait, which is
+#                       5 of 44 and is exactly the CMS set. Unioned with the
+#                       historical list as a FLOOR, so derivation can only add.
+#         EVIDENCE (R10) A $TPL_ROOT template that RENDERS CMS CHROME (includes
+#                       a frontdoor/ or cms/ partial, links a stylesheet from
+#                       either) is a CMS surface whoever owns its controller —
+#                       the net under a CMS controller that never used the trait.
+#         FAIL-CLOSED (C8) A $TPL_ROOT/<X>_<action>.tpl with no
+#                       controller.<X>.php is a routed surface the gate cannot
+#                       classify, and is REPORTED rather than skipped.
+#
+#       What remains, stated honestly: a controller with no CMS marker whose
+#       template renders no CMS chrome is, on all available evidence, a CRM
+#       surface — and a CRM surface linking orkui.css and naming #theme_container
+#       is doing its job, not violating anything. There is nothing left to detect
+#       in that case, which is why the residual is principled rather than a gap.
 #
 #   R3  EVERY OTHER STYLESHEET UNDER orkui/template/ IS CRM-OWNED. C5 no longer
 #       watches style/ specifically; it watches "a .css that is not CMS-owned",
@@ -140,6 +163,20 @@
 #       Only C7 runs on these files. C1-C6 are about how CSS is declared and
 #       linked in stylesheets and templates, and applying them to PHP source
 #       would be a category error.
+#
+#   R9  THE CMS CONTROLLER SET IS DERIVED, NOT LISTED. Every rule above that
+#       says "for <C> in CMS_CONTROLLERS" used to rest on a hand-maintained
+#       list. CMS_CONTROLLERS is now read off the filesystem — the controllers
+#       carrying the CmsScopeContext trait — unioned with the historical list as
+#       a floor so the set can only grow. See R2 above for why, and for the two
+#       rules that back it up.
+#
+#  R10  A SURFACE TEMPLATE THAT RENDERS CMS CHROME IS A CMS SURFACE TEMPLATE,
+#       whatever its prefix and whoever owns its controller. Direct evidence,
+#       not inference: it includes a frontdoor/ or cms/ partial, or links a
+#       stylesheet from either directory. Verified to add no file today (13 of
+#       the 15 existing CMS surface templates already qualify on content alone;
+#       none of the 99 others reference either directory).
 #
 # ---------------------------------------------------------------------------
 # The rules
@@ -359,6 +396,16 @@
 #       tests/cms-css/boundary_test.php remains the backstop that reads what a
 #       live surface actually serves.
 #
+#   C8  EVERY ROUTED SURFACE TEMPLATE MUST BE CLASSIFIABLE. A
+#       $TPL_ROOT/<X>_<action>.tpl with no orkui/controller/controller.<X>.php
+#       is a routed surface with nothing behind it: the gate cannot tell whether
+#       it is CMS or CRM, so it runs no rule on it. Reported rather than skipped,
+#       because "no rule matched" and "no rule ran" look identical from the
+#       outside and only one of them is safe. Zero today — all 23 distinct
+#       prefixes under $TPL_ROOT resolve to a controller that exists.
+#       Leading-underscore files are partials, not routed surfaces, and are
+#       skipped; $TPL_ROOT/_index.tpl is in scope by name already.
+#
 # Case and line endings. The scanner runs under LC_ALL=C and matches lowercase
 # literals, so every rule matches against a tolower() view of the line. That is
 # not an anti-evasion measure — HTML tag and attribute names are
@@ -446,11 +493,41 @@ ASSETS_INSHELL="$CMS_PUBLIC/_assets_inshell.tpl"
 # stylesheet whatsoever. Exempt from C3 — see the rule text above.
 CMS_DENY="$TPL_ROOT/Cms_deny.tpl"
 
-# R2. The controllers whose page templates are CMS surfaces. This is the one
-# list the design keeps, and it is per CONTROLLER: every template a listed
-# controller can ever render ($TPL_ROOT/<Name>_<action>.tpl) is in scope
-# automatically. Add a CMS controller here when you add one.
-CMS_CONTROLLERS="Site Page Blog Cms"
+CMS_CONTROLLER_DIR="orkui/controller"
+CMS_MODEL_DIR="orkui/model"
+CMS_DOMAIN_DIR="system/lib/ork3"
+
+# R2/R9 — THE CMS CONTROLLER SET IS DERIVED FROM THE FILESYSTEM.
+#
+# This used to be a hand-maintained list, documented as "the one manual step".
+# A manual step is a step someone forgets, and forgetting it was SILENT: a new
+# Ogre_view.tpl linking orkui.css, carrying a static <style> AND writing
+# id="theme_container" class="ork-card" passed at exit 0, because no rule was
+# switched on for it at all. A new surface got NO coverage and said nothing.
+#
+# So the set is derived the way check-layering.sh derives DOMAIN_CLASSES from
+# system/lib/ork3/class.*.php — ask the filesystem, not a list. The marker is
+# the CMS scope trait: controller.{Site,Page,Blog,Cms,CmsAjax}.php each open
+# with `require_once __DIR__ . '/trait.CmsScope.php';` and `use
+# CmsScopeContext;`, and NO other controller in the tree does (5 of 44, exactly
+# the CMS set). It is a structural marker rather than a naming convention,
+# which is the point: a controller cannot participate in CMS scope resolution
+# without it.
+#
+# The historical list is kept as a FLOOR, not as the source of truth. Union, not
+# replacement: deriving alone would mean that deleting the trait from
+# controller.Blog.php quietly removes every Blog_*.tpl from scope, which is the
+# original failure mode wearing a different hat. The floor makes the set
+# monotone — derivation can only ever ADD.
+CMS_CONTROLLERS_FLOOR="Site Page Blog Cms"
+CMS_CONTROLLER_MARKER="CmsScopeContext"
+CMS_CONTROLLERS=$(
+    {
+        printf '%s\n' $CMS_CONTROLLERS_FLOOR
+        grep -lF "$CMS_CONTROLLER_MARKER" "$CMS_CONTROLLER_DIR"/controller.*.php 2>/dev/null |
+            sed 's|.*/controller\.||; s|\.php$||'
+    } | sed '/^$/d' | sort -u | tr '\n' ' '
+)
 
 # R8 — the CMS PHP source set, for C7. ONE derivation, applied to all three
 # directories, so the halves cannot drift apart.
@@ -484,10 +561,9 @@ CMS_CONTROLLERS="Site Page Blog Cms"
 # model.FrontDoor.php is the one name that still has to be written out: the front
 # door is rendered by the BASE controller, so its membrane carries no CMS
 # controller prefix to derive from.
+# (CMS_CONTROLLER_DIR, CMS_MODEL_DIR and CMS_DOMAIN_DIR are set above the
+# controller derivation, which needs the controller directory to read.)
 CMS_MODEL_FRONTDOOR="orkui/model/model.FrontDoor.php"
-CMS_CONTROLLER_DIR="orkui/controller"
-CMS_MODEL_DIR="orkui/model"
-CMS_DOMAIN_DIR="system/lib/ork3"
 
 # The static-declaration budget an interpolating <style> may carry (C3, per file).
 C3_MAX_STATIC=8
@@ -565,6 +641,42 @@ $CMS_CONTROLLER_DIR/controller.${c}*.php
 $CMS_CONTROLLER_DIR/trait.${c}*.php
 $CMS_MODEL_DIR/model.${c}*.php
 $CMS_DOMAIN_DIR/class.${c}*.php"
+done
+
+# R10 — DIRECT EVIDENCE, for the surface template whose controller the marker
+# above cannot see.
+#
+# The derivation closes "nobody updated the list"; it does not close "the new
+# CMS controller did not use the trait". This does, from the other end, and with
+# evidence rather than inference: a $TPL_ROOT surface template that RENDERS CMS
+# CHROME — includes a frontdoor/ or cms/ partial, links a stylesheet from either
+# directory — is a CMS surface template whoever owns its controller. That is not
+# a heuristic about naming, it is the template saying what it renders.
+#
+# 13 of the 15 CMS surface templates that exist today are already caught this
+# way independently of their prefix (Blog_index.tpl and Cms_deny.tpl are the two
+# that reference nothing, and the prefix rule holds them). NO non-CMS template
+# under $TPL_ROOT references either directory — verified across all 114 — so
+# this adds no file today and costs nothing; it is purely the net under a future
+# surface. frontdoor/ implies the PUBLIC tier, cms/-only implies ADMIN.
+#
+# Content is read from the working tree, the same way R6's stylesheet set and
+# R7's asset-base seeds are, in every mode.
+CMS_BY_CONTENT_PUBLIC=$(grep -lE '(default/)?frontdoor/[A-Za-z0-9_./-]+\.(tpl|css|js)' \
+    "$TPL_ROOT"/*.tpl 2>/dev/null | sort -u)
+CMS_BY_CONTENT_ADMIN=$(grep -lE '(default/)?cms/[A-Za-z0-9_./-]+\.(tpl|css|js)' \
+    "$TPL_ROOT"/*.tpl 2>/dev/null | sort -u)
+
+in_list() {
+    [ -n "$2" ] || return 1
+    printf '%s\n' "$2" | grep -qxF -- "$1"
+}
+
+# ...and they have to be AUDIT candidates too, or --all would classify them
+# correctly and then never be handed them.
+for t in $CMS_BY_CONTENT_PUBLIC $CMS_BY_CONTENT_ADMIN; do
+    ALL_PATHSPECS="$ALL_PATHSPECS
+$t"
 done
 
 case "$MODE" in
@@ -2103,6 +2215,21 @@ for f in $CANDIDATES; do
             ;;
     esac
 
+    # R10 — direct evidence. A surface template that renders CMS chrome is a CMS
+    # surface template whatever its prefix, which is the net under a CMS
+    # controller that never used the scope trait the derivation looks for.
+    if [ "$IS_CMS" = 0 ]; then
+        case "$f" in
+            "$TPL_ROOT"/*.tpl)
+                if in_list "$f" "$CMS_BY_CONTENT_PUBLIC"; then
+                    IS_CMS=1; IS_PUBLIC=1
+                elif in_list "$f" "$CMS_BY_CONTENT_ADMIN"; then
+                    IS_CMS=1
+                fi
+                ;;
+        esac
+    fi
+
     # R8 — the CMS PHP/JS source set. These are the files that can put CSS on a
     # CMS page without a stylesheet or a template being touched. Only C7 runs on
     # them, so IS_CMS_SRC is kept separate from IS_CMS (which drives C2/C3 with
@@ -2324,6 +2451,66 @@ elif [ "$STATIC_TOTAL" -lt "$C3_TOTAL_STATIC" ]; then
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# C8 — EVERY SURFACE TEMPLATE MUST BE CLASSIFIABLE. Fail closed on the ones that
+# are not, so a new surface forces a decision instead of silently getting no
+# coverage.
+#
+# The derivation above answers "which controllers are CMS?" by asking the
+# filesystem, and R10 answers "is this template a CMS surface?" from its
+# content. Both are positive tests, and a positive test that finds nothing
+# says nothing — which is exactly the failure being closed here. The router
+# resolves <Controller>/<action> to $TPL_ROOT/<Controller>_<action>.tpl, so a
+# $TPL_ROOT template named that way whose controller DOES NOT EXIST is a surface
+# this gate cannot reason about at all: it cannot tell whether it is CMS or CRM,
+# so it cannot know which rules to run, so it runs none. That is reported.
+#
+# Today the count is ZERO — all 23 distinct prefixes under $TPL_ROOT
+# (Admin, Atlas, … Tournament, Unit) resolve to a controller.<X>.php that
+# exists — so this costs nothing now and fires the moment a surface appears with
+# nothing behind it. Files beginning with "_" are partials, not routed surfaces,
+# and $TPL_ROOT/_index.tpl (the front door, rendered by the BASE controller) is
+# in scope by name already.
+# ---------------------------------------------------------------------------
+set -f
+SURFACE_TPLS=$( { git ls-files -- "$TPL_ROOT/*.tpl"
+                  git ls-files --others --exclude-standard -- "$TPL_ROOT/*.tpl"
+                } | sed '/^$/d' | sort -u )
+set +f
+
+UNCLASSIFIED=""
+for t in $SURFACE_TPLS; do
+    # $TPL_ROOT only — git's `*` crosses `/`, so frontdoor/ and cms/ came along.
+    case "$t" in "$TPL_ROOT"/*/*) continue ;; esac
+    b=${t##*/}
+    b=${b%.tpl}
+    case "$b" in _*) continue ;; esac
+    case "$b" in *_*) : ;; *) continue ;; esac
+    c=${b%%_*}
+    [ -f "$CMS_CONTROLLER_DIR/controller.$c.php" ] && continue
+    git cat-file -e ":$CMS_CONTROLLER_DIR/controller.$c.php" 2>/dev/null && continue
+    UNCLASSIFIED="$UNCLASSIFIED
+$t	$c"
+done
+UNCLASSIFIED=$(printf '%s\n' "$UNCLASSIFIED" | sed '/^$/d')
+
+CLASS_FAIL=0
+if [ -n "$UNCLASSIFIED" ]; then
+    echo ""
+    printf '%s\n' "$UNCLASSIFIED" | while IFS='	' read -r t c; do
+        [ -z "$t" ] && continue
+        printf "  %sC8%s  %s:1\n" "$C_RED" "$C_OFF" "$t"
+        echo "        Surface template the gate cannot classify: no $CMS_CONTROLLER_DIR/controller.$c.php."
+        printf "        %s-> The router resolves <Controller>/<action> to \$TPL_ROOT/<Controller>_<action>.tpl, so\n" "$C_DIM"
+        echo "           this file is a routed surface with no controller behind it. The gate cannot tell"
+        echo "           whether it is a CMS surface or a CRM one, so it runs NO rule on it — which is how a"
+        echo "           new surface used to get zero coverage in silence. Add the controller (a CMS one uses"
+        echo "           the CmsScopeContext trait, which is what puts its templates in scope automatically),"
+        printf "           or rename the file to a partial (leading underscore) if it is not a routed surface.%s\n" "$C_OFF"
+    done
+    CLASS_FAIL=1
+fi
+
 if [ "$TOTAL" -gt 0 ]; then
     echo ""
     echo "  CSS boundary gate: $TOTAL file(s) cross the CMS/CRM line."
@@ -2333,5 +2520,6 @@ fi
 
 [ "$TOTAL" -gt 0 ] && exit 1
 [ "$STATIC_FAIL" = "1" ] && exit 1
+[ "$CLASS_FAIL" = "1" ] && exit 1
 
 exit 0
