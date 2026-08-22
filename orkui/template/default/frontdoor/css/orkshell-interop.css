@@ -1,0 +1,104 @@
+/* ============================================================
+ * orkshell-interop.css — the ONLY place CMS CSS may name an ORK selector.
+ *
+ * The front door, CMS pages, the blog and the OGRE admin all render INSIDE the
+ * ORK application shell, so orkui.css and default.theme's inline chrome are in
+ * their cascade. A handful of CMS controls therefore lose to ORK rules that win
+ * on ID specificity (`#theme_container a` is (1,0,1); `html[data-theme="dark"]
+ * #theme_container a` is (1,1,1)). The overrides that fix that are collected
+ * here rather than scattered through frontdoor.css, so the coupling is visible,
+ * greppable and deletable.
+ *
+ * NOT loaded by Site_shell.tpl. A standalone org site does not load orkui.css
+ * at all (see default.theme's $IsOrgSite gate), so it needs none of this — and
+ * bin/check-css-boundaries.sh (C4) fails the build if the link is ever added.
+ *
+ * Every rule below is here because an ORK rule outranks a CMS rule. If you find
+ * yourself adding a rule for any other reason, it belongs in frontdoor.css.
+ * ============================================================ */
+
+/* Gold-filled buttons are <a> tags; `#theme_container a` forces link-blue text
+   in dark mode. Override at matching specificity, restating the SAME dark ink
+   the base .fd-btn-gold / .fd-nav-cta rules already use (#1a1205 — no "ink on
+   accent" token exists in CmsThemeTokens, and both base rules already hard-code
+   this exact value, so restating it keeps one source of truth rather than
+   inventing a second near-black). #1a1205 on gold measures ~10.7:1. */
+#theme_container a.fd-btn-gold,
+#theme_container a.fd-btn-gold:hover,
+#theme_container a.fd-nav-cta,
+#theme_container a.fd-nav-cta:hover {
+    color: #1a1205 !important;
+}
+
+/* Ghost buttons sit on the DARK hero field (not on gold), where white is the
+   correct, legible choice — kept separate from the gold-filled pair above so a
+   future contrast fix to one never silently changes the other. */
+#theme_container a.fd-btn-ghost,
+#theme_container a.fd-btn-ghost:hover {
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+
+/* Same trap for the outline login button: `#theme_container a` is (1,0,1), so a
+   plain .fd-nav-login colour never lands and the button renders link-blue.
+   Restate both themes at ID specificity. (`inherit` is NOT the shortcut here —
+   it would pull the nav bar's colour, not the button's.) */
+#theme_container a.fd-nav-login {
+    color: #56607a;
+}
+#theme_container a.fd-nav-login:hover {
+    color: var(--fd-text);
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login {
+    color: #c8d2e6;
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
+    color: #fff;
+}
+
+/* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
+   their title/blurb are meant to be white. `#theme_container a` drags the link
+   and its inherited children to link-blue in dark mode; restore white at
+   matching specificity. Colour only (no text-shadow) so light mode — already
+   white via .fd-path — is visually unchanged. The gold icon keeps its own
+   color:var(--gold) and is deliberately not matched here. */
+#theme_container a.fd-path,
+#theme_container a.fd-path:hover,
+#theme_container a.fd-path .fd-path-label,
+#theme_container a.fd-path .fd-serif {
+    color: #fff !important;
+}
+
+/* Park strip links (moved from _park_strip.tpl's inline <style>). The dark-mode
+   `html[data-theme="dark"] #theme_container a` rule is (1,1,2) — one notch above
+   the plain `#theme_container a.pk-strip-link` rule — so the dark pair below is
+   required, not redundant. */
+#theme_container a.pk-strip-link {
+    color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
+    font-weight: 600;
+}
+#theme_container a.pk-strip-link:hover {
+    color: var(--fd-primary-contrast);
+}
+html[data-theme="dark"] #theme_container a.pk-strip-link {
+    color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
+}
+html[data-theme="dark"] #theme_container a.pk-strip-link:hover {
+    color: var(--fd-primary-contrast);
+}
+
+/* Front door only. The front door hides #newmenu outright (display:none, height 0)
+   and ships its own marketing nav, so orkui.css's 48px body clearance reserves
+   space for a bar that is never painted; together with the UA's default 8px body
+   margin that pushed the marketing nav down 56px of dead space. #theme_container's
+   own 10px/6px inset is deliberate — it gives the rounded nav bar its gutter — so
+   it stays.
+
+   This lives here, not in orkui.css, because it is a CMS rule: the CRM must not
+   style CMS surfaces (bin/check-css-boundaries.sh C5). It still wins over
+   orkui.css's `body { padding-top:48px }` — `body.fd-home` is (0,1,1) against
+   (0,0,1) — and this file is linked after orkui.css on every in-shell surface. */
+body.fd-home {
+    padding-top: 0;
+    margin-top: 0;
+}

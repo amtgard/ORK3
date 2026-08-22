@@ -18,6 +18,7 @@ $pvPublishUrl = UIR . ($pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/pub
 $pvIdField    = ($pvKind === 'post') ? 'post_id' : 'page_id';
 ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime($fdDir . 'css/frontdoor.css') ?>">
+<?php include $fdDir . '_assets_inshell.tpl'; ?>
 <style>
 .cms-preview-banner{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:12px;
   padding:10px 18px;background:#92400e;color:#fff;font-size:14px;font-weight:600;

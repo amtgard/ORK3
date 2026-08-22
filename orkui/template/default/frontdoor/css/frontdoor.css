@@ -184,62 +184,6 @@
     text-decoration: none;
 }
 
-/* Gold-filled buttons are <a> tags; the global `#theme_container a` (ID
-   specificity) forces link-blue text in dark mode. Override with matching
-   specificity, restating the SAME dark ink the base .fd-btn-gold/.fd-nav-cta
-   rules already use (#1a1205, not a token — no "ink on accent" token exists
-   in CmsThemeTokens, and both base rules already hard-code this exact value,
-   so restating it keeps one source of truth rather than inventing a second
-   near-black). Fix round 1: this used to force white here, which measured
-   1.86:1 on the gold background (needs 4.5:1) — backwards from what the old
-   comment claimed. #1a1205 on gold measures ~10.7:1. No text-shadow needed
-   once the ink itself has real contrast. */
-#theme_container a.fd-btn-gold,
-#theme_container a.fd-btn-gold:hover,
-#theme_container a.fd-nav-cta,
-#theme_container a.fd-nav-cta:hover {
-    color: #1a1205 !important;
-}
-
-/* Ghost buttons sit on the DARK hero field (not on gold), where white is the
-   correct, legible choice — kept separate from the gold-filled pair above so
-   a future contrast fix to one never silently changes the other. */
-#theme_container a.fd-btn-ghost,
-#theme_container a.fd-btn-ghost:hover {
-    color: #fff !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
-}
-
-/* Same trap for the outline login button: `#theme_container a` is (1,0,1), so a
-   plain .fd-nav-login colour never lands and the button renders link-blue. Restate
-   both themes at ID specificity. (`inherit` is NOT the shortcut here — it would
-   pull the nav bar's colour, not the button's.) */
-#theme_container a.fd-nav-login {
-    color: #56607a;
-}
-#theme_container a.fd-nav-login:hover {
-    color: var(--fd-text);
-}
-html[data-theme="dark"] #theme_container a.fd-nav-login {
-    color: #c8d2e6;
-}
-html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
-    color: #fff;
-}
-
-/* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
-   their title/blurb are meant to be white. The global `#theme_container a` (ID
-   specificity) drags the link + its inherited children to link-blue in dark
-   mode; restore white with matching specificity. Color only (no text-shadow) so
-   light mode — already white via .fd-path — is visually unchanged. The gold
-   icon keeps its own inline color:var(--gold) (not matched here). */
-#theme_container a.fd-path,
-#theme_container a.fd-path:hover,
-#theme_container a.fd-path .fd-path-label,
-#theme_container a.fd-path .fd-serif {
-    color: #fff !important;
-}
-
 .fd-btn-ghost {
     display: inline-block;
     border: 1.5px solid rgba(255, 255, 255, .6);

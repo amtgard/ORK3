@@ -10,6 +10,7 @@ $fdDir       = DIR_TEMPLATE . 'default/frontdoor/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime( $fdDir . 'css/frontdoor.css' ) ?>">
+<?php include $fdDir . '_assets_inshell.tpl'; ?>
 <style>
 /*
  * #86: On the public front door the internal ORK application top bar (#newmenu)
