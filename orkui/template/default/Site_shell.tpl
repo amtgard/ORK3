@@ -51,11 +51,19 @@ foreach ($fdBlocks as $__b) {
     }
 }
 
-// F1 — opt into the blog CSS layer only in the modes that can emit blog markup.
-// 'blog' renders org_blog_index.tpl and 'post' renders the org post article;
-// home / page / comingsoon / notfound never do, so they no longer download
-// blog.css (6,219 B) for 0 matched selectors.
-$fdWantBlog = ($siteMode === 'blog' || $siteMode === 'post');
+// G3 — a standalone org site never opts into the blog CSS layer ($fdWantBlog),
+// in ANY mode. F1 had narrowed it to 'blog'/'post' on the assumption that those
+// two emit blog markup; measured against the served HTML, neither does. The
+// 'post' branch below renders .org-post* and the 'blog' branch renders
+// org_blog_index.tpl's .org-blog-* — both styled end to end by orgsite.css,
+// which this template links directly. Every selector in blog.css is .blog-* or
+// .blogp-* (note .org-blog-card is NOT one of them), so blog.css matched 0
+// nodes on every org-site mode: 6,811 bytes of dead CSS on a post page and on
+// the org blog index. blog.css belongs to the IN-SHELL blog alone
+// (Blog_index.tpl / Blog_post.tpl). If an org-site surface ever starts emitting
+// .blog-* / .blogp-* markup, set $fdWantBlog = true immediately before the
+// include below and the layer comes back.
+// tests/cms-css/boundary_test.php asserts this against the running app.
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/orgsite.css?v=<?= @filemtime($fdDir . 'css/orgsite.css') ?>">

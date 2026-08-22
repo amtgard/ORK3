@@ -37,13 +37,21 @@ Two partials emit the links — **add a stylesheet there, not in a page template
   `Site_shell.tpl`, `Page_view.tpl`, `Blog_index.tpl`, `Blog_post.tpl`,
   `Cms_preview.tpl`.
   - **The blog opt-in**: set `$fdWantBlog = true;` *before* the include to get
-    `blog.css`. Only `Blog_index.tpl`, `Blog_post.tpl` and `Site_shell.tpl` in
-    its `blog`/`post` modes do — they are the only surfaces that emit `.blog-*` /
-    `.blogp-*` markup. Everywhere else the layer's 28 selectors matched 0 nodes,
-    so it was 6,219 bytes of dead CSS on every front-door, CMS-page and org-site
-    home/page view. The partial `unset()`s the flag so it cannot leak into a
-    later include on the same request. If you add blog markup to a new surface,
-    set the flag there or the page renders unstyled.
+    `blog.css`. Exactly two surfaces do — `Blog_index.tpl` and `Blog_post.tpl`,
+    the **in-shell** blog. They are the only templates that emit `.blog-*` /
+    `.blogp-*` markup. Everywhere else the layer's selectors matched 0 nodes, so
+    it was 6,811 bytes of dead CSS. The partial `unset()`s the flag so it cannot
+    leak into a later include on the same request. If you add blog markup to a
+    new surface, set the flag there or the page renders unstyled.
+  - **`Site_shell.tpl` does not opt in, in any mode.** An earlier pass narrowed
+    the flag to its `blog`/`post` modes on the assumption that those emit blog
+    markup; measured against the served HTML, neither does. The `post` branch
+    renders `.org-post*`, and `blog` mode renders `org_blog_index.tpl`'s
+    `.org-blog-*` — both styled end to end by `orgsite.css`. Every selector in
+    `blog.css` is `.blog-*` or `.blogp-*`, and `.org-blog-card` is **not** one of
+    them, so an org post page and an org blog index were each downloading the
+    whole layer for zero matched nodes. `tests/cms-css/boundary_test.php` asserts
+    this against the running app, in both directions.
   - **`blocks.css` is deliberately unconditional**, even though the front door
     matched only 1 of its 198 selectors when measured. Block presence is
     *authored content*, not a template property: any CMS-backed surface can start
@@ -67,9 +75,9 @@ pair) directly, on the `$IsOrgSite` branch. `cms-admin.css` is linked by
 | Front door `/`, CMS page, blog, CMS preview | `$IsFrontDoor` / `$IsCmsPage` | yes | `tokens.css` + `orkui.css` + public set + `orkshell-interop.css`. |
 | OGRE admin `Cms/*` | — | yes | `tokens.css` + `orkui.css` + `cms-admin.css`. |
 
-"Public set" = `frontdoor.css` + `blocks.css`, plus `blog.css` on the blog
-surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
-`blog`/`post` mode).
+"Public set" = `frontdoor.css` + `blocks.css`, plus `blog.css` on the two
+in-shell blog surfaces only (`Blog_index.tpl`, `Blog_post.tpl`). A standalone org
+site never gets `blog.css` — see the blog opt-in above.
 
 ## What is in scope, and why it is a rule and not a list
 
@@ -247,9 +255,43 @@ before trying to dedupe the emissions — deduping by type drops later emissions
 and re-flows earlier blocks; deduping by count reorders which emission is last.
 Both change rendering.
 
+## The runtime backstop (`tests/cms-css/boundary_test.php`)
+
+Every hole ever found in `bin/check-css-boundaries.sh` existed because a text
+scanner was outwitted by a spelling. The property the separation actually
+protects is observable at runtime and cannot be spelled around:
+
+> **A standalone public org site must serve zero bytes of ORK CRM CSS.**
+
+`tests/cms-css/boundary_test.php` reads no source. It fetches the real surfaces
+off a running app and asserts on the HTML that is served:
+
+1. no org-site page links `tokens.css`, `orkui.css`, `reports.css`,
+   `cms-admin.css` or `orkshell-interop.css` — and still links `cms-base.css` +
+   `orgsite.css`, so "zero CRM CSS" cannot be won by serving no CSS at all;
+2. the **in-shell** surfaces (front door, `Blog/index`, a discovered
+   `Blog/post`) still link `orkui.css` + `tokens.css` + `orkshell-interop.css`,
+   so satisfying (1) by unlinking the CRM stylesheets globally fails here
+   instead of shipping;
+3. the cascade order holds on every surface — `frontdoor.css` → `blocks.css` →
+   `blog.css` → `orgsite.css`/`orkshell-interop.css` — and each layer is linked
+   exactly once;
+4. `blog.css` is linked on exactly the blog surfaces, cross-checked **against
+   the markup rendered**: a class token starting `blog-`/`blogp-` must be
+   present iff the layer is linked (`org-blog-card` is `orgsite.css`, not a
+   `blog.css` hook);
+5. no org-site page carries an inline `<style>` naming `#theme_container`,
+   `#newmenu` or `.ork-`.
+
+It is **safe in any environment**: if nothing answers it prints
+`SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)
+that the local DB cannot supply — post surfaces are discovered from the index
+pages rather than hardcoded. Point it elsewhere with `ORK_BASE_URL`.
+
 ## Commands
 
 ```
+php tests/cms-css/boundary_test.php    # runtime backstop; SKIPs cleanly if the app is down
 bin/check-css-boundaries.sh --all      # audit every file in scope, untracked included
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
 bin/check-css-boundaries.sh --files a.css b.tpl
@@ -259,6 +301,28 @@ npm run lint:css:dupes:report          # list every duplicate group, never fails
 bin/check-css-duplication.php -v       # the same list, direct
 bin/check-layering.sh --all            # the PHP layering gate, for comparison
 ```
+
+**There is no runner for the `tests/cms-*/` scripts.** They are standalone
+`php <file>` scripts — no PHPUnit, no bootstrap, no DB connection — deliberately
+outside `phpunit.xml.dist`, so `bin/run-unit-tests.sh` does not pick them up.
+Run the set by hand; this is the sign-off loop, and `boundary_test.php` belongs
+in it:
+
+```
+for t in tests/cms-css/boundary_test.php tests/cms-theme/tokens_test.php \
+         tests/cms-site/site_test.php tests/cms-fields/allowlist_test.php \
+         tests/cms-fields/officers_vacancy_test.php \
+         tests/cms-sanitizer/sanitizer_test.php tests/cms-tenancy/tenancy_test.php \
+         tests/cms-heraldry-color/color_test.php; do
+    echo "== $t"
+    php "$t" || exit 1
+done
+```
+
+Every one of them exits non-zero on failure, so that loop is itself the gate —
+do not pipe the run through `tail`, which would throw the status away.
+`boundary_test.php` is the only one that needs the app up; it SKIPs (exit 0)
+when it is not, so the loop is safe to run anywhere as written.
 
 Both gates block `git commit` and `git push`. stylelint runs on pre-push too,
 but is advisory and never blocks. Deliberate exception, shared by both gates:
