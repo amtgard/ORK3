@@ -430,6 +430,43 @@ CMS_CONTROLLER_DIR="orkui/controller"
 # The static-declaration budget an interpolating <style> may carry (C3, per file).
 C3_MAX_STATIC=8
 
+# C3-TOTAL — THE TREE-WIDE INLINE-STATIC-CSS RATCHET.
+#
+# C3_MAX_STATIC above is per FILE, and a per-file budget reopens one level up:
+# three new partials under frontdoor/ carrying 8 static declarations each are 24
+# static declarations back inline, every file inside its budget, gate exit 0.
+# (Proven. R1 puts a new partial in scope wherever under frontdoor/ it sits, so
+# there is nothing to stop the third, the tenth or the fiftieth.) The per-file
+# rule bounds one file; it cannot bound the render path, because the render path
+# is the SUM.
+#
+# So the quantity that is actually pinned is the tree-wide one: how many static
+# declarations ride along inside LEGAL (PHP-interpolating) <style> blocks across
+# every CMS template, counted over the whole tree in every mode. Today that is 6
+# — the six columns.tpl declares beside its interpolated grid-template-columns
+# (display, gap, align-items, min-width, and the two in its @media partner) —
+# and it is the ONLY file that contributes. cms/_shell_top.tpl's "<style>" is
+# prose inside a PHP comment and Cms_deny.tpl is exempt from C3 altogether
+# (structural: it bypasses the shell and links no stylesheet at all), so both
+# contribute 0 and both keep passing.
+#
+# A static-ONLY <style> is not in this number: it is a plain C3 violation and is
+# reported as one. This budget measures exactly the laundering channel — static
+# CSS riding on a legitimate interpolation.
+#
+# IT IS A RATCHET, NOT A FREEZE, for the reason bin/check-css-duplication.php
+# gives: a budget that only fails upward lets slack sit there for the next
+# commit to spend, with the gate green throughout. Above the pin fails ("ROSE"),
+# below it fails too ("FELL — re-pin"), and the failure prints the exact line of
+# this file and the replacement line so re-pinning is a one-line edit. The
+# below-budget direction only — never the above — is forgiven for one run by
+# CSS_STATIC_ALLOW_SLACK=1, mirroring CSS_DUP_ALLOW_SLACK=1.
+#
+# Raising it is therefore a deliberate, reviewable act, which is the whole point:
+# the fourth partial is not a judgement call about whether 8 is small, it is a
+# diff that raises a pinned number.
+C3_TOTAL_STATIC=6
+
 # R6 — THE CRM STYLESHEET SET IS DERIVED FROM THE FILESYSTEM, not listed here.
 # C4-link and C6 used to hardcode "orkui.css|tokens.css|orkshell-interop.css",
 # which meant the two other stylesheets that have sat in style/ all along —
@@ -498,7 +535,16 @@ esac
 # ---------------------------------------------------------------------------
 AWKPROG=$(mktemp) || exit 2
 CONTENT=$(mktemp) || exit 2
-trap 'rm -f "$AWKPROG" "$CONTENT" "$SEEDS"' EXIT INT TERM
+# One "<file>\t<static declarations>" line per file C3 ran on, for the C3-TOTAL
+# ratchet below.
+STATICS=$(mktemp) || exit 2
+trap 'rm -f "$AWKPROG" "$CONTENT" "$SEEDS" "$STATICS"' EXIT INT TERM
+
+# Where to point a reader who has to re-pin C3_TOTAL_STATIC. We are cd'd to the
+# repo root, so $0 resolves when the script was invoked by path from there;
+# otherwise fall back to the canonical location.
+GATE_SELF="$0"
+[ -f "$GATE_SELF" ] || GATE_SELF="bin/check-css-boundaries.sh"
 
 # R7 — ASSET-BASE SEEDS, derived from the tree.
 #
@@ -544,6 +590,11 @@ shell_report() {
 
 cat > "$AWKPROG" <<'AWKEOF'
 function report(rule, lineno, msg, fix) {
+    # CENSUS runs exist only to COUNT (C3-TOTAL). They re-scan files the caller
+    # never asked about, so anything they find is not this invocation's finding
+    # and must not be printed or counted — the reporting pass covers those files
+    # on its own terms.
+    if (CENSUS) return
     printf "  %s%s%s  %s:%d\n", C_RED, rule, C_OFF, file, lineno
     printf "        %s\n", msg
     printf "        %s-> %s%s\n", C_DIM, fix, C_OFF
@@ -1812,7 +1863,14 @@ END {
         report("C6", FNR, "could not follow the PHP if/endif structure of " file ".", \
                "C6 must be able to prove every CRM stylesheet link sits on an $IsOrgSite-false branch. Restore alternative-syntax if/endif balance, or teach bin/check-css-boundaries.sh the new shape.")
 
-    exit (hits > 0) ? 1 : 0
+    # C3-TOTAL. Emit this file's contribution to the tree-wide inline-static-CSS
+    # count, so the shell can sum it. Appended, because each file is its own awk
+    # invocation. Written whenever C3 ran, so the reporting pass and the census
+    # pass count the same thing by construction rather than by a second
+    # implementation that could drift.
+    if (C3 && STATICOUT != "") print file "\t" file_static >> STATICOUT
+
+    exit (CENSUS || hits == 0) ? 0 : 1
 }
 AWKEOF
 
@@ -1990,6 +2048,7 @@ for f in $CANDIDATES; do
         -v C5="$C5" -v C6="$C6" -v C7="$C7" \
         -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" -v C3_MAX_STATIC="$C3_MAX_STATIC" \
         -v CRM_SHEETS="$CRM_SHEETS" -v SEEDFILE="$SEEDS" \
+        -v CENSUS=0 -v STATICOUT="$STATICS" \
         -v C1_FIX="Standalone org sites do not load orkui.css, so this rule is dead there and couples the layers everywhere else. Move it to frontdoor/css/orkshell-interop.css." \
         -v C1_FIX_BASE="cms-base.css may name #theme_container and nothing else. Move anything more into frontdoor/css/orkshell-interop.css — org sites never load it, so a rule placed here would ship to every one of them." \
         -v C2_FIX="Rename it to --cms-* or --fd-* and scope it to the CMS root. Reading an --ork-* token with var() is fine; defining one is not." \
@@ -1997,12 +2056,98 @@ for f in $CANDIDATES; do
     [ $? -ne 0 ] && TOTAL=$((TOTAL + 1))
 done
 
+# ---------------------------------------------------------------------------
+# C3-TOTAL — the tree-wide inline-static-CSS census (see C3_TOTAL_STATIC above)
+#
+# The loop above only counted the files THIS invocation was asked about, and the
+# pinned number is a property of the whole tree — that is the entire point of it,
+# since the hole it closes is "one more file, each one inside the per-file
+# budget". So every remaining CMS template is re-scanned here in census mode:
+# the same awk program and the same C3 counter, with reporting suppressed, so
+# the census cannot drift from the rule it is measuring.
+#
+# Only a template whose text contains "<style" can contribute, so the candidate
+# set is pre-filtered on that substring — 3 files today, not 62.
+# ---------------------------------------------------------------------------
+set -f
+CENSUS_ALL=$( { git ls-files -- $ALL_PATHSPECS; git ls-files --others --exclude-standard -- $ALL_PATHSPECS; } |
+    sed '/^$/d' | sort -u | grep -E '\.tpl$' )
+set +f
+COUNTED=$(awk -F'\t' '{print $1}' "$STATICS" 2>/dev/null | sort -u)
+
+for f in $CENSUS_ALL; do
+    # Cms_deny.tpl is exempt from C3 entirely (structural — it bypasses the shell
+    # and links no stylesheet), so it is exempt from C3-TOTAL too.
+    [ "$f" = "$CMS_DENY" ] && continue
+    case "$f" in */vendor/*|*/node_modules/*) continue ;; esac
+    printf '%s\n' "$COUNTED" | grep -qxF -- "$f" && continue
+
+    if [ "$MODE" = "staged" ]; then
+        git show ":$f" > "$CONTENT" 2>/dev/null || continue
+    else
+        [ -f "$f" ] || continue
+        [ -L "$f" ] && continue
+        cat "$f" > "$CONTENT" 2>/dev/null || continue
+    fi
+    grep -qi '<style' "$CONTENT" || continue
+
+    awk -v file="$f" -v tpl=1 -v phpsrc=0 -v filedir="$(dirname "$f")" \
+        -v TPL_BASE="$TPL_BASE" -v TPL_ROOT="$TPL_ROOT" \
+        -v C1=0 -v C2=0 -v C3=1 -v C4=0 -v C4_PATH=0 -v C5=0 -v C6=0 -v C7=0 \
+        -v C1_TC=0 -v C3_DEST="" -v C3_MAX_STATIC="$C3_MAX_STATIC" \
+        -v CRM_SHEETS="" -v SEEDFILE="" \
+        -v CENSUS=1 -v STATICOUT="$STATICS" \
+        -f "$AWKPROG" "$CONTENT"
+done
+
+STATIC_TOTAL=$(awk -F'\t' '{s += $2} END {print s + 0}' "$STATICS" 2>/dev/null)
+[ -z "$STATIC_TOTAL" ] && STATIC_TOTAL=0
+PIN_LINE=$(grep -n '^C3_TOTAL_STATIC=' "$GATE_SELF" 2>/dev/null | head -1 | cut -d: -f1)
+[ -z "$PIN_LINE" ] && PIN_LINE=0
+
+static_contributors() {
+    awk -F'\t' '$2 + 0 > 0 {printf "        %6d  %s\n", $2, $1}' "$STATICS" 2>/dev/null | sort -rn
+}
+
+STATIC_FAIL=0
+if [ "$STATIC_TOTAL" -gt "$C3_TOTAL_STATIC" ]; then
+    echo ""
+    printf "  %sC3-TOTAL%s  %s:%s\n" "$C_RED" "$C_OFF" "$GATE_SELF" "$PIN_LINE"
+    echo "        Inline static CSS across the CMS templates ROSE to $STATIC_TOTAL static declaration(s)"
+    echo "        riding inside PHP-interpolating <style> blocks; the pinned budget is $C3_TOTAL_STATIC."
+    echo "        Contributing files:"
+    static_contributors
+    printf "        %s-> The per-file budget (C3_MAX_STATIC=%s) bounds one file; it cannot bound the render\n" "$C_DIM" "$C3_MAX_STATIC"
+    echo "           path, which is the SUM — N files of $C3_MAX_STATIC is the same inline stylesheet split N ways."
+    echo "           Move the static declarations into a stylesheet under frontdoor/css/ or cms/css/ and"
+    echo "           keep only the interpolated declaration inline. If the new inline CSS is genuinely"
+    echo "           per-instance and cannot be a stylesheet, raise the pin deliberately:"
+    printf "               %s:%s   C3_TOTAL_STATIC=%s%s\n" "$GATE_SELF" "$PIN_LINE" "$STATIC_TOTAL" "$C_OFF"
+    STATIC_FAIL=1
+elif [ "$STATIC_TOTAL" -lt "$C3_TOTAL_STATIC" ]; then
+    if [ "${CSS_STATIC_ALLOW_SLACK:-0}" = "1" ]; then
+        echo "  note: inline static CSS fell to $STATIC_TOTAL (budget $C3_TOTAL_STATIC) — forgiven by CSS_STATIC_ALLOW_SLACK=1."
+    else
+        echo ""
+        printf "  %sC3-TOTAL%s  %s:%s\n" "$C_RED" "$C_OFF" "$GATE_SELF" "$PIN_LINE"
+        echo "        Inline static CSS across the CMS templates FELL to $STATIC_TOTAL; the pin still says $C3_TOTAL_STATIC."
+        printf "        %s-> A budget that only fails upward is a freeze, not a ratchet: the slack sits there for\n" "$C_DIM"
+        echo "           the next commit to spend on fresh inline CSS with the gate green throughout. Pin the"
+        echo "           improvement so it cannot be spent:"
+        printf "               %s:%s   C3_TOTAL_STATIC=%s%s\n" "$GATE_SELF" "$PIN_LINE" "$STATIC_TOTAL" "$C_OFF"
+        echo "        (One-run escape hatch, below-budget direction only: CSS_STATIC_ALLOW_SLACK=1)"
+        STATIC_FAIL=1
+    fi
+fi
+
 if [ "$TOTAL" -gt 0 ]; then
     echo ""
     echo "  CSS boundary gate: $TOTAL file(s) cross the CMS/CRM line."
     echo "  Design: docs/superpowers/specs/2026-08-21-cms-css-separation-design.md"
     echo "  Audit with: bin/check-css-boundaries.sh --all"
-    exit 1
 fi
+
+[ "$TOTAL" -gt 0 ] && exit 1
+[ "$STATIC_FAIL" = "1" ] && exit 1
 
 exit 0

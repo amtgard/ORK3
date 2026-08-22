@@ -226,11 +226,45 @@ stylesheet was born with no coverage at all. The scope rules now are:
   two declarations of headroom and stops far short of a lifted-out stylesheet.
   The budget is per **file**, not per element, because N elements of 8 would be
   the same hole reopened (proven: two 5-static blocks fail).
-  *Residual gap, stated honestly:* up to 8 static declarations can still ride
-  along in a file that has a legitimate interpolating block, and the counter
-  only sees **declarations** — a `<style>` carrying `@font-face` bodies or
-  selectors without declarations is under-counted. The budget makes the
-  laundering small and bounded, not impossible.
+
+  **C3-total — the tree-wide ratchet, because a per-file budget reopens one
+  level up.** N *elements* of 8 was closed by making the budget per file; N
+  *files* of 8 does exactly the same thing one level higher. Proven: three new
+  partials under `frontdoor/`, 8 static declarations each, = 24 static
+  declarations back inline, every file inside its budget, gate exit 0. R1 puts a
+  new partial in scope wherever under `frontdoor/` it sits, so nothing stopped
+  the third, the tenth or the fiftieth. The per-file rule bounds one file; it
+  cannot bound the render path, because the render path is the **sum**.
+
+  So the quantity actually pinned is the tree-wide one: `C3_TOTAL_STATIC` = **6**,
+  the total number of static declarations riding inside *legal*
+  (PHP-interpolating) `<style>` blocks across **every** CMS template, counted
+  over the whole tree in **every** mode — `--staged`, `--range` and `--files`
+  re-scan the tree for the census, so the sum cannot be evaded by committing one
+  partial at a time. All 6 are `columns.tpl`'s; it is the only contributor.
+  `cms/_shell_top.tpl`'s `<style>` is prose inside a PHP comment and
+  `Cms_deny.tpl` is exempt from C3 altogether, so both contribute 0 and both keep
+  passing. A static-**only** `<style>` is not in this number — that is a plain C3
+  violation, reported as one. C3-total measures exactly the laundering channel:
+  static CSS riding on a legitimate interpolation.
+
+  It is a **ratchet, not a freeze**, for the same reason the duplication budgets
+  are (see below): above the pin fails (`ROSE`), below it fails too
+  (`FELL — re-pin`), because slack left in a budget is slack the next commit can
+  spend with the gate green throughout. The failure prints the exact line of the
+  script and the replacement line, so re-pinning is a one-line edit.
+  `CSS_STATIC_ALLOW_SLACK=1` forgives the below-budget direction only — never
+  the above — mirroring `CSS_DUP_ALLOW_SLACK=1`. Raising it is therefore a
+  deliberate, reviewable act: the fourth partial is not a judgement call about
+  whether 8 is small, it is a diff that raises a pinned number.
+
+  *Residual gap, stated honestly:* within the pinned total, up to 8 static
+  declarations can still ride along in a file that has a legitimate interpolating
+  block, and the counter only sees **declarations** — a `<style>` carrying
+  `@font-face` bodies or selectors without declarations is under-counted, in the
+  per-file budget and in the total alike. The two budgets together make the
+  laundering small, bounded and *unable to grow silently*; they do not make it
+  impossible.
   A PHP tag parked between rules, or one echoing a literal (`<?= '' ?>`), still
   does not launder a static block; PHP that echoes a `<style>` tag assembled
   from string fragments (`'<st' . 'yle>'`) is rejected too; and the tag match is

@@ -163,11 +163,24 @@ now **derived**:
   block two declarations of headroom and stops well short of a lifted-out
   stylesheet. It is per **file**, not per element, because N elements of 8 would
   reopen the same hole. Tune it at `C3_MAX_STATIC` in the script.
-  **Residual gap, stated honestly:** up to 8 static declarations can still ride
-  along in a file that has a legitimate interpolating block, and the counter
-  only sees declarations — a `<style>` full of `@font-face` bodies or selectors
-  with no declarations is under-counted. The budget makes the laundering *small
-  and bounded*; it does not make it impossible.
+  **3. And the whole tree stays under `C3_TOTAL_STATIC` = 6.** A per-file budget
+  reopens the hole one level up: N *files* of 8 is the same inline stylesheet
+  split N ways. Proven — three new partials under `frontdoor/`, 8 static
+  declarations each, 24 declarations back inline, gate exit 0. So the sum is
+  pinned too: the total static declarations riding inside *legal* interpolating
+  `<style>` blocks across every CMS template, counted over the whole tree in
+  every mode (`--staged`, `--range` and `--files` re-scan the tree for the
+  census, so you cannot land the partials one commit at a time). All 6 are
+  `columns.tpl`'s — it is the only contributor. It is a **ratchet**: above the
+  pin fails, and so does below (the message tells you the line to re-pin and the
+  number to put there), because slack in a budget is slack the next commit
+  spends. `CSS_STATIC_ALLOW_SLACK=1` forgives the below-budget direction only.
+  **Residual gap, stated honestly:** inside the pinned total, up to 8 static
+  declarations can still ride along in a file that has a legitimate interpolating
+  block, and the counter only sees declarations — a `<style>` full of
+  `@font-face` bodies or selectors with no declarations is under-counted, in both
+  budgets. Together they make the laundering *small, bounded and unable to grow
+  silently*; they do not make it impossible.
   **Destinations:** `frontdoor/blocks/*.tpl` → `frontdoor/css/blocks.css`; other
   public-tier templates → the matching `frontdoor/css/` layer; every admin
   template → `cms/css/cms-admin.css`, which `cms/_shell_top.tpl` links exactly
@@ -349,7 +362,9 @@ variable names are case-sensitive.
 cannot express a per-instance column count. It declares **6** static properties
 beside that one, against C3's budget of 8 — so if you add three more static
 declarations to that block, the gate will (correctly) tell you they belong in
-`blocks.css`. Its `@media (max-width:760px)`
+`blocks.css`. Those same 6 are the entire tree-wide `C3_TOTAL_STATIC` budget, so
+a *second* template that wants an interpolating `<style>` has to raise the pin
+deliberately rather than quietly spend the headroom. Its `@media (max-width:760px)`
 partner has to stay in that same `<style>` element, after the base rule, or a
 stylesheet copy loaded earlier would lose the same-specificity order tie and the
 phone breakpoint would stop collapsing to one column.
