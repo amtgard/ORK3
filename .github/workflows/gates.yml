@@ -1,0 +1,187 @@
+# ORK3 architectural + CSS gates, in CI.
+#
+# WHY THIS EXISTS. Every gate in this repo has been enforced by a local git
+# hook (.githooks/pre-commit, .githooks/pre-push, activated by `npm install`
+# running the `prepare` script). That leaves two holes a reviewer cannot see:
+#
+#   * `git commit --no-verify` / `git push --no-verify` walks straight past
+#     both hooks — verified, not assumed;
+#   * a contributor who clones and never runs `npm install` has
+#     core.hooksPath unset, so there is no gate at all.
+#
+# CI closes both. The hooks stay the FAST PATH — they fail in seconds, on the
+# staged blob, before the commit exists — and this workflow is the BACKSTOP
+# that a human reviewing a PR can actually see. Nothing here replaces a hook;
+# it re-runs the same scripts over the whole tree so a red check on the PR is
+# the last word.
+#
+# Reference: docs/superpowers/specs/2026-08-21-cms-css-separation-design.md
+#            orkui/template/default/frontdoor/css/README.md
+#
+# Action versions are pinned to release major tags, never @master. If this repo
+# later adopts commit-SHA pinning, these four are the lines to change.
+
+name: Gates
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Layering / CSS boundary / CSS lint / CMS tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # composer.json requires php >=8.2, so CI runs the FLOOR: anything that
+      # needs a newer PHP is a real finding, not a CI quirk.
+      # ext-curl is what tests/cms-css/boundary_test.php uses; ext-mbstring is
+      # what tests/cms-fields/allowlist_test.php uses.
+      - name: Set up PHP 8.2 (composer.json floor)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, curl
+          coverage: none
+          tools: none
+
+      # stylelint 16 requires Node >= 18.12; 22 is the current LTS line.
+      # `cache: npm` keys the npm cache off package-lock.json.
+      - name: Set up Node 22 (stylelint 16) with npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # --ignore-scripts on purpose: `prepare` only sets core.hooksPath (moot in
+      # CI, we call the scripts directly) and `postinstall` copies FullCalendar
+      # dist files and runs esbuild into the tracked asset tree — build output
+      # no gate below reads, and mutating the checkout would only muddy the run.
+      # stylelint needs no install script.
+      - name: Install npm dev dependencies (stylelint)
+        run: npm ci --ignore-scripts
+
+      # ----------------------------------------------------------------------
+      # Gate 1 — PHP layer separation.
+      # DB work lives in system/lib/ork3/; orkui/ reaches it only through
+      # orkui/model/ wrappers. A failure here names the file:line and the rule.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 1 — PHP layering: no $DB / domain classes in orkui (bin/check-layering.sh --all)'
+        run: bin/check-layering.sh --all
+
+      # ----------------------------------------------------------------------
+      # Gate 2 — CMS/CRM CSS boundary, rules C0-C7.
+      # C1 ORK shell selectors on the public CMS tier, C2 --ork-* token
+      # definitions, C3 static inline <style>, C4 CRM CSS on the org-site render
+      # path, C5 CMS selectors in CRM CSS, C6 default.theme's $IsOrgSite gate,
+      # C7 CSS injected from CMS PHP/JS.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 2 — CMS/CRM CSS boundary C0-C7 (bin/check-css-boundaries.sh --all)'
+        run: bin/check-css-boundaries.sh --all
+
+      # ----------------------------------------------------------------------
+      # Gate 3 — three checks behind one npm script, exactly as the pre-push
+      # hook and the sign-off loop run it:
+      #   stylelint 16 over frontdoor/css/ + cms/css/
+      #   lint:css:tabs   CMS CSS is 4-space indent, never tabs
+      #   lint:css:dupes  the duplication ratchet (FAILS IN BOTH DIRECTIONS —
+      #                   if duplication FELL, run
+      #                   `npm run lint:css:dupes:rebaseline` and commit it)
+      # Advisory on pre-push; BLOCKING here.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 3 — CSS lint: stylelint + tab-indent + duplication ratchet (npm run lint:css)'
+        run: npm run lint:css
+
+      # ----------------------------------------------------------------------
+      # Gate 4 — the tests/cms-*/ scripts.
+      # They are standalone `php <file>` scripts, deliberately outside
+      # phpunit.xml.dist, so bin/run-unit-tests.sh does not pick them up and
+      # this loop is the only thing that runs them. Each exits non-zero on
+      # failure AND prints a `FAIL  <label>` line; both are checked, because a
+      # script that one day forgets to exit non-zero must not pass silently.
+      #
+      # tests/cms-css/boundary_test.php IS EXPECTED TO SKIP HERE, and that is a
+      # deliberate decision, not an oversight. It fetches real surfaces off a
+      # running app. Standing one up in the runner is possible (docker compose
+      # is in the repo) but pointless: the repo carries incremental
+      # db-migrations/ and no baseline schema or data dump, so the app would
+      # come up against an empty database with no ork_cms_site rows, no
+      # kingdoms and no parks — every org-site surface would 404 and the test
+      # would assert on not-found pages. A green run off an empty database is
+      # worse than an honest skip. So it skips, and the skip is REPORTED: the
+      # step prints a banner, emits a ::notice annotation and writes to the job
+      # summary, so a reviewer sees "1 skipped" instead of an unqualified green.
+      # The runtime backstop is run by hand against local docker on :19080 —
+      # see orkui/template/default/frontdoor/css/README.md.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 4 — CMS test scripts (tests/cms-*/): any FAIL line or non-zero exit fails the job'
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          failed=""
+          skipped=""
+          ran=0
+
+          for t in $(git ls-files 'tests/cms-*/*.php' | sort); do
+              echo "::group::php $t"
+              if out=$(php "$t" 2>&1); then rc=0; else rc=$?; fi
+              printf '%s\n' "$out"
+              echo "::endgroup::"
+              ran=$((ran + 1))
+
+              bad=0
+              if [ "$rc" -ne 0 ]; then
+                  echo "::error file=$t,title=CMS test failed::$t exited $rc"
+                  bad=1
+              fi
+              if printf '%s\n' "$out" | grep -qE '^[[:space:]]*FAIL'; then
+                  echo "::error file=$t,title=CMS test reported FAIL::$t printed at least one FAIL line"
+                  printf '%s\n' "$out" | grep -E '^[[:space:]]*FAIL' | sed 's/^/    /'
+                  bad=1
+              fi
+              [ "$bad" -eq 1 ] && failed="$failed $t"
+
+              if printf '%s\n' "$out" | grep -q '^SKIP:'; then
+                  skipped="$skipped $t"
+              fi
+          done
+
+          echo "### CMS test scripts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ran \`$ran\` script(s) from \`tests/cms-*/\`." >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$skipped" ]; then
+              echo ""
+              echo "=============================================================="
+              echo "SKIPPED (needs a running ORK app, not available in CI):"
+              for s in $skipped; do echo "    $s"; done
+              echo "This job is NOT fully green: run the skipped script by hand"
+              echo "against local docker — ORK_BASE_URL=http://localhost:19080"
+              echo "=============================================================="
+              echo "::notice title=CMS runtime backstop skipped in CI::$skipped needs a running ORK app with a populated CMS database; CI has neither. Run it by hand against local docker before merging."
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "**Skipped (needs a running app):**$skipped — CI cannot supply a populated CMS database, so this one is run by hand against local docker on :19080." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -n "$failed" ]; then
+              echo ""
+              echo "FAILED:$failed"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "**Failed:**$failed" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+          fi
+
+          echo ""
+          echo "All $ran CMS test script(s) passed (skips listed above, if any)."

@@ -479,6 +479,46 @@ ORK3_ALLOW_LAYER_VIOLATION=1 git commit …
 ORK3_ALLOW_LAYER_VIOLATION=1 git push …
 ```
 
+## CI is the backstop; the hooks are the fast path
+
+`.github/workflows/gates.yml` runs the same four gates on every `pull_request`
+and every `push`:
+
+| Step | Runs |
+|---|---|
+| Gate 1 | `bin/check-layering.sh --all` |
+| Gate 2 | `bin/check-css-boundaries.sh --all` |
+| Gate 3 | `npm run lint:css` — stylelint + the tab check + the duplication ratchet, **blocking** here, unlike the advisory pre-push run |
+| Gate 4 | every `tests/cms-*/` script; a non-zero exit **or** a printed `FAIL` line fails the job |
+
+The hooks stay the fast path — they fail in seconds, on the staged blob, before
+the commit exists — and none of this replaces them. CI exists because a hook is
+not a gate a reviewer can see, and it has two holes CI does not:
+
+- **`git commit --no-verify` / `git push --no-verify` walks straight past both
+  hooks.** Verified, not assumed.
+- **A clone that never ran `npm install` has no hooks at all** — the hooks are
+  activated by `npm install` running the `prepare` script
+  (`git config core.hooksPath .githooks`), so a contributor who skips it has
+  `core.hooksPath` unset and commits with nothing checking anything.
+
+A red check on the PR is therefore the last word, and the escape hatch
+`ORK3_ALLOW_LAYER_VIOLATION=1` is honoured by the hooks only — it is not
+plumbed into CI, by design.
+
+**`tests/cms-css/boundary_test.php` is expected to SKIP in CI, deliberately.**
+It fetches real surfaces off a running app, and standing one up in the runner
+would prove nothing: the repo carries incremental `db-migrations/` and no
+baseline schema or data dump, so the app would come up against an empty
+database with no `ork_cms_site` rows, no kingdoms and no parks — every org-site
+surface would 404 and the test would be asserting on not-found pages. A green
+run off an empty database is worse than an honest skip. So Gate 4 lets it skip
+and **reports the skip out loud**: a banner in the log, a `::notice`
+annotation, and a line in the job summary, so the check never reads as an
+unqualified green. Run it by hand against local docker before merging —
+`ORK_BASE_URL=http://localhost:19080 php tests/cms-css/boundary_test.php`; it
+is the only one of the nine that needs the app.
+
 ## The duplication ratchet
 
 stylelint has `no-duplicate-selectors` and
