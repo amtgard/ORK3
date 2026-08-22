@@ -5267,10 +5267,13 @@ class Report extends Ork3
         arsort($sessClientCounts);
         // Self-identified API clients always keep their own bar, however small —
         // this chart doubles as the adoption tracker for the Client field.
-        $alwaysShow = array('jsork', 'mORK');
+        // Prefix match: mORK labels carry a platform ("mORK on iOS").
+        $isApiClient = function ($label) {
+            return strncasecmp($label, 'jsork', 5) === 0 || strncasecmp($label, 'mORK', 4) === 0;
+        };
         $sessClientBreak = array();
         foreach ($sessClientCounts as $label => $count) {
-            if (count($sessClientBreak) >= 14 && !in_array($label, $alwaysShow, true)) {
+            if (count($sessClientBreak) >= 14 && !$isApiClient($label)) {
                 $sessClientBreak['Other'] = ($sessClientBreak['Other'] ?? 0) + $count;
                 continue;
             }

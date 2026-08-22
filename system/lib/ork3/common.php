@@ -94,6 +94,14 @@ function ork_session_client_label($ua)
         return 'Unknown client';
     }
     if (stripos($ua, 'mork') === 0) {
+        // Keep the platform (durable iOS-vs-Android adoption trend in the
+        // tally) but collapse versions — "mORK/2.5 (iOS)" -> "mORK on iOS".
+        if (stripos($ua, 'ios') !== false || stripos($ua, 'iphone') !== false || stripos($ua, 'ipad') !== false) {
+            return 'mORK on iOS';
+        }
+        if (stripos($ua, 'android') !== false) {
+            return 'mORK on Android';
+        }
         return 'mORK';
     }
     if (stripos($ua, 'jsork') !== false) {
