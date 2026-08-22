@@ -6641,10 +6641,11 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Players' => [], 'KingdomId' => 0];
         }
 
-        $auth = $this->_authorizeReportPlayerScope($request, $mundaneId);
-        if ($auth !== null) {
-            return array_merge($auth, ['Players' => [], 'KingdomId' => 0]);
-        }
+        // Deliberately UNGATED (C-22 regression, fixed 2026-08-22): this getter
+        // powers the voting-eligibility badge on the PUBLIC player profile, for
+        // any viewer, logged in or not. It discloses only booleans derived from
+        // facts the profile already displays (awards, attendance recency). The
+        // roster-level voting getters remain token-gated.
 
         if ($kingdomId <= 0) {
             $this->db->Clear();
