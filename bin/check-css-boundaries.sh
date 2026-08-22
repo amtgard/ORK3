@@ -103,6 +103,34 @@
 #       dangerous direction too: point one of those names at style/ anywhere
 #       and every partial that consumes it starts reporting.
 #
+#   R8  CMS PHP AND CMS JS ARE IN SCOPE FOR CSS INJECTION (C7). Rules C1-C6
+#       read .css, .tpl and .theme, which is every file that can DECLARE CSS —
+#       and none of the files that can INJECT it. A stylesheet <link> and a
+#       <style>#theme_container{}</style> were put into a live org-site page
+#       from two directions, and this gate plus the layering gate both returned
+#       exit 0: once from frontdoor/js/frontdoor.js via
+#       document.head.insertAdjacentHTML(), once from
+#       orkui/controller/controller.Site.php echoing the markup. The blind set
+#       was 31 files. It is now in scope, derived the same way everything else
+#       here is:
+#
+#         orkui/controller/controller.<C>*.php   for <C> in CMS_CONTROLLERS —
+#                                                so controller.CmsAjax.php and
+#                                                any future controller.SiteAjax
+#                                                are covered without a list
+#         orkui/model/model.Cms*.php             the model membrane
+#         orkui/model/model.FrontDoor.php        the front door's membrane; the
+#                                                one name that has to be spelled
+#                                                out, because the front door is
+#                                                rendered by the BASE controller
+#                                                and so has no Cms/Site prefix
+#         system/lib/ork3/class.Cms*.php         the CMS domain layer
+#         frontdoor/**.js, cms/**.js             R1, extended to scripts
+#
+#       Only C7 runs on these files. C1-C6 are about how CSS is declared and
+#       linked in stylesheets and templates, and applying them to PHP source
+#       would be a category error.
+#
 # ---------------------------------------------------------------------------
 # The rules
 #
@@ -220,6 +248,80 @@
 #       prove. It matches the same PATH SHAPE C4-LINK does, so every spelling
 #       listed under "WHICH STYLESHEET A PATH ACTUALLY NAMES" below is one
 #       rule, not eight. Scope: $TPL_ROOT/*.theme.
+#   C7  CMS PHP AND CMS JS MAY NOT INJECT CSS INTO A PAGE. Scope: R8.
+#
+#       ONE flat rule, no tiers, no exemption list. CSS enters a CMS page
+#       through exactly three sanctioned channels — the two link partials
+#       (frontdoor/_assets_public.tpl, frontdoor/_assets_inshell.tpl),
+#       cms/_shell_top.tpl for the admin, and default.theme's $IsOrgSite gate —
+#       and it lives in a stylesheet under frontdoor/css/ or cms/css/. A
+#       controller, a model, a domain class and a script bundle are none of
+#       those, on either tier, which is why C7 needs no public/admin split:
+#       there is no legitimate case anywhere in the set. Reported:
+#
+#         a <style> element, however assembled — the literal tag, a tag built
+#           by string concatenation ('<sty' . 'le>' / '<sty' + 'le>'), and the
+#           DOM spellings that never write the tag at all
+#           (document.createElement('style'), CSSStyleSheet + insertRule,
+#           adoptedStyleSheets);
+#         a stylesheet <link> — a <link> that HAS an href and whose rel is not
+#           one of the known non-stylesheet rels, plus createElement('link');
+#         an @import;
+#         an ORK application-shell selector (#theme_container, #newmenu,
+#           .ork-), in the same spellings C1 reads, including the
+#           attribute-selector forms and CSS identifier escapes;
+#         a definition in the CRM's --ork-* namespace, in the same spellings C2
+#           reads, plus the JS one C2 has no reason to know:
+#           el.style.setProperty('--ork-x', v);
+#         a CRM stylesheet NAME or a style/<…>.css path shape, so a href
+#           assembled into a variable is caught before it ever reaches a tag.
+#
+#       WHY THIS IS NOT A FALSE-POSITIVE ENGINE, which is the whole difficulty.
+#       Several files in scope handle CSS legitimately, as DATA:
+#
+#         class.CmsThemeTokens.php  BUILDS css text — Block(), ToCss(),
+#                                   ToRootCss() emit `.fd-page{--fd-x:…}`
+#         class.CmsTheme.php        passes that css text around
+#         class.CmsSanitizer.php    inspects and STRIPS style attributes and
+#                                   <style>/<link> tags from authored content
+#
+#       The distinction drawn here is LITERAL EMISSION, NOT MENTION, and it is
+#       drawn by choosing the trigger set rather than by exempting paths:
+#
+#         * C7 fires on the tag OPENERS "<style" and "<link", never on the
+#           WORDS "style" and "link". CmsSanitizer's blocklist is
+#           array('script', 'style', … 'link', …) — bare tag NAMES — so it
+#           passes on its own merits.
+#         * C7 fires on the CRM namespace --ork-*, never on the CMS namespace
+#           --fd-*/--cms-*. CmsThemeTokens is a --fd-* factory from end to end,
+#           so it passes on its own merits. If it ever starts writing --ork-* or
+#           wrapping its output in a <style> tag, that is a real finding: the
+#           tag belongs in default.theme, which already emits it.
+#         * Comment text is stripped first (PHP's #-to-end-of-line form
+#           included, for PHP sources only — in CSS "#" starts an id selector
+#           and in JS a private field), so the docblocks in CmsTheme.php that
+#           say "the <style> inner CSS for the active theme" are prose, not
+#           emission.
+#         * A <link> with no href is not a stylesheet link. class.CmsPost.php
+#           writes `'<link>' . … . '</link>'` into an RSS feed — the RSS <link>
+#           ELEMENT, whose URL is its text content — and passes on its own
+#           merits.
+#
+#       THERE IS DELIBERATELY NO PATH EXEMPTION LIST. An exemption is a
+#       standing hole that rots as the exempted file grows; a trigger set
+#       narrow enough that the CSS-as-data classes never touch it does not.
+#       Verified: all 31 files in scope report clean today.
+#
+#       Fail-closed where it cannot tell: a <link rel="<?= $rel ?>" href=…>
+#       whose rel is assembled at runtime is reported, because an unprovable
+#       rel could be "stylesheet". C7 deliberately does NOT resolve the href —
+#       for these files EVERY stylesheet link is a violation whatever it points
+#       at, so there is nothing to resolve and nothing to be fail-open about.
+#
+#       Not covered, stated honestly: CSS reached by a route that names none of
+#       the above — a stylesheet URL fetched from the database and handed to a
+#       template that links it, say. tests/cms-css/boundary_test.php remains the
+#       backstop that reads what a live surface actually serves.
 #
 # Case and line endings. The scanner runs under LC_ALL=C and matches lowercase
 # literals, so every rule matches against a tolower() view of the line. That is
@@ -314,6 +416,17 @@ CMS_DENY="$TPL_ROOT/Cms_deny.tpl"
 # automatically. Add a CMS controller here when you add one.
 CMS_CONTROLLERS="Site Page Blog Cms"
 
+# R8 — the CMS PHP source set, for C7. Controllers are derived from
+# CMS_CONTROLLERS (the `*` picks up controller.CmsAjax.php and any future
+# controller.SiteAjax.php without a second list); models and domain classes come
+# from their Cms prefix. model.FrontDoor.php is the one name that has to be
+# written out: the front door is rendered by the BASE controller, so its
+# membrane carries no Cms/Site prefix to derive from.
+CMS_MODEL_FRONTDOOR="orkui/model/model.FrontDoor.php"
+CMS_MODEL_GLOB="orkui/model/model.Cms"
+CMS_DOMAIN_GLOB="system/lib/ork3/class.Cms"
+CMS_CONTROLLER_DIR="orkui/controller"
+
 # The static-declaration budget an interpolating <style> may carry (C3, per file).
 C3_MAX_STATIC=8
 
@@ -344,10 +457,14 @@ ALL_PATHSPECS="$CMS_PUBLIC
 $CMS_ADMIN
 $TPL_ROOT/*.theme
 $TPL_ROOT/_index.tpl
-$TPL_BASE/*.css"
+$TPL_BASE/*.css
+$CMS_MODEL_FRONTDOOR
+$CMS_MODEL_GLOB*.php
+$CMS_DOMAIN_GLOB*.php"
 for c in $CMS_CONTROLLERS; do
     ALL_PATHSPECS="$ALL_PATHSPECS
-$TPL_ROOT/${c}_*.tpl"
+$TPL_ROOT/${c}_*.tpl
+$CMS_CONTROLLER_DIR/controller.${c}*.php"
 done
 
 case "$MODE" in
@@ -510,6 +627,19 @@ function decomment(s,    out, i, n, c, q, p) {
         }
         if (substr(s, i, 2) == "/*") { in_block = 1; out = out " "; i = i + 2; continue }
         if (tpl && substr(s, i, 4) == "<!--") { in_html = 1; out = out " "; i = i + 4; continue }
+        # PHP's third comment syntax, "#" to end of line (or to ?>). Enabled for
+        # PHP SOURCES ONLY: in CSS "#" opens an id selector — the very thing C1
+        # is looking for — and in JS it opens a private field. Strings were
+        # already copied through above, so '#fff' and '#theme_container' as data
+        # are untouched; this only strips prose, which is exactly the point:
+        # `# theme_container is the shell root` is documentation, not emission.
+        if (phpsrc && c == "#") {
+            p = index(substr(s, i), "?>")
+            out = out " "
+            if (p == 0) return out
+            i = i + p - 1
+            continue
+        }
         if (tpl && substr(s, i, 2) == "//" && !url_slashes(s, i)) {
             # A PHP // comment ends at ?>, not merely at end of line. Honouring
             # that keeps the PHP-region tracker (C6) in sync on the very common
@@ -880,10 +1010,12 @@ function check_include(s,    expr, p, lit, base, vn, tgt) {
 # templates (and default.theme's own dynamic rel="canonical" / rel="alternate"
 # links) from reading as violations.
 #
-# Not covered, stated honestly: a stylesheet injected by JavaScript. frontdoor/
-# js/ is not scanned by this gate at all, and no text scanner can follow it —
-# tests/cms-css/boundary_test.php is the backstop that reads what a live surface
-# actually serves.
+# A stylesheet injected by JavaScript, or echoed straight out of a controller,
+# used to be out of reach here: C4 reads templates, and frontdoor/js/ was not
+# scanned by this gate at all. R8 + C7 below bring the CMS PHP and JS sources
+# into scope for exactly that. What no text scanner can follow is a URL that
+# never appears as text in the tree — tests/cms-css/boundary_test.php is the
+# backstop that reads what a live surface actually serves.
 # ---------------------------------------------------------------------------
 
 # A value SET: SETSEP-separated candidate strings. A candidate that contains UNK
@@ -1353,6 +1485,73 @@ function org_track(code,    t, k, ne, cond, st) {
     }
 }
 
+# ---------------------------------------------------------------------------
+# C7 — CSS injection from a CMS PHP source or a CMS script (R8)
+#
+# The rule is flat: none of these files may put CSS on a page, on either tier.
+# See the C7 entry in the header for why that needs no exemption list — the
+# trigger set is chosen so the CSS-as-DATA classes (CmsThemeTokens builds css
+# text, CmsSanitizer strips style/link tags, CmsTheme passes css around) never
+# touch it. Tag OPENERS, not tag NAMES; the --ork-* namespace, not --fd-*.
+# ---------------------------------------------------------------------------
+
+# Is this <link> one a browser could fetch a stylesheet from?
+#
+# Deliberately does NOT resolve the href. For these files EVERY stylesheet link
+# is a violation whatever it points at, so there is nothing to resolve — and
+# that is what lets the test survive concatenation. `'<link rel="stylesheet"
+# href="' . $u . '">'` has its attribute values shredded by the PHP string
+# quotes, so no scanner can read the href out of it; the attribute is still
+# demonstrably PRESENT, and present is all C7 needs.
+#
+# Two things keep it honest rather than noisy:
+#   href absent  -> not a stylesheet link. class.CmsPost.php writes the RSS
+#                   <link> ELEMENT, whose URL is its TEXT CONTENT, and passes.
+#   rel known    -> a rel that cannot load a stylesheet (icon, canonical,
+#                   alternate, …) is skipped, sharing C4's list. An UNPROVABLE
+#                   rel is analysed, because it could be "stylesheet".
+function c7_link_is_sheet(buf,    rel, parts, i, n) {
+    if (attr_value(buf, "href") == NOATTR) return 0
+    rel = attr_value(buf, "rel")
+    if (rel != NOATTR && index(rel, TOK) == 0) {
+        n = split(tolower(rel), parts, /[ \t]+/)
+        for (i = 1; i <= n; i++)
+            if (parts[i] in noncss_rel) return 0
+    }
+    return 1
+}
+
+function c7_link_flush() {
+    if (c7_lk_open && c7_link_is_sheet(c7_lk_buf))
+        report("C7", c7_lk_line, "CMS PHP/JS emits a stylesheet <link>.", C7_LINK_FIX)
+    c7_lk_open = 0
+    c7_lk_buf = ""
+}
+
+# <link> tags, accumulated across lines so a tag built over several
+# concatenated fragments is one string again.
+function c7_links(s,    ls, p, q) {
+    ls = tolower(s)
+    while (1) {
+        if (!c7_lk_open) {
+            p = index(ls, "<link")
+            if (p == 0) return
+            c7_lk_open = 1; c7_lk_buf = ""; c7_lk_line = FNR
+            s = substr(s, p + 5); ls = substr(ls, p + 5)
+            continue
+        }
+        q = index(ls, ">")
+        if (q == 0) {
+            c7_lk_buf = c7_lk_buf " " s
+            if (length(c7_lk_buf) > 4000) c7_link_flush()
+            return
+        }
+        c7_lk_buf = c7_lk_buf " " substr(s, 1, q - 1)
+        c7_link_flush()
+        s = substr(s, q + 1); ls = substr(ls, q + 1)
+    }
+}
+
 BEGIN {
     PHPMARK = sprintf("%c", 1)
     STRMARK = sprintf("%c", 2)
@@ -1391,6 +1590,13 @@ BEGIN {
     C3_MSG = "Static inline <style> block in a CMS template."
     C3_FIX = "This CSS belongs in " C3_DEST " so it is cacheable, lintable and visible to duplication analysis, instead of being re-sent in the HTML of every render. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
+    C7_WHERE = "CSS reaches a CMS page through three sanctioned channels only: frontdoor/_assets_public.tpl and frontdoor/_assets_inshell.tpl for the public tier, cms/_shell_top.tpl for the admin, and default.theme's $IsOrgSite gate. It LIVES in a stylesheet under frontdoor/css/ or cms/css/."
+    C7_STYLE_FIX = "A controller, model, domain class or script must not put a <style> element on the page — it is re-sent in the HTML of every render, invisible to stylelint and to the duplication ratchet, and it is exactly the injection route this gate was blind to. " C7_WHERE " The one <style> the CMS legitimately emits is default.theme's theme-token block, whose CSS text CmsThemeTokens builds."
+    C7_LINK_FIX = "A controller, model, domain class or script must not link a stylesheet. " C7_WHERE
+    C7_IMPORT_FIX = "@import from a CMS PHP source or script injects a stylesheet the gate cannot account for, serially after the linking stylesheet has parsed. " C7_WHERE
+    C7_SHELL_FIX = "Naming an ORK application-shell selector from CMS code couples the CMS to the ORK chrome a standalone org site never renders, where the hook styles nothing. Give the element an .fd-/.cms-/.org- class, and put any genuine coupling in frontdoor/css/orkshell-interop.css, which is the designated place for it."
+    C7_TOKEN_FIX = "Rename it to --cms-* or --fd-* and scope it to the CMS root. Reading an --ork-* token is fine; defining one — with a declaration, with @property, or with element.style.setProperty() — writes into the CRM's namespace."
+    C7_CRM_FIX = "A CRM stylesheet name or a style/<…>.css path built inside CMS code is a stylesheet link one step before it becomes one. " C7_WHERE
     C4_FIX = "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. The in-shell surfaces get the interop layer from frontdoor/_assets_inshell.tpl, which is the only file allowed to link it."
 }
 {
@@ -1514,6 +1720,62 @@ BEGIN {
         report("C5", FNR, "CRM CSS names a CMS selector.", \
                "The CRM must not style CMS surfaces. Move the rule into the matching CMS stylesheet under frontdoor/css/ or cms/css/.")
 
+    # C7 — R8. A CMS PHP source or CMS script may not inject CSS into a page.
+    if (C7) {
+        # PHP joins with ".", JS with "+", so '<sty' . 'le>' and '<sty' + 'le>'
+        # are one string here before the tag nets look at the line.
+        j7line = lraw
+        gsub(/["'][ \t]*[.+][ \t]*["']/, "", j7line)
+
+        # The tag OPENER "<style", never the tag NAME "style": CmsSanitizer's
+        # blocklist is array('script', 'style', … ) and must stay clean.
+        if (lraw ~ /<[ \t]*style/ || j7line ~ /<[ \t]*style/)
+            report("C7", FNR, "CMS PHP/JS emits a <style> tag.", C7_STYLE_FIX)
+        # The DOM spellings that build the same element without ever writing the
+        # tag. createElement('div') and el.style are untouched — the name must
+        # be the style or link element itself.
+        else if (j7line ~ /createelement[ \t]*\([ \t]*["'`][ \t]*(style|link)[ \t]*["'`]/ ||
+                 j7line ~ /(insertrule|adoptedstylesheets)/ ||
+                 j7line ~ /new[ \t]+cssstylesheet/)
+            report("C7", FNR, "CMS PHP/JS builds a stylesheet in the DOM.", C7_STYLE_FIX)
+
+        if (lraw ~ /@import/)
+            report("C7", FNR, "CMS PHP/JS emits an @import.", C7_IMPORT_FIX)
+
+        c7_links(line)
+
+        # The COARSE net, shared with C4/C6: a CRM stylesheet name or a
+        # style/<…>.css path shape assembled anywhere in the file, caught one
+        # step before it reaches a tag.
+        if (crm_mentioned(j7line))
+            report("C7", FNR, "CMS PHP/JS names a CRM stylesheet or a style/ path.", C7_CRM_FIX)
+
+        # C1's coupling, in the files C1 cannot read — as a SELECTOR, as the
+        # MARKUP C1 also reads (a controller echoing <div class="ork-card"> is
+        # coupled exactly as hard as a template writing it), and in the two DOM
+        # spellings that reach the same elements without any CSS syntax at all.
+        if (lline ~ /(#theme_container|#newmenu|\.ork-)/ ||
+            attr_sel_id(lline, "theme_container") || attr_sel_id(lline, "newmenu") ||
+            attr_sel_class(lline, "ork-") ||
+            lline ~ /id[ \t]*=[ \t]*["']?theme_container/ ||
+            lline ~ /class[ \t]*=[ \t]*"[ \t]*ork-/ ||
+            lline ~ /class[ \t]*=[ \t]*'[ \t]*ork-/ ||
+            lline ~ /class[ \t]*=[ \t]*"[^"]*[ \t]ork-/ ||
+            lline ~ /class[ \t]*=[ \t]*'[^']*[ \t]ork-/ ||
+            lline ~ /classname[ \t]*=[ \t]*["'`][ \t]*ork-/ ||
+            lline ~ /classlist[ \t]*\.[ \t]*[a-z]+[ \t]*\([ \t]*["'`][ \t]*ork-/ ||
+            lline ~ /getelementbyid[ \t]*\([ \t]*["'`][ \t]*(theme_container|newmenu)[ \t]*["'`]/)
+            report("C7", FNR, "CMS PHP/JS names an ORK application-shell selector.", C7_SHELL_FIX)
+
+        # C2's namespace, plus the JS spelling of a definition that C2 has no
+        # reason to know about. --fd-* and --cms-* are the CMS's own namespaces
+        # and are never touched, which is why CmsThemeTokens passes on merit.
+        if (lline ~ /@property[ \t]+--ork-/ ||
+            lline ~ /(^|[;{(, \t"'`])--ork-[a-z0-9-]+[ \t]*:/ ||
+            lline ~ /setproperty[ \t]*\([ \t]*["'`][ \t]*--ork-/)
+            report("C7", FNR, "CMS PHP/JS defines a token in the CRM's --ork-* namespace.", C7_TOKEN_FIX)
+    }
+
     if (C6) {
         # org_track deliberately gets the UNFOLDED code: $IsOrgSite is a PHP
         # variable name and PHP variable names are case-sensitive.
@@ -1533,6 +1795,7 @@ END {
     # A <link> tag left open at EOF is still a link. Judge what we have rather
     # than letting an unclosed tag be a place to park an href.
     if (lk_open) analyze_link(lk_buf, lk_rule)
+    if (c7_lk_open) c7_link_flush()
 
     # C0. A comment opener that never closes leaves everything after it
     # unscanned. Failing loudly beats a gate that silently disarms itself.
@@ -1556,10 +1819,12 @@ AWKEOF
 TOTAL=0
 
 for f in $CANDIDATES; do
-    # Only stylesheets and templates can carry a boundary violation; this also
-    # keeps images, fonts and the frontdoor/js/ bundle out of the scanner.
+    # Stylesheets and templates DECLARE CSS (C1-C6); PHP sources and scripts can
+    # INJECT it (C7, R8). Everything else — images, fonts — is dropped here. A
+    # .php/.js outside the CMS source set falls out at the classification step
+    # below with no rule enabled.
     case "$f" in
-        *.css|*.tpl|*.theme) : ;;
+        *.css|*.tpl|*.theme|*.php|*.js) : ;;
         *) continue ;;
     esac
     # Never scan third-party or generated code.
@@ -1600,7 +1865,26 @@ for f in $CANDIDATES; do
             ;;
     esac
 
-    C1=0; C2=0; C3=0; C4=0; C4_PATH=0; C5=0; C6=0; C1_TC=0
+    # R8 — the CMS PHP/JS source set. These are the files that can put CSS on a
+    # CMS page without a stylesheet or a template being touched. Only C7 runs on
+    # them, so IS_CMS_SRC is kept separate from IS_CMS (which drives C2/C3 with
+    # template semantics).
+    IS_CMS_SRC=0; IS_PHP_SRC=0
+    case "$f" in
+        "$CMS_PUBLIC"/*.js|"$CMS_ADMIN"/*.js)      IS_CMS_SRC=1 ;;
+        "$CMS_MODEL_FRONTDOOR")                    IS_CMS_SRC=1; IS_PHP_SRC=1 ;;
+        "$CMS_MODEL_GLOB"*.php|"$CMS_DOMAIN_GLOB"*.php) IS_CMS_SRC=1; IS_PHP_SRC=1 ;;
+        *.php)
+            for c in $CMS_CONTROLLERS; do
+                case "$f" in
+                    "$CMS_CONTROLLER_DIR"/controller."$c"*.php)
+                        IS_CMS_SRC=1; IS_PHP_SRC=1; break ;;
+                esac
+            done
+            ;;
+    esac
+
+    C1=0; C2=0; C3=0; C4=0; C4_PATH=0; C5=0; C6=0; C7=0; C1_TC=0
 
     # C1 — public tier only, with the two documented exemptions.
     if [ "$IS_PUBLIC" = 1 ]; then
@@ -1658,7 +1942,10 @@ for f in $CANDIDATES; do
         "$TPL_ROOT"/*.theme) C6=1 ;;
     esac
 
-    [ "$C1$C2$C3$C4$C4_PATH$C5$C6" = "0000000" ] && continue
+    # C7 — R8: CSS injection from a CMS PHP source or a CMS script.
+    C7=$IS_CMS_SRC
+
+    [ "$C1$C2$C3$C4$C4_PATH$C5$C6$C7" = "00000000" ] && continue
 
     # R5 — a symlink is never scanned. `git show :path` on one returns the link
     # TARGET, not the content it resolves to, so a staged symlink used to sail
@@ -1680,10 +1967,11 @@ for f in $CANDIDATES; do
         continue
     fi
 
-    # Templates carry // and <!-- --> comments on top of /* */; stylesheets do not.
+    # Templates carry // and <!-- --> comments on top of /* */; stylesheets do
+    # not. PHP sources and scripts carry // too, so they take the same lexer.
     TPL=0
     case "$f" in
-        *.tpl|*.theme) TPL=1 ;;
+        *.tpl|*.theme|*.php|*.js) TPL=1 ;;
     esac
 
     FILEDIR=$(dirname "$f")
@@ -1695,11 +1983,11 @@ for f in $CANDIDATES; do
         cat "$f" > "$CONTENT" 2>/dev/null || continue
     fi
 
-    awk -v file="$f" -v tpl="$TPL" -v filedir="$FILEDIR" \
+    awk -v file="$f" -v tpl="$TPL" -v phpsrc="$IS_PHP_SRC" -v filedir="$FILEDIR" \
         -v TPL_BASE="$TPL_BASE" -v TPL_ROOT="$TPL_ROOT" \
         -v C_RED="$C_RED" -v C_DIM="$C_DIM" -v C_OFF="$C_OFF" \
         -v C1="$C1" -v C2="$C2" -v C3="$C3" -v C4="$C4" -v C4_PATH="$C4_PATH" \
-        -v C5="$C5" -v C6="$C6" \
+        -v C5="$C5" -v C6="$C6" -v C7="$C7" \
         -v C1_TC="$C1_TC" -v C3_DEST="$C3_DEST" -v C3_MAX_STATIC="$C3_MAX_STATIC" \
         -v CRM_SHEETS="$CRM_SHEETS" -v SEEDFILE="$SEEDS" \
         -v C1_FIX="Standalone org sites do not load orkui.css, so this rule is dead there and couples the layers everywhere else. Move it to frontdoor/css/orkshell-interop.css." \

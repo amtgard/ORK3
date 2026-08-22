@@ -32,6 +32,12 @@
 //      Manager, Cloudflare Web Analytics) — and the in-shell tier still does.
 //   8. no org-site page loads orkui.js (jQuery + the 1 MB CRM app bundle) while it
 //      still loads its own frontdoor.js — and the in-shell tier still gets orkui.js.
+//   9. the SCRIPTS an org site is served — every same-origin <script src> plus
+//      every inline <script> — inject no CSS: no <style>/<link> element built in
+//      the DOM, no @import, no constructed stylesheet, no CRM stylesheet name or
+//      style/ path, no ORK shell selector, no --ork-* token. This is the runtime
+//      mirror of C7 in bin/check-css-boundaries.sh: sections 1-4 read the served
+//      HTML, and a stylesheet a script appends after load is not in it.
 //
 // SAFE IN ANY ENVIRONMENT. If nothing answers at the base URL the script prints
 // a SKIP line and exits 0. Point it elsewhere with ORK_BASE_URL:
@@ -272,6 +278,55 @@ function inline_styles($html)
         }
     }
     return $out;
+}
+
+/**
+ * The SAME-ORIGIN script URLs a surface links, absolute. Third-party CDNs are
+ * skipped for the same reason stylesheet_urls() skips them: they are not ours.
+ */
+function script_urls($html, $base)
+{
+    $out = array();
+    if (!preg_match_all('#<script\b[^>]*\bsrc\s*=\s*(["\'])(.*?)\1[^>]*>#i', $html, $m)) {
+        return $out;
+    }
+    foreach ($m[2] as $raw) {
+        $src = html_entity_decode($raw, ENT_QUOTES);
+        if (preg_match('#^https?://#i', $src)) {
+            if (strpos($src, $base) !== 0) {
+                continue;
+            }
+        } elseif ($src !== '' && $src[0] === '/') {
+            $src = $base . $src;
+        } else {
+            continue;
+        }
+        $out[$src] = $src;
+    }
+    return array_values($out);
+}
+
+/** The bodies of every INLINE <script> element (no src attribute). */
+function inline_scripts($html)
+{
+    $out = array();
+    if (preg_match_all('#<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script\s*>#is', $html, $m)) {
+        foreach ($m[1] as $body) {
+            $out[] = $body;
+        }
+    }
+    return $out;
+}
+
+/** Fetched script bodies, memoised — the same bundle is linked by every surface. */
+function js_body($url)
+{
+    static $cache = array();
+    if (!array_key_exists($url, $cache)) {
+        $r = http_get($url);
+        $cache[$url] = ($r === null || $r[0] !== 200) ? null : $r[1];
+    }
+    return $cache[$url];
 }
 
 /** Class TOKENS used anywhere in the document (so "org-blog-card" != "blog-card"). */
@@ -674,6 +729,85 @@ foreach ($orgPages as $p) {
 }
 foreach ($shellPages as $p) {
     check("in-shell surface still links orkui.js — {$p['label']}", strpos($p['body'], $ORK_APP_JS) !== false);
+}
+
+// ---------------------------------------------------------------------------
+// 9. The SCRIPTS an org site serves inject no CSS.
+//
+//    The runtime mirror of C7 in bin/check-css-boundaries.sh. That gate reads
+//    the CMS PHP and JS sources in the repo; this reads the JavaScript a
+//    standalone org site is ACTUALLY SERVED — every same-origin <script src>
+//    it links, plus every inline <script> in its HTML — so a payload that
+//    reaches the page from somewhere the source gate never scans (a new bundle
+//    outside frontdoor/js/, a vendored script, a snippet pasted into a
+//    template) is caught here.
+//
+//    A stylesheet a script appends after load is invisible to sections 1-4:
+//    they read the served HTML, and the injected <link> is not in it. This is
+//    the assertion that closes that, and it is the reason C7 exists — both
+//    halves of the verifier's proof (an insertAdjacentHTML() in frontdoor.js
+//    and an echo in controller.Site.php) put orkui.css and a
+//    #theme_container rule onto a live org-site page with every gate green.
+//
+//    Scoped to the ORG tier deliberately. The in-shell tier legitimately loads
+//    orkui.js — 1 MB of jQuery, jQuery UI and CRM app code that manipulates
+//    styles constantly — and asserting on bytes we do not own would be noise.
+//    The property being protected is "an org site receives zero CRM CSS", and
+//    that is an org-tier property.
+// ---------------------------------------------------------------------------
+$JS_INJECTION = array(
+    // A <style> element, however it is built.
+    '#<\s*style#i'                                         => 'emits a <style> tag',
+    '#createelement\s*\(\s*["\'`]\s*(style|link)\s*["\'`]#i' => 'builds a style/link element',
+    '#\binsertrule\b#i'                                    => 'inserts a CSS rule',
+    '#\badoptedstylesheets\b#i'                            => 'adopts a constructed stylesheet',
+    '#new\s+cssstylesheet#i'                               => 'constructs a stylesheet',
+    // A stylesheet link, and the @import that needs no tag at all.
+    '#\bstylesheet\b#i'                                    => 'names rel="stylesheet"',
+    '#@import#i'                                           => 'emits an @import',
+    // A CRM stylesheet by name, or by the style/ path shape.
+    '#(^|[^a-z0-9_-])style/[a-z0-9_./-]*\.css#i'           => 'names a style/ stylesheet path',
+    // The ORK application shell, and the CRM token namespace.
+    '#(\#theme_container|\#newmenu|\.ork-)#i'              => 'names an ORK shell selector',
+    '#--ork-#i'                                            => 'names a CRM --ork-* token',
+);
+foreach ($CRM_CSS as $sheet) {
+    $JS_INJECTION['#' . preg_quote($sheet, '#') . '#i'] = "names $sheet";
+}
+
+foreach ($orgPages as $p) {
+    $bodies = array();
+    foreach (script_urls($p['body'], $BASE) as $u) {
+        $js = js_body($u);
+        if ($js === null) {
+            echo '  note: could not fetch ' . $u . " — script not checked\n";
+            continue;
+        }
+        $bodies[basename(preg_replace('/[?#].*$/', '', $u))] = $js;
+    }
+    foreach (inline_scripts($p['body']) as $i => $js) {
+        $bodies['inline #' . ($i + 1)] = $js;
+    }
+    // "No CSS-injecting JS" must not be winnable by serving no JS at all —
+    // section 8 already requires frontdoor.js, and this asserts we read it.
+    check("org site scripts were readable — {$p['label']}", count($bodies) > 0);
+    // One assertion per script, not one per needle: the needle set is a dozen
+    // spellings of ONE property ("this script injects no CSS"), and a
+    // cross-product of them against every script on every surface buries the
+    // rest of the run in PASS lines. A failure names every spelling that hit.
+    foreach ($bodies as $what => $js) {
+        $hits = array();
+        foreach ($JS_INJECTION as $re => $desc) {
+            if (preg_match($re, $js)) {
+                $hits[] = $desc;
+            }
+        }
+        check(
+            "org-site script injects no CSS — $what — {$p['label']}"
+                . ($hits ? ' [' . implode('; ', $hits) . ']' : ''),
+            count($hits) === 0
+        );
+    }
 }
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";

@@ -97,6 +97,7 @@ now **derived**:
 | **R5** | A symlink in an in-scope path is **rejected** (C0), never scanned. | `git show :path` on a symlink returns the *link target*, one short line that passes every rule — so a staged symlink used to be a way to ship arbitrary CSS through the gate. |
 | **R6** | The **CRM stylesheet set is read off the filesystem** — every `.css` under `style/`, at any depth, plus `orkshell-interop.css`. | C4/C6 named three files and so were blind to `reports.css` (55 KB) and `custom.css`, which had been sitting in `style/` all along. A CRM stylesheet added tomorrow is covered the day it lands — and a CMS stylesheet must not reuse a CRM stylesheet's basename. |
 | **R7** | **Asset-base seeds** are derived too: every in-scope file is scanned for `$name = HTTP_TEMPLATE\|DIR_TEMPLATE . '…'`, and a name the tree assigns a provable prefix to resolves to it in files that do not assign it themselves. | `_assets_public.tpl` is handed `$fdAssetBase` by its six includers, so read alone its href is unresolvable and C4's fail-closed rule would fire on the one file whose job is linking the CMS stylesheets. In-file assignment always wins; an unresolvable assignment seeds nothing. It cuts the other way too — point one of those names at `style/` anywhere and every partial consuming it starts reporting. |
+| **R8** | **The CMS PHP and JS sources are in scope too**, for C7 only: `controller.<C>*.php` for each CMS controller (so `controller.CmsAjax.php` comes along without a second list), `model.Cms*.php` + `model.FrontDoor.php`, `class.Cms*.php`, and `frontdoor/**.js` / `cms/**.js`. | C1–C6 read `.css`, `.tpl` and `.theme` — every file that can *declare* CSS, and none that can *inject* it. A verifier put a stylesheet `<link>` and a `<style>#theme_container{}</style>` onto a live org-site page from two directions — `frontdoor/js/frontdoor.js` via `document.head.insertAdjacentHTML()`, and `controller.Site.php` echoing the markup — and **both** this gate and the layering gate returned exit 0. The blind set was **31 files**. |
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
@@ -225,6 +226,67 @@ now **derived**:
   the same path shapes C4-link does. If you restructure that gate, expect to
   teach `bin/check-css-boundaries.sh` the new shape.
 
+- **C7 — CMS PHP and CMS JS may not inject CSS into a page.** Scope: R8's 31
+  files. **One flat rule, no tiers, no exemption list.** CSS enters a CMS page
+  through three sanctioned channels — the two link partials, `cms/_shell_top.tpl`
+  for the admin, and `default.theme`'s `$IsOrgSite` gate — and it *lives* in a
+  stylesheet under `frontdoor/css/` or `cms/css/`. A controller, a model, a
+  domain class and a script bundle are none of those on **either** tier, which
+  is why C7 needs no public/admin split. Reported:
+  - a **`<style>` element**, however assembled — the literal tag, a tag built by
+    string concatenation (`'<sty' . 'le>'`, `'<sty' + 'le>'`), and the DOM
+    spellings that never write the tag at all: `document.createElement('style')`,
+    `new CSSStyleSheet()` + `insertRule`, `adoptedStyleSheets`;
+  - a **stylesheet `<link>`** — a `<link>` that *has* an `href` and whose `rel`
+    is not one of the known non-stylesheet rels, plus
+    `document.createElement('link')`;
+  - an **`@import`**;
+  - an **ORK application-shell selector** (`#theme_container`, `#newmenu`,
+    `.ork-`) in the spellings C1 reads — attribute selectors and CSS identifier
+    escapes included — plus the *markup* spellings C1 also reads
+    (`id="theme_container"`, a `class` token starting `ork-`) and the two DOM
+    ones (`classList.add('ork-…')`, `getElementById('theme_container')`);
+  - a **definition in the CRM's `--ork-*` namespace** in the spellings C2 reads,
+    plus the JS one C2 has no reason to know: `style.setProperty('--ork-x', v)`;
+  - a **CRM stylesheet name or a `style/<…>.css` path shape**, so an href
+    assembled into a variable is caught one step before it reaches a tag.
+
+  **Why this is not a false-positive engine — the whole difficulty.** Three
+  files in scope handle CSS legitimately, as *data*: `class.CmsThemeTokens.php`
+  **builds** CSS text (`Block()`, `ToCss()`, `ToRootCss()`),
+  `class.CmsSanitizer.php` inspects and **strips** style attributes and
+  `<style>`/`<link>` tags out of authored content, and `class.CmsTheme.php`
+  passes that CSS around. The distinction drawn is **literal emission, not
+  mention**, and it is drawn by *choosing the trigger set* rather than by
+  exempting paths:
+
+  | Trigger | What it deliberately does **not** match |
+  |---|---|
+  | the tag **openers** `<style` / `<link` | the tag **names** — `CmsSanitizer`'s blocklist is `array('script', 'style', … 'link', …)`, bare names, and passes on its own merits |
+  | the CRM namespace `--ork-*` | the CMS namespaces `--fd-*` / `--cms-*` — `CmsThemeTokens` is a `--fd-*` factory end to end, and passes on its own merits |
+  | code, after comment stripping (PHP's `#`-to-end-of-line form included, for PHP sources only — in CSS `#` opens an id selector) | prose. The docblock in `CmsTheme.php` reading *"the `<style>` inner CSS for the active theme"* is documentation |
+  | a `<link>` **with an `href`** | the RSS `<link>` **element**, whose URL is its text content — `class.CmsPost.php` writes exactly that into the feed, and passes on its own merits |
+
+  **There is deliberately no path exemption list.** An exemption is a standing
+  hole that rots as the exempted file grows; a trigger set narrow enough that
+  the CSS-as-data classes never touch it does not. Verified: all 31 files in
+  scope report clean today, with no file named anywhere in the rule.
+
+  **Fail-closed where it cannot tell:** a `<link rel="<?= $rel ?>" href=…>`
+  whose `rel` is assembled at runtime is reported, because an unprovable `rel`
+  could be `stylesheet`. C7 deliberately does **not** resolve the `href` — for
+  these files *every* stylesheet link is a violation whatever it points at, so
+  there is nothing to resolve and nothing to be fail-open about. That is also
+  what lets it survive concatenation: `'<link rel="stylesheet" href="' . $u .
+  '">'` has its attribute values shredded by the PHP string quotes, so no
+  scanner can read the href out of it — but the attribute is demonstrably
+  *present*, and present is all C7 needs.
+
+  **Not covered, stated honestly:** CSS reached by a route that names none of
+  the above — a stylesheet URL read out of the database and handed to a template
+  that links it, say. Section 9 of `tests/cms-css/boundary_test.php` is the
+  runtime half.
+
 ### Which stylesheet a path names
 
 C4-link and C6 used to ask "is the literal `default/style/…css`, or one of three
@@ -255,10 +317,12 @@ Only the two vectors that actually make a browser fetch a stylesheet are read
 this way — a `<link>` whose `rel` could be one, and an `@import`. An `<img src>`,
 a `<script src>` and an `<a href>` are left alone; that narrowness is what keeps
 fail-closed from firing on the dynamic hrefs all over the CMS templates.
-**Not covered, stated honestly:** a stylesheet injected by JavaScript.
-`frontdoor/js/` is not scanned by this gate at all and no text scanner can
-follow it — `tests/cms-css/boundary_test.php` reads what a live surface actually
-serves, and is the backstop for that.
+A stylesheet injected by JavaScript, or echoed straight out of a controller,
+used to be out of reach here — C4 reads templates, and `frontdoor/js/` was not
+scanned by this gate at all. **R8 + C7** now bring the CMS PHP and JS sources
+into scope for exactly that. What no text scanner can follow is a URL that never
+appears as text in the tree; `tests/cms-css/boundary_test.php` reads what a live
+surface actually serves, and is the backstop for that.
 
 Comment text is stripped before the rules run, so discussing these patterns in
 prose — as this directory's files do constantly — is not a violation. The
@@ -350,6 +414,18 @@ off a running app and asserts on the HTML that is served:
    templates' inline scripts (gallery lightbox, parks map) are plain DOM, and
    `CmsSanitizer` strips `<script>` and every `on*` handler from authored
    content, so an author cannot reintroduce the dependency.
+9. **the scripts an org site is served inject no CSS** — every same-origin
+   `<script src>` it links **and** every inline `<script>` in its HTML is read,
+   and none may contain a `<style>`/`<link>` element built in the DOM, an
+   `@import`, a constructed stylesheet (`insertRule`, `adoptedStyleSheets`), a
+   CRM stylesheet name, a `style/` path, an ORK shell selector or an `--ork-*`
+   token. This is the **runtime mirror of C7**: sections 1–4 read the served
+   HTML, and a stylesheet a script appends *after load* is not in it. Scoped to
+   the org tier deliberately — the in-shell tier legitimately loads `orkui.js`,
+   1 MB of jQuery and CRM app code that manipulates styles constantly, and
+   asserting on bytes we do not own would be noise. One assertion per script
+   rather than one per spelling, so a clean run does not bury the rest of the
+   output; a failure names every spelling that hit.
 
 It is **safe in any environment**: if nothing answers it prints
 `SKIP: app not reachable …` and exits 0, and it skips a surface (with a note)

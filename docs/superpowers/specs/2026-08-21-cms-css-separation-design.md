@@ -136,6 +136,29 @@ stylesheet was born with no coverage at all. The scope rules now are:
   it works in the dangerous direction too: point one of those names at `style/`
   anywhere in the tree and every partial that consumes it starts reporting.
 
+- **R8** **The CMS PHP and JS sources are in scope for C7.** R1–R7 scope `.css`,
+  `.tpl` and `.theme` — every file that can *declare* CSS, and none of the files
+  that can *inject* it. A verifier put a stylesheet `<link>` and a
+  `<style>#theme_container{}</style>` onto a live org-site page from two
+  directions — `frontdoor/js/frontdoor.js` via
+  `document.head.insertAdjacentHTML()`, and `orkui/controller/controller.Site.php`
+  echoing the markup — and **both** this gate and the layering gate returned exit
+  0. The blind set was 31 files; it is now derived the same way everything else
+  here is:
+
+  | Derived from | Files |
+  |---|---|
+  | `CMS_CONTROLLERS`, as `controller.<C>*.php` | `controller.{Site,Page,Blog,Cms}.php` + `controller.CmsAjax.php` — the `*` means an Ajax sibling needs no second list |
+  | the `Cms` prefix on the model membrane | `orkui/model/model.Cms*.php` |
+  | the `Cms` prefix in the domain layer | `system/lib/ork3/class.Cms*.php` |
+  | R1, extended to scripts | `frontdoor/**.js`, `cms/**.js` |
+  | **named explicitly** | `orkui/model/model.FrontDoor.php` — the front door is rendered by the **base** controller, so its membrane carries no `Cms`/`Site` prefix to derive from. The second manual step in the design, beside `CMS_CONTROLLERS`. |
+
+  Only C7 runs on these files. C1–C6 are about how CSS is *declared and linked*
+  in stylesheets and templates, and applying them to PHP source would be a
+  category error.
+
+
 - **C0** The scanner must be able to parse the file. A comment opener that is
   never closed leaves every later line unscanned, so it is reported instead of
   passing silently. See "Comment handling" below. A symlink in an in-scope path
@@ -260,6 +283,54 @@ stylesheet was born with no coverage at all. The scope rules now are:
   an org-reachable branch whose destination it cannot prove. Scope:
   `orkui/template/default/*.theme`.
 
+- **C7** **CMS PHP and CMS JS may not inject CSS into a page.** Scope: R8.
+  One flat rule, no tiers, no exemption list. CSS enters a CMS page through
+  three sanctioned channels — the two link partials, `cms/_shell_top.tpl` for
+  the admin, and `default.theme`'s `$IsOrgSite` gate — and it *lives* in a
+  stylesheet under `frontdoor/css/` or `cms/css/`. A controller, a model, a
+  domain class and a script bundle are none of those on either tier, which is
+  why C7 needs no public/admin split: there is no legitimate case anywhere in
+  the set. Reported: a `<style>` element however assembled (the literal tag, a
+  tag built by string concatenation `'<sty' . 'le>'` / `'<sty' + 'le>'`, and the
+  DOM spellings that never write a tag — `createElement('style')`,
+  `new CSSStyleSheet()` + `insertRule`, `adoptedStyleSheets`); a stylesheet
+  `<link>` (one that *has* an `href` and whose `rel` is not a known
+  non-stylesheet rel, plus `createElement('link')`); an `@import`; an ORK
+  application-shell selector in the spellings C1 reads plus the markup ones
+  (`id="theme_container"`, a `class` token starting `ork-`) and the DOM ones
+  (`classList.add('ork-…')`, `getElementById('theme_container')`); a definition
+  in the CRM's `--ork-*` namespace in the spellings C2 reads plus
+  `style.setProperty('--ork-x', v)`; and a CRM stylesheet name or a
+  `style/<…>.css` path shape, so an href assembled into a variable is caught one
+  step before it reaches a tag.
+
+  **The difficulty is false positives, and it is answered by the trigger set,
+  not by an exemption list.** Three files in scope handle CSS legitimately, as
+  *data*: `class.CmsThemeTokens.php` **builds** CSS text (`Block()`, `ToCss()`,
+  `ToRootCss()`), `class.CmsSanitizer.php` inspects and **strips** style
+  attributes and `<style>`/`<link>` tags out of authored content, and
+  `class.CmsTheme.php` passes that CSS around. The distinction drawn is
+  **literal emission, not mention**:
+
+  | Trigger | What it deliberately does **not** match |
+  |---|---|
+  | the tag **openers** `<style` / `<link` | the tag **names**. `CmsSanitizer`'s blocklist is `array('script', 'style', … 'link', …)` — bare names — and passes on its own merits |
+  | the CRM namespace `--ork-*` | the CMS namespaces `--fd-*` / `--cms-*`. `CmsThemeTokens` is a `--fd-*` factory end to end, and passes on its own merits |
+  | code, after comment stripping — PHP's `#`-to-end-of-line form included, for PHP sources only, since `#` opens an id selector in CSS and a private field in JS | prose. `CmsTheme.php`'s docblock *"the `<style>` inner CSS for the active theme"* is documentation |
+  | a `<link>` **with an `href`** | the RSS `<link>` **element**, whose URL is its text content. `class.CmsPost.php` writes exactly that into the feed, and passes on its own merits |
+
+  An exemption is a standing hole that rots as the exempted file grows; a
+  trigger set narrow enough that the CSS-as-data classes never touch it does
+  not. **Verified: all 31 files report clean, with no file named anywhere in the
+  rule.** C7 is fail-closed on an unprovable `rel` (it could be `stylesheet`)
+  and deliberately does **not** resolve the `href`: for these files every
+  stylesheet link is a violation whatever it points at, which is also what lets
+  it survive concatenation — `'<link rel="stylesheet" href="' . $u . '">'` has
+  its attribute values shredded by the PHP string quotes, so no scanner can read
+  the href out of it, but the attribute is demonstrably *present*, and present
+  is all C7 needs.
+
+
 **Which stylesheet a path names.** C4-link and C6 originally asked "is the
 literal `default/style/…css`, or one of three basenames, on this line?". A
 verifier defeated both with spellings that are **idiomatic in this codebase**,
@@ -297,10 +368,14 @@ what keeps the dynamic hrefs all over the CMS templates — and `default.theme`'
 own dynamic `rel="canonical"` / `rel="alternate"` links — from reading as
 violations. A coarse name/shape net still runs over the whole (concatenation-
 joined) line, for spellings that never reach a `<link>` at all.
-*Not covered, stated honestly:* a stylesheet injected by JavaScript.
-`frontdoor/js/` is not in this gate's scope and no text scanner can follow it;
-`tests/cms-css/boundary_test.php` reads what a live surface actually serves and
-is the backstop for that.
+A stylesheet injected by JavaScript, or echoed straight out of a controller,
+used to be out of reach here — C4 reads templates, and `frontdoor/js/` was not in
+this gate's scope at all. **R8 + C7** now cover the CMS PHP and JS sources for
+exactly that, and section 9 of `tests/cms-css/boundary_test.php` is the runtime
+mirror: it reads every same-origin `<script src>` and inline `<script>` an org
+site is actually served and asserts none of them injects CSS. *Not covered,
+stated honestly:* a stylesheet URL that never appears as text in the tree — read
+out of the database, say — for which the runtime test remains the only backstop.
 
 **Case and line endings.** Two normalisations run before any rule sees a line,
 and both close holes a developer could open without trying to. **CR is
@@ -429,6 +504,7 @@ Measured across `67ff338d..HEAD` (Phases 1–3), before → after:
 | Public-side files naming an ORK selector | 3 (`frontdoor.css`, `_park_strip.tpl`, `_index.tpl`) | **0** — 22 references now sit in `orkshell-interop.css` (exempt), 3 in `cms-base.css` (exempt), 2 remaining are prose in comments |
 | CMS public stylesheets | 2 (`frontdoor.css`, `orgsite.css`) | 6, split by surface, all cacheable |
 | CSS linting / hooks | none | stylelint 16 + `bin/check-css-duplication.php` + `bin/check-css-boundaries.sh` in pre-commit and pre-push |
+| Files the CSS gate can see | 0 of the 31 CMS PHP/JS sources — a `<link>` and a `<style>` injected from `frontdoor.js` and from `controller.Site.php` both scored exit 0 | **31 of 31** (R8/C7), plus section 9 of `boundary_test.php` reading the scripts a live org site serves |
 
 Also fixed along the way: the `--fd-*` defaults in `frontdoor.css` had drifted
 from `CmsThemeTokens::Defaults()`; they are realigned and
