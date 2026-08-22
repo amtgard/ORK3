@@ -5204,6 +5204,76 @@ class Report extends Ork3
             'charts' => array($qualOutcomeChart),
         );
 
+        // ====================================================================
+        // RELEASE 3.5.5 — Hydra  (Multi-Device Sessions)
+        // ====================================================================
+        // ork_session holds one row per live session and the login path prunes
+        // to three per player, so "current" counts read the table directly.
+        // user_agent stores a self-identified client label (Authorize `Client`
+        // field / X-ORK-Client header) when one was sent, else the browser UA.
+        $sessActive = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}session` WHERE expires > NOW()"
+        );
+        $sessPlayers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}session` WHERE expires > NOW()"
+        );
+        $sessMulti = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM (
+			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
+			     GROUP BY mundane_id HAVING COUNT(*) >= 2) m"
+        );
+        $sessNew30 = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}session` WHERE created >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+        );
+        // Client breakdown is labeled in PHP so the buckets match the session
+        // list in the account menu (nav_session_client_label in the theme).
+        $sessClientCounts = array();
+        $r = $this->db->query("SELECT user_agent FROM `{$p}session` WHERE expires > NOW()");
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $label = self::_rfuSessionClientLabel($r->user_agent);
+                $sessClientCounts[$label] = ($sessClientCounts[$label] ?? 0) + 1;
+            }
+        }
+        arsort($sessClientCounts);
+        $sessClientBreak = array();
+        foreach ($sessClientCounts as $label => $count) {
+            if (count($sessClientBreak) >= 9) {
+                $sessClientBreak['Other'] = ($sessClientBreak['Other'] ?? 0) + $count;
+                continue;
+            }
+            $sessClientBreak[$label] = $count;
+        }
+        $sessClientRows = array();
+        foreach ($sessClientBreak as $label => $count) {
+            $sessClientRows[] = array('k' => $label, 'c' => $count);
+        }
+
+        $featSessions = array(
+            'key'         => 'multi_sessions',
+            'title'       => 'Multi-Device Sessions',
+            'description' => 'Up to three concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu.',
+            'kpis' => array(
+                $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
+                $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
+                $this->_rfuKpi('Players on 2+ devices', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players actually using the multi-device allowance', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Sign-ins (30 days)', $sessNew30, null, null, 'sessions created in the last 30 days'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-sessions-client', 'bar', 'Active sessions by client', $sessClientRows, 'Sessions'),
+            ),
+        );
+
+        $release355 = array(
+            'version' => '3.5.5',
+            'name'    => 'Hydra',
+            'date'    => '2026-08-22',
+            'blurb'   => 'Engine hardening and multi-device sessions: up to three concurrent sign-ins per player, session visibility with Log Out Everywhere, unified tables, and a broad regression-audit pass.',
+            'features' => array(
+                $featSessions,
+            ),
+        );
+
         $release354 = array(
             'version' => '3.5.4',
             'name'    => 'Walker',
@@ -6118,7 +6188,7 @@ class Report extends Ork3
                 'players_with_design'    => (int)$playersWithDesign,
                 'active_recommendations' => (int)$activeRecommendations,
             ),
-            'releases' => array($release354, $release353, $release352, $release351, $release350),
+            'releases' => array($release355, $release354, $release353, $release352, $release351, $release350),
         );
     }
 
@@ -6127,6 +6197,56 @@ class Report extends Ork3
      * The query MUST alias its scalar as `c`. Matches the file's $this->db
      * query/next idiom; Clear() first to drop stale PDO bindings.
      */
+    /**
+     * Bucket a session user_agent into a short client label. Mirrors
+     * nav_session_client_label() in the theme so the report's buckets match
+     * what players see in their account-menu session list.
+     */
+    private static function _rfuSessionClientLabel($ua)
+    {
+        $ua = (string)$ua;
+        if ($ua === '') {
+            return 'Unknown client';
+        }
+        if (stripos($ua, 'mork') === 0) {
+            return 'mORK';
+        }
+        if (stripos($ua, 'jsork') !== false) {
+            return 'jsork';
+        }
+        if (stripos($ua, 'curl') === 0) {
+            return 'API client (curl)';
+        }
+        if (stripos($ua, 'Mozilla') === false) {
+            return substr($ua, 0, 40);
+        }
+        $browser = 'Browser';
+        if (stripos($ua, 'Edg/') !== false) {
+            $browser = 'Edge';
+        } elseif (stripos($ua, 'OPR/') !== false) {
+            $browser = 'Opera';
+        } elseif (stripos($ua, 'Chrome/') !== false) {
+            $browser = 'Chrome';
+        } elseif (stripos($ua, 'Firefox/') !== false) {
+            $browser = 'Firefox';
+        } elseif (stripos($ua, 'Safari/') !== false) {
+            $browser = 'Safari';
+        }
+        $os = '';
+        if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) {
+            $os = 'iOS';
+        } elseif (stripos($ua, 'Android') !== false) {
+            $os = 'Android';
+        } elseif (stripos($ua, 'Macintosh') !== false) {
+            $os = 'Mac';
+        } elseif (stripos($ua, 'Windows') !== false) {
+            $os = 'Windows';
+        } elseif (stripos($ua, 'Linux') !== false) {
+            $os = 'Linux';
+        }
+        return $os !== '' ? "$browser on $os" : $browser;
+    }
+
     private function _rfuScalar($sql)
     {
         $this->db->Clear();
