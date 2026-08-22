@@ -5222,18 +5222,31 @@ class Report extends Ork3
 			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
 			     GROUP BY mundane_id HAVING COUNT(*) >= 2) m"
         );
-        // NOTE: no "sign-ins over time" KPI on purpose. Logout, Log Out
-        // Everywhere, and the three-session cap all DELETE rows, so counting
-        // surviving rows by created-date silently undercounts — and login is
-        // not otherwise recorded anywhere. An accumulating sign-in metric
-        // needs its own counter first.
+        // Accumulating sign-in counts come from ork_signin_tally (anonymous
+        // per-day/per-client counters bumped in CreateSession) — ork_session
+        // itself can't provide them, since logout / Log Out Everywhere / the
+        // three-session cap all DELETE rows.
+        $signins7 = $this->_rfuScalar(
+            "SELECT COALESCE(SUM(signins),0) AS c FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
+        );
+        $signins30 = $this->_rfuScalar(
+            "SELECT COALESCE(SUM(signins),0) AS c FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        );
+        $signinDayBreak = $this->_rfuBreakdown(
+            "SELECT DATE_FORMAT(day, '%b %e') AS k, SUM(signins) AS c
+			   FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+			  GROUP BY day ORDER BY day ASC"
+        );
         // Client breakdown is labeled in PHP so the buckets match the session
         // list in the account menu (nav_session_client_label in the theme).
         $sessClientCounts = array();
         $r = $this->db->query("SELECT user_agent FROM `{$p}session` WHERE expires > NOW()");
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
-                $label = self::_rfuSessionClientLabel($r->user_agent);
+                $label = ork_session_client_label($r->user_agent);
                 $sessClientCounts[$label] = ($sessClientCounts[$label] ?? 0) + 1;
             }
         }
@@ -5259,9 +5272,12 @@ class Report extends Ork3
                 $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
                 $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
                 $this->_rfuKpi('Players on 2+ devices', $sessMulti, $sessPlayers, $sessPlayers > 0 ? round(($sessMulti / $sessPlayers) * 100, 1) : null, 'signed-in players actually using the multi-device allowance', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Sign-ins (7 days)', $signins7, null, null, 'sessions created in the last 7 days — anonymous daily tally, no player attribution'),
+                $this->_rfuKpi('Sign-ins (30 days)', $signins30, null, null, 'sessions created in the last 30 days — anonymous daily tally, no player attribution'),
             ),
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-sessions-client', 'bar', 'Active sessions by client', $sessClientRows, 'Sessions'),
+                $this->_rfuChartFromBreakdown('rfu-signins-day', 'bar', 'Sign-ins per day (last 30 days, all clients)', $signinDayBreak, 'Sign-ins'),
             ),
         );
 
@@ -6198,56 +6214,6 @@ class Report extends Ork3
      * The query MUST alias its scalar as `c`. Matches the file's $this->db
      * query/next idiom; Clear() first to drop stale PDO bindings.
      */
-    /**
-     * Bucket a session user_agent into a short client label. Mirrors
-     * nav_session_client_label() in the theme so the report's buckets match
-     * what players see in their account-menu session list.
-     */
-    private static function _rfuSessionClientLabel($ua)
-    {
-        $ua = (string)$ua;
-        if ($ua === '') {
-            return 'Unknown client';
-        }
-        if (stripos($ua, 'mork') === 0) {
-            return 'mORK';
-        }
-        if (stripos($ua, 'jsork') !== false) {
-            return 'jsork';
-        }
-        if (stripos($ua, 'curl') === 0) {
-            return 'API client (curl)';
-        }
-        if (stripos($ua, 'Mozilla') === false) {
-            return substr($ua, 0, 40);
-        }
-        $browser = 'Browser';
-        if (stripos($ua, 'Edg/') !== false) {
-            $browser = 'Edge';
-        } elseif (stripos($ua, 'OPR/') !== false) {
-            $browser = 'Opera';
-        } elseif (stripos($ua, 'Chrome/') !== false) {
-            $browser = 'Chrome';
-        } elseif (stripos($ua, 'Firefox/') !== false) {
-            $browser = 'Firefox';
-        } elseif (stripos($ua, 'Safari/') !== false) {
-            $browser = 'Safari';
-        }
-        $os = '';
-        if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) {
-            $os = 'iOS';
-        } elseif (stripos($ua, 'Android') !== false) {
-            $os = 'Android';
-        } elseif (stripos($ua, 'Macintosh') !== false) {
-            $os = 'Mac';
-        } elseif (stripos($ua, 'Windows') !== false) {
-            $os = 'Windows';
-        } elseif (stripos($ua, 'Linux') !== false) {
-            $os = 'Linux';
-        }
-        return $os !== '' ? "$browser on $os" : $browser;
-    }
-
     private function _rfuScalar($sql)
     {
         $this->db->Clear();

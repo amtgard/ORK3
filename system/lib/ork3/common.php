@@ -80,6 +80,58 @@ function decodeBase64UrlSafe($value)
 
 // Sign a URL with a given crypto key
 // Note that this URL must be properly URL-encoded
+/**
+ * Bucket a session user_agent / client label into a short display label
+ * ("Chrome on Mac", "jsork", "mORK", ...). Single source of truth for the
+ * anonymous sign-in tally (Authorization::CreateSession), the Release
+ * Feature Utilization report, and mirrored by nav_session_client_label()
+ * in the theme for the account-menu session list.
+ */
+function ork_session_client_label($ua)
+{
+    $ua = (string)$ua;
+    if ($ua === '') {
+        return 'Unknown client';
+    }
+    if (stripos($ua, 'mork') === 0) {
+        return 'mORK';
+    }
+    if (stripos($ua, 'jsork') !== false) {
+        return 'jsork';
+    }
+    if (stripos($ua, 'curl') === 0) {
+        return 'API client (curl)';
+    }
+    if (stripos($ua, 'Mozilla') === false) {
+        return substr($ua, 0, 40);
+    }
+    $browser = 'Browser';
+    if (stripos($ua, 'Edg/') !== false) {
+        $browser = 'Edge';
+    } elseif (stripos($ua, 'OPR/') !== false) {
+        $browser = 'Opera';
+    } elseif (stripos($ua, 'Chrome/') !== false) {
+        $browser = 'Chrome';
+    } elseif (stripos($ua, 'Firefox/') !== false) {
+        $browser = 'Firefox';
+    } elseif (stripos($ua, 'Safari/') !== false) {
+        $browser = 'Safari';
+    }
+    $os = '';
+    if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) {
+        $os = 'iOS';
+    } elseif (stripos($ua, 'Android') !== false) {
+        $os = 'Android';
+    } elseif (stripos($ua, 'Macintosh') !== false) {
+        $os = 'Mac';
+    } elseif (stripos($ua, 'Windows') !== false) {
+        $os = 'Windows';
+    } elseif (stripos($ua, 'Linux') !== false) {
+        $os = 'Linux';
+    }
+    return $os !== '' ? "$browser on $os" : $browser;
+}
+
 function signUrl($myUrlToSign, $privateKey)
 {
     return $myUrlToSign;
