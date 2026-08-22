@@ -13,9 +13,18 @@
  * ========================================================================== */
 
 /* Warning/accent token used by Cms_media.tpl ("In use" label) and note-live
-   surfaces. Defined globally so it isn't left undefined (bad contrast). */
-:root { --ork-warn: #9c4221; }
-html[data-theme="dark"] { --ork-warn: #fbd38d; }
+   surfaces. Scoped to the admin shell rather than :root — this is a CMS token,
+   and a CMS stylesheet must not define into the CRM's --ork-* namespace
+   (bin/check-css-boundaries.sh C2). */
+.cms-shell,
+.cms-wrap {
+    --cms-warn: #9c4221;
+}
+
+html[data-theme="dark"] .cms-shell,
+html[data-theme="dark"] .cms-wrap {
+    --cms-warn: #fbd38d;
+}
 
 .cms-wrap {
     /* Admin brand accent tokens, scoped to the admin shell */
@@ -23,9 +32,11 @@ html[data-theme="dark"] { --ork-warn: #fbd38d; }
     --cms-gold-deep: #caa23a;
     --cms-navy: #0b1120;
     --cms-navy2: #121a30;
-    /* #93: the global #newmenu navbar is position:fixed at 48px tall (see orkui.css).
-       Sticky elements below must clear it or they hide behind it on scroll. */
-    --ork-header-h: 48px;
+    /* The global #newmenu navbar is position:fixed at 48px tall (orkui.css).
+       Sticky elements below must clear it or they hide behind it on scroll.
+       Named --cms-* because a CMS stylesheet must not define into the CRM's
+       --ork-* namespace, even for a value the CRM originates. */
+    --cms-header-h: 48px;
 
     max-width: 1180px;
     margin: 0 auto;
@@ -124,7 +135,7 @@ html[data-theme="dark"] { --ork-warn: #fbd38d; }
     width: 220px;
     align-self: flex-start;
     position: sticky;
-    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    top: calc(var(--cms-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -753,7 +764,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-meta-panel {
     position: sticky;
-    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    top: calc(var(--cms-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
     border: 1px solid var(--ork-border);
     border-radius: 10px;
     background: var(--ork-card-bg);
@@ -1085,10 +1096,10 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-note a { color: var(--cms-gold-deep, #caa23a); font-weight: 600; }
 /* #45: "edits to a published page go live immediately" — amber warning variant. */
 .cms-note-live {
-    border-left-color: var(--ork-warn, #b8860b);
+    border-left-color: var(--cms-warn, #b8860b);
     background: rgba(184, 134, 11, .08);
 }
-.cms-note-live > i { color: var(--ork-warn, #b8860b); }
+.cms-note-live > i { color: var(--cms-warn, #b8860b); }
 html[data-theme="dark"] .cms-note-live { background: rgba(184, 134, 11, .14); }
 
 /* dynamic-block info card (icon + one-line live description) */
@@ -1596,7 +1607,7 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
 
 .cms-editbar {
     position: sticky;
-    top: var(--ork-header-h, 48px); /* #93: was 0 — hid behind the fixed 48px navbar */
+    top: var(--cms-header-h, 48px); /* #93: was 0 — hid behind the fixed 48px navbar */
     z-index: 30;
     display: flex;
     align-items: center;

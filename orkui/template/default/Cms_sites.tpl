@@ -52,7 +52,6 @@ $fmtDate = function ($raw) {
 
 $totalSites = count($kSites) + count($pSites);
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <style>
 /* ---- CMS Sites overview (scoped). Dark mode via html[data-theme="dark"]. ---- */

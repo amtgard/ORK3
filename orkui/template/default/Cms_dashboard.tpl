@@ -97,7 +97,6 @@ $dashSiteAdminTerm = 'a site administrator';
 $dashOrgNoun      = trim((string)($CmsScopeNoun ?? ''));
 $dashOrgNounLower = ($dashOrgNoun !== '') ? strtolower($dashOrgNoun) : 'site';
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <?php // Dashboard-specific styling (.cms-dash-*/.cms-sitecard-*) lives in the
       // shared, cacheable cms-admin.css (loaded above) — no per-render inline block. ?>

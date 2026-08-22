@@ -100,7 +100,6 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
     <?php
 };
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <style>
 /* Navigation manager — small layout tweaks on top of cms-admin.css. */

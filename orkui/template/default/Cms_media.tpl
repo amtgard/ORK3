@@ -21,7 +21,6 @@ $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <style>
 /* ---- Media-page styling (reuses .cms-media-* tile tokens; dark-mode via vars) ---- */
@@ -57,7 +56,7 @@ $h = function ($v) {
 .cms-media-card-alt.cms-media-noalt { font-style: italic; }
 .cms-media-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .cms-media-card-usage { font-size: 11px; color: var(--ork-text-muted); margin-top: 6px; min-height: 1em; }
-.cms-media-card-usage.cms-media-inuse { color: var(--ork-warn, #b8860b); font-weight: 600; }
+.cms-media-card-usage.cms-media-inuse { color: var(--cms-warn, #b8860b); font-weight: 600; }
 /* Per-card bulk-select checkbox (top-left overlay on the thumb) */
 .cms-media-card-sel {
     position: absolute; top: 7px; left: 7px; z-index: 2;

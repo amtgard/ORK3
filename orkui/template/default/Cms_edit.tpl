@@ -75,7 +75,6 @@ foreach ($catalog as $c) {
     $catalogLabels[$c['type']] = $c['label'];
 }
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */

@@ -78,6 +78,10 @@ window.CMS_SCOPE = <?= json_encode($shScopeSel, JSON_HEX_TAG) ?>;
 window.CMS_UIR = <?= json_encode(UIR, JSON_HEX_TAG) ?>;
 window.CMS_CAPS = <?= json_encode($shCmsCaps, JSON_HEX_TAG) ?>;
 </script>
+<?php // Shared OGRE admin stylesheet — one source of truth for every admin
+      // surface. Loaded HERE rather than in each of the nine page templates,
+      // which previously hand-rolled this link and its cache-buster. ?>
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/cms/css/cms-admin.css?v=<?= filemtime(__DIR__ . '/css/cms-admin.css') ?>">
 <?php // Shared CMS admin helpers (CmsAdmin.toast/.modal/.post) — one source of
       // truth for the toast, modal controller, and CSRF-aware urlencoded POST
       // that every CMS surface uses. Loaded ONCE here so every page gets it. ?>

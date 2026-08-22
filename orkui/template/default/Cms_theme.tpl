@@ -131,7 +131,6 @@ $cmsActions = '';
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
 <div class="theme-editor">
 

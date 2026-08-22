@@ -52,7 +52,6 @@ $h = function ($v) {
 // so navigating into an editor/preview stays in the current org scope.
 $scopeQ = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <?php

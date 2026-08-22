@@ -33,7 +33,6 @@ $h = function ($v) {
 // Active scope query ('&scope=k:5' or '') threaded onto intra-admin links.
 $scopeQ = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <?php
