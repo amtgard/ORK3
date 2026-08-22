@@ -1,0 +1,84 @@
+/* ============================================================
+ * cms-base.css — minimal global base for STANDALONE public CMS org sites.
+ *
+ * Loaded INSTEAD of the CRM's tokens.css + orkui.css when default.theme is
+ * rendering with $IsOrgSite set (Controller_Site). It supplies only the global
+ * element normalization a public marketing site genuinely needs; everything
+ * visual comes from frontdoor.css / orgsite.css / blocks.css scoped under
+ * .fd-page, and from the per-org theme tokens injected as <style id="fd-theme-tokens">.
+ *
+ * DO NOT add component styling here. This file is a base, not a stylesheet.
+ * DO NOT reference #theme_container, #newmenu or any .ork-* class beyond the
+ * single container-neutralizing rule below — bin/check-css-boundaries.sh (C1)
+ * rejects it.
+ *
+ * Every rule here is deliberate; see the plan's Task 1.1 table for the
+ * orkui.css rule each one replaces (or intentionally omits).
+ * ============================================================ */
+
+/* Horizontal-overflow guard. Clamp <html> ONLY — clamping body as well produces
+   the duplicate-scrollbar bug. Body uses overflow-x:clip so a wide descendant is
+   contained without creating a second scroll container. */
+html {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow-x: clip;
+    background: var(--fd-bg, #ffffff);
+    color: var(--fd-text, #1a2236);
+    font-family: var(--fd-font-body, system-ui, -apple-system, sans-serif);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* default.theme always emits #theme_container, including on standalone org
+   sites. Without orkui.css it is unstyled, which is what we want — but state
+   the full-bleed intent explicitly rather than relying on the absence of a
+   rule, so a future orkui.css change can never reach in and re-inset it. */
+#theme_container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+}
+
+/* Media never overflows its column. */
+img,
+svg,
+video,
+canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+/* iOS zooms the viewport when a focused control's text is under 16px. Carried
+   over from orkui.css:2180 — the one global form rule an org site still needs
+   (contact/RSVP forms inside authored pages). */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="date"],
+select,
+textarea {
+    font-size: 16px;
+}
+
+/* The browser's own dark-surface hinting for form controls and scrollbars.
+   orkui.css supplied this implicitly via its dark-mode block; org sites need it
+   stated. */
+html[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+}
