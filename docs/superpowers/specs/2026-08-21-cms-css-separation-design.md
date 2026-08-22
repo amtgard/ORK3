@@ -168,6 +168,33 @@ without a repo-wide reformat. It runs on pre-push as well but is **advisory**:
 it never blocks, and it is skipped when `node_modules/.bin/stylelint` is absent
 so a fresh clone that has not run `npm install` can still push.
 
+### The duplication ratchet (`bin/check-css-duplication.php`)
+
+stylelint has no rule for the defect this directory actually accumulates: a
+duplicate declaration **body** — N different selectors carrying byte-identical
+declarations, one component copied N times under N class prefixes. `lint:css`
+therefore also runs `bin/check-css-duplication.php`, which groups rules by
+**(at-rule context, normalized declaration body)** and enforces two budgets set
+to the count on the day they were last measured:
+
+| Budget | Today | Counts |
+|---|---|---|
+| `MAX_GROUPS_2PLUS` | 22 | duplicate bodies with ≥ 2 declarations — the real DRY signal |
+| `MAX_GROUPS_ANY` | 78 | every duplicate body, single-declaration coincidences included |
+
+Duplication may fall, never rise. The at-rule context is the part that is easy
+to get wrong — two identical bodies in two *different* `@media` blocks are not
+duplicates and cannot be collapsed — and the comment stripper is string-aware so
+a `content: "/*"` cannot blind it. Re-baseline with
+`npm run lint:css:dupes:report` and edit the two constants at the top of the
+script, in the same commit as the change that moved them.
+
+Proven live in an isolated copy of the tree: a new 2-declaration duplicate
+fails both budgets, a new 1-declaration duplicate fails the any-size budget, the
+same body in two different `@media` contexts correctly does **not** count, the
+same body in one `@media` context does, a reflowed/re-cased copy still matches,
+and duplication placed after a `content: "/*"` string is still seen.
+
 ## What changed
 
 Measured across `67ff338d..HEAD` (Phases 1–3), before → after:
@@ -180,7 +207,7 @@ Measured across `67ff338d..HEAD` (Phases 1–3), before → after:
 | Inline block CSS in templates | — | **714 lines deleted**, 37 re-inserted |
 | Public-side files naming an ORK selector | 3 (`frontdoor.css`, `_park_strip.tpl`, `_index.tpl`) | **0** — 22 references now sit in `orkshell-interop.css` (exempt), 3 in `cms-base.css` (exempt), 2 remaining are prose in comments |
 | CMS public stylesheets | 2 (`frontdoor.css`, `orgsite.css`) | 6, split by surface, all cacheable |
-| CSS linting / hooks | none | stylelint 16 + `bin/check-css-boundaries.sh` in pre-commit and pre-push |
+| CSS linting / hooks | none | stylelint 16 + `bin/check-css-duplication.php` + `bin/check-css-boundaries.sh` in pre-commit and pre-push |
 
 Also fixed along the way: the `--fd-*` defaults in `frontdoor.css` had drifted
 from `CmsThemeTokens::Defaults()`; they are realigned and

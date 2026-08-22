@@ -154,8 +154,10 @@ Both change rendering.
 bin/check-css-boundaries.sh --all      # audit every tracked file in scope
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
 bin/check-css-boundaries.sh --files a.css b.tpl
-npm run lint:css                       # stylelint + the tab-indent check
+npm run lint:css                       # stylelint + tab-indent check + duplication ratchet
 npm run lint:css:fix                   # autofix what stylelint can
+npm run lint:css:dupes:report          # list every duplicate group, never fails
+bin/check-css-duplication.php -v       # the same list, direct
 bin/check-layering.sh --all            # the PHP layering gate, for comparison
 ```
 
@@ -166,6 +168,46 @@ but is advisory and never blocks. Deliberate exception, shared by both gates:
 ORK3_ALLOW_LAYER_VIOLATION=1 git commit …
 ORK3_ALLOW_LAYER_VIOLATION=1 git push …
 ```
+
+## The duplication ratchet
+
+stylelint has `no-duplicate-selectors` and
+`declaration-block-no-duplicate-properties`, but **no rule for a duplicate
+declaration *body***: N different selectors carrying byte-identical
+declarations, i.e. one component copied N times under N class prefixes. That is
+the defect this directory actually accumulates — the feed-block family
+(`.ko-*`, `.pm-*`, `.pe-*`, `.ke-*`, `.bf-*`, `.kp-*`, `.kpm-*`) is one
+component rendered by seven block templates — and it was invisible to the gate
+until `bin/check-css-duplication.php` landed.
+
+It groups rules by **(at-rule context, normalized declaration body)**. The
+at-rule context is the part that is easy to get wrong: two rules with the same
+body inside two *different* `@media` blocks are not duplicates and cannot be
+collapsed onto one selector list. Its comment stripper is string-aware, so a
+`content: "/*"` cannot blind it to everything below.
+
+`npm run lint:css` enforces two budgets, both set to the count on the day they
+were last measured, so duplication can fall but not rise:
+
+| Budget | Today | What it counts |
+|---|---|---|
+| `MAX_GROUPS_2PLUS` | **22** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
+| `MAX_GROUPS_ANY` | **78** | every duplicate body, single-declaration coincidences included |
+
+Both numbers live as constants at the top of `bin/check-css-duplication.php`.
+**To re-baseline**: run `npm run lint:css:dupes:report`, take the two printed
+counts, edit the two constants, and say why in the same commit. Lower them
+freely after a cleanup — that is the ratchet tightening. Do not raise one just
+to get a commit through.
+
+**How to collapse a group**: selector grouping, never a class rename — block
+templates and authored pages depend on the existing names. Put the selectors on
+one rule at the position of the *first* member, and check two traps: members in
+different at-rule contexts cannot share a rule at all, and the grouped rule must
+still sit **after** any base rule it overrides at the same specificity, which is
+not always the first member's position. (The 820px one-column collapse in
+`blocks.css` is exactly that case — it sits at the `.pe-grid` copy, not the
+earlier `.pm-grid` one, because it has to follow the base grid rule.)
 
 ## Conventions
 
