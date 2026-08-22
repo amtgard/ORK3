@@ -50,6 +50,12 @@ foreach ($fdBlocks as $__b) {
         break;
     }
 }
+
+// F1 — opt into the blog CSS layer only in the modes that can emit blog markup.
+// 'blog' renders org_blog_index.tpl and 'post' renders the org post article;
+// home / page / comingsoon / notfound never do, so they no longer download
+// blog.css (6,219 B) for 0 matched selectors.
+$fdWantBlog = ($siteMode === 'blog' || $siteMode === 'post');
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/orgsite.css?v=<?= @filemtime($fdDir . 'css/orgsite.css') ?>">

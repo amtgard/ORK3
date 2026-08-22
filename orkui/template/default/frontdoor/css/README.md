@@ -22,17 +22,35 @@ Design: `docs/superpowers/specs/2026-08-21-cms-css-separation-design.md`
 
 ## Load order (it is load-bearing)
 
-`frontdoor.css` → `blocks.css` → `blog.css` → then `orgsite.css` (standalone org
-sites) or `orkshell-interop.css` (in-shell surfaces). `blocks.css` and `blog.css`
-were split off the end of `frontdoor.css` and several of their rules win
-same-specificity ties against it. Do not reorder.
+`frontdoor.css` → `blocks.css` → `blog.css` (when linked at all — see the blog
+opt-in below) → then `orgsite.css` (standalone org sites) or
+`orkshell-interop.css` (in-shell surfaces). `blocks.css` and `blog.css` were
+split off the end of `frontdoor.css` and several of their rules win
+same-specificity ties against it. Do not reorder; `blog.css` stays last of the
+three.
 
 Two partials emit the links — **add a stylesheet there, not in a page template**:
 
-- `frontdoor/_assets_public.tpl` — `frontdoor.css`, `blocks.css`, `blog.css`, in
-  that order. Safe on every public CMS surface, standalone org sites included.
-  Included by `_index.tpl`, `Site_shell.tpl`, `Page_view.tpl`, `Blog_index.tpl`,
-  `Blog_post.tpl`, `Cms_preview.tpl`.
+- `frontdoor/_assets_public.tpl` — `frontdoor.css`, then `blocks.css`, then
+  `blog.css` **only if the including surface opted in**. Safe on every public CMS
+  surface, standalone org sites included. Included by `_index.tpl`,
+  `Site_shell.tpl`, `Page_view.tpl`, `Blog_index.tpl`, `Blog_post.tpl`,
+  `Cms_preview.tpl`.
+  - **The blog opt-in**: set `$fdWantBlog = true;` *before* the include to get
+    `blog.css`. Only `Blog_index.tpl`, `Blog_post.tpl` and `Site_shell.tpl` in
+    its `blog`/`post` modes do — they are the only surfaces that emit `.blog-*` /
+    `.blogp-*` markup. Everywhere else the layer's 28 selectors matched 0 nodes,
+    so it was 6,219 bytes of dead CSS on every front-door, CMS-page and org-site
+    home/page view. The partial `unset()`s the flag so it cannot leak into a
+    later include on the same request. If you add blog markup to a new surface,
+    set the flag there or the page renders unstyled.
+  - **`blocks.css` is deliberately unconditional**, even though the front door
+    matched only 1 of its 198 selectors when measured. Block presence is
+    *authored content*, not a template property: any CMS-backed surface can start
+    rendering any block type the moment an author adds one, so linking it by
+    current content would un-style the next edit. It is one cacheable file shared
+    by all six public surfaces; the pre-refactor equivalent was inline CSS re-sent
+    in the HTML of every page view.
 - `frontdoor/_assets_inshell.tpl` — `orkshell-interop.css` only. Included by
   every one of the above **except `Site_shell.tpl`**, which must never link it
   (C4).
@@ -48,6 +66,10 @@ pair) directly, on the `$IsOrgSite` branch. `cms-admin.css` is linked by
 | Standalone org site `/k/{slug}` | `$IsOrgSite` | no | `cms-base.css` + public set + `orgsite.css`. **No** `orkui.css`, `tokens.css`, `cms-admin.css` or `orkshell-interop.css`. |
 | Front door `/`, CMS page, blog, CMS preview | `$IsFrontDoor` / `$IsCmsPage` | yes | `tokens.css` + `orkui.css` + public set + `orkshell-interop.css`. |
 | OGRE admin `Cms/*` | — | yes | `tokens.css` + `orkui.css` + `cms-admin.css`. |
+
+"Public set" = `frontdoor.css` + `blocks.css`, plus `blog.css` on the blog
+surfaces only (`Blog_index.tpl`, `Blog_post.tpl`, and `Site_shell.tpl` in
+`blog`/`post` mode).
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 

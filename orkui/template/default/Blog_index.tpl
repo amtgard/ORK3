@@ -41,6 +41,8 @@ $blogPageHref = function ($p) use ($blogTag) {
     return $href;
 };
 ?>
+<?php // Blog markup (.blog-*) renders here, so opt into the blog CSS layer. ?>
+<?php $fdWantBlog = true; ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 

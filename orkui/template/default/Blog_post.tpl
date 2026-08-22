@@ -23,6 +23,8 @@ $postFound = isset($post) && is_array($post) && !empty($post);
 $fdBlocks  = (isset($post_blocks) && is_array($post_blocks)) ? $post_blocks : [];
 $heroRef   = (isset($hero) && is_array($hero)) ? $hero : null;
 ?>
+<?php // Post markup (.blogp-*) renders here, so opt into the blog CSS layer. ?>
+<?php $fdWantBlog = true; ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 
