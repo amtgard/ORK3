@@ -50,13 +50,16 @@ Park card, `Controller_Kingdom`'s `CanAddPark` flag and the `ParkAjax` gate all
 offered the action to a kingdom monarch. Three of four layers agreed; the library
 was the outlier, so the modal always failed and created nothing.
 
-**Decision:** widened `CreatePark` to accept kingdom-level `AUTH_CREATE` on the
-target kingdom. Creating a park inside a kingdom you already run is not an
-escalation. Genuinely cross-kingdom operations (`TransferPark`, `MergeParks`)
-remain admin-only.
-
-**To revert:** restore the single `HasAuthority(..., AUTH_ADMIN, ...)` condition
-in `Park::CreatePark` and hide the card instead.
+**Decision (final, ratified by Ken 2026-08-22): park creation stays GLOBAL
+ADMIN ONLY.** Parks sign a contract with Amtgard International before they are
+created, so creation is an administrative act, not a kingdom one. An earlier
+revision of this branch widened `CreatePark` to kingdom-level `AUTH_CREATE`;
+that was reverted (`f23c01ba`), and the fix for the original mismatch is the
+opposite alignment: all four layers now agree on admin-only — `CreatePark`
+checks `HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE)`, `CanAddPark` mirrors it so
+monarchs never see the card, and the `ParkAjax` gate refuses non-admins before
+the library is reached. Cross-kingdom operations (`TransferPark`, `MergeParks`)
+remain admin-only as before.
 
 ### F003 — cross-scope player recruitment
 

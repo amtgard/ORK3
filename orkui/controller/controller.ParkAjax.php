@@ -482,8 +482,11 @@ class Controller_ParkAjax extends Controller
 
         if ($action === 'create') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-                echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
+            // Park creation is GLOBAL ADMIN ONLY -- parks sign a contract with
+            // Amtgard International before creation, so this gate must mirror
+            // Park::CreatePark and Controller_Kingdom::$CanAddPark exactly.
+            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Park creation is restricted to ORK administrators.']);
                 exit;
             }
             $this->load_model('Park');
