@@ -94,11 +94,18 @@ class Controller_Park extends Controller
             (string)($_ogPi['City'] ?? ''),
             (string)($_ogPi['Province'] ?? ''),
         ))));
-        $this->data['og'] = array(
+        $og = array(
             'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
             'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
                 . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
         );
+        // Park heraldry over the site logo when it exists (Ken's call).
+        if (!empty($_ogPi['HasHeraldry']) && !empty($this->data['park_info']['Heraldry']['Url'])) {
+            $og['image'] = (string)$this->data['park_info']['Heraldry']['Url'];
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
 
         $this->load_model('Weather');
         $this->data['park_weather']     = $this->Weather->for_park($park_id);

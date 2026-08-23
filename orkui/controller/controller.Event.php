@@ -239,10 +239,21 @@ class Controller_Event extends Controller
             }
             $ogDesc .= ($ogDesc !== '' ? ' — ' : '') . $ogBlurb;
         }
-        $this->data['og'] = array(
+        $og = array(
             'title'       => (string)($info['Name'] ?? 'Amtgard Event'),
             'description' => $ogDesc !== '' ? $ogDesc : 'An Amtgard event on the ORK.',
         );
+        // Event heraldry over the site logo when it exists (Ken's call).
+        // Same resolve pattern as the event page header.
+        if (!empty($info['HasHeraldry'])) {
+            $ogHerFile = Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event_id));
+            if ($ogHerFile !== '' && file_exists(DIR_EVENT_HERALDRY . $ogHerFile)) {
+                $og['image'] = HTTP_EVENT_HERALDRY . $ogHerFile . '?v=' . filemtime(DIR_EVENT_HERALDRY . $ogHerFile);
+                $og['image:width'] = '';
+                $og['image:height'] = '';
+            }
+        }
+        $this->data['og'] = $og;
 
         unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['event']);
         if (!empty($info['KingdomId'])) {

@@ -227,13 +227,20 @@ class Controller_Kingdom extends Controller
             exit;
         }
 
-        // Link-preview card (text-only; image policy pending).
+        // Link-preview card: kingdom heraldry over the site logo when it
+        // exists (Ken's call).
         $_ogKi = $this->data['kingdom_info']['Info']['KingdomInfo'];
-        $this->data['og'] = array(
+        $og = array(
             'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
             'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
                 . ' — parks, players, events and awards on the ORK.',
         );
+        if (!empty($_ogKi['HasHeraldry']) && !empty($this->data['kingdom_info']['HeraldryUrl']['Url'])) {
+            $og['image'] = (string)$this->data['kingdom_info']['HeraldryUrl']['Url'];
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
 
         $this->data['kingdom_officers']    = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
