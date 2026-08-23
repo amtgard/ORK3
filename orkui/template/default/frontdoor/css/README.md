@@ -5,7 +5,21 @@ hosted inside the ORK. Its CSS is kept physically separate from the CRM's so the
 two can evolve independently, and `bin/check-css-boundaries.sh` keeps it that
 way.
 
-Design: `docs/superpowers/specs/2026-08-21-cms-css-separation-design.md`
+Design: `docs/superpowers/specs/2026-08-21-cms-css-separation-design.md` — the
+**maintained** design document. `docs/superpowers/plans/2026-08-21-cms-css-separation.md`
+is committed beside it but is a **historical record**: the plan as written before
+execution, several of whose task-level assumptions were corrected while the work
+was done. Read the plan for how the work was approached; read the spec and this
+file for what the code does. When they disagree the plan is wrong by
+construction, and it is deliberately not updated to match — that would destroy
+the only record of what changed during execution.
+
+**Numbers in this file carry the command that produces them.** Anything marked
+*(content-dependent)* depends on authored CMS content or the local database, so
+the method is what to trust, not the snapshot; anything marked *(historical)* was
+a one-off verification and has no standing command. Bytes are `wc -c`, never
+rounded KB. Runtime figures were taken against local docker on `:19080` on
+2026-08-22.
 
 ## Where things live
 
@@ -18,7 +32,7 @@ Design: `docs/superpowers/specs/2026-08-21-cms-css-separation-design.md`
 | `frontdoor/css/blog.css` | Blog index + single post. |
 | `frontdoor/css/orgsite.css` | Per-org standalone site chrome. |
 | `frontdoor/css/orkshell-interop.css` | **The only** public-side file that may name an ORK selector. |
-| `cms/css/cms-admin.css` | OGRE admin. Renders inside the ORK shell, so it may *read* `--ork-*` (it does, ~269 times) but never define one. |
+| `cms/css/cms-admin.css` | OGRE admin. Renders inside the ORK shell, so it may *read* `--ork-*` (it does **334** times — `grep -o 'var(--ork-' orkui/template/default/cms/css/cms-admin.css \| wc -l`) but never define one. |
 
 ## Load order (it is load-bearing)
 
@@ -40,7 +54,8 @@ Two partials emit the links — **add a stylesheet there, not in a page template
     `blog.css`. Exactly two surfaces do — `Blog_index.tpl` and `Blog_post.tpl`,
     the **in-shell** blog. They are the only templates that emit `.blog-*` /
     `.blogp-*` markup. Everywhere else the layer's selectors matched 0 nodes, so
-    it was 6,811 bytes of dead CSS. The partial `unset()`s the flag so it cannot
+    it was **6,811 bytes** of dead CSS
+    (`wc -c < orkui/template/default/frontdoor/css/blog.css`). The partial `unset()`s the flag so it cannot
     leak into a later include on the same request. If you add blog markup to a
     new surface, set the flag there or the page renders unstyled.
   - **`Site_shell.tpl` does not opt in, in any mode.** An earlier pass narrowed
@@ -53,12 +68,21 @@ Two partials emit the links — **add a stylesheet there, not in a page template
     whole layer for zero matched nodes. `tests/cms-css/boundary_test.php` asserts
     this against the running app, in both directions.
   - **`blocks.css` is deliberately unconditional**, even though the front door
-    matched only 1 of its 198 selectors when measured. Block presence is
-    *authored content*, not a template property: any CMS-backed surface can start
-    rendering any block type the moment an author adds one, so linking it by
-    current content would un-style the next edit. It is one cacheable file shared
-    by all six public surfaces; the pre-refactor equivalent was inline CSS re-sent
-    in the HTML of every page view.
+    renders **one** block type today *(content-dependent — re-derive with
+    `curl -sL http://localhost:19080/ | grep -oE 'fdb-[a-z_]+' | sort -u`, which
+    prints `fdb-steps` and nothing else)*. Block presence is *authored content*,
+    not a template property: any CMS-backed surface can start rendering any block
+    type the moment an author adds one, so linking it by current content would
+    un-style the next edit. It is one cacheable file shared by all six public
+    surfaces; the pre-refactor equivalent was inline CSS re-sent in the HTML of
+    every page view.
+    **The price, which nobody had written down:** `blocks.css` is 50,579 B, and
+    it is the largest part of why the in-shell front door got **37,654 B heavier**
+    across this refactor (144,625 B → 182,279 B of linked CSS) while a standalone
+    org site got 52,953 B lighter. That is a known, accepted tradeoff, not a
+    regression — the full accounting, with commands, is under *The cost, stated*
+    in the design spec. Re-measure either side any time with the `css_bytes`
+    helper documented there.
 - `frontdoor/_assets_inshell.tpl` — `orkshell-interop.css` only. Included by
   every one of the above **except `Site_shell.tpl`**, which must never link it
   (C4).
@@ -95,11 +119,38 @@ now **derived**:
 | **R3** | Any `.css` under `orkui/template/` that is **not** CMS-owned is CRM CSS. | A stylesheet dropped at `orkui/template/default/probe-tween.css`, in `orkremental/`, or in `revised-frontend/style/` is guarded as CRM CSS (C5) immediately — C5 no longer watches `style/` specifically. |
 | **R4** | `--all` unions `git ls-files` with `git ls-files --others --exclude-standard` and names the untracked files it pulled in. | An audit can no longer report a clean tree while an unguarded, not-yet-`git add`ed template sits in the working copy. |
 | **R5** | A symlink in an in-scope path is **rejected** (C0), never scanned. | `git show :path` on a symlink returns the *link target*, one short line that passes every rule — so a staged symlink used to be a way to ship arbitrary CSS through the gate. |
-| **R6** | The **CRM stylesheet set is read off the filesystem** — every `.css` under `style/`, at any depth, plus `orkshell-interop.css`. | C4/C6 named three files and so were blind to `reports.css` (55 KB) and `custom.css`, which had been sitting in `style/` all along. A CRM stylesheet added tomorrow is covered the day it lands — and a CMS stylesheet must not reuse a CRM stylesheet's basename. |
+| **R6** | The **CRM stylesheet set is read off the filesystem** — every `.css` under `style/`, at any depth, plus `orkshell-interop.css`. | C4/C6 named three files and so were blind to `reports.css` (**36,674 B** — `wc -c < orkui/template/default/style/reports.css`) and `custom.css`, which had been sitting in `style/` all along. A CRM stylesheet added tomorrow is covered the day it lands — and a CMS stylesheet must not reuse a CRM stylesheet's basename. |
 | **R7** | **Asset-base seeds** are derived too: every in-scope file is scanned for `$name = HTTP_TEMPLATE\|DIR_TEMPLATE . '…'`, and a name the tree assigns a provable prefix to resolves to it in files that do not assign it themselves. | `_assets_public.tpl` is handed `$fdAssetBase` by its six includers, so read alone its href is unresolvable and C4's fail-closed rule would fire on the one file whose job is linking the CMS stylesheets. In-file assignment always wins; an unresolvable assignment seeds nothing. It cuts the other way too — point one of those names at `style/` anywhere and every partial consuming it starts reporting. |
 | **R8** | **The CMS PHP and JS sources are in scope too**, for C7 only. **One** derivation from `CMS_CONTROLLERS`, applied to every directory a CMS PHP source lives in: `controller.<C>*.php` and `trait.<C>*.php` in `orkui/controller/`, `model.<C>*.php` in `orkui/model/`, `class.<C>*.php` in `system/lib/ork3/` — plus `model.FrontDoor.php` by name and `frontdoor/**.js` / `cms/**.js`. | C1–C6 read `.css`, `.tpl` and `.theme` — every file that can *declare* CSS, and none that can *inject* it. A verifier put a stylesheet `<link>` and a `<style>#theme_container{}</style>` onto a live org-site page from two directions — `frontdoor/js/frontdoor.js` via `document.head.insertAdjacentHTML()`, and `controller.Site.php` echoing the markup — and **both** this gate and the layering gate returned exit 0. The blind set was **31 files**. The model and domain sets then matched a literal `Cms` prefix while the controllers were *derived*, so the model set was **narrower than the controller set**: `model.BlogZz.php` echoing a `<style>` and a CRM `<link>` passed at exit 0, and `trait.CmsScope.php` was uncovered because the glob said `controller.`. Deriving all four from one list means they cannot drift. |
-| **R9** | **`CMS_CONTROLLERS` is derived from the filesystem, not listed** — the controllers carrying the **`CmsScopeContext`** trait (5 of 44, exactly the CMS set), unioned with the historical list as a **floor** so derivation can only *add*. Same idea as `check-layering.sh` deriving `DOMAIN_CLASSES` from `system/lib/ork3/class.*.php`. | The list used to be "the one manual step", and a manual step is a step someone forgets — **silently**. A new `Ogre_view.tpl` linking `orkui.css`, carrying a static `<style>` *and* writing `id="theme_container" class="ork-card"` passed at exit 0, because no rule was switched on for it at all. Now `controller.Ogre.php` using the trait puts every `Ogre_*.tpl` in scope with nothing to remember. The floor matters as much as the derivation: without it, deleting the trait from `controller.Blog.php` would quietly drop every `Blog_*.tpl` from scope. |
+| **R9** | **`CMS_CONTROLLERS` is derived from the filesystem, not listed** — the controllers carrying the **`CmsScopeContext`** trait (**5 of 44**, exactly the CMS set — `grep -l CmsScopeContext orkui/controller/controller.*.php | wc -l` and `ls orkui/controller/controller.*.php | wc -l`), unioned with the historical list as a **floor** so derivation can only *add*. Same idea as `check-layering.sh` deriving `DOMAIN_CLASSES` from `system/lib/ork3/class.*.php`. | The list used to be "the one manual step", and a manual step is a step someone forgets — **silently**. A new `Ogre_view.tpl` linking `orkui.css`, carrying a static `<style>` *and* writing `id="theme_container" class="ork-card"` passed at exit 0, because no rule was switched on for it at all. Now `controller.Ogre.php` using the trait puts every `Ogre_*.tpl` in scope with nothing to remember. The floor matters as much as the derivation: without it, deleting the trait from `controller.Blog.php` would quietly drop every `Blog_*.tpl` from scope. |
 | **R10** | **A `$TPL_ROOT` template that renders CMS chrome is a CMS surface template** — it includes a `frontdoor/` or `cms/` partial, or links a stylesheet from either — whatever its prefix, whoever owns its controller. `frontdoor/` ⇒ public tier, `cms/`-only ⇒ admin tier. **The include destination is *resolved*** by the very resolver C4-PATH uses (`resolve_include()`), not matched as a literal path. | R9 closes "nobody updated the list"; this closes "the new CMS controller never used the trait", with **evidence rather than inference** — the template says what it renders. It only started doing that once it resolved includes: as a literal match for `frontdoor/…` it matched **no include line in this repo**, because every CMS template writes `include $fdDir . 'render_blocks.tpl';` against a `$fdDir` assigned earlier in the file. The only lines it ever hit were the docblocks that mention a partial by path — so a new routed CMS surface written the normal way got **zero** rules, and could link `orkui.css`, carry a static `<style>`, name `#theme_container` and define `--ork-*` at exit 0. Now 15 of the 16 CMS surface templates qualify on real evidence (only `Cms_deny.tpl`, which includes and links nothing, does not) and none of the other 97 does — so it still changes no existing file's rules. |
+
+### The size of that scope is a number the gate produces
+
+Ask the gate, never a hand-written duplicate of its scope logic — two
+implementations of "what is in scope" would drift, which is the same defect as
+the model glob that was narrower than the controller glob. `--list` prints one
+line per in-scope file with its rule mask and runs no rule:
+
+```sh
+bin/check-css-boundaries.sh --list | tail -1               # 146 files in scope
+bin/check-css-boundaries.sh --list | grep -c '^00000001  '   # 32  C7-only (R8 PHP/JS)
+bin/check-css-boundaries.sh --list \
+  | grep -E '^[01]{8}  ' | grep -vc '^00000001  '            # 114 files that declare CSS
+bin/check-css-boundaries.sh --list | awk '{print $2}' \
+  | grep -cE '^orkui/template/default/[^/]+\.tpl$'           # 16 surface templates, of 113
+bin/check-css-boundaries.sh --list | grep -E '^[01]{8}' \
+  | awk '{m=$1; for(i=1;i<=8;i++) c[i]+=substr(m,i,1)}
+         END {split("C1 C2 C3 C4 C4-PATH C5 C6 C7",n," ");
+              for(i=1;i<=8;i++) printf "%-8s %d\n", n[i], c[i]}'
+#   C1 54   C2 69   C3 61   C4 54   C4-PATH 44   C5 44   C6 1   C7 32
+```
+
+**146 and 114 are the same scope counted two ways** — 146 files total, 32 of them
+the R8 PHP/JS sources that only C7 runs on, leaving **114** that can *declare*
+CSS and so carry a C1–C6 mask. The design doc's liveness sweep (append a
+rule-appropriate violation to every in-scope file, catch every one) uses the 114;
+R10's verification quotes the 146. Both are right.
 
 ## Rules (enforced by `bin/check-css-boundaries.sh`)
 
@@ -177,6 +228,48 @@ now **derived**:
   pin fails, and so does below (the message tells you the line to re-pin and the
   number to put there), because slack in a budget is slack the next commit
   spends. `CSS_STATIC_ALLOW_SLACK=1` forgives the below-budget direction only.
+
+  > ### ⚠ `C3_TOTAL_STATIC` has ZERO headroom — read this before filing a bug
+  >
+  > The pin is **6** and `columns.tpl` spends all **6**. So **the next
+  > interpolating `<style>` anywhere in the CMS trips the gate on its first
+  > static declaration**, however small and however legitimate. That is the
+  > ratchet working as designed — a budget with slack is a budget the next commit
+  > spends — but the first person to hit it will be writing a perfectly
+  > reasonable per-instance style and will read `C3-TOTAL … ROSE` as a false
+  > alarm. It is not one.
+  >
+  > Verified 2026-08-22: adding one static declaration to `columns.tpl`'s block —
+  > 7 for the file, still inside `C3_MAX_STATIC=8` — took the tree to 7 and
+  > `bin/check-css-boundaries.sh --all` to **exit 1**. Reverted, exit 0.
+  >
+  > **The re-baseline is one line, and the failure prints it**, with the line
+  > number computed at runtime so it cannot go stale:
+  >
+  > ```
+  >   C3-TOTAL  bin/check-css-boundaries.sh:633
+  >         Inline static CSS across the CMS templates ROSE to 7 static declaration(s)
+  >         riding inside PHP-interpolating <style> blocks; the pinned budget is 6.
+  >         Contributing files:
+  >              7  orkui/template/default/frontdoor/blocks/columns.tpl
+  >         -> … raise the pin deliberately:
+  >                bin/check-css-boundaries.sh:633   C3_TOTAL_STATIC=7
+  > ```
+  >
+  > Your two options, in order of preference:
+  >
+  > 1. **Move the static declarations into a stylesheet** under `frontdoor/css/`
+  >    or `cms/css/` and keep only the interpolated declaration inline. This is
+  >    almost always right, and it is what the budget exists to push you toward.
+  > 2. **Raise the pin**, editing exactly the line the message names, and say in
+  >    the commit message *why* the CSS has to be per-instance. Unlike the
+  >    duplication ratchet there is no `--allow-raise` flag here: the deliberate
+  >    act is the diff itself.
+  >
+  > What will **not** work is `CSS_STATIC_ALLOW_SLACK=1` — it forgives only the
+  > *below*-budget direction and cannot silence a rise. Re-pin downward the same
+  > way if you ever remove `columns.tpl`'s block: the gate will fail with
+  > `FELL`, and it names the line and the number then too.
   **Residual gap, stated honestly:** inside the pinned total, up to 8 static
   declarations can still ride along in a file that has a legitimate interpolating
   block, and the counter only sees declarations — a `<style>` full of
@@ -237,7 +330,8 @@ now **derived**:
   downloads: the `if (empty($IsOrgSite)):` gate at `default.theme:104-110` picks
   `tokens.css` + `orkui.css` for in-shell surfaces and `cms-base.css` for org
   sites. A link added to its `else:` branch — or added unconditionally — brings
-  back the 91 KB this whole separation exists to remove. The check is
+  back the **95,368 B** (`orkui.css` 91,352 + `tokens.css` 4,016 at `67ff338d`)
+  this whole separation exists to remove. The check is
   branch-aware (it follows PHP alternative-syntax `if`/`elseif`/`else`/`endif`
   nesting, so the legitimate branch is not a false positive) and fail-closed
   twice over: a structure it cannot follow is reported, and so is a stylesheet
@@ -314,8 +408,10 @@ now **derived**:
 
   **There is deliberately no path exemption list.** An exemption is a standing
   hole that rots as the exempted file grows; a trigger set narrow enough that
-  the CSS-as-data classes never touch it does not. Verified: all 31 files in
-  scope report clean today, with no file named anywhere in the rule.
+  the CSS-as-data classes never touch it does not. Verified: all **32** files in
+  scope report clean today, with no file named anywhere in the rule
+  (`bin/check-css-boundaries.sh --list | grep -c '^00000001  '` = 32,
+  `bin/check-css-boundaries.sh --all` = exit 0).
 
   **Fail-closed where it cannot tell:** a `<link rel="<?= $rel ?>" href=…>`
   whose `rel` is assembled at runtime is reported, because an unprovable `rel`
@@ -336,7 +432,7 @@ now **derived**:
   routed surface with nothing behind it: the gate cannot tell whether it is a CMS
   surface or a CRM one, so it runs **no** rule on it. That is reported, because
   *"no rule matched"* and *"no rule ran"* look identical from the outside and
-  only one of them is safe. **Zero today** — all 23 distinct prefixes under
+  only one of them is safe. **Zero today** — all **23** distinct prefixes under
   `$TPL_ROOT` (`Admin`, `Atlas`, … `Tournament`, `Unit`) resolve to a controller
   that exists — so it costs nothing now and fires on the first surface that
   appears with nothing behind it. Leading-underscore files are partials, not
@@ -466,7 +562,8 @@ off a running app and asserts on the HTML that is served:
    a kingdom's or park's public marketing site is not an ORK application
    surface and must not report into ORK's analytics.
 8. **no org-site page loads `orkui.js`** — jQuery 1.7.1 + jQuery UI +
-   tablesorter + the CRM's app code, 1,032,786 bytes render-blocking in
+   tablesorter + the CRM's app code, **1,032,786 bytes**
+   (`wc -c < orkui/template/default/script/orkui.js`) render-blocking in
    `<head>`, 11x the CSS this separation removed — while it **does** still load
    its own `frontdoor.js`, so "no CRM JS" cannot be won by serving no
    behaviour at all. The in-shell tier still gets `orkui.js`. Nothing on the
@@ -490,7 +587,8 @@ off a running app and asserts on the HTML that is served:
 ### A skipped surface is accounted for, not shrugged off
 
 The backstop used to be able to lose a third of itself in silence. With the park
-org site unpublished the run dropped from **227 assertions to 194** — the whole
+org site unpublished the run dropped from **227 assertions to 194** *(historical
+ demonstration; a clean run today reports 243)* — the whole
 park tier and the only `&_pfx=p` coverage — and still printed `ALL PASS`, still
 exited 0, and CI still reported an unqualified green, because a per-surface skip
 printed `  note: surface not available, skipped — …` and the only skip signal
@@ -607,6 +705,9 @@ php tests/cms-css/boundary_test.php            # runtime backstop, lenient: skip
 php tests/cms-css/boundary_test.php --strict   # ANY skipped surface is a failure (exit 1) — run this before merging
 php tests/cms-css/duplication_ratchet_test.php   # the duplication ratchet, both directions
 bin/check-css-boundaries.sh --all      # audit every file in scope, untracked included
+bin/check-css-boundaries.sh --list     # print the scope itself: one line per in-scope file
+                                       #   with its rule mask (C1 C2 C3 C4 C4-PATH C5 C6 C7),
+                                       #   then the count. Runs no rule, always exits 0.
 bin/check-css-boundaries.sh --staged   # what pre-commit runs
 bin/check-css-boundaries.sh --files a.css b.tpl
 npm run lint:css                       # stylelint + tab-indent check + duplication ratchet
@@ -703,8 +804,11 @@ cannot tell what ran, and "cannot tell" is treated as broken.
 **Why CI does not stand the app up — decided, not defaulted.** The docker
 compose files *are* in the repo, so booting php + mariadb in the runner is
 mechanically possible. It is not worth it, and the reason is data, not
-containers: 88 of the 89 tracked `.sql` files are incremental migrations under
-`db-migrations/`, and the one exception — `ork.sql` — is a 2013 phpMyAdmin
+containers: of the **89** tracked `.sql` files, **71** are incremental migrations
+under `db-migrations/` (`git ls-files '*.sql' | wc -l` and
+`git ls-files 'db-migrations/*.sql' | wc -l`) and the other 18 are `ork-db`
+schema templates and a service test rig — none of them a populated dump. The one
+full-schema file, `ork.sql`, is a 2013 phpMyAdmin
 **schema** dump with 38 `CREATE TABLE`s, **zero** `INSERT`s and **not one
 `ork_cms_*` table** (the entire CMS schema postdates it). An app stood up in CI
 would come up with no `ork_cms_site` rows, no kingdoms, no parks and no posts;
@@ -748,7 +852,14 @@ were last measured:
 | `MAX_GROUPS_2PLUS` | **26** | duplicate bodies with **≥ 2 declarations** — the real DRY signal |
 | `MAX_GROUPS_ANY` | **90** | every duplicate body, single-declaration coincidences included |
 
-Both numbers live as constants at the top of `bin/check-css-duplication.php`.
+Both numbers live as constants at the top of `bin/check-css-duplication.php`, and
+both are re-derived by the tool itself:
+
+```
+$ bin/check-css-duplication.php
+CMS CSS duplication: 7 stylesheets, 90 duplicate declaration-body groups (26 with >= 2 declarations)
+OK    ratchet held (26 / 26 groups with >= 2 declarations, 90 / 90 overall)
+```
 
 ### It is a ratchet, not a freeze — both directions fail
 
@@ -802,14 +913,17 @@ touched.
 
 The 91→90 step (2026-08-22) is the first **tightening**, and the first one the
 gate demanded on its own. The largest duplicate body in the CMS CSS was seven
-copies of `color: var(--cms-gold, #f0b429)` scattered across ~2,300 lines of
+copies of `color: var(--cms-gold, #f0b429)` scattered across the **2,701** lines
+(`wc -l < orkui/template/default/cms/css/cms-admin.css`) of
 `cms-admin.css`; they are now one grouped rule under a `Gold accent text`
 comment, sitting at the position of `.cms-editbar-hint-dirty` — the one member
 whose cascade position is load-bearing, because it overrides `.cms-editbar-hint`
 at equal specificity and only source order makes it win. Equivalence was proved,
 not assumed: specificity is unchanged by a move, so the only way a move can
 change a rendered value is by flipping a cascade pair that shares a property at
-**equal** specificity in the same at-rule context. All 54,778 such ordered pairs
+**equal** specificity in the same at-rule context *(the pair/element/snapshot
+counts that follow are a historical one-off proof, run once at the commit that
+made the change; there is no standing command for them)*. All 54,778 such ordered pairs
 in the file were enumerated before and after; exactly 4 flipped, and all 4 are
 between class pairs that never appear together on one element in any of the
 4,203 distinct class attributes the repo emits. The next-biggest group — 6 copies

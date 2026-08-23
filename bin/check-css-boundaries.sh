@@ -21,8 +21,20 @@
 #   bin/check-css-boundaries.sh --range master..HEAD  # files changed in a range (pre-push)
 #   bin/check-css-boundaries.sh --files a.css b.tpl   # explicit paths (editor hook)
 #   bin/check-css-boundaries.sh --all                 # every file in scope (audit)
+#   bin/check-css-boundaries.sh --list                # print the scope: one line
+#                                                     # per in-scope file, with the
+#                                                     # rule mask that runs on it,
+#                                                     # then the count. Runs no rule.
+#
+# --list exists so the SIZE of the scope is a number the gate itself produces.
+# The design doc and the README quote it (the liveness sweep's denominator: every
+# in-scope file gets a rule-appropriate violation appended and must be caught),
+# and a figure re-derived by a hand-written duplicate of the scope logic would
+# drift from the scope logic — the same defect as the model glob that was
+# narrower than the controller glob. One implementation, asked directly.
 #
 # Exit 0 = clean, 1 = violations found, 2 = bad invocation.
+# --list always exits 0: it reports scope, not compliance.
 #
 # Escape hatch (deliberate exceptions only): ORK3_ALLOW_LAYER_VIOLATION=1 is
 # honoured by the git hooks that call this script, not by the script itself.
@@ -447,7 +459,7 @@
 # reported as C0 instead of silently disarming the scanner.
 
 usage() {
-    sed -n '3,29p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # Byte-wise matching: orkui/ carries UTF-8 content and stray non-UTF-8 bytes,
@@ -465,11 +477,13 @@ cd "$REPO_ROOT" || exit 0
 MODE=""
 RANGE=""
 FILES=""
+LIST=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --staged) MODE=staged ;;
         --all)    MODE=all ;;
+        --list)   MODE=all; LIST=1 ;;
         --range)
             MODE=range
             RANGE="$2"
@@ -2333,6 +2347,7 @@ shell_report() {
 }
 
 TOTAL=0
+LISTED=0
 
 for f in $CANDIDATES; do
     # Stylesheets and templates DECLARE CSS (C1-C6); PHP sources and scripts can
@@ -2482,6 +2497,15 @@ for f in $CANDIDATES; do
 
     [ "$C1$C2$C3$C4$C4_PATH$C5$C6$C7" = "00000000" ] && continue
 
+    # --list: report the scope and run nothing. The mask is printed in rule order
+    # (C1 C2 C3 C4 C4-PATH C5 C6 C7) so "which files does C6 cover?" is a grep.
+    if [ "$LIST" = 1 ]; then
+        printf '%s%s%s%s%s%s%s%s  %s\n' \
+            "$C1" "$C2" "$C3" "$C4" "$C4_PATH" "$C5" "$C6" "$C7" "$f"
+        LISTED=$((LISTED + 1))
+        continue
+    fi
+
     # R5 — a symlink is never scanned. `git show :path` on one returns the link
     # TARGET, not the content it resolves to, so a staged symlink used to sail
     # through every rule while pointing at anything at all.
@@ -2532,6 +2556,11 @@ for f in $CANDIDATES; do
         -f "$AWKPROG" "$CONTENT"
     [ $? -ne 0 ] && TOTAL=$((TOTAL + 1))
 done
+
+if [ "$LIST" = 1 ]; then
+    echo "$LISTED files in scope (mask columns: C1 C2 C3 C4 C4-PATH C5 C6 C7)"
+    exit 0     # the EXIT trap above removes the temp files
+fi
 
 # ---------------------------------------------------------------------------
 # C3-TOTAL — the tree-wide inline-static-CSS census (see C3_TOTAL_STATIC above)
