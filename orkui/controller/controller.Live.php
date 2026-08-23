@@ -28,6 +28,20 @@ class Controller_Live extends Controller
     {
         $this->template = '../revised-frontend/Live_index.tpl';
         $this->data['page_title'] = 'Live Attendance';
+
+        // Link-preview card from the same 30s-cached stats the page polls:
+        // the "is anyone playing right now?" answer, right in the embed.
+        $_ogS = $this->Live->stats('');
+        $_ogActive = (int)($_ogS['active_3h'] ?? 0);
+        $_ogParks = is_array($_ogS['parks'] ?? null) ? count($_ogS['parks']) : 0;
+        $this->data['og'] = array(
+            'title'       => 'Amtgard Live Attendance',
+            'url'         => UIR . 'Live',
+            'description' => $_ogActive > 0
+                ? $_ogActive . ' player' . ($_ogActive === 1 ? '' : 's') . ' signed in at '
+                    . $_ogParks . ' park' . ($_ogParks === 1 ? '' : 's') . ' in the last few hours — watch Amtgard light up on the live map.'
+                : 'A live map of Amtgard park activity — parks light up as players sign in, all day, every day.',
+        );
     }
 
     public function stats()

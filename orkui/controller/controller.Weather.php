@@ -40,6 +40,28 @@ class Controller_Weather extends Controller
         $this->data['PlayToday']       = $this->Weather->play_for_date($today, $token);
         $this->data['UpcomingEvents']  = $this->Weather->upcoming_events_with_forecast(7, $token);
         $this->data['FreshnessPhrase'] = $this->Weather->freshness_phrase($token);
+
+        // Link-preview card from the same rundown the page shows: how many
+        // parks play today and whether weather is a factor anywhere.
+        $_ogR = is_array($this->data['Rundown']) ? $this->data['Rundown'] : array();
+        $_ogParks = (int)($_ogR['total_parks'] ?? 0);
+        $_ogBadges = is_array($_ogR['badge_counts'] ?? null) ? $_ogR['badge_counts'] : array();
+        arsort($_ogBadges);
+        $_ogWarn = array();
+        foreach (array_slice($_ogBadges, 0, 2, true) as $_ogLabel => $_ogN) {
+            if ((int)$_ogN > 0) {
+                $_ogWarn[] = $_ogN . ' park' . ((int)$_ogN === 1 ? '' : 's') . ' under ' . strtolower($_ogLabel);
+            }
+        }
+        $_ogDesc = !empty($_ogR['no_play_today']) || $_ogParks === 0
+            ? 'Forecasts for every Amtgard park and event — no scheduled park play today.'
+            : 'Forecasts where Amtgard plays today: ' . $_ogParks . ' park' . ($_ogParks === 1 ? '' : 's') . ' on the calendar'
+                . ($_ogWarn !== array() ? ' — ' . implode(', ', $_ogWarn) : ', all looking clear') . '.';
+        $this->data['og'] = array(
+            'title'       => 'Amtgard Weather',
+            'url'         => UIR . 'Weather',
+            'description' => $_ogDesc,
+        );
         // 7-day strip of pills (today + next 6 days), anchored to clock-pinned today.
         $strip = array();
         $todayTs = strtotime($today . ' 12:00:00');
