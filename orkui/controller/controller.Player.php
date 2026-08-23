@@ -305,19 +305,38 @@ class Controller_Player extends Controller
             exit;
         }
 
-        // Link-preview card: persona + home chapter only. Deliberately no
-        // image (heraldry/photo policy is a pending product decision) and no
-        // About text (the profile shows it, but auto-rendering bio prose into
-        // third-party chat embeds is a different exposure than a page view).
+        // Link-preview card: persona, home chapter, bio snippet, and heraldry
+        // (photo fallback). Bio and images are already public on the profile
+        // and Google already quotes the bio in search snippets — Ken's call
+        // 2026-08-23: match that in embeds, revisit on community pushback.
         $_ogPark = $this->Park->get_park_info((int)($this->data['Player']['ParkId'] ?? 0));
         $_ogWhere = trim(implode(', ', array_filter(array(
             (string)($_ogPark['ParkInfo']['ParkName'] ?? ''),
             (string)($_ogPark['KingdomInfo']['KingdomName'] ?? ''),
         ))));
-        $this->data['og'] = array(
+        $_ogBio = trim(preg_replace('/[#*_>`]+/', ' ', strip_tags(html_entity_decode((string)($this->data['Player']['AboutPersona'] ?? '')))));
+        if ($_ogBio !== '') {
+            $_ogBio = function_exists('mb_substr') ? mb_substr($_ogBio, 0, 180) : substr($_ogBio, 0, 180);
+        }
+        $_ogDesc = ($_ogWhere !== '' ? $_ogWhere : 'Amtgard player profile on the ORK')
+            . ($_ogBio !== '' ? ' — ' . $_ogBio : '');
+        $og = array(
             'title'       => (string)($this->data['Player']['Persona'] ?? 'Amtgard Player'),
-            'description' => ($_ogWhere !== '' ? $_ogWhere . ' — ' : '') . 'Amtgard player profile on the ORK.',
+            'description' => $_ogDesc,
         );
+        // Heraldry first (identity art, made to be shown), profile photo as
+        // fallback. Blank the default image dimensions — they describe the
+        // site logo, not this image.
+        if (!empty($this->data['Player']['HasHeraldry']) && !empty($this->data['Player']['Heraldry'])) {
+            $og['image'] = (string)$this->data['Player']['Heraldry'];
+        } elseif (!empty($this->data['Player']['HasImage']) && !empty($this->data['Player']['Image'])) {
+            $og['image'] = (string)$this->data['Player']['Image'];
+        }
+        if (isset($og['image'])) {
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
