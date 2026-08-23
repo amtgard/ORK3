@@ -1559,6 +1559,55 @@ html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.cu
 }
 
 /* ============================================================================
+ * List filter strip (Pages) — ONE row that looks like the product
+ *
+ * The page list used to carry its filters in two places: a status <select>
+ * floating above the card, and DataTables' stock "Show 25 entries" / "Search:"
+ * chrome sitting undesigned INSIDE it. Both now live in this strip across the
+ * top of the table card; Cms_index.tpl relocates the two generated widgets into
+ * it on init. These rules must stay AFTER the DataTables block above — they tie
+ * it on specificity, so source order is what makes them win.
+ * ========================================================================== */
+.cms-listbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+/* The search field is the only strip item that grows, so it absorbs the free
+   space and pushes the page-length widget to the right edge on its own. */
+.cms-listbar-search { flex: 1 1 240px; min-width: 0; }
+.cms-listbar .cms-select { max-width: 170px; flex: 0 0 auto; }
+/* Neutralise the widgets' own spacing/alignment now that they are strip items. */
+.cms-table-wrap .cms-listbar .dataTables_filter,
+.cms-table-wrap .cms-listbar .dataTables_length {
+    margin: 0;
+    text-align: left;
+    white-space: nowrap;
+}
+.cms-table-wrap .cms-listbar .dataTables_filter input {
+    margin: 0;
+    width: 100%;
+    min-width: 0;
+}
+.cms-table-wrap .cms-listbar .dataTables_filter label {
+    display: block;
+    margin: 0;
+}
+.cms-table-wrap .cms-listbar .dataTables_length select { margin: 0 0 0 6px; }
+/* With the controls hoisted into the strip, the wrapper no longer needs the top
+   padding it reserved for them. Scoped to "a strip precedes it" so the lists
+   that still keep their controls inside the wrapper are untouched. */
+.cms-table-wrap .cms-listbar + .dataTables_wrapper { padding-top: 0; }
+
+@media (max-width: 640px) {
+    .cms-listbar .cms-select { max-width: none; flex: 1 1 auto; }
+}
+
+/* ============================================================================
  * Bulk-select bar + checkbox column + row-action overflow menu
  * ========================================================================== */
 

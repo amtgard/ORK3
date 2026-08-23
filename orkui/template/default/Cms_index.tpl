@@ -48,6 +48,39 @@ $pageViewCounts = isset($pageViewCounts) && is_array($pageViewCounts) ? $pageVie
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
+
+// L2: "Jul 8, 2026 5:04 PM" on all 21 rows told an author nothing — every page
+// was touched in the same import, so the column read as one repeated string.
+// What an author actually wants from it is HOW LONG AGO. The exact timestamp is
+// still one hover away (data-tip on the cell) and the real epoch still drives
+// the sort (data-order), so nothing here sorts on the rendered words.
+$relTime = function ($ts) {
+    $diff = time() - (int)$ts;
+    if ($diff < 0) {
+        $diff = 0; // clock skew / a future updated_at reads as "just now"
+    }
+    if ($diff < 60) {
+        return 'just now';
+    }
+    $steps = array(
+        array(3600,     60,       'minute'),
+        array(86400,    3600,     'hour'),
+        array(604800,   86400,    'day'),
+        array(2592000,  604800,   'week'),
+        array(31536000, 2592000,  'month'),
+        array(PHP_INT_MAX, 31536000, 'year'),
+    );
+    foreach ($steps as $s) {
+        if ($diff < $s[0]) {
+            $n = (int)floor($diff / $s[1]);
+            if ($n < 1) {
+                $n = 1;
+            }
+            return $n . ' ' . $s[2] . ($n === 1 ? '' : 's') . ' ago';
+        }
+    }
+    return 'a long time ago';
+};
 // Active scope query ('&scope=k:5' or '') threaded onto every intra-admin link
 // so navigating into an editor/preview stays in the current org scope.
 $scopeQ = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
@@ -69,16 +102,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <div class="cms-notice"><?= $h($message) ?></div>
     <?php endif; ?>
 
-    <?php if (!empty($pages)): ?>
-    <div class="cms-filters">
-        <select id="cmsStatusFilter" class="cms-select" aria-label="Filter by status">
-            <option value="">All statuses</option>
-            <option value="Published"<?= $statusF === 'published' ? ' selected' : '' ?>>Published</option>
-            <option value="Draft"<?= $statusF === 'draft' ? ' selected' : '' ?>>Draft</option>
-        </select>
-    </div>
-
     <?php /* ---- Bulk-action bar (revealed when ≥1 row checked) ---- */ ?>
+    <?php if (!empty($pages)): ?>
     <div class="cms-bulkbar" id="cmsBulkBar" role="region" aria-label="Bulk actions">
         <span class="cms-bulkbar-count" id="cmsBulkCount"><i class="fas fa-check-square"></i>0 selected</span>
         <div class="cms-bulkbar-actions">
@@ -94,6 +119,22 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php endif; ?>
 
     <div class="cms-table-wrap">
+        <?php /* L2: ONE filter strip. The status <select> used to float above the
+                card while DataTables' raw "Show 25 entries" / "Search:" chrome sat
+                unstyled inside it — two filter controls in two places, one of them
+                undesigned. The DataTables widgets are relocated into this strip on
+                init (see cmsListbarDt below) so all three read as one product. */ ?>
+        <?php if (!empty($pages)): ?>
+        <div class="cms-listbar" id="cmsListbar">
+            <div class="cms-listbar-search" id="cmsListbarSearch"></div>
+            <select id="cmsStatusFilter" class="cms-select cms-listbar-select" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                <option value="Published"<?= $statusF === 'published' ? ' selected' : '' ?>>Published</option>
+                <option value="Draft"<?= $statusF === 'draft' ? ' selected' : '' ?>>Draft</option>
+            </select>
+            <div class="cms-listbar-len" id="cmsListbarLen"></div>
+        </div>
+        <?php endif; ?>
         <table class="cms-table" id="cms-pages-table">
             <thead>
                 <tr>
@@ -131,7 +172,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         $updated   = (string)($p['updated_at'] ?? '');
                         $typeLabel = isset($typeLabels[$type]) ? $typeLabels[$type] : ucwords(str_replace('_', ' ', $type));
                         $isPub     = ($status === 'published');
-                        $updatedFmt = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
+                        $updatedTs = $updated !== '' ? (int)strtotime($updated) : 0;
+                        // Human-readable absolute stays reachable on hover; the epoch
+                        // is what DataTables sorts on (data-order), never the words.
+                        $updatedAbs = $updatedTs > 0 ? date('F j, Y g:i A', $updatedTs) : '';
+                        $updatedRel = $updatedTs > 0 ? $relTime($updatedTs) : '';
+                        $statusWord = $isPub ? 'Published' : 'Draft';
                     ?>
                     <tr data-page-id="<?= $pid ?>" data-system="<?= $isSystem ? 1 : 0 ?>">
                         <td class="cms-check-col" data-label="">
@@ -157,12 +203,22 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php endif; ?>
                         </td>
                         <td data-label="Type"><?= $h($typeLabel) ?></td>
-                        <td data-label="Status">
-                            <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>" data-status-badge>
-                                <?= $isPub ? 'Published' : 'Draft' ?>
-                            </span>
+                        <?php /* L2: Published is the norm on this list — a chip on every
+                                row is 21 repetitions of "nothing to see". Only the
+                                exceptions get a chip. data-search/data-order keep the
+                                real word as the filter + sort value (DataTables reads
+                                those HTML5 attributes), and .cms-sr-only keeps it in
+                                the accessibility tree for a screen reader. */ ?>
+                        <td data-label="Status" data-status-cell
+                            data-search="<?= $statusWord ?>" data-order="<?= $statusWord ?>">
+                            <?php if ($isPub): ?>
+                                <span class="cms-sr-only">Published</span>
+                            <?php else: ?>
+                                <span class="cms-badge cms-badge-draft" data-status-badge>Draft</span>
+                            <?php endif; ?>
                         </td>
-                        <td data-label="Updated" class="cms-muted"><?= $h($updatedFmt) ?></td>
+                        <td data-label="Updated" class="cms-muted" data-order="<?= $updatedTs ?>"
+                            <?= $updatedAbs !== '' ? 'data-tip="' . $h($updatedAbs) . '"' : '' ?>><?= $updatedRel !== '' ? $h($updatedRel) : '—' ?></td>
                         <td data-label="Actions">
                             <div class="cms-row-actions">
                                 <?php if ($canEdit || $canCreate): ?>
@@ -265,18 +321,49 @@ include __DIR__ . '/cms/_shell_top.tpl';
             dom: 'lfrtip',
             pageLength: 25,
             order: [[4, 'desc']], // Updated DESC (col 0 is the checkbox)
+            language: {
+                // Plain product wording instead of the library's stock phrasing.
+                lengthMenu: 'Show _MENU_ pages',
+                search: '',
+                searchPlaceholder: 'Search pages…',
+                info: '_START_–_END_ of _TOTAL_ pages',
+                infoEmpty: 'No pages',
+                infoFiltered: '(of _MAX_)',
+                zeroRecords: 'No pages match that search.'
+            },
             columnDefs: [
                 { targets: [0], orderable: false, searchable: false }, // Checkbox
-                { targets: [4], type: 'date' },
+                // Updated: the cells carry data-order="<unix epoch>", which
+                // DataTables picks up as this column's sort/type source, so the
+                // relative wording ("3 weeks ago") is display-only and can never
+                // sort alphabetically. 'num' pins the comparison to the epoch.
+                { targets: [4], type: 'num' },
                 { targets: [5], orderable: false, searchable: false } // Actions
             ]
         });
+        // L2: fold DataTables' own controls into the designed filter strip. Its
+        // markup is generated on init, so the move happens here rather than in
+        // the template. Guarded — a missing node just leaves the widget where
+        // DataTables put it.
+        var lbSearch = document.getElementById('cmsListbarSearch');
+        var lbLen = document.getElementById('cmsListbarLen');
+        var dtFilter = document.getElementById('cms-pages-table_filter');
+        var dtLength = document.getElementById('cms-pages-table_length');
+        if (lbSearch && dtFilter) {
+            lbSearch.appendChild(dtFilter);
+            // language.search:'' drops the visible "Search:" label, so the input
+            // needs its name back for assistive tech — a placeholder is not one.
+            var dtSearchInput = dtFilter.querySelector('input');
+            if (dtSearchInput) { dtSearchInput.setAttribute('aria-label', 'Search pages'); }
+        }
+        if (lbLen && dtLength) { lbLen.appendChild(dtLength); }
+
         var statusSel = document.getElementById('cmsStatusFilter');
         if (statusSel) {
             statusSel.addEventListener('change', function () {
-                // Status column (index 3). "Published"/"Draft" don't overlap, so a
-                // plain (non-regex, non-smart) contains match is safe and survives
-                // the badge cell's surrounding whitespace.
+                // Status column (index 3). Each cell carries data-search with the
+                // bare word, so this matches the VALUE — not, as it used to, any
+                // substring of the badge markup that happened to contain it.
                 dt.column(3).search(statusSel.value, false, false).draw();
             });
         }
@@ -284,6 +371,24 @@ include __DIR__ . '/cms/_shell_top.tpl';
         dt.on('draw', function () { syncSelectAll(); refreshBulkBar(); });
     }
     <?php endif; ?>
+
+    /* ---- Status cell: a chip only when the status is NOT the common case.
+       Published is the norm, so a published row shows nothing visible and keeps
+       the word in .cms-sr-only for assistive tech; the filter/sort value lives on
+       the cell's data-search/data-order, which is why the cell is repainted (and
+       the DataTables cache invalidated) rather than just the badge's text. ---- */
+    function paintStatusCell(row, nowPub) {
+        if (!row) { return; }
+        var cell = row.querySelector('[data-status-cell]');
+        if (!cell) { return; }
+        var word = nowPub ? 'Published' : 'Draft';
+        cell.setAttribute('data-search', word);
+        cell.setAttribute('data-order', word);
+        cell.innerHTML = nowPub
+            ? '<span class="cms-sr-only">Published</span>'
+            : '<span class="cms-badge cms-badge-draft" data-status-badge>Draft</span>';
+        if (dt) { dt.cell(cell).invalidate(); }
+    }
 
     /* ---- toast (shared: CmsAdmin.toast) ---- */
     var toast = CmsAdmin.toast;
@@ -325,12 +430,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 btn.innerHTML = nowPub
                     ? '<i class="fas fa-eye-slash"></i> Unpublish'
                     : '<i class="fas fa-globe"></i> Publish';
-                var row = btn.closest('tr');
-                var badge = row ? row.querySelector('[data-status-badge]') : null;
-                if (badge) {
-                    badge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
-                    badge.textContent = nowPub ? 'Published' : 'Draft';
-                }
+                paintStatusCell(btn.closest('tr'), nowPub);
                 toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
             }).catch(function () { btn.disabled = false; toast('Network error.', 'error'); });
         });
@@ -420,11 +520,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         var nowPub = (res.status === 'published');
                         var row2 = document.querySelector('tr[data-page-id="' + id + '"]');
                         if (row2) {
-                            var badge = row2.querySelector('[data-status-badge]');
-                            if (badge) {
-                                badge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
-                                badge.textContent = nowPub ? 'Published' : 'Draft';
-                            }
+                            paintStatusCell(row2, nowPub);
                             var tgl = row2.querySelector('[data-pubtoggle]');
                             if (tgl) {
                                 tgl.setAttribute('data-status', nowPub ? 'published' : 'draft');
