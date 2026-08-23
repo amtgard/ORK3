@@ -70,6 +70,31 @@ class WeatherService extends Ork3
         return $this->weather->strip_severities($dates);
     }
 
+    /**
+     * A park's local weather for an app widget: the forecast for one date
+     * (default today) plus that date's safety badges. Reads only the cron-
+     * warmed ork_park_weather cache — no upstream call is reachable from
+     * here, so client polling can't inflate Open-Meteo usage.
+     */
+    public function GetForecastForPark($Token, int $parkId, string $date = ''): array
+    {
+        if (!$this->requireToken($Token)) {
+            return BadToken();
+        }
+        if ($date === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            $date = date('Y-m-d');
+        }
+        $forecast = $this->weather->forecast_for_date($parkId, $date);
+        if (!$forecast) {
+            return [];
+        }
+        return [
+            'Date'     => $date,
+            'Forecast' => $forecast,
+            'Badges'   => $this->weather->badges_for_date($parkId, $date),
+        ];
+    }
+
     public function GetArchiveForPark($Token, int $parkId, string $date): array
     {
         if (!$this->requireToken($Token)) {
