@@ -47,18 +47,6 @@ $statPages  = (int)($stats['pages'] ?? 0);
 $statPosts  = (int)($stats['posts'] ?? 0);
 $statDrafts = (int)($stats['drafts'] ?? 0);
 
-// Calm time-of-day greeting.
-$hr = (int)date('G');
-if ($hr < 5) {
-    $greet = 'Good evening';
-} elseif ($hr < 12) {
-    $greet = 'Good morning';
-} elseif ($hr < 17) {
-    $greet = 'Good afternoon';
-} else {
-    $greet = 'Good evening';
-}
-
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
@@ -109,13 +97,13 @@ $cmsActions = '';
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
-    <div class="cms-dash-block">
-        <h2 class="cms-dash-greet"><?= $h($greet) ?>.</h2>
-        <?php // The one place the acronym is spelled out in visible copy — the
-              // dashboard is where a first-time author lands. ?>
-        <p class="cms-dash-lede">Welcome to <strong>OGRE</strong>, the Online Gallery and Resource
-            Engine. Pick up where you left off, or create something new below.</p>
-    </div>
+    <?php // ONE page title. The masthead above is the shell's own title slot and
+          // every other OGRE surface uses it, so the dashboard keeps it and drops
+          // the second heading that used to sit here — a time-of-day greeting plus
+          // "Welcome to OGRE, the Online Gallery and Resource Engine". That was a
+          // second page title AND onboarding copy in a permanent slot: the acronym
+          // was re-explained on every visit, forever. The name still lives in the
+          // rail wordmark, its tooltip and the rail's screen-reader expansion. ?>
 
     <?php if ($dashIsOrgSite): ?>
     <?php
@@ -164,6 +152,44 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
+    <?php // Unfinished work FIRST. Picking a half-written page back up is the one
+          // thing an author comes to this page to do, and it used to sit below the
+          // stat tiles and two analytics panels. When there is nothing in progress
+          // the block is omitted entirely rather than spending the best slot on an
+          // empty state — Quick create below offers the same "New Page" action. ?>
+    <?php if (!empty($recent)): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Continue editing</h3>
+        <div class="cms-recent-list">
+            <?php foreach ($recent as $r):
+                $isPage  = (($r['kind'] ?? 'page') === 'page');
+                $title   = (string)($r['title'] ?? '(untitled)');
+                $status  = (string)($r['status'] ?? 'draft');
+                $isPub   = ($status === 'published');
+                $href    = (string)($r['edit_href'] ?? '#');
+                $updated = (string)($r['updated_at'] ?? '');
+                $when    = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
+            ?>
+                <div class="cms-recent-item">
+                    <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
+                        <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
+                    </span>
+                    <div class="cms-recent-main">
+                        <div class="cms-recent-title"><?= $h($title) ?></div>
+                        <div class="cms-recent-meta">
+                            <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
+                            &nbsp;Updated <?= $h($when) ?>
+                        </div>
+                    </div>
+                    <div class="cms-recent-actions">
+                        <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php if ($canCreate): ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">Quick create</h3>
@@ -201,11 +227,17 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
             </a>
-            <?php // #09: scope-wide view rollup. Not a link (no analytics drill-down yet). ?>
+            <?php // #09: scope-wide view rollup. Not a link (no analytics drill-down yet).
+                  // Suppressed while nothing has ever been viewed: a "0 Views" tile sitting
+                  // directly above a "No views recorded yet" panel stated the same fact twice,
+                  // and the panel states it in words. Once a single view lands, the tile
+                  // returns and is the more useful of the two. ?>
+            <?php if ($viewTotal > 0): ?>
             <div class="cms-stat-tile" data-tip="<?= $h($nf($viewTotal)) ?> total views all-time on published pages &amp; posts">
                 <div class="cms-stat-num"><?= $h($nf($viewRecent)) ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-chart-line"></i> View<?= $viewRecent === 1 ? '' : 's' ?> (last <?= (int)$viewDays ?> days)</div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -245,11 +277,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php // #09: most-viewed content — closes the "does anyone see this?" loop. ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">Most viewed</h3>
+        <?php // Compact empty state. The full .cms-empty panel (icon floating in a
+              // tall box) gave a third of the page to "nothing has happened yet" —
+              // one line says it, and says it in the only slot that has to. ?>
         <?php if (empty($topViewed)): ?>
-            <div class="cms-empty">
-                <div class="cms-empty-icon"><i class="fas fa-chart-line"></i></div>
-                <div class="cms-empty-copy">No views recorded yet — once your published pages and posts are visited, your most-read content will appear here.</div>
-            </div>
+            <p class="cms-empty-line">No views recorded yet. Once people visit your published pages and posts, your most-read content appears here.</p>
         <?php else: ?>
             <div class="cms-recent-list">
                 <?php foreach ($topViewed as $tv):
@@ -268,47 +300,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <div class="cms-recent-meta">
                                 <strong><?= $h($nf($total)) ?></strong> total view<?= $total === 1 ? '' : 's' ?>
                                 &nbsp;·&nbsp; <?= $h($nf($recent)) ?> in the last <?= (int)$viewDays ?> days
-                            </div>
-                        </div>
-                        <div class="cms-recent-actions">
-                            <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-
-    <div class="cms-dash-block">
-        <h3 class="cms-dash-section-title">Continue editing</h3>
-        <?php if (empty($recent)): ?>
-            <div class="cms-empty">
-                <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
-                <div class="cms-empty-copy">Nothing here yet — your recent edits will appear here.</div>
-                <?php if ($canCreate): ?>
-                    <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new<?= $scopeQ ?>"><i class="fas fa-plus"></i> New Page</a>
-                <?php endif; ?>
-            </div>
-        <?php else: ?>
-            <div class="cms-recent-list">
-                <?php foreach ($recent as $r):
-                    $isPage  = (($r['kind'] ?? 'page') === 'page');
-                    $title   = (string)($r['title'] ?? '(untitled)');
-                    $status  = (string)($r['status'] ?? 'draft');
-                    $isPub   = ($status === 'published');
-                    $href    = (string)($r['edit_href'] ?? '#');
-                    $updated = (string)($r['updated_at'] ?? '');
-                    $when    = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
-                ?>
-                    <div class="cms-recent-item">
-                        <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
-                            <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
-                        </span>
-                        <div class="cms-recent-main">
-                            <div class="cms-recent-title"><?= $h($title) ?></div>
-                            <div class="cms-recent-meta">
-                                <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
-                                &nbsp;Updated <?= $h($when) ?>
                             </div>
                         </div>
                         <div class="cms-recent-actions">

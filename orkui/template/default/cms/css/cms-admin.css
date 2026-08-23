@@ -645,6 +645,22 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-empty-cta {
     margin-top: 4px;
 }
+/* Compact empty state. .cms-empty is a 48px-tall centred panel with a 44px icon
+   in it — right for "this list is where your work lives and it is empty", far too
+   loud for a secondary analytics panel that is empty because nobody has visited
+   the site yet. One line, stated plainly, in a dashed box so it still reads as a
+   placeholder rather than as content. Colour comes from tokens, so dark mode
+   follows without a second rule. */
+.cms-empty-line {
+    margin: 0;
+    padding: 11px 14px;
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 9px;
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+}
 
 /* New-page type chooser (in a modal) */
 .cms-typegrid {
@@ -2490,16 +2506,9 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
    rules are fetched once and cached across CMS admin views. Reuses cms-/ork-
    tokens; dark-mode via those vars + explicit html[data-theme] overrides.
    ============================================================================ */
-.cms-dash-greet {
-    font-family: inherit;
-    font-size: 22px;
-    color: var(--cms-gold, #f0b429);
-    margin: 0 0 4px;
-    background: transparent; border: none; padding: 0; border-radius: 0;
-    text-shadow: none;
-}
-.cms-dash-lede { color: var(--ork-text-muted); font-size: 14px; margin: 0 0 22px; }
-
+/* .cms-dash-greet / .cms-dash-lede removed with the dashboard's second page
+   title ("Good evening." + the OGRE acronym expansion). The shell masthead is
+   the one title slot. */
 .cms-dash-section-title {
     font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
