@@ -157,6 +157,11 @@ class Controller_Park extends Controller
             $this->data['jsonld'] = $_pdEvents;
         }
 
+        // "Is there many people at field today?" — distinct players credited
+        // today; the Next Park Day card shows it when today IS a park day.
+        $_fieldToday = $this->Report->GetParkFieldCountToday(array('ParkId' => $park_id));
+        $this->data['TodayAtField'] = (int)($_fieldToday['Count'] ?? 0);
+
         $this->load_model('Weather');
         $this->data['park_weather']     = $this->Weather->for_park($park_id);
         $_park_officers = $this->Park->get_officers($park_id, $this->session->token);

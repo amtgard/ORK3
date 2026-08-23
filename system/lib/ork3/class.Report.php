@@ -6707,6 +6707,30 @@ class Report extends Ork3
     /**
      * @return array<string, mixed>
      */
+    /**
+     * Distinct players credited with attendance at a park today — the
+     * "is there many people at field?" number for the public park page.
+     * UNGATED: park-level aggregate, same class of data as the public Live
+     * map. Real-time only for parks using QR sign-in links; reeve-entered
+     * attendance appears when it's typed in.
+     */
+    public function GetParkFieldCountToday($request)
+    {
+        $park_id = valid_id($request['ParkId'] ?? 0) ? (int)$request['ParkId'] : 0;
+        if ($park_id <= 0) {
+            return array('Status' => InvalidParameter(), 'Count' => 0);
+        }
+        $r = $this->db->query(
+            'SELECT COUNT(DISTINCT mundane_id) AS c FROM ' . DB_PREFIX . "attendance
+			 WHERE park_id = $park_id AND date = CURDATE()"
+        );
+        $count = 0;
+        if ($r !== false && $r->size() > 0 && $r->next()) {
+            $count = (int)$r->c;
+        }
+        return array('Status' => Success(), 'Count' => $count);
+    }
+
     public function GetAttendanceDates($request)
     {
         $type = $request['Type'] ?? 'Kingdom';

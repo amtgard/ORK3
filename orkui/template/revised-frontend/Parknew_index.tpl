@@ -378,9 +378,15 @@
 	?>
 	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
 		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
+		<?php $_pdIsToday = ($nextParkDayDate === $parkLocalToday); ?>
 		<?php if ($nextParkDayDate): ?>
-			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
-			<div class="pk-stat-sub"><?= date('l', strtotime($nextParkDayDate)) ?></div>
+			<div class="pk-stat-value" style="font-size:1.1rem"><?= $_pdIsToday ? 'Today' : date('M j', strtotime($nextParkDayDate)) ?></div>
+			<div class="pk-stat-sub"><?= $_pdIsToday ? date('l, M j', strtotime($nextParkDayDate)) : date('l', strtotime($nextParkDayDate)) ?></div>
+			<?php if ($_pdIsToday && !empty($TodayAtField)): ?>
+				<div class="pk-stat-sub pk-field-count" title="Distinct players credited with attendance today. Parks using QR sign-in links update live; reeve-entered attendance appears when it's typed in.">
+					🏃 <?= (int)$TodayAtField ?> at field so far
+				</div>
+			<?php endif; ?>
 			<?php if ($nextPdForecast && $nextPdForecast['hi_f'] !== null):
 				// WMO code → emoji (daytime; forecast doesn't distinguish day/night)
 				$fcCode = (int)$nextPdForecast['code'];
@@ -413,7 +419,7 @@
 		<?php else: ?>
 			<div class="pk-stat-value">&mdash;</div>
 		<?php endif; ?>
-		<div class="pk-stat-label">Next Park Day</div>
+		<div class="pk-stat-label"><?= $_pdIsToday ? 'Park Day Today' : 'Next Park Day' ?></div>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('players')">
 		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
