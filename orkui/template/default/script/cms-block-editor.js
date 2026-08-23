@@ -148,6 +148,24 @@ window.CmsBlockEditor = (function () {
     // real line instead of "custom fields (JSON)".
     var SUMMARY_KEYS = ['heading', 'title', 'text', 'label', 'name', 'caption',
         'kicker', 'subheading', 'subcopy', 'quote', 'body', 'html'];
+    // Fields the author PICKS from a fixed set (dropdown / toggle / preset) rather
+    // than types, plus the URL-ish ones. The catch-all loop below must never quote
+    // either: an empty Heading block summarised as "left" — its align value — and
+    // an empty Rich Text did the same, because the catch-all beat the
+    // "Not filled in yet" answer those blocks should have fallen through to. A
+    // route is no more a description of a block than a config token is.
+    var CONFIG_KEYS = {
+        align: 1, style: 1, size: 1, band: 1, level: 1, variant: 1, layout: 1,
+        presentation: 1, sort: 1, provider: 1, theme: 1, mode: 1, format: 1,
+        position: 1, direction: 1, ratio: 1, width: 1, columns: 1, kind: 1,
+        target: 1, rel: 1, status: 1, type: 1, icon: 1, scope: 1, source: 1, tag: 1
+    };
+    // Suffix rule so per-field variants (cta_href, more_href, max_width, video_id,
+    // placeholder_image_src, …) are covered without listing every one.
+    var CONFIG_SUFFIX = /(^|_)(href|url|src|id|class|slug|width|color|colour|align|style|size|level|variant|layout)$/;
+    function isConfigKey(k) {
+        return Object.prototype.hasOwnProperty.call(CONFIG_KEYS, k) || CONFIG_SUFFIX.test(k);
+    }
     function firstTextIn(f) {
         var i, k, v;
         if (!f || typeof f !== 'object') { return ''; }
@@ -159,6 +177,7 @@ window.CmsBlockEditor = (function () {
         }
         for (k in f) {
             if (!Object.prototype.hasOwnProperty.call(f, k)) { continue; }
+            if (isConfigKey(k)) { continue; }
             v = f[k];
             if (typeof v === 'string' && v.trim() !== '') { return strip(v); }
         }
@@ -199,10 +218,19 @@ window.CmsBlockEditor = (function () {
                 return ((f.images || []).length) + ' image(s)';
             case 'table':
                 return ((f.rows || []).length) + ' row(s)';
+            // Divider and Spacer hold no author copy by nature, so there is nothing
+            // to quote — but "line" and "md" were the stored config tokens, not a
+            // summary. Say what the block PUTS on the page, the way the live blocks
+            // do, so a collapsed row still reads as a sentence.
             case 'divider':
-                return f.style || 'line';
-            case 'spacer':
-                return f.size || 'md';
+                return (String(f.style || 'line') === 'dots')
+                    ? 'a dotted rule between sections'
+                    : 'a solid rule between sections';
+            case 'spacer': {
+                var sz = String(f.size || 'md');
+                return 'a ' + (sz === 'sm' ? 'small' : (sz === 'lg' ? 'large' : 'medium'))
+                    + ' gap between blocks';
+            }
             case 'raw_html':
                 return f.html ? 'HTML set' : 'no HTML';
             case 'marketing_nav':
