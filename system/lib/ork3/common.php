@@ -118,6 +118,45 @@ function ork_og_meta_tags($og = array())
 }
 
 /**
+ * Render a sitemap <urlset> document. $urls = list of ['loc' => URL,
+ * 'lastmod' => 'Y-m-d' (optional)]. Escaping handled here.
+ */
+function ork_sitemap_xml($urls)
+{
+    $out = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+        . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    foreach ((array)$urls as $u) {
+        $loc = trim((string)($u['loc'] ?? ''));
+        if ($loc === '') {
+            continue;
+        }
+        $out .= "  <url><loc>" . htmlspecialchars($loc, ENT_QUOTES) . '</loc>';
+        $lastmod = trim((string)($u['lastmod'] ?? ''));
+        if ($lastmod !== '' && ($ts = strtotime($lastmod)) !== false) {
+            $out .= '<lastmod>' . date('Y-m-d', $ts) . '</lastmod>';
+        }
+        $out .= "</url>\n";
+    }
+    return $out . "</urlset>\n";
+}
+
+/**
+ * Render a sitemap index document pointing at the per-section sitemaps.
+ */
+function ork_sitemap_index_xml($sitemaps)
+{
+    $out = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+        . '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    foreach ((array)$sitemaps as $loc) {
+        $loc = trim((string)$loc);
+        if ($loc !== '') {
+            $out .= '  <sitemap><loc>' . htmlspecialchars($loc, ENT_QUOTES) . "</loc></sitemap>\n";
+        }
+    }
+    return $out . "</sitemapindex>\n";
+}
+
+/**
  * Assemble a schema.org Event JSON-LD structure for an event occurrence.
  * Google reads this for rich event results (date chips, venue, "events near
  * me" surfaces) instead of scraping dates out of the page text.
