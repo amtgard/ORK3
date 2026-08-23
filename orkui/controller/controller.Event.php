@@ -227,6 +227,11 @@ class Controller_Event extends Controller
         if ($ogWhere !== '') {
             $ogParts[] = $ogWhere;
         }
+        // Social proof sells events better than anything else on the card.
+        $ogGoing = (int)($info['RsvpGoing'] ?? 0);
+        if ($ogGoing > 0) {
+            $ogParts[] = $ogGoing . ' going';
+        }
         $ogDesc = implode(' · ', $ogParts);
         // Strip markdown heading/emphasis markers — descriptions are authored
         // in the event editor's markdown and render literally in an embed.
