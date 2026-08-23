@@ -23,12 +23,14 @@ class Controller_Weather extends Controller
         $this->data['no_index'] = true;
     }
 
+    // PUBLIC (opened 2026-08-23, Ken's call): weather is a decide-before-you-
+    // drive utility. Every read below hits only the cron-warmed
+    // ork_park_weather cache / ghettocache — no Open-Meteo call is reachable
+    // from a page view, so anonymous/bot traffic can't inflate API usage.
+    // The token-gated fetch-capable endpoints (GetForecastForPark,
+    // GetArchiveForPark) remain gated for app use.
     public function index($action = null)
     {
-        if (!isset($this->session->user_id)) {
-            header('Location: ' . UIR . 'Login/login/Weather');
-            exit;
-        }
         $this->template = '../revised-frontend/Weather_index.tpl';
         $this->data['page_title'] = 'Weather Forecast';
         $today = EraPhoenice::todayDateString();
@@ -65,10 +67,6 @@ class Controller_Weather extends Controller
     public function day($p = null)
     {
         header('Content-Type: application/json');
-        if (!isset($this->session->user_id)) {
-            echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
-            exit;
-        }
         $date = trim($p ?? '');
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             echo json_encode(array('status' => 1, 'error' => 'Invalid date'));

@@ -296,7 +296,6 @@ class Controller_Player extends Controller
         $this->load_model('Event');
         $action    = $params[1] ?? '';
         $roastbeef = $params[2] ?? '';
-
         // Missing row → bail rather than render a mostly-blank profile with
         // sub-fields synthesized from queries against a nonexistent id. Same
         // guard as index() at the top of this file.
@@ -305,6 +304,20 @@ class Controller_Player extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card: persona + home chapter only. Deliberately no
+        // image (heraldry/photo policy is a pending product decision) and no
+        // About text (the profile shows it, but auto-rendering bio prose into
+        // third-party chat embeds is a different exposure than a page view).
+        $_ogPark = $this->Park->get_park_info((int)($this->data['Player']['ParkId'] ?? 0));
+        $_ogWhere = trim(implode(', ', array_filter(array(
+            (string)($_ogPark['ParkInfo']['ParkName'] ?? ''),
+            (string)($_ogPark['KingdomInfo']['KingdomName'] ?? ''),
+        ))));
+        $this->data['og'] = array(
+            'title'       => (string)($this->data['Player']['Persona'] ?? 'Amtgard Player'),
+            'description' => ($_ogWhere !== '' ? $_ogWhere . ' — ' : '') . 'Amtgard player profile on the ORK.',
+        );
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 

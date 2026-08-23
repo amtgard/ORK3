@@ -18,39 +18,29 @@ class WeatherService extends Ork3
         return Ork3::$Lib->authorization->IsAuthorized($Token ?? '') > 0;
     }
 
+    // The five page-backing reads below are PUBLIC (opened 2026-08-23, Ken's
+    // call — the weather page no longer requires login). They serve only the
+    // cron-warmed ork_park_weather cache / ghettocache; no Open-Meteo call is
+    // reachable from them. The fetch-capable per-park endpoints further down
+    // (GetForecastForPark, GetArchiveForPark) KEEP their token gates.
+    // $Token params retained for caller compatibility; unused.
     public function GetDailySummary($Token, string $date): array
     {
-        if (!$this->requireToken($Token)) {
-            return BadToken();
-        }
-
         return $this->weather->daily_summary($date);
     }
 
     public function GetPlayForDate($Token, string $date): array
     {
-        if (!$this->requireToken($Token)) {
-            return BadToken();
-        }
-
         return $this->weather->play_for_date($date);
     }
 
     public function GetUpcomingEventsWithForecast($Token, int $days = 7): array
     {
-        if (!$this->requireToken($Token)) {
-            return BadToken();
-        }
-
         return $this->weather->upcoming_events_with_forecast($days);
     }
 
     public function GetFreshnessPhrase($Token = null): string
     {
-        if (!$this->requireToken($Token)) {
-            return '';
-        }
-
         return $this->weather->freshness_phrase();
     }
 
@@ -59,9 +49,6 @@ class WeatherService extends Ork3
      */
     public function GetStripSeverities($Token, $dates): array
     {
-        if (!$this->requireToken($Token)) {
-            return BadToken();
-        }
         if (is_string($dates)) {
             $decoded = json_decode($dates, true);
             $dates = is_array($decoded) ? $decoded : [];

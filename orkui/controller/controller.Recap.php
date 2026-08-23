@@ -23,19 +23,12 @@ class Controller_Recap extends Controller
         parent::__construct($call, $method);
         $this->load_model('Recap');
 
-        // Login required for both the page and the JSON endpoint. For json,
-        // respond with a 401 + JSON body instead of an HTML redirect so callers
-        // (e.g. the planned WebXR dashboard) can detect auth failure cleanly.
-        if (!isset($this->session->user_id)) {
-            if ($this->method === 'json' || $this->method === 'json_kingdom') {
-                header('Content-Type: application/json');
-                http_response_code(401);
-                echo json_encode(array('error' => 'login_required'));
-                exit;
-            }
-            header('Location: ' . UIR . 'Login');
-            exit;
-        }
+        // PUBLIC (opened 2026-08-23, Ken's call): the recap is the ORK's
+        // shareable artifact — a weekly link pasted into kingdom Discords
+        // must render for non-logged-in readers or it's dead to every
+        // prospect who taps it. All data here is precomputed aggregates of
+        // already-public facts (awards, attendance counts), read from
+        // ork_weekly_recap + ghettocache, so anonymous load is bounded.
     }
 
     public function index($week_start = null)
@@ -59,15 +52,19 @@ class Controller_Recap extends Controller
     }
 
     // Trends view: the recap's headline numbers over time, plus the
-    // all-history weekly active-players curve. Same audience as the recap
-    // itself (the constructor's login gate applies); the heavy lifting is
-    // ghettocached upstream, so page loads are two cheap cache reads.
+    // all-history weekly active-players curve. Public, like the recap; the
+    // heavy lifting is ghettocached upstream, so page loads are cheap cache
+    // reads.
     public function trends()
     {
         $this->data['page_title']     = 'Amtgard Platform Trends';
         $this->data['trend_series']   = $this->Recap->trend_series();
         $this->data['players_series'] = $this->Recap->weekly_active_players();
         $this->data['signin_series']  = $this->Recap->signin_series();
+        $this->data['og'] = array(
+            'title'       => 'Amtgard Platform Trends',
+            'description' => 'How many people use the ORK and play the game, week over week — visitors, sign-ins, and players on the field across all recorded history.',
+        );
     }
 
     public function json_kingdom($p = null)
@@ -124,6 +121,51 @@ class Controller_Recap extends Controller
         $this->data['scope_kingdom_id']   = $kingdom_id;
         $this->data['scope_kingdom_name'] = $kingdom_name;
         $this->data['kingdom_list']  = $this->Recap->kingdom_list();
+        $this->data['og'] = $this->_og_for_recap($recap, $kingdom_id, $kingdom_name, $week_start);
+    }
+
+    // Link-preview card for a recap week: pasted into a kingdom Discord, the
+    // embed should say which week and lead with the headline numbers instead
+    // of the site-generic blurb. Every field is optional-safe — a missing
+    // payload falls back to the generic description.
+    private function _og_for_recap($recap, $kingdom_id, $kingdom_name, $week_start)
+    {
+        $count = function ($v) {
+            if (is_array($v)) {
+                return count($v);
+            }
+            return is_numeric($v) ? (int)$v : 0;
+        };
+
+        $ws = strtotime((string)($recap['WeekStart'] ?? $week_start));
+        $we = strtotime((string)($recap['WeekEnd'] ?? ''));
+        $range = $ws ? date('M j', $ws) . ($we ? '–' . date($ws && date('n', $ws) === date('n', $we) ? 'j' : 'M j', $we) : '') . ', ' . date('Y', $we ?: $ws) : '';
+
+        $title = 'Amtgard Week in Review' . ($range !== '' ? ' — ' . $range : '');
+        if ($kingdom_id > 0 && $kingdom_name !== '') {
+            $title .= ' · ' . $kingdom_name;
+        }
+
+        $parts = array();
+        $visitors = $count($recap['HumanUsers'] ?? null);
+        if ($visitors > 0) {
+            $parts[] = number_format($visitors) . ' people visited the ORK';
+        }
+        $newbies = $count($recap['NewPlayers'] ?? null);
+        if ($newbies > 0) {
+            $parts[] = $newbies . ' new player' . ($newbies === 1 ? '' : 's');
+        }
+        $belts = $count($recap['Knightings'] ?? null) + $count($recap['Masterhoods'] ?? null) + $count($recap['Paragons'] ?? null);
+        if ($belts > 0) {
+            $parts[] = $belts . ' knighting' . ($belts === 1 ? '' : 's') . ' & masterhoods';
+        }
+
+        return array(
+            'title'       => $title,
+            'description' => $parts !== array()
+                ? implode(' · ', $parts) . ' — the week in Amtgard, every Monday.'
+                : 'The week in Amtgard — attendance, awards and events, every Monday.',
+        );
     }
 
     // Shared JSON render. $kingdom_id = 0 means global.

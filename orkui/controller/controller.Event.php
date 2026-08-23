@@ -215,6 +215,35 @@ class Controller_Event extends Controller
         $this->data['detail_id']  = $detail_id;
         $this->data['page_title'] = $info['Name'] ?? $this->data['page_title'];
 
+        // Link-preview card: event links are what get pasted into Discord
+        // most, so the embed should carry the event's own name, date and
+        // location instead of the site-generic blurb. Text-only for now —
+        // og:image policy (banners/heraldry) is a pending product decision.
+        $ogParts = array();
+        if (!empty($info['NextDate']) && strtotime($info['NextDate']) !== false) {
+            $ogParts[] = date('M j, Y', strtotime($info['NextDate']));
+        }
+        $ogWhere = trim(implode(', ', array_filter(array($info['ParkName'] ?? '', $info['KingdomName'] ?? ''))));
+        if ($ogWhere !== '') {
+            $ogParts[] = $ogWhere;
+        }
+        $ogDesc = implode(' · ', $ogParts);
+        // Strip markdown heading/emphasis markers — descriptions are authored
+        // in the event editor's markdown and render literally in an embed.
+        $ogBlurb = trim(preg_replace('/[#*_>`]+/', ' ', strip_tags(html_entity_decode((string)($info['ShortDescription'] ?? '')))));
+        if ($ogBlurb !== '') {
+            if (function_exists('mb_substr')) {
+                $ogBlurb = mb_substr($ogBlurb, 0, 180);
+            } else {
+                $ogBlurb = substr($ogBlurb, 0, 180);
+            }
+            $ogDesc .= ($ogDesc !== '' ? ' — ' : '') . $ogBlurb;
+        }
+        $this->data['og'] = array(
+            'title'       => (string)($info['Name'] ?? 'Amtgard Event'),
+            'description' => $ogDesc !== '' ? $ogDesc : 'An Amtgard event on the ORK.',
+        );
+
         unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['event']);
         if (!empty($info['KingdomId'])) {
             $this->data['menu']['kingdom'] = [

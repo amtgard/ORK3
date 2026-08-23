@@ -226,6 +226,15 @@ class Controller_Kingdom extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card (text-only; image policy pending).
+        $_ogKi = $this->data['kingdom_info']['Info']['KingdomInfo'];
+        $this->data['og'] = array(
+            'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
+            'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
+                . ' — parks, players, events and awards on the ORK.',
+        );
+
         $this->data['kingdom_officers']    = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 

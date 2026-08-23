@@ -48,6 +48,9 @@ class Controller
         $this->Report = new APIModel('Report');
         $this->Search = new JSONModel('Search');
         $this->data[ 'no_index' ] = false;
+        // Per-page OpenGraph overrides for link-preview cards (Discord etc.);
+        // rendered by ork_og_meta_tags() in the theme head.
+        $this->data[ 'og' ] = array();
 
         if (get_class($this) == "Controller") {
             $this->data[ 'page_title' ] = "Home";

@@ -86,6 +86,20 @@ class Controller_Park extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card (text-only; image policy pending): park name plus
+        // where it is — the question anyone tapping a shared park link has.
+        $_ogPi = $this->data['park_info']['ParkInfo'];
+        $_ogLoc = trim(implode(', ', array_filter(array(
+            (string)($_ogPi['City'] ?? ''),
+            (string)($_ogPi['Province'] ?? ''),
+        ))));
+        $this->data['og'] = array(
+            'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
+            'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
+        );
+
         $this->load_model('Weather');
         $this->data['park_weather']     = $this->Weather->for_park($park_id);
         $_park_officers = $this->Park->get_officers($park_id, $this->session->token);
