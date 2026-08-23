@@ -322,6 +322,7 @@ class Controller_Player extends Controller
             . ($_ogBio !== '' ? ' — ' . $_ogBio : '');
         $og = array(
             'title'       => (string)($this->data['Player']['Persona'] ?? 'Amtgard Player'),
+            'url'         => UIR . 'Player/profile/' . (int)$id,
             'description' => $_ogDesc,
         );
         // Profile photo first (Ken's call — the card should show the person,

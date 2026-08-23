@@ -63,6 +63,7 @@ class Controller_Recap extends Controller
         $this->data['signin_series']  = $this->Recap->signin_series();
         $this->data['og'] = array(
             'title'       => 'Amtgard Platform Trends',
+            'url'         => UIR . 'Recap/trends',
             'description' => 'How many people use the ORK and play the game, week over week — visitors, sign-ins, and players on the field across all recorded history.',
         );
     }
@@ -160,8 +161,12 @@ class Controller_Recap extends Controller
             $parts[] = $belts . ' knighting' . ($belts === 1 ? '' : 's') . ' & masterhoods';
         }
 
+        $canonical = $kingdom_id > 0
+            ? UIR . 'Recap/kingdom/' . $kingdom_id . '/' . $week_start
+            : UIR . 'Recap/index/' . $week_start;
         return array(
             'title'       => $title,
+            'url'         => $canonical,
             'description' => $parts !== array()
                 ? implode(' · ', $parts) . ' — the week in Amtgard, every Monday.'
                 : 'The week in Amtgard — attendance, awards and events, every Monday.',

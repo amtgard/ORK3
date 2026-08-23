@@ -241,6 +241,7 @@ class Controller_Event extends Controller
         }
         $og = array(
             'title'       => (string)($info['Name'] ?? 'Amtgard Event'),
+            'url'         => UIR . 'Event/detail/' . (int)$event_id . ($detail_id > 0 ? '/' . (int)$detail_id : ''),
             'description' => $ogDesc !== '' ? $ogDesc : 'An Amtgard event on the ORK.',
         );
         // Event heraldry over the site logo when it exists (Ken's call).

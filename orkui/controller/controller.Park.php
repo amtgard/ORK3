@@ -96,6 +96,7 @@ class Controller_Park extends Controller
         ))));
         $og = array(
             'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
+            'url'         => UIR . 'Park/profile/' . (int)$park_id,
             'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
                 . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
         );

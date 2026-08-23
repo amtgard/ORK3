@@ -232,6 +232,7 @@ class Controller_Kingdom extends Controller
         $_ogKi = $this->data['kingdom_info']['Info']['KingdomInfo'];
         $og = array(
             'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
+            'url'         => UIR . 'Kingdom/profile/' . (int)$kingdom_id,
             'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
                 . ' — parks, players, events and awards on the ORK.',
         );
