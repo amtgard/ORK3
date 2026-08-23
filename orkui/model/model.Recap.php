@@ -56,4 +56,11 @@ class Model_Recap extends Model
         $r = $this->Report->GetWeeklyActivePlayersSeries();
         return is_array($r) ? $r : array();
     }
+
+    // Daily anonymous sign-in counts by client family (1h-cached upstream).
+    public function signin_series()
+    {
+        $r = $this->Report->GetSigninTrendSeries();
+        return is_array($r) ? $r : array();
+    }
 }

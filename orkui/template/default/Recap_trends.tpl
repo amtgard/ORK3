@@ -5,10 +5,13 @@
  * $trend_series   : rows of WeekStart/Visitors/Requests/Blocked/CacheHits/Bytes
  *                   (nulls where a source wasn't available — charts show gaps).
  * $players_series : rows of WeekStart/Players across all recorded history.
+ * $signin_series  : rows of Day/Browsers/InApp/Apps/Total — anonymous daily
+ *                   sign-in counts (tally starts 2026-08-22).
  */
 
 $_ts  = is_array($trend_series)   ? $trend_series   : array();
 $_ps  = is_array($players_series) ? $players_series : array();
+$_ss  = is_array($signin_series)  ? $signin_series  : array();
 
 // Highcharts datetime series: [ms, value|null]. INTERIOR gaps stay gaps — the
 // honest rendering for "we don't trust / don't have data for this week" — but
@@ -43,6 +46,18 @@ foreach ($_ps as $_row) {
 	$_ms = strtotime((string)$_row['WeekStart']);
 	if ($_ms === false || $_ms < strtotime('2004-12-01')) continue;
 	$_players[] = array($_ms * 1000, $_row['Players']);
+}
+
+$_si_browsers = array();
+$_si_inapp    = array();
+$_si_apps     = array();
+foreach ($_ss as $_row) {
+	$_ms = strtotime((string)$_row['Day']);
+	if ($_ms === false) continue;
+	$_ms *= 1000;
+	$_si_browsers[] = array($_ms, $_row['Browsers']);
+	$_si_inapp[]    = array($_ms, $_row['InApp']);
+	$_si_apps[]     = array($_ms, $_row['Apps']);
 }
 
 $_fmt = function ($n) {
@@ -125,6 +140,25 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 		</details>
 	</section>
 
+<?php if ($_ss !== array()) : ?>
+	<section class="recap-section">
+		<h2><span class="recap-section-icon"><i class="fas fa-sign-in-alt"></i></span> Signing in</h2>
+		<p class="recap-digest recap-muted">
+			Successful sign-ins per day, by kind of app — browsers, links opened inside
+			apps like Discord, and community-built tools (mORK, jsork). Counted anonymously:
+			the ORK keeps daily totals only, never who signed in.
+		</p>
+		<div id="trends-signins" class="trends-chart"></div>
+		<details><summary>Data table (recent 30 days)</summary>
+			<table class="trends-table"><tr><th>Day</th><th>Browsers &amp; other</th><th>In-app</th><th>Community apps</th><th>Total</th></tr>
+<?php foreach (array_slice(array_reverse($_ss), 0, 30) as $_row) : ?>
+				<tr><td><?=htmlspecialchars($_row['Day'])?></td><td><?=number_format($_row['Browsers'])?></td><td><?=number_format($_row['InApp'])?></td><td><?=number_format($_row['Apps'])?></td><td><?=number_format($_row['Total'])?></td></tr>
+<?php endforeach; ?>
+			</table>
+		</details>
+	</section>
+<?php endif; ?>
+
 	<section class="recap-section">
 		<h2><span class="recap-section-icon"><i class="fas fa-fist-raised"></i></span> Players on the field</h2>
 		<p class="recap-digest recap-muted">
@@ -169,6 +203,9 @@ jQuery(document).ready(function() {
 	var PLAYERS  = <?=json_encode($_players)?>;
 	var REQUESTS = <?=json_encode($_requests)?>;
 	var BLOCKED  = <?=json_encode($_blocked)?>;
+	var SI_BROWSERS = <?=json_encode($_si_browsers)?>;
+	var SI_INAPP    = <?=json_encode($_si_inapp)?>;
+	var SI_APPS     = <?=json_encode($_si_apps)?>;
 
 	function palette() {
 		var dk = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -176,6 +213,7 @@ jQuery(document).ready(function() {
 			dk:      dk,
 			blue:    dk ? '#3987e5' : '#2a78d6',
 			orange:  dk ? '#d95926' : '#eb6834',
+			green:   dk ? '#2f9e63' : '#1f8a52',
 			text:    dk ? '#cbd5e0' : '#333',
 			muted:   dk ? '#a0aec0' : '#666',
 			grid:    dk ? '#2d3748' : '#e6e6e6',
@@ -214,6 +252,20 @@ jQuery(document).ready(function() {
 		o1.legend = { enabled: false };
 		o1.series = [{ name: 'Visitors', data: VISITORS, color: p.blue }];
 		charts.push(new Highcharts.Chart(o1));
+
+		if (document.getElementById('trends-signins')) {
+			var oS = baseOptions('trends-signins', p);
+			// Daily series, unlike the weekly charts — say the actual day.
+			oS.tooltip.xDateFormat = '%A, %b %e, %Y';
+			oS.legend = { enabled: true, itemStyle: { color: p.text, fontWeight: 'normal' },
+				itemHoverStyle: { color: p.text } };
+			oS.series = [
+				{ name: 'Browsers & other', data: SI_BROWSERS, color: p.blue },
+				{ name: 'In-app links', data: SI_INAPP, color: p.green },
+				{ name: 'Community apps', data: SI_APPS, color: p.orange }
+			];
+			charts.push(new Highcharts.Chart(oS));
+		}
 
 		var o2 = baseOptions('trends-players', p);
 		o2.legend = { enabled: false };

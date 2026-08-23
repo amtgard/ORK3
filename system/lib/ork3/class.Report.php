@@ -4280,6 +4280,43 @@ class Report extends Ork3
     }
 
     /**
+     * Daily sign-in counts from the anonymous tally, grouped into three
+     * reader-facing client families for the public trends page. The tally
+     * stores (day, client-bucket, count) with no player attribution, so this
+     * is aggregation over already-anonymous data.
+     */
+    public function GetSigninTrendSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('signin-trend-series'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+            return $cache;
+        }
+        $sql = "SELECT day,
+					   SUM(CASE WHEN client LIKE 'mORK%' OR client LIKE 'jsork%' THEN signins ELSE 0 END) AS apps,
+					   SUM(CASE WHEN client LIKE 'In-app browser%' THEN signins ELSE 0 END)               AS inapp,
+					   SUM(CASE WHEN client NOT LIKE 'mORK%' AND client NOT LIKE 'jsork%'
+					             AND client NOT LIKE 'In-app browser%' THEN signins ELSE 0 END)           AS browsers,
+					   SUM(signins) AS total
+				FROM " . DB_PREFIX . "signin_tally
+				GROUP BY day
+				ORDER BY day";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'Day'      => $r->day,
+                    'Browsers' => (int)$r->browsers,
+                    'InApp'    => (int)$r->inapp,
+                    'Apps'     => (int)$r->apps,
+                    'Total'    => (int)$r->total,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
      * Distinct players credited with attendance per week (Monday-anchored,
      * matching the recap window), across all recorded history — the long
      * participation curve of the game itself, independent of web analytics.

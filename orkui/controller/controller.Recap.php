@@ -67,6 +67,7 @@ class Controller_Recap extends Controller
         $this->data['page_title']     = 'Amtgard Platform Trends';
         $this->data['trend_series']   = $this->Recap->trend_series();
         $this->data['players_series'] = $this->Recap->weekly_active_players();
+        $this->data['signin_series']  = $this->Recap->signin_series();
     }
 
     public function json_kingdom($p = null)
