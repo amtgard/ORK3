@@ -200,7 +200,7 @@ body {
     width: 220px;
     align-self: flex-start;
     position: sticky;
-    /* 14px, and deliberately NOT --cms-header-h + 14px.
+    /* 28px, and deliberately NOT --cms-header-h + 14px.
        #93 added the navbar height here back when the viewport was the scroller.
        It no longer is: orkui.css clamps `html, body { overflow-x: hidden }`, so
        body's overflow is not propagated to the viewport and BODY is the scroll
@@ -501,6 +501,20 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
         margin-bottom: 16px;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        /* A flex item defaults to min-width:auto, which refuses to shrink below its
+           content's min-content width — so the rail laid its seven items out at their
+           full 411px inside a 354px shell and the overflow-x above never engaged. The
+           surplus was then clipped by the ancestor's overflow-x:hidden rather than
+           scrolling, silently cutting the last items off at 390px.
+
+           min-width:0 lets the item shrink; align-self is the other half. The base
+           rule sets align-self:flex-start so the desktop rail does not stretch to
+           the full height of the workspace beside it. Once .cms-shell flips to
+           flex-direction:column the cross axis is horizontal, and flex-start there
+           means shrink-to-fit the CONTENT — which is exactly the 411px. Stretching
+           it back to the container is what makes overflow-x:auto engage. */
+        min-width: 0;
+        align-self: stretch;
     }
     .cms-rail-brand {
         padding: 0 10px 0 4px;
