@@ -83,6 +83,9 @@ $humanize_days = function($days) {
 .recap-hero-eyebrow { color: #c89b3f; font-size: 0.78em; letter-spacing: 0.22em;
 	text-transform: uppercase; font-weight: 700; margin-bottom: 0.4em; }
 .recap-hero-eyebrow .fas { margin-right: 0.4em; }
+.recap-hero-link { color: #1a4c8c; text-decoration: none; font-style: normal; }
+.recap-hero-link:hover { text-decoration: underline; }
+.recap-hero-link .fas { margin-right: 0.3em; color: #c89b3f; }
 /* The site-wide h1-h6 rule in orkui.css applies a light-gray background, border,
  * and text-shadow to every heading — explicitly reset those for our headings. */
 .recap-root h1, .recap-root h2 { background: transparent; border: none;
@@ -202,6 +205,7 @@ html[data-theme="dark"] .recap-hero { border-bottom-color: #4a3b1f; }
 html[data-theme="dark"] .recap-hero-eyebrow { color: #e0b95a; }
 html[data-theme="dark"] .recap-hero h1 { color: #f1f5f9; }
 html[data-theme="dark"] .recap-hero-sub { color: #6b7280; }
+html[data-theme="dark"] .recap-hero-link { color: #63b3ed; }
 html[data-theme="dark"] .recap-section { background: #2d3748; border-color: #4a5568;
 	box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
 html[data-theme="dark"] .recap-section h2 { color: #f1f5f9; }
@@ -243,6 +247,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		</div>
 		<h1><?=htmlspecialchars($week_headline)?></h1>
 		<div class="recap-hero-sub">Weekly recaps are automatically produced early Monday mornings for the previous week.</div>
+		<div class="recap-hero-sub"><a class="recap-hero-link" href="<?=UIR?>Recap/trends"><i class="fas fa-chart-line"></i> Also worth a visit: Platform Trends</a> — visitors, sign-ins and players on the field, week over week.</div>
 	</div>
 
 	<div class="recap-actions">
