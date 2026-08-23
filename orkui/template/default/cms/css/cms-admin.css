@@ -3197,13 +3197,28 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
  * .cms-media-thumb.cms-empty-thumb are the same specificity, so source order
  * is what makes this modifier win over both.
  * ========================================================================== */
+/* A missing file is news, not an emergency. This started out in the danger
+   palette, which put a blood-red tile on every card whose file is absent — and on
+   a library where the files have not been synced that is the whole grid, shouting.
+   It is also the mistake this surface just finished fixing for Delete: the loudest
+   treatment reserved for the most common state.
+
+   Amber says "look at this" without saying "something broke". The dashed edge is
+   what actually separates it from the neutral "no image chosen" tile; the colour
+   only has to carry attention, not alarm. */
 .cms-empty-thumb.cms-missing-thumb {
-    color: var(--ork-badge-red-text, #c0392b);
-    background: var(--ork-badge-red-bg, #fdecea);
+    color: var(--cms-warn, #9c4221);
+    background: var(--ork-badge-amber-bg, #fdf3e3);
     border-style: dashed;
+    border-color: var(--cms-warn, #9c4221);
 }
+
+html[data-theme="dark"] .cms-empty-thumb.cms-missing-thumb {
+    background: #2b2113;
+}
+
 .cms-missing-label {
-    color: var(--ork-badge-red-text, #c0392b);
+    color: var(--cms-warn, #9c4221);
     font-weight: 600;
     white-space: nowrap;
 }
