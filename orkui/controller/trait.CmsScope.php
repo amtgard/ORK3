@@ -371,6 +371,148 @@ trait CmsScopeContext
     }
 
     /**
+     * Memoized site row for the current non-global scope (false = not yet looked up).
+     * Lives on the trait because BOTH consumers build public live URLs from it:
+     * the page surfaces (Controller_Cms) and the JSON endpoints
+     * (Controller_CmsAjax::pagelist, which hands the link chooser the same URL
+     * shape the admin list links to).
+     * @var array|false|null
+     */
+    private $_scopeSiteMemo = false;
+
+    /**
+     * Memoized site row for the current (non-global) scope, or null. Used to
+     * build scope-correct PUBLIC live URLs in the admin — a kingdom/park page's
+     * public address is Site/... (its org site), never the global Page/Blog route.
+     *
+     * @param array $scope
+     * @return array|null
+     */
+    private function _scopeSite($scope)
+    {
+        if ($this->_scopeSiteMemo !== false) {
+            return $this->_scopeSiteMemo;
+        }
+        $this->_scopeSiteMemo = null;
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->load_model('CmsSite');
+            $site = $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
+            $this->_scopeSiteMemo = is_array($site) ? $site : null;
+        }
+        return $this->_scopeSiteMemo;
+    }
+
+    /**
+     * The "View live site" URL for the current scope: the org site's public home
+     * (Site/view/{siteSlug}) when scoped, else the global front door (UIR).
+     *
+     * @param array $scope
+     * @return string
+     */
+    private function _scopeLiveHome($scope)
+    {
+        if ($this->_scopeIsGlobal($scope)) {
+            return UIR;
+        }
+        $site = $this->_scopeSite($scope);
+        $slug = ($site && !empty($site['slug'])) ? (string)$site['slug'] : '';
+        return $slug !== '' ? UIR . 'Site/view/' . rawurlencode($slug) : UIR;
+    }
+
+    /**
+     * Scope-correct PUBLIC live URL for a page row. Global scope keeps the
+     * legacy Page/view route; a scoped page maps to its org site — the home page
+     * (matched by home_page_id, or the 'home' slug) to Site/view/{siteSlug}, any
+     * other page to Site/page/{siteSlug}/{pageSlug}. Returns '' when a scoped
+     * site has no resolvable slug yet (no public URL to link).
+     *
+     * @param array      $scope
+     * @param int        $pageId
+     * @param string     $pageSlug
+     * @param array|null $pathMap  optional pageId => full-slug-path map (#13) to
+     *                             resolve nested paths in memory; falls back to a
+     *                             PagePath() DB walk for any id it doesn't cover.
+     * @return string
+     */
+    private function _pageLiveHref($scope, $pageId, $pageSlug, $pathMap = null)
+    {
+        $pageSlug = (string)$pageSlug;
+        if ($this->_scopeIsGlobal($scope)) {
+            return ($pageSlug === 'home') ? UIR : UIR . 'Page/view/' . rawurlencode($pageSlug);
+        }
+        $site = $this->_scopeSite($scope);
+        $siteSlug = ($site && !empty($site['slug'])) ? (string)$site['slug'] : '';
+        if ($siteSlug === '') {
+            return '';
+        }
+        $isHome = ($site && (int)($site['home_page_id'] ?? 0) === (int)$pageId) || $pageSlug === 'home';
+        if ($isHome) {
+            return UIR . 'Site/view/' . rawurlencode($siteSlug);
+        }
+        // Nested pages live at their FULL slug path (parent/child/…), not the bare
+        // leaf slug — so the live link matches the public Site/page route (which
+        // walks parent_id). #13: prefer the precomputed in-memory path map; only
+        // fall back to a per-row PagePath() DB walk when the map can't resolve it.
+        $path = (is_array($pathMap) && isset($pathMap[(int)$pageId]))
+            ? (string)$pathMap[(int)$pageId]
+            : (string)$this->CmsPage->PagePath((int)$pageId);
+        if ($path === '') {
+            $path = $pageSlug;
+        }
+        $encPath = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return UIR . 'Site/page/' . rawurlencode($siteSlug) . '/' . $encPath;
+    }
+
+    /**
+     * #13: build a pageId => full-slug-path map from the already-fetched admin
+     * list rows, resolving nested paths with an in-memory parent_id walk — one
+     * pass over the rows instead of a PagePath() DB walk per row. A row is only
+     * mapped when its ENTIRE ancestor chain is present in the same result set and
+     * every row carries the parent_id column; anything not fully resolvable is
+     * simply omitted so _pageLiveHref falls back to a PagePath() lookup for it
+     * (correctness preserved for filtered lists or pre-migration rows).
+     *
+     * @param array $pages ListPages rows (need page_id, slug, parent_id)
+     * @return array<int,string> pageId => 'parent/child/leaf' slug path
+     */
+    private function _buildScopePathMap($pages)
+    {
+        $byId = array();
+        foreach ((is_array($pages) ? $pages : array()) as $p) {
+            $pid = (int)($p['page_id'] ?? 0);
+            // Require the parent_id column to resolve ancestry in memory; without
+            // it, leave the row unmapped (caller falls back to PagePath).
+            if ($pid <= 0 || !array_key_exists('parent_id', $p)) {
+                continue;
+            }
+            $par = ($p['parent_id'] !== null && (int)$p['parent_id'] > 0) ? (int)$p['parent_id'] : 0;
+            $byId[$pid] = array('slug' => (string)($p['slug'] ?? ''), 'parent' => $par);
+        }
+
+        $map = array();
+        foreach ($byId as $pid => $_) {
+            $parts = array();
+            $cur   = $pid;
+            $guard = 0;
+            $ok    = true;
+            while ($cur > 0) {
+                if (!isset($byId[$cur]) || ++$guard > 64) {
+                    $ok = false; // ancestor missing from this list, or a cycle
+                    break;
+                }
+                array_unshift($parts, $byId[$cur]['slug']);
+                $cur = $byId[$cur]['parent'];
+            }
+            if ($ok) {
+                $map[$pid] = implode('/', array_filter($parts, function ($s) {
+                    return $s !== '';
+                }));
+            }
+        }
+        return $map;
+    }
+
+    /**
      * True when a page/post/media row belongs to the resolved scope — the IDOR
      * guard for every by-id mutation. A row with no scope columns is treated as
      * global ('global', 0), matching the libs' create defaults.

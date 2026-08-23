@@ -92,4 +92,13 @@ class Model_CmsPage extends Model
     {
         return $this->CmsPage->ListPages($filters);
     }
+
+    /**
+     * Scope-BOUND page list for the admin link chooser (CmsAjax/pagelist).
+     * Unlike list_pages(), the scope is not an optional filter — see the lib.
+     */
+    public function list_pages_for_scope($scopeType, $scopeId, $search = null, $limit = 300)
+    {
+        return $this->CmsPage->ListPagesForScope($scopeType, $scopeId, $search, $limit);
+    }
 }

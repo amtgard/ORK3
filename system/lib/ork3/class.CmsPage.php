@@ -2173,6 +2173,71 @@ class CmsPage extends CmsBase
     }
 
     /**
+     * Link-target list for ONE scope: the pages an author may point a link at,
+     * as page_id / parent_id / slug / title / status.
+     *
+     * Deliberately NOT ListPages() with filters: this is the scope-BOUND read.
+     * scope_type and scope_id are always matched (never optional, never
+     * defaulted), so a caller cannot be handed another org's pages by omitting a
+     * filter — which is exactly the mistake ListPages()'s optional
+     * scope_type/scope_id makes possible. Ordering is by title because the only
+     * consumer is a human picking from a list, not an activity feed.
+     *
+     * Scope handling, trashed-row exclusion and the scheduled-status promotion
+     * all match ListPages() (its immediate neighbour above).
+     *
+     * @param string      $scopeType 'global' | 'kingdom' | 'park'
+     * @param int         $scopeId   scope owner id (0 for global)
+     * @param string|null $search    optional title/slug substring filter
+     * @param int         $limit     row cap (clamped to 1..500)
+     * @return array list of ['page_id','parent_id','slug','title','status']
+     */
+    public function ListPagesForScope($scopeType, $scopeId, $search = null, $limit = 300)
+    {
+        global $DB;
+
+        // Keep the chooser honest — flip any due scheduled rows first, exactly
+        // as ListPages() does (C7).
+        $this->_promoteScheduled();
+
+        $where = array('deleted_at IS NULL', 'scope_type = :scope_type', 'scope_id = :scope_id');
+
+        $DB->Clear();
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
+
+        if ($search !== null && trim((string)$search) !== '') {
+            // Distinct placeholders: native prepared statements forbid reusing
+            // one named param twice in a single statement.
+            $where[] = '(title LIKE :search_t OR slug LIKE :search_s)';
+            $DB->search_t = '%' . trim((string)$search) . '%';
+            $DB->search_s = '%' . trim((string)$search) . '%';
+        }
+
+        // Code-controlled integer only; inlined since LIMIT can't be bound.
+        $limit = (int)$limit;
+        if ($limit <= 0 || $limit > 500) {
+            $limit = 500;
+        }
+
+        // parent_id travels so the caller can resolve nested slug paths in
+        // memory instead of one PagePath() walk per row (#13).
+        $sql = 'SELECT page_id, parent_id, slug, title, status'
+            . ' FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE ' . implode(' AND ', $where)
+            . ' ORDER BY title ASC, page_id ASC'
+            . ' LIMIT ' . $limit;
+
+        $r = $DB->DataSet($sql);
+
+        $out = array();
+        foreach ($this->_eachRow($r) as $row) {
+            $out[] = $row;
+        }
+        return $out;
+    }
+
+    /**
      * Status-broken-down live page counts for a scope, via a single GROUP BY
      * (no full-row fetch). Only non-trashed rows are counted (deleted_at IS NULL).
      * Lets admin surfaces show "N drafts / M published" without materializing the

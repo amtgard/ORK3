@@ -377,7 +377,11 @@ html[data-theme="dark"] .cms-wrap {
     white-space: nowrap;
     transition: background .12s, border-color .12s, opacity .12s;
 }
-.cms-btn:hover { background: var(--ork-bg-tertiary); }
+/* Grouped with the link chooser's page-row hover (same declaration body — the
+   duplication gate wants one rule, not two copies). Both are :hover, so the
+   grouped rule outranks either base rule wherever it sits. */
+.cms-btn:hover,
+.cms-linkpick-opt:hover { background: var(--ork-bg-tertiary); }
 .cms-btn:disabled,
 .cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
 .cms-btn-primary {
@@ -2674,13 +2678,8 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
    vars (was the second inline style element in cms/_block_editor.tpl). ---- */
 .cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
 .cms-cols-countrow .cms-label { margin: 0; }
-.cms-cols-seg { display: inline-flex; gap: 6px; }
-.cms-cols-seg .cms-btn { min-width: 42px; justify-content: center; }
-.cms-cols-seg .cms-cols-seg-active {
-    background: var(--cms-gold, #f0b429);
-    border-color: var(--cms-gold, #f0b429);
-    color: #1a1205;
-}
+/* The segmented control moved to the shared .cms-seg rules at the end of this
+   file — the columns splitter and the link chooser both use it. */
 .cms-cols-grid { display: grid; gap: 12px; align-items: start; }
 .cms-cols-grid-2 { grid-template-columns: 1fr 1fr; }
 .cms-cols-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -2765,4 +2764,67 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
     background: var(--ork-bg-tertiary);
     color: var(--cms-gold, #f0b429);
     font-size: 15px;
+}
+
+/* ---- Shared segmented control. Two-plus mutually-exclusive buttons where one
+   is on: the columns splitter's 2/3 count and the link chooser's
+   page-vs-address mode. (Was .cms-cols-seg, columns-only.) ---- */
+.cms-seg { display: inline-flex; gap: 6px; }
+.cms-seg .cms-btn { min-width: 42px; justify-content: center; }
+.cms-seg .cms-seg-active {
+    background: var(--cms-gold, #f0b429);
+    border-color: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+
+/* ---- Link chooser (V2): "a page on this site" vs. "another address".
+   Theme-aware via the ORK vars; the gold accent is defined for both themes on
+   .cms-wrap / .cms-shell at the top of this file. ---- */
+.cms-linkpick-modes { margin-bottom: 8px; }
+.cms-linkpick-filter { margin-bottom: 6px; }
+.cms-linkpick-list {
+    max-height: 186px;
+    overflow-y: auto;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-secondary);
+}
+.cms-linkpick-opt {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--ork-border);
+    background: none;
+    color: var(--ork-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.cms-linkpick-opt:last-child { border-bottom: 0; }
+/* .cms-linkpick-opt:hover is grouped up with .cms-btn:hover. */
+.cms-linkpick-opt-active {
+    background: var(--ork-bg-tertiary);
+    box-shadow: inset 3px 0 0 var(--cms-gold, #f0b429);
+}
+.cms-linkpick-opt-title {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cms-linkpick-opt-meta {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--ork-text-muted);
+}
+.cms-linkpick-empty {
+    padding: 9px 10px;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--ork-text-muted);
 }

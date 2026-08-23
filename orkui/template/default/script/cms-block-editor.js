@@ -543,10 +543,10 @@ window.CmsBlockEditor = (function () {
     function ctaRepeater(block, styleOpts) {
         return repeater(block, 'ctas', 'CTA', { label: '', href: '#', style: styleOpts[0].value }, function (cta) {
             var box = el('div', null);
-            var g = el('div', 'cms-grid2');
-            g.appendChild(textBound(cta, 'label', 'Label'));
-            g.appendChild(textBound(cta, 'href', 'Link (href)'));
-            box.appendChild(g);
+            // Not a .cms-grid2 row any more: the link control is a full-width
+            // chooser, so the label and the link stack instead of sharing a row.
+            box.appendChild(textBound(cta, 'label', 'Label'));
+            box.appendChild(linkBound(cta, 'href', 'Where the button goes'));
             box.appendChild(selectBound(cta, 'style', 'Style', styleOpts, styleOpts[0].value));
             return box;
         });
@@ -707,6 +707,171 @@ window.CmsBlockEditor = (function () {
         wrap.appendChild(el('div', 'cms-help',
             'Pick one above, or type a Font Awesome class name if you already know the one you want.'));
         paint();
+        return wrap;
+    }
+
+    /* ---- link chooser (V2) ------------------------------------------------
+     * Every link field in this editor used to be a bare text input labelled
+     * "Link (href)". The value a real page actually carries is
+     *   /orkui/index.php?Route=Page/view/mission
+     * i.e. the author's workflow was: open the target page, copy the framework
+     * route out of the address bar, paste it here. That is a developer's URL,
+     * not something a park officer should ever have to see.
+     *
+     * linkBound() offers two modes instead:
+     *   "A page on this site"  — the pages in the CURRENT SCOPE by TITLE,
+     *                            searchable; picking one stores the same URL
+     *                            shape that has always worked.
+     *   "Another address"      — free text, for links off this site.
+     *
+     * Round-trip: a stored href that matches a page in this scope opens in page
+     * mode with that page highlighted; anything else opens in address mode
+     * showing the raw value untouched. A field with nothing in it yet (or the
+     * placeholder '#') opens in page mode, because that is the answer the author
+     * wants nine times in ten — free text must not be the primary control. */
+
+    // Per-scope cache: opening ten choosers costs ONE request. Keyed by the
+    // scope selector so a scope switch (which reloads the page anyway) can never
+    // serve another org's page list out of a stale cache.
+    var pageListCache = {};
+    var pageListReq   = {};
+
+    function loadPageList() {
+        var key = String(window.CMS_SCOPE || '');
+        if (pageListCache[key]) { return Promise.resolve(pageListCache[key]); }
+        if (pageListReq[key]) { return pageListReq[key]; }
+        pageListReq[key] = fetch(
+            AJAX + 'pagelist' + (key ? '&scope=' + encodeURIComponent(key) : ''),
+            { credentials: 'same-origin' }
+        )
+            .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+            .then(function (d) {
+                var rows = (d && d.ok && Array.isArray(d.pages)) ? d.pages : [];
+                pageListCache[key] = rows;
+                return rows;
+            })
+            .catch(function () {
+                // Do NOT cache a failure — a transient error would otherwise
+                // leave every chooser in this session permanently empty.
+                delete pageListReq[key];
+                return [];
+            });
+        return pageListReq[key];
+    }
+
+    // Compare hrefs origin-insensitively: the server builds absolute URLs from
+    // UIR, while values seeded/typed earlier are often site-relative
+    // ('/orkui/index.php?Route=Page/view/mission'). Same page, different string.
+    function normHref(u) {
+        var s = String(u == null ? '' : u).trim();
+        return s.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '');
+    }
+
+    function linkBound(obj, key, label, ph) {
+        var wrap = el('div', 'cms-field');
+        wrap.style.marginBottom = '8px';
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+
+        var modes = el('div', 'cms-seg cms-linkpick-modes');
+        var pageBtn = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-file"></i> A page on this site');
+        pageBtn.type = 'button';
+        var addrBtn = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-globe"></i> Another address');
+        addrBtn.type = 'button';
+        modes.appendChild(pageBtn);
+        modes.appendChild(addrBtn);
+        wrap.appendChild(modes);
+
+        var pagePane = el('div', 'cms-linkpick-pane');
+        var filter = el('input', 'cms-input cms-linkpick-filter');
+        filter.type = 'text';
+        filter.placeholder = 'Search pages by name…';
+        filter.setAttribute('aria-label', 'Search pages by name');
+        var list = el('div', 'cms-linkpick-list');
+        pagePane.appendChild(filter);
+        pagePane.appendChild(list);
+
+        var addrPane = el('div', 'cms-linkpick-pane');
+        var addr = el('input', 'cms-input');
+        addr.type = 'text';
+        addr.placeholder = ph || 'https://…';
+        addr.value = obj[key] != null ? obj[key] : '';
+        addr.addEventListener('input', function () { obj[key] = addr.value; markDirty(); });
+        addrPane.appendChild(addr);
+        addrPane.appendChild(el('div', 'cms-help',
+            'For somewhere off this site — a Facebook group, a Google form, another kingdom.'));
+
+        wrap.appendChild(pagePane);
+        wrap.appendChild(addrPane);
+
+        function setMode(m) {
+            var isPage = (m === 'page');
+            pageBtn.classList.toggle('cms-seg-active', isPage);
+            addrBtn.classList.toggle('cms-seg-active', !isPage);
+            pageBtn.setAttribute('aria-pressed', isPage ? 'true' : 'false');
+            addrBtn.setAttribute('aria-pressed', isPage ? 'false' : 'true');
+            pagePane.style.display = isPage ? '' : 'none';
+            addrPane.style.display = isPage ? 'none' : '';
+        }
+        pageBtn.addEventListener('click', function () { setMode('page'); });
+        addrBtn.addEventListener('click', function () { setMode('address'); });
+
+        // Start in address mode so a chooser whose page list never arrives still
+        // shows the author the value they have. paint() moves it once the list
+        // resolves.
+        setMode('address');
+        list.appendChild(el('div', 'cms-linkpick-empty', 'Loading pages…'));
+
+        function paint(rows) {
+            var term = filter.value.trim().toLowerCase();
+            var cur = normHref(obj[key]);
+            list.innerHTML = '';
+            var shown = 0;
+            rows.forEach(function (p) {
+                var title = String(p.title || p.slug || '');
+                if (term
+                    && title.toLowerCase().indexOf(term) < 0
+                    && String(p.slug || '').toLowerCase().indexOf(term) < 0) {
+                    return;
+                }
+                shown++;
+                var opt = el('button', 'cms-linkpick-opt',
+                    '<span class="cms-linkpick-opt-title">' + esc(title) + '</span>'
+                    + '<span class="cms-linkpick-opt-meta">'
+                    + esc(p.status === 'published' ? 'Published' : 'Not published yet')
+                    + '</span>');
+                opt.type = 'button';
+                if (p.href && normHref(p.href) === cur) {
+                    opt.classList.add('cms-linkpick-opt-active');
+                    opt.setAttribute('aria-current', 'true');
+                }
+                opt.addEventListener('click', function () {
+                    obj[key] = String(p.href || '');
+                    addr.value = obj[key];
+                    markDirty();
+                    paint(rows);
+                });
+                list.appendChild(opt);
+            });
+            if (!shown) {
+                list.appendChild(el('div', 'cms-linkpick-empty',
+                    rows.length ? 'No pages match that search.' : 'No pages on this site yet.'));
+            }
+        }
+
+        loadPageList().then(function (rows) {
+            filter.addEventListener('input', function () { paint(rows); });
+            paint(rows);
+            var cur = normHref(obj[key]);
+            var known = false;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].href && normHref(rows[i].href) === cur) { known = true; break; }
+            }
+            // '#' is the blank-CTA placeholder this editor has always seeded, so
+            // it counts as "nothing chosen yet", not as a raw address.
+            var empty = (cur === '' || cur === '#');
+            setMode((known || (empty && rows.length)) ? 'page' : 'address');
+        });
+
         return wrap;
     }
 
@@ -936,11 +1101,11 @@ window.CmsBlockEditor = (function () {
             { key: 'logo', type: 'image', label: 'Logo' },
             { key: 'cta', type: 'group', label: 'Call-to-action button', of: [
                 { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Find a Park' },
-                { key: 'href', type: 'url', label: 'Link (href)', placeholder: 'https://…' }
+                { key: 'href', type: 'url', label: 'Where the button goes', placeholder: 'https://…' }
             ] },
             { key: 'login', type: 'group', label: 'Login button', of: [
                 { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Sign in' },
-                { key: 'href', type: 'url', label: 'Link (href)', placeholder: 'https://…' }
+                { key: 'href', type: 'url', label: 'Where the button goes', placeholder: 'https://…' }
             ] },
             { type: 'note', html: 'Menu links are managed in the <a href="' + esc(UIR) + 'Cms/nav">Navigation tab</a>. This block only controls the logo and the buttons above.' }
         ],
@@ -952,7 +1117,7 @@ window.CmsBlockEditor = (function () {
             ] },
             { key: 'cta', type: 'group', label: 'Optional call-to-action', of: [
                 { key: 'label', type: 'text', label: 'CTA label' },
-                { key: 'href', type: 'url', label: 'CTA link', placeholder: 'https://…' }
+                { key: 'href', type: 'url', label: 'Where the button goes', placeholder: 'https://…' }
             ] },
             { key: 'steps', type: 'repeater', label: 'Steps', singular: 'Step', of: [
                 { key: 'n', type: 'number', label: 'Number', placeholder: 'e.g. 1' },
@@ -988,13 +1153,13 @@ window.CmsBlockEditor = (function () {
             { key: 'heading', type: 'text', label: 'Heading' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max kingdoms shown', placeholder: '12' },
-            { key: 'more_href', type: 'url', label: '“Browse all” link', placeholder: 'https://…' }
+            { key: 'more_href', type: 'url', label: 'Where “Browse all” goes', placeholder: 'https://…' }
         ],
         events_feed: [
             { key: 'heading', type: 'text', label: 'Heading' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max events shown', placeholder: '3' },
-            { key: 'more_href', type: 'url', label: '“All events” link', placeholder: 'https://…' }
+            { key: 'more_href', type: 'url', label: 'Where “All events” goes', placeholder: 'https://…' }
         ],
         blog_feed: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Latest News' },
@@ -1044,7 +1209,7 @@ window.CmsBlockEditor = (function () {
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming Events' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max events shown', placeholder: '3' },
-            { key: 'more_href', type: 'url', label: '“All events” link', placeholder: 'https://…' }
+            { key: 'more_href', type: 'url', label: 'Where “All events” goes', placeholder: 'https://…' }
         ],
         kingdom_parks: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Parks' },
@@ -1056,7 +1221,7 @@ window.CmsBlockEditor = (function () {
             ] },
             { key: 'show_heraldry', type: 'bool', label: 'Display park heraldry' },
             { key: 'limit', type: 'number', label: 'Max parks shown', placeholder: '24' },
-            { key: 'more_href', type: 'url', label: '“All parks” link', placeholder: 'https://…' }
+            { key: 'more_href', type: 'url', label: 'Where “All parks” goes', placeholder: 'https://…' }
         ],
         kingdom_parks_map: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Park Map' },
@@ -1066,7 +1231,7 @@ window.CmsBlockEditor = (function () {
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming Events' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max events shown', placeholder: '3' },
-            { key: 'more_href', type: 'url', label: '“All events” link', placeholder: 'https://…' }
+            { key: 'more_href', type: 'url', label: 'Where “All events” goes', placeholder: 'https://…' }
         ],
         member_bar: []  // pure info card; no knobs
     };
@@ -1232,7 +1397,12 @@ window.CmsBlockEditor = (function () {
                 break;
             }
 
+            // 'url' is a LINK — a page on this site, or an address elsewhere.
+            // It gets the chooser; 'text' (and the default) stay plain inputs.
             case 'url':
+                node = linkBound(obj, spec.key, spec.label, spec.placeholder);
+                break;
+
             case 'text':
             default:
                 node = textBound(obj, spec.key, spec.label, spec.placeholder);
@@ -1263,11 +1433,9 @@ window.CmsBlockEditor = (function () {
                 [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }], 'left'));
             if (!block.fields.cta || typeof block.fields.cta !== 'object') { block.fields.cta = {}; }
             var ctaWrap = el('div', null);
-            ctaWrap.appendChild(el('div', 'cms-label', 'Optional CTA'));
-            var g = el('div', 'cms-grid2');
-            g.appendChild(textBound(block.fields.cta, 'label', 'CTA label'));
-            g.appendChild(textBound(block.fields.cta, 'href', 'CTA link'));
-            ctaWrap.appendChild(g);
+            ctaWrap.appendChild(el('div', 'cms-label', 'Optional button'));
+            ctaWrap.appendChild(textBound(block.fields.cta, 'label', 'Button label'));
+            ctaWrap.appendChild(linkBound(block.fields.cta, 'href', 'Where the button goes'));
             body.appendChild(ctaWrap);
             return body;
         }
@@ -1276,7 +1444,7 @@ window.CmsBlockEditor = (function () {
             if (!block.fields.image || typeof block.fields.image !== 'object') { block.fields.image = {}; }
             body.appendChild(fieldImage(block.fields, 'image', 'Image'));
             body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional caption' }));
-            body.appendChild(fieldText(block, 'href', 'Link (optional)', { placeholder: 'https://…' }));
+            body.appendChild(linkBound(block.fields, 'href', 'Where the image links to (optional)'));
             return body;
         }
 
@@ -1314,7 +1482,7 @@ window.CmsBlockEditor = (function () {
                     // The icon picker is a full-width swatch grid, so the card's
                     // icon + link no longer share a .cms-grid2 row.
                     box.appendChild(iconBound(card, 'icon', 'Icon'));
-                    box.appendChild(textBound(card, 'href', 'Link (href)'));
+                    box.appendChild(linkBound(card, 'href', 'Where the card goes'));
                     box.appendChild(textBound(card, 'title', 'Title'));
                     box.appendChild(textBound(card, 'blurb', 'Blurb'));
                     return box;
@@ -1354,7 +1522,7 @@ window.CmsBlockEditor = (function () {
                         'Off by default for privacy. Only turn this on with the person’s consent — otherwise the public card shows their Amtgard name only.'));
                     box.appendChild(textBound(person, 'role', 'Role / title'));
                     box.appendChild(textBoundArea(person, 'bio', 'Bio'));
-                    box.appendChild(textBound(person, 'href', 'Manual link (used only if no persona is linked)'));
+                    box.appendChild(linkBound(person, 'href', 'Where this person’s name links (used only if no persona is linked)'));
                     return box;
                 }));
             return body;
@@ -1703,7 +1871,7 @@ window.CmsBlockEditor = (function () {
 
         var countRow = el('div', 'cms-cols-countrow');
         countRow.appendChild(el('span', 'cms-label', 'Columns'));
-        var seg = el('div', 'cms-cols-seg');
+        var seg = el('div', 'cms-seg');
         [2, 3].forEach(function (n) {
             var b = el('button', 'cms-btn cms-btn-sm', String(n));
             b.type = 'button';
@@ -1720,7 +1888,7 @@ window.CmsBlockEditor = (function () {
 
         function syncChrome() {
             Array.prototype.forEach.call(seg.children, function (b) {
-                b.classList.toggle('cms-cols-seg-active', Number(b.getAttribute('data-n')) === cols.length);
+                b.classList.toggle('cms-seg-active', Number(b.getAttribute('data-n')) === cols.length);
             });
             grid.className = 'cms-cols-grid cms-cols-grid-' + cols.length;
         }

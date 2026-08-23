@@ -20,6 +20,7 @@ require_once __DIR__ . '/controller.Cms.php';
  *   CmsAjax/deletepage    → delete a non-system page + its blocks           (page.delete)
  *   CmsAjax/mediaupload   → base64 image upload → media library             (media.manage)
  *   CmsAjax/medialist     → media-ref list for the picker                   (media.manage)
+ *   CmsAjax/pagelist      → page list for the editor's link chooser          (page.edit | page.edit_own | page.create)
  *
  * Every action: requires a logged-in user, gates the capability via
  * CmsAuth->cms_can($uid, <cap>, GLOBAL_SCOPE), and emits a JSON envelope
@@ -1325,6 +1326,102 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * pagelist — page-chooser list for the block editor's link control
+     * ------------------------------------------------------------------ */
+
+    /**
+     * GET: the pages in the caller's resolved scope, each with the PUBLIC href
+     * an author's link should carry, so the block editor can offer "a page on
+     * this site" instead of asking a volunteer to copy a framework route out of
+     * the address bar.
+     *
+     * Scope + capability handling mirrors personlookup (the other editor-support
+     * read): the scope selector is re-validated server-side by _scope(), and the
+     * gate accepts page.edit OR page.edit_own OR page.create, because every
+     * context that can place a link is one of those three.
+     *
+     * IDOR: the list is read with CmsPage::ListPagesForScope(), whose scope is
+     * MANDATORY, so a foreign org's pages can never appear. The optional
+     * `page_id` lookup (used to resolve a stored href back to a page name) goes
+     * through the same _requireOwned() guard every by-id mutation uses, so an id
+     * from another scope is refused rather than resolved.
+     */
+    public function pagelist($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+            && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
+            && !$this->CmsAuth->cms_can($uid, 'page.create', $scope)
+        ) {
+            $this->_denyCapability(array('page.edit', 'page.edit_own', 'page.create'));
+        }
+
+        // Single-page resolve (round-tripping a stored href back to a title).
+        // Scope-guarded exactly like every by-id path in this controller.
+        $pageId = (int)($_GET['page_id'] ?? $_POST['page_id'] ?? 0);
+        if ($pageId > 0) {
+            $row = $this->CmsPage->get_page($pageId);
+            if (!is_array($row) || !empty($row['deleted_at'])) {
+                $this->_fail('Page not found.', 4);
+            }
+            $this->_requireOwned($row, $scope);
+            $this->_ok(array('pages' => array($this->_pageChoice($scope, $row, null)), 'count' => 1));
+        }
+
+        $search = trim((string)($_GET['q'] ?? $_POST['q'] ?? ''));
+        $limit  = $this->_clampLimit($_GET['limit'] ?? $_POST['limit'] ?? 300, 300, 500);
+
+        $rows = $this->CmsPage->list_pages_for_scope(
+            (string)$scope['type'],
+            (int)$scope['id'],
+            ($search === '' ? null : $search),
+            $limit
+        );
+        if (!is_array($rows)) {
+            $rows = array();
+        }
+
+        // One in-memory parent_id walk for the whole list instead of a PagePath()
+        // DB round-trip per row (#13) — the same map the admin page list builds.
+        $pathMap = $this->_buildScopePathMap($rows);
+
+        $out = array();
+        foreach ($rows as $row) {
+            $out[] = $this->_pageChoice($scope, $row, $pathMap);
+        }
+
+        $this->_ok(array(
+            'pages' => $out,
+            'count' => count($out),
+            'limit' => $limit,
+        ));
+    }
+
+    /**
+     * One pagelist row -> the chooser's wire shape. `href` is the SAME public URL
+     * the admin page list links to, so a chosen page stores exactly what an
+     * author would have pasted by hand.
+     *
+     * @param array      $scope
+     * @param array      $row     a cms_page row
+     * @param array|null $pathMap optional pageId => slug-path map
+     * @return array
+     */
+    private function _pageChoice($scope, $row, $pathMap)
+    {
+        $pageId = (int)($row['page_id'] ?? 0);
+        $slug   = (string)($row['slug'] ?? '');
+        return array(
+            'page_id' => $pageId,
+            'title'   => (string)($row['title'] ?? ''),
+            'slug'    => $slug,
+            'status'  => (string)($row['status'] ?? 'draft'),
+            'href'    => $this->_pageLiveHref($scope, $pageId, $slug, $pathMap),
+        );
+    }
+
+    /* ------------------------------------------------------------------ *
      * Internal helpers
      * ------------------------------------------------------------------ */
 
@@ -1458,7 +1555,8 @@ class Controller_CmsAjax extends Controller
 
         // CSRF: state-changing requests arrive as POST and must carry the
         // per-session synchronizer token (sent by the editor JS as the
-        // X-CSRF-Token header). GET reads (medialist, personlookup) are exempt.
+        // X-CSRF-Token header). GET reads (medialist, personlookup, pagelist)
+            // are exempt.
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $sent = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? ''));
             if ($sent === '' || !hash_equals($this->_csrfToken(), $sent)) {
