@@ -52,16 +52,26 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
     $href     = (string)($item['href'] ?? '#');
     $enabled  = !empty($item['enabled']);
     $tlabel   = (string)($item['target_label'] ?? '');
+    // Same words the Add/Edit dialog uses for these choices — "Route" was the
+    // developer's name for it, and no park officer has ever called a menu entry
+    // that.
     $linkTypeLabel = array(
-        'page' => 'Page', 'post' => 'Post', 'url' => 'URL', 'dynamic' => 'Route',
+        'page' => 'Site page', 'post' => 'Blog post', 'url' => 'External link', 'dynamic' => 'ORK app page',
     );
     $ltl = isset($linkTypeLabel[$linkType]) ? $linkTypeLabel[$linkType] : ucfirst($linkType);
     $linkTypeIcon = array(
         'url' => 'fa-globe', 'page' => 'fa-file', 'post' => 'fa-newspaper', 'dynamic' => 'fa-route',
     );
     $lti = isset($linkTypeIcon[$linkType]) ? $linkTypeIcon[$linkType] : 'fa-link';
-    // Suppress a bare "#" target — there's nothing meaningful to show.
-    $showTarget = ($tlabel !== '' && $tlabel !== '#');
+    // L3: the middle column repeated the label on most rows ("About" → "About")
+    // and differed on exactly the rows worth noticing ("Join" → "Join Now",
+    // "Find a Chapter" → "Atlas"). Repeating it taught an author to stop reading
+    // the column, which is where the differences were hiding. Show it only when
+    // it actually says something the label does not. (A bare "#" never does.)
+    $showTarget = ($tlabel !== '' && $tlabel !== '#' && strcasecmp(trim($tlabel), trim($label)) !== 0);
+    // Every row tool names the ACTION and the ITEM it acts on: five identical
+    // grey glyphs are a guessing game otherwise.
+    $named = $label !== '' ? $label : '(untitled)';
     ?>
     <div class="cms-block-card<?= $enabled ? '' : ' cms-block-disabled' ?> cms-nav-item"
          data-nav-id="<?= $navId ?>"
@@ -79,20 +89,27 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
                 <span class="cms-nav-label"><?= $h($label !== '' ? $label : '(untitled)') ?></span>
             </div>
             <?php if ($showTarget): ?>
-                <span class="cms-block-summary cms-nav-target"><?= $h($tlabel) ?></span>
+                <span class="cms-block-summary cms-nav-target" data-tip="Labelled “<?= $h($named) ?>” in the menu; points at “<?= $h($tlabel) ?>”">
+                    <i class="fas fa-arrow-right cms-nav-target-arrow" aria-hidden="true"></i><span class="cms-nav-target-text"><?= $h($tlabel) ?></span>
+                </span>
             <?php endif; ?>
             <?php if (!$enabled): ?>
                 <span class="cms-badge cms-badge-draft" style="margin-left:6px;">Hidden</span>
             <?php endif; ?>
             <?php if ($canManage): ?>
             <div class="cms-block-tools">
-                <button type="button" class="cms-icon-btn" data-act="up" data-tip="Move up" aria-label="Move up"><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
-                <button type="button" class="cms-icon-btn" data-act="down" data-tip="Move down" aria-label="Move down"><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="up" data-tip="Move “<?= $h($named) ?>” up" aria-label="Move “<?= $h($named) ?>” up"><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="down" data-tip="Move “<?= $h($named) ?>” down" aria-label="Move “<?= $h($named) ?>” down"><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
                 <?php if (!$isChild): ?>
-                    <button type="button" class="cms-icon-btn" data-act="addchild" data-tip="Add sub-item" aria-label="Add sub-item"><i class="fas fa-level-down-alt" aria-hidden="true"></i></button>
+                    <?php /* The third glyph was fa-level-down-alt — a corner arrow that
+                            reads as "indent", "reply", or "move into", and is the one
+                            tool on this row nobody could name. It adds a drop-down entry
+                            underneath this one; fa-sitemap says hierarchy, and the tip
+                            says the rest. */ ?>
+                    <button type="button" class="cms-icon-btn" data-act="addchild" data-tip="Add a drop-down sub-item under “<?= $h($named) ?>”" aria-label="Add a drop-down sub-item under “<?= $h($named) ?>”"><i class="fas fa-sitemap" aria-hidden="true"></i></button>
                 <?php endif; ?>
-                <button type="button" class="cms-icon-btn" data-act="edit" data-tip="Edit" aria-label="Edit"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" data-tip="Delete" aria-label="Delete"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="edit" data-tip="Edit “<?= $h($named) ?>”" aria-label="Edit “<?= $h($named) ?>”"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" data-tip="Delete “<?= $h($named) ?>”" aria-label="Delete “<?= $h($named) ?>”"><i class="fas fa-trash" aria-hidden="true"></i></button>
             </div>
             <?php endif; ?>
         </div>

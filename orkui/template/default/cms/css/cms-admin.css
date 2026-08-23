@@ -2805,7 +2805,14 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
 
 /* ---- Navigation manager (was inline style element in Cms_nav.tpl) ---- */
-.cms-nav-item { margin-bottom: 8px; }
+/* A nav row is a .cms-block-card that contains ONLY a .cms-block-head, and that
+   card clips (overflow:hidden) so the head's square corners stay inside its
+   radius. Clipping also ate every row-tool tooltip, which is the whole point of
+   naming those five identical glyphs — so the row stops clipping and the head
+   carries the rounding itself instead. With no card body under it the head's
+   border-bottom was doubling the card's own bottom border; it goes too. */
+.cms-nav-item { margin-bottom: 8px; overflow: visible; }
+.cms-nav-item .cms-block-head { border-radius: 9px; border-bottom: none; }
 .cms-nav-children { margin: 4px 0 12px 28px; border-left: 2px solid var(--ork-border); padding-left: 12px; }
 .cms-nav-children .cms-nav-item { margin-bottom: 6px; }
 /* Nav rows only. This was a bare `.cms-block-type` while it lived inline on
@@ -2819,7 +2826,14 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-iconpick-custom { display: flex; align-items: center; gap: 8px; }
 .cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
 .cms-nav-label { font-weight: 600; color: var(--ork-text); }
-.cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+/* Shown only on the rows where the target differs from the label, so it now
+   reads as a fact about THIS row rather than as a column of repeats. */
+.cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; max-width: 40%; min-width: 0; display: flex; align-items: center; }
+/* The ellipsis lives on the inner text, not on .cms-nav-target itself: an
+   element that clips also clips its own ::after, and the tip is what carries the
+   full target when it is too long to show. */
+.cms-nav-target-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-nav-target-arrow { font-size: 10px; opacity: .6; margin-right: 5px; flex: 0 0 auto; }
 .cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
 .cms-nav-addchild-row { margin: 0 0 16px 28px; }
 
