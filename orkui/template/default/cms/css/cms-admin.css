@@ -177,7 +177,12 @@ body {
     /* The global #newmenu navbar is position:fixed at 48px tall (orkui.css).
        Sticky elements below must clear it or they hide behind it on scroll.
        Named --cms-* because a CMS stylesheet must not define into the CRM's
-       --ork-* namespace, even for a value the CRM originates. */
+       --ork-* namespace, even for a value the CRM originates.
+
+       READ THE NOTE ON .cms-rail's `top` BEFORE reaching for this token in a
+       new sticky rule: the scrollport these offsets are measured from already
+       starts below the navbar, so spending this token buys the clearance a
+       second time and pushes the element down the page at rest. */
     --cms-header-h: 48px;
 
     display: flex;
@@ -195,7 +200,27 @@ body {
     width: 220px;
     align-self: flex-start;
     position: sticky;
-    top: calc(var(--cms-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    /* 14px, and deliberately NOT --cms-header-h + 14px.
+       #93 added the navbar height here back when the viewport was the scroller.
+       It no longer is: orkui.css clamps `html, body { overflow-x: hidden }`, so
+       body's overflow is not propagated to the viewport and BODY is the scroll
+       container for everything in the admin. A sticky offset is measured from
+       that scrollport's top edge, and body's content box already begins at 56px
+       down the window — its 8px margin plus the 48px padding-top orkui.css adds
+       precisely to clear the fixed navbar. The navbar is therefore already paid
+       for, and spending --cms-header-h again pinned the rail's top edge at
+       56 + 48 + 14 = 118px while the masthead beside it rests at 84px: the rail
+       started a whole 34px below the page title it is supposed to line up with.
+       Sticky is still what we want for the scrolled state, so keep it and drop
+       only the double count.
+       14px works for both states. Pinned, it holds the rail 56 + 14 = 70px down
+       the window, a clear 22px below the navbar's 48px. At rest it is under the
+       28px of chrome stacked above the workspace (#theme_container's 10px margin
+       + 6px padding + the shell's own 12px padding), so the threshold sits above
+       the rail's flow position, nothing is displaced, and the rail's head and the
+       masthead's head start on the same line. Keep any future value below that
+       28px or the rail drifts back down the page. */
+    top: 14px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
