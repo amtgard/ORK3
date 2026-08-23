@@ -194,6 +194,10 @@ function ork_event_jsonld($args)
     $organizer = trim((string)($args['organizer'] ?? ''));
     if ($organizer !== '') {
         $ld['organizer'] = array('@type' => 'Organization', 'name' => $organizer);
+        $orgUrl = trim((string)($args['organizer_url'] ?? ''));
+        if ($orgUrl !== '') {
+            $ld['organizer']['url'] = $orgUrl;
+        }
     }
     $url = trim((string)($args['url'] ?? ''));
     if ($url !== '') {

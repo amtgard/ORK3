@@ -286,6 +286,7 @@ class Controller_Event extends Controller
                     'postal'      => (string)($ogDetail['PostalCode'] ?? ''),
                     'country'     => (string)($ogDetail['Country'] ?? ''),
                     'organizer'   => (string)($info['KingdomName'] ?? ''),
+                    'organizer_url' => !empty($info['KingdomId']) ? UIR . 'Kingdom/profile/' . (int)$info['KingdomId'] : '',
                     'url'         => $og['url'],
                 ));
             }

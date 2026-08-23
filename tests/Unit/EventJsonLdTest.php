@@ -32,6 +32,7 @@ final class EventJsonLdTest extends TestCase
             'postal'      => 'P0M 3C0',
             'country'     => 'Canada',
             'organizer'   => 'The Kingdom of the Nine Blades',
+            'organizer_url' => 'https://ork.amtgard.com/orkui/index.php?Route=Kingdom/profile/31',
             'url'         => 'https://ork.amtgard.com/orkui/index.php?Route=Event/detail/18666/9175',
         ));
 
@@ -42,6 +43,7 @@ final class EventJsonLdTest extends TestCase
         $this->assertSame('Wolven Fang', $ld['location']['name']);
         $this->assertSame('Wahnapitae', $ld['location']['address']['addressLocality']);
         $this->assertSame('The Kingdom of the Nine Blades', $ld['organizer']['name']);
+        $this->assertSame('https://ork.amtgard.com/orkui/index.php?Route=Kingdom/profile/31', $ld['organizer']['url']);
     }
 
     public function testEmptyFieldsAreOmittedNotBlank(): void
