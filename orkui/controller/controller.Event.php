@@ -236,6 +236,12 @@ class Controller_Event extends Controller
         // Strip markdown heading/emphasis markers — descriptions are authored
         // in the event editor's markdown and render literally in an embed.
         $ogBlurb = trim(preg_replace('/[#*_>`]+/', ' ', strip_tags(html_entity_decode((string)($info['ShortDescription'] ?? '')))));
+        // Some organizers put ONLY a link in the description (e.g. Pacwar).
+        // A bare URL is useless as card/search-result prose — drop it and let
+        // the date/place line carry the description instead.
+        if (preg_match('#^https?://\S*$#', $ogBlurb)) {
+            $ogBlurb = '';
+        }
         if ($ogBlurb !== '') {
             if (function_exists('mb_substr')) {
                 $ogBlurb = mb_substr($ogBlurb, 0, 180);
