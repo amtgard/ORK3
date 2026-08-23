@@ -698,8 +698,13 @@ window.CmsBlockEditor = (function () {
      * (used for the photo_mosaic block) is NOT in 5.8.2 and is deliberately
      * absent here.
      *
-     * The free-text escape hatch stays for an author who knows the class they
-     * want, but it sits UNDER the swatches, not in front of them. */
+     * The free-text escape hatch stays for an author who knows the code they
+     * want, but it sits UNDER the swatches, not in front of them, and it is
+     * labelled as the advanced option it is. The vendor's name is mentioned
+     * exactly once, in the help line — never in the swatch tooltips (a button
+     * already reading "Shield" gained nothing from a tip reading
+     * "fa-shield-alt"), never in the placeholder, never as the input's
+     * accessible name. */
     var ICON_CHOICES = [
         { c: 'fa-shield-alt',      n: 'Shield' },
         { c: 'fa-crown',           n: 'Crown' },
@@ -729,16 +734,21 @@ window.CmsBlockEditor = (function () {
         { c: 'fa-info-circle',     n: 'Information' }
     ];
 
+    var iconPickSeq = 0;
+
     function iconBound(obj, key, label) {
         var wrap = el('div', 'cms-field');
         wrap.style.marginBottom = '8px';
         wrap.appendChild(el('label', 'cms-label', esc(label)));
 
+        var freeId = 'cmsIconCode' + (++iconPickSeq);
         var grid = el('div', 'cms-iconpick-grid');
         var free = el('input', 'cms-input');
         free.type = 'text';
-        free.placeholder = 'Font Awesome class, e.g. fa-shield-alt';
-        free.setAttribute('aria-label', 'Font Awesome class name');
+        free.id = freeId;
+        free.placeholder = 'e.g. fa-dragon';
+        var freeLabel = el('label', 'cms-label', 'Or type an icon code (advanced)');
+        freeLabel.setAttribute('for', freeId);
         var preview = el('span', 'cms-iconpick-preview');
 
         function current() {
@@ -777,7 +787,9 @@ window.CmsBlockEditor = (function () {
                 '<i class="fas ' + esc(ic.c) + '" aria-hidden="true"></i><span>' + esc(ic.n) + '</span>');
             b.type = 'button';
             b.setAttribute('data-icon', ic.c);
-            b.setAttribute('data-tip', ic.c);
+            // No tooltip: the <span> below the glyph already names the icon, and
+            // it is that <span> the swatch takes its accessible name from. A tip
+            // here could only repeat the label or leak the CSS class.
             b.addEventListener('click', function () { choose(ic.c); });
             grid.appendChild(b);
         });
@@ -793,9 +805,10 @@ window.CmsBlockEditor = (function () {
         customRow.appendChild(free);
 
         wrap.appendChild(grid);
+        wrap.appendChild(freeLabel);
         wrap.appendChild(customRow);
         wrap.appendChild(el('div', 'cms-help',
-            'Pick one above, or type a Font Awesome class name if you already know the one you want.'));
+            'Only needed for an icon that is not in the grid. Codes come from the Font Awesome 5 solid set.'));
         paint();
         return wrap;
     }
