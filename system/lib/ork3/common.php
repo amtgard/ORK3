@@ -118,6 +118,61 @@ function ork_og_meta_tags($og = array())
 }
 
 /**
+ * Next occurrence dates for a park-day row, mirroring the recurrence
+ * predicates in Weather::parks_playing_on(). $pd uses the GetParkDays keys:
+ * Recurrence, WeekDay, WeekOfMonth, MonthDay, StartDate, WeekInterval.
+ * Returns up to $count 'Y-m-d' dates within $horizon_days of $from
+ * (default today). Pure date math — no DB.
+ */
+function ork_parkday_next_occurrences($pd, $from = null, $count = 2, $horizon_days = 70)
+{
+    $ts = strtotime($from !== null ? (string)$from : date('Y-m-d'));
+    if ($ts === false) {
+        return array();
+    }
+    $recurrence = (string)($pd['Recurrence'] ?? '');
+    $week_day   = (string)($pd['WeekDay'] ?? '');
+    $wom        = (int)($pd['WeekOfMonth'] ?? 0);
+    $month_day  = (int)($pd['MonthDay'] ?? 0);
+    $start_date = (string)($pd['StartDate'] ?? '');
+    $interval   = (int)($pd['WeekInterval'] ?? 0);
+
+    $out = array();
+    for ($i = 0; $i < $horizon_days && count($out) < $count; $i++) {
+        $day = strtotime("+$i days", $ts);
+        $dow = date('l', $day);
+        $dom = (int)date('j', $day);
+        $ymd = date('Y-m-d', $day);
+        $nth = (int)ceil($dom / 7);
+
+        $match = false;
+        switch ($recurrence) {
+            case 'weekly':
+                $match = ($dow === $week_day);
+                break;
+            case 'week-of-month':
+                $match = ($dow === $week_day && $nth === $wom);
+                break;
+            case 'monthly':
+                $match = ($dom === $month_day);
+                break;
+            case 'every-x-weeks':
+                $sd = strtotime($start_date);
+                // round(), not floor(): DST transitions make midnight-to-midnight
+                // diffs 23 or 25 hours; round() recovers the calendar-day count
+                // (SQL-side this is DATEDIFF, which counts calendar days).
+                $match = ($dow === $week_day && $interval > 0 && $sd !== false && $day >= $sd
+                    && ((int)round(($day - $sd) / 86400)) % ($interval * 7) === 0);
+                break;
+        }
+        if ($match) {
+            $out[] = $ymd;
+        }
+    }
+    return $out;
+}
+
+/**
  * Render a sitemap <urlset> document. $urls = list of ['loc' => URL,
  * 'lastmod' => 'Y-m-d' (optional)]. Escaping handled here.
  */
@@ -186,15 +241,18 @@ function ork_event_jsonld($args)
     if ($ld['name'] === '') {
         return array();
     }
+    // all_day: emit a bare date (schema.org Date) — a park day with no
+    // stored time must not claim to start at midnight.
+    $allDay = !empty($args['all_day']);
     $start = $iso($args['start'] ?? '');
     if ($start === '') {
         // startDate is required for rich results; without it, emit nothing.
         return array();
     }
-    $ld['startDate'] = $start;
+    $ld['startDate'] = $allDay ? substr($start, 0, 10) : $start;
     $end = $iso($args['end'] ?? '');
     if ($end !== '' && $end !== $start) {
-        $ld['endDate'] = $end;
+        $ld['endDate'] = $allDay ? substr($end, 0, 10) : $end;
     }
     $desc = trim((string)($args['description'] ?? ''));
     if ($desc !== '') {
