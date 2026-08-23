@@ -261,6 +261,30 @@ class Controller_Event extends Controller
         }
         $this->data['og'] = $og;
 
+        // schema.org Event structured data for Google rich results — built
+        // from this occurrence's own dates and street address. Venue-local
+        // naive datetimes on purpose; see ork_event_jsonld().
+        if ($detail_id > 0) {
+            $ogDetail = $this->Attendance->get_eventdetail_info($detail_id);
+            if (is_array($ogDetail) && !empty($ogDetail['EventStart'])) {
+                $this->data['jsonld'] = ork_event_jsonld(array(
+                    'name'        => (string)($info['Name'] ?? ''),
+                    'start'       => (string)$ogDetail['EventStart'],
+                    'end'         => (string)($ogDetail['EventEnd'] ?? ''),
+                    'description' => $ogBlurb,
+                    'image'       => (string)($og['image'] ?? ''),
+                    'venue'       => (string)($info['ParkName'] ?? ''),
+                    'street'      => (string)($ogDetail['Address'] ?? ''),
+                    'city'        => (string)($ogDetail['City'] ?? ''),
+                    'province'    => (string)($ogDetail['Province'] ?? ''),
+                    'postal'      => (string)($ogDetail['PostalCode'] ?? ''),
+                    'country'     => (string)($ogDetail['Country'] ?? ''),
+                    'organizer'   => (string)($info['KingdomName'] ?? ''),
+                    'url'         => $og['url'],
+                ));
+            }
+        }
+
         unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['event']);
         if (!empty($info['KingdomId'])) {
             $this->data['menu']['kingdom'] = [

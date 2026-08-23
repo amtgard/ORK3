@@ -24,6 +24,11 @@
 <?php /* Per-page link-preview tags — controllers override via $this->data['og'];
          defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
 <?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
+<?php /* Structured data for search engines (schema.org JSON-LD) — set per
+         page via $this->data['jsonld']; e.g. Event rich results. */ ?>
+<?php if (!empty($jsonld)) : ?>
+		<script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+<?php endif; ?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
 

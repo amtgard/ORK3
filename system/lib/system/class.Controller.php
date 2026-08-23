@@ -51,6 +51,8 @@ class Controller
         // Per-page OpenGraph overrides for link-preview cards (Discord etc.);
         // rendered by ork_og_meta_tags() in the theme head.
         $this->data[ 'og' ] = array();
+        // Per-page schema.org JSON-LD (search-engine structured data).
+        $this->data[ 'jsonld' ] = null;
 
         if (get_class($this) == "Controller") {
             $this->data[ 'page_title' ] = "Home";

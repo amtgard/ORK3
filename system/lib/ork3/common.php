@@ -118,6 +118,91 @@ function ork_og_meta_tags($og = array())
 }
 
 /**
+ * Assemble a schema.org Event JSON-LD structure for an event occurrence.
+ * Google reads this for rich event results (date chips, venue, "events near
+ * me" surfaces) instead of scraping dates out of the page text.
+ *
+ * Datetimes are emitted WITHOUT a timezone offset on purpose: the ORK stores
+ * venue-local naive datetimes, and Google's documented behavior for
+ * offset-less event times is to interpret them as local to the venue address
+ * supplied in `location` — which is exactly what the data means. Do not
+ * fabricate an offset here.
+ *
+ * Empty fields are omitted rather than emitted blank.
+ */
+function ork_event_jsonld($args)
+{
+    $iso = function ($dt) {
+        $ts = strtotime((string)$dt);
+        return $ts === false ? '' : date('Y-m-d\TH:i:s', $ts);
+    };
+
+    $ld = array(
+        '@context'            => 'https://schema.org',
+        '@type'               => 'Event',
+        'name'                => trim((string)($args['name'] ?? '')),
+        'eventStatus'         => 'https://schema.org/EventScheduled',
+        'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+    );
+    if ($ld['name'] === '') {
+        return array();
+    }
+    $start = $iso($args['start'] ?? '');
+    if ($start === '') {
+        // startDate is required for rich results; without it, emit nothing.
+        return array();
+    }
+    $ld['startDate'] = $start;
+    $end = $iso($args['end'] ?? '');
+    if ($end !== '' && $end !== $start) {
+        $ld['endDate'] = $end;
+    }
+    $desc = trim((string)($args['description'] ?? ''));
+    if ($desc !== '') {
+        $ld['description'] = $desc;
+    }
+    $image = trim((string)($args['image'] ?? ''));
+    if ($image !== '') {
+        $ld['image'] = $image;
+    }
+
+    $address = array('@type' => 'PostalAddress');
+    foreach (array(
+        'streetAddress'   => 'street',
+        'addressLocality' => 'city',
+        'addressRegion'   => 'province',
+        'postalCode'      => 'postal',
+        'addressCountry'  => 'country',
+    ) as $ldKey => $argKey) {
+        $v = trim((string)($args[$argKey] ?? ''));
+        if ($v !== '') {
+            $address[$ldKey] = $v;
+        }
+    }
+    $place = array('@type' => 'Place');
+    $venue = trim((string)($args['venue'] ?? ''));
+    if ($venue !== '') {
+        $place['name'] = $venue;
+    }
+    if (count($address) > 1) {
+        $place['address'] = $address;
+    }
+    if (count($place) > 1) {
+        $ld['location'] = $place;
+    }
+
+    $organizer = trim((string)($args['organizer'] ?? ''));
+    if ($organizer !== '') {
+        $ld['organizer'] = array('@type' => 'Organization', 'name' => $organizer);
+    }
+    $url = trim((string)($args['url'] ?? ''));
+    if ($url !== '') {
+        $ld['url'] = $url;
+    }
+    return $ld;
+}
+
+/**
  * Bucket a session user_agent / client label into a short display label
  * ("Chrome on Mac", "jsork", "mORK", ...). Single source of truth for the
  * anonymous sign-in tally (Authorization::CreateSession), the Release
