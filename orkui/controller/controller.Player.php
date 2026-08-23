@@ -324,13 +324,13 @@ class Controller_Player extends Controller
             'title'       => (string)($this->data['Player']['Persona'] ?? 'Amtgard Player'),
             'description' => $_ogDesc,
         );
-        // Heraldry first (identity art, made to be shown), profile photo as
-        // fallback. Blank the default image dimensions — they describe the
-        // site logo, not this image.
-        if (!empty($this->data['Player']['HasHeraldry']) && !empty($this->data['Player']['Heraldry'])) {
-            $og['image'] = (string)$this->data['Player']['Heraldry'];
-        } elseif (!empty($this->data['Player']['HasImage']) && !empty($this->data['Player']['Image'])) {
+        // Profile photo first (Ken's call — the card should show the person,
+        // matching the profile hero), heraldry as fallback. Blank the default
+        // image dimensions — they describe the site logo, not this image.
+        if (!empty($this->data['Player']['HasImage']) && !empty($this->data['Player']['Image'])) {
             $og['image'] = (string)$this->data['Player']['Image'];
+        } elseif (!empty($this->data['Player']['HasHeraldry']) && !empty($this->data['Player']['Heraldry'])) {
+            $og['image'] = (string)$this->data['Player']['Heraldry'];
         }
         if (isset($og['image'])) {
             $og['image:width'] = '';
