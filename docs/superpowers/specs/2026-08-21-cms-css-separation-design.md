@@ -641,8 +641,8 @@ Both are closed the same way: **the run is accounted for, and the accounting is
 machine-readable.** Every exit path — including both skips — ends with
 
 ```
-SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
-SURFACE: <label> COVERED <n> | SKIPPED 0 — <why>
+SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED, 0 NOT-APPLICABLE
+SURFACE: <label> COVERED <n> | SKIPPED 0 — <why> | NOT-APPLICABLE 0 — <evidence>
 ASSERTIONS: <n> RAN, <n> FAILED
 MODE: LENIENT|STRICT
 SKIP-KIND: NONE|WHOLE-RUN|PARTIAL
@@ -656,13 +656,55 @@ single-post surface per tier that list covers — nine today — so adding a sur
 extends the contract automatically and no constant can go stale. The post
 surfaces are *discovered* (a slug is data), but they are **expected** all the
 same: the single-post render path is the only place `.blogp-*` / `.org-post*` is
-exercised, and "no post in the database" is a coverage hole whether or not
-anyone chose it. A **total assertion count is deliberately not pinned**: the
+exercised. A **total assertion count is deliberately not pinned**: the
 per-surface count legitimately varies with how many stylesheets and same-origin
 scripts a surface serves, so a pinned total would be a false-failure engine.
 Section 10 asserts the property that *is* stable — every covered surface ran at
 least one assertion, and every surface that ran is in the expected set — and the
 per-surface counts are printed so a drop shows up in a log diff.
+
+**"Did not run" and "cannot exist" are different answers.** Deriving one
+single-post surface per tier was right; treating a *post* — which is **data** —
+as guaranteed to exist was not. A stock local database has a global post and no
+kingdom- or park-scoped one, so `php tests/cms-css/boundary_test.php --strict`,
+the command the README prescribes before merging, exited **1 on a clean
+checkout**, every time, reporting a coverage hole nobody could close without
+authoring content. A documented pre-merge check that is red by default teaches
+people to ignore it, and that costs more than the surface it was reporting.
+
+A surface the current data **cannot** produce is therefore `NOT-APPLICABLE`
+rather than `SKIPPED`: still expected, still listed, still counted, but out of
+the coverage denominator, `SKIP-KIND: NONE`, `RESULT: PASS`.
+
+**The distinction is derived from the data, not declared** — hardcoding "the org
+post surface is optional" would forgive a *real* skip forever, which is the exact
+swallow this accounting exists to end. The app is asked instead, in the
+machine-readable form it already publishes: the **RSS feed of the scope the
+surface belongs to** (`Site/rss/{slug}` per org site, `Blog/rss` for the shell
+tier), one feed per covered surface of the tier, each feed URL derived from that
+surface's **own route** so a surface added to `$surfaces` brings its feed with it
+and no second list can drift.
+
+| Evidence | Verdict |
+|---|---|
+| every derived feed answered and parsed, **0 `<item>` in total** | `NOT-APPLICABLE` — nothing rendered it because nothing is there |
+| any feed carries an `<item>`, **or** a post link was found and would not render | `SKIPPED` — should exist, did not; fatal under `--strict` |
+| no feed derivable, a feed did not answer, or it did not parse | `SKIPPED` — **fail closed**; "cannot tell" is not "not applicable" |
+
+Verified against local docker, all four directions, each by a reversible
+one-line break restored and diffed afterwards:
+
+| Probe | Result |
+|---|---|
+| stock DB, app up, `--strict` | `0 SKIPPED, 1 NOT-APPLICABLE`, `RESULT: PASS`, **exit 0** |
+| `Blog_post.tpl`'s `.fd-page` renamed (post exists, will not render) | `blog post (discovered) SKIPPED`, `SKIP-KIND: PARTIAL`, **exit 1** |
+| `Blog_index.tpl`'s post href broken (feed has an item, no link to follow) | `SKIPPED … a published shell post EXISTS but no covered shell index page linked one`, **exit 1** |
+| `Controller_Site::rss` forced to 404 (absence unprovable) | `org post (discovered)` back to `SKIPPED … could not prove none exists — HTTP 404`, **exit 1** |
+
+The feeds are GhettoCached per scope for 1800s — the same cache that serves the
+index pages the discovery reads — so a post published seconds ago can read as
+absent on both; restart the app container after a DB change, as for any other CMS
+probe.
 
 **Two modes.** Lenient (default) reports a skip as `RESULT: PASS-WITH-SKIPS` and
 exits 0, so the script stays usable with the app down. Strict (`--strict` or

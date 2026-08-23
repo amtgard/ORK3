@@ -60,7 +60,7 @@
 //
 // So every exit path now ends with a MACHINE-READABLE SUMMARY, always printed:
 //
-//     SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
+//     SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED, 0 NOT-APPLICABLE
 //     SURFACE: org home (kingdom burning-lands) COVERED 33
 //     SURFACE: org post (discovered) SKIPPED 0 — <why>
 //     ASSERTIONS: 194 RAN, 0 FAILED
@@ -81,6 +81,45 @@
 // a pinned total would be a false-failure engine. What is asserted instead is
 // that every expected surface ran, and that each one ran at least one assertion;
 // the per-surface counts are printed so a drop is visible in a diff of the log.
+//
+// ---------------------------------------------------------------------------
+// "DID NOT RUN" AND "CANNOT EXIST" ARE DIFFERENT ANSWERS
+//
+// The expected set is derived, which is right — but it derived one single-post
+// surface PER TIER unconditionally, and a post is DATA. A stock local database
+// has a global post and no kingdom- or park-scoped one, so `--strict` — the
+// command the README tells you to run before merging — exited 1 on a clean
+// checkout, every time, naming a "coverage hole" nobody could close without
+// authoring content. A documented pre-merge check that is red by default teaches
+// people to ignore it, which costs more than the surface it was reporting.
+//
+// A surface that CANNOT exist in the current data is now NOT-APPLICABLE rather
+// than SKIPPED. It is still expected, still listed, still counted — it simply is
+// not a coverage loss, because there is no coverage available to lose.
+//
+// THE DISTINCTION IS DERIVED FROM THE DATA, NOT DECLARED. Hardcoding "the org
+// post surface is optional" would be exactly the swallow this file exists to
+// end: it would forgive a REAL skip forever. Instead the app is asked, in the
+// machine-readable form it already publishes — the RSS feed of the very scope
+// the surface belongs to (Site/rss/{slug} per org site, Blog/rss for the shell
+// tier). Every covered surface of the tier contributes its scope's feed:
+//
+//   * every feed answers, and they carry ZERO <item> elements in total
+//         → no published post exists in any scope this run covers
+//         → NOT-APPLICABLE. Nothing rendered it because nothing is there.
+//   * any feed carries an <item>, or a post link was found and would not render
+//         → the surface SHOULD exist and did not
+//         → SKIPPED, i.e. still a hard failure under --strict.
+//   * no feed derivable for the tier, or a feed did not answer, or did not parse
+//         → cannot prove absence
+//         → SKIPPED. Fail closed: "cannot tell" is not "not applicable".
+//
+// So the forgiving path is only ever reached on the app's own evidence that the
+// data is empty, and the moment someone publishes a kingdom post the surface
+// becomes required again with no edit to this file. (The feeds are GhettoCached
+// per scope for 1800s, the same cache that serves the index pages the discovery
+// reads, so a post published seconds ago can read as absent on both — restart
+// the app container after a DB change, exactly as for any other CMS probe.)
 //
 // TWO MODES:
 //
@@ -132,6 +171,7 @@ $ran      = 0;
 $SURFACE  = '(setup)';          // the surface check() attributes to right now
 $COVERED  = array();            // label => assertions run against it
 $SKIPPED  = array();            // label => why it did not run
+$NA       = array();            // label => the EVIDENCE that it cannot exist here
 
 /** Attribute every following check() to $label. */
 function surface($label)
@@ -165,6 +205,19 @@ function skip_surface($label, $why)
 }
 
 /**
+ * Record a surface that CANNOT exist against the data this run is pointed at,
+ * together with the evidence — never a policy, always something the app said.
+ * Not a skip: there is no coverage available to lose, so --strict does not fail
+ * on it. See "DID NOT RUN AND CANNOT EXIST ARE DIFFERENT ANSWERS" above.
+ */
+function na_surface($label, $evidence)
+{
+    global $NA;
+    $NA[$label] = $evidence;
+    echo "  note: surface not applicable to this data — $label ($evidence)\n";
+}
+
+/**
  * The machine-readable summary, and the ONLY exit from this script.
  *
  * $skipKind is NONE, WHOLE-RUN (nothing answered at the base URL, so no surface
@@ -174,15 +227,24 @@ function skip_surface($label, $why)
  */
 function finish($skipKind = 'NONE')
 {
-    global $fails, $ran, $STRICT, $EXPECTED_SURFACES, $COVERED, $SKIPPED;
+    global $fails, $ran, $STRICT, $EXPECTED_SURFACES, $COVERED, $SKIPPED, $NA;
 
     // Fail closed: an expected surface that is neither registered as covered nor
     // recorded as skipped is counted as SKIPPED, so a future edit that forgets to
-    // account for one cannot make it disappear from the tally.
+    // account for one cannot make it disappear from the tally. NOT-APPLICABLE is
+    // NOT a third way to be unaccounted for — it is only ever set by
+    // na_surface(), on evidence from the app, and it loses to SKIPPED if both
+    // were somehow recorded for one label.
     $expected = count($EXPECTED_SURFACES);
     $covered  = 0;
+    $na       = 0;
     foreach ($EXPECTED_SURFACES as $label => $_meta) {
         if (isset($SKIPPED[$label])) {
+            unset($NA[$label]);
+            continue;
+        }
+        if (isset($NA[$label])) {
+            $na++;
             continue;
         }
         if (array_key_exists($label, $COVERED)) {
@@ -191,7 +253,9 @@ function finish($skipKind = 'NONE')
             $SKIPPED[$label] = 'surface was never attempted (unaccounted for)';
         }
     }
-    $skipped = $expected - $covered;
+    // A not-applicable surface is expected but not coverable, so it is removed
+    // from the denominator rather than counted as lost coverage.
+    $skipped = $expected - $covered - $na;
     if ($skipped > 0 && $skipKind === 'NONE') {
         $skipKind = ($covered === 0) ? 'WHOLE-RUN' : 'PARTIAL';
     }
@@ -212,15 +276,20 @@ function finish($skipKind = 'NONE')
         echo "\nNOTHING RAN — 0 assertions, $skipped of $expected SURFACE(S) SKIPPED\n";
     } elseif ($skipped > 0) {
         echo "\nALL $ran RAN ASSERTIONS PASSED — but $skipped of $expected SURFACE(S) DID NOT RUN\n";
+    } elseif ($na > 0) {
+        echo "\nALL $ran RAN ASSERTIONS PASSED — $na of $expected SURFACE(S) NOT APPLICABLE"
+            . " TO THIS DATA (no coverage was lost; see the SURFACE: lines for the evidence)\n";
     } else {
         echo "\nALL PASS\n";
     }
 
     echo "\n--- machine-readable summary (parsed by .github/workflows/gates.yml) ---\n";
-    echo "SURFACES: $expected EXPECTED, $covered COVERED, $skipped SKIPPED\n";
+    echo "SURFACES: $expected EXPECTED, $covered COVERED, $skipped SKIPPED, $na NOT-APPLICABLE\n";
     foreach ($EXPECTED_SURFACES as $label => $_meta) {
         if (isset($SKIPPED[$label])) {
             echo "SURFACE: $label SKIPPED 0 — {$SKIPPED[$label]}\n";
+        } elseif (isset($NA[$label])) {
+            echo "SURFACE: $label NOT-APPLICABLE 0 — {$NA[$label]}\n";
         } else {
             echo "SURFACE: $label COVERED " . (isset($COVERED[$label]) ? $COVERED[$label] : 0) . "\n";
         }
@@ -247,9 +316,12 @@ function finish($skipKind = 'NONE')
  */
 function skip($why, $kind)
 {
-    global $EXPECTED_SURFACES, $SKIPPED, $COVERED;
+    global $EXPECTED_SURFACES, $SKIPPED, $COVERED, $NA;
     echo "SKIP: $why\n";
     foreach ($EXPECTED_SURFACES as $label => $_meta) {
+        if (isset($NA[$label])) {
+            continue;   // already answered, on evidence: it cannot exist here
+        }
         if (!isset($SKIPPED[$label]) && !array_key_exists($label, $COVERED)) {
             $SKIPPED[$label] = $why;
         }
@@ -673,10 +745,97 @@ foreach ($surfaces as $s) {
     $pages[]    = $s;
 }
 
+/**
+ * The RSS feed URL for the SCOPE a covered surface belongs to, derived from that
+ * surface's own route — never listed, so a surface added to $surfaces brings its
+ * feed with it. '' when the surface names no scope-bearing route (the front door
+ * is fetched at $BASE . '/', has no Route= at all, and is global scope, which
+ * Blog/rss already speaks for).
+ *
+ *   Site/view/{slug}          → Site/rss/{slug}
+ *   Site/page/{slug}/{path}   → Site/rss/{slug}
+ *   Site/blog/{slug}          → Site/rss/{slug}
+ *   Blog/index                → Blog/rss
+ *
+ * Any trailing query the surface carries is preserved, because a park site is
+ * only reachable with &_pfx=p and its feed is no different.
+ */
+$feedUrlFor = function ($surfaceUrl) use ($UI) {
+    $pos = strpos($surfaceUrl, 'Route=');
+    if ($pos === false) {
+        return '';
+    }
+    $route = substr($surfaceUrl, $pos + 6);
+    $tail  = '';
+    if (($amp = strpos($route, '&')) !== false) {
+        $tail  = substr($route, $amp);
+        $route = substr($route, 0, $amp);
+    }
+    $seg = explode('/', trim($route, '/'));
+    if (!isset($seg[0])) {
+        return '';
+    }
+    if ($seg[0] === 'Blog') {
+        return $UI . 'Blog/rss' . $tail;
+    }
+    if ($seg[0] === 'Site' && isset($seg[2]) && $seg[2] !== '') {
+        return $UI . 'Site/rss/' . $seg[2] . $tail;
+    }
+    return '';
+};
+
+/**
+ * Does the DATA contain a published post anywhere this tier's covered surfaces
+ * reach? Answered from the app's own per-scope RSS feeds, never from a list in
+ * this file — see the header. Returns array($exists, $evidence):
+ *
+ *   array(true,  …)  at least one feed carries an <item>
+ *   array(false, …)  every feed answered, parsed, and carried no <item> at all
+ *   array(null,  …)  no feed derivable, or one did not answer / did not parse —
+ *                    absence unproven, so the caller must fail closed.
+ */
+$tierHasPublishedPost = function ($tier, $pages) use ($feedUrlFor) {
+    $feeds = array();
+    foreach ($pages as $p) {
+        if ($p['tier'] !== $tier) {
+            continue;
+        }
+        $u = $feedUrlFor($p['url']);
+        if ($u !== '') {
+            $feeds[$u] = true;      // keyed: two surfaces of one scope = one feed
+        }
+    }
+    $feeds = array_keys($feeds);
+    if (!$feeds) {
+        return array(null, "no RSS feed could be derived from any covered $tier surface");
+    }
+
+    $items = 0;
+    foreach ($feeds as $u) {
+        $r = http_get($u);
+        if ($r === null) {
+            return array(null, "no HTTP response from $u");
+        }
+        if ($r[0] !== 200) {
+            return array(null, "HTTP {$r[0]} from $u");
+        }
+        if (!preg_match('#<channel[\s>]#i', $r[1])) {
+            return array(null, "200 but no <channel> — not an RSS feed — $u");
+        }
+        $items += preg_match_all('#<item[\s>]#i', $r[1]);
+    }
+
+    $n = count($feeds);
+    return $items > 0
+        ? array(true, "$items published post(s) in $n $tier scope feed(s)")
+        : array(false, "0 <item> across all $n $tier scope RSS feed(s): " . implode(', ', $feeds));
+};
+
 // Post surfaces need a published post to exist, so they are discovered by
 // following a post link off an index page. A tier with no discoverable post is
-// a SKIPPED surface — reported in the summary and fatal under --strict — not a
-// silent "one fewer surface".
+// a SKIPPED surface — reported in the summary and fatal under --strict — unless
+// the tier's own feeds prove no such post exists, in which case it is
+// NOT-APPLICABLE. Never a silent "one fewer surface".
 $found = array('org' => false, 'shell' => false);
 $whyNot = array('org' => '', 'shell' => '');
 foreach ($pages as $p) {
@@ -711,12 +870,32 @@ foreach ($found as $tier => $ok) {
     if ($ok) {
         continue;
     }
-    skip_surface(
-        post_surface_label($tier),
-        $whyNot[$tier] !== ''
-            ? $whyNot[$tier]
-            : "no published $tier post linked from any covered $tier index page"
-    );
+    $label = post_surface_label($tier);
+
+    // A post link WAS found and the page would not render: that is the surface
+    // failing, not the data being empty. Never forgiven, whatever the feeds say.
+    if ($whyNot[$tier] !== '') {
+        skip_surface($label, $whyNot[$tier]);
+        continue;
+    }
+
+    // Otherwise ask the app whether a post exists in this tier's scopes at all.
+    list($exists, $evidence) = $tierHasPublishedPost($tier, $pages);
+    if ($exists === false) {
+        na_surface($label, $evidence);
+    } elseif ($exists === true) {
+        skip_surface(
+            $label,
+            "a published $tier post EXISTS but no covered $tier index page linked"
+                . " one this run could render — $evidence"
+        );
+    } else {
+        skip_surface(
+            $label,
+            "no published $tier post linked from any covered $tier index page, and"
+                . " this run could not prove none exists — $evidence"
+        );
+    }
 }
 
 $orgPages   = array_values(array_filter($pages, function ($p) {

@@ -128,8 +128,16 @@ jobs:
       #
       #   RESULT: PASS | PASS-WITH-SKIPS | FAIL
       #   SKIP-KIND: NONE | WHOLE-RUN | PARTIAL
-      #   SURFACES: <n> EXPECTED, <n> COVERED, <n> SKIPPED
+      #   SURFACES: <n> EXPECTED, <n> COVERED, <n> SKIPPED, <n> NOT-APPLICABLE
       #   ASSERTIONS: <n> RAN, <n> FAILED
+      #
+      # NOT-APPLICABLE is not a skip and needs no handling here. It is a surface
+      # the DATA cannot produce — the per-tier single-post surface against a
+      # database with no post in that tier's scopes — established from the app's
+      # own RSS feeds, not from a list in the test, and it leaves RESULT: PASS
+      # with SKIP-KIND: NONE. A surface that SHOULD exist and did not render is
+      # still SKIPPED and still fails; see the test's header for the three-way
+      # decision and its fail-closed default.
       #
       # and the two kinds of skip are treated differently, deliberately:
       #

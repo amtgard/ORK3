@@ -500,7 +500,7 @@ without a signal is worse than no backstop: it manufactures confidence.
 So **every run now ends with a machine-readable summary**, on every exit path:
 
 ```
-SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED
+SURFACES: 9 EXPECTED, 8 COVERED, 1 SKIPPED, 0 NOT-APPLICABLE
 SURFACE: org home (kingdom burning-lands) COVERED 33
 SURFACE: org post (discovered) SKIPPED 0 — no published org post linked from any covered org index page
 ASSERTIONS: 243 RAN, 0 FAILED
@@ -518,6 +518,51 @@ RESULT: PASS-WITH-SKIPS
 
 `ALL PASS` is now reserved for a run that covered everything; a run that lost a
 surface says so in the human line as well.
+
+### "Did not run" and "cannot exist" are different answers
+
+The expected set derives one single-post surface **per tier**, and a post is
+**data**. A stock local database has a global post and no kingdom- or
+park-scoped one, so `--strict` — the command this file tells you to run before
+merging — exited 1 on a clean checkout, every time, naming a coverage hole
+nobody could close without authoring content. A documented pre-merge check that
+is red by default teaches people to ignore it, which costs more than the surface
+it was reporting.
+
+A surface the current data **cannot** produce is now `NOT-APPLICABLE` rather
+than `SKIPPED`. It is still expected, still listed, still counted — it is simply
+not coverage loss, because there was no coverage available to lose:
+
+```
+SURFACES: 9 EXPECTED, 8 COVERED, 0 SKIPPED, 1 NOT-APPLICABLE
+SURFACE: org post (discovered) NOT-APPLICABLE 0 — 0 <item> across all 3 org scope RSS feed(s): …
+SKIP-KIND: NONE
+RESULT: PASS
+```
+
+**The distinction is derived from the data, not declared.** Hardcoding "the org
+post surface is optional" would be exactly the swallow this accounting exists to
+end — it would forgive a *real* skip forever. Instead the app is asked, in the
+machine-readable form it already publishes: **the RSS feed of the very scope the
+surface belongs to**, `Site/rss/{slug}` per org site and `Blog/rss` for the shell
+tier, one feed per covered surface, the URL derived from that surface's own route
+so a surface added to `$surfaces` brings its feed with it.
+
+| What the feeds say | Verdict |
+|---|---|
+| every feed answered and parsed, **0 `<item>` in total** | `NOT-APPLICABLE` — nothing rendered it because nothing is there |
+| any feed carries an `<item>`, **or** a post link was found and would not render | `SKIPPED` — the surface should exist and did not; still fatal under `--strict` |
+| no feed derivable, a feed did not answer, or it did not parse | `SKIPPED` — **fail closed**: "cannot tell" is not "not applicable" |
+
+So the forgiving path is only ever reached on the app's own evidence that the
+data is empty, and the moment someone publishes a kingdom post the surface
+becomes required again with no edit to the test. Proven in all four directions
+against local docker — see the commit that introduced it.
+
+The feeds are GhettoCached per scope for 1800s, the same cache that serves the
+index pages the discovery reads, so a post published seconds ago can read as
+absent on both. `docker restart ork3-php8-app` after a DB change, exactly as for
+any other CMS probe.
 
 **The expected surface set is derived, not pinned.** It is the `$surfaces` list
 plus one single-post surface per tier that list covers, so adding a surface
@@ -543,12 +588,15 @@ fully populated CMS database — **run it by hand before merging**:
 php tests/cms-css/boundary_test.php --strict
 ```
 
-Strict needs a **published post on each tier** as well as the seven listed
+Strict wants a **published post on each tier** as well as the seven listed
 surfaces: the single-post render path is the only place `.blogp-*` / `.org-post*`
-is exercised, so a tier with no discoverable post is a coverage hole whether or
-not anyone chose it. A local database with no kingdom- or park-scoped published
-post will report `org post (discovered) SKIPPED` — that is the gap being
-reported, not a bug in the test.
+is exercised, so a tier whose post exists and did not render is a coverage hole
+whether or not anyone chose it. A tier whose scopes contain **no** published post
+is reported `NOT-APPLICABLE`, not `SKIPPED`, on the evidence of that tier's own
+RSS feeds — see ["Did not run" and "cannot exist" are different
+answers](#did-not-run-and-cannot-exist-are-different-answers). So `--strict`
+exits 0 on a stock local database with the app up, and still exits 1 the moment
+a surface that does exist stops rendering.
 
 Point it at another host with `ORK_BASE_URL`.
 
