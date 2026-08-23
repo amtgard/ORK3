@@ -524,6 +524,11 @@ class Controller_Cms extends Controller
         // Full human label map for the Type column (covers types not present in
         // PageTypes, e.g. legacy/system page types). Unknown keys → ucwords.
         $this->data['TypeLabels'] = self::_pageTypeLabelMap();
+        // The New-page chooser on THIS page is the same chooser as the
+        // dashboard's, so it must be fed from the same registry. Without this it
+        // fell through to the template's hard-coded fallback list, which was
+        // missing the 'about' type entirely and carried no descriptions.
+        $this->data['PageTypes']  = $this->_pageTypes();
     }
 
     /* ------------------------------------------------------------------ *
@@ -1261,7 +1266,7 @@ class Controller_Cms extends Controller
      * Page-type presets (editor hint → starting block set). Mirrors the spec's
      * "Page types are editor presets" decision.
      *
-     * Each entry: ['type','label','blocks'=>[<starter block objects>]], where a
+     * Each entry: ['type','label','description','blocks'=>[<starter blocks>]], where a
      * starter block is a fully-formed block: ['type','enabled','source','fields'].
      * The editor seeds the block list from these when CREATING a new page of the
      * given type (and re-seeds when the type is switched on an empty new page).
@@ -1286,9 +1291,14 @@ class Controller_Cms extends Controller
                 $blocks[] = $this->_starter($blockType, $catalog);
             }
             $out[] = array(
-                'type'   => $type,
-                'label'  => (string)$def['label'],
-                'blocks' => $blocks,
+                'type'        => $type,
+                'label'       => (string)$def['label'],
+                // Author-facing one-liner shown at the point of choice (the
+                // New-page type cards and the editor rail's Type select). Empty
+                // string when the registry carries none, so every consumer can
+                // just test truthiness.
+                'description' => isset($def['description']) ? (string)$def['description'] : '',
+                'blocks'      => $blocks,
             );
         }
         return $out;

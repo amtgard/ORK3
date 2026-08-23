@@ -28,13 +28,23 @@ $scopeQ  = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 
 // Page-type enum the meta form offers (mirror controller _pageTypes()).
 $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
-    array('type' => 'composed',   'label' => 'Composed / Landing'),
-    array('type' => 'article',    'label' => 'Article / Text'),
-    array('type' => 'media',      'label' => 'Media / Gallery'),
-    array('type' => 'resource',   'label' => 'Resource / Document'),
-    array('type' => 'blog_index', 'label' => 'Blog Index'),
-    array('type' => 'dynamic',    'label' => 'Dynamic Data'),
+    array('type' => 'composed',   'label' => 'Landing page'),
+    array('type' => 'article',    'label' => 'Article'),
+    array('type' => 'media',      'label' => 'Photo gallery'),
+    array('type' => 'resource',   'label' => 'Documents & downloads'),
+    array('type' => 'blog_index', 'label' => 'News index'),
+    array('type' => 'dynamic',    'label' => 'Live ORK data'),
 );
+
+// type key => one-line author-facing description (CmsBlockRegistry::PageTypeDefs).
+// Rendered under the Type select and swapped on change, so the author reads what
+// a type MAKES at the moment they pick it.
+$pageTypeDesc = array();
+foreach ($pageTypes as $pt) {
+    if (!empty($pt['description'])) {
+        $pageTypeDesc[(string)$pt['type']] = (string)$pt['description'];
+    }
+}
 
 // A "type=" hint may arrive on the New-page URL — seed the meta form's type.
 // Only honor it if it matches a known page type (allowlist) to avoid
@@ -103,13 +113,14 @@ ob_start();
     </div>
     <div class="cms-field">
         <label class="cms-label" for="cmsType">Type</label>
-        <select class="cms-select" id="cmsType">
+        <select class="cms-select" id="cmsType" aria-describedby="cmsTypeHelp">
             <?php foreach ($pageTypes as $pt):
                 $sel = ((string)$pt['type'] === $pType) ? ' selected' : '';
             ?>
                 <option value="<?= $h($pt['type']) ?>"<?= $sel ?>><?= $h($pt['label']) ?></option>
             <?php endforeach; ?>
         </select>
+        <div class="cms-help" id="cmsTypeHelp"><?= $h(isset($pageTypeDesc[$pType]) ? $pageTypeDesc[$pType] : '') ?></div>
     </div>
     <div class="cms-field">
         <label class="cms-label" for="cmsMeta">Meta description</label>
@@ -275,7 +286,15 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     // On a NEW page, switching the type re-seeds the starter blocks — but only
     // when the user hasn't authored content yet (avoid clobbering real work).
+    // One line saying what the chosen type MAKES, swapped as the choice changes.
+    var typeHelp = document.getElementById('cmsTypeHelp');
+    var TYPE_DESC = <?= json_encode($pageTypeDesc, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    function paintTypeHelp() {
+        if (typeHelp) { typeHelp.textContent = TYPE_DESC[typeInput.value] || ''; }
+    }
+
     typeInput.addEventListener('change', function () {
+        paintTypeHelp();
         if (BE && BE.setPageType) { BE.setPageType(typeInput.value); }
         if (STATE.isNew && BE && BE.isPristine()) {
             BE.seedFromPreset(typeInput.value);

@@ -434,7 +434,17 @@ class CmsBlockRegistry
      * An `extra_blocks` of null means the chooser list is computed elsewhere —
      * 'composed' is the kitchen sink, derived from every addable catalog entry.
      *
-     * @return array<string,array{label:string|null,starters:array<int,string>|null,
+     * `label` + `description` are AUTHOR-FACING copy and the single source for
+     * every place a type is chosen (the New-page type cards on the dashboard and
+     * the page list, and the Type select in the editor rail). They used to be
+     * two-part names — 'Composed / Landing', 'Article / Text', 'Resource /
+     * Document' — whose first half was just the internal key title-cased. That
+     * taught an author the developer's vocabulary and explained nothing, so each
+     * type is now named for what the author GETS, with one plain line saying what
+     * kind of page it makes.
+     *
+     * @return array<string,array{label:string|null,description:string|null,
+     *                            starters:array<int,string>|null,
      *                            extra_blocks:array<int,string>|null}>
      */
     public static function PageTypeDefs()
@@ -445,44 +455,51 @@ class CmsBlockRegistry
 
         self::$_pageTypeDefs = array(
             'composed' => array(
-                'label'        => 'Composed / Landing',
+                'label'        => 'Landing page',
+                'description'  => 'A page you build from blocks — a big hero image, rows of cards, photos, buttons. The most flexible type, and the one front pages use.',
                 'starters'     => array('hero_carousel', 'rich_text', 'cta_band'),
                 // The landing-page kitchen sink: every addable block, computed
                 // from the catalog rather than enumerated (see _blockAllow).
                 'extra_blocks' => null,
             ),
             'article' => array(
-                'label'    => 'Article / Text',
+                'label'    => 'Article',
+                'description' => 'A page of writing: a heading and formatted text, with tables, downloads or images dropped in where you need them.',
                 'starters' => array('heading', 'rich_text'),
                 // Long-form content + inline media + supporting layout.
                 'extra_blocks' => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
             ),
             'media' => array(
-                'label'    => 'Media / Gallery',
+                'label'    => 'Photo gallery',
+                'description' => 'A page led by pictures — galleries and photo mosaics, with headings between them.',
                 'starters' => array('heading', 'gallery'),
                 // Image-led blocks.
                 'extra_blocks' => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
             ),
             'about' => array(
-                'label'    => 'About / Team',
+                'label'    => 'About us',
+                'description' => 'Who you are and who runs things: your story, plus a roster of officers or staff with photos and roles.',
                 'starters' => array('rich_text', 'staff_roster'),
                 // A people roster plus supporting content blocks.
                 'extra_blocks' => array('staff_roster', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'park_officers', 'park_meeting', 'card_grid', 'cta_band', 'gallery'),
             ),
             'resource' => array(
-                'label'    => 'Resource / Document',
+                'label'    => 'Documents & downloads',
+                'description' => 'A place to hand people files — rules PDFs, forms, waivers — with tables and a questions list around them.',
                 'starters' => array('heading', 'file_download'),
                 // Downloads + tabular/structured reference.
                 'extra_blocks' => array('file_download', 'table', 'accordion', 'columns'),
             ),
             'blog_index' => array(
-                'label'    => 'Blog Index',
+                'label'    => 'News index',
+                'description' => 'The page that lists your news posts, newest first. You write the posts themselves under Posts.',
                 'starters' => array('heading', 'blog_feed'),
                 // The live post feed, with an optional call-to-action.
                 'extra_blocks' => array('blog_feed', 'cta_band'),
             ),
             'dynamic' => array(
-                'label'    => 'Dynamic Data',
+                'label'    => 'Live ORK data',
+                'description' => 'A page that fills itself in from the ORK — your parks, your officers, your upcoming events. Nothing to type or keep up to date.',
                 'starters' => array('kingdoms_teaser'),
                 // Every live feed, plus framing blocks. #65: the global
                 // events_feed (org-wide, all kingdoms) is dropped from the
@@ -500,6 +517,7 @@ class CmsBlockRegistry
             // articles in the Add-block chooser and nowhere else.
             'post' => array(
                 'label'        => null,
+                'description'  => null,
                 'starters'     => null,
                 'extra_blocks' => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
             ),

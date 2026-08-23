@@ -27,12 +27,12 @@ $nf = function ($n) {
 };
 
 $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
-    array('type' => 'composed',   'label' => 'Composed / Landing'),
-    array('type' => 'article',    'label' => 'Article / Text'),
-    array('type' => 'media',      'label' => 'Media / Gallery'),
-    array('type' => 'resource',   'label' => 'Resource / Document'),
-    array('type' => 'blog_index', 'label' => 'Blog Index'),
-    array('type' => 'dynamic',    'label' => 'Dynamic Data'),
+    array('type' => 'composed',   'label' => 'Landing page'),
+    array('type' => 'article',    'label' => 'Article'),
+    array('type' => 'media',      'label' => 'Photo gallery'),
+    array('type' => 'resource',   'label' => 'Documents & downloads'),
+    array('type' => 'blog_index', 'label' => 'News index'),
+    array('type' => 'dynamic',    'label' => 'Live ORK data'),
 );
 
 $canCreate = !empty($caps['create']);
