@@ -129,9 +129,22 @@
 // The next-largest group, 6 copies of `display:flex`, is NOT collapsible: four
 // live in cms-admin.css and two in blocks.css, and a selector list lives in
 // exactly one file, so no grouping can take that group below two members.
+//
+// 2026-08-22, L-series (OGRE list surfaces): ANY 89 -> 90, 2PLUS unchanged. The
+// raise is one NEW x2 group of a single declaration, `position:relative`, whose
+// two members are:
+//     cms-admin.css   .cms-shell [data-tip], .cms-modal [data-tip]
+//     frontdoor.css   .fd-navitem
+// It is the same not-collapsible shape as the `display:flex` group above. The
+// admin tier and the public tier are physically separate stylesheets BY RULE
+// (check-css-boundaries.sh C1 exists to keep them from touching), a selector
+// list lives in exactly one file, and the anchor rule genuinely needs that one
+// declaration and no other: it establishes the containing block the [data-tip]
+// ::after chip is positioned against. Padding it to two declarations to duck
+// this counter would be the actual defect. Both rules carry a comment saying so.
 // ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 26;
-const MAX_GROUPS_ANY   = 89;
+const MAX_GROUPS_ANY   = 90;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(

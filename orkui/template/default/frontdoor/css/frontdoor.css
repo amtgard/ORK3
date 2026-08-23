@@ -579,6 +579,10 @@ html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
     flex: 1;
 }
 
+/* Deliberate duplicate of the one-declaration `position:relative` body that
+   cms-admin.css uses to anchor its [data-tip] chip: the public and admin tiers
+   are separate stylesheets by rule (check-css-boundaries.sh C1) and a selector
+   list lives in exactly one file, so the two can never be grouped. */
 .fd-navitem {
     position: relative;
 }

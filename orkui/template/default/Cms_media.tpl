@@ -85,6 +85,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     $alt   = (string)($m['alt'] ?? '');
                     $title = (string)($m['title'] ?? '');
                     $fn    = (string)($m['filename'] ?? ('#' . $mid));
+                    $full  = (string)($m['src'] ?? $thumb);
                 ?>
                     <div class="cms-media-card" data-media-id="<?= $mid ?>">
                         <?php if (!empty($caps['media'])): ?>
@@ -103,10 +104,27 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php endif; ?>
                             <div class="cms-media-card-usage" data-media-id="<?= $mid ?>"></div>
                             <?php if (!empty($caps['media'])): ?>
+                                <?php /* L1: the picture is the card. "Where used" is the one thing that
+                                        makes deleting safe, so it stays visible; everything else — including
+                                        Delete, which used to be 21 red buttons at once — rides in the
+                                        hover/focus-within cluster, same shape as the Pages list. */ ?>
                                 <div class="cms-media-card-actions">
-                                    <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>
                                     <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-usage" data-tip="See where this image is used"><i class="fas fa-link"></i> Where used</button>
-                                    <button type="button" class="cms-btn cms-btn-sm cms-btn-danger cms-media-delete"><i class="fas fa-trash-alt"></i> Delete</button>
+                                    <div class="cms-media-card-reveal">
+                                        <button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>
+                                        <div class="cms-overflow">
+                                            <button type="button" class="cms-overflow-btn" data-overflow-toggle
+                                                    aria-haspopup="true" aria-expanded="false"
+                                                    data-tip="More actions" aria-label="More actions for <?= $h($fn) ?>">
+                                                <i class="fas fa-ellipsis-h" aria-hidden="true"></i>
+                                            </button>
+                                            <div class="cms-overflow-menu" role="menu">
+                                                <a class="cms-overflow-item" role="menuitem" href="<?= $h($full) ?>" target="_blank" rel="noopener noreferrer"><i class="fas fa-expand"></i> Open full size</a>
+                                                <div class="cms-overflow-sep"></div>
+                                                <button type="button" class="cms-overflow-item cms-overflow-danger cms-media-delete" role="menuitem"><i class="fas fa-trash-alt"></i> Delete</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -242,7 +260,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var canEditMedia = <?= !empty($caps['media']) ? 'true' : 'false' ?>;
 
     // Shared card body markup — name + optional title + alt line + a where-used
-    // line + (when permitted) the Edit / Where used / Delete actions. Used by the
+    // line + (when permitted) the always-visible "Where used" plus the
+    // hover/focus-revealed Edit + (⋯) cluster that holds Delete. Used by the
     // JS re-render path; the initial PHP render carries the SAME structure so the
     // delegated handlers work on first paint too.
     function cardBodyHtml(m) {
@@ -250,6 +269,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         var fn = m.filename || ('#' + mid);
         var alt = m.alt || '';
         var title = m.title || '';
+        var full = m.src || m.thumb || '';
         return '<div class="cms-media-card-body" data-media-id="' + esc(mid) + '">' +
             '<div class="cms-media-card-name" data-tip="' + esc(fn) + '">' + esc(fn) + '</div>' +
             (title ? '<div class="cms-media-card-title">' + esc(title) + '</div>' : '') +
@@ -259,9 +279,20 @@ include __DIR__ . '/cms/_shell_top.tpl';
             '<div class="cms-media-card-usage" data-media-id="' + esc(mid) + '"></div>' +
             (canEditMedia
                 ? '<div class="cms-media-card-actions">' +
-                    '<button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>' +
                     '<button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-usage" data-tip="See where this image is used"><i class="fas fa-link"></i> Where used</button>' +
-                    '<button type="button" class="cms-btn cms-btn-sm cms-btn-danger cms-media-delete"><i class="fas fa-trash-alt"></i> Delete</button>' +
+                    '<div class="cms-media-card-reveal">' +
+                      '<button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>' +
+                      '<div class="cms-overflow">' +
+                        '<button type="button" class="cms-overflow-btn" data-overflow-toggle aria-haspopup="true" aria-expanded="false" data-tip="More actions" aria-label="More actions for ' + esc(fn) + '">' +
+                          '<i class="fas fa-ellipsis-h" aria-hidden="true"></i>' +
+                        '</button>' +
+                        '<div class="cms-overflow-menu" role="menu">' +
+                          '<a class="cms-overflow-item" role="menuitem" href="' + esc(full) + '" target="_blank" rel="noopener noreferrer"><i class="fas fa-expand"></i> Open full size</a>' +
+                          '<div class="cms-overflow-sep"></div>' +
+                          '<button type="button" class="cms-overflow-item cms-overflow-danger cms-media-delete" role="menuitem"><i class="fas fa-trash-alt"></i> Delete</button>' +
+                        '</div>' +
+                      '</div>' +
+                    '</div>' +
                   '</div>'
                 : '') +
             '</div>';
@@ -362,6 +393,22 @@ include __DIR__ . '/cms/_shell_top.tpl';
         return '<ul class="cms-usage-list"><li>' + parts.map(esc).join('</li><li>') + '</li></ul>';
     }
 
+    /* ---- Card-action overflow menu (⋯) — shared: CmsAdmin.installOverflowMenus,
+       the same controller the Pages list uses, so the two surfaces behave
+       identically (fixed positioning, Esc to close, close on scroll/resize). ---- */
+    CmsAdmin.installOverflowMenus();
+
+    // Choosing an item from a card's ⋯ menu should dismiss the menu — the shared
+    // controller deliberately leaves a click INSIDE the menu alone (so a menu can
+    // host a control), and every item here either navigates or opens a modal.
+    function closeOwningOverflow(el) {
+        var wrap = el.closest('.cms-overflow');
+        if (!wrap) { return; }
+        wrap.classList.remove('cms-open');
+        var t = wrap.querySelector('[data-overflow-toggle]');
+        if (t) { t.setAttribute('aria-expanded', 'false'); }
+    }
+
     /* ---- delegated card actions: Edit / Where used / Delete + checkbox ---- */
     area.addEventListener('click', function (e) {
         var editBtn = e.target.closest('.cms-media-edit');
@@ -378,10 +425,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
         var delBtn = e.target.closest('.cms-media-delete');
         if (delBtn) {
+            closeOwningOverflow(delBtn);
             var dBody = delBtn.closest('.cms-media-card-body');
             if (dBody) { startDelete(dBody, delBtn); }
             return;
         }
+        var fullBtn = e.target.closest('.cms-overflow-menu a[role="menuitem"]');
+        if (fullBtn) { closeOwningOverflow(fullBtn); }
     });
 
     area.addEventListener('change', function (e) {
