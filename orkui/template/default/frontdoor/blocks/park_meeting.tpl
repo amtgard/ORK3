@@ -153,9 +153,19 @@ $pmPlace = static function (array $d, array $park) {
     // data. Anything starting with { or [, or containing a "key": pair, is a cache
     // artefact and is dropped — the address line below is the reliable venue info
     // and renders on its own.
+    //  3. A third trap, same shape as the first two: the column holds the literal
+    //     four-character string "null" — a stringified null from whatever wrote the
+    //     row, not a venue called "null". It is non-empty, does not start with { or
+    //     [, and carries no "key": pair, so it passed every guard above and printed
+    //     `null` on the card. This is not one bad row: 33 ork_parkday and 267
+    //     ork_park rows hold it. Treat the usual stringified-empty spellings as
+    //     empty rather than migrating 300 rows.
     $pmCleanName = static function ($raw) {
         $v = trim((string) $raw);
         if ($v === '' || $v[0] === '{' || $v[0] === '[') {
+            return '';
+        }
+        if (in_array(strtolower($v), ['null', 'nil', 'none', 'undefined', 'n/a'], true)) {
             return '';
         }
         return preg_match('/"[a-z_]+"\s*:/i', $v) ? '' : $v;

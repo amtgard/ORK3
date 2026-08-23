@@ -911,6 +911,34 @@ html[data-theme="dark"] .fdb-divider-dots {
 
 /* ---- heading block (was inline style element in frontdoor/blocks/heading.tpl) ---- */
 /* Reset the global orkui.css h1-h6 gray-box styling for this block's heading. */
+/* A heading block is a section TITLE, not a section of its own.
+   render_blocks wraps every block in .fd-pad (42px 44px), which is the rhythm for a
+   full content section. Applied to a lone heading that gives it 42px above AND
+   below, and the section it introduces then adds its own 42px on top — 84px of dead
+   space between a title and the content it titles. Measured on Page/view/staff and
+   Page/view/documents before this rule existed.
+
+   So: keep generous room ABOVE (it separates this group from the previous one),
+   collapse the room BELOW so the title sits with its content, and tighten the
+   following section's top padding to match. Scoped to .fd-pad so it only affects
+   the block-rendered wrapper, never a heading used elsewhere.
+
+   Only in-shell CMS pages use heading blocks today (0 occurrences on the front door
+   and on org sites), so the blast radius is Page/view/* and Site/page/*. */
+.fd-pad.fdb-heading-wrap {
+    padding-bottom: 0;
+}
+
+.fd-pad.fdb-heading-wrap + .fd-pad {
+    padding-top: 16px;
+}
+
+/* A heading directly under the breadcrumb trail is the page title. It needs less
+   room above than one separating two content groups further down the page. */
+.fd-breadcrumbs + .fd-pad.fdb-heading-wrap {
+    padding-top: 20px;
+}
+
 .fdb-heading-wrap .fdb-heading {
     background: transparent;
     border: none;

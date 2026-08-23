@@ -109,6 +109,32 @@ html[data-theme="dark"] #theme_container .fd-body-text a {
    !important because orkui.css paints #newmenu at ID specificity and the bar is
    the ORK shell's, not ours, to restyle; `display` is the only property either
    side sets on it, so nothing here is being overridden in turn. */
+/* Every CMS surface that hides the ORK navbar. Both the front door (body.fd-home)
+   and CMS pages / the blog (body.cms-page) suppress #newmenu — measured: display
+   none, height 0 on all of them — and ship their own marketing nav, so orkui.css's
+   `body { padding-top: 48px }` — the
+   clearance for a fixed navbar that is never painted here — reserves 48px of dead
+   space, and the UA's default 8px body margin adds to it. #theme_container's own
+   10px/6px inset is deliberate and stays: it gives the rounded nav bar its gutter.
+
+   This lives here, not in orkui.css, because it is a CMS rule and the CRM must not
+   style CMS surfaces (bin/check-css-boundaries.sh C5). It wins over orkui.css's
+   plain `body` rule on specificity — body.fd-home is (0,1,1) against (0,0,1) — and
+   this file is linked after orkui.css on every in-shell surface.
+
+   REGRESSION HISTORY: the body.fd-home half of this rule was dropped by d370795f,
+   which removed the park-strip rules above it by truncating the file from their
+   comment to EOF and took this with it. The front door carried 72px of dead space
+   (8 body margin + 48 body padding + 10 + 6 from #theme_container) until it was
+   restored. body.cms-page was never covered at all — CMS pages and the blog
+   carried the same 56px from the day #newmenu was first hidden for them.
+   tests/cms-css/boundary_test.php now asserts it is served. */
+body.fd-home,
+body.cms-page {
+    padding-top: 0;
+    margin-top: 0;
+}
+
 body.fd-home #newmenu {
     display: none !important;
 }

@@ -1232,6 +1232,61 @@ foreach ($orgPages as $p) {
 }
 
 // ---------------------------------------------------------------------------
+// 9b. A surface that hides the ORK navbar must not still reserve room for it.
+//
+//     orkui.css sets `body { padding-top: 48px }` to clear the fixed #newmenu bar.
+//     Every CMS surface in the shell tier hides #newmenu and ships its own
+//     marketing nav, so that clearance — plus the UA's 8px body margin — is 56px of
+//     dead space at the top of the page. orkshell-interop.css cancels it with
+//     `body.fd-home, body.cms-page { padding-top: 0; margin-top: 0 }`.
+//
+//     This is asserted because it has already been lost once, silently: commit
+//     d370795f removed the rule as collateral while deleting an unrelated block
+//     from the same file, and it stayed missing for 40 commits and several review
+//     rounds because nothing checked for it. The front door carried 72px of dead
+//     space that whole time. A rule whose absence is invisible to every gate is a
+//     rule that needs a test.
+// ---------------------------------------------------------------------------
+$interopCss = null;
+foreach ($shellPages as $p) {
+    surface($p['label']);
+
+    // The surface must actually be one that hides the navbar, or the rule is moot.
+    $hidesNavbar = (bool) preg_match('/<body[^>]*class="[^"]*\b(fd-home|cms-page)\b/i', $p['body']);
+    check("shell surface carries fd-home or cms-page — {$p['label']}", $hidesNavbar);
+    if (!$hidesNavbar) {
+        continue;
+    }
+
+    if ($interopCss === null) {
+        $href = null;
+        foreach (stylesheet_hrefs($p['body']) as $u) {
+            if (strpos($u, 'orkshell-interop.css') !== false) {
+                $href = $u;
+                break;
+            }
+        }
+        // http_get() returns array($code, $body), not a string.
+        $resp       = ($href !== null) ? http_get($href) : null;
+        $interopCss = (is_array($resp) && (int) $resp[0] === 200) ? (string) $resp[1] : '';
+        check('orkshell-interop.css was fetchable for the navbar-clearance check', $interopCss !== '');
+    }
+
+    // Comment-stripped, so the explanatory prose above the rule cannot satisfy it.
+    $bare = preg_replace('#/\*.*?\*/#s', '', (string) $interopCss);
+    check(
+        "orkshell-interop.css cancels the navbar clearance for both body classes — {$p['label']}",
+        (bool) preg_match('/body\.fd-home\s*,\s*body\.cms-page\s*\{[^}]*padding-top:\s*0/i', $bare)
+            || ((bool) preg_match('/body\.fd-home[^{]*\{[^}]*padding-top:\s*0/i', $bare)
+                && (bool) preg_match('/body\.cms-page[^{]*\{[^}]*padding-top:\s*0/i', $bare))
+    );
+    check(
+        "…and the 8px UA body margin with it — {$p['label']}",
+        (bool) preg_match('/body\.(fd-home|cms-page)[^{]*\{[^}]*margin-top:\s*0/i', $bare)
+    );
+}
+
+// ---------------------------------------------------------------------------
 // 10. The accounting itself.
 //
 //     A surface that was fetched but had nothing asserted against it is the same
