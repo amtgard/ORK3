@@ -212,21 +212,39 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
+    <?php // Every tile is guarded, not just Views. A brand-new site — the first
+          // thing a first-time author ever sees — used to read "0 Pages / 0 Posts /
+          // 0 Drafts in progress": it reported nothing three times to the one person
+          // who already knows there is nothing. A count of zero is not news, so the
+          // tile is simply absent until there is something to count, and when there
+          // is nothing at all the block says so once and points at the way in. ?>
+    <?php $hasGlance = ($statPages > 0 || $statPosts > 0 || $statDrafts > 0 || $viewTotal > 0); ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">At a glance</h3>
+        <?php if (!$hasGlance): ?>
+        <p class="cms-empty-line"><?= $canCreate
+            ? 'Nothing here yet. Start a page or a post above and your counts will show up here.'
+            : 'Nothing has been created here yet.' ?></p>
+        <?php else: ?>
         <div class="cms-stat-row">
+            <?php if ($statPages > 0): ?>
             <a class="cms-stat-tile" href="<?= UIR ?>Cms/index<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statPages ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-file-alt"></i> Page<?= $statPages === 1 ? '' : 's' ?></div>
             </a>
+            <?php endif; ?>
+            <?php if ($statPosts > 0): ?>
             <a class="cms-stat-tile" href="<?= UIR ?>Cms/posts<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statPosts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-newspaper"></i> Post<?= $statPosts === 1 ? '' : 's' ?></div>
             </a>
+            <?php endif; ?>
+            <?php if ($statDrafts > 0): ?>
             <a class="cms-stat-tile cms-stat-tile-drafts" href="<?= UIR ?>Cms/index&status=draft<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
             </a>
+            <?php endif; ?>
             <?php // #09: scope-wide view rollup. Not a link (no analytics drill-down yet).
                   // Suppressed while nothing has ever been viewed: a "0 Views" tile sitting
                   // directly above a "No views recorded yet" panel stated the same fact twice,
@@ -239,6 +257,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
             <?php endif; ?>
         </div>
+        <?php endif; ?>
     </div>
 
     <?php // E128: Top content over the last 30 days — [{title,url,count}]. Rendered
