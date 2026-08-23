@@ -40,7 +40,8 @@ final class LiveServiceTest extends TestCase
         if ($recent['signins'] !== []) {
             $first = $recent['signins'][0];
             $this->assertIsArray($first);
-            $this->assertCount(5, $first);
+            // [iso, park_id, event_id, cdid, is_first, is_self]
+            $this->assertCount(6, $first);
         }
     }
 
