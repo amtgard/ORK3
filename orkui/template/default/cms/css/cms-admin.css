@@ -2636,7 +2636,10 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
    .cms-block-type <span> (cms-block-editor.js) and turn it into a flex box.
    Scoped to .cms-nav-item, which exists only on the nav page. The generic
    .cms-block-type rule above sets font only, so nothing ties. */
-.cms-nav-item .cms-block-type { display: flex; align-items: center; gap: 8px; }
+/* Grouped with the icon picker's custom-class row below (same declaration
+   body — the duplication gate wants one rule, not two copies). */
+.cms-nav-item .cms-block-type,
+.cms-iconpick-custom { display: flex; align-items: center; gap: 8px; }
 .cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
 .cms-nav-label { font-weight: 600; color: var(--ork-text); }
 .cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
@@ -2699,3 +2702,67 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-cols-childcard .cms-block-body { padding: 8px 10px; }
 .cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
 .cms-cols-add { align-self: flex-start; }
+
+/* ---- Icon picker (V1): swatches showing the real glyph + a plain-English
+   name, with a free-text escape hatch underneath. Theme-aware via the ORK
+   vars; the only hard-coded colour is the admin gold (defined for BOTH themes
+   on .cms-wrap / .cms-shell above) and the dark ink that sits on it. ---- */
+.cms-iconpick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.cms-iconswatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 9px 4px;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text-secondary);
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+}
+.cms-iconswatch:hover {
+    border-color: var(--cms-gold, #f0b429);
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+.cms-iconswatch i {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--cms-gold, #f0b429);
+}
+.cms-iconswatch span {
+    font-size: 10.5px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.cms-iconswatch-active {
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: inset 0 0 0 1px var(--cms-gold, #f0b429);
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+.cms-iconswatch-none i { color: var(--ork-text-muted); }
+/* .cms-iconpick-custom's own flex body is grouped up with
+   .cms-nav-item .cms-block-type (see the navigation-manager section). */
+.cms-iconpick-custom .cms-input { flex: 1 1 auto; min-width: 0; }
+.cms-iconpick-preview {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-tertiary);
+    color: var(--cms-gold, #f0b429);
+    font-size: 15px;
+}

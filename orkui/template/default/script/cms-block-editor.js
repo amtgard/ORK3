@@ -594,6 +594,122 @@ window.CmsBlockEditor = (function () {
         return fieldImage(obj, key, label);
     }
 
+    /* ---- icon picker (V1) -------------------------------------------------
+     * A card icon used to be a raw CSS class an author had to know and type
+     * ("Icon (Font Awesome class, e.g. fa-shield-alt)"). This shows the actual
+     * rendered glyph plus a plain-English name instead.
+     *
+     * The set is DERIVED from what the product already uses — the per-block
+     * icons in CmsBlockRegistry::BlockDefs() and the glyphs the front-door
+     * templates ship — trimmed to the ones that suit Amtgard content. Every
+     * name below was checked against the Font Awesome build the shell actually
+     * loads (5.8.2 free, `fas`), because a name that only exists in a later
+     * release renders as an empty box. NOTE: the registry's own 'fa-icons'
+     * (used for the photo_mosaic block) is NOT in 5.8.2 and is deliberately
+     * absent here.
+     *
+     * The free-text escape hatch stays for an author who knows the class they
+     * want, but it sits UNDER the swatches, not in front of them. */
+    var ICON_CHOICES = [
+        { c: 'fa-shield-alt',      n: 'Shield' },
+        { c: 'fa-crown',           n: 'Crown' },
+        { c: 'fa-khanda',          n: 'Crossed swords' },
+        { c: 'fa-fist-raised',     n: 'Raised fist' },
+        { c: 'fa-dragon',          n: 'Dragon' },
+        { c: 'fa-hat-wizard',      n: 'Wizard hat' },
+        { c: 'fa-scroll',          n: 'Scroll' },
+        { c: 'fa-book-open',       n: 'Rulebook' },
+        { c: 'fa-map-marker-alt',  n: 'Location pin' },
+        { c: 'fa-map',             n: 'Map' },
+        { c: 'fa-calendar-day',    n: 'Calendar' },
+        { c: 'fa-campground',      n: 'Campground' },
+        { c: 'fa-users',           n: 'People' },
+        { c: 'fa-user-shield',     n: 'Officer' },
+        { c: 'fa-handshake',       n: 'Welcome' },
+        { c: 'fa-trophy',          n: 'Trophy' },
+        { c: 'fa-medal',           n: 'Award' },
+        { c: 'fa-landmark',        n: 'Kingdom' },
+        { c: 'fa-gavel',           n: 'Rules' },
+        { c: 'fa-bullhorn',        n: 'Announcement' },
+        { c: 'fa-envelope',        n: 'Contact' },
+        { c: 'fa-question-circle', n: 'Questions' },
+        { c: 'fa-download',        n: 'Download' },
+        { c: 'fa-camera',          n: 'Photos' },
+        { c: 'fa-images',          n: 'Gallery' },
+        { c: 'fa-info-circle',     n: 'Information' }
+    ];
+
+    function iconBound(obj, key, label) {
+        var wrap = el('div', 'cms-field');
+        wrap.style.marginBottom = '8px';
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+
+        var grid = el('div', 'cms-iconpick-grid');
+        var free = el('input', 'cms-input');
+        free.type = 'text';
+        free.placeholder = 'Font Awesome class, e.g. fa-shield-alt';
+        free.setAttribute('aria-label', 'Font Awesome class name');
+        var preview = el('span', 'cms-iconpick-preview');
+
+        function current() {
+            return String(obj[key] == null ? '' : obj[key]).trim();
+        }
+
+        function paint() {
+            var v = current();
+            grid.querySelectorAll('.cms-iconswatch').forEach(function (b) {
+                var on = (b.getAttribute('data-icon') || '') === v;
+                b.classList.toggle('cms-iconswatch-active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            if (free.value.trim() !== v) { free.value = v; }
+            preview.innerHTML = v
+                ? '<i class="fas ' + esc(v) + '" aria-hidden="true"></i>'
+                : '<i class="fas fa-ban" aria-hidden="true"></i>';
+        }
+
+        function choose(v) {
+            obj[key] = v;
+            markDirty();
+            paint();
+        }
+
+        // "No icon" leads the grid so clearing is one click, not a text wipe.
+        var none = el('button', 'cms-iconswatch cms-iconswatch-none',
+            '<i class="fas fa-ban" aria-hidden="true"></i><span>No icon</span>');
+        none.type = 'button';
+        none.setAttribute('data-icon', '');
+        none.addEventListener('click', function () { choose(''); });
+        grid.appendChild(none);
+
+        ICON_CHOICES.forEach(function (ic) {
+            var b = el('button', 'cms-iconswatch',
+                '<i class="fas ' + esc(ic.c) + '" aria-hidden="true"></i><span>' + esc(ic.n) + '</span>');
+            b.type = 'button';
+            b.setAttribute('data-icon', ic.c);
+            b.setAttribute('data-tip', ic.c);
+            b.addEventListener('click', function () { choose(ic.c); });
+            grid.appendChild(b);
+        });
+
+        free.addEventListener('input', function () {
+            obj[key] = free.value.trim();
+            markDirty();
+            paint();
+        });
+
+        var customRow = el('div', 'cms-iconpick-custom');
+        customRow.appendChild(preview);
+        customRow.appendChild(free);
+
+        wrap.appendChild(grid);
+        wrap.appendChild(customRow);
+        wrap.appendChild(el('div', 'cms-help',
+            'Pick one above, or type a Font Awesome class name if you already know the one you want.'));
+        paint();
+        return wrap;
+    }
+
     function tnFixedAcPosition(input, dropdown) {
         var r = input.getBoundingClientRect();
         dropdown.style.position = 'fixed';
@@ -1195,10 +1311,10 @@ window.CmsBlockEditor = (function () {
                 function (card) {
                     var box = el('div', null);
                     box.appendChild(imageBound(card, 'image', 'Card image'));
-                    var g = el('div', 'cms-grid2');
-                    g.appendChild(textBound(card, 'icon', 'Icon (Font Awesome class, e.g. fa-shield-alt)'));
-                    g.appendChild(textBound(card, 'href', 'Link (href)'));
-                    box.appendChild(g);
+                    // The icon picker is a full-width swatch grid, so the card's
+                    // icon + link no longer share a .cms-grid2 row.
+                    box.appendChild(iconBound(card, 'icon', 'Icon'));
+                    box.appendChild(textBound(card, 'href', 'Link (href)'));
                     box.appendChild(textBound(card, 'title', 'Title'));
                     box.appendChild(textBound(card, 'blurb', 'Blurb'));
                     return box;
