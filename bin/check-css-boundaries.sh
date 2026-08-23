@@ -75,6 +75,12 @@
 #                       a frontdoor/ or cms/ partial, links a stylesheet from
 #                       either) is a CMS surface whoever owns its controller —
 #                       the net under a CMS controller that never used the trait.
+#                       The include destination is RESOLVED by the same resolver
+#                       C4-PATH uses. It used to be a literal string match, which
+#                       matched no include line in this repo — every one of them
+#                       goes through a $fdDir assigned earlier in the file — so
+#                       R10 covered nothing but docblocks and the whole of this
+#                       net was open. See R10 below.
 #         FAIL-CLOSED (C8) A $TPL_ROOT/<X>_<action>.tpl with no
 #                       controller.<X>.php is a routed surface the gate cannot
 #                       classify, and is REPORTED rather than skipped.
@@ -174,9 +180,16 @@
 #  R10  A SURFACE TEMPLATE THAT RENDERS CMS CHROME IS A CMS SURFACE TEMPLATE,
 #       whatever its prefix and whoever owns its controller. Direct evidence,
 #       not inference: it includes a frontdoor/ or cms/ partial, or links a
-#       stylesheet from either directory. Verified to add no file today (13 of
-#       the 15 existing CMS surface templates already qualify on content alone;
-#       none of the 99 others reference either directory).
+#       stylesheet from either directory.
+#
+#       THE INCLUDE DESTINATION IS RESOLVED, not matched as a literal. This was
+#       a grep for the string "frontdoor/<name>.tpl", and every CMS template in
+#       this repo writes `include $fdDir . 'render_blocks.tpl';` against a
+#       $fdDir assigned earlier in the file — so the literal is never on the
+#       include line, and the only lines R10 matched were the DOCBLOCKS that
+#       mention a partial by path. It therefore gave the idiom actually in use
+#       no coverage at all. R10 now calls resolve_include(), the same resolver
+#       C4-PATH calls; see the CLASSIFY block in the scanner.
 #
 # ---------------------------------------------------------------------------
 # The rules
@@ -643,68 +656,6 @@ $CMS_MODEL_DIR/model.${c}*.php
 $CMS_DOMAIN_DIR/class.${c}*.php"
 done
 
-# R10 — DIRECT EVIDENCE, for the surface template whose controller the marker
-# above cannot see.
-#
-# The derivation closes "nobody updated the list"; it does not close "the new
-# CMS controller did not use the trait". This does, from the other end, and with
-# evidence rather than inference: a $TPL_ROOT surface template that RENDERS CMS
-# CHROME — includes a frontdoor/ or cms/ partial, links a stylesheet from either
-# directory — is a CMS surface template whoever owns its controller. That is not
-# a heuristic about naming, it is the template saying what it renders.
-#
-# 13 of the 15 CMS surface templates that exist today are already caught this
-# way independently of their prefix (Blog_index.tpl and Cms_deny.tpl are the two
-# that reference nothing, and the prefix rule holds them). NO non-CMS template
-# under $TPL_ROOT references either directory — verified across all 114 — so
-# this adds no file today and costs nothing; it is purely the net under a future
-# surface. frontdoor/ implies the PUBLIC tier, cms/-only implies ADMIN.
-#
-# Content is read from the working tree, the same way R6's stylesheet set and
-# R7's asset-base seeds are, in every mode.
-CMS_BY_CONTENT_PUBLIC=$(grep -lE '(default/)?frontdoor/[A-Za-z0-9_./-]+\.(tpl|css|js)' \
-    "$TPL_ROOT"/*.tpl 2>/dev/null | sort -u)
-CMS_BY_CONTENT_ADMIN=$(grep -lE '(default/)?cms/[A-Za-z0-9_./-]+\.(tpl|css|js)' \
-    "$TPL_ROOT"/*.tpl 2>/dev/null | sort -u)
-
-in_list() {
-    [ -n "$2" ] || return 1
-    printf '%s\n' "$2" | grep -qxF -- "$1"
-}
-
-# ...and they have to be AUDIT candidates too, or --all would classify them
-# correctly and then never be handed them.
-for t in $CMS_BY_CONTENT_PUBLIC $CMS_BY_CONTENT_ADMIN; do
-    ALL_PATHSPECS="$ALL_PATHSPECS
-$t"
-done
-
-case "$MODE" in
-    staged) CANDIDATES=$(git diff --cached --name-only --diff-filter=ACM) ;;
-    range)  CANDIDATES=$(git diff --name-only --diff-filter=ACM "$RANGE") ;;
-    files)
-        # Accept absolute paths (editor / hook callers pass them) by rebasing
-        # onto the repo root; anything outside the repo stays absolute and is
-        # then dropped by the scope filter below.
-        CANDIDATES=$(printf '%s\n' $FILES | sed "s|^$REPO_ROOT/||")
-        ;;
-    all)
-        # R4: an audit that only knows about tracked files declares victory
-        # while an unguarded, not-yet-added template sits in the working copy.
-        set -f
-        TRACKED=$(git ls-files -- $ALL_PATHSPECS)
-        UNTRACKED=$(git ls-files --others --exclude-standard -- $ALL_PATHSPECS)
-        set +f
-        CANDIDATES=$(printf '%s\n%s\n' "$TRACKED" "$UNTRACKED" | sed '/^$/d' | sort -u)
-        if [ -n "$UNTRACKED" ]; then
-            echo "  note: also scanning untracked file(s) in scope:"
-            printf '%s\n' "$UNTRACKED" | sed 's/^/          /'
-        fi
-        ;;
-esac
-
-[ -z "$CANDIDATES" ] && exit 0
-
 # ---------------------------------------------------------------------------
 # Scanner
 # ---------------------------------------------------------------------------
@@ -714,54 +665,6 @@ CONTENT=$(mktemp) || exit 2
 # ratchet below.
 STATICS=$(mktemp) || exit 2
 trap 'rm -f "$AWKPROG" "$CONTENT" "$SEEDS" "$STATICS"' EXIT INT TERM
-
-# Where to point a reader who has to re-pin C3_TOTAL_STATIC. We are cd'd to the
-# repo root, so $0 resolves when the script was invoked by path from there;
-# otherwise fall back to the canonical location.
-GATE_SELF="$0"
-[ -f "$GATE_SELF" ] || GATE_SELF="bin/check-css-boundaries.sh"
-
-# R7 — ASSET-BASE SEEDS, derived from the tree.
-#
-# A partial does not assign the base it is handed: _assets_public.tpl documents
-# "Expects $fdDir (filesystem) and $fdAssetBase (URL) already in scope" and its
-# six includers each assign them. Reading that partial alone, the base is
-# unresolvable — and a fail-closed rule that reports it is a false positive on
-# the one file whose whole job is linking the CMS stylesheets.
-#
-# So the seed is derived the same way everything else here is: every in-scope
-# file is scanned for `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'`, and a name the
-# tree assigns a PROVABLE prefix to resolves to that prefix (all of them, if a
-# name is assigned more than one) when the file being scanned does not assign it
-# itself. An in-file assignment always wins; an assignment the scanner cannot
-# resolve seeds nothing, so the variable stays unprovable.
-#
-# This is not a loophole: it works in the dangerous direction too. Point any of
-# these names at style/ anywhere in the tree and every partial that consumes it
-# starts reporting.
-SEEDS=$(mktemp) || exit 2
-set -f
-{ git ls-files -- $ALL_PATHSPECS; git ls-files --others --exclude-standard -- $ALL_PATHSPECS; } |
-    sed '/^$/d' | sort -u |
-    grep -E '\.(css|tpl|theme)$' |
-    tr '\n' '\0' |
-    xargs -0 grep -hE '\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*(HTTP_TEMPLATE|DIR_TEMPLATE)[ \t]*\.' \
-    > "$SEEDS" 2>/dev/null
-set +f
-
-# Colour only when writing to a terminal — hook and CI callers capture plain text.
-if [ -t 1 ]; then
-    C_RED=$(printf '\033[31m'); C_DIM=$(printf '\033[2m'); C_OFF=$(printf '\033[0m')
-else
-    C_RED=""; C_DIM=""; C_OFF=""
-fi
-
-# Same shape as the awk report() below, for findings the shell decides (R5).
-shell_report() {
-    printf "  %s%s%s  %s:%d\n" "$C_RED" "$1" "$C_OFF" "$2" 0
-    printf "        %s\n" "$3"
-    printf "        %s-> %s%s\n" "$C_DIM" "$4" "$C_OFF"
-}
 
 cat > "$AWKPROG" <<'AWKEOF'
 function report(rule, lineno, msg, fix) {
@@ -1239,30 +1142,89 @@ function last_literal(s,    i, n, c, e, lit) {
     return lit
 }
 
-# Remember what a variable's value starts with, when it is a path under
-# frontdoor/ (or under __DIR__, which for an in-scope file is frontdoor/ too).
-function track_base(s,    seg, vn, rhs, b, ov) {
+# Remember what a variable's value starts with, when the resolver can prove it:
+# DIR_TEMPLATE . '<literal>', __DIR__ . '<literal>', or another variable already
+# tracked.
+#
+# The DIR_TEMPLATE arm used to be hard-wired to the literal "default/frontdoor/",
+# which was enough while C4-PATH was the only caller — it only ever asks whether
+# an include stays inside frontdoor/. R10 now asks the same resolver WHICH CMS
+# directory a template renders from, and cms/ is one of the two answers, so the
+# arm resolves whichever literal it is actually handed.
+#
+# Only the exact `CONST . '<literal>'` shape is accepted. A base with an
+# unproven segment in the middle (DIR_TEMPLATE . $sub . 'x/') stays untracked on
+# purpose: half a path is not a path, and both callers are fail-closed.
+function track_base(s,    seg, vn, rhs, lit) {
     if (!match(s, /\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*[^=]/)) return
     seg = substr(s, RSTART + 1)
     vn = seg
     sub(/[ \t]*=.*$/, "", vn)
     rhs = seg
     sub(/^[^=]*=/, "", rhs)
-    if (index(rhs, "DIR_TEMPLATE") > 0 && index(rhs, "default/frontdoor/") > 0) {
-        b = rhs
-        sub(/^.*default\/frontdoor\//, "", b)
-        sub(/["'].*$/, "", b)
-        pathbase[vn] = TPL_ROOT "/frontdoor/" b
+    # `'a' . 'b'` is one string to PHP, so it is one string here too.
+    gsub(/["'][ \t]*\.[ \t]*["']/, "", rhs)
+    if (match(rhs, /^[ \t]*DIR_TEMPLATE[ \t]*\.[ \t]*["'][^"']*["'][ \t]*;?[ \t]*$/)) {
+        pathbase[vn] = TPL_BASE "/" base_literal(rhs)
+        return
+    }
+    if (match(rhs, /^[ \t]*__DIR__[ \t]*\.[ \t]*["'][^"']*["'][ \t]*;?[ \t]*$/)) {
+        pathbase[vn] = filedir "/" base_literal(rhs)
         return
     }
     if (index(rhs, "__DIR__") > 0) { pathbase[vn] = filedir "/"; return }
     if (match(rhs, /\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
-        ov = substr(rhs, RSTART + 1, RLENGTH - 1)
-        if (ov in pathbase) pathbase[vn] = pathbase[ov]
+        lit = substr(rhs, RSTART + 1, RLENGTH - 1)
+        if (lit in pathbase) pathbase[vn] = pathbase[lit]
     }
 }
 
-function check_include(s,    expr, p, lit, base, vn, tgt) {
+# The single quoted literal out of a `CONST . '<literal>'` right-hand side.
+function base_literal(rhs,    lit) {
+    lit = rhs
+    sub(/^[^"']*["']/, "", lit)
+    sub(/["'][^"']*$/, "", lit)
+    return lit
+}
+
+# THE INCLUDE RESOLVER — one implementation, two callers.
+#
+# Returns the repo-relative path the include/require on this line of PHP CODE
+# lands on, or:
+#     ""   the line does not include a template at all
+#     "?"  it includes one and the destination cannot be proved
+#
+# C4-PATH JUDGES the answer ("is this inside frontdoor/?"); R10 reads the same
+# answer as EVIDENCE ("which CMS directory does this template render from?").
+# Both have to agree about what `include $fdDir . 'render_blocks.tpl';` means,
+# and the only way to guarantee that is for there to be one implementation of
+# it. R10 used to carry its own — a grep for the literal string "frontdoor/…",
+# which no include line in this repo contains, because every one of them is
+# written against a $fdDir assigned earlier in the file. So R10 matched nothing
+# but the docblocks that happen to mention a partial by path, and added no
+# protection at all against the idiom actually in use.
+function resolve_include(s,    expr, p, lit, base, vn) {
+    if (!match(tolower(mask_strings(s)), /(^|[^a-z0-9_$])(include|require)(_once)?[ \t(]/)) return ""
+    expr = substr(s, RSTART + RLENGTH - 1)
+    p = index(expr, ";")
+    if (p > 0) expr = substr(expr, 1, p - 1)
+
+    lit = last_literal(expr)
+    if (lit != "" && lit !~ /\.tpl$/) return ""   # a PHP library, not a template
+
+    base = ""
+    if (index(expr, "__DIR__") > 0)           base = filedir "/"
+    else if (index(expr, "DIR_TEMPLATE") > 0) base = TPL_BASE "/"
+    else if (match(expr, /\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
+        vn = substr(expr, RSTART + 1, RLENGTH - 1)
+        if (vn in pathbase) base = pathbase[vn]
+    }
+
+    if (base == "") return "?"                   # fail closed: cannot prove it
+    return norm_path(base "/" lit)
+}
+
+function check_include(s,    expr, p, tgt) {
     if (!match(tolower(mask_strings(s)), /(^|[^a-z0-9_$])(include|require)(_once)?[ \t(]/)) return
     expr = substr(s, RSTART + RLENGTH - 1)
     p = index(expr, ";")
@@ -1274,23 +1236,13 @@ function check_include(s,    expr, p, lit, base, vn, tgt) {
         return
     }
 
-    lit = last_literal(expr)
-    if (lit != "" && lit !~ /\.tpl$/) return   # a PHP library, not a template
-
-    base = ""
-    if (index(expr, "__DIR__") > 0)           base = filedir "/"
-    else if (index(expr, "DIR_TEMPLATE") > 0) base = TPL_BASE "/"
-    else if (match(expr, /\$[a-zA-Z_][a-zA-Z0-9_]*/)) {
-        vn = substr(expr, RSTART + 1, RLENGTH - 1)
-        if (vn in pathbase) base = pathbase[vn]
-    }
-
-    if (base == "") {
+    tgt = resolve_include(s)
+    if (tgt == "") return
+    if (tgt == "?") {
         report("C4", FNR, "Cannot prove where this include on the org-site render path lands.", \
                "Everything a standalone org site renders must live under " TPL_ROOT "/frontdoor/, where C4 covers it. Build the path from $fdDir, __DIR__ or DIR_TEMPLATE . 'default/frontdoor/…' so the gate can follow it.")
         return
     }
-    tgt = norm_path(base "/" lit)
     if (index(tgt, TPL_ROOT "/frontdoor/") != 1)
         report("C4", FNR, "The org-site render path includes a template outside frontdoor/ (" tgt ").", \
                "Everything a standalone org site renders must live under " TPL_ROOT "/frontdoor/, where C4 covers it. A partial parked elsewhere is a one-line detour around the rule.")
@@ -1927,6 +1879,71 @@ BEGIN {
     C7_CRM_FIX = "A CRM stylesheet name or a style/<…>.css path built inside CMS code is a stylesheet link one step before it becomes one. " C7_WHERE
     C4_FIX = "Org sites load cms-base.css instead of the CRM stylesheets, and need no ORK-shell interop layer. The in-shell surfaces get the interop layer from frontdoor/_assets_inshell.tpl, which is the only file allowed to link it."
 }
+# ---------------------------------------------------------------------------
+# R10 — CLASSIFY MODE: "does this $TPL_ROOT template render CMS chrome?"
+#
+# Same program, same lexer, same resolver, a different question. The shell runs
+# this over $TPL_ROOT/*.tpl in ONE process (-v CLASSIFY=1, the templates in
+# ARGV) and reads back one "PUBLIC<TAB>path" / "ADMIN<TAB>path" line per
+# template that renders from frontdoor/ or cms/.
+#
+# It lives here, inside the scanner, rather than as a grep in the shell,
+# because the question it asks IS resolve_include()'s question — and a second
+# implementation of that drifts from the first. It had: the shell grepped for
+# the literal string "frontdoor/<name>.tpl", while every CMS template in the
+# repo writes
+#
+#     $fdDir = DIR_TEMPLATE . 'default/frontdoor/';
+#     include $fdDir . '_assets_public.tpl';
+#
+# so the literal never appears on an include line and the only thing R10 ever
+# matched was the DOCBLOCKS that mention a partial by path.
+#
+# EVIDENCE IS CODE, NOT PROSE: the line is decommented before either net reads
+# it, so a template that merely documents frontdoor/render_blocks.tpl in a
+# comment is no longer classified by it.
+# ---------------------------------------------------------------------------
+function cls_emit(tier) {
+    if (tier == "PUBLIC") { if (cls_pub) return; cls_pub = 1 }
+    else                  { if (cls_adm) return; cls_adm = 1 }
+    print tier "\t" FILENAME
+}
+
+CLASSIFY && FNR == 1 {
+    # Per-file state: one process reads every template, so the lexer's
+    # carry-over flags and the resolver's variable table must be reset.
+    split("", pathbase)
+    in_block = 0; in_html = 0; php_open = 0
+    cls_pub = 0; cls_adm = 0
+    filedir = FILENAME
+    sub(/\/[^\/]*$/, "", filedir)
+}
+
+CLASSIFY {
+    craw = $0
+    gsub(/\r/, "", craw)
+    cline = decomment(craw)
+
+    # Half one: an include destination, resolved. This is the half that was
+    # missing, and it is the half every CMS template in this repo actually uses.
+    cphp = php_extract(cline)
+    track_base(cphp)
+    ctgt = resolve_include(cphp)
+    if (ctgt != "" && ctgt != "?") {
+        if (index(ctgt, TPL_ROOT "/frontdoor/") == 1)    cls_emit("PUBLIC")
+        else if (index(ctgt, TPL_ROOT "/cms/") == 1)     cls_emit("ADMIN")
+    }
+
+    # Half two, unchanged in substance: a stylesheet or asset path naming a CMS
+    # directory outright — a <link href> built from
+    # HTTP_TEMPLATE . 'default/frontdoor/css/…', say. Read on the decommented,
+    # concatenation-joined line, so the two halves see the same code-only view.
+    cjoin = tolower(cline)
+    gsub(/["'][ \t]*\.[ \t]*["']/, "", cjoin)
+    if (cjoin ~ /(default\/)?frontdoor\/[a-z0-9_.\/-]+\.(tpl|css|js)/) cls_emit("PUBLIC")
+    if (cjoin ~ /(default\/)?cms\/[a-z0-9_.\/-]+\.(tpl|css|js)/)       cls_emit("ADMIN")
+    next
+}
 {
     # CR normalisation, before anything else looks at the text. A file with
     # CRLF endings leaves a \r as the last character of every line, and \r
@@ -2131,6 +2148,9 @@ BEGIN {
     }
 }
 END {
+    # CLASSIFY runs answer a question; they never report and never fail.
+    if (CLASSIFY) exit 0
+
     # An unterminated <style> is still an inline block, and its content still
     # ships. Judge it on the same two tests.
     if (C3 && in_style) style_close()
@@ -2165,6 +2185,152 @@ END {
     exit (CENSUS || hits == 0) ? 0 : 1
 }
 AWKEOF
+
+# R10 — DIRECT EVIDENCE, for the surface template whose controller the marker
+# above cannot see.
+#
+# The derivation closes "nobody updated the list"; it does not close "the new
+# CMS controller did not use the trait". This does, from the other end, and with
+# evidence rather than inference: a $TPL_ROOT surface template that RENDERS CMS
+# CHROME — includes a frontdoor/ or cms/ partial, links a stylesheet from either
+# directory — is a CMS surface template whoever owns its controller. That is not
+# a heuristic about naming, it is the template saying what it renders.
+# frontdoor/ implies the PUBLIC tier, cms/-only implies ADMIN.
+#
+# THE EVIDENCE IS RESOLVED, NOT PATTERN-MATCHED. This used to be a grep for the
+# literal string "frontdoor/<name>.tpl" on the include line. Every CMS template
+# in this repo writes its includes the other way round:
+#
+#     $fdDir = DIR_TEMPLATE . 'default/frontdoor/';
+#     ...
+#     include $fdDir . '_assets_public.tpl';
+#     include $fdDir . 'render_blocks.tpl';
+#
+# so the literal never appears on the include line at all, and the only lines
+# R10 ever matched were the DOCBLOCKS that happen to mention a partial by path.
+# Against the idiom actually in use it added nothing: a brand-new routed CMS
+# surface whose controller does not use the trait, including its partials the
+# normal way, could link orkui.css, carry a static <style> AND write
+# id="theme_container" class="ork-card" with every gate at exit 0 — reproduced,
+# not theorised.
+#
+# So R10 now asks the SAME resolver C4-PATH asks — resolve_include() in the awk
+# program above, which follows an in-file `$var = DIR_TEMPLATE . '…'` assignment
+# one hop, knows __DIR__ and DIR_TEMPLATE, and fails closed when it cannot prove
+# a destination. One resolver, two callers, so the two cannot drift: C4-PATH
+# judges the answer, R10 reads it as evidence. Writing a second resolver here
+# would be the same mistake the model/controller glob split already made.
+#
+# WHAT IT COVERS TODAY: 15 of the 16 CMS surface templates qualify on evidence
+# (6 public — _index, Site_shell, Page_view, Blog_index, Blog_post, Cms_preview;
+# 9 admin — the Cms_* screens), and NONE of the other 97 templates under
+# $TPL_ROOT does. Cms_deny.tpl is the one that qualifies on nothing: it includes
+# no partial and links no stylesheet, which is exactly why it is C3-exempt, and
+# R2's prefix rule holds it. The prefix rules already cover all 16, so R10 still
+# changes no existing file's rule mask — it is purely the net under a future
+# surface, which is the only thing it was ever for.
+#
+# COST: this lexes every $TPL_ROOT template once per invocation (~1s here), the
+# price of asking the resolver instead of grepping. Do not "optimise" it with a
+# pre-filter on which templates are worth lexing — that pre-filter is a second
+# opinion about what counts as evidence, and a second opinion is what this
+# change exists to remove.
+#
+# Content is read from the working tree, the same way R6's stylesheet set and
+# R7's asset-base seeds are, in every mode.
+CMS_BY_CONTENT=$(awk -v CLASSIFY=1 -v tpl=1 -v phpsrc=0 \
+    -v TPL_BASE="$TPL_BASE" -v TPL_ROOT="$TPL_ROOT" \
+    -f "$AWKPROG" "$TPL_ROOT"/*.tpl 2>/dev/null)
+CMS_BY_CONTENT_PUBLIC=$(printf '%s\n' "$CMS_BY_CONTENT" |
+    awk -F'\t' '$1 == "PUBLIC" && $2 != "" {print $2}' | sort -u)
+CMS_BY_CONTENT_ADMIN=$(printf '%s\n' "$CMS_BY_CONTENT" |
+    awk -F'\t' '$1 == "ADMIN" && $2 != "" {print $2}' | sort -u)
+
+in_list() {
+    [ -n "$2" ] || return 1
+    printf '%s\n' "$2" | grep -qxF -- "$1"
+}
+
+# ...and they have to be AUDIT candidates too, or --all would classify them
+# correctly and then never be handed them.
+for t in $CMS_BY_CONTENT_PUBLIC $CMS_BY_CONTENT_ADMIN; do
+    ALL_PATHSPECS="$ALL_PATHSPECS
+$t"
+done
+
+case "$MODE" in
+    staged) CANDIDATES=$(git diff --cached --name-only --diff-filter=ACM) ;;
+    range)  CANDIDATES=$(git diff --name-only --diff-filter=ACM "$RANGE") ;;
+    files)
+        # Accept absolute paths (editor / hook callers pass them) by rebasing
+        # onto the repo root; anything outside the repo stays absolute and is
+        # then dropped by the scope filter below.
+        CANDIDATES=$(printf '%s\n' $FILES | sed "s|^$REPO_ROOT/||")
+        ;;
+    all)
+        # R4: an audit that only knows about tracked files declares victory
+        # while an unguarded, not-yet-added template sits in the working copy.
+        set -f
+        TRACKED=$(git ls-files -- $ALL_PATHSPECS)
+        UNTRACKED=$(git ls-files --others --exclude-standard -- $ALL_PATHSPECS)
+        set +f
+        CANDIDATES=$(printf '%s\n%s\n' "$TRACKED" "$UNTRACKED" | sed '/^$/d' | sort -u)
+        if [ -n "$UNTRACKED" ]; then
+            echo "  note: also scanning untracked file(s) in scope:"
+            printf '%s\n' "$UNTRACKED" | sed 's/^/          /'
+        fi
+        ;;
+esac
+
+[ -z "$CANDIDATES" ] && exit 0
+
+# Where to point a reader who has to re-pin C3_TOTAL_STATIC. We are cd'd to the
+# repo root, so $0 resolves when the script was invoked by path from there;
+# otherwise fall back to the canonical location.
+GATE_SELF="$0"
+[ -f "$GATE_SELF" ] || GATE_SELF="bin/check-css-boundaries.sh"
+
+# R7 — ASSET-BASE SEEDS, derived from the tree.
+#
+# A partial does not assign the base it is handed: _assets_public.tpl documents
+# "Expects $fdDir (filesystem) and $fdAssetBase (URL) already in scope" and its
+# six includers each assign them. Reading that partial alone, the base is
+# unresolvable — and a fail-closed rule that reports it is a false positive on
+# the one file whose whole job is linking the CMS stylesheets.
+#
+# So the seed is derived the same way everything else here is: every in-scope
+# file is scanned for `$name = HTTP_TEMPLATE|DIR_TEMPLATE . '…'`, and a name the
+# tree assigns a PROVABLE prefix to resolves to that prefix (all of them, if a
+# name is assigned more than one) when the file being scanned does not assign it
+# itself. An in-file assignment always wins; an assignment the scanner cannot
+# resolve seeds nothing, so the variable stays unprovable.
+#
+# This is not a loophole: it works in the dangerous direction too. Point any of
+# these names at style/ anywhere in the tree and every partial that consumes it
+# starts reporting.
+SEEDS=$(mktemp) || exit 2
+set -f
+{ git ls-files -- $ALL_PATHSPECS; git ls-files --others --exclude-standard -- $ALL_PATHSPECS; } |
+    sed '/^$/d' | sort -u |
+    grep -E '\.(css|tpl|theme)$' |
+    tr '\n' '\0' |
+    xargs -0 grep -hE '\$[a-zA-Z_][a-zA-Z0-9_]*[ \t]*=[ \t]*(HTTP_TEMPLATE|DIR_TEMPLATE)[ \t]*\.' \
+    > "$SEEDS" 2>/dev/null
+set +f
+
+# Colour only when writing to a terminal — hook and CI callers capture plain text.
+if [ -t 1 ]; then
+    C_RED=$(printf '\033[31m'); C_DIM=$(printf '\033[2m'); C_OFF=$(printf '\033[0m')
+else
+    C_RED=""; C_DIM=""; C_OFF=""
+fi
+
+# Same shape as the awk report() below, for findings the shell decides (R5).
+shell_report() {
+    printf "  %s%s%s  %s:%d\n" "$C_RED" "$1" "$C_OFF" "$2" 0
+    printf "        %s\n" "$3"
+    printf "        %s-> %s%s\n" "$C_DIM" "$4" "$C_OFF"
+}
 
 TOTAL=0
 

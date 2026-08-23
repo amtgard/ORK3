@@ -114,8 +114,35 @@ stylesheet was born with no coverage at all. The scope rules now are:
   | | Mechanism | What it catches |
   |---|---|---|
   | **R9** | `CMS_CONTROLLERS` is derived from the filesystem — the controllers using the **`CmsScopeContext`** trait (`controller.{Site,Page,Blog,Cms,CmsAjax}.php`: 5 of 44, exactly the CMS set), unioned with the historical list as a **floor** so derivation can only *add*. Same idea as `check-layering.sh` deriving `DOMAIN_CLASSES` from `system/lib/ork3/class.*.php`. | The new CMS controller nobody added to the list. Proven: with `controller.Ogre.php` using the trait, `Ogre_view.tpl` reports C1 + C3 + C4. |
-  | **R10** | A `$TPL_ROOT` template that **renders CMS chrome** — includes a `frontdoor/` or `cms/` partial, links a stylesheet from either — is a CMS surface template whatever its prefix and whoever owns its controller. Direct evidence, not inference. `frontdoor/` ⇒ public tier, `cms/`-only ⇒ admin. | The new CMS controller that never used the trait. Proven: with the trait removed, `Ogre_view.tpl` including `frontdoor/render_blocks.tpl` still reports C1 + C3 + C4. Adds **no** file today — 13 of the 15 existing CMS surface templates already qualify on content alone, and **none** of the other 99 templates under `$TPL_ROOT` reference either directory. |
+  | **R10** | A `$TPL_ROOT` template that **renders CMS chrome** — includes a `frontdoor/` or `cms/` partial, links a stylesheet from either — is a CMS surface template whatever its prefix and whoever owns its controller. Direct evidence, not inference. `frontdoor/` ⇒ public tier, `cms/`-only ⇒ admin. **The include destination is resolved by C4-path's resolver** (`resolve_include()`), not matched as a literal path — see below. | The new CMS controller that never used the trait. Proven: with the trait removed, `Ogre_view.tpl` including its partials **the way this repo writes them** (`include $fdDir . '…'`) reports C1 + C2 + C3 + C4. Adds **no** file today — 15 of the 16 existing CMS surface templates qualify on evidence (all 16 are already held by the prefix rules), and **none** of the other 97 templates under `$TPL_ROOT` does. |
   | **C8** | A `$TPL_ROOT/<X>_<action>.tpl` with no `controller.<X>.php` is **reported**. "No rule matched" and "no rule ran" look identical from outside, and only one is safe. | The surface with nothing behind it. Zero today: all 23 distinct prefixes resolve to a controller that exists, so it costs nothing and fires on the first one that does not. |
+
+  **R10 only became true when it resolved the include.** As built it matched the
+  *literal* string `frontdoor/` on the include line — and no include line in
+  this repo contains it. Every CMS template writes
+
+  ```php
+  $fdDir = DIR_TEMPLATE . 'default/frontdoor/';
+  include $fdDir . '_assets_public.tpl';
+  include $fdDir . 'render_blocks.tpl';
+  ```
+
+  so the only lines R10 ever matched were the **docblocks** that mention a
+  partial by path — prose, in all five public-tier hits. Against the idiom
+  actually in use it added nothing, and the failure it was built to end was
+  still open end to end: a brand-new routed CMS surface whose controller does
+  not use the trait, including its partials the normal way, linked `orkui.css`,
+  carried a static `<style>`, named `#theme_container` and defined `--ork-*`
+  with the gate at **exit 0** — reproduced before the fix, then reported as
+  C1 + C2 + C3 + C4 after it. R10 now calls `resolve_include()`, the **same**
+  function C4-path calls: C4-path *judges* the answer, R10 reads it as
+  *evidence*, and there is one implementation of it because two would drift —
+  the same defect as the model glob that was narrower than the controller glob.
+  Coverage moved from 14 files matched on prose to **15 of the 16** CMS surface
+  templates matched on code (only `Cms_deny.tpl`, which includes and links
+  nothing, qualifies on neither) with **none** of the other 97 matched, and
+  every existing file's rule mask unchanged — verified file by file, before and
+  after, across all 146 in-scope files.
 
   *Residual, stated honestly:* a controller with no CMS marker whose template
   renders no CMS chrome is, on every piece of available evidence, a **CRM**
@@ -323,7 +350,9 @@ stylesheet was born with no coverage at all. The scope rules now are:
     assignments (`$fdDir = DIR_TEMPLATE . 'default/frontdoor/'`), `__DIR__` and
     `DIR_TEMPLATE`, one variable hop at a time; only PHP **code** is examined
     (prose and string contents are not statements); and it is **fail-closed** —
-    an include whose destination it cannot prove is reported.
+    an include whose destination it cannot prove is reported. **R10's classifier
+    calls this same resolver**, so "where does this include land?" has exactly
+    one answer anywhere in the gate.
 
   *Why not walk `Site_shell.tpl`'s transitive include graph?* Because that graph
   has a dynamic edge — `render_blocks.tpl` does `include $partial`, one file per
