@@ -194,7 +194,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div class="cms-preview-note" id="cmsPreviewNote" role="status" aria-live="polite" style="display:none;"></div>
             <div class="cms-preview-pane-body">
                 <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">
-                    <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Post preview" src="about:blank"></iframe>
+                    <?php /* sandbox WITHOUT allow-same-origin — see the note on the same iframe in
+                             Cms_edit.tpl. Author content arrives here by srcdoc exactly as it does
+                             there, so the two must not drift apart. */ ?>
+                    <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Post preview"
+                        sandbox="allow-scripts" src="about:blank"></iframe>
                 </div>
             </div>
         </aside>

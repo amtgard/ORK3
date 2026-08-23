@@ -393,30 +393,48 @@
             noteEl.style.display = msg ? '' : 'none';
         }
 
-        /* The frame is same-origin, so the parent can carry the reader's scroll
-         * offset across a reload. Without this every debounced update yanks the
-         * author back to the top of the page they were looking at. */
-        function frameScroll() {
-            try { return (iframe && iframe.contentWindow) ? (iframe.contentWindow.scrollY || 0) : 0; } catch (e) { return 0; }
+        /* Carrying the reader's scroll offset across a reload. Without it every
+         * debounced update yanks the author back to the top of the page they
+         * were looking at, which on a sixteen-block page makes the live preview
+         * unusable.
+         *
+         * The frame is sandboxed WITHOUT allow-same-origin (see the iframe in
+         * Cms_edit.tpl), so it has a null origin and the parent can no longer
+         * read iframe.contentWindow.scrollY or call scrollTo on it — those now
+         * throw SecurityError. The offset therefore travels the only way a null
+         * origin allows: the frame reports its own scroll by postMessage, and
+         * the next document is built carrying the offset to restore. Same
+         * behaviour, no same-origin reach.
+         *
+         * The listener is deliberately paranoid: it is the one thing inside the
+         * admin page that the sandboxed document can talk to, so it accepts a
+         * message only from THIS frame, only in the expected shape, and does
+         * nothing with it but remember a number of pixels. */
+        var frameY = 0;
+        function onFrameScrollMessage(e) {
+            if (!iframe || !e || e.source !== iframe.contentWindow) { return; }
+            var y = e.data && e.data.cmsPreviewScrollY;
+            if (typeof y !== 'number' || !isFinite(y)) { return; }
+            frameY = y > 0 ? (y | 0) : 0;
         }
-        // Single-slot: a superseded refresh must not leave a listener behind that
-        // later scrolls a NEWER document to a stale offset.
-        var pendingScroll = null;
-        function restoreScrollOnNextLoad(y) {
-            if (!iframe) { return; }
-            if (pendingScroll) { iframe.removeEventListener('load', pendingScroll); pendingScroll = null; }
-            if (!y) { return; }
-            pendingScroll = function () {
-                iframe.removeEventListener('load', pendingScroll);
-                pendingScroll = null;
-                try { iframe.contentWindow.scrollTo(0, y); } catch (e) {}
-            };
-            iframe.addEventListener('load', pendingScroll);
+        window.addEventListener('message', onFrameScrollMessage);
+
+        /* The parent-controlled tail appended to every preview document: restore
+         * the offset, then keep reporting it. Appended AFTER the rendered page,
+         * so nothing an author writes can reach around it. */
+        function scrollBridge(y) {
+            return '<script>(function(){var y=' + (y > 0 ? (y | 0) : 0) + ',p=0;'
+                + 'function r(){try{window.scrollTo(0,y);}catch(e){}}'
+                + 'if(y){r();window.addEventListener("load",r);}'
+                + 'window.addEventListener("scroll",function(){if(p){return;}p=1;'
+                + 'requestAnimationFrame(function(){p=0;'
+                + 'try{parent.postMessage({cmsPreviewScrollY:window.scrollY||0},"*");}catch(e){}});'
+                + '},{passive:true});})();<\/script>';
         }
 
         function loadLive() {
             var seq = ++liveSeq;
-            var y = frameScroll();
+            var y = frameY;
             setNote(loaded ? 'Updating\u2026' : 'Building preview\u2026');
             // Promise.resolve().then(liveFn) rather than liveFn(): a host callback
             // that throws SYNCHRONOUSLY must land in the .catch below like any
@@ -424,12 +442,13 @@
             // pane stuck on "Updating…".
             Promise.resolve().then(liveFn).then(function (html) {
                 if (seq !== liveSeq || !iframe) { return; }   // superseded by a newer edit
-                restoreScrollOnNextLoad(y);
                 // srcdoc, not src: a POST cannot be an iframe URL, and a fresh
                 // document (rather than an injected fragment) is what lets the
                 // public stylesheets cascade and frontdoor.js — a parse-time
                 // IIFE with no re-init hook — actually run for each preview.
-                iframe.srcdoc = html;
+                // The scroll bridge rides along on the end; `y` was read before
+                // the request went out, so a slow render cannot lose the offset.
+                iframe.srcdoc = html + scrollBridge(y);
                 loaded = true;
                 setNote('');
             }).catch(function (err) {

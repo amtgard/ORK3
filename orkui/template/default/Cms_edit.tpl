@@ -216,7 +216,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div class="cms-preview-note" id="cmsPreviewNote" role="status" aria-live="polite" style="display:none;"></div>
             <div class="cms-preview-pane-body">
                 <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">
-                    <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Page preview" src="about:blank"></iframe>
+                    <?php /* sandbox WITHOUT allow-same-origin, deliberately: this frame is fed
+                             author-written content through srcdoc, and srcdoc otherwise inherits
+                             the admin's own origin — one sanitizer bypass away from a script
+                             running with the editing officer's session. The null origin the
+                             sandbox forces takes that reach away. allow-scripts stays because the
+                             preview has to behave like the real page: frontdoor.js runs the hero
+                             carousels and the gallery lightboxes, and a preview that cannot
+                             animate is not a preview. Scripts alone cannot reach the session; the
+                             two tokens are only dangerous together, which is why allow-same-origin
+                             must never be added back. Keep this in step with Cms_editpost.tpl. */ ?>
+                    <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Page preview"
+                        sandbox="allow-scripts" src="about:blank"></iframe>
                 </div>
             </div>
         </aside>
