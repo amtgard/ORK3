@@ -899,9 +899,90 @@ class CmsNav extends CmsBase
             case 'url':
             case 'dynamic':
                 $u = isset($row['url']) ? trim((string)$row['url']) : '';
-                return ($u !== '') ? $u : '(no link)';
+                if ($u === '') {
+                    return '(no link)';
+                }
+                // A row seeded with an ABSOLUTE UIR ('http://host/orkui/index.php
+                // ?Route=…') is this site, not an off-site link — strip our own
+                // route base before the external test so it lands in the internal
+                // branch below rather than printing a full framework URL.
+                $uir = (string)$this->_uir();
+                if ($uir !== '' && stripos($u, $uir) === 0) {
+                    $u = substr($u, strlen($uir));
+                } elseif ($this->_isExternal($u)) {
+                    // A genuinely external link IS its URL — show it verbatim.
+                    return $u;
+                }
+                // An INTERNAL target is a framework route, and the admin list was
+                // printing it raw: the seeded "Home" row stores 'index.php?Route='
+                // and read as literally that. A route base with nothing after it
+                // is the site root, i.e. the scope's home page — name the page.
+                $route = ltrim($u, '/');
+                $base  = 'index.php?Route=';
+                $pos   = strpos($route, $base);
+                if ($pos !== false) {
+                    $route = substr($route, $pos + strlen($base));
+                }
+                $route = ltrim($route, '/');
+                if ($route === '') {
+                    $home = $this->_scopeHomeTitle(
+                        isset($row['scope_type']) ? $row['scope_type'] : 'global',
+                        isset($row['scope_id']) ? $row['scope_id'] : 0
+                    );
+                    return ($home !== '') ? $home : 'Site home page';
+                }
+                // Any other internal route keeps its route key, minus the
+                // framework prefix an author never needs to read.
+                return $route;
         }
         return '';
+    }
+
+    /**
+     * Per-request memo for _scopeHomeTitle(), keyed by "scope_type|scope_id".
+     * ListItems() resolves at most one home row per menu, but a page render can
+     * list several menus in one request.
+     * @var array<string,string>
+     */
+    private static $homeTitleCache = array();
+
+    /**
+     * The title of a scope's home page, for labelling a nav row that points at
+     * the site root. '' when the scope has no resolvable home page (the caller
+     * falls back to a generic phrase rather than printing a route).
+     *
+     * Scope-bound like every other read here: the lookup is pinned to the row's
+     * OWN scope_type/scope_id, so a nav row can never surface another org's page
+     * title.
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @return string
+     */
+    private function _scopeHomeTitle($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+        $key       = $scopeType . '|' . $scopeId;
+        if (isset(self::$homeTitleCache[$key])) {
+            return self::$homeTitleCache[$key];
+        }
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT title FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+            . ' AND deleted_at IS NULL AND (is_system = 1 OR slug = \'home\')'
+            . ' ORDER BY is_system DESC, page_id ASC LIMIT 1'
+        ));
+        $title = ($row !== null && isset($row['title'])) ? trim((string)$row['title']) : '';
+
+        self::$homeTitleCache[$key] = $title;
+        return $title;
     }
 
     /* ====================================================================
