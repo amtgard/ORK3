@@ -420,7 +420,39 @@
         return { load: load, refresh: refresh, open: open, close: close, isOpen: isOpen };
     }
 
+    /* Swap a broken <img> for a real placeholder.
+     *
+     * The browser's broken-image glyph is the problem this exists to solve: it
+     * looks the same whether the file is genuinely gone from the media library
+     * (and therefore broken on the PUBLIC site too) or merely failed to reach
+     * this one request. The placeholder says "missing" and keeps the element's
+     * footprint, so nothing below it jumps.
+     *
+     * Lifted out of Cms_media.tpl (#95), which now delegates here, so the block
+     * editor's image fields get the same treatment instead of a second copy.
+     *
+     *   img   the <img> that errored
+     *   cls   the size/shape class of the thumbnail it replaces
+     *   opts  {icon, tip} — icon defaults to fa-image; tip becomes data-tip
+     * Returns the placeholder node, or null when one was already applied.
+     */
+    function thumbFallback(img, cls, opts) {
+        if (!img || img.dataset.fbApplied) { return null; }
+        img.dataset.fbApplied = '1';
+        opts = opts || {};
+        var ph = document.createElement('div');
+        ph.className = (cls || 'cms-media-thumb') + ' cms-empty-thumb cms-missing-thumb';
+        var icon = document.createElement('i');
+        icon.className = 'fas ' + (opts.icon || 'fa-image');
+        icon.setAttribute('aria-hidden', 'true');
+        ph.appendChild(icon);
+        if (opts.tip) { ph.setAttribute('data-tip', opts.tip); }
+        if (img.parentNode) { img.parentNode.replaceChild(ph, img); }
+        return ph;
+    }
+
     window.CmsAdmin = {
+        thumbFallback: thumbFallback,
         toast: toast,
         undoableToast: undoableToast,
         post: post,

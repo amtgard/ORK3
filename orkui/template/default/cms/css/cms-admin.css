@@ -2858,3 +2858,29 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
     font-style: italic;
     color: var(--ork-text-muted);
 }
+
+/* ============================================================================
+ * Missing-image placeholder (E3)
+ *
+ * The block editor and the media grid share CmsAdmin.thumbFallback, which
+ * swaps a broken <img> for .cms-empty-thumb + this modifier. .cms-empty-thumb
+ * on its own is the NEUTRAL "nothing chosen yet" state; a file that 404s is a
+ * different fact — the page is publishing a broken image right now — so it
+ * gets the danger tokens and a dashed edge instead of reading as empty.
+ *
+ * Both tokens are CRM badge colours READ (never defined) here, so the dark
+ * values arrive with html[data-theme="dark"] and need no override. Placed at
+ * the end of the file deliberately: .cms-media-card-thumb.cms-empty-thumb and
+ * .cms-media-thumb.cms-empty-thumb are the same specificity, so source order
+ * is what makes this modifier win over both.
+ * ========================================================================== */
+.cms-empty-thumb.cms-missing-thumb {
+    color: var(--ork-badge-red-text, #c0392b);
+    background: var(--ork-badge-red-bg, #fdecea);
+    border-style: dashed;
+}
+.cms-missing-label {
+    color: var(--ork-badge-red-text, #c0392b);
+    font-weight: 600;
+    white-space: nowrap;
+}

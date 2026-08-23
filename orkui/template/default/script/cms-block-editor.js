@@ -497,6 +497,18 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
+    /* ---- E3: the three states of an image field must be TELLABLE APART ----
+     * "No image chosen", "here is the image" and "the file this block points at
+     * is gone" used to render as two states plus the browser's broken-image
+     * glyph — and that glyph looks identical to a thumbnail that merely failed
+     * to reach this one request, so an author could not tell a page that is
+     * fine from a page that is publishing a broken image.
+     *
+     * A missing file gets the shared CmsAdmin.thumbFallback placeholder (the
+     * same treatment Cms_media.tpl uses on the media grid) plus a caption that
+     * says what it means for the public site. */
+    var MISSING_IMG_TIP = 'This image is missing from the media library — it will be broken on the public site too.';
+
     function fieldImage(container, key, label) {
         var wrap = el('div', 'cms-field');
         wrap.appendChild(el('label', 'cms-label', esc(label)));
@@ -506,16 +518,32 @@ window.CmsBlockEditor = (function () {
         // An empty {} ref is "no image chosen" — only treat it as selected when it
         // actually carries an image (thumb/src). Gates the name label + Clear button.
         var hasImage = ref && (ref.thumb || ref.src);
-        var thumb;
-        if (ref && ref.thumb) {
-            thumb = el('img', 'cms-media-thumb');
-            thumb.src = ref.thumb || ref.src;
-        } else {
-            thumb = el('div', 'cms-media-thumb cms-empty-thumb', '<i class="fas fa-image"></i>');
+
+        // Declared before buildThumb so its error handler can rewrite the caption.
+        var nameEl = el('div', 'cms-media-name', hasImage ? esc(ref.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>');
+        function markMissing() {
+            nameEl.innerHTML = '<span class="cms-missing-label"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Image missing</span>';
+            nameEl.setAttribute('data-tip', MISSING_IMG_TIP);
+        }
+        function buildThumb(r) {
+            if (r && (r.thumb || r.src)) {
+                var img = el('img', 'cms-media-thumb');
+                img.alt = '';
+                img.addEventListener('error', function () {
+                    if (window.CmsAdmin && CmsAdmin.thumbFallback) {
+                        CmsAdmin.thumbFallback(img, 'cms-media-thumb', { icon: 'fa-unlink', tip: MISSING_IMG_TIP });
+                    }
+                    markMissing();
+                });
+                img.src = r.thumb || r.src;
+                return img;
+            }
+            return el('div', 'cms-media-thumb cms-empty-thumb', '<i class="fas fa-image" aria-hidden="true"></i>');
         }
 
+        var thumb = buildThumb(ref);
+
         var meta = el('div', 'cms-media-meta');
-        var nameEl = el('div', 'cms-media-name', hasImage ? esc(ref.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>');
         var btnRow = el('div', null);
         btnRow.style.marginTop = '6px';
         var chooseBtn = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-image"></i> Choose image');
@@ -528,15 +556,10 @@ window.CmsBlockEditor = (function () {
         function render(newRef) {
             container[key] = newRef || {};
             var newHasImage = newRef && (newRef.thumb || newRef.src);
-            var fresh;
-            if (newRef && newRef.thumb) {
-                fresh = el('img', 'cms-media-thumb');
-                fresh.src = newRef.thumb || newRef.src;
-            } else {
-                fresh = el('div', 'cms-media-thumb cms-empty-thumb', '<i class="fas fa-image"></i>');
-            }
+            var fresh = buildThumb(newRef);
             row.replaceChild(fresh, thumb);
             thumb = fresh;
+            nameEl.removeAttribute('data-tip');
             nameEl.innerHTML = newHasImage ? esc(newRef.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>';
             clearBtn.style.display = newHasImage ? '' : 'none';
             markDirty();

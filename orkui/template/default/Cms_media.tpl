@@ -27,17 +27,21 @@ $h = function ($v) {
       // once by cms/_shell_top.tpl below — no per-render inline block. ?>
 
 <script>
-// #95: swap a broken media thumbnail for the fa-image placeholder. Defined up front
-// (before the grid) so it exists by the time any <img> onerror fires. Sized via the
-// .cms-media-card-thumb.cms-empty-thumb rule so the fallback keeps the tile footprint
-// and never overlaps the bulk-select checkbox or the caption.
+// #95: swap a broken media thumbnail for the placeholder. Defined up front
+// (before the grid) so the name exists by the time any <img> onerror fires. Sized
+// via the .cms-media-card-thumb.cms-empty-thumb rule so the fallback keeps the tile
+// footprint and never overlaps the bulk-select checkbox or the caption.
+//
+// The behaviour itself now lives in CmsAdmin.thumbFallback (script/cms-admin.js),
+// shared with the block editor's image fields. This stays as the onerror= entry
+// point; CmsAdmin is loaded by _shell_top.tpl below, which is in place long
+// before an image can finish failing.
 window.cmsMediaThumbFallback = function (img) {
-    if (!img || img.dataset.fbApplied) { return; }
-    img.dataset.fbApplied = '1';
-    var ph = document.createElement('div');
-    ph.className = 'cms-media-card-thumb cms-empty-thumb';
-    ph.innerHTML = '<i class="fas fa-image" aria-hidden="true"></i>';
-    if (img.parentNode) { img.parentNode.replaceChild(ph, img); }
+    if (window.CmsAdmin && CmsAdmin.thumbFallback) {
+        CmsAdmin.thumbFallback(img, 'cms-media-card-thumb', {
+            tip: 'This file is missing from storage — it will be broken on the public site too.'
+        });
+    }
 };
 </script>
 
