@@ -26,6 +26,66 @@ html[data-theme="dark"] .cms-wrap {
     --cms-warn: #fbd38d;
 }
 
+/* ---- Workspace ground --------------------------------------------------
+ * Dark mode gets its structure from contrast for free: default.theme paints
+ * body #1a202c and every card is #2d3748, so a card lifts off the page. Light
+ * mode had no ground at all — body is white, --ork-card-bg is white, and the
+ * only thing between a card and the page was a #e2e8f0 hairline. The Media grid
+ * flattened into a field of text and the loudest thing on the page was whatever
+ * carried a colour.
+ *
+ * --cms-ground is that missing step: one notch below card white, and pulled
+ * toward the admin's navy rather than being a neutral grey, so the navy rail has
+ * a ground that acknowledges it instead of floating on paper. --cms-card is the
+ * surface an object sits on (card white in light; identical to --ork-bg-secondary
+ * in dark, where both tokens are #2d3748 — so promoting a card to it is a
+ * light-mode-only change by construction and cannot regress dark mode).
+ *
+ * These are :root because `body` has to read --cms-ground and body is an
+ * ancestor of the shell. Safe: this stylesheet is linked by cms/_shell_top.tpl
+ * and the OGRE admin templates only, so it reaches no CRM page. --cms-*, never
+ * --ork-* (C2). */
+:root {
+    --cms-ground: #e9eef7;
+    --cms-card: var(--ork-card-bg, #fff);
+    --cms-card-shadow: 0 1px 2px rgba(15, 26, 51, .07), 0 3px 10px rgba(15, 26, 51, .05);
+}
+
+html[data-theme="dark"] {
+    --cms-ground: #1a202c;
+    /* Dark cards separate by value, not by depth; a drop shadow on #2d3748 over
+       #1a202c reads as smudge. */
+    --cms-card-shadow: none;
+}
+
+/* The OGRE admin workspace ground. In dark mode default.theme's
+   `html[data-theme="dark"] body` is (0,1,2) and wins over this (0,0,1) with the
+   same #1a202c --cms-ground carries, so one rule covers both themes and no dark
+   partner is needed. */
+body {
+    background-color: var(--cms-ground);
+}
+
+/* Elevation is a property of "this is an object on the ground", not of each
+   component, so it is one selector list rather than a box-shadow copied into
+   nine rules. In light mode it is the second cue (after the tint) that separates
+   a card from the page; in dark mode --cms-card-shadow is `none`, because a drop
+   shadow under #2d3748 on #1a202c reads as a smudge and the value step already
+   does the work. Component rules that set their own box-shadow (drag-over,
+   selected, error) are all at least (0,2,0) and still win. */
+.cms-table-wrap,
+.cms-block-card,
+.cms-media-card,
+.cms-quick-card,
+.cms-stat-tile,
+.cms-sitecard,
+.cms-recent-list,
+.cms-provision,
+.cms-preview-pane,
+.te-group {
+    box-shadow: var(--cms-card-shadow);
+}
+
 .cms-wrap {
     /* Admin brand accent tokens, scoped to the admin shell */
     --cms-gold: #f0b429;
@@ -306,8 +366,13 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
     text-shadow: none;
     color: var(--ork-text);
 }
+/* Ground-level text, not card text: --ork-text-muted is ~4.0:1 on white and
+   ~3.4:1 on --cms-ground, so every label that sits directly on the workspace
+   ground (this, the crumbs, the dashboard section titles, the live-site link,
+   the compact empty line, the sites count) reads --ork-text-secondary instead.
+   Muted stays muted INSIDE cards, where the surface is still white. */
 .cms-shell-sub {
-    color: var(--ork-text-muted);
+    color: var(--ork-text-secondary);
     font-size: 14px;
     line-height: 1.3;
     margin-top: 3px;
@@ -330,7 +395,7 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
     font-size: 12.5px;
     margin-bottom: 6px;
 }
-.cms-crumb { color: var(--ork-text-muted); text-decoration: none; }
+.cms-crumb { color: var(--ork-text-secondary); text-decoration: none; }
 .cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
 .cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
 .cms-crumb-sep { color: var(--ork-text-lighter); }
@@ -430,6 +495,7 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
    base rules wherever it sits. */
 .cms-btn:hover,
 .cms-linkpick-opt:hover,
+.cms-recent-item:hover,
 .cms-block-collapsible > .cms-block-head:hover { background: var(--ork-bg-tertiary); }
 .cms-btn:disabled,
 .cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
@@ -586,7 +652,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     border: 1px solid var(--ork-border);
     border-radius: 10px;
     overflow: hidden;
-    background: var(--ork-card-bg);
+    background: var(--cms-card);
 }
 .cms-table {
     width: 100%;
@@ -656,7 +722,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     padding: 11px 14px;
     border: 1px dashed var(--ork-border-dark);
     border-radius: 9px;
-    color: var(--ork-text-muted);
+    color: var(--ork-text-secondary);
     font-size: 13px;
     line-height: 1.45;
     text-align: left;
@@ -911,7 +977,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-block-card {
     border: 1px solid var(--ork-border);
     border-radius: 10px;
-    background: var(--ork-card-bg);
+    background: var(--cms-card);
     margin-bottom: 9px;
     overflow: hidden;
 }
@@ -1654,7 +1720,7 @@ html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.cu
     border: 1px solid var(--cms-gold-deep, #caa23a);
     border-left: 3px solid var(--cms-gold, #f0b429);
     border-radius: 9px;
-    background: var(--ork-bg-secondary);
+    background: var(--cms-card);
 }
 .cms-bulkbar.cms-open { display: flex; }
 .cms-bulkbar.cms-busy { opacity: .6; pointer-events: none; }
@@ -2511,7 +2577,7 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
    the one title slot. */
 .cms-dash-section-title {
     font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
+    color: var(--ork-text-secondary); font-weight: 700; margin: 0 0 12px;
     background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
 }
 .cms-dash-block { margin-bottom: 30px; }
@@ -2523,7 +2589,7 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
 .cms-quick-card {
     display: flex; align-items: center; gap: 14px;
     border: 1px solid var(--ork-border-dark); border-radius: 11px;
-    background: var(--ork-bg-secondary); padding: 16px 18px;
+    background: var(--cms-card); padding: 16px 18px;
     text-decoration: none; color: var(--ork-text);
     transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
 }
@@ -2545,7 +2611,7 @@ html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
 }
 .cms-stat-tile {
     border: 1px solid var(--ork-border); border-radius: 11px;
-    background: var(--ork-bg-secondary); padding: 16px 18px;
+    background: var(--cms-card); padding: 16px 18px;
     text-decoration: none; color: var(--ork-text); display: block;
     transition: border-color .12s;
 }
@@ -2555,13 +2621,19 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
 
 /* Continue-editing list */
-.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; }
+.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; background: var(--cms-card); }
+/* The list is the card; a row paints nothing of its own so it inherits the card
+   surface. It used to be --ork-bg, which in dark mode is the page ground
+   (#1a202c) — the rows sat at ground level inside their own container. */
 .cms-recent-item {
     display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    border-bottom: 1px solid var(--ork-border); background: var(--ork-bg);
+    border-bottom: 1px solid var(--ork-border); background: transparent;
 }
 .cms-recent-item:last-child { border-bottom: none; }
-.cms-recent-item:hover { background: var(--ork-bg-secondary); }
+/* .cms-recent-item:hover is grouped with the other --ork-bg-tertiary hovers up
+   at .cms-btn:hover. It moved off --ork-bg-secondary because that token is
+   identical to --ork-card-bg in dark mode, so the hover was invisible there once
+   the rows took the card surface. */
 .cms-recent-kind {
     flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
     background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
@@ -2575,7 +2647,7 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-sitecard {
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
     border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
-    border-radius: 11px; background: var(--ork-bg-secondary); padding: 16px 18px;
+    border-radius: 11px; background: var(--cms-card); padding: 16px 18px;
 }
 .cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
 .cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -2590,7 +2662,7 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
 html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
 
-.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
+.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-secondary); text-decoration: none; font-size: 13.5px; }
 .cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
 /* dark .cms-dash-livelink:hover is gold — see "Gold accent text" above. */
 
@@ -2674,7 +2746,7 @@ html[data-theme="dark"] .cms-fd-card {
 .cms-sites-section-head {
     display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
 }
-.cms-sites-count { font-size: 12.5px; color: var(--ork-text-muted); }
+.cms-sites-count { font-size: 12.5px; color: var(--ork-text-secondary); }
 
 /* Table (reuses .cms-table; a couple of overview-specific tweaks) */
 .cms-sites-table td, .cms-sites-table th { vertical-align: middle; }
@@ -2701,7 +2773,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 /* Provision panel */
 .cms-provision {
     padding: 18px 20px; border-radius: 12px;
-    border: 1px solid var(--ork-border-dark); background: var(--ork-bg-secondary);
+    border: 1px solid var(--ork-border-dark); background: var(--cms-card);
 }
 .cms-provision-grid {
     display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
@@ -2731,7 +2803,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-media-card {
     position: relative;
     border: 1px solid var(--ork-border); border-radius: 11px;
-    background: var(--ork-bg-secondary); display: flex; flex-direction: column;
+    background: var(--cms-card); display: flex; flex-direction: column;
 }
 .cms-media-card.cms-media-selected {
     border-color: var(--ork-accent, #c9a24b);
@@ -2805,7 +2877,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-media-bulkbar {
     display: none; align-items: center; gap: 12px; flex-wrap: wrap;
     margin-bottom: 12px; padding: 10px 14px; border-radius: 10px;
-    border: 1px solid var(--ork-border); background: var(--ork-bg-secondary);
+    border: 1px solid var(--ork-border); background: var(--cms-card);
 }
 .cms-media-bulkbar.cms-show { display: flex; }
 .cms-media-bulkbar-count { font-weight: 600; font-size: 13px; color: var(--ork-text); }
