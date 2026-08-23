@@ -213,14 +213,26 @@ body {
        started a whole 34px below the page title it is supposed to line up with.
        Sticky is still what we want for the scrolled state, so keep it and drop
        only the double count.
-       14px works for both states. Pinned, it holds the rail 56 + 14 = 70px down
-       the window, a clear 22px below the navbar's 48px. At rest it is under the
-       28px of chrome stacked above the workspace (#theme_container's 10px margin
-       + 6px padding + the shell's own 12px padding), so the threshold sits above
-       the rail's flow position, nothing is displaced, and the rail's head and the
-       masthead's head start on the same line. Keep any future value below that
-       28px or the rail drifts back down the page. */
-    top: 14px;
+       The usable window is (16px, 28px]. Both ends are measured, not derived:
+
+         upper — 28px is the chrome stacked above the workspace (#theme_container's
+                 10px margin + 6px padding + the shell's own 12px padding). At or
+                 below it the sticky threshold sits above the rail's flow position,
+                 so nothing is displaced and the rail's head and the masthead's head
+                 start on the same line (both at 84px). Above it the rail drifts
+                 back down the page.
+         lower — the document has a SECOND scroller. orkui.css gives html and body
+                 height:100%, and body's 48px navbar padding plus 16px of margin
+                 puts 56px of overflow on <html> itself. A wheel never reaches it,
+                 but scrollIntoView does — CmsBlockEditor.focusFirstError() calls
+                 exactly that. While html is scrolled its full 56px, the rail pins
+                 at viewport y = T rather than 56 + T, so the wordmark (32px tall)
+                 needs T + 32 > 48, i.e. T > 16.
+
+       28px is the top of that window: identical rest alignment to any other value
+       in it, and the most navbar clearance when both scrollers are engaged —
+       measured 24px of clear air versus 10px at 14px. */
+    top: 28px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
