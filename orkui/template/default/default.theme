@@ -24,6 +24,15 @@
 <?php /* Per-page link-preview tags — controllers override via $this->data['og'];
          defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
 <?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
+<?php /* rel=canonical from the same per-page URL as og:url — Facebook honors
+         og:url but Google only respects this tag. Consolidates parameter
+         variants (&rev=, ordering, aliases) into one indexed URL. Only pages
+         that declare a canonical emit it; occurrence-changing aliases (e.g.
+         Event/detail/<id> without a detail id) 302-redirect before rendering,
+         so the tag never points across content. */ ?>
+<?php if (!empty($og['url'])) : ?>
+		<link rel="canonical" href="<?= htmlspecialchars($og['url'], ENT_QUOTES) ?>">
+<?php endif; ?>
 <?php /* Structured data for search engines (schema.org JSON-LD) — set per
          page via $this->data['jsonld']; e.g. Event rich results. */ ?>
 <?php if (!empty($jsonld)) : ?>
