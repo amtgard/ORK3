@@ -83,12 +83,17 @@ class Sitemap extends Ork3
             return $cache;
         }
 
+        // No lastmod on players, deliberately: ork_mundane.modified is
+        // ON UPDATE CURRENT_TIMESTAMP and bumps on ANY row write — bulk
+        // migrations and the suspension-expiry sweep stamp thousands of rows
+        // at once with zero content change. A lying lastmod teaches Google to
+        // ignore lastmod site-wide; a bare <loc> is honest.
         $urls = array();
         $this->db->Clear();
-        $rs = $this->db->DataSet("SELECT mundane_id, modified FROM " . DB_PREFIX . "mundane WHERE active = 1");
+        $rs = $this->db->DataSet("SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE active = 1");
         if ($rs && $rs->Size() > 0) {
             while ($rs->Next()) {
-                $urls[] = array('loc' => UIR . 'Player/profile/' . (int)$rs->mundane_id, 'lastmod' => $rs->modified);
+                $urls[] = array('loc' => UIR . 'Player/profile/' . (int)$rs->mundane_id);
             }
         }
 
