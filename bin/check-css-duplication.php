@@ -131,7 +131,7 @@
 // exactly one file, so no grouping can take that group below two members.
 // ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 26;
-const MAX_GROUPS_ANY   = 90;
+const MAX_GROUPS_ANY   = 89;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(

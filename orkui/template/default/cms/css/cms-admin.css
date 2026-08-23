@@ -377,11 +377,13 @@ html[data-theme="dark"] .cms-wrap {
     white-space: nowrap;
     transition: background .12s, border-color .12s, opacity .12s;
 }
-/* Grouped with the link chooser's page-row hover (same declaration body — the
-   duplication gate wants one rule, not two copies). Both are :hover, so the
-   grouped rule outranks either base rule wherever it sits. */
+/* Grouped with the link chooser's page-row hover and the block-card head's
+   (same declaration body — the duplication gate wants one rule, not two
+   copies). All three are :hover, so the grouped rule outranks any of their
+   base rules wherever it sits. */
 .cms-btn:hover,
-.cms-linkpick-opt:hover { background: var(--ork-bg-tertiary); }
+.cms-linkpick-opt:hover,
+.cms-block-collapsible > .cms-block-head:hover { background: var(--ork-bg-tertiary); }
 .cms-btn:disabled,
 .cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
 .cms-btn-primary {
@@ -988,6 +990,10 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 320px;
+    /* Give up width to the tools rather than squeezing them (collapsed cards
+       navigate by this line, so it earns space but never at their expense). */
+    flex: 0 1 auto;
+    min-width: 0;
 }
 .cms-block-tools {
     display: flex;
@@ -1047,6 +1053,20 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 
 .cms-block-body { padding: 10px 12px; }
 .cms-block-body.cms-collapsed { display: none; }
+
+/* ---- Collapsed-by-default block cards ------------------------------------
+   Block bodies now start closed, which makes the head the primary navigation
+   rather than a label above an already-open form. It therefore has to read as
+   a control: pointer cursor, a hover wash, and a chevron whose direction says
+   which way it goes. .cms-block-collapsible is set only on the page-level
+   cards; a columns child card reuses the same chrome but is always open, so it
+   keeps the plain, non-interactive head. Colours are theme tokens, so the
+   hover wash follows html[data-theme="dark"] with no dark-only override. */
+.cms-block-collapsible > .cms-block-head {
+    cursor: pointer;
+    /* A double-click on the head should open the block, not select its title. */
+    user-select: none;
+}
 
 /* toggle switch */
 .cms-switch { position: relative; display: inline-block; width: 38px; height: 21px; flex: 0 0 auto; }
@@ -1853,7 +1873,17 @@ html[data-theme="dark"] a.cms-sites-slug:hover {
 @media (max-width: 620px) {
     .cms-grid2 { grid-template-columns: 1fr; }
     .cms-typegrid { grid-template-columns: 1fr; }
-    .cms-block-summary { display: none; }
+    /* Blocks start collapsed, so the summary is how a phone author tells one
+       card from the next — it can no longer be hidden. Wrap the head and give
+       the summary its own full-width line under the block name. */
+    .cms-block-head { flex-wrap: wrap; }
+    .cms-block-summary {
+        order: 3;
+        flex: 1 1 100%;
+        max-width: 100%;
+        margin-left: 28px;
+        white-space: normal;
+    }
     .cms-table thead { display: none; }
     .cms-table, .cms-table tbody, .cms-table tr, .cms-table td { display: block; width: 100%; box-sizing: border-box; }
     .cms-table tr { border-bottom: 1px solid var(--ork-border); padding: 8px 0; }

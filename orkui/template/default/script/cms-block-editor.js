@@ -84,6 +84,10 @@ window.CmsBlockEditor = (function () {
     }
 
     function markDirty() {
+        // Collapsed cards navigate by their summary line, so it has to track the
+        // edit that just happened — including an edit made in a SIBLING block
+        // (a columns child, say) that shows up in another card's summary.
+        if (listEl) { try { refreshSummaries(); } catch (e) {} }
         try { onDirty(); } catch (e) {}
     }
 
@@ -118,8 +122,50 @@ window.CmsBlockEditor = (function () {
         return null;
     }
 
-    /* ---- short human summary for the block card header ---- */
+    /* ---- short human summary for the block card header ----
+     * Blocks now start COLLAPSED, so this line is the author's ONLY view of what
+     * is inside a block until they open it — it has to be populated for every
+     * type, never empty and never just the block's own name. summarize() is the
+     * entry point: it takes the hand-written line where there is one, and falls
+     * back to the first text the author actually typed where there isn't. */
     function summarize(block) {
+        var s = summarizeRaw(block);
+        if (typeof s === 'string' && s.trim() !== '') { return s; }
+        var alt = firstTextIn(block.fields || {});
+        return alt !== '' ? alt : 'Not filled in yet';
+    }
+
+    // A live/dynamic block quotes no authored copy — say what it will PUT on the
+    // page, prefixed with the author's own heading when they set one.
+    function liveSummary(f, what) {
+        var hd = strip(f.heading || f.kicker || '');
+        return hd !== '' ? (hd + ' · live ' + what) : ('live · ' + what);
+    }
+
+    // Last-resort summary: quote the first text the author actually typed. The
+    // preferred keys are tried in author-visible order first, then any remaining
+    // string field, so a block type with no hand-written case above still gets a
+    // real line instead of "custom fields (JSON)".
+    var SUMMARY_KEYS = ['heading', 'title', 'text', 'label', 'name', 'caption',
+        'kicker', 'subheading', 'subcopy', 'quote', 'body', 'html'];
+    function firstTextIn(f) {
+        var i, k, v;
+        if (!f || typeof f !== 'object') { return ''; }
+        for (i = 0; i < SUMMARY_KEYS.length; i++) {
+            v = f[SUMMARY_KEYS[i]];
+            if (typeof v === 'string' && v.trim() !== '') {
+                return (SUMMARY_KEYS[i] === 'body' || SUMMARY_KEYS[i] === 'html') ? stripHtml(v) : strip(v);
+            }
+        }
+        for (k in f) {
+            if (!Object.prototype.hasOwnProperty.call(f, k)) { continue; }
+            v = f[k];
+            if (typeof v === 'string' && v.trim() !== '') { return strip(v); }
+        }
+        return '';
+    }
+
+    function summarizeRaw(block) {
         var f = block.fields || {};
         switch (block.type) {
             case 'rich_text':
@@ -171,8 +217,25 @@ window.CmsBlockEditor = (function () {
                 return 'live data';
             case 'columns':
                 return ((f.columns || []).length) + ' column(s)';
+            // Kingdom-/park-scoped live blocks. These fell through to the old
+            // "custom fields (JSON)" default — dev jargon, and identical on all
+            // eight, so a collapsed park page read as eight anonymous rows.
+            case 'kingdom_officers':
+            case 'park_officers':
+                return liveSummary(f, 'officer list');
+            case 'kingdom_parks':
+                return liveSummary(f, 'park list');
+            case 'kingdom_parks_map':
+                return liveSummary(f, 'park map');
+            case 'kingdom_events':
+            case 'park_events':
+                return liveSummary(f, 'upcoming events');
+            case 'park_meeting':
+                return liveSummary(f, 'meeting times & directions');
+            case 'park_hero':
+                return liveSummary(f, 'park crest & next game day');
             default:
-                return 'custom fields (JSON)';
+                return firstTextIn(f);
         }
     }
     // Block fields other than `body`/`html` are PLAIN TEXT on write (CmsPage::HTML_FIELDS
@@ -242,6 +305,10 @@ window.CmsBlockEditor = (function () {
 
     function initTiny(textarea) {
         if (!tinyReady || !textarea) { return; }
+        // Idempotent: lazy body-building means a textarea can be reached by both
+        // the per-body init and a caller's batch init. A second tinymce.init() on
+        // the same target would stack a duplicate editor over the first.
+        if (textarea.id && tinymce.get(textarea.id)) { return; }
         var isDark = currentIsDark();
         lastTinyDark = isDark;
         tinymce.init({
@@ -2043,7 +2110,10 @@ window.CmsBlockEditor = (function () {
     /* ---- build one block card (bound to the block object, not an index, so its
      * handlers survive surgical reorders) ---- */
     function buildCard(block) {
-        var card = el('div', 'cms-block-card' + (block.enabled ? '' : ' cms-block-disabled') + (block._jsonError ? ' cms-block-error' : ''));
+        // cms-block-collapsible marks a card whose HEAD is an expand control.
+        // Columns child cards reuse .cms-block-card chrome but are always open,
+        // so they must not pick up the pointer/hover affordance.
+        var card = el('div', 'cms-block-card cms-block-collapsible' + (block.enabled ? '' : ' cms-block-disabled') + (block._jsonError ? ' cms-block-error' : ''));
         card._block = block;
         // draggable is enabled only while the drag handle is pressed (wireDrag),
         // so text selection inside field inputs never starts a card drag.
@@ -2055,13 +2125,20 @@ window.CmsBlockEditor = (function () {
         handle.setAttribute('data-tip', 'Drag to reorder');
         head.appendChild(handle);
 
-        var collapseBtn = iconBtn('fa-chevron-down', 'Collapse / expand', false);
+        // Blocks start COLLAPSED (see setExpanded) unless this block remembers
+        // being open — a fresh page load is a list of one-line rows, not 800px
+        // of form per block.
+        var startOpen = (block._expanded === true);
+        var collapseBtn = iconBtn(startOpen ? 'fa-chevron-down' : 'fa-chevron-right', 'Collapse / expand', false);
+        collapseBtn.setAttribute('aria-expanded', startOpen ? 'true' : 'false');
         head.appendChild(collapseBtn);
         head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
         head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
         // #100: author-facing header shows the friendly label + icon only — never
         // the raw machine block-type slug (dev jargon).
-        head.appendChild(el('span', 'cms-block-summary', esc(summarize(block))));
+        var summaryEl = el('span', 'cms-block-summary', esc(summarize(block)));
+        card._summaryEl = summaryEl;
+        head.appendChild(summaryEl);
 
         var tools = el('div', 'cms-block-tools');
         var up = iconBtn('fa-arrow-up', 'Move up', false);
@@ -2108,26 +2185,87 @@ window.CmsBlockEditor = (function () {
         head.appendChild(tools);
         card.appendChild(head);
 
-        var body = el('div', 'cms-block-body');
-        // loud inline error message (shown only when this block blocks the save)
-        var errMsg = el('div', 'cms-block-error-msg', '<i class="fas fa-exclamation-triangle"></i> <span>This block has invalid JSON and won’t be saved until you fix it.</span>');
-        errMsg.style.display = block._jsonError ? '' : 'none';
-        card._errMsg = errMsg;
-        body.appendChild(errMsg);
-        body.appendChild(buildBlockBody(block));
+        // The body is built LAZILY, the first time the block is expanded. A
+        // collapsed body used to be a fully-built form sitting behind
+        // display:none — every input, every repeater and (worse) a live TinyMCE
+        // instance per rich-text block, all constructed for content nobody had
+        // asked to see. Building on demand also sidesteps initialising TinyMCE
+        // inside a hidden container, which sizes its iframe to zero.
+        var body = el('div', 'cms-block-body' + (startOpen ? '' : ' cms-collapsed'));
         card.appendChild(body);
-
         card._body = body;
         card._collapseBtn = collapseBtn;
+        card._built = false;
+
+        // @param {boolean} initEditors init this body's TinyMCE editors now.
+        //   False when the CALLER inits the batch (renderList / insertRowAt),
+        //   matching the same `ready` handshake buildColumnPanel uses.
+        card._buildBody = function (initEditors) {
+            if (card._built) { return; }
+            card._built = true;
+            // loud inline error message (shown only when this block blocks the save)
+            var errMsg = el('div', 'cms-block-error-msg', '<i class="fas fa-exclamation-triangle"></i> <span>This block has invalid JSON and won’t be saved until you fix it.</span>');
+            errMsg.style.display = block._jsonError ? '' : 'none';
+            card._errMsg = errMsg;
+            body.appendChild(errMsg);
+            body.appendChild(buildBlockBody(block));
+            if (initEditors) {
+                body.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+            }
+        };
+        if (startOpen) { card._buildBody(false); }
+
         collapseBtn.addEventListener('click', function () {
-            body.classList.toggle('cms-collapsed');
-            var icon = collapseBtn.querySelector('i');
-            if (icon) { icon.className = body.classList.contains('cms-collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
-            updateCollapseAllBtn();
+            setExpanded(card, body.classList.contains('cms-collapsed'));
+        });
+        // The whole header row is the expand affordance — the chevron is a 24px
+        // target on a card that is otherwise inert, and an author who wants to
+        // open a block aims at its name. Clicks on the tools (reorder, duplicate,
+        // enable, delete) and on the drag handle keep their own behaviour.
+        head.addEventListener('click', function (e) {
+            if (e.target.closest('.cms-block-tools, .cms-drag-handle, .cms-icon-btn')) { return; }
+            setExpanded(card, body.classList.contains('cms-collapsed'));
         });
 
         wireDrag(card, handle, block);
         return card;
+    }
+
+    /* ---- expand / collapse one card ----
+     * The open/closed state is remembered ON THE BLOCK OBJECT, which outlives
+     * every DOM rebuild in this editor (renderList/replaceModel re-render the
+     * same objects), so a save — or a revision restore — never collapses the
+     * block the author was working in. */
+    function setExpanded(card, want) {
+        if (!card || !card._body) { return; }
+        want = !!want;
+        if (want && card._buildBody) { card._buildBody(true); }
+        card._body.classList.toggle('cms-collapsed', !want);
+        if (card._block) { card._block._expanded = want; }
+        if (card._collapseBtn) {
+            var ic = card._collapseBtn.querySelector('i');
+            if (ic) { ic.className = want ? 'fas fa-chevron-down' : 'fas fa-chevron-right'; }
+            card._collapseBtn.setAttribute('aria-expanded', want ? 'true' : 'false');
+        }
+        // Collapsing hands navigation back to the summary line, so make sure it
+        // reflects what was just typed rather than what was there on load.
+        if (!want) { refreshSummary(card); }
+        updateCollapseAllBtn();
+    }
+
+    /* Repaint one card's summary line from its (possibly just-edited) block. */
+    function refreshSummary(card) {
+        if (card && card._summaryEl && card._block) {
+            card._summaryEl.textContent = summarize(card._block);
+        }
+    }
+    /* Repaint every collapsed card's summary — cheap, and it keeps the one-line
+     * view honest while the author edits a sibling block. */
+    function refreshSummaries() {
+        rowNodes().forEach(function (r) {
+            var card = r.querySelector('.cms-block-card');
+            if (card && card._body && card._body.classList.contains('cms-collapsed')) { refreshSummary(card); }
+        });
     }
 
     /* ================= collapse-all / expand-all ================= */
@@ -2143,12 +2281,8 @@ window.CmsBlockEditor = (function () {
     function setAllCollapsed(collapse) {
         rowNodes().forEach(function (r) {
             var card = r.querySelector('.cms-block-card');
-            if (!card || !card._body) { return; }
-            card._body.classList.toggle('cms-collapsed', collapse);
-            if (card._collapseBtn) {
-                var ic = card._collapseBtn.querySelector('i');
-                if (ic) { ic.className = collapse ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
-            }
+            if (!card) { return; }
+            setExpanded(card, !collapse);
         });
         updateCollapseAllBtn();
     }
@@ -2296,7 +2430,9 @@ window.CmsBlockEditor = (function () {
             type:    block.type,
             enabled: block.enabled,
             source:  block.source,
-            fields:  JSON.parse(JSON.stringify(block.fields || {}))
+            fields:  JSON.parse(JSON.stringify(block.fields || {})),
+            // A duplicate exists to be edited — open it like a freshly added block.
+            _expanded: true
         };
         model.splice(i + 1, 0, copy);
         insertRowAt(copy, i + 1, false);
@@ -2344,7 +2480,10 @@ window.CmsBlockEditor = (function () {
             type: c.type,
             enabled: true,
             source: c.dynamic ? 'dynamic' : 'authored',
-            fields: {}
+            fields: {},
+            // An author who has just added a block wants to fill it in, so this
+            // one opens even though the list defaults to collapsed.
+            _expanded: true
         };
         var at = (addInsertAt === null || addInsertAt < 0 || addInsertAt > model.length)
             ? model.length : addInsertAt;
@@ -2925,6 +3064,9 @@ window.CmsBlockEditor = (function () {
                 var row = rowForBlock(model[i]);
                 var card = row ? row.querySelector('.cms-block-card') : null;
                 if (card) {
+                    // Blocks default to collapsed — open it, or the author is sent
+                    // to a card whose broken field is hidden.
+                    setExpanded(card, true);
                     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     card.classList.add('cms-block-error-flash');
                     setTimeout(function (c) { return function () { c.classList.remove('cms-block-error-flash'); }; }(card), 1500);
