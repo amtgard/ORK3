@@ -81,6 +81,43 @@ function decodeBase64UrlSafe($value)
 // Sign a URL with a given crypto key
 // Note that this URL must be properly URL-encoded
 /**
+ * Render the OpenGraph <meta> block for the page head. Link-preview crawlers
+ * (Discord, Facebook, Slack, iMessage) read ONLY these tags — never the page
+ * body — so per-page values here are what turn a pasted ORK link into a card
+ * that says what it links to instead of the site-wide generic.
+ *
+ * $og overrides the defaults per page: ['title' => ..., 'description' => ...,
+ * 'image' => URL, 'image:width' => n, 'image:height' => n, 'url' => canonical].
+ * Values are escaped here; pass raw text.
+ */
+function ork_og_meta_tags($og = array())
+{
+    $defaults = array(
+        'type'         => 'website',
+        'site_name'    => 'ORK 3 - Amtgard Online Record Keeper',
+        'title'        => 'ORK 3 - Amtgard Online Record Keeper',
+        'description'  => 'The Online Record Keeper for the Amtgard International LARP.',
+        'image'        => (defined('HTTP_ASSETS') ? HTTP_ASSETS : '/assets/') . 'images/clippy_large.png',
+        'image:width'  => '1075',
+        'image:height' => '1075',
+    );
+    $og = array_merge($defaults, is_array($og) ? $og : array());
+    $out = '';
+    foreach ($og as $prop => $value) {
+        $value = trim((string)$value);
+        if ($value === '') {
+            continue;
+        }
+        // Collapse whitespace/newlines — description text often comes from
+        // user-authored fields.
+        $value = preg_replace('/\s+/', ' ', $value);
+        $out .= "\t\t<meta property=\"og:" . htmlspecialchars($prop, ENT_QUOTES) . '" content="'
+            . htmlspecialchars($value, ENT_QUOTES) . "\">\n";
+    }
+    return $out;
+}
+
+/**
  * Bucket a session user_agent / client label into a short display label
  * ("Chrome on Mac", "jsork", "mORK", ...). Single source of truth for the
  * anonymous sign-in tally (Authorization::CreateSession), the Release

@@ -86,28 +86,21 @@ final class WeatherServiceTest extends TestCase
         $fixture->cleanup();
     }
 
-    public function testWeatherServiceRequiresToken(): void
+    // PUBLIC since 2026-08-23 (Ken's call): the Weather page no longer
+    // requires login, so its cache-backed reads serve tokenless callers. The
+    // fetch-capable endpoints keep their gates — see
+    // PublicServiceAuthTest::testFetchCapableWeatherEndpointsStayGated.
+    public function testWeatherPageReadsArePublic(): void
     {
-        $fixture = AdminDashboardFixture::create();
-        $parkId = $fixture->firstParkId();
-        $player = $fixture->createPlayer($parkId, 'c13-wx');
         $service = new WeatherService();
 
         unset($_SESSION['is_authorized_mundane_id']);
-        $denied = $service->GetDailySummary('', date('Y-m-d'));
-        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $denied['Status'] ?? null);
-
-        unset($_SESSION['is_authorized_mundane_id']);
-        $ok = $service->GetDailySummary($player['token'], date('Y-m-d'));
+        $ok = $service->GetDailySummary('', date('Y-m-d'));
         $this->assertArrayNotHasKey('Status', $ok);
-        $this->assertIsArray($ok);
+        $this->assertArrayHasKey('date', $ok);
 
         unset($_SESSION['is_authorized_mundane_id']);
-        $this->assertSame('', $service->GetFreshnessPhrase(''));
-        unset($_SESSION['is_authorized_mundane_id']);
-        $this->assertIsString($service->GetFreshnessPhrase($player['token']));
-
-        $fixture->cleanup();
+        $this->assertIsString($service->GetFreshnessPhrase(''));
     }
 
     public function testCoordsForCalendarDetailRejectsHalfZeroSentinels(): void
