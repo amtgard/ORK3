@@ -112,8 +112,10 @@ $body = $out[0]['fields']['body'];
 check('script tag removed from body', stripos($body, '<script') === false);
 check('script payload removed from body', stripos($body, 'alert(1)') === false);
 check('surrounding markup kept', stripos($body, 'ok') !== false);
-check('body === CmsSanitizer::Clean of the same input',
-    $body === CmsSanitizer::Clean('<p>ok</p><script>alert(1)</script>'));
+check(
+    'body === CmsSanitizer::Clean of the same input',
+    $body === CmsSanitizer::Clean('<p>ok</p><script>alert(1)</script>')
+);
 
 // 2. on* handler.
 $out = $page->SanitizeBlocksForRender(array(
@@ -130,8 +132,10 @@ $out = $page->SanitizeBlocksForRender(array(
 ));
 $html = $out[0]['fields']['html'];
 check('svg onload dropped from html field', stripos($html, 'onload') === false && stripos($html, '<svg') === false);
-check('html === CmsSanitizer::Clean of the same input',
-    $html === CmsSanitizer::Clean('<svg onload="alert(1)"><circle/></svg><p>kept</p>'));
+check(
+    'html === CmsSanitizer::Clean of the same input',
+    $html === CmsSanitizer::Clean('<svg onload="alert(1)"><circle/></svg><p>kept</p>')
+);
 
 // 4. javascript: / data: / protocol-relative in URL fields — including one
 //    nested inside a repeater, which is where authors actually put them.
@@ -161,8 +165,87 @@ $out = $page->SanitizeBlocksForRender(array(
         'ctas' => array(array('label' => 'Go', 'href' => 'https://amtgard.com/about')),
     )),
 ));
-check('legitimate https href preserved',
-    $out[0]['fields']['ctas'][0]['href'] === CmsSanitizer::SafeHrefOrHash('https://amtgard.com/about'));
+check(
+    'legitimate https href preserved',
+    $out[0]['fields']['ctas'][0]['href'] === CmsSanitizer::SafeHrefOrHash('https://amtgard.com/about')
+);
+
+// 4b. The media-ref 'display' key is a URL field like its siblings.
+//
+// CmsMedia::ToMediaRef writes the mid-size WebP rendition's URL to 'display'
+// beside 'src' and 'thumb' (C4/#14), and seven partials read it as
+// `$img['display'] ?? $img['src']` straight into an <img src> — image,
+// hero_carousel, cta_band, marketing_nav, card_grid, photo_mosaic, park_hero.
+// 'display' was the one member of that trio missing from CmsPage::URL_FIELDS,
+// so a hand-posted {"image":{"display":"javascript:…"}} reached the attribute
+// with no scheme check at all. These cases pin it to the list.
+$urlFields = $rc->getConstant('URL_FIELDS');
+check(
+    'URL_FIELDS carries the media-ref trio (src, thumb, display)',
+    is_array($urlFields)
+    && in_array('src', $urlFields, true)
+    && in_array('thumb', $urlFields, true)
+    && in_array('display', $urlFields, true)
+);
+
+foreach ($badHrefs as $bad) {
+    $out = $page->SanitizeBlocksForRender(array(
+        array('type' => 'image', 'fields' => array(
+            'image' => array('key' => 'm4', 'media_id' => 4, 'src' => $bad, 'thumb' => $bad, 'display' => $bad),
+        )),
+    ));
+    $ref = $out[0]['fields']['image'];
+    check(
+        'image display neutralized: ' . $bad,
+        stripos($ref['display'], 'javascript:') === false && stripos($ref['display'], 'data:') === false
+    );
+    check('image display === SafeHrefOrHash: ' . $bad, $ref['display'] === CmsSanitizer::SafeHrefOrHash($bad));
+}
+
+// The same key one level deeper, where the carousel actually keeps it.
+$out = $page->SanitizeBlocksForRender(array(
+    array('type' => 'hero_carousel', 'fields' => array('slides' => array(
+        array('image' => array('display' => 'javascript:alert(1)', 'src' => '/assets/cms-media/202608/a.webp')),
+    ))),
+));
+check(
+    'nested slide image display neutralized',
+    $out[0]['fields']['slides'][0]['image']['display'] === '#'
+);
+
+// ...and real media must come through byte-for-byte. 'display' carries a live
+// URL on every image in the library, so a rule any stricter than its siblings'
+// would blank the lot.
+$out = $page->SanitizeBlocksForRender(array(
+    array('type' => 'image', 'fields' => array('image' => array(
+        'display' => '/assets/cms-media/202608/kingdom-banner.display.webp',
+        'src'     => 'http://localhost/assets/cms-media/202608/kingdom-banner.png',
+        'thumb'   => '/assets/cms-media/202608/kingdom-banner.thumb.webp',
+    ))),
+));
+$ref = $out[0]['fields']['image'];
+check(
+    'root-relative /assets display URL survives unchanged',
+    $ref['display'] === '/assets/cms-media/202608/kingdom-banner.display.webp'
+);
+check(
+    'absolute http src survives unchanged',
+    $ref['src'] === 'http://localhost/assets/cms-media/202608/kingdom-banner.png'
+);
+check(
+    'thumb survives unchanged',
+    $ref['thumb'] === '/assets/cms-media/202608/kingdom-banner.thumb.webp'
+);
+
+// A bare word in the same key is not a scheme, so nothing on the list mangles
+// it — the rule cannot break a field that happens to be named 'display'.
+$out = $page->SanitizeBlocksForRender(array(
+    array('type' => 'card_grid', 'fields' => array('display' => 'grid')),
+));
+check(
+    'a schemeless keyword in a display field is left alone',
+    $out[0]['fields']['display'] === 'grid'
+);
 
 // 5. Recursion depth: a columns block's CHILD block fields are sanitized too.
 $out = $page->SanitizeBlocksForRender(array(
@@ -184,8 +267,10 @@ $out = $page->SanitizeBlocksForRender(array(
         'fields' => array('text' => 'Hi', 'level' => 2)),
 ));
 $row = $out[0];
-check('row keys + ORDER match the stored-block shape',
-    array_keys($row) === array('id', 'type', 'enabled', 'order', 'source', 'fields'));
+check(
+    'row keys + ORDER match the stored-block shape',
+    array_keys($row) === array('id', 'type', 'enabled', 'order', 'source', 'fields')
+);
 check('id is an int', $row['id'] === 17);
 check('enabled is a real bool (renderer + cache payload expect it)', $row['enabled'] === true);
 check('order carries through', $row['order'] === 40);
@@ -209,8 +294,10 @@ check('missing id defaults to 0', $out[0]['id'] === 0);
 check('missing order falls back to positional', $out[0]['order'] === 0 && $out[1]['order'] === 10);
 check('missing source defaults to authored', $out[0]['source'] === 'authored');
 check('missing enabled defaults to true', $out[0]['enabled'] === true);
-check('source=dynamic preserved',
-    $page->SanitizeBlocksForRender(array(array('type' => 'events_feed', 'source' => 'dynamic', 'fields' => array())))[0]['source'] === 'dynamic');
+check(
+    'source=dynamic preserved',
+    $page->SanitizeBlocksForRender(array(array('type' => 'events_feed', 'source' => 'dynamic', 'fields' => array())))[0]['source'] === 'dynamic'
+);
 
 // Junk entries are skipped, not rendered.
 $out = $page->SanitizeBlocksForRender(array(
@@ -221,8 +308,10 @@ $out = $page->SanitizeBlocksForRender(array(
     array('type' => 'heading', 'fields' => 'not-an-array'),
 ));
 check('non-array / typeless / empty-type entries dropped', count($out) === 2);
-check('surviving entries are the typed ones',
-    $out[0]['fields']['text'] === 'kept' && $out[1]['fields'] === array());
+check(
+    'surviving entries are the typed ones',
+    $out[0]['fields']['text'] === 'kept' && $out[1]['fields'] === array()
+);
 check('non-array input returns an empty list', $page->SanitizeBlocksForRender('nope') === array());
 check('empty input returns an empty list', $page->SanitizeBlocksForRender(array()) === array());
 

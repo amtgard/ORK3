@@ -31,8 +31,18 @@ class CmsPage extends CmsBase
      */
     public const HTML_FIELDS = array('body', 'html');
 
-    /** E36: block field keys holding a URL → must pass URL-scheme validation on save. */
-    public const URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src', 'thumb', 'poster');
+    /**
+     * E36: block field keys holding a URL → must pass URL-scheme validation on save.
+     *
+     * 'display' is a media-ref key, not a CSS keyword: CmsMedia::ToMediaRef puts
+     * the mid-size WebP rendition's URL there (C4/#14) beside 'src' and 'thumb',
+     * and seven partials read it as `$img['display'] ?? $img['src']` straight
+     * into an <img src>. It was the one member of that trio missing from this
+     * list, so a hand-posted {"image":{"display":"javascript:…"}} reached the
+     * attribute unvalidated. Sibling keys belong together here — if a key can
+     * end up in a src or an href, it goes on this list.
+     */
+    public const URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src', 'thumb', 'poster', 'display');
 
     /** Max revision snapshots retained per owner (older ones pruned on write). */
     private static $MAX_REVISIONS = 25;
