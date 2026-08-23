@@ -97,7 +97,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <?php if ($isPublished): ?><i class="fas fa-eye-slash"></i> Unpublish<?php else: ?><i class="fas fa-globe"></i> Publish<?php endif; ?>
                 </button>
             <?php endif; ?>
-            <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPreviewToggle"<?= $postId > 0 ? '' : ' disabled data-needsave="1" data-tip="Save the post first to preview it."' ?>>
+            <?php /* E2: no longer gated on "save first" — the pane renders the
+                     editor's CURRENT blocks via CmsAjax/previewblocks. */ ?>
+            <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPreviewToggle" data-tip="Show or hide the live preview">
                 <i class="fas fa-eye"></i> Preview
             </button>
         </div>
@@ -178,17 +180,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <?php /* ============ IN-CONTEXT PREVIEW PANE ============ */ ?>
         <aside class="cms-preview-pane" id="cmsPreviewPane" aria-hidden="true">
             <div class="cms-preview-pane-head">
-                <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Preview</span>
+                <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Live preview</span>
                 <div class="cms-preview-devtoggle" role="group" aria-label="Preview width">
                     <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width" aria-label="Desktop width"><i class="fas fa-desktop" aria-hidden="true"></i></button>
                     <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width" aria-label="Mobile width"><i class="fas fa-mobile-alt" aria-hidden="true"></i></button>
                 </div>
                 <span class="cms-spacer"></span>
-                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview" aria-label="Refresh preview"><i class="fas fa-redo" aria-hidden="true"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $postId > 0 ? UIR . 'Cms/previewpost/' . $postId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab" aria-label="Open preview in new tab"><i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Rebuild the preview now" aria-label="Rebuild the preview now"><i class="fas fa-redo" aria-hidden="true"></i></button>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $postId > 0 ? UIR . 'Cms/previewpost/' . $postId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open the last SAVED version in a new tab \u2014 the pane beside you shows your unsaved edits" aria-label="Open the saved post in a new tab"><i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview" aria-label="Close preview"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
             <div class="cms-preview-note cms-muted">Preview shows the current draft.</div>
+            <div class="cms-preview-note" id="cmsPreviewNote" role="status" aria-live="polite" style="display:none;"></div>
             <div class="cms-preview-pane-body">
                 <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">
                     <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Post preview" src="about:blank"></iframe>
@@ -306,6 +309,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
         dirty = true;
         if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
         autosaveTimer.schedule();
+        // E2: keep the preview following the typing. Debounced inside the pane,
+        // and a no-op while the pane has never been opened.
+        if (preview) { preview.schedule(); }
     }
 
     function doSave(isAuto) {
@@ -475,11 +481,26 @@ include __DIR__ . '/cms/_shell_top.tpl';
        Pane/iframe/device-button wiring is identical between the two editors; only
        the preview URL, the "is it saved yet" test and the toast copy differ. ==== */
     var preview = CmsAdmin.previewPane({
-        url: function () {
-            return UIR + 'Cms/previewpost/' + STATE.postId + '?_t=' + Date.now() + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
+        // E2: same live preview the page editor uses — CmsAjax/previewblocks runs
+        // the posted block list through the identical validation a save runs and
+        // returns a rendered post document.
+        live: function () {
+            if (!BE) { return Promise.reject(new Error('Preview is unavailable on this post.')); }
+            return post('previewblocks', {
+                owner_type: 'post',
+                owner_id:   STATE.postId,
+                title:      titleInput ? titleInput.value.trim() : '',
+                blocks:     JSON.stringify(BE.serialize())
+            }).then(function (res) {
+                if (!res || !res.ok || typeof res.html !== 'string') {
+                    throw new Error((res && res.error)
+                        || 'Preview could not update. Your edits are safe \u2014 they are still in the form.');
+                }
+                return res.html;
+            });
         },
-        ready: function () { return STATE.postId > 0; },
-        notReadyMsg: 'Save the post first to preview it.'
+        ready: function () { return true; },
+        openPrefKey: 'cms_preview_open_post'
     });
     // Declared as a hoisted function so the save/publish handlers above can call it.
     function refreshPreview() { preview.refresh(); }

@@ -53,6 +53,16 @@ class Model_CmsPage extends Model
         return $this->CmsPage->GetBlocksForEditor($ownerType, $ownerId);
     }
 
+    /**
+     * E2 (live preview): sanitize an UNSAVED editor block list into render shape
+     * WITHOUT writing anything. Runs the same clean a save runs — see
+     * CmsPage::SanitizeBlocksForRender.
+     */
+    public function sanitize_blocks_for_render($blocksArray)
+    {
+        return $this->CmsPage->SanitizeBlocksForRender($blocksArray);
+    }
+
     public function get_page_blocks($pageId)
     {
         return $this->CmsPage->GetPageBlocks($pageId);

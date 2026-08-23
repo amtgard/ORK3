@@ -223,6 +223,52 @@ class CmsPage extends CmsBase
     }
 
     /**
+     * E2 (live preview): take an UNSAVED block list straight from the editor and
+     * return it in the same row shape GetBlocks() returns, so the front-door
+     * renderer can draw it without any of it touching the database.
+     *
+     * SECURITY — this is the whole point of the method. Rendering author JSON
+     * that has not been through the save-time clean is a stored-XSS vector, so
+     * the preview path must not be a second, weaker sanitizer. It therefore
+     * calls _normalizeBlocks(), the EXACT method ReplaceBlocks() calls, which
+     * runs _sanitizeBlockFields() over every fields array: CmsSanitizer::Clean()
+     * on the authored-HTML fields (HTML_FIELDS) and CmsSanitizer::SafeHrefOrHash()
+     * on the URL fields (URL_FIELDS), recursively through nested arrays. There is
+     * no branch here that a save does not also take; if _normalizeBlocks ever
+     * changes, the preview changes with it, which is the only arrangement in
+     * which "the preview shows what will be saved" can stay true.
+     *
+     * The TYPE allowlist is the caller's half of the contract, exactly as it is
+     * on save: Controller_CmsAjax::_parseBlocks() drops any block whose type is
+     * not in the canonical catalog and strips nested columns BEFORE handing the
+     * list here — see the class docblock on that controller for why the type
+     * vocabulary deliberately lives there and not in this class.
+     *
+     * Pure: no DB, no cache, no write, no revision. Safe to call per keystroke.
+     *
+     * @param mixed $blocksArray ordered list of block definitions (or non-array)
+     * @return array list of ['id','type','enabled','order','source','fields']
+     */
+    public function SanitizeBlocksForRender($blocksArray)
+    {
+        $out = array();
+        foreach ($this->_normalizeBlocks($blocksArray) as $n) {
+            // KEY ORDER matches _fetchBlocks() so a previewed block and a stored
+            // block are indistinguishable to render_blocks.tpl and to anything
+            // that json_encodes either one.
+            $out[] = array(
+                'id'      => (int)$n['id'],
+                'type'    => $n['type'],
+                'enabled' => ((int)$n['enabled'] === 1),
+                'order'   => (int)$n['ordering'],
+                'source'  => $n['source'],
+                'fields'  => $n['fields'],
+            );
+        }
+        return $out;
+    }
+
+    /**
      * Shared block read behind GetBlocks (enabled-only) and GetBlocksForEditor
      * (everything). Same SQL, same ordering, same decoded row shape — the only
      * difference is the `enabled = 1` filter and how 'enabled' is reported.

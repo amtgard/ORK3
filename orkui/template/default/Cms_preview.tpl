@@ -14,18 +14,28 @@ $pvCanPublish = ! empty($CanPublish) && $pvStatus !== 'published';
 $pvKind       = (isset($PreviewKind) && $PreviewKind === 'postrow') ? 'post' : 'page';
 $pvId         = ($pvKind === 'post') ? (int) ($PreviewPage['post_id'] ?? 0) : (int) ($PreviewPage['page_id'] ?? 0);
 $pvScopeQuery = isset($CmsScopeQuery) ? (string) $CmsScopeQuery : '';
+// E2: set by CmsAjax/previewblocks, which renders the editor's UNSAVED blocks.
+// The badge has to say so — "Unpublished · Preview" reads as "this is the draft
+// on record", and it isn't; nothing on screen has been saved yet.
+$pvLive       = ! empty($PreviewLive);
 $pvPublishUrl = UIR . ($pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/publish') . $pvScopeQuery;
 $pvIdField    = ($pvKind === 'post') ? 'post_id' : 'page_id';
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
+<?php if (! $pvLive) : // The live preview (E2) renders as a STANDALONE public
+    // document ($IsOrgSite), so it loads no orkui.css and the ORK-shell interop
+    // layer has nothing to interop with. The saved preview still renders inside
+    // the application shell and still needs it.
+    ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
+<?php endif; ?>
 <?php
 // .cms-preview-* styling lives in frontdoor/css/blocks.css, which the
 // _assets_public.tpl include above links.
 ?>
 
 <div class="cms-preview-banner">
-	<span class="cms-preview-badge"><?= $pvStatus === 'published' ? 'Published' : 'Unpublished' ?> · Preview</span>
+	<span class="cms-preview-badge"><?= $pvLive ? 'Unsaved' : ($pvStatus === 'published' ? 'Published' : 'Unpublished') ?> · <?= $pvLive ? 'Live preview' : 'Preview' ?></span>
 	<?php if ($pvTitle !== '') : ?><span class="cms-preview-title"><?= htmlspecialchars($pvTitle) ?></span><?php endif; ?>
 	<?php if ($pvCanPublish && $pvId > 0) : ?>
 		<button type="button" class="cms-preview-publish" id="cmsPreviewPublish"

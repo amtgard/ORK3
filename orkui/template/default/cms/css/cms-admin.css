@@ -1813,11 +1813,22 @@ html[data-theme="dark"] a.cms-sites-slug:hover {
     background: var(--cms-gold, #f0b429);
     color: #1a1205;
 }
+/* E2: the live preview's status line, between the pane head and the frame.
+   The base state is the quiet "Updating…" tick. .cms-preview-note-error is a
+   refresh that FAILED, and it deliberately does not look like an editor error:
+   the form is fine and the author's text is safe — only the picture is stale.
+   Both colours are CRM tokens read (never defined) here, so dark mode arrives
+   with the palette. */
 .cms-preview-note {
     font-size: 11.5px;
     padding: 6px 12px;
     border-bottom: 1px solid var(--ork-border);
     background: var(--ork-bg);
+    color: var(--ork-text-muted);
+}
+.cms-preview-note-error {
+    color: var(--ork-badge-red-text, #c0392b);
+    background: var(--ork-badge-red-bg, #fdecea);
 }
 .cms-preview-pane-body {
     flex: 1 1 auto;

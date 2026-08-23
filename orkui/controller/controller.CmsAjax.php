@@ -151,6 +151,157 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * previewblocks — render an UNSAVED editor block list (E2, live preview)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Render the editor's CURRENT, UNSAVED blocks through the real front-door
+     * renderer and hand the resulting page back as HTML. Writes nothing.
+     *
+     * Why this exists: Cms/preview/{id} renders what is in the DATABASE, so an
+     * iframe pointed at it previews the last save, not what the author is
+     * typing. The editor posts its live block list here instead.
+     *
+     * SECURITY — this action renders author-supplied JSON, so it must apply the
+     * SAME validation a save applies, not a preview-shaped approximation:
+     *
+     *   1. _begin()                 login + the CSRF synchronizer token (POST).
+     *   2. _scope()                 the ?scope= selector, authorized, never
+     *                               silently downgraded to global.
+     *   3. _requireOwnerEditable()  for an existing row: page.edit / page.edit_own,
+     *                               not-found, the IDOR scope guard and the
+     *                               edit_own ownership test — the identical gate
+     *                               savepage/savepost run. A brand-new, unsaved
+     *                               page needs page.create, as savepage does.
+     *   4. _parseBlocks()           the write-side TYPE vocabulary: the canonical
+     *                               allowlist and the nested-columns rejection.
+     *   5. sanitize_blocks_for_render()  CmsPage::_normalizeBlocks — literally the
+     *                               method ReplaceBlocks calls — so CmsSanitizer
+     *                               cleans the HTML fields and hardens the URL
+     *                               fields exactly as it does on the way to disk.
+     *
+     * Steps 4 and 5 are the same two calls savepage() makes, in the same order,
+     * against the same code. There is no second path.
+     *
+     * The response is a FULL page document (Cms_preview.tpl rendered through the
+     * normal view pipeline), which the editor drops into its preview iframe.
+     * Rendering it as a document rather than a fragment is deliberate: the
+     * fragment would have to be injected into an already-loaded frame, where
+     * frontdoor.js — a parse-time IIFE with no re-init hook — would never re-run,
+     * so carousels and lightboxes would be dead in the preview. A document also
+     * gets the public stylesheet cascade (frontdoor.css -> blocks.css -> the org
+     * theme tokens) from the same partials the public site uses, instead of this
+     * controller assembling <link> tags (which the CSS boundary gate forbids CMS
+     * PHP from doing, rule C7).
+     *
+     * @return void (emits JSON {ok, html} + exit)
+     */
+    public function previewblocks($action = null)
+    {
+        $uid = $this->_begin();
+        // POST ONLY. _begin() exempts GET from the CSRF token because the GET
+        // endpoints here are plain reads (medialist, personlookup, pagelist) —
+        // this one is not: it renders caller-supplied content, so it must not be
+        // reachable by a bare cross-site GET. Checked after _begin() so the JSON
+        // headers are already set on the refusal.
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            $this->_fail('Preview must be requested with POST.', 1);
+        }
+        $scope = $this->_scope($uid);
+
+        $isPost  = ((string)($_POST['owner_type'] ?? 'page') === 'post');
+        $ownerId = (int)($_POST['owner_id'] ?? 0);
+
+        // Same authorization split as savepage/savepost: an existing row runs the
+        // full edit gate (IDOR included), an unsaved one needs page.create.
+        $row = null;
+        if ($ownerId > 0) {
+            $row = $this->_requireOwnerEditable($uid, $isPost ? 'post' : 'page', $ownerId, $scope);
+        } else {
+            $this->_require($uid, 'page.create', $scope);
+        }
+
+        // Steps 4 + 5 — the save path's own validation, in the save path's order.
+        $blocks = $this->CmsPage->sanitize_blocks_for_render($this->_parseBlocks($_POST['blocks'] ?? null));
+
+        // The banner row. For an unsaved page there is no row to show, so a
+        // minimal stand-in carries the title the author has typed. status is
+        // pinned to the STORED status (or 'draft'): a live preview shows unsaved
+        // content, and calling it "Published" would be a lie.
+        $title = trim((string)($_POST['title'] ?? ''));
+        if ($title === '') {
+            $title = (string)($row['title'] ?? 'Untitled');
+        }
+        $previewRow = is_array($row) ? $row : array();
+        $previewRow['title']  = $title;
+        $previewRow['status'] = (string)($row['status'] ?? 'draft');
+
+        $this->template = 'Cms_preview.tpl';
+        $this->data['IsFrontDoor'] = false;
+        $this->data['no_index']    = true;
+        $this->data['FrontDoor']   = $blocks;
+        $this->data['PreviewPage'] = $previewRow;
+        // 'postrow' (not 'post') is a literal contract: Cms_preview.tpl keys on it.
+        $this->data['PreviewKind'] = $isPost ? 'postrow' : 'page';
+        // No Publish button on a LIVE preview: the button publishes the SAVED
+        // row, which is not what is on screen. Save, then publish.
+        $this->data['CanPublish']  = false;
+        $this->data['PreviewLive'] = true;
+        // Render the preview as a STANDALONE PUBLIC DOCUMENT rather than inside
+        // the ORK application shell. default.theme gates the whole ORK chrome on
+        // $IsOrgSite, so this one flag gives the frame exactly the public asset
+        // set (cms-base.css -> fonts -> frontdoor.css -> blocks.css) with no
+        // orkui.css, no global nav, and — the reason this matters for a LIVE
+        // preview specifically — no Google Tag Manager / gtag, which would
+        // otherwise fire on every debounced keystroke. It also drops the
+        // document from ~44KB to ~7KB per refresh.
+        $this->data['IsOrgSite'] = true;
+        $this->data['page_title']  = 'Preview: ' . $title;
+        // The kingdom_*/park_* live blocks derive their org from the render-time
+        // site scope (Controller_Site::_bootShell publishes these). Without them
+        // every one of those blocks renders NOTHING — an author on a park page
+        // would preview a blank where their meeting times are going to be. The
+        // scope here is the resolved, ALREADY AUTHORIZED request scope, so this
+        // cannot be used to render another org's data.
+        $this->data['SiteNavScopeType'] = (string)$scope['type'];
+        $this->data['SiteNavScopeId']   = (int)$scope['id'];
+        $this->_applyPreviewTheme($scope);
+
+        // Controller::view() is the framework's own render step. Calling it here
+        // (rather than letting index.php call it after the action) is what lets an
+        // AJAX action return a rendered document; _ok() exits before index.php
+        // would reach its own $C->view(), so it is never rendered twice.
+        $this->_ok(array('html' => (string)$this->view()));
+    }
+
+    /**
+     * Publish the active scope's theme tokens to the preview document. The CSS
+     * text is built by CmsThemeTokens and emitted by default.theme's
+     * <style id="fd-theme-tokens"> — the one sanctioned inline-CSS channel — so
+     * a themed kingdom previews in its own colours instead of the defaults.
+     *
+     * @param array $scope resolved ['type'=>..,'id'=>..]
+     * @return void
+     */
+    private function _applyPreviewTheme($scope)
+    {
+        $css = (string)$this->CmsTheme->get_active_css((string)$scope['type'], (int)$scope['id']);
+        if ($css !== '') {
+            $this->data['fdThemeCss'] = $css;
+        }
+        // The :root copy, for the same reason Controller_Site::_bootShell emits
+        // it: <html>/<body> are ANCESTORS of .fd-page and custom properties
+        // inherit downward only, so cms-base.css's `body { background:
+        // var(--fd-bg) }` cannot see the scoped block. Without this a
+        // dark-themed org previews its page on a white body. default.theme gates
+        // this emit on $IsOrgSite, which the live preview sets.
+        $rootCss = (string)$this->CmsTheme->get_active_root_css((string)$scope['type'], (int)$scope['id']);
+        if ($rootCss !== '') {
+            $this->data['fdThemeCssRoot'] = $rootCss;
+        }
+    }
+
+    /* ------------------------------------------------------------------ *
      * publish / unpublish
      * ------------------------------------------------------------------ */
 

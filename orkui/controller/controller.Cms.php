@@ -713,6 +713,25 @@ class Controller_Cms extends Controller
         $this->data['PreviewKind'] = $isPost ? 'postrow' : 'page';
         $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
         $this->data['page_title']  = 'Preview: ' . $row['title'];
+        // The kingdom_*/park_* live blocks derive their org from the render-time
+        // site scope (Controller_Site::_bootShell publishes these). The preview
+        // never set them, so every one of those blocks previewed as a blank —
+        // an officer could not see their own officer grid or meeting times
+        // until the page was published. The scope is the already-authorized
+        // request scope, so this cannot surface another org's data.
+        $this->data['SiteNavScopeType'] = (string)$scope['type'];
+        $this->data['SiteNavScopeId']   = (int)$scope['id'];
+        // E2: preview in the ORG'S OWN COLOURS. The saved preview never emitted
+        // the scope's theme tokens, so a themed kingdom previewed its pages
+        // against the default palette and then found a different-looking page
+        // once published. CmsThemeTokens builds the CSS; default.theme emits it
+        // from $fdThemeCss in <style id="fd-theme-tokens">, the one sanctioned
+        // inline-CSS channel. Same call Controller_Site::_bootShell makes.
+        $this->load_model('CmsTheme');
+        $themeCss = (string)$this->CmsTheme->get_active_css((string)$scope['type'], (int)$scope['id']);
+        if ($themeCss !== '') {
+            $this->data['fdThemeCss'] = $themeCss;
+        }
     }
 
     /* ------------------------------------------------------------------ *

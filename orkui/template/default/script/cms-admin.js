@@ -355,9 +355,14 @@
     /* In-context preview pane: iframe load/refresh, open/close, and the
      * Desktop/Mobile device-width buttons. Element ids are shared by both hosts.
      * opts:
-     *   url()         -> the (cache-busted) preview URL to load
-     *   ready()       -> true once the entity has an id, so preview is possible
-     *   notReadyMsg   -> toast text when the author opens it before saving
+     *   url()         -> the (cache-busted) preview URL to load  (SAVED state)
+     *   live()        -> Promise<html> for the editor's CURRENT, UNSAVED state
+     *                    (E2). When present it REPLACES url(): the pane renders
+     *                    what the author is typing rather than the last save.
+     *   liveDelay     -> debounce, ms, for schedule() (default 600)
+     *   ready()       -> true once previewing is possible at all
+     *   notReadyMsg   -> toast text when the author opens it before that
+     *   openPrefKey   -> localStorage key remembering "pane open?" per browser
      */
     function previewPane(opts) {
         opts = opts || {};
@@ -365,36 +370,118 @@
         var pane       = document.getElementById('cmsPreviewPane');
         var iframe     = document.getElementById('cmsPreviewIframe');
         var wrap       = document.getElementById('cmsPreviewFrameWrap');
+        var noteEl     = document.getElementById('cmsPreviewNote');
         var closeBtn   = document.getElementById('cmsPreviewClose');
         var refreshBtn = document.getElementById('cmsPreviewRefresh');
         var grid       = document.getElementById('cmsEditorGrid');
         var loaded     = false;
+        var liveFn     = (typeof opts.live === 'function') ? opts.live : null;
+        var liveSeq    = 0;      // guards against an older response landing last
+        var liveTimer  = null;
 
         function ready() { return typeof opts.ready === 'function' ? !!opts.ready() : true; }
         function isOpen() { return !!(pane && pane.classList.contains('cms-preview-open')); }
 
+        /* A status line inside the pane. The preview must never be able to block
+         * editing, so a failure is reported HERE and the form is left alone —
+         * no toast storm, no disabled buttons, and the last good frame stays on
+         * screen rather than being blanked. */
+        function setNote(msg, kind) {
+            if (!noteEl) { return; }
+            noteEl.textContent = msg || '';
+            noteEl.className = 'cms-preview-note' + (kind ? ' cms-preview-note-' + kind : '');
+            noteEl.style.display = msg ? '' : 'none';
+        }
+
+        /* The frame is same-origin, so the parent can carry the reader's scroll
+         * offset across a reload. Without this every debounced update yanks the
+         * author back to the top of the page they were looking at. */
+        function frameScroll() {
+            try { return (iframe && iframe.contentWindow) ? (iframe.contentWindow.scrollY || 0) : 0; } catch (e) { return 0; }
+        }
+        // Single-slot: a superseded refresh must not leave a listener behind that
+        // later scrolls a NEWER document to a stale offset.
+        var pendingScroll = null;
+        function restoreScrollOnNextLoad(y) {
+            if (!iframe) { return; }
+            if (pendingScroll) { iframe.removeEventListener('load', pendingScroll); pendingScroll = null; }
+            if (!y) { return; }
+            pendingScroll = function () {
+                iframe.removeEventListener('load', pendingScroll);
+                pendingScroll = null;
+                try { iframe.contentWindow.scrollTo(0, y); } catch (e) {}
+            };
+            iframe.addEventListener('load', pendingScroll);
+        }
+
+        function loadLive() {
+            var seq = ++liveSeq;
+            var y = frameScroll();
+            setNote(loaded ? 'Updating\u2026' : 'Building preview\u2026');
+            // Promise.resolve().then(liveFn) rather than liveFn(): a host callback
+            // that throws SYNCHRONOUSLY must land in the .catch below like any
+            // other failure, not escape as an uncaught TypeError that leaves the
+            // pane stuck on "Updating…".
+            Promise.resolve().then(liveFn).then(function (html) {
+                if (seq !== liveSeq || !iframe) { return; }   // superseded by a newer edit
+                restoreScrollOnNextLoad(y);
+                // srcdoc, not src: a POST cannot be an iframe URL, and a fresh
+                // document (rather than an injected fragment) is what lets the
+                // public stylesheets cascade and frontdoor.js — a parse-time
+                // IIFE with no re-init hook — actually run for each preview.
+                iframe.srcdoc = html;
+                loaded = true;
+                setNote('');
+            }).catch(function (err) {
+                if (seq !== liveSeq) { return; }
+                setNote((err && err.message)
+                    || 'Preview could not update. Your edits are safe \u2014 they are still in the form.', 'error');
+            });
+        }
+
         function load() {
             if (!ready() || !iframe) { return; }
+            if (liveFn) { loadLive(); return; }
             iframe.src = opts.url();
             loaded = true;
         }
-        // Only reload when the pane is open (or already loaded) — avoids fetching a
-        // preview the editor never opened.
+        // Only reload when the pane is open (or, in the saved-URL mode, already
+        // loaded) — avoids fetching a preview the editor never opened, and in
+        // live mode avoids re-rendering into a pane nobody is looking at.
         function refresh() {
             if (!ready() || !iframe) { return; }
-            if (isOpen() || loaded) { load(); }
+            if (isOpen() || (!liveFn && loaded)) { load(); }
         }
-        function open() {
+        /* Debounced refresh, for a host that wants the preview to follow typing.
+         * No-ops when there is nothing on screen to update, so an unopened pane
+         * costs nothing per keystroke. */
+        function schedule() {
+            // Closed pane -> nothing on screen to update, so no request. (open()
+            // re-renders on the way in, so reopening never shows stale content.)
+            if (!liveFn || !ready() || !isOpen()) { return; }
+            if (liveTimer) { clearTimeout(liveTimer); }
+            liveTimer = setTimeout(function () { liveTimer = null; load(); },
+                (typeof opts.liveDelay === 'number') ? opts.liveDelay : 600);
+        }
+        function rememberOpen(isOpenNow) {
+            if (!opts.openPrefKey) { return; }
+            try { localStorage.setItem(opts.openPrefKey, isOpenNow ? '1' : '0'); } catch (e) {}
+        }
+        function open(remember) {
             if (!ready()) { toast(opts.notReadyMsg || 'Save first to preview.', 'error'); return; }
             if (pane) { pane.classList.add('cms-preview-open'); pane.setAttribute('aria-hidden', 'false'); }
             if (grid) { grid.classList.add('cms-preview-active'); }
             if (toggle) { toggle.classList.add('cms-btn-active'); }
-            if (!loaded) { load(); }
+            if (remember !== false) { rememberOpen(true); }
+            // Live mode always re-renders on open: the pane may have been closed
+            // through a dozen edits, and schedule() deliberately skipped them.
+            if (liveFn || !loaded) { load(); }
         }
-        function close() {
+        function close(remember) {
             if (pane) { pane.classList.remove('cms-preview-open'); pane.setAttribute('aria-hidden', 'true'); }
             if (grid) { grid.classList.remove('cms-preview-active'); }
             if (toggle) { toggle.classList.remove('cms-btn-active'); }
+            if (remember !== false) { rememberOpen(false); }
         }
 
         if (toggle) {
@@ -417,7 +504,32 @@
             });
         });
 
-        return { load: load, refresh: refresh, open: open, close: close, isOpen: isOpen };
+        /* The Theme page's shape, which this review holds up as the model: on a
+         * window wide enough for two columns the rendered result is PRESENT, not
+         * something the author has to go and ask for. 1100px is the editor's own
+         * two-column threshold (see the cms-editor-haspreview media query): the
+         * blocks column needs ~430px before its two-up field rows collapse, the
+         * pane declares minmax(360px, .95fr), and the rail takes 220-258px.
+         * Below that the pane is a toggle that stacks under the form.
+         * An author who closes it keeps it closed, per browser. */
+        if (liveFn && opts.openPrefKey && window.matchMedia
+            && window.matchMedia('(min-width: 1100px)').matches) {
+            var pref = null;
+            try { pref = localStorage.getItem(opts.openPrefKey); } catch (e) {}
+            // Deferred a tick ON PURPOSE. Both hosts construct the pane BEFORE
+            // they boot the block engine, so opening synchronously would post an
+            // empty block list and paint a blank page the author then has to
+            // trigger a refresh out of. A macrotask lets the rest of the host
+            // script — CmsBlockEditor.init() included — finish first.
+            if (pref !== '0') {
+                setTimeout(function () { if (ready()) { open(false); } }, 0);
+            }
+        }
+
+        return {
+            load: load, refresh: refresh, schedule: schedule,
+            open: open, close: close, isOpen: isOpen
+        };
     }
 
     /* Swap a broken <img> for a real placeholder.
