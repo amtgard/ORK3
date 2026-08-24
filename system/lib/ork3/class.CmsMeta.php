@@ -74,6 +74,33 @@ class CmsMeta
      * The scheme+host origin for absolute canonical/OG URLs, derived from
      * the live request (honors the CF/proxy-forwarded proto when present).
      *
+     * Host is CLIENT-SUPPLIED, and the front web server is a catch-all
+     * (server_name _), so a request carrying `Host: evil.example` would
+     * otherwise be echoed straight into every canonical/og:url and into the
+     * absolute links of the cached RSS feed — the classic host-header
+     * SEO/cache-poisoning vector. The Host is therefore checked against the
+     * deployment's canonical-host allowlist, ORK_CANONICAL_HOSTS (a
+     * comma/whitespace-separated string or an array of 'host' / 'host:port'
+     * entries, defined in the deployment config). A Host outside that list
+     * takes the same "cannot build an absolute URL" path as a missing Host.
+     *
+     * The allowlist is enforced beyond these meta tags, not here:
+     * host-guard.php's ork_enforce_canonical_host() replaces a non-canonical
+     * Host with the first canonical one, and the config runs it before it
+     * mints HTTP_UI/HTTP_ASSETS and the rest of the absolute-URL constants.
+     * The matcher below is the same one (ork_host_is_allowed()) so the two
+     * cannot drift. Coverage is only as wide as the entry points that reach
+     * a guard call, so a deployment whose config predates the require_once/
+     * ork_enforce_canonical_host() pair in config.dist.php is protected only
+     * where startup.php or index.php runs the pre-config env-var route.
+     *
+     * When ORK_CANONICAL_HOSTS is NOT defined the legacy derivation is kept
+     * (a request-derived origin) so an unconfigured deployment does not
+     * silently lose every canonical and feed link — but the poisoning
+     * protection is INERT, for the WHOLE application and not merely these
+     * meta tags, until the constant is configured. Define it; see the
+     * commented block in config.dist.php.
+     *
      * Returns '' when there is no Host header at all (CLI/test render) —
      * see the "empty host" note in the class header. Callers must treat ''
      * as "cannot build an absolute URL", never as a prefix to concatenate
@@ -83,13 +110,45 @@ class CmsMeta
      */
     public static function Origin()
     {
-        $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
-        if ($host === '') {
+        $host = self::NormalizeHost((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '' || !self::HostIsAllowed($host)) {
             return '';
         }
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
         return ($https ? 'https://' : 'http://') . $host;
+    }
+
+    /**
+     * Is this request Host one of the deployment's canonical hosts?
+     *
+     * Configured  → membership in ORK_CANONICAL_HOSTS decides (case-insensitive,
+     *               trailing dot and default-port forms normalized away).
+     * Unconfigured → the host is accepted only if it is syntactically a
+     *               hostname/IP with an optional port; see Origin().
+     *
+     * Delegates to host-guard.php's ork_host_is_allowed() — the same matcher
+     * the pre-config Host guard uses — so there is one implementation, not two.
+     *
+     * @param string $host raw $_SERVER['HTTP_HOST']
+     * @return bool
+     */
+    private static function HostIsAllowed($host)
+    {
+        return ork_host_is_allowed($host);
+    }
+
+    /**
+     * Lowercase a host, drop a trailing dot and the redundant default port so
+     * 'Example.COM.:443' and 'example.com' compare equal. Delegates to
+     * host-guard.php's ork_normalize_host() (see HostIsAllowed()).
+     *
+     * @param string $host
+     * @return string
+     */
+    private static function NormalizeHost($host)
+    {
+        return ork_normalize_host($host);
     }
 
     /**

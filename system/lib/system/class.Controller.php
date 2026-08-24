@@ -74,9 +74,11 @@ class Controller
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
-            // validate_session_token() only reports "invalid" when the query SUCCEEDED and
-            // the token is absent or mismatched; a transient DB error reports valid so a
-            // blip cannot log everyone out.
+            // validate_session_token() returns false whenever the stored token is absent
+            // or mismatched. Note it does NOT distinguish that from a failed query: PDO
+            // runs in ERRMODE_WARNING (Yapo2\YapoMysql), so a transient DB error yields a
+            // result set with no rows rather than an exception, and this check treats it
+            // as an invalid token — i.e. a DB blip logs the session out.
             $this->load_model('SessionToken');
             if (!$this->SessionToken->validate_session_token($_uid_check, $_tok_check)) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
@@ -116,25 +118,35 @@ class Controller
             }
         }
 
+        $this->load_model('Authorization');
+        $this->data['NavIsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
         // CMS admin access flag for the user drop-down ("Manage Site Pages").
         // True for any holder of a CMS capability at global scope (and super-admins).
         // Computed LAZILY: only the non-AJAX (nav-rendering) request path shows the
         // user drop-down, so skip the capability probe entirely for the *Ajax
         // controllers (reuse the $_skipTokenCheck detection) — they never render the
-        // nav and so would pay a needless CmsAuth query on every XHR.
+        // nav and so would pay a needless CmsAuth query on every XHR. ORK admins are
+        // super-admins to CmsAuth, so NavIsOrkAdmin (already resolved above, same
+        // HasAuthority(AUTH_ADMIN, 0, AUTH_ADMIN) probe cms_can would repeat)
+        // short-circuits the capability probe entirely for them.
         $this->data['CanManageCms'] = false;
         if ($_uid > 0 && !$_skipTokenCheck) {
-            $this->load_model('CmsAuth');
-            if (isset($this->CmsAuth)) {
-                // One capability probe (not a loop): every CMS role from
-                // contributor up holds page.create, and super-admins short-circuit
-                // inside cms_can — so a single check answers "can this user reach
-                // the CMS admin?" without N grant/auth queries on every request.
-                $this->data['CanManageCms'] = (bool) $this->CmsAuth->cms_can(
-                    $_uid,
-                    'page.create',
-                    ['type' => 'global', 'id' => 0]
-                );
+            if ($this->data['NavIsOrkAdmin']) {
+                $this->data['CanManageCms'] = true;
+            } else {
+                $this->load_model('CmsAuth');
+                if (isset($this->CmsAuth)) {
+                    // One capability probe (not a loop): every CMS role from
+                    // contributor up holds page.create — so a single check answers
+                    // "can this user reach the CMS admin?" without N grant/auth
+                    // queries on every request.
+                    $this->data['CanManageCms'] = (bool) $this->CmsAuth->cms_can(
+                        $_uid,
+                        'page.create',
+                        ['type' => 'global', 'id' => 0]
+                    );
+                }
             }
         }
 
@@ -143,8 +155,6 @@ class Controller
 
         $this->data[ 'menu' ] = [ ];
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-        $this->load_model('Authorization');
-        $this->data['NavIsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, null, null)) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
         }
@@ -295,31 +305,55 @@ class Controller
         // door is the Amtgard-level site, so "Amtgard - Home". See
         // Controller::PUBLIC_SITE_BRAND and the <title> block in default.theme.
         $this->data[ 'SiteTitleOrg' ] = self::PUBLIC_SITE_BRAND;
-        $this->_attachFrontDoorTheme();
         $frontDoorBlocks = null;
-        $this->load_model('CmsPage');
-        // C1: one GhettoCache-backed bundle (home page row + its enabled blocks)
-        // instead of a separate GetHomePage() + GetBlocks() pair. A null slug means
-        // "the scope's home page".
-        $bundle = $this->CmsPage->get_page_with_blocks('global', 0, null);
-        $home = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
-        $homeBlocks = (is_array($bundle) && isset($bundle['blocks']) && is_array($bundle['blocks']))
-            ? $bundle['blocks'] : array();
-        if (!empty($home) && !empty($home['page_id'])) {
-            if (!empty($homeBlocks)) {
-                $frontDoorBlocks = $homeBlocks;
-            }
-            // Floating editor FAB on the front-door home for CMS editors
-            // (rendered by default.theme from cmsEditUrl). NOTE: $_uid from the
-            // bootstrap method is out of scope here, so read the session directly.
-            $fabUid = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
-            if ($fabUid > 0) {
-                $this->load_model('CmsAuth');
-                if (isset($this->CmsAuth) && $this->CmsAuth->cms_can($fabUid, 'page.edit', ['type' => 'global', 'id' => 0])) {
-                    $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $home['page_id'];
-                    $this->data['cmsEditTip'] = 'Edit home page';
+        $home = null;
+        $_ogImage = '';
+        // Every CMS-library read on the front door sits inside ONE boundary: the
+        // site root must still render from the hardcoded Model_FrontDoor defaults
+        // if any of them throws, not just when the bundle comes back empty.
+        try {
+            $this->_attachFrontDoorTheme();
+            $this->load_model('CmsPage');
+            // C1: one GhettoCache-backed bundle (home page row + its enabled blocks)
+            // instead of a separate GetHomePage() + GetBlocks() pair. A null slug means
+            // "the scope's home page".
+            $bundle = $this->CmsPage->get_page_with_blocks('global', 0, null);
+            $home = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
+            $homeBlocks = (is_array($bundle) && isset($bundle['blocks']) && is_array($bundle['blocks']))
+                ? $bundle['blocks'] : array();
+            if (!empty($home) && !empty($home['page_id'])) {
+                if (!empty($homeBlocks)) {
+                    $frontDoorBlocks = $homeBlocks;
+                }
+                // Floating editor FAB on the front-door home for CMS editors
+                // (rendered by default.theme from cmsEditUrl). NOTE: $_uid from the
+                // bootstrap method is out of scope here, so read the session directly.
+                $fabUid = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+                if ($fabUid > 0) {
+                    $this->load_model('CmsAuth');
+                    if (isset($this->CmsAuth) && $this->CmsAuth->cms_can($fabUid, 'page.edit', ['type' => 'global', 'id' => 0])) {
+                        $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $home['page_id'];
+                        $this->data['cmsEditTip'] = 'Edit home page';
+                    }
                 }
             }
+            // C6 (og:image half): the home page's hero, when one is set. Inside the
+            // boundary because it is another CMS-library read; the theme's default
+            // image covers the failure case.
+            if (!empty($home) && !empty($home['hero_media_id'])) {
+                $this->load_model('CmsMedia');
+                if (isset($this->CmsMedia)) {
+                    $_hm = $this->CmsMedia->get_media((int) $home['hero_media_id']);
+                    if (is_array($_hm) && !empty($_hm['url'])) {
+                        $_ogImage = CmsMeta::Absolutize((string) $_hm['url'], CmsMeta::Origin());
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Degrade to the hardcoded front door rather than fataling the site root.
+            $frontDoorBlocks = null;
+            $_ogImage = '';
+            unset($this->data['cmsEditUrl'], $this->data['cmsEditTip']);
         }
         if ($frontDoorBlocks === null) {
             $this->load_model('FrontDoor');
@@ -334,17 +368,7 @@ class Controller
         // branding in default.theme is now a FALLBACK, overridden here so the home
         // canonical is the site root and og:image can use the home page's hero
         // when one is set (else the theme falls back to the ORK default image).
-        $_origin  = CmsMeta::Origin();
-        $_ogImage = '';
-        if (!empty($home) && !empty($home['hero_media_id'])) {
-            $this->load_model('CmsMedia');
-            if (isset($this->CmsMedia)) {
-                $_hm = $this->CmsMedia->get_media((int) $home['hero_media_id']);
-                if (is_array($_hm) && !empty($_hm['url'])) {
-                    $_ogImage = CmsMeta::Absolutize((string) $_hm['url'], $_origin);
-                }
-            }
-        }
+        $_origin = CmsMeta::Origin();
         // No Host header (CLI/test render) → no canonical at all rather than a
         // bare '/' that would resolve against whatever host reads the page.
         $this->data['PageMeta'] = CmsMeta::Build(array(
@@ -367,7 +391,13 @@ class Controller
         }
     }
 
-    public function view()
+    /**
+     * The framework RENDER step (index.php), deliberately named apart from the
+     * action namespace: a controller action may legitimately be called "view"
+     * (Page/view, Site/view), and when the render step was also view() a
+     * zero-arg 2-segment route was indistinguishable from the render call.
+     */
+    public function render()
     {
         $V = null;
         if (is_null($this->view)) {
@@ -383,6 +413,15 @@ class Controller
         $CONTENT = $V->view($this->data, $this->kingdom);
 
         return $CONTENT;
+    }
+
+    /**
+     * Backwards-compatible alias for render(). Kept so existing zero-arg
+     * $this->view() / parent::view() callers keep rendering.
+     */
+    public function view()
+    {
+        return $this->render();
     }
 
     public function controller_class()

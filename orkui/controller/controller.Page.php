@@ -8,12 +8,8 @@ require_once __DIR__ . '/trait.CmsScope.php';
  * Route: Page/view/{slug}  →  Controller_Page::view($slug)
  * (the framework passes the route's 3rd segment as the action arg).
  *
- * NOTE on the dual role of view(): the framework calls the controller twice —
- * first as the action handler ($C->view($slug), one arg) to populate data, then
- * as the render step ($C->view(), zero args, defined on the base Controller) to
- * produce the page HTML. Because the action name here collides with the base
- * render method, view() dispatches on arg count: with a slug it loads the page;
- * with no args it delegates to parent::view() to render.
+ * view() here is a plain action: the framework's render step is $C->render()
+ * (base Controller), so an action named view() no longer collides with it.
  *
  * Published global pages only (v2 scope). Blocks come from the CmsPage lib and
  * render via the same frontdoor/render_blocks.tpl partial the home page uses, so
@@ -34,11 +30,6 @@ class Controller_Page extends Controller
 
     public function view($slug = null)
     {
-        // Zero-arg call = framework render step → delegate to base renderer.
-        if (func_num_args() === 0) {
-            return parent::view();
-        }
-
         $this->template = 'Page_view.tpl';
         $this->data['IsFrontDoor'] = false;
         // Distinct from the front-door home: still a CMS-styled public page, so the

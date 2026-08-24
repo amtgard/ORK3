@@ -33,10 +33,9 @@ require_once __DIR__ . '/trait.CmsScope.php';
  *   /k/{slug}/{a}/{b}/…             → Site/page/{slug}/{a}/{b}/…  (nested path)
  *   /p/{slug}/…                     → same, park scope
  *
- * NOTE on view(): the framework calls the controller twice — first as the action
- * handler ($C->view($slug), one arg) to populate data, then as the base render
- * step ($C->view(), zero args). Because the action name collides with the base
- * render method, view() dispatches on arg count (mirrors Controller_Page).
+ * NOTE on view(): it is a plain action. The framework's render step is
+ * $C->render() (base Controller), so an action named view() does not collide
+ * with it (mirrors Controller_Page).
  *
  * Multi-segment routes ("Site/page/a/b") arrive as ONE joined string arg
  * ("a/b") because the dispatcher collapses segments 3+ with implode('/'); the
@@ -89,11 +88,6 @@ class Controller_Site extends Controller
      */
     public function view($slug = null)
     {
-        // Zero-arg call = framework render step → delegate to base renderer.
-        if (func_num_args() === 0) {
-            return parent::view();
-        }
-
         $site = $this->_resolveSite($slug);
         if ($this->_requirePublished($site)) {
             return;
@@ -390,17 +384,22 @@ class Controller_Site extends Controller
             'scope_id'   => $scopeId,
             'limit'      => self::SITEMAP_MAX,
         ));
-        foreach ((is_array($pages) ? $pages : array()) as $pg) {
+        $pages = is_array($pages) ? $pages : array();
+        // Resolve every path from ONE in-memory parent_id walk over the rows we
+        // already fetched, instead of a PagePath() + _hasRestrictedAncestor() DB
+        // walk per row (an N+1 on a public, uncached endpoint). The row set IS the
+        // published, live, in-scope set, so a page whose chain the map cannot
+        // resolve has an ancestor outside it (draft/scheduled) — precisely what
+        // _hasRestrictedAncestor() rejected — and is skipped the same way.
+        $pathMap = $this->_buildScopePathMap($pages);
+        foreach ($pages as $pg) {
             $pid = (int) ($pg['page_id'] ?? 0);
             if ($pid <= 0 || $pid === $homeId) {
                 continue;
             }
-            $path = trim((string) $this->CmsPage->PagePath($pid), '/');
+            $path = isset($pathMap[$pid]) ? trim((string) $pathMap[$pid], '/') : '';
             if ($path === '') {
-                continue;   // pathless page collapses onto the base; skip the dupe
-            }
-            if ($this->_hasRestrictedAncestor($pid)) {
-                continue;   // path embeds a draft ancestor's slug — never advertise it
+                continue;   // pathless page (or a restricted/unresolvable chain) — skip
             }
             $urls[] = array('loc' => $base . '/' . $path, 'lastmod' => (string) ($pg['updated_at'] ?? ''));
         }
@@ -579,10 +578,16 @@ class Controller_Site extends Controller
         // site's real scope, 301 to the canonical prefix (preserving the full path
         // + query) so a park always lives at /p/ and a kingdom at /k/ — one URL per
         // site, no duplicate-content ambiguity. Raw Site/* routes (no hint) skip.
-        if ($this->_enforcePrefix($site)) {
+        //
+        // The 301 is issued ONLY for a site the viewer may already see (published,
+        // or preview-authorized): redirecting first would tell an anonymous visitor
+        // that an unbuilt/draft slug is taken (and which org type owns it), while an
+        // unknown slug still 404s — defeating the indistinguishability the unbuilt
+        // branch below depends on.
+        $status = (string) ($site['status'] ?? 'unbuilt');
+        if (($status === 'published' || $this->_viewerCanPreview($site)) && $this->_enforcePrefix($site)) {
             return true;
         }
-        $status = (string) ($site['status'] ?? 'unbuilt');
         if ($status !== 'published') {
             // Authorized officers PREVIEW their own unpublished site (see the
             // seeded / draft content before go-live) — the whole point of building
@@ -640,14 +645,13 @@ class Controller_Site extends Controller
      * render, so it fires exactly once per request on a successful in-scope
      * PUBLISHED fetch and swallows every error.
      *
-     * EXCLUSIONS (a view is only counted when ALL hold):
-     *   - NOT a preview render ($this->_isPreview) — an officer previewing their
-     *     own unpublished/draft content is not a public visitor.
-     *   - a GET request — POST/HEAD/etc. are never a content view.
-     *   - NOT an obvious bot/crawler/link-unfurler (user-agent heuristic).
+     * WHAT COUNTS is not decided here: the exclusion policy (preview / non-GET /
+     * bot) lives in CmsView::IsCountableView() so every entry point that renders
+     * CMS content counts the same way. This method only reports the raw request
+     * facts alongside the view.
      *
      * The lib (CmsView::RecordView) is ALSO best-effort (missing-table probe +
-     * swallowed errors); this is the policy gate in front of it.
+     * swallowed errors).
      *
      * @param array  $site       resolved site row (authoritative scope)
      * @param string $entityType 'page'|'post'
@@ -656,17 +660,6 @@ class Controller_Site extends Controller
      */
     private function _recordCmsView($site, $entityType, $entityId)
     {
-        if ($this->_isPreview) {
-            return;   // officer preview — not a public view
-        }
-        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        if ($method !== 'GET') {
-            return;   // only a GET render counts as a view
-        }
-        if ($this->_isProbablyBot()) {
-            return;   // crawlers / unfurlers / monitors don't count
-        }
-
         $entityId = (int) $entityId;
         if ($entityId <= 0 || !is_array($site)) {
             return;
@@ -678,36 +671,16 @@ class Controller_Site extends Controller
                 (string) ($site['scope_type'] ?? 'global'),
                 (int) ($site['scope_id'] ?? 0),
                 (string) $entityType,
-                $entityId
+                $entityId,
+                array(
+                    'is_preview' => (bool) $this->_isPreview,
+                    'method'     => (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+                    'user_agent' => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+                )
             );
         } catch (\Throwable $e) {
             // Best-effort only — analytics must never surface to the visitor.
         }
-    }
-
-    /**
-     * Lightweight user-agent bot heuristic for the #09 view counter. Deliberately
-     * simple (no third-party lists): matches common crawler / link-unfurler /
-     * uptime-monitor / scripting tokens, and treats a MISSING user-agent as
-     * non-human (bots and scripts routinely omit it). False negatives are
-     * acceptable — the goal is directional feedback, not audited analytics.
-     *
-     * @return bool
-     */
-    private function _isProbablyBot()
-    {
-        $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
-        if (trim($ua) === '') {
-            return true;
-        }
-        return (bool) preg_match(
-            '~(bot|crawl|spider|slurp|mediapartners|facebookexternalhit|embedly|'
-            . 'quora link preview|pinterest|slackbot|twitterbot|telegrambot|whatsapp|'
-            . 'discordbot|linkedinbot|skypeuripreview|preview|monitor|uptime|pingdom|'
-            . 'statuscake|curl|wget|python-requests|python-urllib|go-http-client|'
-            . 'java/|okhttp|headless|phantomjs|lighthouse|scrapy|apache-httpclient)~i',
-            $ua
-        );
     }
 
     /**
@@ -759,11 +732,17 @@ class Controller_Site extends Controller
         return CmsSite::UrlPrefixFor($scopeType);
     }
 
-    /** The '&scope=k:17' / '&scope=p:3' fragment for linking into the scoped CMS admin. */
+    /**
+     * The '&scope=k:17' / '&scope=p:3' fragment for linking into the scoped CMS
+     * admin. Thin adapter over the trait's shared _scopeQuery() so the fragment is
+     * built in exactly one place (a site row is never global scope).
+     */
     private function _scopeQ($site)
     {
-        $prefix = $this->_prefixFor($site['scope_type'] ?? 'kingdom');
-        return '&scope=' . $prefix . ':' . (int) ($site['scope_id'] ?? 0);
+        return $this->_scopeQuery(array(
+            'type' => (string) ($site['scope_type'] ?? 'kingdom'),
+            'id'   => (int) ($site['scope_id'] ?? 0),
+        ));
     }
 
     /**

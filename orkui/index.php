@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'HEAD') {
  *
  * 1. The system searches for the controller in .../controller and instantiates the class as $C
  * 2. $C->$request($action, $additional_params) is called on the controller
- * 3. $C->view() is called, with the default template being .../template/<default|selected template set>/<optional kingdom template/<controller>[_request[_action]].tpl
+ * 3. $C->render() is called, with the default template being .../template/<default|selected template set>/<optional kingdom template/<controller>[_request[_action]].tpl
  * 1. view() instantes a View class from .../view as {$controller}_{$view} to which all of the builtin controller $__data is passed prior to output
  * 2. view() wraps the local Controller template (.../template/<default|selected template set>/<optional kingdom template/{controller}.tpl) around the output and hands it back to the Controller
  * 3. view() substitutes the selected language strings .../language/controller.lang, .../language/controller_request.lang, .../language/controller_request_action.lang
@@ -117,7 +117,7 @@ if (file_exists(DIR_CONTROLLER . 'controller.' . trim($route[ 0 ]) . '.php')) {
 }
 $Session->times['Route Complete'] = time();
 
-$CONTENT = $C->view();
+$CONTENT = $C->render();
 
 $Session->times['Composite'] = time();
 
