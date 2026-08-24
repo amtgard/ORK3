@@ -96,6 +96,7 @@ $_fmt = function ($n) {
 .recap-section details summary::-webkit-details-marker { display: none; }
 .recap-section details summary::before { content: '▸ '; color: #c89b3f; font-size: 0.9em; }
 .recap-section details[open] summary::before { content: '▾ '; }
+.trends-subhead { margin: 1.2em 0 0.2em; font-size: 1em; color: #555; }
 .trends-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 0.5em; }
 .trends-table th, .trends-table td { text-align: right; padding: 3px 8px; border-bottom: 1px solid #eee9dc; }
 .trends-table th:first-child, .trends-table td:first-child { text-align: left; }
@@ -156,6 +157,19 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 <?php endforeach; ?>
 			</table>
 		</details>
+<?php $_av = isset($app_versions) && is_array($app_versions) ? $app_versions : array(); ?>
+<?php if ($_av !== array()) : ?>
+		<h3 class="trends-subhead">Community app versions right now</h3>
+		<p class="recap-digest recap-muted">
+			Currently active sessions per app version — how each community app's
+			latest release is rolling out. Counts only, never who.
+		</p>
+		<table class="trends-table"><tr><th>App version</th><th>Sessions</th><th>Players</th></tr>
+<?php foreach ($_av as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=number_format($_row['Sessions'])?></td><td><?=number_format($_row['Players'])?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
 	</section>
 <?php endif; ?>
 

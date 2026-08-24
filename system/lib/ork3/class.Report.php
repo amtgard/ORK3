@@ -4317,6 +4317,41 @@ class Report extends Ork3
     }
 
     /**
+     * Active sessions per community-app version string ("mORK/1.1.14
+     * (Android)", "jsork/2.0", ...) — the rollout picture for third-party
+     * app developers, published on Platform Trends so nobody needs SQL.
+     * Explicit allowlist matching GetSigninTrendSeries's "Apps" bucket —
+     * a name-slash-digit heuristic also catches curl/python scripts, which
+     * aren't community apps. Aggregate counts only, no identities.
+     */
+    public function GetCommunityAppVersions()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('community-app-versions'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
+        $r = $this->db->query(
+            "SELECT user_agent, COUNT(*) AS sessions, COUNT(DISTINCT mundane_id) AS players
+			   FROM " . DB_PREFIX . "session
+			  WHERE expires > NOW()
+			    AND (user_agent LIKE 'mORK/%' OR user_agent LIKE 'jsork/%')
+			  GROUP BY user_agent
+			  ORDER BY sessions DESC"
+        );
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'Client'   => (string)$r->user_agent,
+                    'Sessions' => (int)$r->sessions,
+                    'Players'  => (int)$r->players,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
      * Distinct players credited with attendance per week (Monday-anchored,
      * matching the recap window), across all recorded history — the long
      * participation curve of the game itself, independent of web analytics.

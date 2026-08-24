@@ -63,4 +63,11 @@ class Model_Recap extends Model
         $r = $this->Report->GetSigninTrendSeries();
         return is_array($r) ? $r : array();
     }
+
+    // Active sessions per community-app version (30m-cached upstream).
+    public function app_versions()
+    {
+        $r = $this->Report->GetCommunityAppVersions();
+        return is_array($r) ? $r : array();
+    }
 }
