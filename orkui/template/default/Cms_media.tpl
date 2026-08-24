@@ -193,7 +193,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 <script>
 (function () {
     'use strict';
-    var UIR = <?= json_encode(UIR) ?>;
+    var UIR = window.CMS_UIR;
     var AJAX = UIR + 'CmsAjax/';
 
     function esc(s) {
@@ -623,6 +623,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             .then(function (r) { return r.json(); })
             .then(function (res) {
                 if (!res || !res.ok) {
+                    clearSelection(); // the cards are going away — don't leave a stale bulk selection armed
                     area.innerHTML = '<div class="cms-empty"><div class="cms-empty-copy">' +
                         esc((res && res.error) || 'Could not load media.') + '</div></div>';
                     return;
@@ -630,6 +631,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 renderGrid(res.media || []);
             })
             .catch(function () {
+                clearSelection(); // the cards are going away — don't leave a stale bulk selection armed
                 area.innerHTML = '<div class="cms-empty"><div class="cms-empty-copy">Network error.</div></div>';
             });
     }

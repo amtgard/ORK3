@@ -60,7 +60,7 @@ if ($urlType !== '') {
 $pageId       = (int)($page['page_id'] ?? 0);
 $pTitle       = (string)($page['title'] ?? '');
 $pSlug        = (string)($page['slug'] ?? '');
-$pType        = $urlType !== '' ? $urlType : (string)($page['type'] ?? 'composed');
+$pType        = ($isNew && $urlType !== '') ? $urlType : (string)($page['type'] ?? 'composed');
 $pMeta        = (string)($page['meta_description'] ?? '');
 $pStatus      = (string)($page['status'] ?? 'draft');
 $pIsSystem    = !empty($page['is_system']);
@@ -140,10 +140,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php /* ============ STICKY EDITOR ACTION BAR ============ */ ?>
     <div class="cms-editbar" id="cmsEditBar">
         <div class="cms-editbar-status">
-            <span class="cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
+            <span class="ork-badge cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
                 <?= $isPublished ? 'Published' : 'Draft' ?>
             </span>
-            <?php if ($pIsSystem): ?><span class="cms-badge cms-badge-system">System</span><?php endif; ?>
+            <?php if ($pIsSystem): ?><span class="ork-badge cms-badge cms-badge-system">System</span><?php endif; ?>
             <span class="cms-editbar-hint" id="cmsSavedHint"></span>
         </div>
         <div class="cms-editbar-actions">
@@ -210,7 +210,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 </div>
                 <span class="cms-spacer"></span>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Rebuild the preview now" aria-label="Rebuild the preview now"><i class="fas fa-redo" aria-hidden="true"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open the last SAVED version in a new tab \u2014 the pane beside you shows your unsaved edits" aria-label="Open the saved page in a new tab"><i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open the last SAVED version in a new tab &mdash; the pane beside you shows your unsaved edits" aria-label="Open the saved page in a new tab"><i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview" aria-label="Close preview"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
             <div class="cms-preview-note" id="cmsPreviewNote" role="status" aria-live="polite" style="display:none;"></div>
@@ -240,7 +240,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 (function () {
     'use strict';
 
-    var UIR  = <?= json_encode(UIR) ?>;
+    var UIR  = window.CMS_UIR;
 
     // Server state injected safely. The block engine lives in the shared
     // cms/_block_editor.tpl partial; this script owns the page META form +
@@ -377,7 +377,20 @@ include __DIR__ . '/cms/_shell_top.tpl';
             blocks: JSON.stringify(BE.serialize())
         };
 
+        // Watchdog: a request that never settles (stalled proxy/backend) would
+        // otherwise leave Save disabled forever. Don't abort the save — just
+        // give the UI back so the author can retry.
+        var saveWatchdog = window.setTimeout(function () {
+            saveWatchdog = 0;
+            saving = false;
+            if (saveBtn) { saveBtn.disabled = false; }
+            dirty = true;
+            if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint'; }
+            toast('Still saving — the server has not responded.', 'error');
+        }, 30000);
+
         post('savepage', params).then(function (res) {
+            if (saveWatchdog) { window.clearTimeout(saveWatchdog); saveWatchdog = 0; }
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
             // C15: concurrent-edit conflict — the stored row is newer than our base.
@@ -399,7 +412,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (res.is_new && res.page_id) {
                 STATE.pageId = res.page_id;
                 STATE.isNew = false;
-                params_pageId_synced();
+                pageIdSynced();
             }
             if (res.slug) { slugInput.value = res.slug; slugTouched = true; }
             STATE.origSlug = slugInput.value.trim();
@@ -409,6 +422,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             // Refresh the in-context preview so it reflects the just-saved draft.
             refreshPreview();
         }).catch(function () {
+            if (saveWatchdog) { window.clearTimeout(saveWatchdog); saveWatchdog = 0; }
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
             dirty = true;
@@ -443,22 +457,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
         );
     }
 
-    // Declared up front so params_pageId_synced (called on first save of a new
-    // page) can reference it without hitting the var-hoisting undefined window.
-    var previewToggle = document.getElementById('cmsPreviewToggle');
-
     // After a new page gets its id, enable Preview/Publish and update URL.
-    function params_pageId_synced() {
+    function pageIdSynced() {
         var openLink = document.getElementById('cmsPreviewOpen');
         if (openLink) { openLink.href = UIR + 'Cms/preview/' + STATE.pageId + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''); }
         var pub = document.getElementById('cmsPubBtn');
         if (pub) { pub.disabled = false; }
-        // Preview is now possible — enable the toggle + clear its "save first" hint.
-        if (previewToggle) {
-            previewToggle.disabled = false;
-            previewToggle.removeAttribute('data-needsave');
-            previewToggle.removeAttribute('data-tip');
-        }
         try {
             history.replaceState(null, '', UIR + 'Cms/edit/' + STATE.pageId + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''));
         } catch (e) {}
@@ -487,7 +491,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 pubBtn.setAttribute('data-status', nowPub ? 'published' : 'draft');
                 pubBtn.innerHTML = nowPub ? '<i class="fas fa-eye-slash"></i> Unpublish' : '<i class="fas fa-globe"></i> Publish';
                 if (statusBadge) {
-                    statusBadge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
+                    statusBadge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
                 // #45: reflect the live-edits warning (and autosave state follows STATE.published).

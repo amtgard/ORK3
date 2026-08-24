@@ -215,7 +215,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 </div>
             </div>
             <iframe id="fd-theme-preview" class="te-preview-frame"
-                    src="<?= $h(UIR) ?>"
+                    src="<?= $h(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>"
                     title="Theme preview"
                     sandbox="allow-same-origin allow-scripts"></iframe>
             <div class="te-preview-note">Live preview &mdash; changes are <strong>not applied to your public site</strong> until you click <strong>Apply to site</strong>. Saving only stores a draft theme.</div>

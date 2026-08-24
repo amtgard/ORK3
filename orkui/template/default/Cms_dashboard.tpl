@@ -177,7 +177,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <div class="cms-recent-main">
                         <div class="cms-recent-title"><?= $h($title) ?></div>
                         <div class="cms-recent-meta">
-                            <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
+                            <span class="ork-badge cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
                             &nbsp;Updated <?= $h($when) ?>
                         </div>
                     </div>
@@ -308,7 +308,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     $title  = (string)($tv['title'] ?? '(untitled)');
                     $href   = (string)($tv['edit_href'] ?? '#');
                     $total  = (int)($tv['total'] ?? 0);
-                    $recent = (int)($tv['recent'] ?? 0);
+                    $recentViews = (int)($tv['recent'] ?? 0);
                 ?>
                     <div class="cms-recent-item">
                         <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
@@ -318,7 +318,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <div class="cms-recent-title"><?= $h($title) ?></div>
                             <div class="cms-recent-meta">
                                 <strong><?= $h($nf($total)) ?></strong> total view<?= $total === 1 ? '' : 's' ?>
-                                &nbsp;·&nbsp; <?= $h($nf($recent)) ?> in the last <?= (int)$viewDays ?> days
+                                &nbsp;·&nbsp; <?= $h($nf($recentViews)) ?> in the last <?= (int)$viewDays ?> days
                             </div>
                         </div>
                         <div class="cms-recent-actions">
@@ -440,11 +440,33 @@ include __DIR__ . '/cms/_shell_top.tpl';
          display:none) — cms-admin.js toast() no-ops when .cms-toast is absent,
          which silently swallowed every save error on this page. Same markup as
          Cms_nav.tpl:284; z-index 11000 renders it over the still-open modal. */ ?>
+<?php /* ---- Confirm modal (maintenance sweep) — native confirm() is banned. ---- */ ?>
+<?php if ($isSuper): ?>
+<div class="cms-modal-overlay" id="cmsMaintConfirmModal">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
+        <div class="cms-modal-head">
+            <h3>Run maintenance cleanup?</h3>
+            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
+        </div>
+        <div class="cms-modal-body">
+            <p style="margin:0;font-size:14px;">This permanently deletes pages trashed more than 30 days ago, plus orphaned blocks and unused tags. It cannot be undone.</p>
+        </div>
+        <div class="cms-modal-foot">
+            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
+            <button type="button" class="cms-btn cms-btn-danger" id="cmsMaintConfirmOk">Run cleanup</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 (function () {
     'use strict';
+    /* Same declaration every other CMS surface makes (Cms_index.tpl, Cms_posts.tpl,
+       …): the shell only emits window.CMS_UIR, so a bare UIR would throw here. */
+    var UIR = window.CMS_UIR;
     <?php if ($canCreate): ?>
     /* The New Page quick-card opens the type chooser (falls through to its href
        if JS is unavailable). */
@@ -486,6 +508,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     return;
                 }
                 var published = (d.status === 'published');
+                /* Keep the attribute in step with the badge — the Site settings
+                   save handler reads it to word its confirmation copy. */
+                siteCard.setAttribute('data-status', published ? 'published' : 'draft');
                 if (badge) {
                     badge.textContent = published ? 'Published' : 'Draft';
                     badge.className = 'cms-sitecard-badge ' + (published ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft');
@@ -589,8 +614,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     /* ---- E117: super-admin maintenance sweep (trash purge + orphan/tag cleanup) ---- */
     var maintBtn = document.getElementById('cmsRunMaintenanceBtn');
-    if (maintBtn) {
+    var maintModal = document.getElementById('cmsMaintConfirmModal');
+    var maintOk = document.getElementById('cmsMaintConfirmOk');
+    if (maintBtn && maintModal && maintOk) {
+        /* The sweep is irreversible, so it goes through the shared confirm modal
+           like every other destructive CMS action (native confirm() is banned). */
         maintBtn.addEventListener('click', function () {
+            CmsAdmin.modal.open(maintModal);
+        });
+        maintOk.addEventListener('click', function () {
+            CmsAdmin.modal.close(maintModal);
             var original = maintBtn.innerHTML;
             maintBtn.disabled = true;
             maintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning up…';

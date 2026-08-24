@@ -152,7 +152,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <td colspan="6">
                             <div class="cms-empty">
                                 <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
-                                <div class="cms-empty-copy">No pages yet.</div>
+                                <?php
+                                // The status <select> NAVIGATES (server-side filter), so an
+                                // all-published org that picks "Draft" lands here. Saying
+                                // "No pages yet." would be a lie, and the select itself is
+                                // in the listbar that only renders when there ARE rows — so
+                                // the way back out has to live in this empty state.
+                                $isFiltered = ($statusF !== '' || $search !== '');
+                                ?>
+                                <div class="cms-empty-copy"><?= $isFiltered ? 'No pages match that filter.' : 'No pages yet.' ?></div>
+                                <?php if ($isFiltered): ?>
+                                    <a class="cms-btn cms-btn-sm cms-empty-cta" href="<?= UIR ?>Cms/index<?= $scopeQ ?>">Show all pages</a>
+                                <?php endif; ?>
                                 <?php if ($canCreate): ?>
                                     <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNewPageEmptyBtn">
                                         <i class="fas fa-plus"></i> New Page
@@ -185,7 +196,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         </td>
                         <td data-label="Title">
                             <div class="cms-pg-title"><?= $h($title) ?>
-                                <?php if ($isSystem): ?><span class="cms-badge cms-badge-system" style="margin-left:6px;">System</span><?php endif; ?>
+                                <?php if ($isSystem): ?><span class="ork-badge cms-badge cms-badge-system" style="margin-left:6px;">System</span><?php endif; ?>
                             </div>
                             <?php if ($slug !== ''): ?>
                                 <?php $liveUrl = $isPub ? (string)($p['live_href'] ?? '') : ''; ?>
@@ -214,7 +225,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php if ($isPub): ?>
                                 <span class="cms-sr-only">Published</span>
                             <?php else: ?>
-                                <span class="cms-badge cms-badge-draft" data-status-badge>Draft</span>
+                                <span class="ork-badge cms-badge cms-badge-draft" data-status-badge>Draft</span>
                             <?php endif; ?>
                         </td>
                         <td data-label="Updated" class="cms-muted" data-order="<?= $updatedTs ?>"
@@ -310,8 +321,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
 <script>
 (function () {
     'use strict';
-    var UIR = <?= json_encode(UIR) ?>;
-    var AJAX = UIR + 'CmsAjax/';
+    var UIR = window.CMS_UIR;
+    var SCOPEQ = <?= json_encode($scopeQ) ?>;
 
     /* ---- DataTables: sorting, pagination, search ---- */
     <?php if (!empty($pages)): ?>
@@ -358,19 +369,28 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
         if (lbLen && dtLength) { lbLen.appendChild(dtLength); }
 
-        var statusSel = document.getElementById('cmsStatusFilter');
-        if (statusSel) {
-            statusSel.addEventListener('change', function () {
-                // Status column (index 3). Each cell carries data-search with the
-                // bare word, so this matches the VALUE — not, as it used to, any
-                // substring of the badge markup that happened to contain it.
-                dt.column(3).search(statusSel.value, false, false).draw();
-            });
-        }
         // On page/search/filter redraw, the select-all reflects only the visible page.
         dt.on('draw', function () { syncSelectAll(); refreshBulkBar(); });
     }
     <?php endif; ?>
+
+    /* ---- Status filter: a NAVIGATION control, deliberately outside both the
+       DataTables guard and the has-rows guard. It touches only window.location,
+       so a failed CDN load (or an empty list) must not disable it. ---- */
+    var statusSel = document.getElementById('cmsStatusFilter');
+    if (statusSel) {
+        statusSel.addEventListener('change', function () {
+            // The status filter is applied SERVER-side (Controller_Cms::index
+            // reads ?status=), so the list already contains only the selected
+            // status. Filtering the DOM here could only ever narrow that
+            // subset further — widening it (All statuses / the other status)
+            // has to go back to the server. So this navigates.
+            // NOTE: this drops any server-side ?q= search. No surface links
+            // Cms/index with q= today, so the two never co-exist in practice.
+            var val = (statusSel.value || '').toLowerCase();
+            window.location.href = UIR + 'Cms/index' + (val ? '&status=' + encodeURIComponent(val) : '') + SCOPEQ;
+        });
+    }
 
     /* ---- Status cell: a chip only when the status is NOT the common case.
        Published is the norm, so a published row shows nothing visible and keeps
@@ -386,7 +406,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         cell.setAttribute('data-order', word);
         cell.innerHTML = nowPub
             ? '<span class="cms-sr-only">Published</span>'
-            : '<span class="cms-badge cms-badge-draft" data-status-badge>Draft</span>';
+            : '<span class="ork-badge cms-badge cms-badge-draft" data-status-badge>Draft</span>';
         if (dt) { dt.cell(cell).invalidate(); }
     }
 
@@ -505,13 +525,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
         if (!bulkBar) { return; }
         bulkBar.classList.toggle('cms-busy', busy);
     }
-    function runBulk(endpoint, ids, doneMsg, removeRows) {
+    function runBulk(endpoint, ids, doneMsg, removeRows, onUndo) {
         setBulkBusy(true);
-        var ok = 0, fail = 0;
+        var ok = 0, fail = 0, okIds = [];
         var jobs = ids.map(function (id) {
             return post(endpoint, { page_id: id }).then(function (res) {
                 if (res && res.ok) {
                     ok++;
+                    okIds.push(id);
                     if (removeRows) {
                         var row = document.querySelector('tr[data-page-id="' + id + '"]');
                         if (row && dt) { dt.row(row).remove(); } else if (row) { row.parentNode.removeChild(row); }
@@ -540,6 +561,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
             refreshBulkBar();
             syncSelectAll();
             var msg = doneMsg + ' (' + ok + ' done' + (fail ? ', ' + fail + ' failed' : '') + ').';
+            // C2 (bulk): the rows that actually went through can be brought back,
+            // so offer the same Undo the single-row delete does.
+            if (typeof onUndo === 'function' && okIds.length) {
+                undoableToast(msg, function () { onUndo(okIds); });
+                // undoableToast hardcodes the OK styling; a partial failure still
+                // needs its red cue, so repaint without losing the Undo button.
+                if (fail) {
+                    var tEl = document.querySelector('.cms-toast');
+                    if (tEl) { tEl.className = 'cms-toast cms-show cms-toast-error'; }
+                }
+                return;
+            }
             toast(msg, fail ? 'error' : 'ok');
         });
     }
@@ -555,9 +588,29 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 runBulk('unpublish', ids, 'Unpublished', false);
             } else if (act === 'delete') {
                 var n = ids.length;
-                askConfirm('Delete ' + n + ' page' + (n === 1 ? '' : 's') + '? This cannot be undone.', function () {
+                askConfirm('Delete ' + n + ' page' + (n === 1 ? '' : 's') + '? This removes the pages and all of their blocks. You can undo this right afterward from the toast that appears.', function () {
                     closeModal(confirmModal);
-                    runBulk('deletepage', ids, 'Deleted', true);
+                    runBulk('deletepage', ids, 'Deleted', true, function (undoIds) {
+                        // CmsAdmin.post resolves with the parsed JSON even when
+                        // {ok:false} (a revoked cap, a failed scope re-check), so
+                        // the response has to be INSPECTED — .catch alone would
+                        // report "restored" over five silent refusals.
+                        var rOk = 0, rFail = 0;
+                        Promise.all(undoIds.map(function (id) {
+                            return post('restorepage', { page_id: id })
+                                .then(function (r) { if (r && r.ok) { rOk++; } else { rFail++; } })
+                                .catch(function () { rFail++; });
+                        })).then(function () {
+                            if (!rOk) {
+                                toast('Restore failed.', 'error');
+                                return;
+                            }
+                            toast(rFail
+                                ? rOk + ' page' + (rOk === 1 ? '' : 's') + ' restored, ' + rFail + ' failed.'
+                                : 'Pages restored.', rFail ? 'error' : 'ok');
+                            window.location.reload();
+                        });
+                    });
                 });
             }
         });

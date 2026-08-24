@@ -13,19 +13,22 @@ require_once __DIR__ . '/controller.Cms.php';
 /**
  * Controller_CmsAjax — JSON endpoints for the CMS admin editor.
  *
- * Routes (one method per endpoint; the router calls $C->$method($action)):
- *   CmsAjax/savepage      → create/update page meta + REPLACE its blocks   (page.create | page.edit)
- *   CmsAjax/publish       → set status=published, stamp published_at        (page.publish)
- *   CmsAjax/unpublish     → set status=draft                                (page.publish)
- *   CmsAjax/deletepage    → delete a non-system page + its blocks           (page.delete)
- *   CmsAjax/mediaupload   → base64 image upload → media library             (media.manage)
- *   CmsAjax/medialist     → media-ref list for the picker                   (media.manage)
- *   CmsAjax/pagelist      → page list for the editor's link chooser          (page.edit | page.edit_own | page.create)
+ * One public method per route; the router calls $C->$method($action). The
+ * surface spans roughly thirty endpoints — pages/posts (save, publish,
+ * unpublish, delete, revisions), Trash/undo (restore*, purge, listtrashed*),
+ * media (upload, list, update, usage, delete, bulk delete), navigation, themes,
+ * per-org site settings (publishsite/unpublishsite/savesite), maintenance
+ * (clearrendercache, runmaintenance) and the editor helpers (previewblocks,
+ * personlookup, pagelist). Each group is documented by its own section banner
+ * below rather than duplicated here.
  *
  * Every action: requires a logged-in user, gates the capability via
- * CmsAuth->cms_can($uid, <cap>, GLOBAL_SCOPE), and emits a JSON envelope
- * {ok:bool, ...} then exit. v2 is global scope only (the data model carries
- * scope_type/scope_id for kingdom/park later).
+ * CmsAuth->cms_can($uid, <cap>, <scope>), and emits a JSON envelope
+ * {ok:bool, ...} then exit. Scope is multi-tenant: a request carries a scope
+ * selector (?scope=k:5 / p:12, else global) resolved + authorized by
+ * CmsScopeContext, and the site endpoints REJECT the global scope outright —
+ * they require a kingdom/park site. Publishing with a future published_at
+ * yields status 'scheduled', not 'published'.
  *
  * Listed in the no-token-skip set in class.Controller.php (the *Ajax pattern),
  * so the single-device token check does not bounce these XHR calls. Conventions:
@@ -199,11 +202,10 @@ class Controller_CmsAjax extends Controller
     public function previewblocks($action = null)
     {
         $uid = $this->_begin();
-        // POST ONLY. _begin() exempts GET from the CSRF token because the GET
-        // endpoints here are plain reads (medialist, personlookup, pagelist) —
-        // this one is not: it renders caller-supplied content, so it must not be
-        // reachable by a bare cross-site GET. Checked after _begin() so the JSON
-        // headers are already set on the refusal.
+        // POST ONLY. _begin() now enforces this for every mutating endpoint, but
+        // the check stays spelled out here: this one renders caller-supplied
+        // content, so its own handler is the right place to say out loud that it
+        // must not be reachable by a bare cross-site GET.
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
             $this->_fail('Preview must be requested with POST.', 1);
         }
@@ -498,7 +500,7 @@ class Controller_CmsAjax extends Controller
      */
     public function revisions($action = null)
     {
-        $uid = $this->_begin();
+        $uid = $this->_begin(false);
         $scope = $this->_scope($uid);
 
         $ownerType = $this->_ownerType($_GET['owner_type'] ?? $_POST['owner_type'] ?? 'page');
@@ -620,7 +622,7 @@ class Controller_CmsAjax extends Controller
      */
     public function listtrashedposts($action = null)
     {
-        $uid   = $this->_begin();
+        $uid   = $this->_begin(false);
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
@@ -640,7 +642,7 @@ class Controller_CmsAjax extends Controller
      */
     public function listtrashedmedia($action = null)
     {
-        $uid   = $this->_begin();
+        $uid   = $this->_begin(false);
         $scope = $this->_scope($uid);
         $this->_require($uid, 'media.manage', $scope);
 
@@ -716,7 +718,7 @@ class Controller_CmsAjax extends Controller
      */
     public function mediausage($action = null)
     {
-        $uid   = $this->_begin();
+        $uid   = $this->_begin(false);
         $scope = $this->_scope($uid);
         $this->_require($uid, 'media.manage', $scope);
 
@@ -799,32 +801,42 @@ class Controller_CmsAjax extends Controller
         // #21: batch the per-id IDOR/scope check into ONE query instead of a
         // GetMedia round-trip per id. The query itself is the lib's job — this is
         // the IDOR guard, so it lives with the code that defines what "in scope"
-        // and "trashed" mean (CmsMedia::FilterOwnedIds). The mutation (DeleteMedia)
-        // and the on-refusal where-used probe (ReferenceUsage) stay per-id: neither
-        // has a batch lib API and the probe only fires on failure.
+        // and "trashed" mean (CmsMedia::FilterOwnedIds).
         $ownedSet = array();
+        $ownedIds = array();
         $owned = $this->CmsMedia->filter_owned_ids($ids, (string)$scope['type'], (int)$scope['id']);
         foreach ((is_array($owned) ? $owned : array()) as $ownedId) {
             $ownedSet[(int)$ownedId] = true;
         }
+        foreach ($ids as $mediaId) {
+            // A row not owned by this scope (foreign / absent / already trashed) is
+            // skipped, not fatal — one forged id can't abort the whole batch.
+            if (!empty($ownedSet[$mediaId])) {
+                $ownedIds[] = $mediaId;
+            }
+        }
+
+        // One lib call for the whole set: the where-used scan runs once instead of
+        // per id. Scope is passed through as well (see mediadelete/purgemedia):
+        // the batched filter above is the enforced IDOR guard, but the lib re-checks
+        // ownership per row — a delete is the last place to rely on a single guard.
+        $batch = $this->CmsMedia->delete_media_batch(
+            $ownedIds,
+            $uid,
+            (string)$scope['type'],
+            (int)$scope['id']
+        );
+        $batch      = is_array($batch) ? $batch : array();
+        $deletedSet = array_flip(array_map('intval', (array)($batch['deleted'] ?? array())));
+        $inUseSet   = array_flip(array_map('intval', (array)($batch['in_use'] ?? array())));
 
         $deleted = array();
         $inUse   = array();
         $failed  = array();
         foreach ($ids as $mediaId) {
-            // A row not owned by this scope (foreign / absent / already trashed) is
-            // skipped, not fatal — one forged id can't abort the whole batch.
-            if (empty($ownedSet[$mediaId])) {
-                $failed[] = $mediaId;
-                continue;
-            }
-            if ($this->CmsMedia->DeleteMedia($mediaId, $uid)) {
+            if (isset($deletedSet[$mediaId])) {
                 $deleted[] = $mediaId;
-                continue;
-            }
-            // Refused — classify (in-use vs. other) for an accurate summary.
-            $usage = $this->CmsMedia->ReferenceUsage($mediaId);
-            if (is_array($usage) && (int)($usage['total'] ?? 0) > 0) {
+            } elseif (isset($inUseSet[$mediaId])) {
                 $inUse[] = $mediaId;
             } else {
                 $failed[] = $mediaId;
@@ -1112,7 +1124,7 @@ class Controller_CmsAjax extends Controller
 
     public function medialist($action = null)
     {
-        $uid = $this->_begin();
+        $uid = $this->_begin(false);
         $scope = $this->_scope($uid);
         $this->_require($uid, 'media.manage', $scope);
 
@@ -1177,7 +1189,11 @@ class Controller_CmsAjax extends Controller
         }
         // SetActive's WHERE keys on (scope_type, scope_id), so a foreign theme_id
         // cannot be activated cross-scope — the IDOR guard is inherent here.
-        $this->CmsTheme->set_active((string)$scope['type'], (int)$scope['id'], $id);
+        // SetActive returns false when it refuses (stale/forged id): report the
+        // refusal instead of echoing a success the DB never performed.
+        if (!$this->CmsTheme->set_active((string)$scope['type'], (int)$scope['id'], $id)) {
+            $this->_fail('Could not activate that theme.', 4);
+        }
         $this->_ok(array('active' => $id));
     }
 
@@ -1323,7 +1339,7 @@ class Controller_CmsAjax extends Controller
      *
      * Coverage by scope:
      *   kingdom → kingdom_officers, kingdom_parks, kingdom_parks_map
-     *   park    → park_officers, park_meeting
+     *   park    → park_officers, park_meeting, park_hero, park_strip
      *   global  → kingdoms_teaser (front-door only; it is the one cached block
      *             with no org in its key, which is exactly why it went unbusted)
      * kingdom_events / park_events are NOT here: they render from
@@ -1433,7 +1449,7 @@ class Controller_CmsAjax extends Controller
      */
     public function personlookup($action = null)
     {
-        $uid = $this->_begin();
+        $uid = $this->_begin(false);
         $scope = $this->_scope($uid);
         // #25: the roster editor is reachable by contributors too — gate on
         // page.edit OR page.edit_own (an edit_own contributor building their own
@@ -1499,7 +1515,7 @@ class Controller_CmsAjax extends Controller
      */
     public function pagelist($action = null)
     {
-        $uid   = $this->_begin();
+        $uid   = $this->_begin(false);
         $scope = $this->_scope($uid);
         if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
             && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
@@ -1692,8 +1708,15 @@ class Controller_CmsAjax extends Controller
     /**
      * Common preamble: JSON + no-cache headers, login gate. Returns the uid.
      * Emits a JSON error + exit when not logged in.
+     *
+     * @param bool $mutating true (the default) for every state-changing endpoint:
+     *        the request MUST be a POST carrying the synchronizer token. Read-only
+     *        endpoints (medialist, pagelist, personlookup, mediausage, revisions,
+     *        listtrashedposts/media) pass false — a GET read needs no token, but a
+     *        POST to one is still token-checked.
+     * @return int the acting mundane_id
      */
-    private function _begin()
+    private function _begin($mutating = true)
     {
         header('Content-Type: application/json');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -1704,11 +1727,24 @@ class Controller_CmsAjax extends Controller
             $this->_fail('You must be logged in.', 5);
         }
 
-        // CSRF: state-changing requests arrive as POST and must carry the
+        // CSRF: a state-changing request must arrive as POST *and* carry the
         // per-session synchronizer token (sent by the editor JS as the
-        // X-CSRF-Token header). GET reads (medialist, personlookup, pagelist)
-            // are exempt.
-        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+        // X-CSRF-Token header). Gating the token on the METHOD alone left the
+        // parameterless mutations — publishsite/unpublishsite/resettheme/
+        // savetheme/clearrendercache/runmaintenance, whose only input is the
+        // ?scope= selector the query string already supplies — reachable by a
+        // bare cross-site GET with the check skipped, so the method itself is
+        // now part of the requirement. GET reads (medialist, personlookup,
+        // pagelist, mediausage, revisions, listtrashed*) pass $mutating=false
+        // and stay exempt.
+        $isPost = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST');
+        if ($mutating && !$isPost) {
+            $this->_fail('This action must be requested with POST.', 1);
+        }
+        // Every POST is token-checked — including a POST to a read-only endpoint.
+        // A mutating request has already been forced to POST just above, so this
+        // one test covers both cases.
+        if ($isPost) {
             $sent = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? ''));
             if ($sent === '' || !hash_equals($this->_csrfToken(), $sent)) {
                 $this->_fail('Invalid or expired request token. Reload the page and try again.', 9);
@@ -2137,7 +2173,13 @@ class Controller_CmsAjax extends Controller
         // path promotes it to 'published' once that time passes.
         $status = $this->_applyPublish($kind, $id, $uid, $_POST['published_at'] ?? '');
         // Re-read: set_status stamps published_at, and the client renders it.
+        // The STORED status is echoed rather than the one we asked for — a write
+        // refused by a concurrent trash must not be reported as a status change
+        // (the row falls back to the requested status only if the re-read failed).
         $row = $model->$getter($id);
+        if (isset($row['status']) && (string)$row['status'] !== '') {
+            $status = (string)$row['status'];
+        }
 
         $this->_ok(array(
             $kind . '_id'  => $id,
@@ -2164,9 +2206,15 @@ class Controller_CmsAjax extends Controller
 
         $model->set_status($id, 'draft', $uid);
 
+        // Echo the STORED status (see _publishEntity): a write refused by a
+        // concurrent trash must not be reported to the editor as a draft.
+        $getter = 'get_' . $kind;
+        $row = $model->$getter($id);
+        $status = (isset($row['status']) && (string)$row['status'] !== '') ? (string)$row['status'] : 'draft';
+
         $this->_ok(array(
             $kind . '_id' => $id,
-            'status'      => 'draft',
+            'status'      => $status,
         ));
     }
 

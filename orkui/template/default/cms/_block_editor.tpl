@@ -26,20 +26,16 @@
  *   CmsBlockEditor.hasJsonError();      // a JSON-fallback block holds invalid JSON
  *   CmsBlockEditor.toast(msg, kind);    // shared toast helper for the host
  *
+ * The block data (blocks/catalog/labels/pageTypes) is NOT supplied by this
+ * partial — each host template serializes its own and passes it straight into
+ * its own CmsBlockEditor.init({...}) call.
+ *
  * Receives (from the host template, before including):
- *   $beBlocks    initial block list (renderer shape) — defaults to []
- *   $beCatalog   block catalog                         — defaults to []
- *   $beLabels    type→label map                        — defaults to {}
- *   $bePageTypes page-type presets                     — defaults to []
  *   $beHeading   blocks-column heading text            — defaults to 'Blocks'
  *   UIR (constant)
  */
 
-$beBlocks    = isset($beBlocks) && is_array($beBlocks) ? $beBlocks : array();
-$beCatalog   = isset($beCatalog) && is_array($beCatalog) ? $beCatalog : array();
-$beLabels    = isset($beLabels) && is_array($beLabels) ? $beLabels : array();
-$bePageTypes = isset($bePageTypes) && is_array($bePageTypes) ? $bePageTypes : array();
-$beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
+$beHeading = isset($beHeading) ? (string)$beHeading : 'Blocks';
 ?>
 <?php /* ---- Blocks column ---- */ ?>
 <div class="cms-blocks-col">
@@ -140,7 +136,7 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
     </div>
 </div>
 
-<div class="cms-toast" id="cmsToast"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <?php
 /* TinyMCE source — prefer a self-hosted, vendored bundle if one exists under the

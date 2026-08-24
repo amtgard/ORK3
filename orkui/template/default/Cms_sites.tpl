@@ -259,7 +259,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 <script>
 (function () {
     'use strict';
-    var UIR  = <?= json_encode(UIR) ?>;
+    var UIR  = window.CMS_UIR;
     var AJAX = UIR + 'CmsAjax/';
 
     /* ---- toast (shared: CmsAdmin.toast — resolves the page's .cms-toast) ---- */

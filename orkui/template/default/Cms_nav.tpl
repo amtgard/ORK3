@@ -94,7 +94,7 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
                 </span>
             <?php endif; ?>
             <?php if (!$enabled): ?>
-                <span class="cms-badge cms-badge-draft" style="margin-left:6px;">Hidden</span>
+                <span class="ork-badge cms-badge cms-badge-draft" style="margin-left:6px;">Hidden</span>
             <?php endif; ?>
             <?php if ($canManage): ?>
             <div class="cms-block-tools">
@@ -294,7 +294,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 <script>
 (function () {
     'use strict';
-    var UIR  = <?= json_encode(UIR) ?>;
+    var UIR  = window.CMS_UIR;
     var AJAX = UIR + 'CmsAjax/';
     var MENU = <?= json_encode($menu) ?>;
 
@@ -365,10 +365,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
         fId.value     = card.getAttribute('data-nav-id') || '0';
         // An item can't be its own parent — exclude its own option.
         var ownId = card.getAttribute('data-nav-id') || '0';
+        // The menu is exactly one level deep. A top-level item that already has
+        // sub-items therefore can't be nested under another item: its own
+        // children would land at depth 3, where nothing renders them.
+        var ownGroup = card.closest('.cms-nav-group');
+        var hasChildren = card.getAttribute('data-child') === '0' && !!ownGroup
+            && !!ownGroup.querySelector(':scope > .cms-nav-children > .cms-nav-item');
         Array.prototype.forEach.call(fParentSel.options, function (opt) {
             if (opt.value === ownId && ownId !== '0') {
                 opt.disabled = true;
                 opt.hidden = true;
+            } else if (hasChildren && opt.value !== '0') {
+                opt.disabled = true;
             }
         });
         fLabel.value  = card.getAttribute('data-label') || '';
@@ -420,7 +428,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             closeModal(modal);
             toast('Navigation saved.', 'ok');
             // Reload to re-render the tree with resolved labels/targets.
-            window.location.reload();
+            reloadAfterOrderFlush();
         }).catch(function () { saveBtn.disabled = false; toast('Network error.', 'error'); });
     }); }
 
@@ -467,7 +475,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                 pendingDeleteId = null;
                 toast('Item deleted.', 'ok');
-                window.location.reload();
+                reloadAfterOrderFlush();
             }).catch(function () { confirmOk.disabled = false; toast('Network error.', 'error'); });
         });
     }
@@ -555,18 +563,43 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     // Debounce the save so a burst of arrow clicks → one POST + one toast.
     var reorderTimer = null;
+    var reorderSeq = 0;
+    function sendOrder() {
+        reorderTimer = null;
+        var token = ++reorderSeq;
+        var sentHtml = navTreeEl ? navTreeEl.innerHTML : null; // the order THIS request carries
+        var items = collectOrder();
+        return post('reordernav', { menu: MENU, items: JSON.stringify(items) }).then(function (res) {
+            if (!res || !res.ok) { revertOrder((res && res.error) || 'Order not saved — retry.'); return; }
+            // Only the newest request may touch the rollback snapshot; clearing it
+            // from a stale response would disarm the rollback for a request that is
+            // still outstanding. And if a later reorder is still pending — scheduled
+            // in the debounce timer OR in flight — the order this request just
+            // persisted becomes the rollback baseline instead of being cleared.
+            if (token === reorderSeq) {
+                preMoveOrderHtml = (reorderTimer === null) ? null : sentHtml;
+            }
+            toast('Order saved.', 'ok');
+            refreshMoveArrows();
+        }).catch(function () { revertOrder('Order not saved — check your connection and retry.'); });
+    }
     function persistOrder() {
         clearTimeout(reorderTimer);
-        reorderTimer = setTimeout(function () {
-            var items = collectOrder();
-            post('reordernav', { menu: MENU, items: JSON.stringify(items) }).then(function (res) {
-                if (!res || !res.ok) { revertOrder((res && res.error) || 'Order not saved — retry.'); return; }
-                // Saved — this order is the new known-good baseline.
-                preMoveOrderHtml = null;
-                toast('Order saved.', 'ok');
-                refreshMoveArrows();
-            }).catch(function () { revertOrder('Order not saved — check your connection and retry.'); });
-        }, 500);
+        reorderTimer = setTimeout(sendOrder, 500);
+    }
+
+    // A full page reload tears down the pending debounce timer, silently dropping
+    // the reorder. Anything that reloads must flush first.
+    function flushOrder() {
+        if (reorderTimer !== null) {
+            clearTimeout(reorderTimer);
+            return sendOrder();
+        }
+        return Promise.resolve();
+    }
+    function reloadAfterOrderFlush() {
+        var go = function () { window.location.reload(); };
+        flushOrder().then(go, go);
     }
 
     // #76: the save failed — roll the tree back to the last persisted order so the

@@ -12,8 +12,10 @@ require_once __DIR__ . '/trait.CmsScope.php';
  *   Cms/edit/{id|new}    → block editor for a page (page.edit, or page.create for new)
  *   Cms/preview/{id}     → render the page's CURRENT draft blocks with a preview banner (page.edit)
  *
- * Auth: every action gates on CmsAuth->cms_can($uid, <capability>, GLOBAL_SCOPE).
- * v2 is global scope only (the data model carries scope_type/scope_id for later).
+ * Auth: every action resolves a PER-REQUEST scope first (_resolveScope() parses the
+ * `k:{id}` / `p:{id}` selector and re-validates it against HasAuthority) and then
+ * gates a capability against that live scope — see _scopeOrDenyWithCap(), which does
+ * both. Global (`scope_type='global'`) is only the fallback when no selector is present.
  * Unauthorized / not-logged-in → redirect to Login (page surfaces never emit JSON).
  *
  * Conventions: thin controller (no raw $DB; all DB work via the CmsPage lib).
@@ -32,7 +34,8 @@ class Controller_Cms extends Controller
 
     /**
      * Per-request capability cache: ['is_super' => bool, 'caps' => string[]].
-     * Keyed by uid so a single request can't bleed between users.
+     * Keyed by uid+scope so a single request can't bleed between users or orgs.
+     * Also holds _bridgedCaps() lists under a 'bridge|'-prefixed key.
      * @var array
      */
     private $_capCache = array();
@@ -491,7 +494,20 @@ class Controller_Cms extends Controller
         // (an N+1). Falls back to PagePath for any row whose ancestry can't be
         // resolved in memory (e.g. a filtered list missing an ancestor, or rows
         // that don't carry parent_id), so correctness never regresses.
-        $pathMap = $this->_buildScopePathMap($pages);
+        //
+        // With a search/status filter active the fetched set is a SUBSET of the
+        // scope, so a nested row whose ancestor didn't match the filter misses the
+        // in-memory walk and pays a per-row PagePath() DB walk. In that case build
+        // the map from ONE extra scope-only fetch (page_id/parent_id/slug are
+        // already in the SELECT) — a single bounded query instead of N walks. The
+        // unfiltered path is untouched; the displayed rows stay the filtered ones.
+        $isFiltered = ($search !== '' || isset($filters['status']));
+        if ($isFiltered) {
+            $allScoped = $this->CmsPage->list_pages($this->_scopeFilters($scope));
+            $pathMap = $this->_buildScopePathMap(is_array($allScoped) ? $allScoped : $pages);
+        } else {
+            $pathMap = $this->_buildScopePathMap($pages);
+        }
         // Attach the scope-correct PUBLIC live URL to each row so the list links
         // to the org site (Site/...) in a scoped context, not the global Page route.
         foreach ($pages as &$pRow) {
@@ -664,6 +680,9 @@ class Controller_Cms extends Controller
         $scope = $this->_resolveScope($this->_uid());
         $query = is_array($scope) ? $this->_scopeQuery($scope) : '';
         header('Location: ' . UIR . $route . $query);
+        // Stop here: index.php calls $C->view() after the action returns, which
+        // would compose and echo a full response body behind the 302.
+        exit;
     }
 
     /**
@@ -687,6 +706,11 @@ class Controller_Cms extends Controller
 
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
+        // Same flag Controller_Page/Controller_Blog set: default.theme turns it into
+        // <body class="cms-page">, which hides #newmenu and zeroes the shell's
+        // padding-top/margin. Without it the preview was the only in-shell CMS
+        // surface carrying the app navbar plus ~56px of dead space.
+        $this->data['IsCmsPage']   = true;
         $this->data['no_index']    = true;
         // C3: Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
         // inline editor actions carry the token. The constructor already set it
@@ -892,7 +916,7 @@ class Controller_Cms extends Controller
             // C2: the editor needs ALL body blocks (incl. disabled) so they can be
             // toggled; get_post_blocks() is the enabled-only public path.
             $blocks  = $this->CmsPage->get_blocks_for_editor('post', (int)$post['post_id']);
-            $heroRef = $this->_heroRef($post);
+            $heroRef = $this->_heroRef($post, $scope);
             $this->data['page_title'] = 'Edit: ' . $post['title'];
         }
 
@@ -936,8 +960,13 @@ class Controller_Cms extends Controller
     /**
      * Resolve a post's hero image (hero_media_id) to a media-ref the editor's
      * image picker understands, or null when none is set / cannot be resolved.
+     *
+     * Defense in depth: the write side already drops a cross-scope hero id
+     * (controller.CmsAjax.php::_resolveHeroMediaId), so the read side mirrors that
+     * check — a stored id pointing outside the post's scope resolves to null
+     * rather than surfacing another org's media in the editor.
      */
-    private function _heroRef($post)
+    private function _heroRef($post, $scope = null)
     {
         $mediaId = isset($post['hero_media_id']) ? (int)$post['hero_media_id'] : 0;
         if ($mediaId <= 0) {
@@ -946,6 +975,9 @@ class Controller_Cms extends Controller
         $this->load_model('CmsMedia');
         $row = $this->CmsMedia->get_media($mediaId);
         if (empty($row)) {
+            return null;
+        }
+        if (is_array($scope) && !$this->_rowInScope($row, $scope)) {
             return null;
         }
         return $this->CmsMedia->to_media_ref($row);
@@ -969,7 +1001,14 @@ class Controller_Cms extends Controller
         if ($resolved['is_super']) {
             return true;
         }
-        return !empty($resolved['caps']);
+        if (!empty($resolved['caps'])) {
+            return true;
+        }
+        // Officer bridge (see _bridgedCaps): _resolveCapabilities reads GRANT rows
+        // only, so a real kingdom/park officer with no grant row would be locked
+        // out of surfaces that cms_can() would happily let them edit. page.edit is
+        // the broadest bridged capability (AUTH_EDIT), so it answers "any?".
+        return (bool)$this->CmsAuth->cms_can($uid, 'page.edit', is_array($scope) ? $scope : self::$SCOPE);
     }
 
     /**
@@ -995,15 +1034,25 @@ class Controller_Cms extends Controller
         $resolved = $this->_resolveCapabilities($uid, $scope);
         $isSuper  = $resolved['is_super'];
         $caps     = $resolved['caps'];
+        // Officer bridge — see _bridgedCaps(). Every key below EXCEPT 'media' ORs
+        // it in so the rail agrees with the cms_can() gates on the actions.
+        $bridged = $isSuper ? array() : $this->_bridgedCaps($uid, $scope);
+        $held = function ($cap) use ($isSuper, $caps, $bridged) {
+            return $isSuper || in_array($cap, $caps, true) || in_array($cap, $bridged, true);
+        };
         return array(
-            'create'  => $isSuper || in_array('page.create', $caps, true),
-            'edit'    => $isSuper || in_array('page.edit', $caps, true),
-            'publish' => $isSuper || in_array('page.publish', $caps, true),
-            'delete'  => $isSuper || in_array('page.delete', $caps, true),
+            'create'  => $held('page.create'),
+            'edit'    => $held('page.edit'),
+            'publish' => $held('page.publish'),
+            'delete'  => $held('page.delete'),
+            // GRANT-ONLY on purpose: media.manage is absent from
+            // CmsAuth::$ADMIN_BRIDGE_CAPS, so bridging it would hand the Media
+            // Library to every AUTH_EDIT officer. media() gates on this same flag,
+            // so the rail entry and the action can never disagree.
             'media'   => $isSuper || in_array('media.manage', $caps, true),
-            'nav'     => $isSuper || in_array('nav.manage', $caps, true),
-            'roles'   => $isSuper || in_array('roles.manage', $caps, true),
-            'theme'   => $isSuper || in_array('theme.manage', $caps, true),
+            'nav'     => $held('nav.manage'),
+            'roles'   => $held('roles.manage'),
+            'theme'   => $held('theme.manage'),
             // ORK super-admin only. Gates the global "All sites" rail entry (the
             // overview is a cross-org, super-admin-only surface). Never true for
             // an org-scoped officer, so the rail entry stays hidden for them.
@@ -1033,7 +1082,56 @@ class Controller_Cms extends Controller
             // with indexOf, never position, so the emit order is not a contract.
             return $this->CmsAuth->all_capabilities();
         }
-        return array_values(array_unique(array_map('strval', (array)$resolved['caps'])));
+        // Officer bridge — see _bridgedCaps(). Without it window.CMS_CAPS would
+        // disable actions for an officer that the server-side gate allows.
+        $caps = array_merge(
+            array_map('strval', (array)$resolved['caps']),
+            $this->_bridgedCaps($uid, $scope)
+        );
+        return array_values(array_unique($caps));
+    }
+
+    /**
+     * Capabilities the OFFICER-AUTHORITY bridge grants in this scope, on top of
+     * the user's grant rows. cms_can() (CmsAuth::CmsCan step 3) falls through to
+     * HasAuthority for kingdom/park scopes; _resolveCapabilities() reads grant
+     * rows ONLY, so every consumer of it has to union these in or a real officer
+     * sees an admin rail that disagrees with the actions' own cms_can() gates.
+     *
+     * 'media.manage' is deliberately EXCLUDED: it is absent from
+     * CmsAuth::$ADMIN_BRIDGE_CAPS, so the bridge would grant it at AUTH_EDIT to
+     * every edit-tier officer. media() gates on the narrow grant-only flag, so
+     * bridging it here would advertise a Media Library that then 403s.
+     *
+     * @param int        $uid
+     * @param array|null $scope
+     * @return string[]
+     */
+    private function _bridgedCaps($uid, $scope = null)
+    {
+        $uid = (int)$uid;
+        if ($uid <= 0) {
+            return array();
+        }
+        if (!is_array($scope)) {
+            $scope = self::$SCOPE;
+        }
+        $key = 'bridge|' . $uid . '|' . (string)($scope['type'] ?? 'global') . ':' . (int)($scope['id'] ?? 0);
+        if (isset($this->_capCache[$key])) {
+            return $this->_capCache[$key];
+        }
+        $out = array();
+        foreach ((array)$this->CmsAuth->all_capabilities() as $cap) {
+            $cap = (string)$cap;
+            if ($cap === 'media.manage') {
+                continue;
+            }
+            if ($this->CmsAuth->cms_can($uid, $cap, $scope)) {
+                $out[] = $cap;
+            }
+        }
+        $this->_capCache[$key] = $out;
+        return $out;
     }
 
     /**
@@ -1068,6 +1166,8 @@ class Controller_Cms extends Controller
 
         // One GetUserGrants query + in-memory role expansion, scoped to this org.
         // Skip for super-admins — they pass every cap already.
+        // NOTE: GRANT ROWS ONLY — no officer bridge. Callers that must agree with
+        // cms_can() union in _bridgedCaps(); media() relies on this being narrow.
         $caps = ($uid > 0 && !$isSuper)
             ? $this->CmsAuth->get_user_capabilities($uid, $scope)
             : array();
@@ -1172,15 +1272,10 @@ class Controller_Cms extends Controller
         }
         header('X-Robots-Tag: noindex, nofollow');
         header('Location: ' . UIR . 'Login');
-        // Set a minimal template so view() has something harmless to render
-        // if headers were already flushed (shouldn't happen in normal flow).
-        $this->template = 'Cms_index.tpl';
-        $this->data['Pages']  = array();
-        $this->data['Search'] = '';
-        $this->data['StatusFilter'] = '';
-        $this->data['Caps'] = array();
-        $this->data['Message'] = 'Not authorized.';
-        return;
+        // Stop here (matching _denyPermission): without the exit, index.php's
+        // $C->view() would assemble and echo the whole OGRE admin shell behind
+        // the 302 — and emit it for real if headers were already flushed.
+        exit;
     }
 
     /**

@@ -130,7 +130,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         $tags      = (isset($p['tags']) && is_array($p['tags'])) ? $p['tags'] : array();
                         $isPub     = ($status === 'published');
                         $dateSrc   = $isPub && $pubAt !== '' ? $pubAt : $updated;
-                        $dateFmt   = $dateSrc !== '' ? date('M j, Y g:i A', strtotime($dateSrc)) : '—';
+                        $dateTs    = $dateSrc !== '' ? (int)strtotime($dateSrc) : 0;
+                        // The epoch is what DataTables sorts on (data-order), never
+                        // the rendered words; an unparseable date falls back to "—".
+                        $dateFmt   = $dateTs > 0 ? date('M j, Y g:i A', $dateTs) : '—';
                     ?>
                     <tr data-post-id="<?= $pid ?>">
                         <td class="cms-check-col" data-label="">
@@ -147,18 +150,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php endif; ?>
                         </td>
                         <td data-label="Status">
-                            <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>" data-status-badge>
+                            <span class="ork-badge cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>" data-status-badge>
                                 <?= $isPub ? 'Published' : 'Draft' ?>
                             </span>
                         </td>
                         <td data-label="Author" class="cms-muted"><?= $author !== '' ? $h($author) : '—' ?></td>
-                        <td data-label="Date" class="cms-muted"><?= $h($dateFmt) ?></td>
+                        <td data-label="Date" class="cms-muted" data-order="<?= $dateTs ?>"><?= $h($dateFmt) ?></td>
                         <td data-label="Tags">
                             <?php if (empty($tags)): ?>
                                 <span class="cms-muted">—</span>
                             <?php else: ?>
                                 <?php foreach ($tags as $tg): ?>
-                                    <span class="cms-badge cms-badge-scope"><?= $h((string)($tg['name'] ?? '')) ?></span>
+                                    <span class="ork-badge cms-badge cms-badge-scope"><?= $h((string)($tg['name'] ?? '')) ?></span>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </td>
@@ -254,7 +257,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 <script>
 (function () {
     'use strict';
-    var UIR = <?= json_encode(UIR) ?>;
+    var UIR = window.CMS_UIR;
     var AJAX = UIR + 'CmsAjax/';
 
     /* ---- DataTables: sorting, pagination, search ---- */
@@ -267,7 +270,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
             order: [[4, 'desc']], // Date DESC (col 0 is the checkbox)
             columnDefs: [
                 { targets: [0], orderable: false, searchable: false }, // Checkbox
-                { targets: [4], type: 'date' },
+                // Date: the cells carry data-order="<unix epoch>", which DataTables
+                // picks up as this column's sort source, so the formatted wording is
+                // display-only. 'num' pins the comparison to the epoch.
+                { targets: [4], type: 'num' },
                 { targets: [5], orderable: false }, // Tags
                 { targets: [6], orderable: false, searchable: false } // Actions
             ]
@@ -327,7 +333,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 var row = btn.closest('tr');
                 var badge = row ? row.querySelector('[data-status-badge]') : null;
                 if (badge) {
-                    badge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
+                    badge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     badge.textContent = nowPub ? 'Published' : 'Draft';
                 }
                 toast(nowPub ? 'Post published.' : 'Post unpublished.', 'ok');
@@ -420,7 +426,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         if (row2) {
                             var badge = row2.querySelector('[data-status-badge]');
                             if (badge) {
-                                badge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
+                                badge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                                 badge.textContent = nowPub ? 'Published' : 'Draft';
                             }
                             var tgl = row2.querySelector('[data-pubtoggle]');
@@ -476,7 +482,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         var trBody  = document.getElementById('cmsTrashBody');
         var countEl = document.getElementById('cmsTrashCount');
         if (!toggle || !panel || !trBody) { return; }
-        var loaded = false;
 
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -495,7 +500,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 var tr = document.createElement('tr');
                 tr.setAttribute('data-trash-post-id', p.post_id);
                 var tags = (p.tags || []).map(function (t) {
-                    return '<span class="cms-badge cms-badge-scope">' + esc(t.name || '') + '</span>';
+                    return '<span class="ork-badge cms-badge cms-badge-scope">' + esc(t.name || '') + '</span>';
                 }).join(' ') || '<span class="cms-muted">—</span>';
                 tr.innerHTML =
                     '<td data-label="Title"><div class="cms-pg-title">' + esc(p.title || '(untitled)') + '</div>' +
@@ -520,7 +525,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             esc((res && res.error) || 'Could not load the Trash.') + '</div></div></td></tr>';
                         return;
                     }
-                    loaded = true;
                     renderRows(res.posts || []);
                 })
                 .catch(function () {
@@ -532,7 +536,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (panel.hasAttribute('hidden')) {
                 panel.removeAttribute('hidden');
                 toggle.setAttribute('aria-expanded', 'true');
-                if (!loaded) { load(); }
+                // Always refetch on expand: a post deleted since the last open must
+                // show up here, and the payload is small and lazily fetched anyway.
+                load();
             } else {
                 panel.setAttribute('hidden', '');
                 toggle.setAttribute('aria-expanded', 'false');

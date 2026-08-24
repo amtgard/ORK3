@@ -82,7 +82,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php /* ============ STICKY EDITOR ACTION BAR ============ */ ?>
     <div class="cms-editbar" id="cmsEditBar">
         <div class="cms-editbar-status">
-            <span class="cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
+            <span class="ork-badge cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
                 <?= $isPublished ? 'Published' : 'Draft' ?>
             </span>
             <?php if ($pAuthor !== ''): ?><span class="cms-editbar-author">By <?= $h($pAuthor) ?></span><?php endif; ?>
@@ -109,6 +109,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <div class="cms-note" role="note">
         <i class="fas fa-lock"></i>
         <span>Saved as a draft &mdash; a monarch or regent needs to publish this post before it's visible to the public.</span>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($canEdit): ?>
+    <div class="cms-note cms-note-live" role="note" id="cmsPublishedLiveNote"<?= $isPublished ? '' : ' style="display:none;"' ?>>
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>This post is <strong>published</strong> &mdash; any edit you save goes live to the public immediately. Autosave is turned off here so you can review before saving.</span>
     </div>
     <?php endif; ?>
 
@@ -211,13 +218,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
 (function () {
     'use strict';
 
-    var UIR = <?= json_encode(UIR) ?>;
+    var UIR = window.CMS_UIR;
 
     var STATE = {
         postId:  <?= (int)$postId ?>,
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
         heroId:  <?= (int)($post['hero_media_id'] ?? 0) ?>,
-        slug:    <?= json_encode($pSlug) ?>,
+        published: <?= $isPublished ? 'true' : 'false' ?>,
         // C15: optimistic-concurrency token = the row's updated_at at load. Sent as
         // base_version on save; the server _fails (status 12) on a stale base and
         // echoes the fresh version back on success.
@@ -303,9 +310,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var saving = false;
 
     // Debounced autosave (shared: CmsAdmin.autosave).
+    // #45: never autosave an already-published post — a save goes live instantly,
+    // so the author must save deliberately. STATE.published flips true on publish.
     var autosaveTimer = CmsAdmin.autosave({
         delay: 3000,
-        enabled: function () { return STATE.canEdit; },
+        enabled: function () { return STATE.canEdit && !STATE.published; },
         save: function () { doSave(true); }
     });
 
@@ -370,7 +379,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 STATE.isNew = false;
                 postIdSynced();
             }
-            if (res.slug) { slugInput.value = res.slug; slugTouched = true; STATE.slug = res.slug; }
+            STATE.published = (STATE.published || res.status === 'published');
+            if (res.slug) { slugInput.value = res.slug; slugTouched = true; }
             if (res.tags && Array.isArray(res.tags)) {
                 tagsInput.value = res.tags.map(function (t) { return t.name; }).join(', ');
             }
@@ -409,10 +419,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         );
     }
 
-    // Declared up front so previewSlugSynced (called on first save of a new
-    // post) can reference it without hitting the var-hoisting undefined window.
-    var previewToggle = document.getElementById('cmsPreviewToggle');
-
     // After a new post gets its id, enable Publish + update URL.
     function postIdSynced() {
         var pub = document.getElementById('cmsPubBtn');
@@ -426,11 +432,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         if (STATE.postId <= 0) { return; }
         var openLink = document.getElementById('cmsPreviewOpen');
         if (openLink) { openLink.href = UIR + 'Cms/previewpost/' + STATE.postId + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''); }
-        if (previewToggle) {
-            previewToggle.disabled = false;
-            previewToggle.removeAttribute('data-needsave');
-            previewToggle.removeAttribute('data-tip');
-        }
     }
 
     if (saveBtn) {
@@ -451,12 +452,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 pubBtn.disabled = false;
                 if (!res || !res.ok) { toast((res && res.error) || 'Action failed.', 'error'); return; }
                 var nowPub = (res.status === 'published');
+                STATE.published = nowPub;
                 pubBtn.setAttribute('data-status', nowPub ? 'published' : 'draft');
                 pubBtn.innerHTML = nowPub ? '<i class="fas fa-eye-slash"></i> Unpublish' : '<i class="fas fa-globe"></i> Publish';
                 if (statusBadge) {
-                    statusBadge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
+                    statusBadge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
+                // #45: reflect the live-edits warning (and autosave state follows STATE.published).
+                var liveNote = document.getElementById('cmsPublishedLiveNote');
+                if (liveNote) { liveNote.style.display = nowPub ? '' : 'none'; }
                 toast(nowPub ? 'Post published.' : 'Post unpublished.', 'ok');
                 refreshPreview();
             }).catch(function () { pubBtn.disabled = false; toast('Network error.', 'error'); });

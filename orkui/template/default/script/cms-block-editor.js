@@ -446,9 +446,13 @@ window.CmsBlockEditor = (function () {
     /* ---- C25: warn (once) when the TinyMCE bundle failed to load, so authors
      * know a rich-text field has silently degraded to a raw-HTML textarea and
      * don't unknowingly save mangled markup. ---- */
-    function warnTinyDegradedIfNeeded() {
+    // `scope` is the container that was JUST built — block bodies are built
+    // lazily, so at the end of renderList() nothing rich-text exists in listEl
+    // yet and a listEl-only check could never fire.
+    function warnTinyDegradedIfNeeded(scope) {
         if (tinyReady || tinyDegradedWarned) { return; }
-        if (!listEl || !listEl.querySelector('textarea[data-tiny]')) { return; }
+        var root = scope || listEl;
+        if (!root || !root.querySelector('textarea[data-tiny]')) { return; }
         tinyDegradedWarned = true;
         toast('Rich-text editor didn’t load — those fields show raw HTML. Check your connection before saving.', 'error');
     }
@@ -472,20 +476,10 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
+    // Block-level select === selectBound over block.fields, minus the 8px
+    // margin the bound helpers add inside repeater rows.
     function fieldSelect(block, key, label, options, dflt) {
-        var wrap = el('div', 'cms-field');
-        wrap.appendChild(el('label', 'cms-label', esc(label)));
-        var sel = el('select', 'cms-select');
-        options.forEach(function (o) {
-            var op = el('option');
-            op.value = o.value; op.textContent = o.label;
-            if ((block.fields[key] || dflt) === o.value) { op.selected = true; }
-            sel.appendChild(op);
-        });
-        if (block.fields[key] == null) { block.fields[key] = dflt; }
-        sel.addEventListener('change', function () { block.fields[key] = sel.value; markDirty(); });
-        wrap.appendChild(sel);
-        return wrap;
+        return selectBound(block.fields, key, label, options, dflt, true);
     }
 
     function fieldNumSelect(block, key, label, options, dflt) {
@@ -613,6 +607,22 @@ window.CmsBlockEditor = (function () {
         var arr = block.fields[key];
         var wrap = el('div', 'cms-subitems');
 
+        // rebuild() re-renders every item, so the control the author just used
+        // is gone from the DOM and focus lands back on <body>. Put a keyboard
+        // author back on the equivalent control of the item they acted on.
+        function refocusTool(idx, ord) {
+            var box = (idx >= 0) ? wrap.children[idx] : null;
+            var btns = box ? box.querySelectorAll('.cms-block-tools .cms-icon-btn') : null;
+            var target = (btns && btns[ord] && !btns[ord].disabled) ? btns[ord] : null;
+            if (!target && btns) {
+                for (var k = 0; k < btns.length; k++) {
+                    if (!btns[k].disabled) { target = btns[k]; break; }
+                }
+            }
+            if (!target) { target = wrap.lastChild; }   // the Add button
+            if (target && target.focus) { target.focus(); }
+        }
+
         function rebuild() {
             wrap.innerHTML = '';
             arr.forEach(function (item, i) {
@@ -623,9 +633,9 @@ window.CmsBlockEditor = (function () {
                 var up = iconBtn('fa-arrow-up', 'Move up', i === 0);
                 var down = iconBtn('fa-arrow-down', 'Move down', i === arr.length - 1);
                 var del = iconBtn('fa-trash', 'Remove', false, true);
-                up.addEventListener('click', function () { swap(arr, i, i - 1); rebuild(); markDirty(); });
-                down.addEventListener('click', function () { swap(arr, i, i + 1); rebuild(); markDirty(); });
-                del.addEventListener('click', function () { arr.splice(i, 1); rebuild(); markDirty(); });
+                up.addEventListener('click', function () { swap(arr, i, i - 1); rebuild(); refocusTool(i - 1, 0); markDirty(); });
+                down.addEventListener('click', function () { swap(arr, i, i + 1); rebuild(); refocusTool(i + 1, 1); markDirty(); });
+                del.addEventListener('click', function () { arr.splice(i, 1); rebuild(); refocusTool(Math.min(i, arr.length - 1), 2); markDirty(); });
                 tools.appendChild(up); tools.appendChild(down); tools.appendChild(del);
                 head.appendChild(tools);
                 box.appendChild(head);
@@ -636,7 +646,11 @@ window.CmsBlockEditor = (function () {
             add.type = 'button';
             add.addEventListener('click', function () {
                 arr.push(JSON.parse(JSON.stringify(blank)));
-                rebuild(); markDirty();
+                rebuild();
+                var box = wrap.children[arr.length - 1];
+                var first = box ? box.querySelector('input, textarea, select') : null;
+                if (first) { first.focus(); } else { refocusTool(arr.length - 1, 0); }
+                markDirty();
             });
             wrap.appendChild(add);
         }
@@ -692,14 +706,17 @@ window.CmsBlockEditor = (function () {
         wrap.appendChild(ta);
         return wrap;
     }
-    function selectBound(obj, key, label, options, dflt) {
+    function selectBound(obj, key, label, options, dflt, noMargin) {
         var wrap = el('div', 'cms-field');
-        wrap.style.marginBottom = '8px';
+        if (!noMargin) { wrap.style.marginBottom = '8px'; }
         wrap.appendChild(el('label', 'cms-label', esc(label)));
         var sel = el('select', 'cms-select');
+        // A stored '' or 0 is a real choice, not "unset" — || would paint the
+        // default as selected while the model still held the author's value.
+        var cur = (obj[key] != null && obj[key] !== '') ? obj[key] : dflt;
         options.forEach(function (o) {
             var op = el('option'); op.value = o.value; op.textContent = o.label;
-            if ((obj[key] || dflt) === o.value) { op.selected = true; }
+            if (cur === o.value) { op.selected = true; }
             sel.appendChild(op);
         });
         if (obj[key] == null) { obj[key] = dflt; }
@@ -957,6 +974,7 @@ window.CmsBlockEditor = (function () {
             var cur = normHref(obj[key]);
             list.innerHTML = '';
             var shown = 0;
+            var hidden = 0;
             rows.forEach(function (p) {
                 var title = String(p.title || p.slug || '');
                 if (term
@@ -964,6 +982,9 @@ window.CmsBlockEditor = (function () {
                     && String(p.slug || '').toLowerCase().indexOf(term) < 0) {
                     return;
                 }
+                // Cap the rendered list — a site with hundreds of pages would
+                // otherwise rebuild hundreds of buttons on every keystroke.
+                if (shown >= 50) { hidden++; return; }
                 shown++;
                 var opt = el('button', 'cms-linkpick-opt',
                     '<span class="cms-linkpick-opt-title">' + esc(title) + '</span>'
@@ -986,11 +1007,18 @@ window.CmsBlockEditor = (function () {
             if (!shown) {
                 list.appendChild(el('div', 'cms-linkpick-empty',
                     rows.length ? 'No pages match that search.' : 'No pages on this site yet.'));
+            } else if (hidden) {
+                list.appendChild(el('div', 'cms-linkpick-empty',
+                    esc(hidden + ' more page' + (hidden === 1 ? '' : 's') + ' — refine your search.')));
             }
         }
 
         loadPageList().then(function (rows) {
-            filter.addEventListener('input', function () { paint(rows); });
+            var paintTimer = null;
+            filter.addEventListener('input', function () {
+                if (paintTimer) { clearTimeout(paintTimer); }
+                paintTimer = setTimeout(function () { paint(rows); }, 150);
+            });
             paint(rows);
             var cur = normHref(obj[key]);
             var known = false;
@@ -1060,7 +1088,7 @@ window.CmsBlockEditor = (function () {
             person.mundane_id = parseInt(row.MundaneId, 10) || 0;
             person.persona_name = row.Persona || person.persona_name;
             input.value = ''; closeDd(); markDirty(); renderChip();
-            fetch(UIR + 'CmsAjax/personlookup&mundane_id=' + person.mundane_id + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''))
+            fetch(AJAX + 'personlookup&mundane_id=' + person.mundane_id + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''))
                 .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
                 .then(function (d) {
                     if (d && d.ok) {
@@ -1111,7 +1139,15 @@ window.CmsBlockEditor = (function () {
             if (term.length < 2) { closeDd(); return; }
             timer = setTimeout(function () { search(term); }, 200);
         });
-        input.addEventListener('blur', function () { setTimeout(closeDd, 150); });
+        // The dropdown is a SINGLETON shared by every persona field, so a search
+        // this field started must not land (and reopen the dropdown) after the
+        // author has moved to another row: cancel both the pending debounce and
+        // the in-flight request on blur.
+        input.addEventListener('blur', function () {
+            if (timer) { clearTimeout(timer); timer = null; }
+            if (ctrl) { ctrl.abort(); ctrl = null; }
+            setTimeout(closeDd, 150);
+        });
 
         wrap.appendChild(chip);
         wrap.appendChild(input);
@@ -1467,13 +1503,20 @@ window.CmsBlockEditor = (function () {
                 node = el('div', 'cms-field');
                 node.appendChild(el('label', 'cms-label', esc(spec.label)));
                 var bsel = el('select', 'cms-select');
-                var cur = (obj[spec.key] === undefined) ? 1 : (obj[spec.key] ? 1 : 0);
+                // '0' is a stored No (PHP's !empty() reads it that way); plain
+                // JS truthiness would flip it to Yes and — with the old
+                // unconditional write-back — silently overwrite the author's
+                // prior choice just by opening the block. Coercion mirrors PHP's
+                // !empty() (null/'' read as No). Only an ABSENT/null value is
+                // seeded, so the model matches what the select shows.
+                var cur = (obj[spec.key] === undefined) ? 1
+                    : ((!obj[spec.key] || obj[spec.key] === '0') ? 0 : 1);
                 boolOpts.forEach(function (o) {
                     var op = el('option'); op.value = o.value; op.textContent = o.label;
                     if (String(cur) === o.value) { op.selected = true; }
                     bsel.appendChild(op);
                 });
-                obj[spec.key] = cur;
+                if (obj[spec.key] == null) { obj[spec.key] = cur; }
                 bsel.addEventListener('change', function () { obj[spec.key] = Number(bsel.value); markDirty(); });
                 node.appendChild(bsel);
                 break;
@@ -1552,7 +1595,7 @@ window.CmsBlockEditor = (function () {
     }
 
     /* ---- build the body form for one block ---- */
-    function buildBlockBody(block) {
+    function buildBlockBody(block, errorOwner) {
         var body = el('div', null);
         var t = block.type;
 
@@ -1767,14 +1810,16 @@ window.CmsBlockEditor = (function () {
                     '<i class="fas fa-info-circle"></i> This Columns block has a custom structure the visual editor can’t show '
                     + '(only 2- and 3-column layouts are visual). Edit it as JSON below — your content is preserved.'));
                 body.appendChild(jsonField(block, 'Columns — advanced (custom structure)',
-                    'Each column is a list of blocks. Parsed on save; invalid JSON keeps the last valid value.'));
+                    'Each column is a list of blocks. Parsed on save; invalid JSON keeps the last valid value.',
+                    errorOwner));
             }
             return body;
         }
 
         // ----- LAST-RESORT JSON fallback (unknown / not-yet-shipped types) -----
         body.appendChild(jsonField(block, 'Fields (JSON)',
-            'This block type has no friendly form yet — edit its fields as JSON. It is parsed on save; invalid JSON keeps the last valid value.'));
+            'This block type has no friendly form yet — edit its fields as JSON. It is parsed on save; invalid JSON keeps the last valid value.',
+            errorOwner));
         return body;
     }
 
@@ -1794,37 +1839,44 @@ window.CmsBlockEditor = (function () {
      * C20: an invalid-JSON block sets block._jsonError, which the host uses to
      * BLOCK the whole page save. That used to be silent — the author got no cue
      * which block was at fault. We now (a) toast the moment JSON goes invalid,
-     * naming the block, and (b) drive a loud inline banner via reflectBlockError. */
-    function jsonField(block, label, help) {
+     * naming the block, and (b) drive a loud inline banner via reflectBlockError.
+     *
+     * `errorOwner` is the object the error is RECORDED on. A nested columns-in-
+     * columns child is not a member of `model`, so hasJsonError()/focusFirstError()
+     * (and rowForBlock, which only knows top-level rows) would never see its
+     * error — the nested call site passes the top-level columns block instead,
+     * so the save gate and the inline banner both keep working. */
+    function jsonField(block, label, help, errorOwner) {
+        var owner = errorOwner || block;
         var wrap = el('div', 'cms-field');
         wrap.appendChild(el('label', 'cms-label', label));
         var ta = el('textarea', 'cms-textarea');
         ta.style.minHeight = '160px';
         ta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
         ta.value = JSON.stringify(block.fields || {}, null, 2);
-        var prevErr = !!block._jsonError;
+        var prevErr = !!owner._jsonError;
         ta.addEventListener('input', function () {
             try {
                 var parsed = JSON.parse(ta.value);
                 if (parsed && typeof parsed === 'object') {
                     block.fields = parsed;
                     ta.style.borderColor = '';
-                    block._jsonError = false;
+                    owner._jsonError = false;
                 } else {
                     throw new Error('not an object');
                 }
             } catch (err) {
                 ta.style.borderColor = 'var(--ork-badge-red-text)';
-                block._jsonError = true;
+                owner._jsonError = true;
             }
-            reflectBlockError(block);
+            reflectBlockError(owner);
             // Loud, once-per-transition: warn on valid→invalid; reassure on fix.
-            if (block._jsonError && !prevErr) {
-                toast('The “' + labelFor(block.type) + '” block has invalid JSON — fix it before saving.', 'error');
-            } else if (!block._jsonError && prevErr) {
-                toast('JSON fixed — the “' + labelFor(block.type) + '” block can save again.', 'ok');
+            if (owner._jsonError && !prevErr) {
+                toast('The “' + labelFor(owner.type) + '” block has invalid JSON — fix it before saving.', 'error');
+            } else if (!owner._jsonError && prevErr) {
+                toast('JSON fixed — the “' + labelFor(owner.type) + '” block can save again.', 'ok');
             }
-            prevErr = !!block._jsonError;
+            prevErr = !!owner._jsonError;
             markDirty();
         });
         wrap.appendChild(ta);
@@ -1891,20 +1943,25 @@ window.CmsBlockEditor = (function () {
     // A child block's field editor. Bounds nesting: a columns-in-columns child is
     // edited as JSON (not a recursive visual editor); everything else reuses the
     // exact same field forms as the page-level list.
-    function childBlockBody(child) {
+    function childBlockBody(child, owner) {
         if (child.type === 'columns') {
+            // The error is recorded on the TOP-LEVEL columns block: a nested child
+            // is not in `model`, so hasJsonError()'s save gate would never see it.
             return jsonField(child, 'Nested columns — advanced (JSON)',
-                'A columns block inside a column is edited as JSON to keep layouts from nesting without bound. Parsed on save; invalid JSON keeps the last valid value.');
+                'A columns block inside a column is edited as JSON to keep layouts from nesting without bound. Parsed on save; invalid JSON keeps the last valid value.',
+                owner);
         }
-        return buildBlockBody(child);
+        // Same reason as above: a non-'columns' child with no friendly form falls
+        // through to the JSON fallback, whose error must also land on the owner.
+        return buildBlockBody(child, owner);
     }
 
     // One child card — the SAME card chrome as a page-level block, bound to its slot
-    // in the column array. `rebuild` re-renders only this column (surgical TinyMCE
-    // teardown/init), never the whole page.
-    function buildChildCard(colArr, idx, rebuild) {
-        var child = colArr[idx];
+    // in the column array. `ops` mutates only the affected child's node (see
+    // buildColumnPanel); `owner` is the top-level columns block this child lives in.
+    function buildChildCard(colArr, child, ops, owner) {
         var card = el('div', 'cms-block-card cms-cols-childcard' + (child.enabled ? '' : ' cms-block-disabled'));
+        card._child = child;
 
         var head = el('div', 'cms-block-head');
         head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(child.type)) + '"></i>'));
@@ -1912,10 +1969,12 @@ window.CmsBlockEditor = (function () {
         head.appendChild(el('span', 'cms-block-summary', esc(summarize(child))));
 
         var tools = el('div', 'cms-block-tools');
-        var up = iconBtn('fa-arrow-up', 'Move up', idx === 0);
-        var down = iconBtn('fa-arrow-down', 'Move down', idx === colArr.length - 1);
-        up.addEventListener('click', function () { swap(colArr, idx, idx - 1); rebuild(); markDirty(); });
-        down.addEventListener('click', function () { swap(colArr, idx, idx + 1); rebuild(); markDirty(); });
+        var up = iconBtn('fa-arrow-up', 'Move up', false);
+        var down = iconBtn('fa-arrow-down', 'Move down', false);
+        card._upBtn = up;
+        card._downBtn = down;
+        up.addEventListener('click', function () { ops.move(child, -1); });
+        down.addEventListener('click', function () { ops.move(child, 1); });
 
         var sw = el('label', 'cms-switch');
         var cb = el('input'); cb.type = 'checkbox'; cb.checked = child.enabled;
@@ -1930,7 +1989,7 @@ window.CmsBlockEditor = (function () {
 
         var del = iconBtn('fa-trash', 'Remove block', false, true);
         del.addEventListener('click', function () {
-            askDeleteChild(child, function () { colArr.splice(idx, 1); rebuild(); markDirty(); });
+            askDeleteChild(child, function () { ops.remove(child); });
         });
 
         tools.appendChild(up); tools.appendChild(down); tools.appendChild(sw); tools.appendChild(del);
@@ -1938,7 +1997,7 @@ window.CmsBlockEditor = (function () {
         card.appendChild(head);
 
         var body = el('div', 'cms-block-body');
-        body.appendChild(childBlockBody(child));
+        body.appendChild(childBlockBody(child, owner));
         card.appendChild(body);
         return card;
     }
@@ -1947,7 +2006,7 @@ window.CmsBlockEditor = (function () {
     // chooser routed to append into THIS column. The initial rebuild does NOT init
     // TinyMCE (the caller — renderList/insertRowAt or renderGrid — inits the batch);
     // later user-triggered rebuilds self-init their new editors.
-    function buildColumnPanel(cols, ci) {
+    function buildColumnPanel(cols, ci, owner) {
         var panel = el('div', 'cms-cols-col');
         var colArr = cols[ci];
         var ready = false;
@@ -1956,31 +2015,81 @@ window.CmsBlockEditor = (function () {
         var listWrap = el('div', 'cms-cols-childlist');
         panel.appendChild(listWrap);
 
-        function rebuildChildren() {
-            destroyTinyIn(listWrap);
-            listWrap.innerHTML = '';
-            if (!colArr.length) {
-                listWrap.appendChild(el('div', 'cms-cols-empty', 'No blocks in this column yet.'));
-            }
-            colArr.forEach(function (child, idx) {
-                listWrap.appendChild(buildChildCard(colArr, idx, rebuildChildren));
-            });
-            var add = el('button', 'cms-btn cms-btn-sm cms-cols-add', '<i class="fas fa-plus"></i> Add block');
-            add.type = 'button';
-            add.addEventListener('click', function () {
-                openAddChooserForHandler(function (c) {
-                    colArr.push({ type: c.type, enabled: true, source: c.dynamic ? 'dynamic' : 'authored', fields: {} });
-                    rebuildChildren(); markDirty();
-                });
-            });
-            listWrap.appendChild(add);
-            if (ready) {
-                listWrap.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
-            }
-        }
+        var emptyNote = el('div', 'cms-cols-empty', 'No blocks in this column yet.');
+        listWrap.appendChild(emptyNote);
 
-        rebuildChildren();   // ready=false → caller inits the initial batch
-        ready = true;        // subsequent rebuilds self-init their new editors
+        var add = el('button', 'cms-btn cms-btn-sm cms-cols-add', '<i class="fas fa-plus"></i> Add block');
+        add.type = 'button';
+        listWrap.appendChild(add);
+
+        // Same surgical treatment the top-level list gets (see "C9: surgical DOM
+        // helpers"): moving or removing ONE child must not rebuild its siblings.
+        // A column can hold a rich_text child, and a rebuild would destroy and
+        // re-init every sibling's TinyMCE — losing caret, scroll and undo history
+        // in blocks the author never touched.
+        function cardFor(child) {
+            var nodes = listWrap.querySelectorAll('.cms-cols-childcard');
+            for (var i = 0; i < nodes.length; i++) {
+                if (nodes[i]._child === child) { return nodes[i]; }
+            }
+            return null;
+        }
+        function syncChildChrome() {
+            var nodes = listWrap.querySelectorAll('.cms-cols-childcard');
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i]._upBtn.disabled = (i === 0);
+                nodes[i]._downBtn.disabled = (i === nodes.length - 1);
+            }
+            emptyNote.style.display = nodes.length ? 'none' : '';
+        }
+        var childOps = {
+            move: function (child, dir) {
+                var i = colArr.indexOf(child);
+                var j = i + dir;
+                if (i < 0 || j < 0 || j >= colArr.length) { return; }
+                var node = cardFor(child);
+                swap(colArr, i, j);
+                var otherNode = cardFor(colArr[i]);
+                if (node && otherNode) {
+                    listWrap.insertBefore(node, dir < 0 ? otherNode : otherNode.nextSibling);
+                }
+                syncChildChrome();
+                markDirty();
+            },
+            remove: function (child) {
+                var i = colArr.indexOf(child);
+                if (i < 0) { return; }
+                var node = cardFor(child);
+                colArr.splice(i, 1);
+                if (node) {
+                    destroyTinyIn(node);
+                    node.parentNode.removeChild(node);
+                }
+                syncChildChrome();
+                markDirty();
+            }
+        };
+
+        add.addEventListener('click', function () {
+            openAddChooserForHandler(function (c) {
+                var child = { type: c.type, enabled: true, source: c.dynamic ? 'dynamic' : 'authored', fields: {} };
+                colArr.push(child);
+                var card = buildChildCard(colArr, child, childOps, owner);
+                listWrap.insertBefore(card, add);
+                syncChildChrome();
+                if (ready) {
+                    card.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+                }
+                warnTinyDegradedIfNeeded(card);
+                markDirty();
+            });
+        });
+
+        colArr.forEach(function (child) {
+            listWrap.insertBefore(buildChildCard(colArr, child, childOps, owner), add);
+        });
+        syncChildChrome();
+        ready = true;        // the caller inits the initial batch; later adds self-init
         return panel;
     }
 
@@ -2027,7 +2136,7 @@ window.CmsBlockEditor = (function () {
         function renderGrid(firstBuild) {
             destroyTinyIn(grid);
             grid.innerHTML = '';
-            cols.forEach(function (colArr, ci) { grid.appendChild(buildColumnPanel(cols, ci)); });
+            cols.forEach(function (colArr, ci) { grid.appendChild(buildColumnPanel(cols, ci, block)); });
             syncChrome();
             // On the very first build the outer machinery (renderList/insertRowAt)
             // inits every data-tiny in the row; a later count change inits here.
@@ -2276,6 +2385,9 @@ window.CmsBlockEditor = (function () {
             if (initEditors) {
                 body.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
             }
+            // The body that just appeared is the first place a data-tiny
+            // textarea can exist — warn here, not (only) from renderList.
+            warnTinyDegradedIfNeeded(body);
         };
         if (startOpen) { card._buildBody(false); }
 
@@ -2966,7 +3078,11 @@ window.CmsBlockEditor = (function () {
 
     function doUpload(file) {
         if (!file) { return; }
-        if (file.size > 8 * 1024 * 1024) { toast('Image is larger than 8MB.', 'error'); return; }
+        // The upload is base64'd into an x-www-form-urlencoded `data=` field, so
+        // the POST body is ~1.4x the file. Anything above ~5MB blows past PHP's
+        // 8M post_max_size, which drops $_POST entirely and surfaces as the
+        // misleading "No image data was supplied." Gate on the REAL ceiling.
+        if (file.size > 5 * 1024 * 1024) { toast('Image is larger than 5MB.', 'error'); return; }
         var alt = uploadAltValue();
         var reader = new FileReader();
         reader.onerror = function () { toast('Could not read file.', 'error'); loadMedia(''); };

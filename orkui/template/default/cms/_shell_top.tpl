@@ -11,8 +11,9 @@
  *
  * Page-set variables (all optional unless noted):
  *   $cmsActive  string  which rail item is highlighted:
- *                       'dashboard'|'pages'|'posts'|'media'|'nav'  (any other
- *                       value, e.g. 'edit', highlights nothing — leaf surfaces).
+ *                       'dashboard'|'pages'|'posts'|'media'|'nav'|'theme'|'sites'
+ *                       ('sites' is the scopeless super-admin overview). Any other
+ *                       value, e.g. 'edit', highlights nothing — leaf surfaces.
  *   $cmsTitle   string  masthead display title. Default 'OGRE'.
  *   $cmsSub     string  optional subtitle under the title.
  *   $cmsCrumbs  array   optional breadcrumb: list of ['label'=>..,'href'=>?..].
@@ -67,16 +68,10 @@ $shRail = array(
     array('sites',     'All sites',  UIR . 'Cms/sites',                     'fa-sitemap',    !empty($shCaps['super'])),
 );
 ?>
-<?php
-// E129: the caller's resolved capability set, exposed to admin JS so surfaces can
-// annotate/disable actions the user lacks. Progressive — empty array is safe.
-$shCmsCaps = isset($CmsCaps) && is_array($CmsCaps) ? array_values($CmsCaps) : array();
-?>
 <script>
 window.CMS_CSRF = <?= json_encode(isset($CmsCsrf) ? (string)$CmsCsrf : '', JSON_HEX_TAG) ?>;
 window.CMS_SCOPE = <?= json_encode($shScopeSel, JSON_HEX_TAG) ?>;
 window.CMS_UIR = <?= json_encode(UIR, JSON_HEX_TAG) ?>;
-window.CMS_CAPS = <?= json_encode($shCmsCaps, JSON_HEX_TAG) ?>;
 </script>
 <?php // Shared OGRE admin stylesheet — one source of truth for every admin
       // surface. Loaded HERE rather than in each of the nine page templates,
@@ -86,36 +81,6 @@ window.CMS_CAPS = <?= json_encode($shCmsCaps, JSON_HEX_TAG) ?>;
       // truth for the toast, modal controller, and CSRF-aware urlencoded POST
       // that every CMS surface uses. Loaded ONCE here so every page gets it. ?>
 <script src="<?= HTTP_TEMPLATE ?>default/script/cms-admin.js?v=<?= filemtime(__DIR__ . '/../script/cms-admin.js') ?>"></script>
-<?php
-// E129: annotate/disable admin actions the user lacks the capability for. Reads
-// window.CMS_CAPS (emitted above); no-op when the set is empty so nothing breaks.
-?>
-<script>
-(function () {
-    'use strict';
-    var caps = Array.isArray(window.CMS_CAPS) ? window.CMS_CAPS : [];
-    if (!caps.length) { return; }
-    function has(cap) { return caps.indexOf(cap) !== -1; }
-    function annotate() {
-        document.querySelectorAll('[data-cms-cap]').forEach(function (el) {
-            var need = el.getAttribute('data-cms-cap');
-            if (!need || has(need)) { return; }
-            el.classList.add('cms-cap-denied');
-            el.setAttribute('aria-disabled', 'true');
-            if (!el.getAttribute('data-tip')) {
-                el.setAttribute('data-tip', 'You do not have the “' + need + '” permission for this.');
-            }
-            if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') { el.disabled = true; }
-            el.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); }, true);
-        });
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', annotate);
-    } else {
-        annotate();
-    }
-})();
-</script>
 <div class="cms-shell">
 
     <aside class="cms-rail<?= $cmsRailExtra !== '' ? ' cms-rail-wide' : '' ?>" aria-label="Content management navigation">

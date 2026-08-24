@@ -244,8 +244,11 @@
                 }
                 return;
             }
-            // Clicking a menu item (or anywhere else) closes any open menu.
-            if (!e.target.closest('.cms-overflow-menu')) { closeAllOverflow(null); }
+            // Clicking a real menu item, or anywhere outside a menu, closes any open menu.
+            // A click on some other control hosted inside a menu is deliberately left alone.
+            if (e.target.closest('.cms-overflow-item') || !e.target.closest('.cms-overflow-menu')) {
+                closeAllOverflow(null);
+            }
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') { closeAllOverflow(null); }
