@@ -3,9 +3,9 @@
 A dev-flavored ORK (`ENVIRONMENT=DEV` → `config.dev.php`) on the shared AWS
 `applications` box (t4g.medium arm64, Ubuntu 22.04 — same Graviton arch as the
 prod ORK host), living beside the wiki/play/go/idp stacks without touching
-them. Public name: **https://ork-staging.amtgard.com** (single-level subdomain
-on purpose — Cloudflare's universal cert doesn't cover two-level names like
-staging.ork.amtgard.com).
+them. Public name: **https://staging.amtgard.com** (single-level on purpose —
+Cloudflare's universal cert doesn't cover two-level names; the warning
+triangle on idp.dev.amtgard.com in the CF dash is that exact problem).
 
 **Operating rules** (Ken, 2026-08-24):
 - Nothing automated ever touches the staging DB — Ken restores seed backups
@@ -55,23 +55,31 @@ interface.
 sudo docker exec -i ork3-stage-db sh -c 'mariadb -u ork -p"$MARIADB_PASSWORD" ork' < seed-backup.sql
 ```
 
-### 3. Cloudflare (dash.cloudflare.com, amtgard.com zone)
+### 3. DNS + Cloudflare (matching the go/play/wiki pattern)
 
-1. **DNS**: A record `ork-staging` → 18.191.144.189, **proxied** (orange).
-2. **SSL/TLS mode** for the zone should already be Full — staging origin gets
-   its own certbot cert in step 4, so Full (strict) also works.
-3. **Zero Trust → Access → Applications → Add application** (self-hosted):
-   - Application domain: `ork-staging.amtgard.com`
+1. **Route 53** (`apps.amtgard.com` hosted zone, AWS console): A record
+   `staging.apps.amtgard.com` → 18.191.144.189 — the direct name, like the
+   siblings' `go.apps` / `play.apps`.
+2. **Cloudflare DNS** (amtgard.com zone): CNAME `staging` →
+   `staging.apps.amtgard.com`, **proxied** (orange) — exactly like the `go` /
+   `play` / `wiki` rows.
+3. **Origin cert**: SSL/TLS → Origin Server → Create Certificate, hostname
+   `staging.amtgard.com`, 15-year validity. Paste cert + key into
+   `/etc/ssl/ork-staging/` on the instance (see the vhost's install
+   comments). No certbot: its renewals would hit the Access wall.
+4. **Zero Trust → Access → Applications → Add application** (self-hosted):
+   - Application domain: `staging.amtgard.com`
    - Policy: Allow → Include → Emails → Ken + whoever else
    - Session duration: 1 week is comfortable.
-   Everyone else — humans and crawlers alike — is stopped at the edge and the
-   origin never sees them. No robots/noindex worry on top: unauthenticated
-   fetches can't reach the pages at all.
+   Everyone else — humans and crawlers alike — is stopped at the edge; the
+   origin never sees them, so no robots/noindex worry on top. The direct
+   Route 53 name is never proxied to the app: the vhost 301s it to the front
+   door.
 
-### 4. Host nginx vhost + cert (on the instance)
+### 4. Host nginx vhost (on the instance)
 
-Follow the install comments in `staging/nginx-ork-staging.conf` (cp, symlink,
-`nginx -t`, reload, then `certbot --nginx -d ork-staging.amtgard.com`).
+Follow the install comments in `staging/nginx-ork-staging.conf` (cert files,
+cp, symlink, `nginx -t`, reload).
 
 ## Routine operation
 
