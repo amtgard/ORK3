@@ -210,6 +210,20 @@ class Controller_Event extends Controller
             }
         }
 
+        // A detail_id that no longer exists (deleted duplicate occurrence) or
+        // belongs to a different event would render a self-canonical "TBD"
+        // shell — which Google then indexes as real content. 301 to the
+        // event's current occurrence instead; permanent, because a deleted
+        // occurrence URL is never coming back.
+        if ($detail_id > 0) {
+            $_detailCheck = $this->Attendance->get_eventdetail_info($detail_id);
+            if (!is_array($_detailCheck) || (int)($_detailCheck['EventId'] ?? 0) !== $event_id) {
+                $_pickedDetail = $this->Event->get_default_occurrence_id($event_id);
+                header('Location: ' . UIR . 'Event/detail/' . (int)$event_id . ($_pickedDetail > 0 ? '/' . $_pickedDetail : ''), true, 301);
+                exit;
+            }
+        }
+
         $this->data['EventInfo']  = $info;
         $this->data['event_id']   = $event_id;
         $this->data['detail_id']  = $detail_id;
