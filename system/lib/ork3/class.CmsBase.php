@@ -341,6 +341,25 @@ class CmsBase extends Ork3
         $slug = strtr($slug, self::_translitMap());
 
         $slug = strtolower(trim($slug));
+
+        // Apostrophes are DELETED, not hyphenated. They sit inside a word rather
+        // than between two, so the generic non-alphanumeric sweep below would cut
+        // the word in half: "Angler's Rift" -> "angler-s-rift", which reads as
+        // three words and buries a bare "s" in a public URL. 139 of this
+        // instance's parks have one in their name. Every spelling a real name
+        // arrives in is covered — ASCII ('), the curly quotes a word processor or
+        // iOS substitutes (U+2018/U+2019), the modifier letter used in
+        // transliterated orthographies (U+02BC), and the grave/acute accents
+        // people type when reaching for an apostrophe (U+0060/U+00B4) — because a
+        // slug is a PUBLIC URL and must not depend on which keyboard typed it.
+        // Runs AFTER the transliteration above so a decomposed combining mark has
+        // already been folded away and cannot leave a stray quote behind.
+        $slug = str_replace(
+            array("'", "\xE2\x80\x99", "\xE2\x80\x98", "\xCA\xBC", '`', "\xC2\xB4"),
+            '',
+            $slug
+        );
+
         $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
         $slug = preg_replace('/-+/', '-', $slug);
         $slug = trim($slug, '-');

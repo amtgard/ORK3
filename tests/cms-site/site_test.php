@@ -152,6 +152,22 @@ check(
 check('derive handles NFD ring + umlaut', $site->DeriveSlug("A\xcc\x8angstro\xcc\x88m") === 'angstrom');
 check('derive empty stays empty', $site->DeriveSlug('   ') === '');
 
+// An apostrophe sits INSIDE a word, so the generic punctuation sweep would cut
+// the word in half ("Angler's Rift" -> "angler-s-rift"), burying a bare "s" in a
+// public URL. 139 parks on this instance have one in their name. Written as
+// explicit bytes for the non-ASCII spellings so an editor cannot silently
+// normalize the assertion into the ASCII one and hide a regression.
+check('derive deletes an ASCII apostrophe, not hyphenates it', $site->DeriveSlug("Angler's Rift") === 'anglers-rift');
+check(
+    'derive converges every apostrophe spelling on one slug',
+    $site->DeriveSlug("Angler's Rift") === 'anglers-rift'                 // U+0027 ASCII
+        && $site->DeriveSlug("Angler\xe2\x80\x99s Rift") === 'anglers-rift' // U+2019 curly (Word/iOS)
+        && $site->DeriveSlug("Angler\xca\xbcs Rift") === 'anglers-rift'     // U+02BC modifier letter
+);
+check('derive handles a trailing-plural apostrophe', $site->DeriveSlug("Angels' Dusk") === 'angels-dusk');
+check('derive still hyphenates punctuation that separates words', $site->DeriveSlug('Rock & Roll') === 'rock-roll');
+check('derive of apostrophes alone is empty, not a hyphen run', $site->DeriveSlug("'''") === '');
+
 // --- ValidateSlug: charset (pure, returns before DB) ---
 check('reject uppercase', is_string($site->ValidateSlug('Foo')));
 check('reject spaces', is_string($site->ValidateSlug('foo bar')));
