@@ -138,3 +138,12 @@ body.cms-page {
 body.fd-home #newmenu {
     display: none !important;
 }
+
+/* The saved CMS draft preview renders in-shell without fd-home/cms-page, so
+   #newmenu is painted there — but its sticky banner needs NO `top` override:
+   BODY is the scroll container (orkui.css clamps `html, body { overflow-x: hidden }`)
+   and body's 8px margin + 48px padding-top already pay for the navbar, so `top: 0`
+   pins the banner clear of it. The only unhandled state is the rare second scroller
+   (<html> scrolled its own 56px, reachable by scrollIntoView, never by a wheel);
+   no single `top` value fixes that and the at-rest position both. See
+   cms/css/cms-admin.css:203-230 for the full measurement. */

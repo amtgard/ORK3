@@ -205,55 +205,74 @@ R10's verification quotes the 146. Both are right.
   `_park_strip.tpl` and `org_blog_index.tpl` — precisely the templates this
   project lifted inline CSS *out of* — free to take it straight back.
   **A `<style>` is legal only if it passes both tests:**
-  1. it interpolates a PHP **variable** into a declaration **value**
-     (the `columns.tpl` exception below), and
+  1. it interpolates a PHP **variable** into a declaration **value**, and
   2. it brings no more than **8 static declarations** with it, counted
-     cumulatively across the whole file.
+     cumulatively across the whole file
+     (`grep -n '^C3_MAX_STATIC=' bin/check-css-boundaries.sh` → `597:C3_MAX_STATIC=8`).
+
+  **No CMS template passes test 1 today** — see
+  [How the columns block sizes itself](#how-the-columns-block-sizes-itself) for
+  the last one that did — so in practice a `<style>` in a CMS template is simply
+  rejected.
   Test 1 alone was all-or-nothing per element, so one interpolation laundered
   an arbitrarily large static block — a single `repeat(<?= $n ?>, 1fr)` plus ten
-  static rules passed. Test 2 is the budget: `columns.tpl` declares 6 static
-  properties beside its interpolated one, so 8 leaves a genuine per-instance
-  block two declarations of headroom and stops well short of a lifted-out
-  stylesheet. It is per **file**, not per element, because N elements of 8 would
-  reopen the same hole. Tune it at `C3_MAX_STATIC` in the script.
-  **3. And the whole tree stays under `C3_TOTAL_STATIC` = 6.** A per-file budget
+  static rules passed. Test 2 is the budget, and 8 was sized against the last
+  template that ever needed an interpolating `<style>`: `columns.tpl` declared
+  **6** static properties beside its interpolated `grid-template-columns`
+  *(historical — that block is gone)*, so 8 left a genuine per-instance block two
+  declarations of headroom and stopped well short of a lifted-out stylesheet. It
+  is per **file**, not per element, because N elements of 8 would reopen the same
+  hole. Tune it at `C3_MAX_STATIC` in the script.
+  **3. And the whole tree stays under `C3_TOTAL_STATIC` = 0.** A per-file budget
   reopens the hole one level up: N *files* of 8 is the same inline stylesheet
   split N ways. Proven — three new partials under `frontdoor/`, 8 static
   declarations each, 24 declarations back inline, gate exit 0. So the sum is
   pinned too: the total static declarations riding inside *legal* interpolating
   `<style>` blocks across every CMS template, counted over the whole tree in
   every mode (`--staged`, `--range` and `--files` re-scan the tree for the
-  census, so you cannot land the partials one commit at a time). All 6 are
-  `columns.tpl`'s — it is the only contributor. It is a **ratchet**: above the
-  pin fails, and so does below (the message tells you the line to re-pin and the
-  number to put there), because slack in a budget is slack the next commit
-  spends. `CSS_STATIC_ALLOW_SLACK=1` forgives the below-budget direction only.
+  census, so you cannot land the partials one commit at a time). **Nothing
+  contributes to that total today** — `columns.tpl` was the last contributor, and
+  its CSS now lives in `blocks.css` behind a `.fdb-columns-N` class. It is a
+  **ratchet**: above the pin fails, and so does below (the message tells you the
+  line to re-pin and the number to put there), because slack in a budget is slack
+  the next commit spends. `CSS_STATIC_ALLOW_SLACK=1` forgives the below-budget
+  direction only.
 
-  > ### ⚠ `C3_TOTAL_STATIC` has ZERO headroom — read this before filing a bug
+  > ### ⚠ `C3_TOTAL_STATIC` is pinned at ZERO — read this before filing a bug
   >
-  > The pin is **6** and `columns.tpl` spends all **6**. So **the next
-  > interpolating `<style>` anywhere in the CMS trips the gate on its first
-  > static declaration**, however small and however legitimate. That is the
-  > ratchet working as designed — a budget with slack is a budget the next commit
-  > spends — but the first person to hit it will be writing a perfectly
-  > reasonable per-instance style and will read `C3-TOTAL … ROSE` as a false
-  > alarm. It is not one.
+  > The pin is **0** and nothing in the tree spends any of it
+  > (`grep -n '^C3_TOTAL_STATIC=' bin/check-css-boundaries.sh` →
+  > `635:C3_TOTAL_STATIC=0`, and `bash bin/check-css-boundaries.sh --all` → exit
+  > 0; because the ratchet fails in *both* directions, that exit 0 is itself the
+  > proof the observed tree total equals the pin).
   >
-  > Verified 2026-08-22: adding one static declaration to `columns.tpl`'s block —
-  > 7 for the file, still inside `C3_MAX_STATIC=8` — took the tree to 7 and
-  > `bin/check-css-boundaries.sh --all` to **exit 1**. Reverted, exit 0.
+  > So **the next interpolating `<style>` anywhere in the CMS trips the gate on
+  > its first static declaration**, however small and however legitimate. The
+  > headroom is still zero, but for a stronger reason than when the pin was 6:
+  > back then `columns.tpl` held all six and a newcomer collided with an
+  > incumbent; now there is no incumbent and no budget, so **any** static
+  > declaration riding inside **any** interpolating `<style>` is over the line
+  > the moment it lands. That is the ratchet working as designed — a budget with
+  > slack is a budget the next commit spends — but the first person to hit it
+  > will be writing a perfectly reasonable per-instance style and will read
+  > `C3-TOTAL … ROSE` as a false alarm. It is not one.
+  >
+  > Verified 2026-08-23: an untracked probe partial under `frontdoor/` carrying
+  > one interpolated declaration and **one** static one — nowhere near
+  > `C3_MAX_STATIC=8` — took the tree to 1 and `bin/check-css-boundaries.sh
+  > --all` to **exit 1**. Removed, exit 0.
   >
   > **The re-baseline is one line, and the failure prints it**, with the line
-  > number computed at runtime so it cannot go stale:
+  > number computed at runtime so it cannot go stale. That probe's real output:
   >
   > ```
-  >   C3-TOTAL  bin/check-css-boundaries.sh:633
-  >         Inline static CSS across the CMS templates ROSE to 7 static declaration(s)
-  >         riding inside PHP-interpolating <style> blocks; the pinned budget is 6.
+  >   C3-TOTAL  bin/check-css-boundaries.sh:635
+  >         Inline static CSS across the CMS templates ROSE to 1 static declaration(s)
+  >         riding inside PHP-interpolating <style> blocks; the pinned budget is 0.
   >         Contributing files:
-  >              7  orkui/template/default/frontdoor/blocks/columns.tpl
+  >              1  orkui/template/default/frontdoor/_c3probe.tpl
   >         -> … raise the pin deliberately:
-  >                bin/check-css-boundaries.sh:633   C3_TOTAL_STATIC=7
+  >                bin/check-css-boundaries.sh:635   C3_TOTAL_STATIC=1
   > ```
   >
   > Your two options, in order of preference:
@@ -267,9 +286,11 @@ R10's verification quotes the 146. Both are right.
   >    act is the diff itself.
   >
   > What will **not** work is `CSS_STATIC_ALLOW_SLACK=1` — it forgives only the
-  > *below*-budget direction and cannot silence a rise. Re-pin downward the same
-  > way if you ever remove `columns.tpl`'s block: the gate will fail with
-  > `FELL`, and it names the line and the number then too.
+  > *below*-budget direction and cannot silence a rise. The downward re-pin is
+  > the same one-line edit, and it is how the pin got to 0: lifting
+  > `columns.tpl`'s block into `blocks.css` made the gate fail with `FELL`, which
+  > named the line and the number, and `bin/check-css-boundaries.sh:635` was
+  > re-pinned **6 → 0** in that same change. Do the same for the next one.
   **Residual gap, stated honestly:** inside the pinned total, up to 8 static
   declarations can still ride along in a file that has a legitimate interpolating
   block, and the counter only sees declarations — a `<style>` full of
@@ -495,27 +516,51 @@ with `ork-`), so folding cannot make `.ork-` match inside an unrelated word such
 as `[class*="network-item"]`. `$IsOrgSite` is exempt from the folding — PHP
 variable names are case-sensitive.
 
-### The `columns.tpl` exception
+### How the columns block sizes itself
 
-`frontdoor/blocks/columns.tpl` is the one block template that keeps an inline
-`<style>`, and C3 lets it through because its body interpolates PHP:
-`grid-template-columns: repeat(<?= (int) $fdbCount ?>, 1fr)`. A stylesheet
-cannot express a per-instance column count. It declares **6** static properties
-beside that one, against C3's budget of 8 — so if you add three more static
-declarations to that block, the gate will (correctly) tell you they belong in
-`blocks.css`. Those same 6 are the entire tree-wide `C3_TOTAL_STATIC` budget, so
-a *second* template that wants an interpolating `<style>` has to raise the pin
-deliberately rather than quietly spend the headroom. Its `@media (max-width:760px)`
-partner has to stay in that same `<style>` element, after the base rule, or a
-stylesheet copy loaded earlier would lose the same-specificity order tie and the
-phone breakpoint would stop collapsing to one column.
+This section used to describe a `columns.tpl` **exception**: the one block
+template that kept an inline `<style>`, let through by C3 because its body
+interpolated `grid-template-columns: repeat(<?= (int) $fdbCount ?>, 1fr)` and a
+stylesheet cannot express a per-instance column count. It was a bug wearing an
+exemption. `.fdb-columns` is a **global** selector, so that "per-instance" block
+was nothing of the kind: with two columns blocks on one page the last emission
+re-flowed every earlier one.
 
-Note the consequence: `.fdb-columns` is one global selector, so with several
-columns blocks on a page the last emission sets the column count for all of
-them. Fix that properly (a per-count class, or an inline style on the wrapper)
-before trying to dedupe the emissions — deduping by type drops later emissions
-and re-flows earlier blocks; deduping by count reorders which emission is last.
-Both change rendering.
+The count now travels as a **class on the element** and every declaration lives
+in `blocks.css`:
+
+- the template emits
+  `class="fd-pad fdb-columns fdb-columns-<?= (int) $fdbCols ?>"`, with
+  `$fdbCols = max(1, min(6, $fdbCount));`
+  (`grep -n 'max(1, min(6' orkui/template/default/frontdoor/blocks/columns.tpl`);
+- `blocks.css` carries the base `.fdb-columns` rule, the
+  `.fdb-columns > .fdb-columns-col { min-width: 0; }` guard, and a ladder of
+  **6** count classes `.fdb-columns-1` … `.fdb-columns-6`
+  (`grep -c '^\.fdb-columns-[0-9] ' orkui/template/default/frontdoor/css/blocks.css`);
+- the `@media (max-width: 760px)` step-down to a single column is the **last
+  rule in the file** (`tail -3 orkui/template/default/frontdoor/css/blocks.css`).
+
+That last placement is load-bearing and is the thing to preserve. The media
+query and `.fdb-columns-N` are the **same specificity**, so the phone rule wins
+the tie only by coming later in the cascade — and it does, because it is the end
+of `blocks.css`. **Append new rules above it, not after it**, or the breakpoint
+stops collapsing to one column. (The old inline block had the mirror-image
+constraint — the `@media` partner had to sit inside that same `<style>`, after
+the base rule. Same tie, different resolution; the stylesheet resolves it once
+for every instance instead of once per emission.)
+
+No CMS template carries an inline `<style>` any more, which is why
+`C3_TOTAL_STATIC` is pinned at **0**.
+
+**The clamp is real, and nearly unreachable.** A count above 6 used to render as
+`repeat(N, 1fr)`; it now clamps to `.fdb-columns-6` and the extra columns wrap
+onto a second grid row. Reaching that needs an author who bypasses the visual
+editor: the editor offers only 2 or 3
+(`grep -n '\[2, 3\].forEach' orkui/template/default/script/cms-block-editor.js`
+→ line 2006) and `setCount` returns early on anything that is not 2 or 3, so only
+the advanced-JSON path can author more. If the editor ever offers more, extend
+the ladder in `blocks.css` and move the clamp in the template with it — they are
+two halves of one number.
 
 ## The runtime backstop (`tests/cms-css/boundary_test.php`)
 

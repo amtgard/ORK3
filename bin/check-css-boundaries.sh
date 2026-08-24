@@ -249,10 +249,11 @@
 #             counted cumulatively over the whole file.
 #       (a) alone was all-or-nothing per element, so ONE interpolation
 #       laundered an arbitrarily large static block (1 interpolation + 10
-#       static rules passed). (b) is the budget: blocks/columns.tpl
-#       interpolates $fdbCount into grid-template-columns and declares 6 static
-#       properties beside it (display, gap, align-items, min-width, and the two
-#       in its @media partner), so the budget is 8 — enough headroom for a
+#       static rules passed). (b) is the budget: it was sized against the last
+#       template that needed an interpolating <style> — blocks/columns.tpl,
+#       which interpolated $fdbCount into grid-template-columns and declared 6
+#       static properties beside it before that CSS moved into blocks.css
+#       behind a .fdb-columns-N class — so the budget is 8, enough headroom for a
 #       genuine per-instance block, far short of a lifted-out stylesheet. It is
 #       per FILE, not per element, because N elements of 8 would be the same
 #       hole reopened.
@@ -607,13 +608,14 @@ C3_MAX_STATIC=8
 #
 # So the quantity that is actually pinned is the tree-wide one: how many static
 # declarations ride along inside LEGAL (PHP-interpolating) <style> blocks across
-# every CMS template, counted over the whole tree in every mode. Today that is 6
-# — the six columns.tpl declares beside its interpolated grid-template-columns
-# (display, gap, align-items, min-width, and the two in its @media partner) —
-# and it is the ONLY file that contributes. cms/_shell_top.tpl's "<style>" is
-# prose inside a PHP comment and Cms_deny.tpl is exempt from C3 altogether
-# (structural: it bypasses the shell and links no stylesheet at all), so both
-# contribute 0 and both keep passing.
+# every CMS template, counted over the whole tree in every mode. Today that is 0
+# — blocks/columns.tpl was the last contributor (six declarations beside an
+# interpolated grid-template-columns) and its CSS now lives in blocks.css, the
+# authored column count riding on a .fdb-columns-N class instead of on an
+# interpolation. cms/_shell_top.tpl's "<style>" is prose inside a PHP comment
+# and Cms_deny.tpl is exempt from C3 altogether (structural: it bypasses the
+# shell and links no stylesheet at all), so both contribute 0 and both keep
+# passing.
 #
 # A static-ONLY <style> is not in this number: it is a plain C3 violation and is
 # reported as one. This budget measures exactly the laundering channel — static
@@ -630,7 +632,7 @@ C3_MAX_STATIC=8
 # Raising it is therefore a deliberate, reviewable act, which is the whole point:
 # the fourth partial is not a judgement call about whether 8 is small, it is a
 # diff that raises a pinned number.
-C3_TOTAL_STATIC=6
+C3_TOTAL_STATIC=0
 
 # R6 — THE CRM STYLESHEET SET IS DERIVED FROM THE FILESYSTEM, not listed here.
 # C4-link and C6 used to hardcode "orkui.css|tokens.css|orkshell-interop.css",

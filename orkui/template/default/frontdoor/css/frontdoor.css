@@ -285,7 +285,7 @@
 
 /* ---- Card -------------------------------------------------- */
 .fd-card {
-    background: var(--fd-bg);
+    background: var(--fd-card-bg, var(--fd-bg));
     border: 1px solid var(--pk-line);
     border-radius: 10px;
     overflow: hidden;
@@ -757,6 +757,10 @@ html[data-theme="dark"] .fd-page {
     /* Dark-mode token defaults (keep UNTHEMED dark looking like today) */
     --fd-bg: #0e1626;
     --fd-surface: #16203a;
+    /* Card plate — a surface one step ABOVE the band so cards stay visible when
+       the band and the page share --fd-bg in dark. Derive() emits a per-org
+       value for this token; this is only the UNTHEMED fallback. */
+    --fd-card-bg: #1e2a3e;
     --fd-border: #243049;
     --fd-text: #e8ecf1;
     --fd-text-muted: #aab3c0;
@@ -770,37 +774,21 @@ html[data-theme="dark"] .fd-page {
     color: #dce3f3;
 }
 
-/* Light white bands → dark surface */
-html[data-theme="dark"] .fd-pad[style*="background:#fff"] {
-    background: #1a2236 !important;
-}
-
-html[data-theme="dark"] .fd-pad[style*="background:#f7f8fb"] {
-    background: #131c2e !important;
-}
-
-/* Generic section backgrounds */
+/* Generic section backgrounds — NO literal repaint here: the light rules already
+   read --pk-paper / --pk-vellum, and the .fd-page block above remaps those onto
+   the dark token set (per-org in dark, not just in light). */
 html[data-theme="dark"] .fd-section-light {
-    background: #1a2236;
     color: #dce3f3;
 }
 
 html[data-theme="dark"] .fd-section-muted {
-    background: #131c2e;
     color: #dce3f3;
 }
 
-/* Cards */
+/* Cards — background comes from --fd-card-bg, border from --pk-line; both are
+   remapped for dark on .fd-page, so a themed org keeps its own palette. */
 html[data-theme="dark"] .fd-card {
-    background: #1e2a3e;
-    border-color: #2e3d55;
     color: #dce3f3;
-}
-
-/* Nav bar */
-html[data-theme="dark"] .fd-nav {
-    background: #111827;
-    border-bottom-color: #2e3d55;
 }
 
 html[data-theme="dark"] .fd-navitem > a {
@@ -808,7 +796,7 @@ html[data-theme="dark"] .fd-navitem > a {
 }
 
 html[data-theme="dark"] .fd-navitem > a:hover {
-    background: #1e2a3e;
+    background: var(--fd-card-bg, #1e2a3e);
     color: var(--gold);
 }
 
@@ -1074,11 +1062,6 @@ html[data-theme="dark"] .fd-btn-ghost {
     }
 
     /* Dark mode nav open override */
-    html[data-theme="dark"] .fd-navlinks {
-        background: #111827;
-        border-bottom-color: #2e3d55;
-    }
-
     html[data-theme="dark"] .fd-dropdown {
         background: rgba(255, 255, 255, .05);
     }

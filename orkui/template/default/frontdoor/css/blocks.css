@@ -889,7 +889,12 @@ html[data-theme="dark"] .fdb-divider-dots {
 .fd-roster-card-modal:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 30px rgba(0,0,0,.28); }
 .fd-roster-card-modal:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .fd-roster-more { margin-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--gold); }
-.fd-rmodal { position: fixed; inset: 0; z-index: 1200; display: none; align-items: center; justify-content: center; padding: 22px; }
+/* z-index matches the gallery lightbox (.fdb-gallery-lb, above) deliberately: a
+   public-tier full-screen overlay has to clear the ORK shell nav on every in-shell
+   surface, and on the saved CMS preview that nav IS painted (--ork-z-nav 9999,
+   --ork-z-nav-overlay 10001), so the old 1200 let the bar punch through this
+   backdrop. .fd-rmodal-card keeps its own z-index:1 inside this stacking context. */
+.fd-rmodal { position: fixed; inset: 0; z-index: 100000; display: none; align-items: center; justify-content: center; padding: 22px; }
 .fd-rmodal.is-open { display: flex; }
 .fd-rmodal-backdrop { position: absolute; inset: 0; background: rgba(6,10,20,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .fd-rmodal-card { position: relative; z-index: 1; width: 100%; max-width: 540px; max-height: 88vh; overflow-y: auto; background: var(--fd-surface, #fff); color: var(--fd-text, #1a2236); border: 1px solid var(--fd-border, #e2e6ec); border-radius: 18px; padding: 34px 32px 30px; box-shadow: 0 28px 80px rgba(0,0,0,.55); text-align: center; animation: fdRModalIn .18s ease-out; }
@@ -1011,10 +1016,10 @@ html[data-theme="dark"] .fdb-rawhtml-empty strong { color: #f4ecc7; }
 html[data-theme="dark"] .fdb-rawhtml-empty code { background: rgba(255,255,255,.1); }
 
 /* ---- steps block (was inline style element in frontdoor/blocks/steps.tpl) ----
-   .fdb-steps-grid gets its base `grid-template-columns: repeat(N, 1fr)` from an
-   inline style attribute (N = the authored step count), so these step-downs keep
-   their !important: an !important author declaration outranks a normal inline
-   style declaration, which is the only way to beat that attribute. */
+   .fdb-steps-grid gets its base `grid-template-columns` from the
+   .fdb-steps-1 … .fdb-steps-4 ladder at the end of this file (shared with
+   .fdb-columns-N). These step-downs keep their !important: that ladder is
+   declared LATER, so at equal specificity it would otherwise win these ties. */
 @media (max-width: 760px) { .fdb-steps-grid { grid-template-columns: repeat(2, 1fr) !important; } }
 
 @media (max-width: 480px) { .fdb-steps-grid { grid-template-columns: 1fr !important; } }
@@ -1105,13 +1110,36 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover {
     background: #166534;
 }
 
-/* ============================================================
- * The one block whose CSS is NOT here: frontdoor/blocks/columns.tpl.
- *
- * It interpolates the authored column count into
- * `grid-template-columns: repeat(N, 1fr)`, so the rule is per-instance and
- * cannot live in a static stylesheet. Its `@media (max-width: 760px)`
- * single-column step-down has to stay in that same inline style element,
- * immediately after the base rule, or the copy here would be earlier in the
- * cascade and lose the same-specificity tie. See the comment in columns.tpl.
- * ============================================================ */
+/* ---- columns block (was inline style element in frontdoor/blocks/columns.tpl) ----
+   The authored column count arrives as a class (.fdb-columns-1 … .fdb-columns-6,
+   clamped in columns.tpl) instead of an interpolated
+   `grid-template-columns: repeat(N, 1fr)`. That is what lets the rule live here:
+   per-instance state is in the class list, so several columns blocks on one page
+   no longer overwrite each other's column count. */
+.fdb-columns {
+    display: grid;
+    gap: 22px;
+    align-items: start;
+}
+
+.fdb-columns > .fdb-columns-col { min-width: 0; }
+
+/* steps.tpl now takes the same treatment (its count is clamped to 1..4), so the
+   two ladders share one rule per count rather than duplicating the bodies. The
+   .fdb-steps-grid step-downs earlier in this file keep their !important — see
+   the note there. */
+.fdb-columns-1, .fdb-steps-1 { grid-template-columns: repeat(1, 1fr); }
+.fdb-columns-2, .fdb-steps-2 { grid-template-columns: repeat(2, 1fr); }
+.fdb-columns-3, .fdb-steps-3 { grid-template-columns: repeat(3, 1fr); }
+.fdb-columns-4, .fdb-steps-4 { grid-template-columns: repeat(4, 1fr); }
+.fdb-columns-5 { grid-template-columns: repeat(5, 1fr); }
+.fdb-columns-6 { grid-template-columns: repeat(6, 1fr); }
+
+.fdb-steps-grid {
+    display: grid;
+    gap: 20px;
+}
+
+@media (max-width: 760px) {
+    .fdb-columns { grid-template-columns: 1fr; gap: 14px; }
+}

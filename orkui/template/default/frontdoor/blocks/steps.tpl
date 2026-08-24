@@ -8,7 +8,25 @@ $kicker  = $blockFields['kicker']  ?? '';
 $heading = $blockFields['heading'] ?? '';
 $band    = $blockFields['band']    ?? 'light';
 $steps   = $blockFields['steps']   ?? [];
+$steps   = is_array($steps) ? array_values(array_filter($steps, 'is_array')) : [];
 $cta     = $blockFields['cta']     ?? [];
+
+// Nothing to say and nowhere to go → render nothing. The wrapper below paints a
+// full-width band (muted vellum, or navy when $band is 'dark'), so an untouched
+// starter block showed up as a blank colored stripe with no content at all.
+// Matches the cta_band / hero_carousel / photo_mosaic pattern: silent for
+// visitors, discoverable hint for the author in preview.
+if (
+    trim((string) $kicker) === ''
+    && trim((string) $heading) === ''
+    && empty($steps)
+    && trim((string) ($cta['label'] ?? '')) === ''
+) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This steps block is empty.');
+    }
+    return;
+}
 
 $isDark  = ($band === 'dark');
 // Light band: render via the .fd-section-muted class (no inline background) so
@@ -41,7 +59,11 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
     </div>
 
     <?php if (!empty($steps)): ?>
-        <div class="fdb-steps-grid" style="display:grid;grid-template-columns:repeat(<?= count($steps) ?>,1fr);gap:20px;">
+        <?php // Clamp the desktop column count the way columns.tpl does: past four,
+              // extra steps wrap onto a second row instead of shrinking every step
+              // into an unreadable sliver. ?>
+        <?php $stepCols = max(1, min(4, count($steps))); ?>
+        <div class="fdb-steps-grid fdb-steps-<?= (int) $stepCols ?>">
             <?php foreach ($steps as $step): ?>
                 <?php
                 $n     = (int)($step['n']     ?? 0);

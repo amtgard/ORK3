@@ -143,8 +143,8 @@
 // ::after chip is positioned against. Padding it to two declarations to duck
 // this counter would be the actual defect. Both rules carry a comment saying so.
 // ---------------------------------------------------------------------------
-const MAX_GROUPS_2PLUS = 26;
-const MAX_GROUPS_ANY   = 90;
+const MAX_GROUPS_2PLUS = 25;
+const MAX_GROUPS_ANY   = 89;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(
@@ -158,27 +158,20 @@ const CSS_GLOBS = array(
  * A naive /\*.*?\*\/ regex is blinded by `content: "/*"` — the quoted opener eats
  * the rest of the file and every rule after it stops being analysed. Walking the
  * text with quote tracking costs nothing and cannot be fooled that way.
+ *
+ * The quote tracking is cssStringToken(), the same scanner cssRules() and
+ * cssSplitDecls() use — so a stray apostrophe (`Foo's`) is a typo here too, and
+ * no longer blinds comment stripping for the rest of the file.
  */
 function cssStripComments($src)
 {
-    $out   = '';
-    $len   = strlen($src);
-    $quote = '';
+    $out = '';
+    $len = strlen($src);
     for ($i = 0; $i < $len; $i++) {
         $c = $src[$i];
-        if ($quote !== '') {
-            $out .= $c;
-            if ($c === '\\' && $i + 1 < $len) {
-                $out .= $src[$i + 1];
-                $i++;
-            } elseif ($c === $quote) {
-                $quote = '';
-            }
-            continue;
-        }
-        if ($c === '"' || $c === "'") {
-            $quote = $c;
-            $out  .= $c;
+        if (($c === '"' || $c === "'") && ($tok = cssStringToken($src, $i, $len)) !== null) {
+            $out .= $tok['text'];
+            $i    = $tok['end'];
             continue;
         }
         if ($c === '/' && $i + 1 < $len && $src[$i + 1] === '*') {
@@ -195,6 +188,47 @@ function cssStripComments($src)
         $out .= $c;
     }
     return $out;
+}
+
+/**
+ * The one string scanner. Every consumer that walks CSS text uses it.
+ *
+ * Does the quote at $pos open a string, and if so where does it end? A CSS string
+ * cannot contain a raw newline, so an unterminated quote (`Foo's`) is a typo, not
+ * structure: believing it swallows the rest of the file and collapses the counts
+ * this gate ratchets on. A `\` + newline continuation is stepped over, and so
+ * still counts as closing — that is the only way a string spans lines.
+ *
+ * Returning the whole token, not just a yes/no, is deliberate. Four consumers
+ * (cssStripComments, the prelude and body scanners in cssRules, and
+ * cssSplitDecls) used to re-implement the escape/newline/close loop inline and
+ * had already drifted apart on line counting. A divergent copy of this loop
+ * silently moves the numbers the ratchet enforces, so there is exactly one.
+ *
+ * @return array{text:string, end:int, lines:int}|null  null = not a string opener.
+ *         `text` is the token including both quotes, `end` the index of its last
+ *         character, `lines` the newlines inside it (continuations only).
+ */
+function cssStringToken($src, $pos, $len)
+{
+    $q    = $src[$pos];
+    $text = $q;
+    for ($k = $pos + 1; $k < $len; $k++) {
+        $c = $src[$k];
+        if ($c === '\\' && $k + 1 < $len) {
+            $text .= $c . $src[$k + 1];
+            $k++;
+            continue;
+        }
+        if ($c === "\n") {
+            return null;   // raw newline before any closer: a typo, not a string
+        }
+        $text .= $c;
+        if ($c === $q) {
+            return array('text' => $text, 'end' => $k, 'lines' => substr_count($text, "\n"));
+        }
+    }
+    return null;
 }
 
 /**
@@ -217,6 +251,14 @@ function cssRules($file)
         if ($c === "\n") {
             $line++;
         }
+        // Strings are consumed whole, same reason cssStripComments does it: a
+        // `content: "}"` or `content: "a; b"` must not be read as structure.
+        if (($c === '"' || $c === "'") && ($tok = cssStringToken($src, $i, $len)) !== null) {
+            $buf  .= $tok['text'];
+            $line += $tok['lines'];   // escaped newlines: legal continuations, still lines
+            $i     = $tok['end'];
+            continue;
+        }
         if ($c === '{') {
             $prelude = trim(preg_replace('/\s+/', ' ', $buf));
             if ($prelude !== '' && $prelude[0] === '@') {
@@ -228,18 +270,25 @@ function cssRules($file)
             $depth = 1;
             $body  = '';
             for ($j = $i + 1; $j < $len && $depth > 0; $j++) {
-                if ($src[$j] === '{') {
+                $d = $src[$j];
+                if (($d === '"' || $d === "'") && ($tok = cssStringToken($src, $j, $len)) !== null) {
+                    $body .= $tok['text'];
+                    $line += $tok['lines'];   // escaped newlines: legal continuations, still lines
+                    $j     = $tok['end'];
+                    continue;
+                }
+                if ($d === '{') {
                     $depth++;
-                } elseif ($src[$j] === '}') {
+                } elseif ($d === '}') {
                     $depth--;
                     if ($depth === 0) {
                         break;
                     }
                 }
-                if ($src[$j] === "\n") {
+                if ($d === "\n") {
                     $line++;
                 }
-                $body .= $src[$j];
+                $body .= $d;
             }
             $rules[] = array(
                 'at'   => implode(' >> ', $stack),
@@ -273,11 +322,49 @@ function cssRules($file)
     return $rules;
 }
 
+/**
+ * Split a declaration body on `;`, string-aware.
+ *
+ * A plain explode() cuts `background: url("data:image/svg+xml;base64,…")` into two
+ * garbage declarations, which silently moves the counts this gate ratchets on.
+ * `;` is also legal inside an *unquoted* url-token, so parens are tracked too.
+ *
+ * @return array<int, string>
+ */
+function cssSplitDecls($body)
+{
+    $parts = array();
+    $cur   = '';
+    $paren = 0;
+    $len   = strlen($body);
+    for ($i = 0; $i < $len; $i++) {
+        $c = $body[$i];
+        if (($c === '"' || $c === "'") && ($tok = cssStringToken($body, $i, $len)) !== null) {
+            $cur .= $tok['text'];
+            $i    = $tok['end'];
+            continue;
+        }
+        if ($c === '(') {
+            $paren++;
+        } elseif ($c === ')' && $paren > 0) {
+            $paren--;
+        }
+        if ($c === ';' && $paren === 0) {
+            $parts[] = $cur;
+            $cur     = '';
+            continue;
+        }
+        $cur .= $c;
+    }
+    $parts[] = $cur;
+    return $parts;
+}
+
 /** Canonical declaration body: order preserved, whitespace collapsed, property lowercased. */
 function cssNormalizeBody($body)
 {
     $out = array();
-    foreach (explode(';', $body) as $decl) {
+    foreach (cssSplitDecls($body) as $decl) {
         $decl = trim(preg_replace('/\s+/', ' ', $decl));
         if ($decl === '') {
             continue;

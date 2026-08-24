@@ -324,7 +324,7 @@ body {
     border-radius: 4px;
     white-space: pre-line;
     pointer-events: none;
-    z-index: 1300; /* above .cms-overflow-menu (1200) */
+    z-index: var(--z-help-overlay); /* above .cms-overflow-menu (--z-modal-top) */
     min-width: max-content;
     max-width: 240px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
@@ -553,9 +553,12 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
     .cms-rail-word { display: none; }
     .cms-rail-brand { padding: 0 8px 0 4px; }
     /* Keep the label in the a11y tree (screen readers / accessible name)
-       while hiding it visually — icon-only rail must not strip names. */
+       while hiding it visually — icon-only rail must not strip names. The
+       dashboard's recent-activity buttons collapse the same way and are
+       grouped here rather than restating the body in a second 560px block. */
     .cms-rail-item .cms-rail-label,
-    .cms-rail-item-quiet .cms-rail-label {
+    .cms-rail-item-quiet .cms-rail-label,
+    .cms-recent-actions .cms-btn-label {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -632,16 +635,9 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     outline-offset: 2px;
 }
 
-.cms-badge {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .03em;
-    text-transform: uppercase;
-    padding: 3px 9px;
-    border-radius: 999px;
-    line-height: 1.4;
-}
+/* The pill itself comes from the shared `.ork-badge` base in orkui.css (loaded
+   on every admin page); these are the CMS-only semantic colour aliases. Badge
+   markup carries both classes: `class="ork-badge cms-badge cms-badge-draft"`. */
 .cms-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .cms-badge-draft { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
 .cms-badge-system { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
@@ -1437,7 +1433,8 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
     display: none;
     align-items: flex-start;
     justify-content: center;
-    z-index: 10000;
+    /* The one tier above #newmenu's stacking context — see tokens.css. */
+    z-index: var(--ork-z-app-modal);
     padding: 40px 16px;
     overflow-y: auto;
 }
@@ -1546,7 +1543,7 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
     position: fixed;
     right: 18px;
     bottom: 18px;
-    z-index: 11000;
+    z-index: var(--ork-z-app-toast);
     min-width: 200px;
     max-width: 360px;
     padding: 12px 16px;
@@ -1864,7 +1861,7 @@ html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.cu
      * escapes the .cms-table-wrap overflow:hidden clip and flips upward near the
      * viewport bottom — matches the project's tnFixedAcPosition pattern. */
     position: fixed;
-    z-index: 1200;
+    z-index: var(--z-modal-top);
     min-width: 168px;
     padding: 5px;
     border: 1px solid var(--ork-border);
@@ -2764,18 +2761,6 @@ html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
 .cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-secondary); text-decoration: none; font-size: 13.5px; }
 .cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
 /* dark .cms-dash-livelink:hover is gold — see "Gold accent text" above. */
-
-@media (max-width: 560px) {
-    /* Collapse the label visually but keep the accessible name. */
-    .cms-recent-actions .cms-btn-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
-}
 
 /* ============================================================================
    Scope-context banner (cms/_shell_top.tpl) — moved out of the shell's inline
