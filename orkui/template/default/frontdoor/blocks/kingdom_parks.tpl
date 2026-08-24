@@ -7,9 +7,9 @@
  * each park's public profile. Sortable by park name, city, or state.
  *
  * Self-sourcing like blog_feed.tpl: reads parks itself via the Kingdom lib
- * (new APIModel('Kingdom') → Kingdom::GetParks). GetParks returns ALL parks incl.
- * retired, so this partial filters to Active === 'Active' (case-insensitive: the
- * shared local DB may hold lowercase status keys).
+ * (new APIModel('Kingdom') → Kingdom::GetActiveParks), which owns the active
+ * filter, the sort modes, the row cap and the heraldry-URL resolve; this partial
+ * only formats the rows it gets back.
  *
  * Scope: derives kingdom_id from the render-time site scope ($SiteNavScopeType /
  * $SiteNavScopeId, set by Controller_Site::_bootShell). Renders NOTHING outside a
@@ -52,9 +52,9 @@ if ($kpMoreHref === '#') {
 
 // C5-style caching (mirrors kingdom_officers.tpl): this DYNAMIC block runs on
 // every anonymous public hit and previously re-queried GetParks AND did a per-row
-// file_exists() heraldry probe inside the render loop. Resolve the park list
-// (filter → sort → slice) AND every crest URL up front in ONE pass, then cache
-// the fully-hydrated result in GhettoCache keyed by (kingdom, limit, sort,
+// file_exists() heraldry probe inside the render loop. Ask the lib for the
+// resolved list (active-filtered, sorted, sliced, crests resolved) once, then
+// cache that fully-hydrated result in GhettoCache keyed by (kingdom, limit, sort,
 // show_heraldry). Public park data is safe to share across viewers; a short TTL
 // keeps it fresh. Cached hits render with ZERO model calls and ZERO disk probes.
 // $kpResolved: list of ['park_id','name','loc','title','crest'].
@@ -63,94 +63,25 @@ $kpResolved = fdBlockCache(
     CmsRenderCache::ParksKey($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry),
     CmsRenderCache::TTL,
     function () use ($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry) {
-    $kpRows = [];
-    if (class_exists('APIModel')) {
-        try {
-            $kpModel  = new APIModel('Kingdom');
-            $kpResult = $kpModel->GetParks(['KingdomId' => $kpKingdomId]);
-            if (is_array($kpResult) && isset($kpResult['Parks']) && is_array($kpResult['Parks'])) {
-                foreach ($kpResult['Parks'] as $kpPark) {
-                    // GetParks does NOT filter status — keep only active parks.
-                    if (strcasecmp(trim((string) ($kpPark['Active'] ?? '')), 'Active') === 0) {
-                        $kpRows[] = $kpPark;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            $kpRows = [];
-        }
+    // Which parks count as active, the three display orders, the row cap and the
+    // crest-URL resolve all live in Kingdom::GetActiveParks — this block only
+    // renders what it hands back.
+    if (!class_exists('APIModel')) {
+        return [];
+    }
+    try {
+        $kpModel = new APIModel('Kingdom');
+        $kpRows  = $kpModel->GetActiveParks([
+            'KingdomId'    => $kpKingdomId,
+            'Sort'         => $kpSort,
+            'Limit'        => $kpLimit,
+            'WithHeraldry' => $kpShowHeraldry,
+        ]);
+    } catch (\Throwable $e) {
+        return [];
     }
 
-    // Sort per the chosen mode. 'city' falls back to name; 'state' falls back to
-    // city then name. Case-insensitive; empty keys sort last within their tier.
-    $kpCmp = static function ($x) {
-        $x = strtolower(trim((string) $x));
-        // Empty values sort after non-empty ones.
-        return $x === '' ? "\xff" . $x : $x;
-    };
-    usort($kpRows, function ($a, $b) use ($kpSort, $kpCmp) {
-        $an = $kpCmp($a['Name'] ?? '');
-        $bn = $kpCmp($b['Name'] ?? '');
-        if ($kpSort === 'state') {
-            $ap = $kpCmp($a['Province'] ?? '');
-            $bp = $kpCmp($b['Province'] ?? '');
-            if ($ap !== $bp) {
-                return strcmp($ap, $bp);
-            }
-            $ac = $kpCmp($a['City'] ?? '');
-            $bc = $kpCmp($b['City'] ?? '');
-            if ($ac !== $bc) {
-                return strcmp($ac, $bc);
-            }
-            return strcmp($an, $bn);
-        }
-        if ($kpSort === 'city') {
-            $ac = $kpCmp($a['City'] ?? '');
-            $bc = $kpCmp($b['City'] ?? '');
-            if ($ac !== $bc) {
-                return strcmp($ac, $bc);
-            }
-            return strcmp($an, $bn);
-        }
-        return strcmp($an, $bn);
-    });
-    $kpRows = array_slice($kpRows, 0, $kpLimit);
-
-    // Resolve a park's heraldry crest URL (only when the park flags it + the image
-    // helper is available). Mirrors the Atlas map's park-heraldry resolution. The
-    // file_exists()-backed resolve_image_ext() probe runs here once (cache-miss),
-    // never in the render loop.
-    $kpHeraldryUrl = static function ($parkId, $hasHeraldry) {
-        if (empty($hasHeraldry) || (int) $parkId <= 0) {
-            return '';
-        }
-        if (!defined('HTTP_PARK_HERALDRY') || !defined('DIR_PARK_HERALDRY') || !class_exists('Common')) {
-            return '';
-        }
-        $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', (int) $parkId));
-        return $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
-    };
-
-    $kpResolved = [];
-    foreach ($kpRows as $kpRow) {
-        $kpParkId = (int) ($kpRow['ParkId'] ?? 0);
-        $kpName   = trim((string) ($kpRow['Name'] ?? ''));
-        if ($kpParkId <= 0 || $kpName === '') {
-            continue;
-        }
-        $kpCity     = trim((string) ($kpRow['City'] ?? ''));
-        $kpProvince = trim((string) ($kpRow['Province'] ?? ''));
-        $kpLocParts = array_filter([$kpCity, $kpProvince], static fn ($v) => $v !== '');
-        $kpResolved[] = [
-            'park_id' => $kpParkId,
-            'name'    => $kpName,
-            'loc'     => implode(', ', $kpLocParts),
-            'title'   => trim((string) ($kpRow['Title'] ?? '')),
-            'crest'   => $kpShowHeraldry ? $kpHeraldryUrl($kpParkId, $kpRow['HasHeraldry'] ?? 0) : '',
-        ];
-    }
-
-    return $kpResolved;
+    return is_array($kpRows) ? $kpRows : [];
     }
 );
 ?>

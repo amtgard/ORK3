@@ -34,7 +34,8 @@
     var i = 0,
       ms = parseInt(car.getAttribute('data-autoplay') || '4500', 10),
       t = null,
-      hovering = false,
+      pointerIn = false,
+      focusIn = false,
       // Under reduced-motion we start paused (no autoplay) but still let the
       // user press Play to opt in.
       userPaused = !!prefersReduced;
@@ -68,7 +69,7 @@
     function stop() { if (t) { clearInterval(t); t = null; } }
     function restart() {
       stop();
-      if (!userPaused && !hovering) { t = setInterval(function () { go(i + 1); }, ms); }
+      if (!userPaused && !pointerIn && !focusIn) { t = setInterval(function () { go(i + 1); }, ms); }
     }
     function syncToggle() {
       if (!toggle) return;
@@ -90,11 +91,20 @@
 
     // Pause auto-advance while the pointer or keyboard focus is inside the
     // carousel (transient — does not flip the user's explicit pause state).
-    car.addEventListener('mouseenter', function () { hovering = true; stop(); });
-    car.addEventListener('mouseleave', function () { hovering = false; restart(); });
-    car.addEventListener('focusin', function () { hovering = true; stop(); });
+    // The two sources are tracked separately so one ending never resumes
+    // autoplay while the other is still inside.
+    car.addEventListener('mouseenter', function () { pointerIn = true; stop(); });
+    car.addEventListener('mouseleave', function () { pointerIn = false; restart(); });
+    // Only keyboard focus counts: a mouse click on a dot/toggle also fires
+    // focusin, and that must not leave a sticky pause after the pointer leaves.
+    car.addEventListener('focusin', function (e) {
+      var el = e.target, kb = true;
+      try { kb = !el.matches || el.matches(':focus-visible'); } catch (err) { kb = true; }
+      if (!kb) { return; }
+      focusIn = true; stop();
+    });
     car.addEventListener('focusout', function (e) {
-      if (!car.contains(e.relatedTarget)) { hovering = false; restart(); }
+      if (!car.contains(e.relatedTarget)) { focusIn = false; restart(); }
     });
 
     if (toggle) {
@@ -270,8 +280,9 @@
             var trigger = (e.target.closest) ? e.target.closest('.fd-roster-card-modal') : null;
             if (trigger && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(trigger); }
         });
-        // Minimal focus trap: keep Tab within the dialog (close button is the only
-        // focusable control), returning focus to the dialog card when it escapes.
+        // Minimal focus trap: keep Tab within the dialog. The focusable set is
+        // recomputed on each Tab (the close button, plus the profile link when
+        // fdLink is set), returning focus to the dialog card when it is empty.
         modal.addEventListener('keydown', function (e) {
             if (e.key !== 'Tab' || !modal.classList.contains('is-open')) { return; }
             var focusables = modal.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');

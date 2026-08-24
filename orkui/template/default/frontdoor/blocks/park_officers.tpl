@@ -10,8 +10,9 @@
  *
  * Self-sourcing like kingdom_officers.tpl: no controller injects officers onto
  * arbitrary site pages, so this partial reads them itself via the Park lib
- * (new APIModel('Park') → Park::GetOfficers). Public view (Token '') exposes only
- * Persona — the lib suppresses real given/surnames for unauthenticated callers.
+ * (new APIModel('Park') → Park::GetPublicOfficers). That lib method owns the whole
+ * public policy — anonymous projection (only Persona is ever exposed), vacant
+ * seats, restricted players, role labels and avatars.
  *
  * Scope: derives park_id from the render-time site scope ($SiteNavScopeType /
  * $SiteNavScopeId, set by Controller_Site::_bootShell). Renders NOTHING outside a

@@ -23,17 +23,22 @@ $siteSlug     = isset($SiteSlug) ? (string) $SiteSlug : '';
 $navScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'kingdom';
 $navScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
 
+// Shared PLAIN-PHP helpers (fdSiteInternalHref). Guarded / require_once.
+require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
+
 // Re-point globally-resolved CmsNav hrefs onto this site's scoped routes.
+// The Page/view -> Site/page rewrite is the shared helper's job; the Blog
+// rewrites below are nav-only and stay inline.
 $orgHref = function ($href) use ($uir, $siteSlug) {
     $href = (string) $href;
     if ($siteSlug === '') {
         return $href;
     }
-    $pagePrefix = $uir . 'Page/view/';
-    $postPrefix = $uir . 'Blog/post/';
-    if (strpos($href, $pagePrefix) === 0) {
-        return $uir . 'Site/page/' . rawurlencode($siteSlug) . '/' . substr($href, strlen($pagePrefix));
+    $rewritten = fdSiteInternalHref($href, $siteSlug);
+    if ($rewritten !== $href) {
+        return $rewritten;
     }
+    $postPrefix = $uir . 'Blog/post/';
     if (strpos($href, $postPrefix) === 0) {
         return $uir . 'Site/post/' . rawurlencode($siteSlug) . '/' . substr($href, strlen($postPrefix));
     }

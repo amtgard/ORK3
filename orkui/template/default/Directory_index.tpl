@@ -61,7 +61,6 @@ if ($hmUserParentKingdomId > 0 && $hmUserKingdomId > 0) {
 }
 
 $hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) : 0;
-$hmEventList = is_array($EventSummary) ? $EventSummary : [];
 ?>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
@@ -95,26 +94,6 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 	.hm-welcome-title { font-size: 24px; }
 }
 
-/* ---- Downtime info box ---- */
-.hm-infobox {
-	display: flex;
-	align-items: flex-start;
-	gap: 10px;
-	background: #e8f4fd;
-	border: 1px solid #90cdf4;
-	border-radius: 7px;
-	padding: 11px 16px;
-	margin: 0 0 14px;
-	color: #1a4f72;
-	font-size: 14px;
-	line-height: 1.5;
-}
-.hm-infobox-icon {
-	flex-shrink: 0;
-	font-size: 18px;
-	margin-top: 1px;
-}
-
 /* ---- Stats bar ---- */
 .hm-stats-bar {
 	display: flex;
@@ -123,7 +102,7 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	margin-bottom: 14px;
-	overflow: hidden;
+	overflow: visible;
 }
 .hm-stat-item {
 	flex: 1;
@@ -136,7 +115,7 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 	border-right: 1px solid var(--ork-border);
 }
 .hm-stat-item:last-child { border-right: none; }
-.hm-stat-item-link { text-decoration: none; color: inherit; transition: background 0.15s; }
+.hm-stat-item-link { position: relative; border-radius: 0 7px 7px 0; text-decoration: none; color: inherit; transition: background 0.15s; }
 .hm-stat-item-link:hover { background: var(--ork-bg-tertiary, #edf2f7); }
 .hm-stat-value {
 	font-size: 24px;
@@ -312,78 +291,6 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 .hm-bottom-main { min-width: 0; }
 .hm-bottom-side { min-width: 0; }
 
-/* ---- Events list ---- */
-.hm-events-list {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-.hm-event-row {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 9px 10px;
-	border-radius: 6px;
-	text-decoration: none;
-	color: inherit;
-	transition: background 0.1s;
-}
-.hm-event-row:hover { background: var(--ork-bg-secondary); }
-.hm-event-heraldry {
-	width: 36px;
-	height: 36px;
-	flex-shrink: 0;
-	border-radius: 4px;
-	overflow: hidden;
-	background: transparent;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-.hm-event-heraldry img {
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
-}
-.hm-event-info { flex: 1; min-width: 0; }
-.hm-event-name {
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--ork-text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-.hm-event-meta {
-	font-size: 11px;
-	color: var(--ork-text-muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-.hm-event-right {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 4px;
-	flex-shrink: 0;
-}
-.hm-event-date {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--ork-text-secondary);
-	background: var(--ork-bg-tertiary);
-	border-radius: 4px;
-	padding: 3px 8px;
-	white-space: nowrap;
-}
-.hm-event-rsvp {
-	font-size: 11px;
-	color: var(--ork-link);
-	font-weight: 600;
-	white-space: nowrap;
-}
-
 /* ---- Find sidebar ---- */
 .hm-find-list {
 	display: grid;
@@ -473,7 +380,8 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 }
 .hm-visit-site i { font-size: 9px; }
 /* Scoped data-tip tooltip (no native title); wraps + stays on-screen. */
-.hm-visit-site[data-tip]::after {
+.hm-visit-site[data-tip]::after,
+.hm-stat-item-link[data-tip]::after {
 	content: attr(data-tip);
 	position: absolute;
 	top: calc(100% + 6px);
@@ -495,11 +403,15 @@ $hmEventList = is_array($EventSummary) ? $EventSummary : [];
 	transition: opacity 0.12s ease, transform 0.12s ease;
 	z-index: 5;
 }
-.hm-visit-site[data-tip]:hover::after {
+.hm-visit-site[data-tip]:hover::after,
+.hm-stat-item-link[data-tip]:hover::after {
 	opacity: 1;
 	transform: translateY(0);
 }
-html[data-theme="dark"] .hm-visit-site[data-tip]::after { background: #0b1220; }
+html[data-theme="dark"] .hm-visit-site[data-tip]::after,
+html[data-theme="dark"] .hm-stat-item-link[data-tip]::after { background: #0b1220; }
+/* Recap tile sits at the bar's right edge, so its bubble grows leftward. */
+.hm-stat-item-link[data-tip]::after { left: auto; right: 0; }
 
 /* ---- Empty state ---- */
 .hm-empty {
@@ -527,6 +439,9 @@ html[data-theme="dark"] .hm-visit-site[data-tip]::after { background: #0b1220; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 	/* Last item spanning both columns when count is odd */
 	.hm-stat-item:last-child:nth-child(odd) { grid-column: span 2; border-right: none; }
+	/* Recap tile: bottom-right cell normally; bottom row when it spans both columns. */
+	.hm-stat-item-link { border-radius: 0 0 7px 0; }
+	.hm-stat-item-link:last-child:nth-child(odd) { border-radius: 0 0 7px 7px; }
 	.hm-stat-value { font-size: 20px; }
 	/* "Visit site" badge: on touch/narrow screens drop it out of the card's tap
 	   area into normal flow beneath the card, with a full-size touch target. */
@@ -609,11 +524,6 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 </div>
 
 <!-- =============================================
-     Downtime Info Box
-     ============================================= -->
-
-
-<!-- =============================================
      Stats Bar
      ============================================= -->
 <div class="hm-stats-bar">
@@ -636,7 +546,7 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 		<span class="hm-stat-label">Players / Week</span>
 	</div>
 	<?php if (!empty($LoggedIn) && is_array($week_recap ?? null)): ?>
-	<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
+	<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" data-tip="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
 		<span class="hm-stat-value">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.7em;opacity:0.7"></i></span>
 		<span class="hm-stat-label">Week of <?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></span>
 	</a>

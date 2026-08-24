@@ -18,17 +18,18 @@
  * curated provider allowlist.
  */
 $fdbHtml = $blockFields['html'] ?? '';
-// Editor/preview context? render_blocks shares $data; the Site controller sets
-// SitePreview only for an authorized officer previewing an unpublished site, so
-// this note is NEVER shown to a public visitor.
-$fdbIsPreview = !empty($SitePreview);
+// Editor/preview context? $fdIsPreview comes from render_blocks.tpl (the only
+// includer of this partial): the Site controller sets SitePreview only for an
+// authorized officer previewing an unpublished site, and the Cms controllers set
+// PreviewPage only for a page/post draft preview, so this note is NEVER shown to
+// a public visitor.
 ?>
 <?php if ($fdbHtml !== ''): ?>
 <div class="fd-pad fdb-rawhtml">
     <?php /* sanitized at save (CmsSanitizer::Clean) */ ?>
     <?= $fdbHtml ?>
 </div>
-<?php elseif ($fdbIsPreview): ?>
+<?php elseif ($fdIsPreview): ?>
 <?php /* Empty AFTER sanitize → likely a stripped embed. Author-only hint. */ ?>
 <div class="fd-pad">
     <div class="fdb-rawhtml-empty" role="note">

@@ -27,9 +27,8 @@ if (
     && !$ctaHasLabel
     && trim(strip_tags((string) $links)) === ''
 ) {
-    if (!empty($SitePreview) || !empty($PreviewPage)) {
-        echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">'
-            . 'This call-to-action band is empty.</div>';
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This call-to-action band is empty.');
     }
     return;
 }

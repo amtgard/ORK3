@@ -8,6 +8,23 @@ $kicker     = $blockFields['kicker']     ?? '';
 $heading    = $blockFields['heading']    ?? '';
 $subheading = $blockFields['subheading'] ?? '';
 $cards      = $blockFields['cards']      ?? [];
+
+// Every field empty → there is nothing to show. Without this the wrapper below
+// still painted a full-width banded section, so an untouched starter block read
+// as an empty stripe on the page. Matches the hero_carousel / photo_mosaic
+// pattern: nothing at all for visitors, a discoverable hint for the author in
+// the CMS editor/preview.
+if (
+    trim((string) $kicker) === ''
+    && trim((string) $heading) === ''
+    && trim((string) $subheading) === ''
+    && empty($cards)
+) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This card grid block is empty.');
+    }
+    return;
+}
 ?>
 <div class="fd-pad fd-section-muted">
     <div style="text-align:center;margin-bottom:22px;">

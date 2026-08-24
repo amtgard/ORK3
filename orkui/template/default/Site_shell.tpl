@@ -39,13 +39,33 @@ $sitePageTitle   = isset($page_title) ? (string) $page_title : '';
 // to live in this loop was therefore unreachable and has been removed. If H1 is
 // ever added back to that Level control, this test MUST come back with it, or
 // such a page renders two <h1>s.
+//
+// The test must match what hero_carousel.tpl ACTUALLY renders, not merely that
+// a slides array exists. That partial (a) filters slides down to those carrying
+// an image/headline/subcopy/kicker and emits nothing at all for a public visitor
+// when none qualify, and (b) emits the <h1> only for the FIRST surviving slide
+// (hero_carousel.tpl:65-69, 84-86 — later slides get <h2>) and only when that
+// slide's headline is non-empty. An image-only first slide — the exact shape the
+// editor seeds — therefore renders an <img> and no heading at all, so testing
+// anything looser than "first renderable slide has a headline" suppresses the
+// fallback <h1> for a page that ships ZERO h1s.
+// Headline test is `!== ''` with no trim, matching hero_carousel.tpl:84.
+// The slide filter itself is fdHeroRenderableSlides() in frontdoor/_helpers.tpl,
+// which hero_carousel.tpl calls too, so the two cannot drift apart. (org_header.tpl
+// below also require_once's the helpers, but this loop runs before that include.)
+require_once $fdDir . '_helpers.tpl';
 $fdHasBlockH1 = false;
 foreach ($fdBlocks as $__b) {
     if (empty($__b['enabled'])) {
         continue;
     }
     $__type = isset($__b['type']) ? (string) $__b['type'] : '';
-    if ($__type === 'hero_carousel' && !empty($__b['fields']['slides']) && is_array($__b['fields']['slides'])) {
+    if ($__type !== 'hero_carousel') {
+        continue;
+    }
+    $__slides = (isset($__b['fields']['slides']) && is_array($__b['fields']['slides'])) ? $__b['fields']['slides'] : [];
+    $__render = fdHeroRenderableSlides($__slides);
+    if (!empty($__render) && (string) ($__render[0]['headline'] ?? '') !== '') {
         $fdHasBlockH1 = true;
         break;
     }
@@ -76,7 +96,10 @@ foreach ($fdBlocks as $__b) {
 </div>
 <?php endif; ?>
 <?php include $fdDir . 'org_header.tpl'; ?>
-<?php include $fdDir . '_park_strip.tpl'; ?>
+<?php // A 404 stub pays two uncached Park queries for chrome nobody asked for. ?>
+<?php if ($siteMode !== 'notfound') {
+    include $fdDir . '_park_strip.tpl';
+} ?>
 <?php if ($siteHomeWarning !== '') : ?>
 <?php // .org-home-warning styling lives in frontdoor/css/orgsite.css. ?>
 <div class="org-home-warning" role="status">
@@ -111,7 +134,12 @@ foreach ($fdBlocks as $__b) {
 <?php elseif ($siteMode === 'post') : ?>
     <article class="org-post">
         <header class="org-post-head">
-            <h1 class="org-post-title"><?= htmlspecialchars(isset($SitePost['title']) ? (string) $SitePost['title'] : '') ?></h1>
+            <?php // C26 — the post body's blocks ARE $fdBlocks (fed to render_blocks.tpl
+                  // below), so a hero_carousel in a post supplies the page's h1. Keep the
+                  // post title visible but demote it to h2 in that case, so the page still
+                  // has one and only one top heading. ?>
+            <?php $__postTitleTag = $fdHasBlockH1 ? 'h2' : 'h1'; ?>
+            <<?= $__postTitleTag ?> class="org-post-title"><?= htmlspecialchars(isset($SitePost['title']) ? (string) $SitePost['title'] : '') ?></<?= $__postTitleTag ?>>
             <?php if (!empty($SitePost['published_at'])) : ?>
             <?php $__ts = strtotime((string) $SitePost['published_at']); ?>
             <?php if ($__ts !== false) : ?>

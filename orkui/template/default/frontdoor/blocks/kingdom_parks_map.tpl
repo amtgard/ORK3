@@ -6,13 +6,12 @@
  * sidebar (heraldry + name + city/state + directions + description + profile
  * link) — the Amtgard Atlas map/sidebar pattern, scoped to one kingdom.
  *
- * Self-sourcing: reads park locations via new APIModel('Map')->GetParkLocations
- * (['KingdomId' => $kid]) — the same source the Atlas page uses. Park geo comes
- * from each park's Location JSON blob; parks without coordinates are skipped.
- * Directions/Description run through Parsedown safe-mode (mirrors the Atlas), so
- * authored HTML can't inject script. name/city/province are htmlspecialchars'd;
- * the whole locations array is json_encode'd with JSON_HEX_TAG|JSON_HEX_AMP for
- * safe <script> embedding.
+ * Self-sourcing: reads ready-to-render rows via new APIModel('Map')->
+ * GetPublicParkMapLocations(['KingdomId' => $kid]). Which parks are plottable,
+ * how the Location blob is decoded, how officer-authored Directions/Description
+ * are sanitized, and where heraldry lives are all decided there, in the domain —
+ * this template only caches, json_encodes and renders. The array is json_encode'd
+ * with JSON_HEX_TAG|JSON_HEX_AMP for safe <script> embedding.
  *
  * Scope: derives kingdom_id from the render-time site scope ($SiteNavScopeType /
  * $SiteNavScopeId). Renders NOTHING outside a kingdom scope, and nothing when no
@@ -33,75 +32,30 @@ if ($kpmKingdomId <= 0) {
 $kpmKicker  = isset($blockFields['kicker']) ? trim((string) $blockFields['kicker']) : '';
 $kpmHeading = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Park Map';
 
-// Markdown helper (safe mode) — identical treatment to the Atlas page.
-if (!function_exists('kpm_map_markdown') && is_file(DIR_LIB . 'Parsedown.php')) {
-    require_once DIR_LIB . 'Parsedown.php';
-    function kpm_map_markdown($text)
-    {
-        $clean = str_replace(['<br />', '<br/>', '<br>'], "\n", (string) $text);
-        $html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
-        return preg_replace('/<img[^>]*>/i', '', $html);
-    }
-}
-
 // C5-style caching (mirrors kingdom_officers.tpl / kingdom_parks.tpl): this
 // DYNAMIC block runs on every anonymous public hit and previously re-queried
-// GetParkLocations, re-ran Parsedown on each park's Directions/Description, AND
+// the map rows, re-ran Parsedown on each park's Directions/Description, AND
 // did a per-row file_exists() heraldry probe. Resolve the whole $kpmParks array
-// (post markdown-render, post heraldry-URL-resolve) once and cache it in
-// GhettoCache keyed by kingdom_id. Public park geo is safe to share across
-// viewers; a short TTL keeps it fresh. Cached hits skip the DB, Parsedown, and
-// disk probes entirely.
+// once and cache it in GhettoCache keyed by kingdom_id. Public park geo is safe
+// to share across viewers; a short TTL keeps it fresh. Cached hits skip the DB,
+// Parsedown, and disk probes entirely.
 $kpmParks = fdBlockCache(
     CmsRenderCache::NS_KINGDOM_PARKS_MAP,
     CmsRenderCache::ParksMapKey($kpmKingdomId),
     CmsRenderCache::TTL,
     function () use ($kpmKingdomId) {
-    $kpmParks = [];
-    if (class_exists('APIModel')) {
-        try {
-            $kpmModel  = new APIModel('Map');
-            $kpmResult = $kpmModel->GetParkLocations(['KingdomId' => $kpmKingdomId]);
-            foreach ((array) ($kpmResult['Parks'] ?? []) as $details) {
-                $loc = @json_decode(stripslashes((string) ($details['Location'] ?? '')));
-                if (!$loc) {
-                    continue;
-                }
-                $latlng = isset($loc->location) ? $loc->location
-                    : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
-                if (!$latlng || !isset($latlng->lat, $latlng->lng)
-                    || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) {
-                    continue;
-                }
-                $parkId   = (int) ($details['ParkId'] ?? 0);
-                if ($parkId <= 0) {
-                    continue;
-                }
-                $heraldry = '';
-                if (!empty($details['HasHeraldry']) && defined('HTTP_PARK_HERALDRY')
-                    && defined('DIR_PARK_HERALDRY') && class_exists('Common')) {
-                    $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $parkId));
-                    $heraldry = $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
-                }
-                $kpmParks[] = [
-                    'name'     => htmlspecialchars(ucwords((string) ($details['Name'] ?? '')), ENT_QUOTES),
-                    'lat'      => (float) $latlng->lat,
-                    'lng'      => (float) $latlng->lng,
-                    'id'       => $parkId,
-                    'color'    => ltrim((string) ($details['KingdomColor'] ?? '718096'), '#'),
-                    'city'     => htmlspecialchars(trim((string) ($details['City'] ?? ''))),
-                    'province' => htmlspecialchars(trim((string) ($details['Province'] ?? ''))),
-                    'heraldry' => $heraldry,
-                    'dir'      => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Directions'] ?? '') : '',
-                    'desc'     => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Description'] ?? '') : '',
-                ];
+        $kpmParks = [];
+        if (class_exists('APIModel')) {
+            try {
+                $kpmModel  = new APIModel('Map');
+                $kpmResult = $kpmModel->GetPublicParkMapLocations(['KingdomId' => $kpmKingdomId]);
+                $kpmParks  = array_values((array) ($kpmResult['Parks'] ?? []));
+            } catch (\Throwable $e) {
+                $kpmParks = [];
             }
-        } catch (\Throwable $e) {
-            $kpmParks = [];
         }
-    }
 
-    return $kpmParks;
+        return $kpmParks;
     }
 );
 
@@ -266,7 +220,13 @@ $kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
     // One-time Maps loader shared by every kpm block on the page. The Maps CDN
     // <script> is only injected once the map scrolls into view (IntersectionObserver),
     // so an off-screen map never blocks the page on a third-party request.
+    // STARTED is a synchronous per-instance latch: the list click handler and the
+    // IntersectionObserver can both reach loadMaps() before MAP is assigned, and
+    // without it init() would run twice on this block (duplicate markers/listeners).
+    var STARTED = false;
     function loadMaps() {
+        if (STARTED) { return; }
+        STARTED = true;
         if (window.google && window.google.maps && window.google.maps.importLibrary) {
             init();
             return;

@@ -12,8 +12,12 @@ $heading  = $blockFields['heading']   ?? '';
 $limit    = fdClampLimit($blockFields['limit'] ?? null, 3);
 $moreHref = $blockFields['more_href'] ?? '';
 
-$hasRows = is_array($EventSummary) && count($EventSummary) > 0;
-$rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
+// The block is addable on any page, but $EventSummary is only injected by the
+// front-door index render path — guard the read so other scopes render cleanly.
+$fdEvents = (isset($EventSummary) && is_array($EventSummary)) ? $EventSummary : [];
+
+$hasRows = count($fdEvents) > 0;
+$rows    = $hasRows ? array_slice($fdEvents, 0, $limit) : [];
 ?>
 <div class="fd-pad fd-section-light">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;">

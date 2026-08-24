@@ -33,9 +33,8 @@ if (
     && !$bodyHasMedia
     && empty($cta['label'])
 ) {
-    if (!empty($SitePreview) || !empty($PreviewPage)) {
-        echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">'
-            . 'This rich text block is empty.</div>';
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This rich text block is empty.');
     }
     return;
 }

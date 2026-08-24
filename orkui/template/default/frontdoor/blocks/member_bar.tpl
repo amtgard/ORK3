@@ -17,7 +17,7 @@ if (empty($LoggedIn)) {
         <?php endif; ?>
     </span>
     <span style="flex:1;"></span>
-    <?php if ((int)$UserKingdomId > 0): ?>
+    <?php if ((int)($UserKingdomId ?? 0) > 0): ?>
         <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"
            style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-crown" style="color:var(--gold);margin-right:5px;"></i>My Kingdom</a>
     <?php endif; ?>

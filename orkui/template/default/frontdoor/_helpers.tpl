@@ -135,19 +135,22 @@ if (!function_exists('fdBlockCache')) {
      * format that changes there must flush in CmsAjax::clearrendercache). A
      * template does not talk to the cache layer; it calls this, and this forwards.
      *
-     * Kept as a function so the five block templates read as
+     * Kept as a function so the seven consuming templates read as
      * fdBlockCache(ns, key, ttl, fn) rather than repeating the lib class name.
      *
      * @param string        $ns      GhettoCache namespace (CmsRenderCache::NS_*)
      * @param string        $key     the key within that namespace
      * @param int           $ttl     seconds a hit stays valid (CmsRenderCache::TTL)
      * @param callable      $build   () => array — runs ONLY on a miss
-     * @param callable|null $storeIf (array $built) => bool — optional gate on
-     *                               WRITING the result. kingdoms_teaser uses it to
-     *                               refuse to cache an empty list built in a
-     *                               context that never injected its source data,
-     *                               which would otherwise pin an empty grid on the
-     *                               front door for the whole TTL.
+     * @param callable|null $storeIf (array $built) => bool — optional EXTRA veto on
+     *                               WRITING the result. It can only NARROW what gets
+     *                               cached: Remember() ANDs it with its own
+     *                               empty-payload gate, which always applies on top,
+     *                               so no caller can opt back into pinning an empty
+     *                               build. kingdoms_teaser uses it to refuse to cache
+     *                               an empty list built in a context that never
+     *                               injected its source data, which would otherwise
+     *                               pin an empty grid on the front door for the TTL.
      * @return mixed the cached payload, or $build()'s value verbatim — including
      *               when there is no cache handle at all
      */
@@ -160,5 +163,67 @@ if (!function_exists('fdBlockCache')) {
             return $build();
         }
         return CmsRenderCache::Remember($ns, $key, $ttl, $build, $storeIf);
+    }
+}
+
+if (!function_exists('fdHeroRenderableSlides')) {
+    /**
+     * Filter a hero_carousel 'slides' field down to the slides that actually
+     * render — those carrying an image src, headline, subcopy or kicker.
+     *
+     * TWO call sites must agree on this predicate exactly, or a page ships zero
+     * <h1>s or two of them: hero_carousel.tpl uses it to decide what to draw
+     * (and to give the FIRST surviving slide the page <h1>), and Site_shell.tpl
+     * uses it to decide whether a hero block already supplies that <h1> and the
+     * fallback page-title heading must therefore be suppressed. It lives here so
+     * the two cannot drift.
+     *
+     * The emptiness test is the concatenate-then-trim form both sites used
+     * inline, kept verbatim: a slide survives when ANY of the four fields has
+     * non-whitespace content. Non-array entries are dropped.
+     *
+     * @param array $slides the raw authored slides field
+     * @return array re-indexed list of the renderable slides, order preserved
+     */
+    function fdHeroRenderableSlides(array $slides)
+    {
+        return array_values(array_filter($slides, static function ($s) {
+            if (!is_array($s)) {
+                return false;
+            }
+            $img = is_array($s['image'] ?? null) ? $s['image'] : [];
+            return trim(
+                (string) ($img['src'] ?? '')
+                . (string) ($s['headline'] ?? '')
+                . (string) ($s['subcopy'] ?? '')
+                . (string) ($s['kicker'] ?? '')
+            ) !== '';
+        }));
+    }
+}
+
+if (!function_exists('fdEmptyBlockNotice')) {
+    /**
+     * Emit the preview-only "this block is empty" note.
+     *
+     * Six blocks (cta_band, card_grid, hero_carousel, photo_mosaic, richtext,
+     * steps) share one wrapper: when every field is blank they render nothing at
+     * all for a public visitor, and a small hint for an author in preview so the
+     * empty block is discoverable in the editor instead of a blank stripe. The
+     * .fd-empty styling was already shared; this shares the markup too.
+     *
+     * The per-block emptiness TEST stays in each block — only the note is shared,
+     * and each block keeps its own wording, which is passed in.
+     *
+     * Callers gate this on $fdIsPreview (set by render_blocks.tpl) themselves,
+     * exactly as the inlined copies did.
+     *
+     * @param string $message the block's own note text (a template literal;
+     *                        emitted as-is, as the inline copies did)
+     * @return void
+     */
+    function fdEmptyBlockNotice($message)
+    {
+        echo '<div class="fd-pad fd-empty">' . $message . '</div>';
     }
 }

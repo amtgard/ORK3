@@ -40,9 +40,21 @@ foreach ($fdBlocks as $block) {
     $blockMeta   = $block;
     // Contain a broken block: a fatal in one partial must not blank the whole
     // page — skip it and render the rest.
+    // Buffer the partial's output so a throw AFTER it has already echoed markup
+    // (e.g. an unclosed <div>) can be discarded instead of corrupting the page.
+    $fdObLevel = ob_get_level();
+    ob_start();
     try {
         include $partial;
+        echo ob_get_clean();
     } catch (\Throwable $e) {
+        // Discard whatever the failed partial emitted (plus any buffer it left open).
+        while (ob_get_level() > $fdObLevel) {
+            ob_end_clean();
+        }
+        // Give operators a signal: a systemically broken block type would
+        // otherwise degrade every page silently. Never leak details to the page.
+        error_log('front-door block render failed [' . $type . ']: ' . $e->getMessage());
         // Public visitors: intentionally swallow — one bad block shouldn't take
         // down the page. Preview/admin only: emit a small inline placeholder so
         // the author knows a block failed. Never leak exception details.

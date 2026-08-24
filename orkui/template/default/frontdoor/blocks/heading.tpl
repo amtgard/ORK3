@@ -1,7 +1,7 @@
 <?php
 /**
  * Partial: heading.tpl
- * Receives: $blockFields (text, level[2..4 default 2], align[left|center|right]), UIR
+ * Receives: $blockFields (text, level[1..4 default 2], align[left|center|right]), UIR
  * Self-contained: scoped .fdb-heading-* styles (light + dark). No JS.
  */
 $text  = $blockFields['text']  ?? '';

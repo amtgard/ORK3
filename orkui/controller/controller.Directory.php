@@ -36,7 +36,7 @@ class Controller_Directory extends Controller
             if (is_array($map)) {
                 $siteSlugs = $map;
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $siteSlugs = array();
         }
         $this->data[ 'KingdomSiteSlugs' ] = $siteSlugs;

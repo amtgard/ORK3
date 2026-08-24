@@ -8,8 +8,9 @@
  *
  * Self-sourcing like blog_feed.tpl: no controller injects officers onto arbitrary
  * site pages, so this partial reads them itself via the Kingdom lib
- * (new APIModel('Kingdom') → Kingdom::GetOfficers). Public view (Token '') exposes
- * only Persona — real given/surnames are suppressed by the lib.
+ * (new APIModel('Kingdom') → Kingdom::GetPublicOfficers). That lib method owns the
+ * whole public policy — anonymous projection (only Persona is ever exposed),
+ * vacant seats, restricted players, role labels and avatars.
  *
  * Scope: derives kingdom_id from the render-time site scope ($SiteNavScopeType /
  * $SiteNavScopeId, set by Controller_Site::_bootShell). Renders NOTHING outside a

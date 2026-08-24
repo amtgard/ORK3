@@ -12,14 +12,21 @@ $kCount   = 0;
 $parks    = 0;
 $att      = 0;
 foreach ($list as $r) {
+    // A principality is not a kingdom, so it is excluded from the kingdom tally.
+    // Its parks/attendance, however, are keyed on the principality's own
+    // kingdom_id and are NOT rolled into the parent — count every row for those.
     if ((int)$r['ParentKingdomId'] === 0) {
         $kCount++;
-        $parks += (int)$r['ParkCount'];
-        $att   += (int)$r['Attendance'];
     }
+    $parks += (int)$r['ParkCount'];
+    $att   += (int)$r['Attendance'];
 }
 $weekly      = $att > 0 ? round($att / $wkCount) : 0;
+// $EventSummary is a LIMIT-15 upcoming-events list (Controller::index), not a
+// count, so at the cap show "15+" rather than presenting the fetch cap as a total.
+$eventsCap   = 15;
 $eventsCount = is_array($EventSummary ?? null) ? count($EventSummary) : 0;
+$eventsMore  = $eventsCount >= $eventsCap;
 
 // --- Field helpers ---
 $autoplayMs = (int)($blockFields['autoplay_ms'] ?? 4500);
@@ -32,21 +39,12 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
 // subcopy, or kicker). With no renderable slides, render nothing for visitors;
 // in the author preview (SitePreview) surface a hint so the empty state is
 // discoverable in the editor instead of a blank strip.
-$renderSlides = array_values(array_filter($slides, static function ($s) {
-    if (!is_array($s)) {
-        return false;
-    }
-    $imgRef = is_array($s['image'] ?? null) ? $s['image'] : [];
-    return trim(
-        (string)($imgRef['src'] ?? '')
-        . (string)($s['headline'] ?? '')
-        . (string)($s['subcopy'] ?? '')
-        . (string)($s['kicker'] ?? '')
-    ) !== '';
-}));
+// The filter lives in frontdoor/_helpers.tpl because Site_shell.tpl runs it too,
+// to decide whether this block supplies the page <h1>; the two must not drift.
+$renderSlides = fdHeroRenderableSlides($slides);
 if (empty($renderSlides)) {
-    if (!empty($SitePreview) || !empty($PreviewPage)) {
-        echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">This carousel has no slides yet.</div>';
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This carousel has no slides yet.');
     }
     return;
 }
@@ -74,7 +72,9 @@ if (empty($renderSlides)) {
             <?php if ($kicker !== ''): ?>
             <div class="fd-kicker" style="margin-bottom:14px"><?= $kicker ?></div>
             <?php endif; ?>
+            <?php if ($headline !== ''): ?>
             <<?= $hlTag ?> class="fd-serif fd-hero-headline" style="font-size:58px;line-height:1.0;text-shadow:0 3px 18px rgba(0,0,0,.6);margin-bottom:16px"><?= $headline ?></<?= $hlTag ?>>
+            <?php endif; ?>
             <?php if ($subcopy !== ''): ?>
             <p style="margin:0 0 26px;font-size:18px;color:rgba(255,255,255,.88);max-width:470px"><?= $subcopy ?></p>
             <?php endif; ?>
@@ -126,7 +126,7 @@ if (empty($renderSlides)) {
             <div class="fd-stat-label">Players / Week</div>
         </div>
         <div class="fd-stat-ticker-cell">
-            <div class="fd-stat-num"><?= number_format($eventsCount) ?></div>
+            <div class="fd-stat-num"><?= number_format($eventsCount) ?><?= $eventsMore ? '+' : '' ?></div>
             <div class="fd-stat-label">Events</div>
         </div>
     </div>

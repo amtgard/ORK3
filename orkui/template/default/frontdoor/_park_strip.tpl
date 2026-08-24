@@ -24,29 +24,69 @@ if ($psParkId <= 0) {
     return;
 }
 
+// SHELL chrome renders on EVERY page of a park's org site — home, page, post,
+// blog — so uncached it charges every anonymous hit two model round trips
+// (GetParkDetails() alone is three queries) for meeting-day and address data
+// that changes a handful of times a year. Cached whole, exactly like the
+// park-scoped dynamic blocks, through the same read-through wrapper they use.
+// The sole call site (Site_shell.tpl) includes org_header.tpl one line earlier and
+// that file already require_once's the helpers, so fdBlockCache is in fact always
+// defined here; the require_once below is a belt-and-braces guard (_helpers.tpl is
+// idempotent and emits nothing) so this partial does not silently depend on the
+// include order of a file it does not own.
+if (!function_exists('fdBlockCache') && defined('DIR_TEMPLATE')) {
+    require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
+}
+
 $psWhen = '';
 $psWhere = '';
 $psMap = '';
 try {
-    $psModel = new APIModel('Park');
-    $psPark  = $psModel->GetParkDetails(array('ParkId' => $psParkId));
-    $psPark  = is_array($psPark) ? $psPark : array();
+    $psBuild = function () use ($psParkId) {
+        $psModel = new APIModel('Park');
+        $psPark  = $psModel->GetParkDetails(array('ParkId' => $psParkId));
+        $psPark  = is_array($psPark) ? $psPark : array();
 
-    $psWhere = trim(implode(', ', array_filter(array(
-        trim((string) ($psPark['City'] ?? '')),
-        trim((string) ($psPark['Province'] ?? '')),
-    ))));
-    $psMap = trim((string) ($psPark['MapUrl'] ?? ''));
-    if ($psMap !== '' && !preg_match('#^https?://#i', $psMap)) {
-        $psMap = '';
-    }
-    if ($psMap === '' && $psWhere !== '') {
-        $psMap = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(
-            trim((string) ($psPark['Address'] ?? '')) . ' ' . $psWhere
+        $psWhere = trim(implode(', ', array_filter(array(
+            trim((string) ($psPark['City'] ?? '')),
+            trim((string) ($psPark['Province'] ?? '')),
+        ))));
+        $psMap = trim((string) ($psPark['MapUrl'] ?? ''));
+        if ($psMap !== '' && !preg_match('#^https?://#i', $psMap)) {
+            $psMap = '';
+        }
+        if ($psMap === '' && $psWhere !== '') {
+            $psMap = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(
+                trim((string) ($psPark['Address'] ?? '')) . ' ' . $psWhere
+            );
+        }
+
+        $psDays = $psModel->GetParkDays(array('ParkId' => $psParkId));
+        // Store the park-day ROWS, never the model envelope. GetParkDays() always
+        // returns ['Status' => Success(), 'ParkDays' => [...]], and Success() is
+        // itself a non-empty array — so caching the envelope would make every
+        // payload look non-empty and defeat CmsRenderCache's empty-payload gate,
+        // pinning a failed fetch (a find() that returned false on a DB blip, so no
+        // City/Province and no days) as an EMPTY strip on every page of this park's
+        // site for the whole TTL. Flattened, a failed build is all-empty and the
+        // cache declines to store it, exactly as that gate intends.
+        return array(
+            'where' => $psWhere,
+            'map'   => $psMap,
+            'days'  => (array) ($psDays['ParkDays'] ?? array()),
         );
-    }
+    };
+    $psData = fdBlockCache(
+        CmsRenderCache::NS_PARK_STRIP,
+        CmsRenderCache::ParkStripKey($psParkId),
+        CmsRenderCache::TTL,
+        $psBuild
+    );
+    $psData = is_array($psData) ? $psData : array();
 
-    $psDays = $psModel->GetParkDays(array('ParkId' => $psParkId));
+    $psWhere = (string) ($psData['where'] ?? '');
+    $psMap   = (string) ($psData['map'] ?? '');
+    $psDays  = (array) ($psData['days'] ?? array());
     $psBest = null;
     // Same past-date guard as park_hero.tpl. Park::CalculateNextParkDay() returns
     // an ALREADY-PAST date for 'week-of-month' (Nth weekday of the current month)
@@ -55,7 +95,7 @@ try {
     // the park's real weekly day while it did so. Guarded at the consumer: the
     // calculator is shared and out of scope here.
     $psTodayTs = strtotime('today');
-    foreach ((array) ($psDays['ParkDays'] ?? array()) as $psDay) {
+    foreach ($psDays as $psDay) {
         if (!is_array($psDay) || !class_exists('Park')) {
             continue;
         }
@@ -82,6 +122,10 @@ try {
         }
     }
 } catch (\Throwable $e) {
+    // Both fetches now sit inside the closure, so a throw in GetParkDays() drops to
+    // tier 3 where it used to leave tier 2 standing. Accepted: both methods go
+    // through Success(), so any shared cause fails GetParkDetails first and tier 2
+    // would have been empty anyway.
     $psWhen = '';
 }
 

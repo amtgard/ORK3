@@ -22,18 +22,144 @@ if ($phParkId <= 0) {
     return;
 }
 
-$phPark = array();
-try {
-    if (class_exists('APIModel')) {
-        $phModel  = new APIModel('Park');
-        $phDetail = $phModel->GetParkDetails(array('ParkId' => $phParkId));
-        if (is_array($phDetail)) {
-            $phPark = $phDetail;
+$phShowWeather = !empty($blockFields['show_weather']);
+
+// Cached whole, like every other org-scoped dynamic block. Uncached this hero
+// pays five model round trips on EVERY anonymous hit to a park site's home page
+// (park details, kingdom name, heraldry URL, park days, forecast) — and it is
+// the one block that renders unconditionally. Keyed by (park, weather flag):
+// the payload varies on both and on nothing else, since the remaining block
+// fields are pure presentation and stay outside the cached region.
+$phData = fdBlockCache(
+    CmsRenderCache::NS_PARK_HERO,
+    CmsRenderCache::ParkHeroKey($phParkId, $phShowWeather),
+    CmsRenderCache::TTL,
+    function () use ($phParkId, $phShowWeather) {
+        $phPark = array();
+        try {
+            if (class_exists('APIModel')) {
+                $phModel  = new APIModel('Park');
+                $phDetail = $phModel->GetParkDetails(array('ParkId' => $phParkId));
+                if (is_array($phDetail)) {
+                    $phPark = $phDetail;
+                }
+            }
+        } catch (\Throwable $e) {
+            $phPark = array();
         }
+
+        // The kingdom NAME is not in the park detail payload — only its id — so resolve it
+        // through the model layer, exactly like the park/heraldry lookups above. The query
+        // itself lives in Kingdom::GetKingdomName(); a template never talks to $DB.
+        $phKingdom = '';
+        $phKingdomId = (int) ($phPark['KingdomId'] ?? 0);
+        if ($phKingdomId > 0) {
+            try {
+                if (class_exists('APIModel')) {
+                    $phKingdom = (string) (new APIModel('Kingdom'))->GetKingdomName($phKingdomId);
+                }
+            } catch (\Throwable $e) {
+                $phKingdom = '';
+            }
+        }
+
+        // --- The seal -------------------------------------------------------------
+        // Gate on has_heraldry, NEVER on a truthy URL: resolve_heraldry_url() returns a
+        // guaranteed-404 path when no file exists, so a URL check always looks positive.
+        $phDeviceUrl = '';
+        $phIsCut     = false;
+        if (!empty($phPark['HasHeraldry'])) {
+            try {
+                $phH = (new APIModel('Heraldry'))->GetHeraldryUrl(array('Type' => 'Park', 'Id' => $phParkId));
+                if (is_array($phH) && !empty($phH['Url'])) {
+                    $phDeviceUrl = (string) $phH['Url'];
+                    // A .jpg is opaque, so its own background BECOMES the plate when
+                    // cover-cropped to the disc. A .png was written with alpha and its
+                    // transparent margin already trimmed, so it floats, matted.
+                    $phIsCut = (bool) preg_match('/\.jpe?g(\?|$)/i', $phDeviceUrl);
+                }
+            } catch (\Throwable $e) {
+                $phDeviceUrl = '';
+            }
+        }
+
+        // --- Next game day + weather ---------------------------------------------
+        $phNextLabel = '';
+        $phWeather   = '';
+        try {
+            $phDays = (new APIModel('Park'))->GetParkDays(array('ParkId' => $phParkId));
+            $phSoonest = null;
+            // Park::CalculateNextParkDay() can return a date that has already happened:
+            // 'week-of-month' resolves the Nth weekday of the CURRENT month (1st Sunday
+            // is 2026-08-02 for the whole of August) and 'monthly' behaves the same way.
+            // Taking the min() below would then let a stale date not only publish "next
+            // game day" in the past, but SUPPRESS the park's correct weekly day, which is
+            // strictly worse than showing nothing. The shared calculator is pre-existing
+            // and used elsewhere, so guard here at the consumer rather than change it.
+            $phTodayTs = strtotime('today');
+            foreach ((array) ($phDays['ParkDays'] ?? array()) as $phDay) {
+                if (!is_array($phDay) || !class_exists('Park')) {
+                    continue;
+                }
+                $phWhen = Park::CalculateNextParkDay(
+                    $phDay['Recurrence'] ?? '', $phDay['WeekOfMonth'] ?? 0, $phDay['MonthDay'] ?? 0,
+                    $phDay['WeekDay'] ?? '', null, $phDay['StartDate'] ?? null, $phDay['WeekInterval'] ?? 0
+                );
+                if (!$phWhen) {
+                    continue;
+                }
+                $phWhenTs = strtotime($phWhen);
+                if ($phWhenTs === false || $phWhenTs < $phTodayTs) {
+                    continue;
+                }
+                if ($phSoonest === null || $phWhenTs < strtotime($phSoonest['d'])) {
+                    $phSoonest = array('d' => $phWhen, 't' => (string) ($phDay['Time'] ?? ''));
+                }
+            }
+            if ($phSoonest !== null) {
+                $phTs = strtotime($phSoonest['d']);
+                $phNextLabel = date('l, F j', $phTs);
+                if ($phSoonest['t'] !== '' && $phSoonest['t'] !== '00:00:00') {
+                    $phNextLabel .= ' · ' . date('g:i A', strtotime($phSoonest['t']));
+                }
+                // Weather degrades SILENTLY past a 7-day horizon — the forecast table only
+                // carries 7 days, and a stale or missing reading must never look broken.
+                $phWithinWeek = ($phTs - time()) <= (7 * 86400);
+                // Through APIModel like every other lookup in this file — a template does
+                // not instantiate a domain class directly.
+                if ($phWithinWeek && $phShowWeather && class_exists('APIModel')) {
+                    $phF = (new APIModel('Weather'))->forecast_for_date($phParkId, date('Y-m-d', $phTs));
+                    // Weather::forecast_from_row() returns 'hi_f' (float|null), NOT 'high' —
+                    // see class.Weather.php:99-118. It always sets the key, using null for a
+                    // missing reading, so isset() alone is not enough; the explicit !== null
+                    // check is load-bearing, not decoration.
+                    if (is_array($phF) && isset($phF['hi_f']) && $phF['hi_f'] !== null) {
+                        $phWeather = round((float) $phF['hi_f']) . '°F';
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $phNextLabel = '';
+            $phWeather   = '';
+        }
+
+        return array(
+            'Park'      => $phPark,
+            'Kingdom'   => $phKingdom,
+            'DeviceUrl' => $phDeviceUrl,
+            'IsCut'     => $phIsCut,
+            'NextLabel' => $phNextLabel,
+            'Weather'   => $phWeather,
+        );
     }
-} catch (\Throwable $e) {
-    $phPark = array();
-}
+);
+
+$phPark      = is_array($phData['Park'] ?? null) ? $phData['Park'] : array();
+$phKingdom   = (string) ($phData['Kingdom'] ?? '');
+$phDeviceUrl = (string) ($phData['DeviceUrl'] ?? '');
+$phIsCut     = !empty($phData['IsCut']);
+$phNextLabel = (string) ($phData['NextLabel'] ?? '');
+$phWeather   = (string) ($phData['Weather'] ?? '');
 
 // NOTE the exact keys: Park::GetParkDetails() returns 'ParkName' (not 'Name')
 // and 'KingdomId' (not 'KingdomName'). Verified against class.Park.php:482-528.
@@ -42,21 +168,6 @@ $phTitle   = trim((string) ($phPark['ParkTitle'] ?? ''));
 $phCity    = trim((string) ($phPark['City'] ?? ''));
 $phProv    = trim((string) ($phPark['Province'] ?? ''));
 $phRetired = (string) ($phPark['Active'] ?? 'Active') !== 'Active';
-
-// The kingdom NAME is not in the park detail payload — only its id — so resolve it
-// through the model layer, exactly like the park/heraldry lookups above. The query
-// itself lives in Kingdom::GetKingdomName(); a template never talks to $DB.
-$phKingdom = '';
-$phKingdomId = (int) ($phPark['KingdomId'] ?? 0);
-if ($phKingdomId > 0) {
-    try {
-        if (class_exists('APIModel')) {
-            $phKingdom = (string) (new APIModel('Kingdom'))->GetKingdomName($phKingdomId);
-        }
-    } catch (\Throwable $e) {
-        $phKingdom = '';
-    }
-}
 
 // Eyebrow states the park's real rank and allegiance — Amtgard terminology doing
 // real work, not decoration.
@@ -67,25 +178,6 @@ if ($phEyebrow === '') {
 $phHeading = trim((string) ($blockFields['heading'] ?? '')) ?: $phName;
 $phPlace   = trim(implode(', ', array_filter(array($phCity, $phProv))));
 
-// --- The seal -------------------------------------------------------------
-// Gate on has_heraldry, NEVER on a truthy URL: resolve_heraldry_url() returns a
-// guaranteed-404 path when no file exists, so a URL check always looks positive.
-$phDeviceUrl = '';
-$phIsCut     = false;
-if (!empty($phPark['HasHeraldry'])) {
-    try {
-        $phH = (new APIModel('Heraldry'))->GetHeraldryUrl(array('Type' => 'Park', 'Id' => $phParkId));
-        if (is_array($phH) && !empty($phH['Url'])) {
-            $phDeviceUrl = (string) $phH['Url'];
-            // A .jpg is opaque, so its own background BECOMES the plate when
-            // cover-cropped to the disc. A .png was written with alpha and its
-            // transparent margin already trimmed, so it floats, matted.
-            $phIsCut = (bool) preg_match('/\.jpe?g(\?|$)/i', $phDeviceUrl);
-        }
-    } catch (\Throwable $e) {
-        $phDeviceUrl = '';
-    }
-}
 // Monogram fallback: initials, not the generic placeholder crest, which would make
 // all 26 deviceless parks identical and unloved.
 $phMonogram = '';
@@ -95,66 +187,6 @@ if ($phDeviceUrl === '') {
         $phMonogram .= mb_strtoupper(mb_substr($phW, 0, 1));
     }
     $phMonogram = mb_substr($phMonogram, 0, 3);
-}
-
-// --- Next game day + weather ---------------------------------------------
-$phNextLabel = '';
-$phWeather   = '';
-try {
-    $phDays = (new APIModel('Park'))->GetParkDays(array('ParkId' => $phParkId));
-    $phSoonest = null;
-    // Park::CalculateNextParkDay() can return a date that has already happened:
-    // 'week-of-month' resolves the Nth weekday of the CURRENT month (1st Sunday
-    // is 2026-08-02 for the whole of August) and 'monthly' behaves the same way.
-    // Taking the min() below would then let a stale date not only publish "next
-    // game day" in the past, but SUPPRESS the park's correct weekly day, which is
-    // strictly worse than showing nothing. The shared calculator is pre-existing
-    // and used elsewhere, so guard here at the consumer rather than change it.
-    $phTodayTs = strtotime('today');
-    foreach ((array) ($phDays['ParkDays'] ?? array()) as $phDay) {
-        if (!is_array($phDay) || !class_exists('Park')) {
-            continue;
-        }
-        $phWhen = Park::CalculateNextParkDay(
-            $phDay['Recurrence'] ?? '', $phDay['WeekOfMonth'] ?? 0, $phDay['MonthDay'] ?? 0,
-            $phDay['WeekDay'] ?? '', null, $phDay['StartDate'] ?? null, $phDay['WeekInterval'] ?? 0
-        );
-        if (!$phWhen) {
-            continue;
-        }
-        $phWhenTs = strtotime($phWhen);
-        if ($phWhenTs === false || $phWhenTs < $phTodayTs) {
-            continue;
-        }
-        if ($phSoonest === null || $phWhenTs < strtotime($phSoonest['d'])) {
-            $phSoonest = array('d' => $phWhen, 't' => (string) ($phDay['Time'] ?? ''));
-        }
-    }
-    if ($phSoonest !== null) {
-        $phTs = strtotime($phSoonest['d']);
-        $phNextLabel = date('l, F j', $phTs);
-        if ($phSoonest['t'] !== '' && $phSoonest['t'] !== '00:00:00') {
-            $phNextLabel .= ' · ' . date('g:i A', strtotime($phSoonest['t']));
-        }
-        // Weather degrades SILENTLY past a 7-day horizon — the forecast table only
-        // carries 7 days, and a stale or missing reading must never look broken.
-        $phWithinWeek = ($phTs - time()) <= (7 * 86400);
-        // Through APIModel like every other lookup in this file — a template does
-        // not instantiate a domain class directly.
-        if ($phWithinWeek && !empty($blockFields['show_weather']) && class_exists('APIModel')) {
-            $phF = (new APIModel('Weather'))->forecast_for_date($phParkId, date('Y-m-d', $phTs));
-            // Weather::forecast_from_row() returns 'hi_f' (float|null), NOT 'high' —
-            // see class.Weather.php:99-118. It always sets the key, using null for a
-            // missing reading, so isset() alone is not enough; the explicit !== null
-            // check is load-bearing, not decoration.
-            if (is_array($phF) && isset($phF['hi_f']) && $phF['hi_f'] !== null) {
-                $phWeather = round((float) $phF['hi_f']) . '°F';
-            }
-        }
-    }
-} catch (\Throwable $e) {
-    $phNextLabel = '';
-    $phWeather   = '';
 }
 
 $phCtaLabel = trim((string) ($blockFields['cta_label'] ?? '')) ?: 'Plan your first visit';
