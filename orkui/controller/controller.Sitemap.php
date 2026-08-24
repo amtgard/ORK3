@@ -7,7 +7,10 @@
  *   /Sitemap/core       → active parks, kingdoms, event occurrences
  *                         (last 12 months + future, published events only),
  *                         dated recaps, trends, home  (~2k URLs)
- *   /Sitemap/players    → active players (~68k URLs)
+ *   /Sitemap/players/N  → active players, sharded into pages of 40k (the
+ *                         protocol caps a file at 50k URLs; ~68k players).
+ *                         Bare /Sitemap/players serves page 1 so the URL
+ *                         Search Console already fetched stays valid.
  *
  * Split so Search Console reports indexing per section — "what fraction of
  * player pages does Google deem index-worthy" becomes its own tracked
@@ -32,7 +35,7 @@ class Controller_Sitemap extends Controller
 
     public function players($p = null)
     {
-        $this->_emit($this->_sitemap()->PlayersXml());
+        $this->_emit($this->_sitemap()->PlayersXml(valid_id($p) ? (int)$p : 1));
     }
 
     private function _sitemap()

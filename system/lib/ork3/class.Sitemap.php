@@ -11,12 +11,31 @@ class Sitemap extends Ork3
 {
     public const CACHE_TTL = 86400;
 
+    // Sitemap protocol caps a file at 50,000 URLs; players (~68k) shard into
+    // pages of this size. 40k leaves growth headroom before a third page.
+    public const PLAYERS_PER_PAGE = 40000;
+
     public function IndexXml()
     {
-        return ork_sitemap_index_xml(array(
-            UIR . 'Sitemap/core',
-            UIR . 'Sitemap/players',
-        ));
+        $key = Ork3::$Lib->ghettocache->key(array('sitemap-index'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.index', $key, self::CACHE_TTL)) !== false) {
+            return $cache;
+        }
+
+        $sitemaps = array(UIR . 'Sitemap/core');
+        for ($p = 1; $p <= $this->PlayersPageCount(); $p++) {
+            $sitemaps[] = UIR . 'Sitemap/players/' . $p;
+        }
+
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.index', $key, ork_sitemap_index_xml($sitemaps));
+    }
+
+    public function PlayersPageCount()
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet("SELECT COUNT(*) AS c FROM " . DB_PREFIX . "mundane WHERE active = 1");
+        $count = ($rs && $rs->Size() > 0 && $rs->Next()) ? (int)$rs->c : 0;
+        return max(1, (int)ceil($count / self::PLAYERS_PER_PAGE));
     }
 
     public function CoreXml()
@@ -76,9 +95,10 @@ class Sitemap extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.core', $key, ork_sitemap_xml($urls));
     }
 
-    public function PlayersXml()
+    public function PlayersXml($page = 1)
     {
-        $key = Ork3::$Lib->ghettocache->key(array('sitemap-players'));
+        $page = max(1, (int)$page);
+        $key = Ork3::$Lib->ghettocache->key(array('sitemap-players-' . $page));
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.players', $key, self::CACHE_TTL)) !== false) {
             return $cache;
         }
@@ -88,9 +108,16 @@ class Sitemap extends Ork3
         // migrations and the suspension-expiry sweep stamp thousands of rows
         // at once with zero content change. A lying lastmod teaches Google to
         // ignore lastmod site-wide; a bare <loc> is honest.
+        // ORDER BY keeps page boundaries stable between the pages' separate
+        // cache fills; a player created mid-day shifts pages at worst, and a
+        // sitemap is a hint, not a contract.
         $urls = array();
         $this->db->Clear();
-        $rs = $this->db->DataSet("SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE active = 1");
+        $rs = $this->db->DataSet(
+            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE active = 1
+			  ORDER BY mundane_id
+			  LIMIT " . self::PLAYERS_PER_PAGE . " OFFSET " . (($page - 1) * self::PLAYERS_PER_PAGE)
+        );
         if ($rs && $rs->Size() > 0) {
             while ($rs->Next()) {
                 $urls[] = array('loc' => UIR . 'Player/profile/' . (int)$rs->mundane_id);
