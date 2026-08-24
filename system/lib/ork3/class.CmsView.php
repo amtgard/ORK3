@@ -15,8 +15,10 @@
  *
  * BEST-EFFORT WRITE: RecordView never blocks or fails the render it is
  * called from — a missing table (pre-migration) is detected once per request
- * and skipped silently, and any write error is swallowed. The controller ALSO
- * gates on !preview + !bot + GET before calling; this lib is the storage layer.
+ * and skipped silently, and any write error is swallowed. The COUNTING POLICY
+ * (!preview + GET + !bot) lives here too, in IsCountableView(), which
+ * RecordView applies itself — every entry point that renders CMS content
+ * counts identically, whatever the caller (Site, Page, Blog, a future app).
  *
  * DB idiom (matches CmsNav/CmsPage): shared global $DB (YapoDb). Always
  * Clear() before a raw DataSet()/Execute(); bind via $DB->field = ...
@@ -53,22 +55,67 @@ class CmsView extends CmsBase
      * ================================================================== */
 
     /**
+     * THE counting policy: does this request count as one public content view?
+     *
+     * Every entry point that renders CMS content hands us the same raw request
+     * facts and gets the same answer, so the dashboard's numbers mean exactly
+     * one thing no matter who rendered the page.
+     *
+     * A view counts only when ALL hold:
+     *   - NOT a preview render — an officer previewing their own unpublished
+     *     content is not a public visitor;
+     *   - a GET request — POST/HEAD/etc. are never a content view;
+     *   - NOT an obvious bot/crawler/link-unfurler (user-agent heuristic).
+     *
+     * @param array $ctx ['is_preview'=>bool, 'method'=>string, 'user_agent'=>string]
+     *                   A missing 'method'/'user_agent' falls back to $_SERVER, so a
+     *                   caller that reports nothing still gets the real request facts;
+     *                   'is_preview' is the one thing only the caller can know (missing
+     *                   → not a preview).
+     * @return bool
+     */
+    public static function IsCountableView($ctx)
+    {
+        $ctx = is_array($ctx) ? $ctx : array();
+
+        if (!empty($ctx['is_preview'])) {
+            return false;   // officer preview — not a public view
+        }
+        $method = strtoupper(trim((string)($ctx['method'] ?? $_SERVER['REQUEST_METHOD'] ?? 'GET')));
+        if ($method !== 'GET') {
+            return false;   // only a GET render counts as a view
+        }
+        if (self::_isProbablyBot((string)($ctx['user_agent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''))) {
+            return false;   // crawlers / unfurlers / monitors don't count
+        }
+
+        return true;
+    }
+
+    /**
      * Record ONE view of a page/post in the given scope (today's counter).
      *
      * Best-effort and fire-and-forget: this is called from the public render
      * path and must never slow or break it. A pre-migration missing table is
      * skipped silently (one probe per request), and every error is swallowed.
-     * The caller is responsible for the exclusion policy (preview / bot / non-GET)
-     * — by the time we get here the view is assumed countable.
+     * The exclusion policy is applied HERE via IsCountableView($ctx) — the
+     * caller only reports the raw request facts and never decides what counts.
      *
      * @param string $scopeType  'global'|'kingdom'|'park'
      * @param int    $scopeId    scope owner id (0 for global)
      * @param string $entityType 'page'|'post'
      * @param int    $entityId   page_id / post_id
+     * @param array  $ctx        request facts for the policy gate — see
+     *                           IsCountableView(). The gate always runs; an
+     *                           omitted/null ctx just means method + user-agent
+     *                           come from $_SERVER and the render is not a preview.
      * @return void
      */
-    public function RecordView($scopeType, $scopeId, $entityType, $entityId)
+    public function RecordView($scopeType, $scopeId, $entityType, $entityId, $ctx = null)
     {
+        if (!self::IsCountableView($ctx)) {
+            return;
+        }
         $entityType = $this->_normalizeEntityType($entityType);
         $entityId   = (int)$entityId;
         if ($entityId <= 0) {
@@ -395,6 +442,32 @@ class CmsView extends CmsBase
     /* ====================================================================
      * INTERNAL
      * ================================================================== */
+
+    /**
+     * Lightweight user-agent bot heuristic behind IsCountableView(). Deliberately
+     * simple (no third-party lists): matches common crawler / link-unfurler /
+     * uptime-monitor / scripting tokens, and treats a MISSING user-agent as
+     * non-human (bots and scripts routinely omit it). False negatives are
+     * acceptable — the goal is directional feedback, not audited analytics.
+     *
+     * @param string $ua
+     * @return bool
+     */
+    private static function _isProbablyBot($ua)
+    {
+        $ua = (string)$ua;
+        if (trim($ua) === '') {
+            return true;
+        }
+        return (bool)preg_match(
+            '~(bot|crawl|spider|slurp|mediapartners|facebookexternalhit|embedly|'
+            . 'quora link preview|pinterest|slackbot|twitterbot|telegrambot|whatsapp|'
+            . 'discordbot|linkedinbot|skypeuripreview|preview|monitor|uptime|pingdom|'
+            . 'statuscake|curl|wget|python-requests|python-urllib|go-http-client|'
+            . 'java/|okhttp|headless|phantomjs|lighthouse|scrapy|apache-httpclient)~i',
+            $ua
+        );
+    }
 
     /** Clamp entity_type to the supported enum (default 'page'). */
     private function _normalizeEntityType($entityType)

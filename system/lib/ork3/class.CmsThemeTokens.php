@@ -249,10 +249,17 @@ class CmsThemeTokens
             ? $light['--fd-accent']
             : $light['--fd-primary-contrast'];
 
+        // Card plate. Light: cards sit on the tinted paper band, so plain --fd-bg
+        // reads as the raised surface. Dark: the band and the page share --fd-bg,
+        // so a card needs its own brand-tinted plate one step lighter or it
+        // disappears into the band (.fd-card reads this token in BOTH themes).
+        $light['--fd-card-bg'] = $light['--fd-bg'];
+
         // Dark color set (color tokens only; shape/type pass through).
         $dark = $light;
         $dark['--fd-bg']         = self::WithL($light['--fd-primary'], 0.08);   // brand-tinted near-black
         $dark['--fd-surface']    = self::WithL($light['--fd-primary'], 0.13);
+        $dark['--fd-card-bg']    = self::WithL($light['--fd-primary'], 0.18);
         $dark['--fd-border']     = self::WithL($light['--fd-primary'], 0.22);
         $dark['--fd-text']       = '#e8ecf1';
         $dark['--fd-text-muted'] = '#aab3c0';

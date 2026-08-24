@@ -78,6 +78,19 @@ check(
         !== CmsThemeTokens::Contrast($dPark['light']['--fd-accent'], $dPark['light']['--fd-primary'])
 );
 
+// --- #fd-card-bg: cards must be per-org themed in DARK too ------------------
+// .fd-card used to be repainted with a fixed #1e2a3e in dark, so every org site
+// rendered the same ORK slate card no matter what the officer picked. The token
+// keeps light identical to --fd-bg while giving dark its own brand-tinted plate.
+$dCard = CmsThemeTokens::Derive(array('--fd-primary' => '#1b4d3e'));
+check('light card plate is the page bg', $dCard['light']['--fd-card-bg'] === $dCard['light']['--fd-bg']);
+check('dark card plate is not the dark page bg', $dCard['dark']['--fd-card-bg'] !== $dCard['dark']['--fd-bg']);
+check('dark card plate is lighter than the dark page bg', CmsThemeTokens::Luminance($dCard['dark']['--fd-card-bg']) > CmsThemeTokens::Luminance($dCard['dark']['--fd-bg']));
+check('dark card text clears AA on the card plate', CmsThemeTokens::Contrast($dCard['dark']['--fd-text'], $dCard['dark']['--fd-card-bg']) >= 4.5);
+// Per-org, not a constant: a different primary must yield a different plate.
+$dCard2 = CmsThemeTokens::Derive(array('--fd-primary' => '#5b1b1b'));
+check('dark card plate follows the org primary', $dCard2['dark']['--fd-card-bg'] !== $dCard['dark']['--fd-card-bg']);
+
 // --- ToCss: CSS emission ---
 $css = CmsThemeTokens::ToCss(array('--fd-primary' => '#1b4d3e'));
 check('emits .fd-page scope', strpos($css, '.fd-page{') !== false);
@@ -284,12 +297,13 @@ $norm = function ($v) {
     return preg_replace('/,\s+/', ',', preg_replace('/\s+/', ' ', trim((string) $v)));
 };
 
-// Only the CATALOG tokens. Derive() also injects --fd-primary-h and
-// --fd-accent-on-primary, which are computed per-org and deliberately carry NO
-// static fallback here: every consumer supplies its own inline
-// `var(--fd-accent-on-primary, var(--fd-primary-contrast))`. Declaring them on
-// .fd-page would not be parity, it would be a rendering change (gold instead of
-// white on the unthemed front door's hero band). Pinned absent below.
+// Only the CATALOG tokens. Derive() also injects --fd-primary-h,
+// --fd-accent-on-primary and --fd-card-bg, which are computed per-org and
+// deliberately carry NO static fallback here: every consumer supplies its own
+// inline `var(--fd-accent-on-primary, var(--fd-primary-contrast))`. Declaring
+// them on .fd-page would not be parity, it would be a rendering change (gold
+// instead of white on the unthemed front door's hero band; a lit card surface
+// instead of the plain one). Pinned absent below.
 foreach (array_keys(CmsThemeTokens::Defaults()) as $token) {
     // --fd-font-scale is emitted as calc(1rem * N) but declared as a bare length
     // fallback; it is asserted separately below.
@@ -318,7 +332,7 @@ check(
     (bool) preg_match('/--fd-font-scale\s*:\s*1rem\s*;/', $cssBlock)
 );
 
-// The two Derive-only tokens stay UNdeclared on .fd-page -- see the note above.
+// The three Derive-only tokens stay UNdeclared on .fd-page -- see the note above.
 check(
     '--fd-accent-on-primary has no static .fd-page fallback',
     !preg_match('/--fd-accent-on-primary\s*:/', $cssBlock)
@@ -326,6 +340,10 @@ check(
 check(
     '--fd-primary-h has no static .fd-page fallback',
     !preg_match('/--fd-primary-h\s*:/', $cssBlock)
+);
+check(
+    '--fd-card-bg has no static .fd-page fallback',
+    !preg_match('/--fd-card-bg\s*:/', $cssBlock)
 );
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";

@@ -469,7 +469,7 @@ class CmsPost extends CmsBase
      */
     public function RssDescription($row)
     {
-        $excerpt = isset($row['excerpt']) ? trim((string)$row['excerpt']) : '';
+        $excerpt = isset($row['excerpt']) ? $this->_plainText((string)$row['excerpt']) : '';
         if ($excerpt !== '') {
             return $excerpt;
         }
@@ -510,22 +510,40 @@ class CmsPost extends CmsBase
             return '';
         }
 
-        $text = strip_tags(implode(' ', $parts));
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $text = trim(preg_replace('/\s+/u', ' ', $text));
+        $text = $this->_plainText(implode(' ', $parts));
         if ($text === '') {
             return '';
         }
 
-        if (mb_strlen($text, 'UTF-8') <= $maxLen) {
+        // Character-aware clamp via the shared CmsBase helpers (one answer for the
+        // whole Cms hierarchy) — these carry the byte fallback the hand-rolled
+        // mb_* calls here lacked on a host without mbstring.
+        if ($this->_strLen($text) <= $maxLen) {
             return $text;
         }
-        $cut = mb_substr($text, 0, $maxLen, 'UTF-8');
-        $sp  = mb_strrpos($cut, ' ', 0, 'UTF-8');
+        $cut = $this->_subStr($text, 0, $maxLen);
+        $sp  = $this->_strRPos($cut, ' ');
         if ($sp !== false && $sp > 0) {
-            $cut = mb_substr($cut, 0, $sp, 'UTF-8');
+            $cut = $this->_subStr($cut, 0, $sp);
         }
         return rtrim($cut) . '…';
+    }
+
+    /**
+     * Reduce authored content to plain text for the RSS <description>: DECODE
+     * entities first, THEN strip tags (the reverse order lets an author type
+     * "&lt;script&gt;" as literal text and have it decoded back into a real tag
+     * inside the CDATA block), then collapse whitespace. Shared by both
+     * description paths — the curated excerpt (stored raw, never routed through
+     * CmsSanitizer) and the auto-generated body snippet — so they can't drift.
+     *
+     * @param string $text
+     * @return string
+     */
+    private function _plainText($text)
+    {
+        $text = html_entity_decode((string)$text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim(preg_replace('/\s+/u', ' ', strip_tags($text)));
     }
 
     /**
@@ -591,8 +609,16 @@ class CmsPost extends CmsBase
     {
         $now = date('Y-m-d H:i:s');
 
+        // Parity with UpdatePage/UpdatePost (#59): the lib layer — not just the
+        // controller — refuses an empty slug, which would publish the post at
+        // 'post/' and collide with any other empty-slug post in the same scope.
+        $slug = $this->_normalizeSlug((string)(isset($data['slug']) ? $data['slug'] : ''));
+        if ($slug === '') {
+            return 0;
+        }
+
         $cols = array(
-            'slug'          => $this->_normalizeSlug((string)(isset($data['slug']) ? $data['slug'] : '')),
+            'slug'          => $slug,
             'title'         => isset($data['title']) ? (string)$data['title'] : '',
             'excerpt'       => isset($data['excerpt']) ? $data['excerpt'] : null,
             'hero_media_id' => (isset($data['hero_media_id']) && $data['hero_media_id'] !== '') ? (int)$data['hero_media_id'] : null,
@@ -724,7 +750,7 @@ class CmsPost extends CmsBase
             $preRow = $this->_firstRow($DB->DataSet(
                 'SELECT scope_type, scope_id, slug FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
             ));
-            $slugChanged = ($preRow !== null && $newSlug !== (string)$preRow['slug']);
+            $slugChanged = ($preRow !== null && $newSlug !== '' && $newSlug !== (string)$preRow['slug']);
 
             if ($newSlug !== '' && $slugChanged) {
                 // Effective target scope: an in-flight scope change wins, else the
@@ -749,8 +775,10 @@ class CmsPost extends CmsBase
             $set[] = 'title = :title';
             $DB->title = (string)$data['title'];
         }
-        if (array_key_exists('slug', $data)) {
-            // $newSlug was normalized (and dup-checked) up front.
+        if (array_key_exists('slug', $data) && $newSlug !== '') {
+            // $newSlug was normalized (and dup-checked) up front. Parity with
+            // CmsPage::UpdatePage (#59): never persist an empty slug — silently
+            // keep the existing one rather than writing slug = ''.
             $set[] = 'slug = :slug';
             $DB->slug = $newSlug;
         }
@@ -861,6 +889,10 @@ class CmsPost extends CmsBase
 
         // Covers SetStatus too (it delegates here).
         $this->_invalidateListCache();
+        // A rename changes the permalink and title/excerpt edits are feed-visible,
+        // so the 300s-cached feed XML has to go too (SetStatus double-busting is
+        // harmless; no-op when memcache isn't wired up).
+        $this->_bustRssCache($postId);
 
         // #62: audit the content-mutating write. Scope = the effective (post-edit)
         // scope — an in-flight scope move wins, else the row's current scope.
@@ -871,6 +903,17 @@ class CmsPost extends CmsBase
             ? (int)$data['scope_id']
             : (int)$existRow['scope_id'];
         $auditActor = (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0;
+
+        // A title/slug/status/published_at edit changes what a nav item linking to
+        // this post resolves to, so bump the scope's content version — the key of
+        // the cross-request nav cache (CmsNav::GetMenu). SetStatus delegates here,
+        // so publish/unpublish/schedule are covered. A scope MOVE changes the nav
+        // of both scopes, so bump both.
+        $this->_bumpContentVersion($auditType, $auditId);
+        if ((string)$existRow['scope_type'] !== $auditType || (int)$existRow['scope_id'] !== $auditId) {
+            $this->_bumpContentVersion((string)$existRow['scope_type'], (int)$existRow['scope_id']);
+        }
+
         $this->_cmsAudit($auditActor, 'update', 'post', $postId, $auditType, $auditId);
 
         return true;

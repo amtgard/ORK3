@@ -61,7 +61,7 @@ class Model_CmsAuth extends Model
         return $this->CmsAuth->IsSuperAdmin($uid);
     }
 
-    /** @no-callers — mirror surface. */
+    /** Callers: Controller_Cms::_capList() (super-admin branch, :1078) and ::_bridgedCaps() (officer bridge, non-super, :1119). */
     public function all_capabilities()
     {
         return $this->CmsAuth->AllCapabilities();

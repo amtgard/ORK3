@@ -76,6 +76,7 @@ class Banner extends Ork3
             . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
             . ', banner_offset_y = ' . $offY . ' WHERE ' . $idCol . ' = ' . $id
         );
+        $this->bustParkMemoIfNeeded($type, $id);
 
         if ($type === 'Player') {
             $this->db->Clear();
@@ -134,6 +135,7 @@ class Banner extends Ork3
             . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
             . ', banner_offset_y = ' . $offY . ' WHERE ' . $idCol . ' = ' . $id
         );
+        $this->bustParkMemoIfNeeded($type, $id);
 
         $this->db->Clear();
         $verify = $this->db->DataSet(
@@ -177,6 +179,7 @@ class Banner extends Ork3
         $this->db->Execute(
             'UPDATE ' . $table . ' SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE ' . $idCol . ' = ' . $id
         );
+        $this->bustParkMemoIfNeeded($type, $id);
 
         if (!$this->verifyHasBanner($table, $idCol, $id, 0)) {
             return ProcessingError('Could not clear banner flag in database. Please try again.');
@@ -249,6 +252,7 @@ class Banner extends Ork3
                 . ', banner_offset_y = ' . (int)$row->banner_offset_y
                 . ' WHERE ' . $idCol . ' = ' . $targetId
             );
+            $this->bustParkMemoIfNeeded($type, $targetId);
         }
 
         $this->bustEventCacheIfNeeded($type, $targetId);
@@ -358,6 +362,19 @@ class Banner extends Ork3
         }
         if (file_exists($base . '.png')) {
             @unlink($base . '.png');
+        }
+    }
+
+    /**
+     * The banner columns this class writes (has_banner, banner_show_logo,
+     * banner_vignette, banner_offset_x/y) are the same ones Park::GetParkDetails()
+     * re-reads and memoizes per request, so a park banner write here has to drop
+     * that memo or the rest of the request renders the pre-write banner config.
+     */
+    private function bustParkMemoIfNeeded(string $type, int $id): void
+    {
+        if ($type === 'Park') {
+            Park::BustParkMemo($id);
         }
     }
 

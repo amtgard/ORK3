@@ -35,4 +35,10 @@ class Model_CmsSanitizer extends Model
     {
         return $this->CmsSanitizer->IsSafeUrl($url);
     }
+
+    /** @no-callers — mirror surface. */
+    public function safe_markdown($text)
+    {
+        return $this->CmsSanitizer->SafeMarkdown($text);
+    }
 }

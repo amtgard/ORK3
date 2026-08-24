@@ -10,9 +10,9 @@
  *
  * What it does (idempotent):
  *   Seeds the editable 'marketing' nav menu (scope global) from the canonical
- *   hardcoded Model_FrontDoor marketing_nav defaults. It reads
- *   Model_FrontDoor::GetContent(), finds the marketing_nav block, and inserts
- *   its items[] (and one level of children[]) into ork_cms_nav_item via the
+ *   hardcoded marketing_nav defaults. It reads
+ *   CmsBlockRegistry::DefaultFrontDoorBlocks(), finds the marketing_nav block,
+ *   and inserts its items[] (and one level of children[]) into ork_cms_nav_item via the
  *   CmsNav lib:
  *     - each item -> link_type='url', url=<item href>, parent_id=NULL,
  *       ordering by position, enabled=1, scope_type='global', scope_id=0.
@@ -35,9 +35,9 @@ if (PHP_SAPI !== 'cli') {
 
 // ---------------------------------------------------------------------------
 // Minimal app bootstrap (CLI). startup.php loads the DB + all libs but does
-// NOT define UIR or a web HTTP host. Model_FrontDoor::GetContent() references
-// UIR (and HTTP_TEMPLATE, built from HTTP_HOST), so provide sane CLI-time
-// stand-ins BEFORE startup so the imported defaults are well-formed.
+// NOT define UIR or a web HTTP host. CmsBlockRegistry::DefaultFrontDoorBlocks()
+// references UIR (and HTTP_TEMPLATE, built from HTTP_HOST), so provide sane
+// CLI-time stand-ins BEFORE startup so the imported defaults are well-formed.
 // ---------------------------------------------------------------------------
 if (empty($_SERVER['HTTP_HOST'])) {
     // Matches the dev container's external origin (see reference_local_dev_routing).
@@ -53,11 +53,8 @@ if (!defined('UIR')) {
     define('UIR', '/orkui/index.php?Route=');
 }
 
-// Model_FrontDoor lives in the orkui model dir (DIR_MODEL); pull it in directly
-// so we can import the canonical front-door defaults.
-require_once DIR_MODEL . 'model.FrontDoor.php';
-
-// The CmsNav lib (DB store) is auto-loaded by startup from DIR_ORK3.
+// The CmsNav lib (DB store) and CmsBlockRegistry (the canonical front-door
+// defaults) are both auto-loaded by startup from DIR_ORK3.
 $nav = new CmsNav();
 
 $report = [];
@@ -80,8 +77,7 @@ if (is_array($existing) && count($existing) > 0) {
 // ---------------------------------------------------------------------------
 // Pull the canonical marketing_nav block from the front-door defaults.
 // ---------------------------------------------------------------------------
-$frontDoor = new Model_FrontDoor();
-$blocks    = $frontDoor->GetContent([
+$blocks = CmsBlockRegistry::DefaultFrontDoorBlocks([
     'logged_in'  => false,
     'kingdom_id' => 0,
 ]);
@@ -99,7 +95,7 @@ foreach ((array) $blocks as $block) {
 if (empty($navItems)) {
     $report = [
         'seeded' => false,
-        'note'   => 'no marketing_nav items found in Model_FrontDoor defaults; nothing to seed',
+        'note'   => 'no marketing_nav items found in the front-door defaults; nothing to seed',
     ];
     echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     return;

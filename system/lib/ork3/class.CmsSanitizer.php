@@ -150,6 +150,20 @@ class CmsSanitizer
             return '';
         }
 
+        // An unbalanced closing tag in author markup (e.g. a stray </div> typed
+        // into the raw_html block's HTML textarea) closes the wrapper early, so
+        // everything after it is re-parented as a SIBLING of the wrapper and
+        // would be dropped silently. Unwrap the wrapper into <body> and walk the
+        // body instead, which keeps that trailing content in document order.
+        $body = $root->parentNode;
+        if ($body instanceof DOMElement && strtolower($body->nodeName) === 'body') {
+            while ($root->firstChild !== null) {
+                $body->insertBefore($root->firstChild, $root);
+            }
+            $body->removeChild($root);
+            $root = $body;
+        }
+
         // #102: a shared node budget threaded through the recursive walk.
         $budget = array('nodes' => self::$MAX_NODES);
         self::sanitizeNode($root, $doc, 0, $budget);
@@ -357,6 +371,12 @@ class CmsSanitizer
             }
         }
 
+        // Browsers normalize backslashes to forward slashes when resolving a
+        // URL under a special scheme, so "\\host", "\/host" and "/\host" all
+        // resolve exactly like the protocol-relative "//host". Normalize here
+        // so the checks below see the same string the browser will.
+        $lower = str_replace('\\', '/', $lower);
+
         // Protocol-relative URLs (leading "//") are NOT allowed: they resolve
         // to an attacker-controlled host in http and https contexts alike.
         if (strlen($lower) >= 2 && $lower[0] === '/' && $lower[1] === '/') {
@@ -413,6 +433,39 @@ class CmsSanitizer
     public static function XmlEscape($text)
     {
         return htmlspecialchars((string)$text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    }
+
+    /**
+     * Render author-written markdown to HTML that is safe to inject into a page.
+     *
+     * The policy — Parsedown safe mode (raw HTML escaped, unsafe URL schemes
+     * refused), breaks enabled (officers type single newlines and expect them
+     * to survive), plus a post-pass that drops <img> so authored content can't
+     * pull a remote image into someone else's page — is a SANITIZATION
+     * decision, so it belongs on this class rather than being redeclared as a
+     * render-time global by each template that happens to need it.
+     *
+     * Returns '' when Parsedown is unavailable: emitting the raw author string
+     * instead would be the one failure mode this function exists to prevent.
+     *
+     * @param mixed $text raw markdown as the author wrote it
+     * @return string sanitized HTML
+     */
+    public static function SafeMarkdown($text)
+    {
+        $text = (string)$text;
+        if ($text === '') {
+            return '';
+        }
+        if (!class_exists('Parsedown')) {
+            if (!defined('DIR_LIB') || !is_file(DIR_LIB . 'Parsedown.php')) {
+                return '';
+            }
+            require_once DIR_LIB . 'Parsedown.php';
+        }
+        $clean = str_replace(array('<br />', '<br/>', '<br>'), "\n", $text);
+        $html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
+        return preg_replace('/<img[^>]*>/i', '', $html);
     }
 
     /**

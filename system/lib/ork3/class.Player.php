@@ -4697,13 +4697,17 @@ class Player extends Ork3
      */
     public function GetWhatsNewSeen(int $mundaneId, string $version): bool
     {
-        if (!valid_id($mundaneId) || $version === '') {
+        if (!valid_id($mundaneId)) {
+            return false;
+        }
+        $version = preg_replace('/[^a-zA-Z0-9_\-]/', '', $version);
+        if ($version === '') {
             return false;
         }
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT 1 FROM ' . DB_PREFIX . "whats_new_seen WHERE mundane_id = " . (int) $mundaneId
-            . " AND version = '" . mysql_real_escape_string($version) . "' LIMIT 1"
+            . " AND version = '" . $version . "' LIMIT 1"
         );
 
         return (bool) ($rs && $rs->Next());

@@ -459,6 +459,15 @@ class CmsPage extends CmsBase
     {
         $now = date('Y-m-d H:i:s');
 
+        // Defensive parity with UpdatePage (and CmsPost::CreatePost): the status
+        // vocabulary is closed — anything outside it clamps to draft rather than
+        // reaching the ENUM column, where a non-strict sql_mode would coerce it
+        // to '' and leave the row invisible to every status-filtered surface.
+        $status = isset($data['status']) ? (string)$data['status'] : 'draft';
+        if ($status !== 'published' && $status !== 'scheduled') {
+            $status = 'draft';
+        }
+
         $cols = array(
             // Shared canonical derivation (CmsBase::_normalizeSlug): 'My Page' ->
             // 'my-page'. Previously stripped non-alphanumerics to nothing
@@ -477,7 +486,7 @@ class CmsPage extends CmsBase
             // do it in the Site render path, not here.
             'type'             => isset($data['type']) ? (string)$data['type'] : 'composed',
             'title'            => isset($data['title']) ? (string)$data['title'] : '',
-            'status'           => isset($data['status']) ? (string)$data['status'] : 'draft',
+            'status'           => $status,
             'published_at'     => isset($data['published_at']) ? $data['published_at'] : null,
             'hero_media_id'    => isset($data['hero_media_id']) ? $data['hero_media_id'] : null,
             'meta_description' => isset($data['meta_description']) ? $data['meta_description'] : null,
@@ -720,6 +729,13 @@ class CmsPage extends CmsBase
             }
             $set[] = 'status = :status';
             $DB->status = $status;
+            // Pair a 'scheduled' write with the has-scheduled-content flag the way
+            // CmsBase::_setStatus does: _promoteScheduled() fast-path-returns while
+            // the cached flag reads the 0 sentinel, so a row scheduled through this
+            // path would otherwise sit unpromoted until the flag TTL expires.
+            if ($status === 'scheduled') {
+                $this->_markScheduledContent();
+            }
         }
         if (array_key_exists('published_at', $data)) {
             $set[] = 'published_at = :published_at';
@@ -758,12 +774,23 @@ class CmsPage extends CmsBase
             . ' WHERE page_id = :page_id AND deleted_at IS NULL'
         );
 
-        // #54: confirm a live row was actually updated. updated_at is bumped on
-        // every save, so a matching non-trashed row always reports >= 1 changed
-        // row; a nonexistent/trashed target reports 0. Read immediately after the
-        // Execute on the same connection (before any other query).
+        // #54: confirm a live row was actually updated. Read immediately after the
+        // Execute on the same connection (before any other query). ROW_COUNT() on
+        // an UPDATE counts rows CHANGED, not matched (the PDO handle is built
+        // without MYSQL_ATTR_FOUND_ROWS), and updated_at has one-second
+        // granularity — so a same-second re-save with otherwise identical values
+        // legitimately changes zero rows. Treat 0 as success only when the live
+        // row is still there; a genuinely absent/trashed target still fails.
         if ($this->_affectedRows() < 1) {
-            return false;
+            $DB->Clear();
+            $DB->page_id = $pageId;
+            $live = $this->_firstRow($DB->DataSet(
+                'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
+                . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
+            ));
+            if ($live === null) {
+                return false;
+            }
         }
 
         // C13/#51: a slug OR parent-link change invalidates memoized ancestor
@@ -816,6 +843,17 @@ class CmsPage extends CmsBase
             ? (int)$data['scope_id']
             : (int)$curRow['scope_id'];
         $auditActor = (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0;
+
+        // A title/slug/status/published_at edit changes what a nav item linking
+        // to this page resolves to, so bump the scope's content version — that is
+        // the cross-request nav cache's key (CmsNav::GetMenu). SetStatus delegates
+        // here, so publish/unpublish/schedule are covered too. On a scope MOVE
+        // both the old and the new scope's nav change, so bump both.
+        $this->_bumpContentVersion($auditType, $auditId);
+        if ((string)$curRow['scope_type'] !== $auditType || (int)$curRow['scope_id'] !== $auditId) {
+            $this->_bumpContentVersion((string)$curRow['scope_type'], (int)$curRow['scope_id']);
+        }
+
         $this->_cmsAudit($auditActor, 'update', 'page', $pageId, $auditType, $auditId);
 
         return true;
@@ -1211,8 +1249,11 @@ class CmsPage extends CmsBase
         // a prefix. Find the LONGEST ancestor prefix that has a redirect and rewrite
         // it, carrying the remaining suffix onto the target's current path. This
         // keeps every descendant URL resolving without recording a row per node.
+        // One indexed point lookup per ancestor prefix, so bound the walk: a
+        // bot-supplied 500-segment 404 path must not turn one miss into 500
+        // sequential queries. Real page nesting never approaches this depth.
         $parts = explode('/', $fromPath);
-        for ($i = count($parts) - 1; $i >= 1; $i--) {
+        for ($i = min(count($parts) - 1, 10); $i >= 1; $i--) {
             $prefix = implode('/', array_slice($parts, 0, $i));
             $suffix = implode('/', array_slice($parts, $i));
             $prow   = $this->_redirectRowFor($scopeType, $scopeId, $prefix);
@@ -1522,7 +1563,7 @@ class CmsPage extends CmsBase
         // fields). Execute() is void under ERRMODE_WARNING, so a silently-dropped
         // write is only visible via a read-back inside the transaction → ROLLBACK.
         $expected = count($upsert['kept']) + count($upsert['inserts']);
-        if (!$this->_verifyBlockCount($ownerType, $ownerId, $expected, $upsert['keptFields'])) {
+        if (!$this->_verifyBlockCount($ownerType, $ownerId, $expected, $upsert['keptFields'], $upsert['inserts'])) {
             $DB->Clear();
             $DB->Execute('ROLLBACK');
             return -1;
@@ -1834,9 +1875,12 @@ class CmsPage extends CmsBase
      * @param int    $expected   count(kept) + count(inserts)
      * @param array  $keptFields map of kept block_id => ['type','ordering',
      *                           'enabled','source','fields_json'] (intended)
+     * @param array  $inserts    list of intended NEW block rows (same keys); their
+     *                           ids aren't known until after the INSERT, so they
+     *                           are matched as an unordered multiset
      * @return bool true when the write verified; false → caller ROLLBACKs
      */
-    private function _verifyBlockCount($ownerType, $ownerId, $expected, $keptFields)
+    private function _verifyBlockCount($ownerType, $ownerId, $expected, $keptFields, $inserts = array())
     {
         global $DB;
 
@@ -1888,6 +1932,51 @@ class CmsPage extends CmsBase
                 $storedJson   = json_decode(isset($s['fields_json']) ? (string)$s['fields_json'] : '', true);
                 $intendedJson = json_decode((string)$intended['fields_json'], true);
                 if ($storedJson != $intendedJson) {
+                    return false;
+                }
+            }
+        }
+
+        // The freshly-INSERTed rows carry no known block_id, so read back every
+        // row that is NOT a kept one and match it against the intended inserts as
+        // an unordered multiset — the same per-column compare the kept rows get,
+        // so a silently truncated/clamped value on a NEW block also ROLLBACKs.
+        if (!empty($inserts)) {
+            $sql = 'SELECT type, ordering, enabled, source, fields_json FROM ' . DB_PREFIX . 'cms_block'
+                . ' WHERE owner_type = :owner_type AND owner_id = :owner_id';
+            if (!empty($keptFields)) {
+                $sql .= ' AND block_id NOT IN (' . implode(',', array_map('intval', array_keys($keptFields))) . ')';
+            }
+            $DB->Clear();
+            $DB->owner_type = $ownerType;
+            $DB->owner_id = $ownerId;
+            $newRows = array();
+            foreach ($this->_eachRow($DB->DataSet($sql)) as $nr) {
+                $newRows[] = $nr;
+            }
+            if (count($newRows) !== count($inserts)) {
+                return false;
+            }
+            $pending = $inserts;
+            foreach ($newRows as $nr) {
+                $storedJson = json_decode(isset($nr['fields_json']) ? (string)$nr['fields_json'] : '', true);
+                $matched = false;
+                foreach ($pending as $pi => $intended) {
+                    if ((string)$nr['type'] !== (string)$intended['type']
+                        || (int)$nr['ordering'] !== (int)$intended['ordering']
+                        || (int)$nr['enabled'] !== (int)$intended['enabled']
+                        || (string)$nr['source'] !== (string)$intended['source']) {
+                        continue;
+                    }
+                    $intendedJson = json_decode((string)$intended['fields_json'], true);
+                    if ($storedJson != $intendedJson) {
+                        continue;
+                    }
+                    unset($pending[$pi]);
+                    $matched = true;
+                    break;
+                }
+                if (!$matched) {
                     return false;
                 }
             }
@@ -2023,7 +2112,7 @@ class CmsPage extends CmsBase
         $DB->Clear();
         $DB->owner_pk = $ownerId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT title, slug, status, published_at, updated_by'
+            'SELECT title, slug, status, published_at, hero_media_id, updated_by'
             . ' FROM ' . DB_PREFIX . $table
             . ' WHERE ' . $pk . ' = :owner_pk LIMIT 1'
         ));
@@ -2089,15 +2178,19 @@ class CmsPage extends CmsBase
      * @param int    $revisionId
      * @param string $ownerType 'page' | 'post'
      * @param int    $ownerId
+     * @param int    $actorId   acting user id (stamps updated_by + attributes the
+     *                          #62 audit row; 0 = unknown). Optional so existing
+     *                          callers are unaffected.
      * @return bool
      */
-    public function RestoreRevision($revisionId, $ownerType, $ownerId)
+    public function RestoreRevision($revisionId, $ownerType, $ownerId, $actorId = 0)
     {
         global $DB;
 
         $revisionId = (int)$revisionId;
         $ownerType = $this->_normalizeOwnerType($ownerType);
         $ownerId = (int)$ownerId;
+        $actorId = (int)$actorId;
         if ($revisionId <= 0 || $ownerId <= 0) {
             return false;
         }
@@ -2122,7 +2215,7 @@ class CmsPage extends CmsBase
             return false;
         }
 
-        $ok = ($this->ReplaceBlocks($ownerType, $ownerId, $blocks) >= 0);
+        $ok = ($this->ReplaceBlocks($ownerType, $ownerId, $blocks, $actorId) >= 0);
         if (!$ok) {
             return false;
         }
@@ -2143,6 +2236,10 @@ class CmsPage extends CmsBase
             if (array_key_exists($k, $meta)) {
                 $metaApply[$k] = $meta[$k];
             }
+        }
+        if (!empty($metaApply) && $actorId > 0) {
+            // Attribute the meta half of the restore to the actor too.
+            $metaApply['updated_by'] = $actorId;
         }
         if (!empty($metaApply)) {
             if ($ownerType === 'post') {
@@ -2346,6 +2443,12 @@ class CmsPage extends CmsBase
         if (!empty($ids)) {
             $idList = implode(',', array_map('intval', $ids));
 
+            // The three deletes are one logical unit (mirroring ReplaceBlocks):
+            // an interruption between them would strip a page's blocks/revisions
+            // while leaving the page row behind.
+            $DB->Clear();
+            $DB->Execute('START TRANSACTION');
+
             // Blocks owned by the doomed pages.
             $DB->Clear();
             $DB->Execute(
@@ -2373,6 +2476,9 @@ class CmsPage extends CmsBase
                 . ' AND deleted_at IS NOT NULL AND deleted_at < (NOW() - INTERVAL ' . $days . ' DAY)'
             );
             $out['pages'] = $this->_affectedRows();
+
+            $DB->Clear();
+            $DB->Execute('COMMIT');
         }
 
         $out['orphan_blocks'] = $this->SweepOrphanBlocks();

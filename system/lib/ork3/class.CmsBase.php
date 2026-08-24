@@ -345,9 +345,14 @@ class CmsBase extends Ork3
         $slug = preg_replace('/-+/', '-', $slug);
         $slug = trim($slug, '-');
 
+        // Clamp with the shared character-aware helpers (_strLen/_subStr) rather
+        // than raw strlen/substr. By this point $slug has already been reduced to
+        // [a-z0-9-] by the regexes above, so it is pure ASCII and the two agree
+        // byte-for-byte — the helpers are used here so this hierarchy has ONE
+        // answer to "clamp a string", not so the output changes.
         $maxLen = (int)$maxLen;
-        if ($maxLen > 0 && strlen($slug) > $maxLen) {
-            $slug = rtrim(substr($slug, 0, $maxLen), '-');
+        if ($maxLen > 0 && $this->_strLen($slug) > $maxLen) {
+            $slug = rtrim($this->_subStr($slug, 0, $maxLen), '-');
         }
 
         if ($slug === '' && $emptyFallback !== null) {
@@ -875,6 +880,11 @@ class CmsBase extends Ork3
         $DB->Clear();
         $DB->Execute('COMMIT');
 
+        // Trashing a page/post changes what this scope's nav resolves (the target
+        // stops being live, and $refCleanup NULLs the nav rows pointing at it) —
+        // bump the scope's content version so CmsNav::GetMenu re-keys immediately.
+        $this->_bumpContentVersion((string)$row['scope_type'], (int)$row['scope_id']);
+
         // C14: audit the trash (fire-and-forget).
         $this->_cmsAudit((int)$actorId, 'delete', $entityType, $id, (string)$row['scope_type'], (int)$row['scope_id']);
 
@@ -956,6 +966,10 @@ class CmsBase extends Ork3
         if ($verify === null || !empty($verify['deleted_at'])) {
             return false;   // restore did not take
         }
+
+        // A restored page/post can become a live nav target again — re-key the
+        // scope's nav cache (see _bumpContentVersion).
+        $this->_bumpContentVersion((string)$row['scope_type'], (int)$row['scope_id']);
 
         $this->_cmsAudit((int)$actorId, 'restore', $entityType, $id, (string)$row['scope_type'], (int)$row['scope_id']);
 
@@ -1086,4 +1100,150 @@ class CmsBase extends Ork3
 
         return $ok;
     }
+
+    /* ------------------------------------------------------------------ *
+     * mbstring-safe string helpers (ONE answer for the whole hierarchy)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Character-aware strlen (falls back to bytes without mbstring).
+     *
+     * The CMS columns are sized in CHARACTERS on a utf8mb4 table, so every clamp
+     * in this hierarchy has to count characters — a byte-wise cut both
+     * over-truncates non-ASCII text and can split a UTF-8 sequence (which MySQL
+     * then rejects under strict sql_mode, silently because Execute() runs under
+     * ERRMODE_WARNING). Lives here, not in CmsNav/CmsPost, so page/post/nav/site
+     * clamps cannot drift apart again.
+     *
+     * @param string $str
+     * @return int
+     */
+    protected function _strLen($str)
+    {
+        return function_exists('mb_strlen') ? mb_strlen($str, 'UTF-8') : strlen($str);
+    }
+
+    /** Character-aware substr (falls back to bytes without mbstring). */
+    protected function _subStr($str, $start, $len)
+    {
+        return function_exists('mb_substr') ? mb_substr($str, $start, $len, 'UTF-8') : substr($str, $start, $len);
+    }
+
+    /**
+     * Character-aware strrpos (falls back to bytes without mbstring). The byte
+     * fallback is safe for the only caller (a word-boundary search for a plain
+     * ASCII space), since a space byte can never occur inside a UTF-8 sequence.
+     */
+    protected function _strRPos($haystack, $needle)
+    {
+        return function_exists('mb_strrpos')
+            ? mb_strrpos($haystack, $needle, 0, 'UTF-8')
+            : strrpos($haystack, $needle);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * per-scope content version (cache key input, not a cache itself)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * GhettoCache "call" namespace + TTL for the per-scope CONTENT VERSION — a
+     * write-time stamp folded into cache keys that depend on a scope's pages,
+     * posts and nav rows (see CmsNav::GetMenu).
+     *
+     * WHY A STAMP AND NOT A CONTENT PROBE: the nav cache used to derive its key
+     * from a SUM(CRC32(...)) aggregate over ork_cms_nav_item — one indexed,
+     * join-free query, but a query on EVERY anonymous pageview all the same,
+     * which is precisely the DB work the cache exists to remove. The version is
+     * bumped by the handful of writers that can change what a scope's nav
+     * resolves instead, so a cache hit costs one memcache get and no DB work at
+     * all. The obligation that buys it: any future writer touching a page/post
+     * title, slug, status, published_at or deleted_at must bump too.
+     *
+     * The stored value is a fresh, never-reused stamp rather than an increment,
+     * so it needs no read-modify-write (Ghettocache exposes no atomic incr): two
+     * concurrent bumps simply store two different fresh values and both are
+     * "not the value any cached tree was stored under", which is the only
+     * property the key needs. A memcache eviction is equally safe — the reader
+     * re-seeds with a fresh stamp, which likewise cannot collide with a stamp
+     * used before (the random component means a collision would need ~1e6 bumps
+     * inside the same second).
+     */
+    protected const CONTENT_VERSION_CALL = 'CmsBase.content_version';
+    protected const CONTENT_VERSION_TTL  = 86400;
+
+    /** GhettoCache key for a scope's content version. */
+    private function _contentVersionKey($scopeType, $scopeId)
+    {
+        return $this->_normalizeScopeType($scopeType) . '.' . (int)$scopeId;
+    }
+
+    /**
+     * A fresh, monotonic-ish, never-previously-used version stamp. Kept as a
+     * STRING ('<epoch>-<rand>') rather than a packed integer: time()*1000 is
+     * ~1.8e12 and overflows PHP_INT_MAX on a 32-bit build, where it would
+     * silently become a float and cast back unpredictably.
+     *
+     * @return string
+     */
+    private function _freshContentVersion()
+    {
+        return (string)time() . '-' . (string)mt_rand(0, 999999);
+    }
+
+    /**
+     * The current content version for a scope, seeding one when the cache is
+     * cold. Returns null only when memcache isn't wired up (callers then skip
+     * cross-request caching entirely).
+     *
+     * MUST be read BEFORE the data it versions: a reader that takes the version
+     * first can only ever store a rebuilt tree under a STALE key (harmless — no
+     * one reads it), never a stale tree under the current key.
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @return string|null
+     */
+    protected function _contentVersion($scopeType, $scopeId)
+    {
+        $gc = $this->_ghettoCache();
+        if ($gc === null) {
+            return null;
+        }
+        $key = $this->_contentVersionKey($scopeType, $scopeId);
+        $v   = $gc->get(self::CONTENT_VERSION_CALL, $key, self::CONTENT_VERSION_TTL);
+        if ((!is_string($v) && !is_int($v)) || (string)$v === '') {
+            $v = $this->_freshContentVersion();
+            $gc->cache(self::CONTENT_VERSION_CALL, $key, $v);
+        }
+        return (string)$v;
+    }
+
+    /**
+     * Bump a scope's content version. Called by every writer that can change
+     * what the scope's nav resolves — a page/post title, slug, status,
+     * published_at or deleted_at, and any nav-item write. No-op without
+     * memcache. Best-effort: a cache failure must never fail the write.
+     *
+     * Deliberately coarse: it fires on EVERY successful page/post update,
+     * including edits the nav cannot show (meta_description, hero_media_id), so
+     * an autosave storm rebuilds the scope's nav tree once per save. That costs
+     * one cheap rebuild per write and keeps the bump call sites impossible to
+     * get wrong; narrowing it to a column diff would not be worth the risk.
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @return void
+     */
+    protected function _bumpContentVersion($scopeType, $scopeId)
+    {
+        $gc = $this->_ghettoCache();
+        if ($gc === null) {
+            return;
+        }
+        $key = $this->_contentVersionKey($scopeType, $scopeId);
+        // Prime the lifetime (Ghettocache reads it back in cache()), then store.
+        $gc->get(self::CONTENT_VERSION_CALL, $key, self::CONTENT_VERSION_TTL);
+        $gc->cache(self::CONTENT_VERSION_CALL, $key, $this->_freshContentVersion());
+    }
+
 }

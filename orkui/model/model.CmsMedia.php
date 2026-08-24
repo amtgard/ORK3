@@ -69,4 +69,9 @@ class Model_CmsMedia extends Model
     {
         return $this->CmsMedia->DeleteMedia($mediaId, $actorId, $scopeType, $scopeId);
     }
+
+    public function delete_media_batch($ids, $actorId = 0, $scopeType = null, $scopeId = null)
+    {
+        return $this->CmsMedia->DeleteMediaBatch($ids, $actorId, $scopeType, $scopeId);
+    }
 }

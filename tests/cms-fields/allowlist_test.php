@@ -328,13 +328,28 @@ check('analyzer clears validated whitelist', count(fdAnalyzeTpl($fixtureSafeVali
 // Run against every real front-door block partial.
 // ---------------------------------------------------------------------------
 $blockDir = $root . '/orkui/template/default/frontdoor/blocks';
-$files = glob($blockDir . '/*.tpl');
-check('found block partials to scan', is_array($files) && count($files) > 0);
+// blocks/_shared/*.tpl holds the shared bodies that thin block adapters include
+// (events.tpl, officers.tpl). The block-field echoes live THERE, not in the
+// adapter, so a non-recursive glob would report a hollow PASS on the adapter
+// and never look at the markup that actually renders. The analyzer is per-file
+// and each shared partial is self-contained for its purposes, so scanning the
+// union of both directories gives the shared markup real coverage.
+$files = array_merge(
+    glob($blockDir . '/*.tpl') ?: [],
+    glob($blockDir . '/_shared/*.tpl') ?: []
+);
+check('found block partials to scan', count($files) > 0);
+// Assert the SCAN LIST contains them, not merely that the directory is non-empty:
+// the latter stays green if the union above regresses to a non-recursive glob,
+// which is the exact silent-coverage-loss this guard exists to catch.
+check('shared block partials are scanned too', count(array_filter($files, static function ($f) {
+    return strpos($f, '/_shared/') !== false;
+})) > 0);
 
 $totalViolations = 0;
 foreach ($files as $file) {
     $src = file_get_contents($file);
-    $name = basename($file);
+    $name = ltrim(str_replace($blockDir, '', $file), '/');
     $violations = fdAnalyzeTpl($src, $HTML_FIELDS);
     if (empty($violations)) {
         check("no raw unescaped non-HTML block field in $name", true);

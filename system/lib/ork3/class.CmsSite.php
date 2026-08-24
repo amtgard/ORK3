@@ -29,9 +29,10 @@ class CmsSite extends CmsBase
         // real top-level controllers (orkui/controller/controller.*.php)
         'admin', 'adminajax', 'atlas', 'attendance', 'attendanceajax',
         'authorization', 'award', 'blog', 'calendaritemajax', 'cms', 'cmsajax',
-        'directory', 'eraphoenice', 'event', 'eventajax', 'eventrsvpajax',
-        'heraldry', 'kingdom', 'kingdomajax', 'live', 'login', 'page', 'park',
-        'parkajax', 'player', 'playerajax', 'principality', 'qr', 'recap',
+        'directory', 'eraphoenice', 'event', 'eventajax', 'eventembed',
+        'eventrsvpajax', 'heraldry', 'kingdom', 'kingdomajax', 'live', 'login',
+        'page', 'park', 'parkajax', 'player', 'playerajax', 'principality',
+        'qr', 'qualtest', 'qualtestajax', 'recap',
         'releasenotes', 'reports', 'search', 'searchajax', 'selfreg', 'signin',
         'tournament', 'unit', 'unitajax', 'weather', 'wnajax',
         // common infrastructure paths worth reserving defensively
@@ -232,8 +233,14 @@ class CmsSite extends CmsBase
             if ($existingId > 0 && !$seeded) {
                 $this->_seedStarterTemplate($existingId, $scopeType, $scopeId, $uid, true);
                 $existing = $this->GetSiteForScope($scopeType, $scopeId);
+                // Only the repair branch can change the cached row; the plain
+                // "row already exists and is seeded" path is a pure READ, and
+                // busting there evicted this org's public /k/{slug} entry on
+                // every CMS-dashboard load.
+                $this->_bustSlugCache(
+                    ($existing !== null && isset($existing['slug'])) ? (string)$existing['slug'] : ''
+                );
             }
-            $this->_bustSlugCache(($existing !== null && isset($existing['slug'])) ? (string)$existing['slug'] : '');
             return $existing;
         }
 
@@ -348,7 +355,6 @@ class CmsSite extends CmsBase
         }
 
         $page = new CmsPage();
-        $nav  = new CmsNav();
         $now  = date('Y-m-d H:i:s');
 
         // The starter page registry — ONE declaration driving both the page seed
@@ -431,84 +437,116 @@ class CmsSite extends CmsBase
         $homeId = isset($pageIds['home']) ? (int) $pageIds['home'] : 0;
 
         // ---- Scoped nav menu ('marketing' — the key org_header.tpl reads) ----
-        // link_type='page' so items follow slug changes; org_header re-points the
-        // resolved Page/view href onto this site's own /Site/page/ route. Same
-        // scope as the pages so CmsNav's scope-bound page join resolves the slug.
-        //
-        // CreateItem is NOT UNIQUE-guarded (unlike CreatePage), so the previous
-        // check-then-insert guard on an empty menu was a TOCTOU: two concurrent
-        // first-load EnsureSite calls could BOTH read the menu empty and BOTH seed
-        // it, duplicating every nav row. Close the race with a real concurrency
-        // guard. Both racing calls resolve to the SAME site row (the DB
-        // UNIQUE(scope) key collapses their site INSERTs to one), so serialize them
-        // on that row: open a transaction and SELECT ... FOR UPDATE the site row
-        // BEFORE the empty-menu check. The first seeder holds the lock, finds the
-        // menu empty, inserts, and COMMITs (releasing the lock); the second then
-        // acquires the lock, sees the now-non-empty menu, and skips.
-        //
-        // Only the nav critical section is transacted — NOT the CmsPage seed above,
-        // which issues its own COMMITs (ReplaceBlocks) that would prematurely
-        // release an outer lock. The nav inserts (CmsNav::CreateItem) run plain
-        // Execute()s with no inner transaction, so they nest cleanly here.
+        if (!$this->_seedNavMenu($siteId, $scopeType, $scopeId, $starters, $pageIds)) {
+            // Site row vanished under the lock — nothing to finish.
+            return;
+        }
+
+        $this->_finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId, $isRepair);
+    }
+
+    /**
+     * The nav critical section of _seedStarterTemplate(), extracted so the
+     * transaction/row-lock discipline lives in one small method of its own.
+     *
+     * link_type='page' so items follow slug changes; org_header re-points the
+     * resolved Page/view href onto this site's own /Site/page/ route. Same
+     * scope as the pages so CmsNav's scope-bound page join resolves the slug.
+     *
+     * CreateItem is NOT UNIQUE-guarded (unlike CreatePage), so the previous
+     * check-then-insert guard on an empty menu was a TOCTOU: two concurrent
+     * first-load EnsureSite calls could BOTH read the menu empty and BOTH seed
+     * it, duplicating every nav row. Close the race with a real concurrency
+     * guard. Both racing calls resolve to the SAME site row (the DB
+     * UNIQUE(scope) key collapses their site INSERTs to one), so serialize them
+     * on that row: open a transaction and SELECT ... FOR UPDATE the site row
+     * BEFORE the empty-menu check. The first seeder holds the lock, finds the
+     * menu empty, inserts, and COMMITs (releasing the lock); the second then
+     * acquires the lock, sees the now-non-empty menu, and skips.
+     *
+     * Only the nav critical section is transacted — NOT the CmsPage seed in the
+     * caller, which issues its own COMMITs (ReplaceBlocks) that would
+     * prematurely release an outer lock. The nav inserts (CmsNav::CreateItem)
+     * run plain Execute()s with no inner transaction, so they nest cleanly here.
+     *
+     * @param int    $siteId
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @param array  $starters  the starter-page registry (array order = nav order)
+     * @param array  $pageIds   slug-keyed seeded page ids (0 = didn't seed)
+     * @return bool false only when the site row vanished under the lock
+     */
+    private function _seedNavMenu($siteId, $scopeType, $scopeId, $starters, $pageIds)
+    {
         global $DB;
+
+        $nav = new CmsNav();
 
         $DB->Clear();
         $DB->Execute('START TRANSACTION');
 
-        // Row-lock the site row so concurrent first-loads serialize at this point.
-        $DB->Clear();
-        $DB->site_id = (int) $siteId;
-        $lockRow = $this->_firstRow($DB->DataSet(
-            'SELECT site_id FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1 FOR UPDATE'
-        ));
-        if ($lockRow === null) {
-            // Site row vanished (shouldn't happen on the create path) — abort the
-            // seed cleanly rather than insert orphaned nav rows.
+        // Defensive: anything throwing between here and the COMMIT would
+        // otherwise leave this transaction — and the FOR UPDATE row lock below —
+        // open for the rest of the request. Roll back explicitly, then rethrow.
+        try {
+            // Row-lock the site row so concurrent first-loads serialize at this point.
             $DB->Clear();
-            $DB->Execute('ROLLBACK');
-            return;
-        }
+            $DB->site_id = (int) $siteId;
+            $lockRow = $this->_firstRow($DB->DataSet(
+                'SELECT site_id FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1 FOR UPDATE'
+            ));
+            if ($lockRow === null) {
+                // Site row vanished (shouldn't happen on the create path) — abort the
+                // seed cleanly rather than insert orphaned nav rows.
+                $DB->Clear();
+                $DB->Execute('ROLLBACK');
+                return false;
+            }
 
-        // Now-safe empty-menu check: we hold the row lock, so no racing seeder can
-        // interleave between this read and our inserts+COMMIT below.
-        $existingNav = $nav->ListItems('marketing', $scopeType, $scopeId);
-        if (is_array($existingNav) && count($existingNav) > 0) {
-            // Menu already seeded (or hand-edited) — leave it untouched. Release the
-            // lock before UpdateSite (its own statement) still sets home_page_id.
+            // Now-safe empty-menu check: we hold the row lock, so no racing seeder can
+            // interleave between this read and our inserts+COMMIT below.
+            $existingNav = $nav->ListItems('marketing', $scopeType, $scopeId);
+            if (is_array($existingNav) && count($existingNav) > 0) {
+                // Menu already seeded (or hand-edited) — leave it untouched. Release the
+                // lock before UpdateSite (its own statement) still sets home_page_id.
+                $DB->Clear();
+                $DB->Execute('COMMIT');
+                return true;
+            }
+
+            // Same registry, same order: Home/About/Parks/Officers/Documents at
+            // ordering 10, 20, 30, 40, 50.
+            $ordering = 0;
+            foreach ($starters as $starterSlug => $starterDef) {
+                $navPageId = isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0;
+                if ($navPageId <= 0) {
+                    continue; // page failed to seed — skip its nav item
+                }
+                $ordering += 10;
+                $nav->CreateItem(array(
+                    'menu'       => 'marketing',
+                    'label'      => $starterDef['nav_label'],
+                    'link_type'  => 'page',
+                    'page_id'    => $navPageId,
+                    'parent_id'  => null,
+                    'ordering'   => $ordering,
+                    'enabled'    => 1,
+                    'scope_type' => $scopeType,
+                    'scope_id'   => $scopeId,
+                ));
+            }
+
+            // Commit the nav inserts (releasing the row lock) BEFORE the home_page_id
+            // write so the lock isn't held across UpdateSite's own UPDATE.
             $DB->Clear();
             $DB->Execute('COMMIT');
-            $this->_finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId);
-            return;
+        } catch (Throwable $e) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            throw $e;
         }
 
-        // Same registry, same order: Home/About/Parks/Officers/Documents at
-        // ordering 10, 20, 30, 40, 50.
-        $ordering = 0;
-        foreach ($starters as $starterSlug => $starterDef) {
-            $navPageId = isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0;
-            if ($navPageId <= 0) {
-                continue; // page failed to seed — skip its nav item
-            }
-            $ordering += 10;
-            $nav->CreateItem(array(
-                'menu'       => 'marketing',
-                'label'      => $starterDef['nav_label'],
-                'link_type'  => 'page',
-                'page_id'    => $navPageId,
-                'parent_id'  => null,
-                'ordering'   => $ordering,
-                'enabled'    => 1,
-                'scope_type' => $scopeType,
-                'scope_id'   => $scopeId,
-            ));
-        }
-
-        // Commit the nav inserts (releasing the row lock) BEFORE the home_page_id
-        // write so the lock isn't held across UpdateSite's own UPDATE.
-        $DB->Clear();
-        $DB->Execute('COMMIT');
-
-        $this->_finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId);
+        return true;
     }
 
     /**
@@ -536,16 +574,21 @@ class CmsSite extends CmsBase
      * @param int    $scopeId
      * @param int    $uid       acting mundane_id (audit)
      * @param int    $homeId    seeded home page_id (0 when it didn't seed)
+     * @param bool   $isRepair  true only from EnsureSite's repair branch
      * @return void
      */
-    private function _finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId)
+    private function _finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId, $isRepair = false)
     {
         // ---- Point the site's landing page at the seeded home ----
         $this->_setSeededHomePage($siteId, $homeId, $uid);
 
         // Palette before the marker: a site that fails mid-seed should not be
-        // stamped as seeded, and the theme is part of "seeded".
-        $this->_seedOrgTheme($scopeType, $scopeId, $uid);
+        // stamped as seeded, and the theme is part of "seeded". A failed theme
+        // write does NOT withhold the marker, though — that would re-run the
+        // whole starter seed (row lock included) on every dashboard load for as
+        // long as the write kept failing; it is audited instead (see
+        // _seedOrgTheme).
+        $this->_seedOrgTheme($scopeType, $scopeId, $uid, $isRepair);
 
         // Seed complete — stamp the marker so this site is never re-seeded, no
         // matter how much of the seeded content the org later deletes.
@@ -1167,9 +1210,10 @@ class CmsSite extends CmsBase
      * @param string $scopeType 'kingdom' | 'park'
      * @param int    $scopeId
      * @param int    $uid acting mundane_id (audit)
+     * @param bool   $isRepair true only from EnsureSite's repair branch
      * @return string the chosen '#rrggbb'
      */
-    private function _seedOrgTheme($scopeType, $scopeId, $uid)
+    private function _seedOrgTheme($scopeType, $scopeId, $uid, $isRepair = false)
     {
         $scopeType = (string) $scopeType;
         $scopeId   = (int) $scopeId;
@@ -1198,6 +1242,17 @@ class CmsSite extends CmsBase
             return $primary;
         }
         $theme = new CmsTheme();
+
+        // A REPAIR pass (template_seeded_at still NULL on an existing site) must
+        // never clobber a palette the org has already customized: SaveTheme
+        // probes by (scope, name) and rewrites tokens_json IN PLACE, and the
+        // theme editor's own default name is the same 'Default' written below.
+        // The first-creation path can't collide (no dashboard load has happened
+        // yet), so the guard is scoped to the repair.
+        if ($isRepair && $theme->GetActiveTheme($scopeType, $scopeId) !== null) {
+            return $primary;
+        }
+
         $id = (int) $theme->SaveTheme($scopeType, $scopeId, 'Default', array(
             '--fd-primary'      => $primary,
             '--fd-font-heading' => 'Archivo',
@@ -1207,6 +1262,11 @@ class CmsSite extends CmsBase
 
         if ($id > 0) {
             $theme->SetActive($scopeType, $scopeId, $id);
+        } else {
+            // The theme write silently dropped (PDO runs ERRMODE_WARNING here, so
+            // nothing throws). Leave a trail rather than stamping the site seeded
+            // with no evidence the palette never landed.
+            $this->_cmsAudit((int) $uid, 'theme.seed_failed', 'theme', 0, $scopeType, $scopeId);
         }
         return $primary;
     }
@@ -1707,6 +1767,20 @@ class CmsSite extends CmsBase
         $this->_bustSlugCache($oldSlug);
         if (isset($binds['slug'])) {
             $this->_bustSlugCache((string)$binds['slug']);
+        }
+
+        // Read-back verification for the one column with a real silent-drop path:
+        // ork_cms_site.slug is UNIQUE, so a race between the ValidateSlug check
+        // above and this UPDATE can hit the dup-key and be swallowed (PDO runs
+        // ERRMODE_WARNING here — Execute() returns void and never throws), leaving
+        // the caller reporting success on a write that never landed. ROW_COUNT()
+        // can't be used for this: it is legitimately 0 whenever the UPDATE writes
+        // the values the row already holds.
+        if (isset($binds['slug'])) {
+            $stored = $this->_slugForSite($siteId);
+            if ($stored !== (string)$binds['slug']) {
+                return 'That web address is already in use. Please choose another.';
+            }
         }
         return true;
     }

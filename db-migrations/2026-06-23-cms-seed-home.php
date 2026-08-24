@@ -9,8 +9,8 @@
  * created the ork_cms_* tables.
  *
  * What it does (idempotent):
- *   1. Imports the hardcoded Model_FrontDoor::GetContent() block defaults and
- *      writes them into the store as the `home` system page
+ *   1. Imports the hardcoded CmsBlockRegistry::DefaultFrontDoorBlocks() block
+ *      defaults and writes them into the store as the `home` system page
  *      (slug='home', type='composed', status='published', is_system=1, global).
  *      Skipped entirely if a `home` page already exists.
  *   2. Seeds a tiny published test page (slug='test-cms') with two blocks
@@ -32,9 +32,10 @@ if (PHP_SAPI !== 'cli') {
 
 // ---------------------------------------------------------------------------
 // Minimal app bootstrap (CLI). startup.php loads the DB + all libs but does
-// NOT define UIR or a web HTTP host. Model_FrontDoor::GetContent() references
-// UIR (and HTTP_TEMPLATE, which is built from HTTP_HOST), so provide sane
-// CLI-time stand-ins BEFORE startup so the imported defaults are well-formed.
+// NOT define UIR or a web HTTP host. CmsBlockRegistry::DefaultFrontDoorBlocks()
+// references UIR (and HTTP_TEMPLATE, which is built from HTTP_HOST), so provide
+// sane CLI-time stand-ins BEFORE startup so the imported defaults are
+// well-formed.
 // ---------------------------------------------------------------------------
 if (empty($_SERVER['HTTP_HOST'])) {
     // Matches the dev container's external origin (see reference_local_dev_routing).
@@ -53,18 +54,15 @@ if (!defined('UIR')) {
     define('UIR', '/orkui/index.php?Route=');
 }
 
-// Model_FrontDoor lives in the orkui model dir (DIR_MODEL); pull it in directly
-// so we can import the canonical front-door defaults.
-require_once DIR_MODEL . 'model.FrontDoor.php';
-
-// The CmsPage lib (DB store) is auto-loaded by startup from DIR_ORK3.
+// The CmsPage lib (DB store) and CmsBlockRegistry (the canonical front-door
+// defaults) are both auto-loaded by startup from DIR_ORK3.
 $cms = new CmsPage();
 
 $now = date('Y-m-d H:i:s');
 $report = [];
 
 // ---------------------------------------------------------------------------
-// 1) Home page — import Model_FrontDoor defaults.
+// 1) Home page — import the canonical CmsBlockRegistry front-door defaults.
 // ---------------------------------------------------------------------------
 $existingHome = $cms->GetPageBySlug('home', 'global', 0, false); // any status
 if (!empty($existingHome) && !empty($existingHome['page_id'])) {
@@ -89,8 +87,7 @@ if (!empty($existingHome) && !empty($existingHome['page_id'])) {
 
     $homeInserted = 0;
     if ($homePageId > 0) {
-        $frontDoor = new Model_FrontDoor();
-        $blocks = $frontDoor->GetContent([
+        $blocks = CmsBlockRegistry::DefaultFrontDoorBlocks([
             'logged_in'  => false,
             'kingdom_id' => 0,
         ]);

@@ -52,6 +52,7 @@ class FakeDB
     public $binds = array();
     public $queue = array();     // FIFO: each entry is the row list one DataSet() returns
     public $executed = array();  // list of executed SQL strings
+    public $execBinds = array(); // binds as they stood at each Execute() (binds are Clear()ed after)
 
     public function Clear()
     {
@@ -72,7 +73,8 @@ class FakeDB
     }
     public function Execute($sql)
     {
-        $this->executed[] = $sql;
+        $this->executed[]  = $sql;
+        $this->execBinds[] = $this->binds;
         return true;
     }
 }
@@ -234,11 +236,24 @@ check('EnsureSite performs NO INSERT for scope_id 0', insertCount($DB) === 0);
 check('EnsureSite returns null for negative scope_id', $site->EnsureSite('kingdom', -3, 99) === null);
 
 // --- UpdateSite normalizes a typed slug via DeriveSlug (no silent mangling) ---
-$DB->executed = array();
-$DB->queue = array(array());   // ValidateSlug uniqueness -> unique
+$DB->executed  = array();
+$DB->execBinds = array();
+// Three reads, in call order: the pre-write oldSlug capture, ValidateSlug's
+// uniqueness probe (empty -> unique), and the post-write read-back that verifies
+// the slug actually landed (must echo the stored value back).
+$DB->queue = array(array(), array(), array(array('slug' => 'my-kingdom')));
 $upd = $site->UpdateSite(42, array('slug' => 'My Kingdom'), 99);
 check('UpdateSite accepts a spaced name, hyphenating it', $upd === true);
-check('UpdateSite stores the hyphenated slug (my-kingdom)', $DB->binds['slug'] === 'my-kingdom');
+// The read-back Clear()s $DB->binds, so assert on the binds recorded at the
+// moment the UPDATE was executed rather than on whatever survives afterwards.
+check('UpdateSite stores the hyphenated slug (my-kingdom)', (function () use ($DB) {
+    foreach ($DB->executed as $i => $sql) {
+        if (stripos($sql, 'UPDATE') !== false) {
+            return isset($DB->execBinds[$i]['slug']) && $DB->execBinds[$i]['slug'] === 'my-kingdom';
+        }
+    }
+    return false;
+})());
 check('UpdateSite executed an UPDATE', (function () use ($DB) {
     foreach ($DB->executed as $sql) {
         if (stripos($sql, 'UPDATE') !== false) {

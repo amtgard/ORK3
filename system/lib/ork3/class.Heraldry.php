@@ -291,6 +291,9 @@ class Heraldry extends Ork3
                 $request = $this->fetch_url_heraldry($request);
                 $this->store_heraldry($request, DIR_PARK_HERALDRY, self::PadLength('park'), 'park');
                 $this->park->save();
+                // has_heraldry is one of the columns Park::GetParkDetails() memoizes
+                // per request, so this write has to drop that memo.
+                Park::BustParkMemo($request['ParkId']);
                 return Success();
             } else {
                 return InvalidParameter();
@@ -316,6 +319,7 @@ class Heraldry extends Ork3
                 }
                 $this->park->has_heraldry = 0;
                 $this->park->save();
+                Park::BustParkMemo($request['ParkId']);
                 return Success();
             } else {
                 return InvalidParameter();

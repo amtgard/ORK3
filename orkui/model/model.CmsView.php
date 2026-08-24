@@ -15,9 +15,9 @@
  */
 class Model_CmsView extends Model
 {
-    public function record_view($scopeType, $scopeId, $entityType, $entityId)
+    public function record_view($scopeType, $scopeId, $entityType, $entityId, $ctx = null)
     {
-        return $this->CmsView->RecordView($scopeType, $scopeId, $entityType, $entityId);
+        return $this->CmsView->RecordView($scopeType, $scopeId, $entityType, $entityId, $ctx);
     }
 
     public function get_scope_view_summary($scopeType, $scopeId)
