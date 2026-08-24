@@ -240,6 +240,108 @@ foreach ($extremes as $primary) {
 // stay PICKABLE, just not the default.
 $dv = CmsThemeTokens::DefaultValues();
 check('default heading font is Archivo, not MedievalSharp', ($dv['--fd-font-heading'] ?? '') === 'Archivo');
+// --- Font catalogue (47 families, role-split) --------------------------------
+$cat = CmsThemeTokens::FontCatalog();
+check('catalogue is non-trivial', count($cat) >= 40);
+
+$catShapeOk = true;
+$urlSafeOk  = true;
+$fallbacks  = array('serif', 'sans-serif', 'cursive');
+foreach ($cat as $family => $meta) {
+    foreach (array('group', 'role', 'fallback', 'weights') as $k) {
+        if (!array_key_exists($k, $meta)) {
+            $catShapeOk = false;
+        }
+    }
+    if (!in_array($meta['fallback'] ?? '', $fallbacks, true)) {
+        $catShapeOk = false;
+    }
+    if (!in_array($meta['role'] ?? '', array('heading', 'both'), true)) {
+        $catShapeOk = false;
+    }
+    // The family name goes into a css2 URL and into a CSS string. Anything
+    // outside this set would need escaping in one or the other, and the two
+    // escapings differ — so the catalogue simply may not contain such a name.
+    if (!preg_match('/^[A-Za-z0-9 -]+$/', (string)$family)) {
+        $urlSafeOk = false;
+    }
+}
+check('every catalogue entry has group/role/fallback/weights, with sane values', $catShapeOk);
+check('every family name is safe in both a css2 URL and a CSS stack', $urlSafeOk);
+
+$heading = CmsThemeTokens::FontsForRole('heading');
+$body    = CmsThemeTokens::FontsForRole('body');
+check('heading offers every family', count($heading) === count($cat));
+check('body is a strict subset of heading', count($body) < count($heading) && count(array_diff($body, $heading)) === 0);
+check('allowlist is the flattened catalogue', CmsThemeTokens::FontAllowlist() === array_keys($cat));
+
+// A display face is a valid HEADING and an invalid BODY. The picker offers the
+// role-split list, so the save path has to enforce the same split — otherwise a
+// hand-posted token sets body copy in blackletter and the public site is
+// unreadable, which the editor's one-line preview would never reveal.
+check('a display face is offered for heading', in_array('UnifrakturMaguntia', $heading, true));
+check('a display face is NOT offered for body', !in_array('UnifrakturMaguntia', $body, true));
+$roleV = CmsThemeTokens::Validate(array(
+    '--fd-font-heading' => 'UnifrakturMaguntia',
+    '--fd-font-body'    => 'UnifrakturMaguntia',
+));
+check('Validate keeps a display face as heading', ($roleV['--fd-font-heading'] ?? '') === 'UnifrakturMaguntia');
+check('Validate DROPS a display face as body', !isset($roleV['--fd-font-body']));
+$textV = CmsThemeTokens::Validate(array('--fd-font-body' => 'EB Garamond'));
+check('Validate keeps a text face as body', ($textV['--fd-font-body'] ?? '') === 'EB Garamond');
+
+// --- The css2 request ---------------------------------------------------------
+$q = CmsThemeTokens::FontQuery(array('Cinzel', 'Lora'));
+check('query asks for both families', strpos($q, 'family=Cinzel') !== false && strpos($q, 'family=Lora') !== false);
+check('query carries display=swap', substr($q, -12) === 'display=swap');
+check('href is the literal origin plus the query', CmsThemeTokens::FontHref(array('Cinzel', 'Lora')) === CmsThemeTokens::FONT_CSS2_URL . '?' . $q);
+check('spaces in a family become +', strpos(CmsThemeTokens::FontQuery(array('EB Garamond')), 'family=EB+Garamond') !== false);
+
+// A system face has no webfont to request. Asking Google for 'system-ui' 404s
+// the family and takes the whole stylesheet — including valid families — with it.
+check('a system face is never requested', CmsThemeTokens::FontQuery(array('Georgia', 'system-ui')) === '');
+check('a system face is skipped but its partner survives', CmsThemeTokens::FontQuery(array('system-ui', 'Lora')) === CmsThemeTokens::FontQuery(array('Lora')));
+check('heading === body is requested once, not twice', substr_count(CmsThemeTokens::FontQuery(array('Lora', 'Lora')), 'family=') === 1);
+check('an unknown family is dropped rather than forged into a URL', CmsThemeTokens::FontQuery(array('Comic Sans')) === '');
+
+// THE DRIFT THIS REFACTOR EXISTS TO PREVENT. The loaded set and the pickable set
+// used to be two hand-maintained lists — an allowlist here and hardcoded <link>
+// tags in default.theme — and they drifted: the seeder wrote Lexend for every org
+// site while default.theme never linked it, so every site asked for a webfont
+// that was never loaded and fell back to the generic sans, silently.
+$unrequestable = array();
+foreach ($cat as $family => $meta) {
+    if ($meta['weights'] === null) {
+        continue;
+    }          // system face, by design
+    if (CmsThemeTokens::FontQuery(array($family)) === '') {
+        $unrequestable[] = $family;
+    }
+}
+check('every pickable webfont family can actually be requested', count($unrequestable) === 0);
+
+// Every family resolves to a stack that names it first and ends in a generic.
+$stackOk = true;
+foreach (array_keys($cat) as $family) {
+    $css = CmsThemeTokens::ToCss(array('--fd-font-heading' => $family));
+    if (strpos($css, '--fd-font-heading:') === false) {
+        $stackOk = false;
+        continue;
+    }
+    $stack = substr($css, strpos($css, '--fd-font-heading:') + 18);
+    $stack = substr($stack, 0, strcspn($stack, ';}'));
+    $endsGeneric = false;
+    foreach ($fallbacks as $g) {
+        if (substr($stack, -strlen($g)) === $g) {
+            $endsGeneric = true;
+        }
+    }
+    if (!$endsGeneric || strpos($stack, $family) !== 0 && strpos($stack, "'" . $family . "'") !== 0) {
+        $stackOk = false;
+    }
+}
+check('every family emits a stack that starts with itself and ends in a generic', $stackOk);
+
 check('MedievalSharp is still selectable for orgs that want it', in_array('MedievalSharp', CmsThemeTokens::FontAllowlist(), true));
 check('the default heading font is itself allowlisted', in_array($dv['--fd-font-heading'] ?? '', CmsThemeTokens::FontAllowlist(), true));
 

@@ -756,6 +756,11 @@ class Controller_Cms extends Controller
         if ($themeCss !== '') {
             $this->data['fdThemeCss'] = $themeCss;
         }
+        // Only the families this scope actually uses (CmsTheme::GetActiveFontQuery).
+        $fontQuery = (string)$this->CmsTheme->get_active_font_query((string)$scope['type'], (int)$scope['id']);
+        if ($fontQuery !== '') {
+            $this->data['fdThemeFontQuery'] = $fontQuery;
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -854,7 +859,13 @@ class Controller_Cms extends Controller
         $this->template = 'Cms_theme.tpl';
         $this->data['page_title']    = 'Theme';
         $this->data['ThemeCatalog']  = $this->CmsTheme->catalog();
-        $this->data['ThemeFonts']    = $this->CmsTheme->font_allowlist();
+        // Role-split on purpose: a blackletter or script face is a valid heading
+        // and an invalid body, and the picker must offer exactly what the save
+        // path will accept (CmsThemeTokens::Validate is role-aware too).
+        $this->data['ThemeFonts']        = $this->CmsTheme->font_allowlist();
+        $this->data['ThemeFontCatalog']  = $this->CmsTheme->font_catalog();
+        $this->data['ThemeFontsHeading'] = $this->CmsTheme->fonts_for_role('heading');
+        $this->data['ThemeFontsBody']    = $this->CmsTheme->fonts_for_role('body');
         $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
         $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
     }

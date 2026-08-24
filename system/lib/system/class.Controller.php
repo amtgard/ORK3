@@ -389,6 +389,11 @@ class Controller
         if ($css !== '') {
             $this->data['fdThemeCss'] = $css;
         }
+        // Only the families the global front door actually uses.
+        $fontQuery = (string) $this->CmsTheme->get_active_font_query('global', 0);
+        if ($fontQuery !== '') {
+            $this->data['fdThemeFontQuery'] = $fontQuery;
+        }
     }
 
     /**

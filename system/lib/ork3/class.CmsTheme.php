@@ -106,6 +106,69 @@ class CmsTheme extends CmsBase
      * (__CLASS__ . '.GetActiveRootCss'). The namespace MUST differ from
      * GetActiveCss()'s or the two would collide and serve each other's CSS.
      */
+    /**
+     * The Google Fonts href for the families this scope's theme actually uses.
+     *
+     * default.theme used to hardcode a <link> per family for EVERY CMS page —
+     * Archivo, MedievalSharp and Lexend whether the org used them or not — which
+     * meant the loaded set and the pickable set were two hand-maintained lists.
+     * They drifted exactly as you would expect: the seeder wrote Lexend for
+     * every org site while default.theme did not link it, so every site asked
+     * for a webfont that was never loaded and silently fell back to the generic
+     * sans. With a 47-family catalogue that approach is not merely fragile, it
+     * is unaffordable.
+     *
+     * Falls back to the DEFAULT families when a scope has no theme row, because
+     * an unthemed front door still renders Archivo and Open Sans and still needs
+     * them fetched. GetActiveTheme() is memoized per request, so this is free
+     * beside the GetActiveCss() call that always accompanies it.
+     *
+     * @return string a css2 URL, or '' when both families are system faces
+     */
+    public function GetActiveFontHref($scopeType = 'global', $scopeId = 0)
+    {
+        $tokens = CmsThemeTokens::DefaultValues();
+        $t      = $this->GetActiveTheme($scopeType, $scopeId);
+        if (is_array($t) && isset($t['tokens_json'])) {
+            $stored = json_decode((string)$t['tokens_json'], true);
+            if (is_array($stored)) {
+                // Validate, never trust: a family that is no longer in the
+                // catalogue must not reach the URL builder, and Validate() drops
+                // it back to nothing so the default takes over.
+                $tokens = array_merge($tokens, CmsThemeTokens::Validate($stored));
+            }
+        }
+        return CmsThemeTokens::FontHref($this->_activeFontFamilies($tokens));
+    }
+
+    /**
+     * The css2 QUERY for this scope's families — origin excluded on purpose.
+     *
+     * default.theme writes the origin as a literal and interpolates only this,
+     * so the CSS-boundary gate can still prove where the stylesheet lands (C6).
+     */
+    public function GetActiveFontQuery($scopeType = 'global', $scopeId = 0)
+    {
+        $tokens = CmsThemeTokens::DefaultValues();
+        $t      = $this->GetActiveTheme($scopeType, $scopeId);
+        if (is_array($t) && isset($t['tokens_json'])) {
+            $stored = json_decode((string)$t['tokens_json'], true);
+            if (is_array($stored)) {
+                $tokens = array_merge($tokens, CmsThemeTokens::Validate($stored));
+            }
+        }
+        return CmsThemeTokens::FontQuery($this->_activeFontFamilies($tokens));
+    }
+
+    /** The two families a resolved token set selects, heading first. */
+    private function _activeFontFamilies($tokens)
+    {
+        return array(
+            isset($tokens['--fd-font-heading']) ? $tokens['--fd-font-heading'] : '',
+            isset($tokens['--fd-font-body']) ? $tokens['--fd-font-body'] : '',
+        );
+    }
+
     public function GetActiveRootCss($scopeType = 'global', $scopeId = 0)
     {
         $t = $this->GetActiveTheme($scopeType, $scopeId);
@@ -270,6 +333,22 @@ class CmsTheme extends CmsBase
     public function FontAllowlist()
     {
         return CmsThemeTokens::FontAllowlist();
+    }
+
+    /**
+     * The full font catalogue (group / role / fallback / weights) so the editor
+     * can group its picker, render each name in its own face, and lazily request
+     * only the faces it actually shows.
+     */
+    public function FontCatalog()
+    {
+        return CmsThemeTokens::FontCatalog();
+    }
+
+    /** The families offered for one font token's picker ('heading' | 'body'). */
+    public function FontsForRole($role)
+    {
+        return CmsThemeTokens::FontsForRole($role);
     }
 
     /** token => default value (editor seed baseline). */

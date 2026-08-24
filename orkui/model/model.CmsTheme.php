@@ -42,6 +42,22 @@ class Model_CmsTheme extends Model
     {
         return $this->CmsTheme->FontAllowlist();
     }
+    public function get_active_font_href($scopeType = 'global', $scopeId = 0)
+    {
+        return $this->CmsTheme->GetActiveFontHref($scopeType, $scopeId);
+    }
+    public function get_active_font_query($scopeType = 'global', $scopeId = 0)
+    {
+        return $this->CmsTheme->GetActiveFontQuery($scopeType, $scopeId);
+    }
+    public function font_catalog()
+    {
+        return $this->CmsTheme->FontCatalog();
+    }
+    public function fonts_for_role($role)
+    {
+        return $this->CmsTheme->FontsForRole($role);
+    }
     public function base_values()
     {
         return $this->CmsTheme->BaseValues();

@@ -33,14 +33,195 @@ class CmsThemeTokens
         );
     }
 
-    /** Vetted font families (heading/body must be one of these). */
+    /**
+     * The vetted font catalogue: family => group / role / fallback / weights.
+     *
+     * ONE definition, four consumers — the theme editor's pickers, Validate(),
+     * FontStack()'s CSS fallback, and the Google Fonts <link> the public page
+     * emits. They used to be four hand-maintained lists (an allowlist here, an
+     * if-ladder in FontStack, and hardcoded <link> tags in default.theme), which
+     * meant adding a face took three edits in three files and forgetting one
+     * failed SILENTLY: the org-site seeder wrote '--fd-font-body' => 'Lexend'
+     * for every site while default.theme never linked it, so every org asked for
+     * a webfont that was never loaded and fell back to the generic sans.
+     *
+     *   group    picker section — 'display' | 'serif' | 'sans'. Presentation only.
+     *   role     'heading' = display face, heading picker ONLY.
+     *            'both'    = readable enough for running text, offered in both.
+     *            A blackletter or script face must never be a BODY font: it is
+     *            unreadable at paragraph length and the officer choosing it
+     *            cannot see the damage from the editor's preview line alone.
+     *   fallback the generic family appended after it in the CSS stack.
+     *   weights  the css2 'wght@...' axis, or null for a SYSTEM face that must
+     *            never be requested from Google (Georgia, system-ui). Every
+     *            non-null value here is verified to return 200 from the css2
+     *            API — an unavailable weight makes Google answer 400 and the
+     *            whole stylesheet, including the families that WERE valid,
+     *            fails to load.
+     *
+     * @return array<string,array{group:string,role:string,fallback:string,weights:?string}>
+     */
+    public static function FontCatalog()
+    {
+        return array(
+            'Cinzel'            => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => 'wght@400;600;700'),
+            'Cinzel Decorative' => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Marcellus'         => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Marcellus SC'      => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Caudex'            => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Eagle Lake'        => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'UnifrakturMaguntia' => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'UnifrakturCook'    => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => 'wght@700'),
+            'Pirata One'        => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Grenze Gotisch'    => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Uncial Antiqua'    => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'MedievalSharp'     => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'IM Fell English'   => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'IM Fell English SC' => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Sorts Mill Goudy'  => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Metamorphous'      => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Almendra'          => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Almendra Display'  => array('group' => 'display', 'role' => 'heading', 'fallback' => 'serif', 'weights' => ''),
+            'Macondo'           => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Fondamento'        => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Berkshire Swash'   => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Griffy'            => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Pinyon Script'     => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Great Vibes'       => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => ''),
+            'Tangerine'         => array('group' => 'display', 'role' => 'heading', 'fallback' => 'cursive', 'weights' => 'wght@400;700'),
+            'Oswald'            => array('group' => 'display', 'role' => 'heading', 'fallback' => 'sans-serif', 'weights' => 'wght@400;500;600;700'),
+            'EB Garamond'       => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;500;600;700'),
+            'Cormorant Garamond' => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;500;600;700'),
+            'Crimson Pro'       => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;600;700'),
+            'Libre Baskerville' => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Lora'              => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;500;600;700'),
+            'Spectral'          => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;600;700'),
+            'Vollkorn'          => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;600;700'),
+            'Gentium Book Plus' => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;700'),
+            'Alegreya'          => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => 'wght@400;500;600;700'),
+            'Georgia'           => array('group' => 'serif', 'role' => 'both', 'fallback' => 'serif', 'weights' => null),
+            'Archivo'           => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;500;600;700;800'),
+            'Open Sans'         => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;600;700'),
+            'Lexend'            => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@300;400;500;600;700'),
+            'Inter'             => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;500;600;700'),
+            'Source Sans 3'     => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;600;700'),
+            'Work Sans'         => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;500;600;700'),
+            'Public Sans'       => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;600;700'),
+            'Karla'             => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;600;700'),
+            'Nunito Sans'       => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;600;700'),
+            'Alegreya Sans'     => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => 'wght@400;500;700'),
+            'system-ui'         => array('group' => 'sans', 'role' => 'both', 'fallback' => 'sans-serif', 'weights' => null),
+        );
+    }
+
+    /**
+     * Every pickable family, flattened.
+     *
+     * Kept as the historical name because Validate() and the theme editor's
+     * controller both read it, and it is the coarse "is this a family we ship"
+     * question. Role-aware callers want FontsForRole() instead.
+     *
+     * @return string[]
+     */
     public static function FontAllowlist()
     {
-        // Archivo is the park/org display face: a modern grotesque with real
-        // banner presence and zero medieval connotation. MedievalSharp stays
-        // PICKABLE — an org that wants it can still choose it — it is just no
-        // longer what 342 parks get by accident.
-        return array('Archivo', 'Open Sans', 'MedievalSharp', 'Lexend', 'Georgia', 'system-ui');
+        return array_keys(self::FontCatalog());
+    }
+
+    /**
+     * The families offered for one token's picker.
+     *
+     * @param  string $role 'heading' or 'body'
+     * @return string[] in catalogue order (display faces first)
+     */
+    public static function FontsForRole($role)
+    {
+        $role = ($role === 'body') ? 'body' : 'heading';
+        $out  = array();
+        foreach (self::FontCatalog() as $family => $meta) {
+            if ($role === 'heading' || $meta['role'] === 'both') {
+                $out[] = $family;
+            }
+        }
+        return $out;
+    }
+
+    /** The role a font token selects for: '--fd-font-body' => 'body'. */
+    public static function RoleForToken($token)
+    {
+        return ($token === '--fd-font-body') ? 'body' : 'heading';
+    }
+
+    /**
+     * The css2 href that loads these families, or '' when none needs loading.
+     *
+     * Used by the public page (the two families a site actually uses) and by the
+     * theme editor (one family at a time, as its picker row scrolls into view).
+     * System faces are skipped — asking Google for 'system-ui' 404s the family
+     * and takes the rest of the request down with it.
+     *
+     * @param  string[] $families
+     * @return string   a full https URL, or '' when every family was a system face
+     */
+    public static function FontHref($families)
+    {
+        $cat   = self::FontCatalog();
+        $parts = array();
+        foreach ((array)$families as $family) {
+            $family = (string)$family;
+            if (!isset($cat[$family]) || $cat[$family]['weights'] === null) {
+                continue;   // unknown, or a system face that needs no request
+            }
+            $spec = str_replace(' ', '+', $family);
+            if ($cat[$family]['weights'] !== '') {
+                $spec .= ':' . $cat[$family]['weights'];
+            }
+            if (!in_array($spec, $parts, true)) {
+                $parts[] = $spec;   // heading === body must not be requested twice
+            }
+        }
+        if (count($parts) === 0) {
+            return '';
+        }
+        return self::FONT_CSS2_URL . '?' . self::FontQuery($families);
+    }
+
+    /** The css2 origin+path. A LITERAL, so a template can emit it without the
+     *  CSS-boundary gate having to prove where a variable href lands (C6). */
+    public const FONT_CSS2_URL = 'https://fonts.googleapis.com/css2';
+
+    /**
+     * Just the query string for FontHref(): 'family=A&family=B&display=swap'.
+     *
+     * Exists so default.theme can write the origin as a literal and interpolate
+     * only the query. C6 fails closed on a stylesheet href built from an
+     * unresolvable variable — correctly, since such a href could name any file,
+     * orkui.css included — and an org's font choice must not be the thing that
+     * makes a stylesheet path unprovable.
+     *
+     * @return string '' when every family was a system face
+     */
+    public static function FontQuery($families)
+    {
+        $cat   = self::FontCatalog();
+        $parts = array();
+        foreach ((array)$families as $family) {
+            $family = (string)$family;
+            if (!isset($cat[$family]) || $cat[$family]['weights'] === null) {
+                continue;
+            }
+            $spec = str_replace(' ', '+', $family);
+            if ($cat[$family]['weights'] !== '') {
+                $spec .= ':' . $cat[$family]['weights'];
+            }
+            if (!in_array($spec, $parts, true)) {
+                $parts[] = $spec;
+            }
+        }
+        if (count($parts) === 0) {
+            return '';
+        }
+        return 'family=' . implode('&family=', $parts) . '&display=swap';
     }
 
     /** token => default value (flattened). */
@@ -85,7 +266,12 @@ class CmsThemeTokens
                     $out[$k] = $val;
                 }
             } elseif ($input === 'font') {
-                if (in_array((string)$raw, self::FontAllowlist(), true)) {
+                // Role-aware on purpose. A blackletter or script face is a valid
+                // HEADING and an invalid BODY, so the flat allowlist is not a
+                // strong enough gate: FontsForRole() is what the picker offered,
+                // and the save path has to enforce the same thing the UI showed.
+                $allowed = self::FontsForRole(self::RoleForToken($k));
+                if (in_array((string)$raw, $allowed, true)) {
                     $out[$k] = (string)$raw;
                 }
             } elseif ($input === 'shadow') {
@@ -293,19 +479,55 @@ class CmsThemeTokens
         return array('light' => $light, 'dark' => $dark);
     }
 
+    /**
+     * The CSS font stack for one family: the family, then its generic fallback.
+     *
+     * Reads the fallback from FontCatalog() rather than an if-ladder, so adding
+     * a face is one edit in one place. A family must never fall back to ITSELF:
+     * without the guard the default body font emitted
+     * `'Open Sans', 'Open Sans', sans-serif` — harmless to the cascade but a
+     * duplicate the static CSS side could not honestly mirror, which is why
+     * frontdoor.css's fallback could not be brought to parity with this
+     * authority. See tests/cms-theme/tokens_test.php.
+     *
+     * A system face is emitted unquoted: `system-ui` is a CSS-wide keyword, and
+     * quoting it makes it a (nonexistent) family name instead.
+     */
     private static function FontStack($family)
     {
-        // 'Open Sans' is the house fallback every other display face drops back
-        // to — but a family must never fall back to ITSELF. Without the extra
-        // branch, the DEFAULT body font emits `'Open Sans', 'Open Sans',
-        // sans-serif`: harmless to the cascade (a repeated family resolves the
-        // same) but a duplicate the CSS side cannot honestly mirror, and the
-        // reason frontdoor.css's static fallback could not be brought to parity
-        // with the authority. See tests/cms-theme/tokens_test.php.
-        $fallback = ($family === 'MedievalSharp') ? 'cursive'
-            : (($family === 'Georgia') ? 'serif'
-            : (($family === 'system-ui' || $family === 'Open Sans') ? 'sans-serif' : "'Open Sans', sans-serif"));
-        return ($family === 'system-ui') ? 'system-ui, sans-serif' : "'" . $family . "', " . $fallback;
+        $cat = self::FontCatalog();
+        if (!isset($cat[$family])) {
+            return "'" . $family . "', sans-serif";
+        }
+        $generic = $cat[$family]['fallback'];
+        $isSystem = ($cat[$family]['weights'] === null);
+
+        // 'system-ui' is a CSS-wide keyword, not a family name — quoting it
+        // turns it into a (nonexistent) family and the whole stack falls to the
+        // generic. A system face needs no webfont bridge either.
+        if ($family === 'system-ui') {
+            return 'system-ui, ' . $generic;
+        }
+        if ($isSystem) {
+            return "'" . $family . "', " . $generic;
+        }
+
+        // A TEXT face routes through the house text face before its generic: if
+        // its webfont fails, the other webfont this page already loaded is a far
+        // closer match than whatever the OS calls "serif". A DISPLAY face does
+        // NOT — substituting Open Sans for a blackletter heading loses exactly
+        // the flavour the officer picked it for, so it falls straight to the
+        // generic and keeps the shape.
+        // A family must never fall back to ITSELF: without the guard the default
+        // body font emitted `'Open Sans', 'Open Sans', sans-serif` — harmless to
+        // the cascade, but a duplicate the static CSS side cannot honestly
+        // mirror, which is why frontdoor.css's fallback could not be brought to
+        // parity with this authority. See tests/cms-theme/tokens_test.php.
+        $house = ($cat[$family]['group'] === 'display' || $family === 'Open Sans')
+            ? ''
+            : "'Open Sans', ";
+
+        return "'" . $family . "', " . $house . $generic;
     }
 
     private static function Block($selector, $tokens)

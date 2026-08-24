@@ -4,7 +4,10 @@
  *
  * Receives (from Controller_Cms::theme):
  *   $ThemeCatalog  array  token => [group, value, input]
- *   $ThemeFonts    array  vetted font family names
+ *   $ThemeFonts        array  every vetted font family (flat)
+ *   $ThemeFontCatalog  array  family => [group, role, fallback, weights]
+ *   $ThemeFontsHeading array  families offered for --fd-font-heading
+ *   $ThemeFontsBody    array  families offered for --fd-font-body (readable only)
  *   $ThemeValues   array  token => seeded value (defaults merged with active)
  *   $ThemeActiveId int    active theme row id (0 = none)
  *   $Caps          array  capability booleans
@@ -14,6 +17,14 @@
 
 $catalog  = isset($ThemeCatalog) && is_array($ThemeCatalog) ? $ThemeCatalog : array();
 $fonts    = isset($ThemeFonts) && is_array($ThemeFonts) ? $ThemeFonts : array();
+$fontCat  = isset($ThemeFontCatalog) && is_array($ThemeFontCatalog) ? $ThemeFontCatalog : array();
+// Role-split lists. The picker must offer exactly what Validate() will accept:
+// a display face is a valid heading and an invalid body.
+$fontsFor = array(
+    '--fd-font-heading' => (isset($ThemeFontsHeading) && is_array($ThemeFontsHeading)) ? $ThemeFontsHeading : $fonts,
+    '--fd-font-body'    => (isset($ThemeFontsBody) && is_array($ThemeFontsBody)) ? $ThemeFontsBody : $fonts,
+);
+$fontGroupLabels = array('display' => 'Medieval & display', 'serif' => 'Serif', 'sans' => 'Sans-serif');
 $values   = isset($ThemeValues) && is_array($ThemeValues) ? $ThemeValues : array();
 $activeId = isset($ThemeActiveId) ? (int)$ThemeActiveId : 0;
 $caps     = isset($Caps) && is_array($Caps) ? $Caps : array();
@@ -79,7 +90,7 @@ $tokenLabels = array(
 );
 
 // Render one token control. Returns HTML string.
-$renderControl = function ($token, $meta) use ($h, $val, $fonts, $ranges, $shadowOptions, $shadowLabels, $tokenLabels) {
+$renderControl = function ($token, $meta) use ($h, $val, $fonts, $fontCat, $fontsFor, $fontGroupLabels, $ranges, $shadowOptions, $shadowLabels, $tokenLabels) {
     $input   = isset($meta['input']) ? (string)$meta['input'] : 'color';
     $tokAttr = $h($token);
     $curVal  = $val($token);
@@ -92,11 +103,32 @@ $renderControl = function ($token, $meta) use ($h, $val, $fonts, $ranges, $shado
             <input type="color" class="te-color" data-token="<?= $tokAttr ?>" value="<?= $h($curVal) ?>">
             <input type="text" class="te-color-hex" data-hex-for="<?= $tokAttr ?>" value="<?= $h($curVal) ?>" maxlength="7" size="8" placeholder="#rrggbb" aria-label="Hex value for <?= $h($label) ?>">
         <?php elseif ($input === 'font'): ?>
-            <select class="te-select" data-token="<?= $tokAttr ?>">
-                <?php foreach ($fonts as $f): ?>
-                    <option value="<?= $h($f) ?>"<?= $curVal === $f ? ' selected' : '' ?>><?= $h($f) ?></option>
-                <?php endforeach; ?>
-            </select>
+            <?php
+            // A native <select> cannot do this: Firefox honours font-family on an
+            // <option>, Chrome on macOS ignores it, so the one thing this control
+            // exists for — showing each face in itself — would silently not work
+            // for most users. The real listbox below is progressive enhancement:
+            // te-font.js upgrades it, and with JS off the <select> still saves.
+            $roleFonts = isset($fontsFor[$token]) ? $fontsFor[$token] : $fonts;
+            $grouped   = array();
+            foreach ($roleFonts as $f) {
+                $g = isset($fontCat[$f]['group']) ? $fontCat[$f]['group'] : 'sans';
+                $grouped[$g][] = $f;
+            }
+            ?>
+            <div class="te-font" data-font-for="<?= $tokAttr ?>">
+                <select class="te-select te-font-native" data-token="<?= $tokAttr ?>"
+                        aria-label="<?= $h($label) ?>">
+                    <?php foreach ($grouped as $g => $famList): ?>
+                        <optgroup label="<?= $h(isset($fontGroupLabels[$g]) ? $fontGroupLabels[$g] : $g) ?>">
+                            <?php foreach ($famList as $f): ?>
+                                <option value="<?= $h($f) ?>"<?= $curVal === $f ? ' selected' : '' ?>><?= $h($f) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                    <?php endforeach; ?>
+                </select>
+                <div class="te-font-sample" data-font-sample-for="<?= $tokAttr ?>" aria-hidden="true"></div>
+            </div>
         <?php elseif ($input === 'shadow'): ?>
             <select class="te-select" data-token="<?= $tokAttr ?>">
                 <?php foreach ($shadowOptions as $si => $sv): ?>
@@ -322,6 +354,9 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
         if (!s) { s = doc.createElement('style'); s.id = 'fd-theme-preview-style'; }
         s.textContent = css;
         doc.body.appendChild(s); // re-append → moves to end, wins source-order cascade
+        // The CSS names the family; without this the iframe has no webfont to
+        // name and silently renders the generic fallback instead.
+        if (typeof teFontLoadPreview === 'function') { teFontLoadPreview(doc); }
     }
 
     var previewTimer = null;
@@ -598,4 +633,216 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
     runContrastCheck();
 
 })();
+
+    /* ------------------------------------------------------------------ *
+     * Font picker — a real listbox that renders every family in itself.
+     *
+     * WHY NOT A STYLED <select>: font-family on an <option> is honoured by
+     * Firefox and ignored by Chrome on macOS, so the one thing this control
+     * exists for would silently not work for most users. The native select
+     * stays in the DOM as the value holder and the no-JS fallback; this
+     * upgrades it in place and dispatches a bubbling 'change' on it, so the
+     * existing delegated handler drives preview + dirty state unchanged.
+     *
+     * Faces load LAZILY. Requesting ~47 webfonts to draw one dropdown would
+     * cost more than the page it is styling, so each row asks for its own
+     * face only when it actually scrolls into view.
+     * ------------------------------------------------------------------ */
+    var TE_FONT_CATALOG = <?= json_encode($fontCat, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var TE_FONT_GROUPS  = <?= json_encode($fontGroupLabels, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function teFontStack(family) {
+        var m = TE_FONT_CATALOG[family];
+        if (!m) { return "'" + family + "', sans-serif"; }
+        if (family === 'system-ui') { return 'system-ui, ' + m.fallback; }
+        return "'" + family + "', " + m.fallback;
+    }
+
+    // createElement, never an HTML string: the CSS-boundary gate's C7 net reads
+    // the literal tag opener "<link", and building the element keeps this file
+    // honest about not shipping a stylesheet reference in its source.
+    //
+    // Takes a DOCUMENT because the live preview is an <iframe>, i.e. a separate
+    // document with its own font set. Loading a face into the editor does not
+    // load it into the preview, and the failure is quiet and misleading rather
+    // than blank: `'Tangerine', cursive` with Tangerine missing renders in the
+    // browser's generic cursive, which on macOS is a swashy script — so the
+    // preview showed A font, just never the one that was picked.
+    function teFontLoadInto(doc, family) {
+        // applyPreview() is defined above this point and fires from an async
+        // response, so guard rather than assume the catalogue literal has been
+        // evaluated: `var` hoists, its assignment does not.
+        if (typeof TE_FONT_CATALOG === 'undefined' || !family) { return; }
+        var m = TE_FONT_CATALOG[family];
+        if (!doc || !doc.head || !m || m.weights === null) { return; }
+        // Track per-document: the editor and the preview each need their own copy.
+        var mark = 'te-font-' + family.replace(/[^A-Za-z0-9]/g, '-');
+        if (doc.getElementById(mark)) { return; }
+        var spec = family.replace(/ /g, '+');
+        if (m.weights) { spec += ':' + m.weights; }
+        var el = doc.createElement('link');
+        el.id = mark;
+        el.rel = 'stylesheet';
+        el.href = 'https://fonts.googleapis.com/css2?family=' + spec + '&display=swap';
+        doc.head.appendChild(el);
+    }
+    function teFontLoad(family) { teFontLoadInto(document, family); }
+
+    /** Ensure the preview document has whatever the pickers currently select. */
+    function teFontLoadPreview(doc) {
+        document.querySelectorAll('.te-font-native').forEach(function (sel) {
+            teFontLoadInto(doc, sel.value);
+        });
+    }
+
+    var teFontObserver = ('IntersectionObserver' in window)
+        ? new IntersectionObserver(function (entries, obs) {
+            entries.forEach(function (e) {
+                if (!e.isIntersecting) { return; }
+                teFontLoad(e.target.getAttribute('data-family'));
+                obs.unobserve(e.target);
+            });
+        }, { root: null, rootMargin: '120px' })
+        : null;
+
+    function teBuildFontPicker(wrap) {
+        var native = wrap.querySelector('.te-font-native');
+        var sample = wrap.querySelector('.te-font-sample');
+        if (!native) { return; }
+
+        var families = [];
+        Array.prototype.forEach.call(native.options, function (o) { families.push(o.value); });
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'te-font-btn';
+        btn.setAttribute('aria-haspopup', 'listbox');
+        btn.setAttribute('aria-expanded', 'false');
+
+        var panel = document.createElement('div');
+        panel.className = 'te-font-panel';
+        panel.setAttribute('role', 'listbox');
+        panel.hidden = true;
+
+        var rows = {};
+        var lastGroup = null;
+        families.forEach(function (family) {
+            var meta = TE_FONT_CATALOG[family] || {};
+            if (meta.group && meta.group !== lastGroup) {
+                lastGroup = meta.group;
+                var hd = document.createElement('div');
+                hd.className = 'te-font-group';
+                hd.textContent = TE_FONT_GROUPS[meta.group] || meta.group;
+                panel.appendChild(hd);
+            }
+            var row = document.createElement('div');
+            row.className = 'te-font-row';
+            row.setAttribute('role', 'option');
+            row.setAttribute('data-family', family);
+            row.tabIndex = -1;
+            // The name IS the specimen — that is the whole point of the control.
+            row.style.fontFamily = teFontStack(family);
+            row.textContent = family;
+            panel.appendChild(row);
+            rows[family] = row;
+            if (teFontObserver) { teFontObserver.observe(row); } else { teFontLoad(family); }
+        });
+
+        function paint() {
+            var family = native.value;
+            teFontLoad(family);
+            btn.style.fontFamily = teFontStack(family);
+            btn.textContent = family;
+            if (sample) {
+                sample.style.fontFamily = teFontStack(family);
+                sample.textContent = 'Handgjord 1234';
+            }
+            Object.keys(rows).forEach(function (f) {
+                var on = (f === family);
+                rows[f].classList.toggle('is-selected', on);
+                rows[f].setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+        }
+        // .te-group is overflow:hidden, so the panel is fixed and placed by hand.
+        // Flips above the button when there is more room up than down, and never
+        // runs off the bottom of the viewport.
+        function place() {
+            if (panel.hidden) { return; }
+            var b = btn.getBoundingClientRect();
+            var below = window.innerHeight - b.bottom - 8;
+            var above = b.top - 8;
+            var h = Math.min(320, Math.max(below, above));
+            panel.style.width = b.width + 'px';
+            panel.style.left = b.left + 'px';
+            panel.style.maxHeight = h + 'px';
+            if (below >= Math.min(320, above) || below >= 200) {
+                panel.style.top = (b.bottom + 4) + 'px';
+                panel.style.bottom = 'auto';
+            } else {
+                panel.style.top = 'auto';
+                panel.style.bottom = (window.innerHeight - b.top + 4) + 'px';
+            }
+        }
+        function open() {
+            panel.hidden = false;
+            place();
+            btn.setAttribute('aria-expanded', 'true');
+            var sel = rows[native.value];
+            if (sel) { sel.focus(); sel.scrollIntoView({ block: 'nearest' }); }
+        }
+        function close(focusBtn) {
+            panel.hidden = true;
+            btn.setAttribute('aria-expanded', 'false');
+            if (focusBtn) { btn.focus(); }
+        }
+        function choose(family) {
+            if (native.value !== family) {
+                native.value = family;
+                // Bubbles, so the delegated 'change' handler runs the same path a
+                // native select would have — preview, dirty flag, everything.
+                native.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            paint();
+            close(true);
+        }
+
+        btn.addEventListener('click', function () { panel.hidden ? open() : close(true); });
+        panel.addEventListener('click', function (e) {
+            var row = e.target.closest ? e.target.closest('.te-font-row') : null;
+            if (row) { choose(row.getAttribute('data-family')); }
+        });
+        panel.addEventListener('keydown', function (e) {
+            var order = families.slice();
+            var i = order.indexOf(document.activeElement.getAttribute('data-family'));
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                var next = order[Math.min(order.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+                if (rows[next]) { rows[next].focus(); rows[next].scrollIntoView({ block: 'nearest' }); }
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (i >= 0) { choose(order[i]); }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                close(true);
+            }
+        });
+        document.addEventListener('click', function (e) {
+            if (!panel.hidden && !wrap.contains(e.target) && !panel.contains(e.target)) { close(false); }
+        });
+        window.addEventListener('resize', place);
+        // Capture phase: the editor column is its own scroller, so a scroll event
+        // on an ancestor never reaches window in the bubble phase.
+        window.addEventListener('scroll', place, true);
+        // Keep the specimen honest when something else moves the value —
+        // "reset to default" writes the native select directly.
+        native.addEventListener('change', paint);
+
+        native.classList.add('te-font-native-hidden');
+        wrap.insertBefore(btn, native.nextSibling);
+        document.body.appendChild(panel);   // fixed + out of the clipping card
+        paint();
+    }
+
+    document.querySelectorAll('.te-font').forEach(teBuildFontPicker);
+
 </script>

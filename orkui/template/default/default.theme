@@ -119,18 +119,31 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
-		<?php if (!empty($IsFrontDoor) || !empty($IsOrgSite) || !empty($IsCmsPage)): ?>
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap">
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
 		<?php
-		// Lexend belongs here with Archivo, NOT only in the dyslexia branch below.
-		// The org-site seeder writes '--fd-font-body' => 'Lexend' for every site it
-		// creates, so without this link every org site asked for a webfont that was
-		// never loaded and silently fell back to the generic sans in the stack.
-		// Same href as the dyslexia link, so when both branches fire the browser
-		// makes one request, not two.
+		// Open Sans above is unconditional: it is the CRM's face too, and it is
+		// the fallback every CMS text face routes through (CmsThemeTokens::
+		// FontStack), so it must be present whatever the org picked.
+		//
+		// Below is the CMS's own type, and it is RESOLVED, not hardcoded. This
+		// used to be three fixed <link> tags — Archivo, MedievalSharp, Lexend —
+		// emitted for every CMS page whether the org used them or not, which made
+		// the LOADED set and the PICKABLE set two hand-maintained lists. They
+		// drifted precisely as you would expect: the seeder wrote Lexend for every
+		// org site while this file did not link it, so every site asked for a
+		// webfont that was never loaded and fell back to the generic sans. With a
+		// 47-family catalogue, hardcoding is not just fragile but unaffordable.
+		// The ORIGIN is a literal here on purpose: C6 fails closed on a
+		// stylesheet href built from an unresolvable variable, and rightly so —
+		// such a href could name any file, orkui.css included. Only the query
+		// varies. The controllers resolve the scope's own two families into
+		// $fdThemeFontQuery (CmsTheme::GetActiveFontQuery), so a page requests
+		// exactly what it renders: two families, or one when heading and body
+		// agree, or none when both are system faces.
 		?>
-		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
+		<?php if (!empty($IsFrontDoor) || !empty($IsOrgSite) || !empty($IsCmsPage)): ?>
+		<?php if (!empty($fdThemeFontQuery)): ?>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?= htmlspecialchars($fdThemeFontQuery, ENT_QUOTES) ?>">
+		<?php endif; ?>
 		<?php endif; ?>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
 		<?php if (!empty($ViewerDyslexiaFonts)) : ?>

@@ -301,6 +301,11 @@ class Controller_CmsAjax extends Controller
         if ($rootCss !== '') {
             $this->data['fdThemeCssRoot'] = $rootCss;
         }
+        // Only the families this scope actually uses (CmsTheme::GetActiveFontQuery).
+        $fontQuery = (string)$this->CmsTheme->get_active_font_query((string)$scope['type'], (int)$scope['id']);
+        if ($fontQuery !== '') {
+            $this->data['fdThemeFontQuery'] = $fontQuery;
+        }
     }
 
     /* ------------------------------------------------------------------ *

@@ -2400,6 +2400,102 @@ html[data-theme="dark"] .te-number {
 html[data-theme="dark"] .te-color-hex::placeholder { color: #6b7585; }
 
 /* Select */
+/* ---- Font picker (Cms_theme.tpl) -----------------------------------------
+   A real listbox, not a styled <select>: font-family on an <option> is honoured
+   by Firefox and ignored by Chrome on macOS, so a native control cannot render
+   each family in itself — which is the entire purpose of this picker. The
+   native select stays in the DOM (value holder + no-JS fallback) and is hidden
+   only once the script has upgraded it, so with JS off the plain select shows.
+   -------------------------------------------------------------------------- */
+/* No html[data-theme="dark"] block below on purpose: every token these rules
+   read (--ork-input-bg, --ork-card-bg, --ork-border, --ork-text,
+   --ork-surface-hover) is already flipped by orkui.css's dark :root pair, so
+   restating them here would be a duplicate that says nothing new — and the
+   duplication ratchet counts it. Verified in both themes. */
+.te-font {
+    position: relative;
+    flex: 1 1 auto;
+    max-width: 240px;
+}
+/* Fully hidden, NOT visually-hidden: once the listbox exists it owns the
+   accessible name and the keyboard, so leaving the select in the a11y tree
+   would announce the same control twice. Applied by script only, so with JS
+   off the native select is what you get. */
+.te-font-native-hidden { display: none; }
+.te-font-btn {
+    display: block;
+    width: 100%;
+    padding: 6px 26px 6px 9px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath fill='%238a93a6' d='M0 0h10L5 6z'/%3E%3C/svg%3E") no-repeat right 9px center;
+    /* REQUIRED, not cosmetic: the SVG carries a viewBox but no width/height, so
+       it has no intrinsic size and background-size defaults to the whole
+       positioning area — the caret scales up to fill the entire control. */
+    background-size: 10px 6px;
+    color: var(--ork-text, #1b2a4a);
+    font-size: 15px;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+}
+.te-font-btn:focus-visible {
+    outline: 2px solid var(--ork-blue-link, #3182ce);
+    outline-offset: 1px;
+}
+.te-font-sample {
+    margin-top: 5px;
+    color: var(--ork-text-muted, #5b6472);
+    font-size: 15px;
+    line-height: 1.4;
+    /* A specimen is only useful if it cannot reflow the control column. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* position:FIXED, not absolute. .te-group sets overflow:hidden, so an absolutely
+   positioned panel is clipped by the card it opens inside — the same trap the
+   player-search autocomplete hit inside modals, solved the same way: take the
+   panel out of flow entirely and position it from the button's client rect
+   (teFontPlacePanel), re-running on scroll and resize. */
+.te-font-panel {
+    position: fixed;
+    z-index: var(--z-dropdown);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 6px;
+    background: var(--ork-card-bg, #fff);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+.te-font-group {
+    padding: 7px 8px 3px;
+    color: var(--ork-text-muted, #5b6472);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.te-font-row {
+    padding: 6px 9px;
+    border-radius: 4px;
+    /* 17px because a blackletter or script face is illegible at control size —
+       the row has to be big enough to actually judge the letterforms. */
+    font-size: 17px;
+    line-height: 1.45;
+    cursor: pointer;
+}
+.te-font-row:hover,
+.te-font-row:focus-visible {
+    background: var(--ork-surface-hover, #edf2f7);
+    outline: none;
+}
+.te-font-row.is-selected {
+    background: var(--ork-blue-link, #3182ce);
+    color: #fff;
+}
+
 .te-select {
     flex: 1 1 auto;
     max-width: 200px;

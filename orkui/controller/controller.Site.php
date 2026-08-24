@@ -839,6 +839,11 @@ class Controller_Site extends Controller
         if ($rootCss !== '') {
             $this->data['fdThemeCssRoot'] = $rootCss;
         }
+        // Only the families this scope actually uses (CmsTheme::GetActiveFontQuery).
+        $fontQuery = (string) $this->CmsTheme->get_active_font_query($scopeType, $scopeId);
+        if ($fontQuery !== '') {
+            $this->data['fdThemeFontQuery'] = $fontQuery;
+        }
 
         // RSS auto-discovery: every org-site page advertises the org's scoped
         // feed (Site/rss/{slug} → /k|/p/{slug}/rss) so readers/aggregators can
