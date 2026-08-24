@@ -13,6 +13,14 @@ require_once __DIR__ . '/class.CmsThemeTokens.php';
 
 class CmsTheme extends CmsBase
 {
+    /**
+     * Per-request memo of GetActiveTheme() results, keyed "{scopeType}.{scopeId}".
+     * A public org-site render asks for the same active theme twice (GetActiveCss
+     * + GetActiveRootCss); this collapses that to one SELECT. Any write below
+     * clears it so a same-request read never serves a stale row.
+     */
+    private $_activeThemeMemo = array();
+
     public function __construct()
     {
         parent::__construct();
@@ -25,6 +33,11 @@ class CmsTheme extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
 
+        $memoKey = $scopeType . '.' . $scopeId;
+        if (array_key_exists($memoKey, $this->_activeThemeMemo)) {
+            return $this->_activeThemeMemo[$memoKey];
+        }
+
         $DB->Clear();
         $DB->scope_type = $scopeType;
         $DB->scope_id   = $scopeId;
@@ -33,12 +46,14 @@ class CmsTheme extends CmsBase
             . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND is_active = 1 LIMIT 1'
         ));
         if ($row === null) {
+            $this->_activeThemeMemo[$memoKey] = null;
             return null;
         }
         $row['tokens'] = json_decode((string)(isset($row['tokens_json']) ? $row['tokens_json'] : ''), true);
         if (!is_array($row['tokens'])) {
             $row['tokens'] = array();
         }
+        $this->_activeThemeMemo[$memoKey] = $row;
         return $row;
     }
 
@@ -46,11 +61,13 @@ class CmsTheme extends CmsBase
      * The <style> inner CSS for the active theme, or '' when none.
      *
      * C5: the resolved CSS is cached in GhettoCache keyed by (scope, updated_at)
-     * so every anonymous public hit no longer re-reads the theme row AND re-runs
-     * the token→CSS compile. The key embeds the active theme's updated_at, which
-     * MariaDB bumps (ON UPDATE CURRENT_TIMESTAMP) on any SaveTheme / SetActive /
-     * ResetActive write — so a theme edit self-busts the cache with no explicit
-     * invalidation. A missing/deactivated theme ('' result) is not cached (cheap).
+     * so every anonymous public hit no longer re-runs the token→CSS compile. The
+     * key is built FROM the theme row, so the row read still happens first — it is
+     * only memoized per request by GetActiveTheme(), not cached across requests.
+     * The key embeds the active theme's updated_at, which MariaDB bumps (ON UPDATE
+     * CURRENT_TIMESTAMP) on any SaveTheme / SetActive / ResetActive write — so a
+     * theme edit self-busts the cache with no explicit invalidation. A
+     * missing/deactivated theme ('' result) is not cached (cheap).
      */
     public function GetActiveCss($scopeType = 'global', $scopeId = 0)
     {
@@ -84,7 +101,8 @@ class CmsTheme extends CmsBase
      * site paints a white body. See CmsThemeTokens::ToRootCss().
      *
      * Caching mirrors GetActiveCss() exactly — same (scope, updated_at, id) key
-     * material, so a theme write self-busts both — but under its OWN namespace
+     * material (so the theme row is read first, per-request memoized, and a theme
+     * write self-busts both compiles) — but under its OWN namespace
      * (__CLASS__ . '.GetActiveRootCss'). The namespace MUST differ from
      * GetActiveCss()'s or the two would collide and serve each other's CSS.
      */
@@ -151,6 +169,7 @@ class CmsTheme extends CmsBase
         }
         $json = json_encode(CmsThemeTokens::Validate($tokens));
         $uid  = (int)$uid;
+        $this->_activeThemeMemo = array();
 
         // Existing (scope,name) → UPDATE in place. This probe is what CHOOSES the
         // UPDATE-vs-INSERT branch; the identical read after the INSERT below is a
@@ -191,6 +210,7 @@ class CmsTheme extends CmsBase
         $id         = (int)$id;
         $scopeType  = $this->_normalizeScopeType($scopeType);
         $scopeId    = (int)$scopeId;
+        $this->_activeThemeMemo = array();
 
         // Guard: the id must belong to this scope, otherwise IF(id=:id,1,0)
         // would silently deactivate every theme in the scope without ever
@@ -223,6 +243,7 @@ class CmsTheme extends CmsBase
     public function ResetActive($scopeType, $scopeId)
     {
         global $DB;
+        $this->_activeThemeMemo = array();
         $DB->Clear();
         $DB->scope_type = $this->_normalizeScopeType($scopeType);
         $DB->scope_id   = (int)$scopeId;

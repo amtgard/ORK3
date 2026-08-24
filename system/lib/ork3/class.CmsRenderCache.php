@@ -29,8 +29,23 @@
  *   frontdoor/blocks/kingdom_parks.tpl
  *   frontdoor/blocks/kingdom_parks_map.tpl
  *   frontdoor/blocks/park_meeting.tpl
+ *   frontdoor/blocks/park_hero.tpl
  *   frontdoor/blocks/kingdoms_teaser.tpl
+ *   frontdoor/_park_strip.tpl                 every page of an org site, not just home
  *   Controller_CmsAjax::clearrendercache      the enumeration/flush loop
+ *
+ * EMPTY IS NOT FAILED — BUT ONLY $storeIf CAN SAY SO
+ * Remember() below stores an empty build as an internal sentinel on the shorter
+ * TTL_EMPTY clock, so a sparsely-populated org is not condemned to re-query on
+ * every anonymous hit forever. The sentinel is private to this file — callers
+ * only ever see what their $build() returned.
+ *
+ * The ONLY channel by which a caller can say "this build FAILED, store nothing"
+ * is $storeIf. Remember() cannot see that a builder caught a \Throwable: a
+ * builder that swallows its own exception and returns an all-empty shape is
+ * indistinguishable from a legitimately empty org, and its failure WILL be
+ * cached for TTL_EMPTY. A block that catches \Throwable must set a failure flag
+ * and veto through $storeIf — see blocks/_shared/officers.tpl ($fdOffFailed).
  *
  * NOT covered: kingdom_events / park_events. Those render from
  * SearchService::Event, which caches internally on its own key and exposes no
@@ -42,6 +57,36 @@ class CmsRenderCache
     /** Seconds a rendered block payload stays warm. */
     public const TTL = 300;
 
+    /**
+     * Seconds a VERIFIED-EMPTY build stays warm — deliberately shorter than TTL.
+     *
+     * A sparsely-populated org (a park with no city, no map URL and no park-day
+     * rows; a kingdom with no parks yet) renders nothing legitimately, and used
+     * to be permanently uncacheable: the empty-payload gate refused to store it,
+     * so _park_strip.tpl — which runs on EVERY page of an org site — re-ran its
+     * queries on every anonymous hit, forever. Such a build is now stored as an
+     * internal sentinel on this shorter clock instead, so the queries are skipped
+     * while the org stays empty, and a newly-populated org shows up within a
+     * minute rather than waiting the full TTL out. Short on purpose for the other
+     * reason too: PDO runs in ERRMODE_WARNING, so a silent query failure can look
+     * like a legitimate empty, and a minute is a cheap ceiling on that mistake.
+     */
+    public const TTL_EMPTY = 60;
+
+    /**
+     * Marker key of the internal empty-build sentinel.
+     *
+     * NEVER escapes this file: Remember() wraps on write and unwraps on read, so
+     * every caller receives exactly what $build() returned. Named distinctively
+     * so it cannot collide with a real block payload slot.
+     *
+     * Mixed-deploy/rollback window: a node still running the pre-sentinel code
+     * that reads a sentinel written by a new node gets the raw wrapper array
+     * back and renders its empty state. Bounded to TTL_EMPTY and to orgs that
+     * were empty anyway, so it needs no versioned key.
+     */
+    private const EMPTY_MARKER = '__fd_render_cache_empty__';
+
     /* ---- namespaces (the GhettoCache "call" argument) ---- */
     public const NS_KINGDOM_OFFICERS  = 'frontdoor.kingdom_officers';
     public const NS_PARK_OFFICERS     = 'frontdoor.park_officers';
@@ -49,6 +94,8 @@ class CmsRenderCache
     public const NS_KINGDOM_PARKS_MAP = 'frontdoor.kingdom_parks_map';
     public const NS_PARK_MEETING      = 'frontdoor.park_meeting';
     public const NS_KINGDOMS_TEASER   = 'frontdoor.kingdoms_teaser';
+    public const NS_PARK_HERO         = 'frontdoor.park_hero';
+    public const NS_PARK_STRIP        = 'frontdoor.park_strip';
 
     /* ---- org-id key prefixes ---- */
     public const PREFIX_KINGDOM = 'k';
@@ -95,6 +142,18 @@ class CmsRenderCache
     {
         return self::PREFIX_PARK . (int)$parkId . '.l' . (int)$limit
             . '.d' . ($showDirections ? 1 : 0);
+    }
+
+    /** park_hero: 'p42.w0' — varies on the park and the weather flag only. */
+    public static function ParkHeroKey($parkId, $showWeather)
+    {
+        return self::PREFIX_PARK . (int)$parkId . '.w' . ($showWeather ? 1 : 0);
+    }
+
+    /** park_strip: 'p42' (the strip varies on nothing else). */
+    public static function ParkStripKey($parkId)
+    {
+        return self::PREFIX_PARK . (int)$parkId;
     }
 
     /** kingdoms_teaser: 'l12' — global, so no org id in the key. */
@@ -170,6 +229,16 @@ class CmsRenderCache
                 );
             }
         }
+        foreach (array(0, 1) as $w) {
+            $out[] = array(
+                'ns'  => self::NS_PARK_HERO,
+                'key' => self::ParkHeroKey($parkId, $w),
+            );
+        }
+        $out[] = array(
+            'ns'  => self::NS_PARK_STRIP,
+            'key' => self::ParkStripKey($parkId),
+        );
         return $out;
     }
 
@@ -232,12 +301,40 @@ class CmsRenderCache
      * @param  string        $key     key within that namespace
      * @param  int           $ttl     seconds a hit stays valid (self::TTL)
      * @param  callable      $build   () => array — runs ONLY on a miss
-     * @param  callable|null $storeIf (array $built) => bool — optional gate on
-     *                                WRITING the result. kingdoms_teaser uses it
-     *                                to refuse to cache an empty list built in a
-     *                                context that never injected its source data,
-     *                                which would otherwise pin an empty grid on
-     *                                the front door for the whole TTL.
+     * @param  callable|null $storeIf (array $built) => bool — optional EXTRA veto
+     *                                on WRITING the result, and the caller's way
+     *                                of saying "this build FAILED". Returning
+     *                                false stores NOTHING AT ALL, empty or not,
+     *                                so the next hit retries. kingdoms_teaser
+     *                                uses it to refuse to cache an empty list
+     *                                built in a context that never injected its
+     *                                source data, which would otherwise pin an
+     *                                empty grid on the front door for the TTL.
+     *
+     * FAILED vs LEGITIMATELY EMPTY. A dynamic block returns an empty build in two
+     * very different situations, and this method treats them differently:
+     *
+     *   FAILED — $storeIf returned false. Nothing is stored at all, so the next
+     *            hit retries. This is the ONLY failure signal Remember() can
+     *            see. It has NO way to learn that $build() caught a \Throwable
+     *            internally: a builder that swallows its own exception and
+     *            returns an all-empty shape looks exactly like a legitimately
+     *            empty org, and that failure IS cached — for TTL_EMPTY, not the
+     *            full TTL. A block that catches \Throwable and still wants a
+     *            failed build to go unstored MUST raise a flag in the builder
+     *            and veto through $storeIf; blocks/_shared/officers.tpl does
+     *            this with $fdOffFailed.
+     *   EMPTY  — the build ran to completion and there genuinely is nothing to
+     *            show. Stored as an internal sentinel on the SHORT TTL_EMPTY
+     *            clock. This is what stops a sparsely-populated org from being
+     *            permanently uncached and re-querying on every single hit
+     *            (worst case: _park_strip.tpl, on every page of an org site).
+     *            TTL_EMPTY is the ceiling on both cases: it is deliberately
+     *            short precisely because a swallowed failure lands here too.
+     *
+     * The sentinel is an implementation detail of this file: it is unwrapped back
+     * to the payload $build() returned before anything is handed to a caller.
+     *
      * @return mixed the cached payload, or $build()'s value verbatim — including
      *               when there is no cache handle at all
      */
@@ -252,14 +349,78 @@ class CmsRenderCache
 
         $hit = $cache->get($ns, $key, $ttl);
         if (is_array($hit)) {
-            return $hit;
+            return self::_unwrapEmpty($hit);
         }
 
         $built = $build();
-        if ($storeIf === null || $storeIf($built)) {
-            $cache->cache($ns, $key, $built);
+
+        // An explicit $storeIf veto means the build FAILED: store nothing at all,
+        // however empty it looks, so the next hit retries.
+        if ($storeIf !== null && !$storeIf($built)) {
+            return $built;
         }
+
+        if (self::_isEmptyPayload($built)) {
+            // Verified empty: pin the sentinel, but only for TTL_EMPTY. GhettoCache
+            // takes a write's expiration from the lifetime the matching get()
+            // recorded, so re-probing the key with the shorter clock is how the
+            // shorter clock is communicated. One extra (missing) memcached read,
+            // on an empty miss only.
+            // min() keeps "shorter than TTL" true for ANY caller: a caller that
+            // passes a $ttl below TTL_EMPTY must not have its empty LENGTHENED.
+            $cache->get($ns, $key, min((int)$ttl, self::TTL_EMPTY));
+            $cache->cache($ns, $key, array(self::EMPTY_MARKER => 1, 'payload' => $built));
+            return $built;
+        }
+
+        $cache->cache($ns, $key, $built);
         return $built;
+    }
+
+    /**
+     * Turn a cache hit back into what $build() returned.
+     *
+     * Only the verified-empty sentinel written above is rewritten; every other
+     * hit passes through byte-identical.
+     *
+     * @param  array $hit
+     * @return mixed
+     */
+    private static function _unwrapEmpty(array $hit)
+    {
+        if (array_key_exists(self::EMPTY_MARKER, $hit) && array_key_exists('payload', $hit)) {
+            return $hit['payload'];
+        }
+        return $hit;
+    }
+
+    /**
+     * Does this build carry nothing — i.e. does it belong on the TTL_EMPTY clock
+     * rather than the full TTL?
+     *
+     * True for an empty array, and for a keyed payload whose every slot is empty
+     * (park_meeting's failure shape is ['Meetings' => [], 'Fallback' => [],
+     * 'Directions' => ''], not a bare []). Anything else — including a non-array
+     * — is a real payload and caches as before.
+     *
+     * @param  mixed $built
+     * @return bool
+     */
+    private static function _isEmptyPayload($built)
+    {
+        if (!is_array($built)) {
+            return false;
+        }
+        foreach ($built as $slot) {
+            if (is_array($slot)) {
+                if ($slot !== array()) {
+                    return false;
+                }
+            } elseif ($slot !== null && $slot !== '' && $slot !== 0 && $slot !== false) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -88,35 +88,50 @@ class CmsNav extends CmsBase
 
         // C-perf: cross-request GhettoCache for the RESOLVED tree. The menu changes
         // only on an officer edit, yet was rebuilt (LEFT JOIN to page/post + PHP
-        // tree assembly) on every anonymous public pageview of an org site. Cache
-        // the built tree keyed by (menu, scope) + a content SIGNATURE of the scope's
-        // nav rows. ork_cms_nav_item has no updated_at column, so the signature
-        // (row count + MAX(nav_id) + SUM(CRC32(row fields))) IS the version signal:
-        // any insert / delete / reorder / label / link-retarget / enable-toggle
-        // changes it, so the key self-busts with no explicit invalidation. The
-        // signature probe is a single indexed aggregate (one row, no joins), far
-        // cheaper than the full fetch + resolve + tree build it lets us skip on hit.
+        // tree assembly) on every anonymous public pageview of an org site.
         //
-        // KNOWN EDGE: the signature covers nav-row fields only, NOT the JOINed
-        // page/post SLUGS. A page/post slug RENAME (a separate CMS entity edit) can
-        // leave a stale resolved href in this cache for up to the 1800s TTL. That is
-        // a bounded, documented trade-off; a slug-edit-driven bust would live in the
-        // page/post write path (a different owner) — see report.
+        // The key is (menu, scope) + the scope's WRITE-TIME content version. That
+        // version replaces the SUM(CRC32(...)) signature probe this cache used to
+        // run: one indexed aggregate over ork_cms_nav_item (no joins) per hit —
+        // cheap, but still a query on EVERY anonymous hit of the front door and
+        // every org-site page, where the point of the cache is to do no DB work
+        // at all. The trade is that freshness is now PUSHED by the writers
+        // (CmsBase::_bumpContentVersion) instead of pulled by a probe: every
+        // nav-item write below, and every page/post write that can change what
+        // the nav resolves (title, slug, status, published_at, trash/restore)
+        // bumps the scope's version, so a rename / reorder / publish / unpublish
+        // / trash appears on the very next request — and any FUTURE writer that
+        // touches those columns must bump too. Reading the version BEFORE the
+        // rows is what makes that safe: a racing write can only make us store a
+        // rebuilt tree under a stale key.
+        //
+        // A cache HIT is now one memcache get for the version plus one for the
+        // tree — no DB work at all.
+        //
+        // The one freshness change no writer can push is a target whose
+        // published_at simply ARRIVES: nothing is written at that moment and
+        // _targetIsLive() flips purely on the clock. So the stored payload
+        // carries 'live_until' — the earliest future published_at among this
+        // scope's own nav targets — and an entry past that instant is treated as
+        // a miss. Scope-local, exact, and costs nothing when nothing is pending.
         $ckey  = null;
         $cache = $this->_ghettoCache();
         if ($cache !== null) {
-            $sig = $this->_navSignature($menuName, $normScope, $scopeId);
-            // Skip caching entirely when the signature probe failed (null) so a
-            // transient DB error can't pin an empty tree under a bogus key.
-            if ($sig !== null) {
-                $ckey   = $menuName . '.' . $normScope . '.' . $scopeId . '.' . $sig;
+            $ver = $this->_contentVersion($normScope, $scopeId);
+            // Skip caching entirely when no version is available (no memcache) so
+            // we can't pin a tree under a bogus key.
+            if ($ver !== null) {
+                $ckey   = $menuName . '.' . $normScope . '.' . $scopeId . '.v' . $ver;
                 $cached = $cache->get(__CLASS__ . '.GetMenu', $ckey, 1800);
-                // Memcached returns the stored value (an array — possibly []) on a
-                // hit, or false on a miss; is_array() distinguishes a genuinely
-                // empty cached menu from a miss.
-                if (is_array($cached)) {
-                    self::$menuCache[$cacheKey] = $cached;
-                    return $cached;
+                // Memcached returns the stored payload on a hit, or false on a
+                // miss. isset($cached['items']) distinguishes a genuinely empty
+                // cached menu (items => []) from a miss, and also rejects any
+                // legacy bare-list payload still in the cache.
+                if (is_array($cached) && isset($cached['items']) && is_array($cached['items'])
+                    && (!isset($cached['live_until']) || (int)$cached['live_until'] > time())
+                ) {
+                    self::$menuCache[$cacheKey] = $cached['items'];
+                    return $cached['items'];
                 }
             }
         }
@@ -131,8 +146,13 @@ class CmsNav extends CmsBase
         // are dropped — they are simply never reached from the root.
         $resolved = array();          // nav_id => resolved item (with empty children)
         $childrenByParent = array();  // parent nav_id (0=top) => [child nav_id, ...]
+        $liveUntil = null;            // earliest future published_at among targets
         foreach ($rows as $row) {
             $navId = (int)$row['nav_id'];
+            $goLive = $this->_nextGoLive($row);
+            if ($goLive !== null && ($liveUntil === null || $goLive < $liveUntil)) {
+                $liveUntil = $goLive;
+            }
             $item = $this->_resolveItem($row, true);
             $item['children'] = array();
             $resolved[$navId] = $item;
@@ -161,10 +181,17 @@ class CmsNav extends CmsBase
         };
         $top = $attach(0, 0);
 
-        // Store into the cross-request cache under the signature key computed above
-        // (only when the probe succeeded → $ckey is set).
+        // Store into the cross-request cache under the version key computed above
+        // (only when a version was available → $ckey is set). An EMPTY menu is a
+        // first-class supported state (an org that hasn't built a nav falls back
+        // to the template defaults), so it is cached like any other — otherwise
+        // exactly those scopes would run the two-LEFT-JOIN fetch on every
+        // anonymous request, which is the cost this cache exists to remove.
         if ($cache !== null && $ckey !== null) {
-            $cache->cache(__CLASS__ . '.GetMenu', $ckey, $top);
+            $cache->cache(__CLASS__ . '.GetMenu', $ckey, array(
+                'items'      => $top,
+                'live_until' => $liveUntil,
+            ));
         }
 
         self::$menuCache[$cacheKey] = $top;
@@ -172,39 +199,41 @@ class CmsNav extends CmsBase
     }
 
     /**
-     * A content signature of a menu/scope's nav rows, used as the cross-request
-     * cache version key (see GetMenu). Single indexed aggregate over
-     * ork_cms_nav_item — no joins — returning "cnt-maxid-crcsum". Covers ALL rows
-     * (enabled and disabled) so an enable/disable toggle also busts. Returns null
-     * on a failed probe so the caller skips caching rather than key on garbage.
+     * The instant this row's resolved href could change BY THE CLOCK ALONE — the
+     * one freshness change no write-time version stamp can see. A target with a
+     * future published_at is not live now and is live then, with nothing written
+     * at the crossing: _targetIsLive() (and _promoteScheduled's
+     * 'scheduled' → 'published' flip, which happens at the same instant) turn
+     * purely on that timestamp. Every OTHER transition — draft/published,
+     * trash/restore, slug or title edits — goes through a writer that bumps the
+     * scope's content version.
      *
-     * @param string $menu      already-clamped menu name
-     * @param string $scopeType already-normalized scope type
-     * @param int    $scopeId
-     * @return string|null
+     * Used to stamp 'live_until' on the cached tree, so an entry expires exactly
+     * at go-live for exactly the scopes that have something pending — as opposed
+     * to a global time bucket, which would rotate every scope's key on a timer
+     * because some unrelated org scheduled a post.
+     *
+     * @param array $row raw nav row with the page_/post_ join columns
+     * @return int|null unix timestamp in the future, or null
      */
-    private function _navSignature($menu, $scopeType, $scopeId)
+    private function _nextGoLive($row)
     {
-        global $DB;
-
-        $DB->Clear();
-        $DB->menu       = $menu;
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = (int)$scopeId;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT COUNT(*) AS cnt, COALESCE(MAX(nav_id), 0) AS mx,'
-            . " COALESCE(SUM(CRC32(CONCAT_WS('|', nav_id, label, link_type,"
-            . " IFNULL(page_id, 0), IFNULL(post_id, 0), IFNULL(url, ''),"
-            . ' IFNULL(parent_id, 0), ordering, enabled))), 0) AS sig'
-            . ' FROM ' . DB_PREFIX . 'cms_nav_item'
-            . ' WHERE menu = :menu AND scope_type = :scope_type AND scope_id = :scope_id'
-        ));
-        if ($row === null) {
-            return null;
+        $now  = time();
+        $next = null;
+        foreach (array('page', 'post') as $kind) {
+            if (!empty($row[$kind . '_deleted_at'])) {
+                continue;
+            }
+            $published = isset($row[$kind . '_published_at']) ? $row[$kind . '_published_at'] : null;
+            if (empty($published)) {
+                continue;
+            }
+            $ts = strtotime((string)$published);
+            if ($ts !== false && $ts > $now && ($next === null || $ts < $next)) {
+                $next = $ts;
+            }
         }
-        return (string)(int)$row['cnt'] . '-'
-            . (string)(int)$row['mx'] . '-'
-            . (string)$row['sig'];
+        return $next;
     }
 
     /**
@@ -286,6 +315,8 @@ class CmsNav extends CmsBase
 
         // A same-request read must not serve a pre-write tree.
         self::$menuCache = array();
+        // Cross-request: re-key the scope's cached tree (CmsBase::_bumpContentVersion).
+        $this->_bumpContentVersion($cols['scope_type'], $cols['scope_id']);
 
         // Verify the INSERT actually landed by reading the row back on the exact
         // tuple we just wrote — NOT GetLastInsertId(), which returns a stale prior
@@ -353,6 +384,12 @@ class CmsNav extends CmsBase
         if ($scopeType !== null && !$this->_ownsItem($navId, $scopeType, $scopeId)) {
             return false;
         }
+
+        // The row's CURRENT scope, read before the bind loop below (it runs its own
+        // Clear()/DataSet(), so it cannot clobber the binds). Needed to bump the
+        // right scope's nav content version after the write — the caller may pass
+        // no intended scope at all, and an in-flight scope move has to bump BOTH.
+        $preScope = $this->_itemScope($navId);
 
         $set = array();
         $DB->Clear();
@@ -455,6 +492,22 @@ class CmsNav extends CmsBase
         // A same-request read must not serve a pre-write tree.
         self::$menuCache = array();
 
+        // Cross-request: re-key the cached tree for the scope(s) this write
+        // touched (see CmsBase::_bumpContentVersion).
+        if ($preScope !== null) {
+            $this->_bumpContentVersion((string)$preScope['scope_type'], (int)$preScope['scope_id']);
+        }
+        if (array_key_exists('scope_type', $data) || array_key_exists('scope_id', $data)) {
+            $this->_bumpContentVersion(
+                array_key_exists('scope_type', $data)
+                    ? $data['scope_type']
+                    : ($preScope !== null ? (string)$preScope['scope_type'] : 'global'),
+                array_key_exists('scope_id', $data)
+                    ? (int)$data['scope_id']
+                    : ($preScope !== null ? (int)$preScope['scope_id'] : 0)
+            );
+        }
+
         return true;
     }
 
@@ -529,8 +582,17 @@ class CmsNav extends CmsBase
             'SELECT nav_id FROM ' . DB_PREFIX . 'cms_nav_item WHERE nav_id = :nav_id LIMIT 1'
         ));
 
+        // Verify the CHILDREN delete too — a silently dropped statement there would
+        // otherwise commit orphan rows pointing at a deleted parent.
         $DB->Clear();
-        if ($stillThere !== null) {
+        $DB->parent_id = $navId;
+        $orphans = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE parent_id = :parent_id'
+        ));
+
+        $DB->Clear();
+        if ($stillThere !== null || $orphans === null || (int)$orphans['cnt'] !== 0) {
             $DB->Execute('ROLLBACK');
             return false;
         }
@@ -538,6 +600,8 @@ class CmsNav extends CmsBase
 
         // A same-request read must not serve a pre-delete tree.
         self::$menuCache = array();
+        // Cross-request: re-key the scope's cached tree (CmsBase::_bumpContentVersion).
+        $this->_bumpContentVersion((string)$existing['scope_type'], (int)$existing['scope_id']);
 
         return true;
     }
@@ -564,13 +628,34 @@ class CmsNav extends CmsBase
 
         // Build the set of nav_ids that legitimately belong to this menu/scope.
         $valid = array();
-        // Only nav_id is consumed here, so skip the page/post LEFT JOINs.
+        // Only nav_id/parent_id are consumed here, so skip the page/post LEFT JOINs.
         $rows = $this->_fetchItems($menu, $scopeType, $scopeId, false, true);
+        $storedParent = array();
         foreach ($rows as $row) {
             $valid[(int)$row['nav_id']] = true;
+            $storedParent[(int)$row['nav_id']] = ($row['parent_id'] === null || $row['parent_id'] === '')
+                ? null : (int)$row['parent_id'];
         }
         if (empty($valid)) {
             return false;
+        }
+
+        // Depth policy (matches CmsAjax::savenavitem's "parent must itself be
+        // top-level" rule and the two-level nav editor): pre-compute each entry's
+        // requested parent so a parent that is itself becoming/remaining a child can
+        // be flattened below. A grandchild is unreachable through savenavitem and
+        // DeleteItem's one-level cascade, so drag-and-drop must not create one.
+        $requestedParent = array();
+        foreach ($orderedItems as $entry) {
+            if (!is_array($entry) || !isset($entry['nav_id'])) {
+                continue;
+            }
+            $eid = (int)$entry['nav_id'];
+            if ($eid <= 0 || !isset($valid[$eid])) {
+                continue;
+            }
+            $requestedParent[$eid] = (isset($entry['parent_id']) && $entry['parent_id'] !== '' && $entry['parent_id'] !== null && (int)$entry['parent_id'] > 0)
+                ? (int)$entry['parent_id'] : null;
         }
 
         // Wrap the per-item UPDATEs in one transaction. These are N separate
@@ -603,6 +688,17 @@ class CmsNav extends CmsBase
             // themselves valid members of this menu/scope.
             if ($parentId !== null && ($parentId === $navId || !isset($valid[$parentId]))) {
                 $parentId = null;
+            }
+            // Two-level cap: if the chosen parent is itself a child (per this
+            // payload, falling back to its stored row), flatten this item to top
+            // level rather than creating a grandchild.
+            if ($parentId !== null) {
+                $grandparent = array_key_exists($parentId, $requestedParent)
+                    ? $requestedParent[$parentId]
+                    : (isset($storedParent[$parentId]) ? $storedParent[$parentId] : null);
+                if ($grandparent !== null) {
+                    $parentId = null;
+                }
             }
 
             $DB->Clear();
@@ -667,8 +763,33 @@ class CmsNav extends CmsBase
 
         // A same-request read must not serve the pre-reorder tree.
         self::$menuCache = array();
+        // Cross-request: re-key the scope's cached tree (CmsBase::_bumpContentVersion).
+        $this->_bumpContentVersion($scopeType, $scopeId);
 
         return true;
+    }
+
+    /**
+     * The stored scope of a nav row, or null when the row doesn't exist.
+     * Runs its own Clear()/DataSet(), so callers must invoke it BEFORE binding.
+     *
+     * @param int $navId
+     * @return array|null ['scope_type' => ..., 'scope_id' => ...]
+     */
+    private function _itemScope($navId)
+    {
+        global $DB;
+
+        $navId = (int)$navId;
+        if ($navId <= 0) {
+            return null;
+        }
+        $DB->Clear();
+        $DB->nav_id = $navId;
+        return $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE nav_id = :nav_id LIMIT 1'
+        ));
     }
 
     /**
@@ -732,7 +853,7 @@ class CmsNav extends CmsBase
         $scopeId = (int)$scopeId;
 
         if ($idsOnly) {
-            $sql = 'SELECT n.nav_id'
+            $sql = 'SELECT n.nav_id, n.parent_id'
                 . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
                 . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
         } else {
@@ -1029,6 +1150,23 @@ class CmsNav extends CmsBase
         return in_array($linkType, self::LINK_TYPES, true) ? $linkType : 'page';
     }
 
+    /**
+     * Clamp a string to a column width.
+     *
+     * Clamp by CHARACTERS: the columns are sized in characters on a utf8mb4
+     * table, so a byte-wise cut both over-truncates non-ASCII text and can split
+     * a UTF-8 sequence (which MySQL then rejects under strict sql_mode, silently
+     * because Execute() runs under ERRMODE_WARNING).
+     */
+    private function _clampLen($str, $max)
+    {
+        $str = (string)$str;
+        if ($this->_strLen($str) > $max) {
+            $str = $this->_subStr($str, 0, $max);
+        }
+        return $str;
+    }
+
     /** Clamp the menu name to its column width (default 'marketing'). */
     private function _clampMenu($menu)
     {
@@ -1036,30 +1174,19 @@ class CmsNav extends CmsBase
         if ($menu === '') {
             $menu = 'marketing';
         }
-        if (strlen($menu) > self::MENU_MAXLEN) {
-            $menu = substr($menu, 0, self::MENU_MAXLEN);
-        }
-        return $menu;
+        return $this->_clampLen($menu, self::MENU_MAXLEN);
     }
 
     /** Clamp a label to its column width. */
     private function _clampLabel($label)
     {
-        $label = (string)$label;
-        if (strlen($label) > self::LABEL_MAXLEN) {
-            $label = substr($label, 0, self::LABEL_MAXLEN);
-        }
-        return $label;
+        return $this->_clampLen($label, self::LABEL_MAXLEN);
     }
 
     /** Clamp a url/route to its column width. */
     private function _clampUrl($url)
     {
-        $url = (string)$url;
-        if (strlen($url) > self::URL_MAXLEN) {
-            $url = substr($url, 0, self::URL_MAXLEN);
-        }
-        return $url;
+        return $this->_clampLen($url, self::URL_MAXLEN);
     }
 
 }

@@ -104,6 +104,56 @@ class CmsMedia extends CmsBase
     /** Relative storage root under assets/ (no leading/trailing context). */
     private static $REL_ROOT = 'cms-media';
 
+    /**
+     * Per-request index of the display renditions present in each storage
+     * directory: 'cms-media/{yyyymm}' => array('{unique}_display.webp' => true).
+     *
+     * ToMediaRef() has to know whether a row's derived _display.webp exists, and
+     * it is called once per row by the ListMedia/ListTrashed mappers — up to
+     * _clampLimit (1000) rows per call, and CmsAjax runs a 1000-row ListTrashed
+     * just to ownership-check a single id. A stat() per row therefore cost up to
+     * 1000 blocking filesystem round-trips per request, which dominates the
+     * response on networked asset storage. One directory listing per distinct
+     * yyyymm folder answers every row in that folder instead, and a listing is
+     * only ever taken for a directory a row actually points at.
+     *
+     * The listing is LAZY: the first TWO questions asked about a directory in a
+     * request are answered with a single is_file() each, and the index is only
+     * built from the third question on. The threshold is two because no public
+     * single-render path asks more than twice about one directory: an org-site
+     * page render asks for the site logo (Site::_logoUrl) and, when the surface
+     * has a hero, for that hero (Site::_ogImage) — and the yyyymm folder is
+     * GLOBAL, so those two land in the SAME directory whenever both assets were
+     * uploaded in the same month. Promoting on the second ask would therefore
+     * have made every public page render list the busiest folder on the box to
+     * answer two booleans. A list mapper pays two stats plus one listing for the
+     * whole folder, which is unmeasurable next to the up-to-1000 stats it saves.
+     *
+     * Request-lifetime only: a rendition can only appear on or leave disk
+     * mid-request through Upload() or PurgeMedia(), both of which drop the
+     * affected directory's entry.
+     *
+     * @var array
+     */
+    private static $displayDirIndex = array();
+
+    /**
+     * How many times each storage directory has been asked about this request,
+     * for the lazy promotion described on $displayDirIndex. Kept in step with
+     * $displayDirIndex by _forgetDisplayDir().
+     *
+     * @var array
+     */
+    private static $displayDirHits = array();
+
+    /**
+     * How many media ids the batched where-used scan folds into one REGEXP
+     * alternation. Small on purpose: a pattern that trips MariaDB's
+     * regexp_time_limit/regexp_stack_limit simply fails to match, which the C8
+     * delete guard would read as "unreferenced".
+     */
+    public const REF_SCAN_CHUNK = 25;
+
     public function __construct()
     {
         parent::__construct();
@@ -139,11 +189,13 @@ class CmsMedia extends CmsBase
         }
         $raw = trim($raw);
         if ($raw === '') {
+            $this->LastError = 'empty_upload';
             return null;
         }
 
         $binary = base64_decode($raw, true);
         if ($binary === false || $binary === '') {
+            $this->LastError = 'invalid_encoding';
             return null;
         }
 
@@ -161,7 +213,15 @@ class CmsMedia extends CmsBase
         $quotaScopeType = (string)($scope['type'] ?? 'global');
         $quotaScopeId   = (int)($scope['id'] ?? 0);
         if ($quotaScopeType !== 'global' && $quotaScopeId > 0) {
-            $used = $this->ScopeUsageBytes($quotaScopeType, $quotaScopeId);
+            // Fail CLOSED when the usage query itself fails: a null here means we
+            // do not know the org's usage, and reading that as "0 bytes stored"
+            // waves an upload past the ceiling during exactly the DB-stress window
+            // the quota exists to survive.
+            $used = $this->_scopeUsageBytesOrNull($quotaScopeType, $quotaScopeId);
+            if ($used === null) {
+                $this->LastError = 'quota_check_failed';
+                return null;
+            }
             if (($used + $bytes) > self::MAX_SCOPE_BYTES) {
                 $this->LastError = 'quota_exceeded';
                 return null;
@@ -171,6 +231,7 @@ class CmsMedia extends CmsBase
         // Validate it's a real image and capture intrinsic dimensions/mime.
         $info = @getimagesizefromstring($binary);
         if ($info === false || empty($info[0]) || empty($info[1])) {
+            $this->LastError = 'invalid_image';
             return null;
         }
         $width  = (int)$info[0];
@@ -179,6 +240,7 @@ class CmsMedia extends CmsBase
         $ext    = $this->_extForMime($mime);
         if ($ext === null) {
             // Not an image type we can write back out.
+            $this->LastError = 'unsupported_type';
             return null;
         }
 
@@ -186,12 +248,14 @@ class CmsMedia extends CmsBase
         // area exceeds the ceiling BEFORE decoding — the compressed byte cap does
         // NOT bound decoded size (a few KB can declare hundreds of megapixels).
         if ($width * $height > self::$MAX_PIXELS) {
+            $this->LastError = 'too_many_pixels';
             return null;
         }
 
         // Build a GD image from the bytes (final reject if GD can't decode it).
         $src = @imagecreatefromstring($binary);
         if ($src === false) {
+            $this->LastError = 'invalid_image';
             return null;
         }
 
@@ -204,6 +268,7 @@ class CmsMedia extends CmsBase
         }
         if (!is_dir($diskDir) || !is_writable($diskDir)) {
             imagedestroy($src);
+            $this->LastError = 'storage_unavailable';
             return null;
         }
 
@@ -217,6 +282,7 @@ class CmsMedia extends CmsBase
         // Write the original (re-encoded through GD; normalizes/strips metadata).
         if (!$this->_writeImage($src, $diskPath, $ext)) {
             imagedestroy($src);
+            $this->LastError = 'write_failed';
             return null;
         }
 
@@ -243,6 +309,10 @@ class CmsMedia extends CmsBase
             if ($display !== false) {
                 $this->_writeImage($display, $diskDisplay, 'webp');
                 imagedestroy($display);
+                // The per-request rendition index (see _displayExists) may already
+                // hold a listing of this directory taken BEFORE this write; drop it
+                // so the ref we build below still sees the file we just wrote.
+                $this->_forgetDisplayDir($relDisplay);
             }
         }
 
@@ -275,7 +345,9 @@ class CmsMedia extends CmsBase
             }
             if ($relDisplay !== '' && is_file($diskDisplay)) {
                 @unlink($diskDisplay);
+                $this->_forgetDisplayDir($relDisplay);
             }
+            $this->LastError = 'db_failed';
             return null;
         }
 
@@ -516,6 +588,27 @@ class CmsMedia extends CmsBase
      */
     public function ScopeUsageBytes($scopeType, $scopeId)
     {
+        // Public contract is unchanged: 0 for "nothing stored", and also 0 when
+        // the query fails — this is the REPORTING call behind the user-facing
+        // "x.x MB used" message, which a sentinel would turn into nonsense.
+        // Enforcement reads _scopeUsageBytesOrNull instead, so a failed query
+        // rejects the upload rather than reading as an empty org.
+        $used = $this->_scopeUsageBytesOrNull($scopeType, $scopeId);
+        return ($used === null) ? 0 : $used;
+    }
+
+    /**
+     * The same LIVE-bytes total as ScopeUsageBytes, but distinguishing "0 bytes
+     * stored" (int 0) from "the usage query failed" (null) so the quota gate in
+     * Upload() can fail CLOSED. A COALESCE(SUM(...)) always returns exactly one
+     * row, so a missing row here means the query itself did not run.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @return int|null bytes, or null when usage could not be determined
+     */
+    private function _scopeUsageBytesOrNull($scopeType, $scopeId)
+    {
         global $DB;
 
         $DB->Clear();
@@ -528,7 +621,7 @@ class CmsMedia extends CmsBase
             . ' AND deleted_at IS NULL'
         );
         // DataSet() needs an explicit Next() before any field read.
-        return ($r && $r->Next()) ? (int)$r->used : 0;
+        return ($r && $r->Next()) ? (int)$r->used : null;
     }
 
     /**
@@ -742,6 +835,263 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * BATCH where-used check: reduce a list of media ids to those that nothing
+     * references, running the reference lookups ONCE for the whole list instead
+     * of once per id.
+     *
+     * Why this exists: _referenceCount() falls through to a REGEXP scan of
+     * ork_cms_block.fields_json (a TEXT column no index can serve), so a bulk
+     * trash of N items costs N full block scans plus N sets of FK counts. Here
+     * the FK checks become three GROUP BY lookups over one IN() list, and the
+     * block scan becomes one query per distinct media scope whose predicate is a
+     * single alternation of every candidate id and path base — the surviving
+     * blocks are then attributed back to individual ids in PHP, so the per-id
+     * answer is exactly the one _referenceCount would have given.
+     *
+     * Semantics match the soft-delete guard, not the purge guard: LIVE owners
+     * only, and the block scan is bound to each media's own scope (#69).
+     *
+     * @param array       $ids       candidate media ids (max MAX_FILTER_IDS; over-cap fails closed)
+     * @param string|null $scopeType optional ownership filter, as for FilterOwnedIds
+     * @param int|null    $scopeId   scope owner id (with $scopeType)
+     * @return array the ids that exist, are live, are in scope, and are unreferenced (input order)
+     */
+    public function FilterUnreferencedIds(array $ids, $scopeType = null, $scopeId = null)
+    {
+        global $DB;
+
+        // Fail closed on an oversized list rather than building a giant IN().
+        if (count($ids) > self::MAX_FILTER_IDS) {
+            return array();
+        }
+
+        $seen  = array();
+        $clean = array();
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id > 0 && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $clean[] = $id;
+            }
+        }
+        if (empty($clean)) {
+            return array();
+        }
+
+        // Path + scope for every candidate, in one read (the batched form of
+        // _mediaRefMeta). Ids that are missing, trashed, or out of scope simply
+        // do not come back and are never reported as safe.
+        $DB->Clear();
+        $scopeSql = '';
+        if ($scopeType !== null) {
+            $scopeSql = ' AND scope_type = :scope_type AND scope_id = :scope_id';
+            $DB->scope_type = $this->_normalizeScopeType($scopeType);
+            $DB->scope_id   = (int)$scopeId;
+        }
+        $meta = array();
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT media_id, path, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id IN (' . implode(',', $clean) . ') AND deleted_at IS NULL' . $scopeSql
+        )) as $row) {
+            $meta[(int)$row['media_id']] = array(
+                'path'       => (string)($row['path'] ?? ''),
+                'scope_type' => (string)($row['scope_type'] ?? 'global'),
+                'scope_id'   => (int)($row['scope_id'] ?? 0),
+            );
+        }
+        if (empty($meta)) {
+            return array();
+        }
+
+        $referenced = $this->_fkReferencedIds(array_keys($meta));
+
+        // Group the survivors by their own scope so each group needs one block
+        // scan (in practice a bulk selection comes from one library view = one
+        // group).
+        $groups = array();
+        foreach ($meta as $id => $m) {
+            if (isset($referenced[$id])) {
+                continue;
+            }
+            $groups[$m['scope_type'] . '|' . $m['scope_id']][$id] = $m['path'];
+        }
+        foreach ($groups as $key => $idToPath) {
+            $parts = explode('|', $key, 2);
+            foreach ($this->_blockReferencedIds($idToPath, $parts[0], (int)$parts[1]) as $id => $unused) {
+                $referenced[$id] = true;
+            }
+        }
+
+        $out = array();
+        foreach ($clean as $id) {
+            if (isset($meta[$id]) && !isset($referenced[$id])) {
+                $out[] = $id;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Batched _fkCounts: which of these media ids are used as a LIVE page hero,
+     * a LIVE post hero, or a site logo. Each source is a separate statement so a
+     * missing table in a partial schema zeroes only itself, exactly as _countOne
+     * does for the single-id path.
+     *
+     * @param array $ids positive media ids
+     * @return array media_id => true for every referenced id
+     */
+    private function _fkReferencedIds(array $ids)
+    {
+        global $DB;
+
+        $hit = array();
+        $in  = implode(',', array_map('intval', $ids));
+        if ($in === '') {
+            return $hit;
+        }
+
+        $sqls = array(
+            'SELECT hero_media_id AS mid FROM ' . DB_PREFIX . 'cms_page'
+                . ' WHERE hero_media_id IN (' . $in . ') AND deleted_at IS NULL GROUP BY hero_media_id',
+            'SELECT hero_media_id AS mid FROM ' . DB_PREFIX . 'cms_post'
+                . ' WHERE hero_media_id IN (' . $in . ') AND deleted_at IS NULL GROUP BY hero_media_id',
+            // ork_cms_site has no deleted_at column — a logo reference is always live.
+            'SELECT logo_media_id AS mid FROM ' . DB_PREFIX . 'cms_site'
+                . ' WHERE logo_media_id IN (' . $in . ') GROUP BY logo_media_id',
+        );
+        foreach ($sqls as $sql) {
+            $DB->Clear();
+            foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {
+                $hit[(int)$row['mid']] = true;
+            }
+        }
+        return $hit;
+    }
+
+    /**
+     * Batched _blockReferenceCount: which of these media ids are embedded in a
+     * block belonging to the given scope. One scan whose predicate alternates
+     * every candidate's media_id pattern and opaque path base; the matching
+     * fields_json values are then attributed to individual ids in PHP.
+     *
+     * A path base that is not the opaque hex/slash form we write (hand-edited
+     * row, legacy import) is NOT folded into the alternation — regex-quoting it
+     * for MySQL's ERE is not worth the risk of getting it wrong and silently
+     * failing OPEN on a real reference — so that id falls back to the per-id
+     * scan instead.
+     *
+     * @param array  $idToPath  media_id => stored relative path
+     * @param string $scopeType the scope the ids belong to
+     * @param int    $scopeId
+     * @return array media_id => true for every referenced id
+     */
+    private function _blockReferencedIds(array $idToPath, $scopeType, $scopeId)
+    {
+        global $DB;
+
+        $hit = array();
+        if (empty($idToPath)) {
+            return $hit;
+        }
+
+        $ids   = array();
+        $bases = array();
+        foreach ($idToPath as $id => $path) {
+            $id   = (int)$id;
+            $base = $this->_pathBase((string)$path);
+            if ($base !== '' && !preg_match('#^[A-Za-z0-9/_-]+$#', $base)) {
+                // Unexpected characters: answer this one the old way rather than
+                // building a pattern we cannot be sure of.
+                if ($this->_blockReferenceCount($id, $path, $scopeType, $scopeId) > 0) {
+                    $hit[$id] = true;
+                }
+                continue;
+            }
+            $ids[] = $id;
+            if ($base !== '') {
+                $bases[$id] = $base;
+            }
+        }
+        if (empty($ids)) {
+            return $hit;
+        }
+
+        // Chunked, and path bases stay on cheap LIKEs (the form
+        // _blockReferenceCount uses) rather than joining the alternation: a
+        // REGEXP that trips MariaDB's regexp_time_limit/regexp_stack_limit does
+        // not match the row, which this guard would read as "unreferenced" and
+        // trash media a live block still embeds. Keeping the pattern small keeps
+        // the C8 guard fail-CLOSED.
+        foreach (array_chunk($ids, self::REF_SCAN_CHUNK) as $chunk) {
+            $this->_blockReferencedIdsChunk($chunk, $bases, $scopeType, $scopeId, $hit);
+        }
+        return $hit;
+    }
+
+    /**
+     * One scan of _blockReferencedIds' chunk: at most REF_SCAN_CHUNK media_id
+     * alternatives plus one LIKE per candidate path base.
+     *
+     * @param array $chunk     media ids in this chunk
+     * @param array $bases     media_id => opaque path base (may omit ids)
+     * @param array $hit       accumulator, media_id => true (by reference)
+     * @return void
+     */
+    private function _blockReferencedIdsChunk(array $chunk, array $bases, $scopeType, $scopeId, array &$hit)
+    {
+        global $DB;
+
+        $DB->Clear();
+        // Same two match forms as _blockReferenceCount: the media_id value inside
+        // fields_json (bounded by a non-digit so 12 never matches 123) and (#68) a
+        // TinyMCE-embedded <img src> carrying the asset's opaque path base.
+        $DB->pat = '"media_id"[[:space:]]*:[[:space:]]*(' . implode('|', $chunk) . ')([^0-9]|$)';
+        $match   = 'b.fields_json REGEXP :pat';
+        $n       = 0;
+        foreach ($chunk as $id) {
+            if (!isset($bases[$id])) {
+                continue;
+            }
+            $key = 'emb' . $n;
+            $n++;
+            $match .= ' OR b.fields_json LIKE :' . $key;
+            // Escape LIKE metacharacters in the path base (defensive; the opaque
+            // base is hex/digits/slash so it carries none in practice).
+            $DB->$key = '%' . str_replace(array('\\', '%', '_'), array('\\\\', '\\%', '\\_'), $bases[$id]) . '%';
+        }
+        $DB->st  = $this->_normalizeScopeType((string)$scopeType);
+        $DB->sid = (int)$scopeId;
+
+        // Scope binding is the #69 owner join _blockReferenceCount uses.
+        $sql = 'SELECT b.fields_json AS fj FROM ' . DB_PREFIX . 'cms_block b'
+            . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
+            . " ON b.owner_type = 'page' AND pg.page_id = b.owner_id"
+            . ' AND pg.deleted_at IS NULL'
+            . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
+            . " ON b.owner_type = 'post' AND po.post_id = b.owner_id"
+            . ' AND po.deleted_at IS NULL'
+            . ' WHERE (' . $match . ')'
+            . ' AND COALESCE(pg.scope_type, po.scope_type) = :st'
+            . ' AND COALESCE(pg.scope_id, po.scope_id) = :sid';
+
+        foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {
+            $fj = (string)($row['fj'] ?? '');
+            foreach ($chunk as $id) {
+                if (isset($hit[$id])) {
+                    continue;
+                }
+                if (preg_match('/"media_id"\s*:\s*' . $id . '([^0-9]|$)/', $fj)) {
+                    $hit[$id] = true;
+                    continue;
+                }
+                if (isset($bases[$id]) && strpos($fj, $bases[$id]) !== false) {
+                    $hit[$id] = true;
+                }
+            }
+        }
+    }
+
+    /**
      * Trash a media row (C2 soft-delete). Files are KEPT so a restore can bring
      * the asset back. REFUSES (C8) when the media is still referenced anywhere —
      * a page/post hero, a site logo, or inside any block's fields_json — so a
@@ -754,6 +1104,88 @@ class CmsMedia extends CmsBase
      * @return bool true when the row existed, was owned, unreferenced, and was trashed
      */
     public function DeleteMedia($mediaId, $actorId = 0, $scopeType = null, $scopeId = null)
+    {
+        return $this->_trashMedia($mediaId, $actorId, $scopeType, $scopeId, false);
+    }
+
+    /**
+     * Bulk soft-delete: run the where-used scan ONCE for the whole selection
+     * (FilterUnreferencedIds) and trash only the ids it clears, instead of
+     * paying a per-id FK + REGEXP block scan.
+     *
+     * The per-id trash still re-reads the row and re-applies its own scope
+     * (IDOR) guard, so the batch filter is an optimisation layered ON the
+     * existing guard, never a replacement for it. There is deliberately NO
+     * public way to skip the where-used check: an id the batch scan did not
+     * clear is refused here exactly as DeleteMedia would refuse it.
+     *
+     * An over-cap list (see MAX_FILTER_IDS) fails CLOSED: nothing is trashed.
+     *
+     * @param array       $ids       candidate media ids
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @param string|null $scopeType optional ownership guard: only touch rows in this scope
+     * @param int|null    $scopeId   optional ownership guard: scope owner id
+     * @return array{deleted:array,in_use:array,failed:array,usage:array} per-id
+     *         outcome in input order; 'usage' maps each in-use id to its
+     *         ReferenceUsage() breakdown.
+     */
+    public function DeleteMediaBatch(array $ids, $actorId = 0, $scopeType = null, $scopeId = null)
+    {
+        $out = array('deleted' => array(), 'in_use' => array(), 'failed' => array(), 'usage' => array());
+
+        $seen  = array();
+        $clean = array();
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id > 0 && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $clean[] = $id;
+            }
+        }
+        if (empty($clean)) {
+            return $out;
+        }
+        if (count($clean) > self::MAX_FILTER_IDS) {
+            $out['failed'] = $clean;
+            return $out;
+        }
+
+        // ONE where-used scan for the whole set. Anything it does not return is
+        // treated as still referenced (fail-closed) and classified below.
+        $safe = array_flip($this->FilterUnreferencedIds($clean, $scopeType, $scopeId));
+
+        foreach ($clean as $id) {
+            if (isset($safe[$id]) && $this->_trashMedia($id, $actorId, $scopeType, $scopeId, true)) {
+                $out['deleted'][] = $id;
+                continue;
+            }
+            // Refused — classify (in-use vs. other) so the caller can say why.
+            $usage = $this->ReferenceUsage($id);
+            if (is_array($usage) && (int)($usage['total'] ?? 0) > 0) {
+                $out['in_use'][] = $id;
+                $out['usage'][$id] = $usage;
+            } else {
+                $out['failed'][] = $id;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The trash mutation behind DeleteMedia/DeleteMediaBatch. PRIVATE on
+     * purpose: $referencesChecked disables the C8 where-used guard and is only
+     * ever true for DeleteMediaBatch, which just answered that exact question
+     * for this id via FilterUnreferencedIds in the same request.
+     *
+     * @param int         $mediaId
+     * @param int         $actorId
+     * @param string|null $scopeType
+     * @param int|null    $scopeId
+     * @param bool        $referencesChecked
+     * @return bool
+     */
+    private function _trashMedia($mediaId, $actorId, $scopeType, $scopeId, $referencesChecked)
     {
         global $DB;
 
@@ -778,8 +1210,11 @@ class CmsMedia extends CmsBase
             return false;
         }
 
-        // C8: where-used check. Refuse while any reference remains.
-        if ($this->_referenceCount($mediaId) > 0) {
+        // C8: where-used check. Refuse while any reference remains. Skipped only
+        // when the caller already got this exact answer from FilterUnreferencedIds
+        // in the same request (the batch path), so a bulk trash does not re-run
+        // the REGEXP block scan once per id.
+        if (!$referencesChecked && $this->_referenceCount($mediaId) > 0) {
             return false;
         }
 
@@ -936,6 +1371,9 @@ class CmsMedia extends CmsBase
         $relDisplay = $this->_displayRelForPath((string)($row['path'] ?? ''));
         if ($relDisplay !== '') {
             $this->_safeUnlink($relDisplay);
+            // Symmetry with Upload: the directory listing this request memoized
+            // no longer describes the disk.
+            $this->_forgetDisplayDir($relDisplay);
         }
 
         $this->_cmsAudit((int)$actorId, 'purge', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
@@ -944,10 +1382,16 @@ class CmsMedia extends CmsBase
 
     /**
      * Ownership guard: does a fetched media row belong to the given scope?
-     * Mirrors CmsNav::_ownsItem — a caller that passes a scope (non-null
+     * Delegates the comparison to CmsBase::_rowInScope (the hoisted, fail-closed
+     * form CmsNav::_ownsItem also uses): a caller that passes a scope (non-null
      * $scopeType) may only touch rows whose scope_type/scope_id match, so a
      * kingdom manager can never mutate global or another org's media (IDOR).
-     * A null $scopeType means "no ownership constraint" (trusted/legacy caller).
+     * Only the WANTED side is normalized — normalizing the STORED side too, as
+     * this used to, would clamp an out-of-enum scope_type to 'global' and hand a
+     * global-scope caller a row that belongs to nobody.
+     * A null $scopeType means "no ownership constraint" (trusted/legacy caller):
+     * kept here deliberately, since the bulk delete path calls DeleteMedia with
+     * no scope after doing its own FilterOwnedIds check.
      *
      * @param array       $row       row with scope_type/scope_id columns
      * @param string|null $scopeType 'global'|'kingdom'|'park', or null to skip
@@ -959,9 +1403,7 @@ class CmsMedia extends CmsBase
         if ($scopeType === null) {
             return true; // no ownership constraint requested
         }
-        return $this->_normalizeScopeType((string)$row['scope_type'])
-                === $this->_normalizeScopeType((string)$scopeType)
-            && (int)$row['scope_id'] === (int)$scopeId;
+        return $this->_rowInScope((array)$row, $scopeType, $scopeId);
     }
 
     /**
@@ -1476,15 +1918,90 @@ class CmsMedia extends CmsBase
      * C4/#14: does the display rendition exist on disk? Guards ToMediaRef so the
      * 'display' key is only exposed when the file is really present (older assets
      * / no-WebP GD builds fall back to 'src').
+     *
+     * Answered from a per-request listing of the containing directory rather than
+     * a stat() per call, but only once a directory has been asked about twice:
+     * every row in a media listing has a distinct path, so a path-keyed memo (and
+     * PHP's own stat cache) buys nothing, while a listing is shared by every row
+     * stored in the same yyyymm folder. No public single-render path asks more
+     * than twice about one directory (an org-site render asks for the logo and
+     * the hero, which share a yyyymm folder), so those paths never pay for a
+     * listing. See $displayDirIndex.
      */
     private function _displayExists($relDisplay)
     {
-        $relDisplay = (string)$relDisplay;
+        $relDisplay = ltrim((string)$relDisplay, '/');
         if ($relDisplay === '') {
             return false;
         }
-        $disk = rtrim(DIR_ASSETS, '/') . '/' . ltrim($relDisplay, '/');
-        return is_file($disk);
+        $slash = strrpos($relDisplay, '/');
+        $dir   = ($slash === false) ? '' : substr($relDisplay, 0, $slash);
+        $file  = ($slash === false) ? $relDisplay : substr($relDisplay, $slash + 1);
+        if (!isset(self::$displayDirIndex[$dir])) {
+            $hits = isset(self::$displayDirHits[$dir]) ? (int)self::$displayDirHits[$dir] : 0;
+            self::$displayDirHits[$dir] = $hits + 1;
+            if ($hits < 2) {
+                // First two (and, on the single-render public paths, only)
+                // questions about this directory: a stat each is strictly
+                // cheaper than a listing.
+                return is_file(rtrim(DIR_ASSETS, '/') . '/' . $relDisplay);
+            }
+            self::$displayDirIndex[$dir] = $this->_indexDisplayDir($dir);
+        }
+        if (self::$displayDirIndex[$dir] === false) {
+            // The directory could not be listed (scandir() needs 'r' on it,
+            // is_file() only needs 'x' on the parent), so a listing failure is
+            // NOT evidence that the rendition is missing. Answer this one row
+            // with a stat; the false sentinel is cached, so the failed scandir
+            // is paid once per directory per request.
+            return is_file(rtrim(DIR_ASSETS, '/') . '/' . $relDisplay);
+        }
+        return isset(self::$displayDirIndex[$dir][$file]);
+    }
+
+    /**
+     * List the display renditions in one storage directory, as a basename set.
+     * Only '*_display.webp' entries are kept, so the index stays small even in a
+     * month folder holding an original + thumb + display for every upload.
+     *
+     * Returns FALSE (not an empty array) when the directory cannot be listed, so
+     * the caller can stat that row instead: reading a listing failure as 'no
+     * rendition' would drop 'display' from every row in the folder at once and
+     * silently serve full-resolution originals.
+     *
+     * @param string $dir relative directory under DIR_ASSETS ('' = the root)
+     * @return array|false basename => true, or false when the listing failed
+     */
+    private function _indexDisplayDir($dir)
+    {
+        $out  = array();
+        $disk = rtrim(DIR_ASSETS, '/') . (($dir === '') ? '' : '/' . $dir);
+        $names = @scandir($disk, SCANDIR_SORT_NONE);
+        if ($names === false) {
+            return false;
+        }
+        foreach ($names as $name) {
+            if (substr($name, -13) === '_display.webp') {
+                $out[$name] = true;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Drop everything this request memoized about the directory holding
+     * $relPath, after a write or an unlink made that memo describe a disk state
+     * that no longer exists. The hit counter goes with the listing, so the next
+     * question about the directory starts over on a stat.
+     *
+     * @param string $relPath relative path (file) under DIR_ASSETS
+     */
+    private function _forgetDisplayDir($relPath)
+    {
+        $relPath = ltrim((string)$relPath, '/');
+        $slash   = strrpos($relPath, '/');
+        $dir     = ($slash === false) ? '' : substr($relPath, 0, $slash);
+        unset(self::$displayDirIndex[$dir], self::$displayDirHits[$dir]);
     }
 
     /**
