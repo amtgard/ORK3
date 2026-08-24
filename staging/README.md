@@ -22,8 +22,8 @@ triangle on idp.dev.amtgard.com in the CF dash is that exact problem).
 ### 1. On the instance (ssh apps-aws)
 
 ```bash
-sudo git clone https://github.com/amtgard/ORK3.git /var/www/ork-staging   # or your fork/remote of choice
-cd /var/www/ork-staging
+git clone https://github.com/amtgard/ORK3.git /var/www/staging.amtgard.com   # or your fork/remote of choice
+cd /var/www/staging.amtgard.com
 git checkout master        # staging tracks master unless testing a branch
 
 # Secrets file (never committed). MARIADB_* configure the db container;
@@ -85,8 +85,8 @@ cp, symlink, `nginx -t`, reload).
 
 ```bash
 ssh apps-aws
-cd /var/www/ork-staging
-sudo git pull                                              # deploy
+cd /var/www/staging.amtgard.com
+git pull                                              # deploy
 sudo docker compose -f docker-compose.staging.yml restart ork3app   # when needed
 sudo docker exec -it ork3-stage-db sh -c 'mariadb -u ork -p"$MARIADB_PASSWORD" ork'  # SQL console
 sudo docker logs --tail 50 ork3-stage-app                  # app logs
