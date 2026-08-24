@@ -51,12 +51,33 @@ final class EventJsonLdTest extends TestCase
         $ld = ork_event_jsonld(array(
             'name'  => 'Park Day',
             'start' => '2026-09-01 12:00:00',
+            'city'  => 'Ottawa',
         ));
         $this->assertArrayNotHasKey('endDate', $ld);
         $this->assertArrayNotHasKey('description', $ld);
         $this->assertArrayNotHasKey('image', $ld);
-        $this->assertArrayNotHasKey('location', $ld);
         $this->assertArrayNotHasKey('organizer', $ld);
+        $this->assertArrayNotHasKey('name', $ld['location']);
+    }
+
+    public function testNoAddressYieldsNothing(): void
+    {
+        // Google requires location on Event items; an address-less event
+        // (e.g. an online event — no VirtualLocation flag in the data) must
+        // emit no markup rather than an invalid item claiming Offline mode.
+        // GSC critical "Missing field location", NL Online Craft Chat 2026.
+        $this->assertSame(array(), ork_event_jsonld(array(
+            'name'  => 'NL Online Craft Chat',
+            'start' => '2026-09-01 19:00:00',
+            'venue' => 'Discord',
+        )));
+        // Region/postal/country alone aren't locatable either.
+        $this->assertSame(array(), ork_event_jsonld(array(
+            'name'     => 'X',
+            'start'    => '2026-09-01 19:00:00',
+            'province' => 'ON',
+            'country'  => 'Canada',
+        )));
     }
 
     public function testSingleDayEventDropsIdenticalEnd(): void
@@ -65,7 +86,9 @@ final class EventJsonLdTest extends TestCase
             'name'  => 'Tourney',
             'start' => '2026-09-01 12:00:00',
             'end'   => '2026-09-01 12:00:00',
+            'city'  => 'Ottawa',
         ));
+        $this->assertSame('2026-09-01T12:00:00', $ld['startDate']);
         $this->assertArrayNotHasKey('endDate', $ld);
     }
 

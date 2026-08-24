@@ -276,17 +276,20 @@ function ork_event_jsonld($args)
             $address[$ldKey] = $v;
         }
     }
-    $place = array('@type' => 'Place');
+    // Google requires location (with an address) on Event items — an item
+    // without a locatable address is flagged critical ("Missing field
+    // location") and can never be a rich result, so emit nothing at all.
+    // Online events land here too (no address, and no data flag to emit a
+    // VirtualLocation instead — better silent than claiming Offline mode).
+    if (empty($address['streetAddress']) && empty($address['addressLocality'])) {
+        return array();
+    }
+    $place = array('@type' => 'Place', 'address' => $address);
     $venue = trim((string)($args['venue'] ?? ''));
     if ($venue !== '') {
         $place['name'] = $venue;
     }
-    if (count($address) > 1) {
-        $place['address'] = $address;
-    }
-    if (count($place) > 1) {
-        $ld['location'] = $place;
-    }
+    $ld['location'] = $place;
 
     $organizer = trim((string)($args['organizer'] ?? ''));
     if ($organizer !== '') {

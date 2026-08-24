@@ -72,9 +72,9 @@ final class ParkdayOccurrencesTest extends TestCase
 
     public function testAllDayEventJsonLdEmitsBareDates(): void
     {
-        $ld = ork_event_jsonld(array('name' => 'Park Day', 'start' => '2026-08-30', 'all_day' => true));
+        $ld = ork_event_jsonld(array('name' => 'Park Day', 'start' => '2026-08-30', 'all_day' => true, 'city' => 'Ottawa'));
         $this->assertSame('2026-08-30', $ld['startDate']);
-        $timed = ork_event_jsonld(array('name' => 'Park Day', 'start' => '2026-08-30 13:00:00'));
+        $timed = ork_event_jsonld(array('name' => 'Park Day', 'start' => '2026-08-30 13:00:00', 'city' => 'Ottawa'));
         $this->assertSame('2026-08-30T13:00:00', $timed['startDate']);
     }
 }
