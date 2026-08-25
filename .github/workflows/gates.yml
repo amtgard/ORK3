@@ -57,12 +57,13 @@ jobs:
           tools: none
 
       # stylelint 16 requires Node >= 18.12; 22 is the current LTS line.
-      # `cache: npm` keys the npm cache off package-lock.json.
-      - name: Set up Node 22 (stylelint 16) with npm cache
+      # No `cache: 'npm'` and no `npm ci`: both key off a lockfile, and this repo
+      # deliberately gitignores package-lock.json (.gitignore:2). Asking for
+      # either fails the job before a single gate runs.
+      - name: Set up Node 22 (stylelint)
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       # --ignore-scripts on purpose: `prepare` only sets core.hooksPath (moot in
       # CI, we call the scripts directly) and `postinstall` copies FullCalendar
@@ -70,7 +71,7 @@ jobs:
       # no gate below reads, and mutating the checkout would only muddy the run.
       # stylelint needs no install script.
       - name: Install npm dev dependencies (stylelint)
-        run: npm ci --ignore-scripts
+        run: npm install --no-audit --no-fund --ignore-scripts
 
       # ----------------------------------------------------------------------
       # Gate 1 — PHP layer separation.
