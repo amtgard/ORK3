@@ -1,10 +1,9 @@
 /* ============================================================
  * blocks.css — CSS for CMS content blocks (frontdoor/blocks/*.tpl).
  *
- * Split out of frontdoor.css, which now owns only the front-door marketing
- * chrome. Loaded AFTER frontdoor.css on every CMS surface — the rules here were
- * at the end of that file and several rely on winning a same-specificity tie
- * against it. Do not reorder the <link> tags.
+ * The companion sheet to frontdoor.css, which owns only the front-door marketing
+ * chrome. Loaded AFTER frontdoor.css on every CMS surface, and several rules here
+ * rely on winning a same-specificity tie against it. Do not reorder the <link> tags.
  *
  * Scoped under .fd-page like everything else on the public side. Each block's
  * dark-mode and responsive partners live next to its base rules, not in a

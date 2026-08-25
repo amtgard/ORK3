@@ -1,8 +1,10 @@
 <?php
 
-// system/lib/ork3/class.CmsThemeTokens.php
-// Pure, framework-free token logic for the CMS Theme Engine.
-// NO `extends`, NO $DB — safe to include in a CLI harness. All methods static.
+/*************************************************************************
+ * CmsThemeTokens — pure, framework-free token logic for the CMS Theme Engine.
+ *
+ * NO `extends`, NO $DB — safe to include in a CLI harness. All methods static.
+ *************************************************************************/
 
 class CmsThemeTokens
 {
@@ -187,14 +189,14 @@ class CmsThemeTokens
     }
 
     /** The css2 origin+path. A LITERAL, so a template can emit it without the
-     *  CSS-boundary gate having to prove where a variable href lands (C6). */
+     *  CSS-boundary gate having to prove where a variable href lands. */
     public const FONT_CSS2_URL = 'https://fonts.googleapis.com/css2';
 
     /**
      * Just the query string for FontHref(): 'family=A&family=B&display=swap'.
      *
      * Exists so default.theme can write the origin as a literal and interpolate
-     * only the query. C6 fails closed on a stylesheet href built from an
+     * only the query. The CSS-boundary gate fails closed on a stylesheet href built from an
      * unresolvable variable — correctly, since such a href could name any file,
      * orkui.css included — and an org's font choice must not be the thing that
      * makes a stylesheet path unprovable.
@@ -235,7 +237,7 @@ class CmsThemeTokens
     }
 
     /** Numeric ranges for non-color tokens: [min, max, unit]. */
-    private static function Ranges()
+    private static function _ranges()
     {
         return array(
             '--fd-font-scale'   => array(0.9, 1.25, ''),
@@ -253,7 +255,7 @@ class CmsThemeTokens
     public static function Validate($tokens)
     {
         $catalog = self::Defaults();
-        $ranges  = self::Ranges();
+        $ranges  = self::_ranges();
         $out = array();
         foreach ((array)$tokens as $k => $raw) {
             if (!isset($catalog[$k]) || $catalog[$k]['input'] === 'derived') {
@@ -390,19 +392,19 @@ class CmsThemeTokens
     }
 
     /** Black or white, whichever contrasts better with $bg. */
-    private static function BestText($bg)
+    private static function _bestText($bg)
     {
         return self::Contrast('#ffffff', $bg) >= self::Contrast('#1a2236', $bg) ? '#ffffff' : '#1a2236';
     }
 
-    private static function WithL($hex, $l)
+    private static function _withL($hex, $l)
     {
         list($h, $s) = self::HexToHsl($hex);
         return self::HslToHex($h, $s, max(0, min(1, $l)));
     }
 
     /** Nudge $fg lightness until it clears $ratio against $bg (preserving hue). */
-    private static function EnsureContrast($fg, $bg, $ratio, $towardLight)
+    private static function _ensureContrast($fg, $bg, $ratio, $towardLight)
     {
         for ($i = 0; $i < 20 && self::Contrast($fg, $bg) < $ratio; $i++) {
             list($h, $s, $l) = self::HexToHsl($fg);
@@ -416,7 +418,7 @@ class CmsThemeTokens
     public static function Derive($userTokens)
     {
         $light = array_merge(self::DefaultValues(), self::Validate($userTokens));
-        $light['--fd-primary-contrast'] = self::BestText($light['--fd-primary']);
+        $light['--fd-primary-contrast'] = self::_bestText($light['--fd-primary']);
 
         // The hue alone, so CSS can build the tinted paper scale
         // (hsl(var(--fd-primary-h) 34% 98.5%)) without re-parsing the hex.
@@ -443,10 +445,10 @@ class CmsThemeTokens
 
         // Dark color set (color tokens only; shape/type pass through).
         $dark = $light;
-        $dark['--fd-bg']         = self::WithL($light['--fd-primary'], 0.08);   // brand-tinted near-black
-        $dark['--fd-surface']    = self::WithL($light['--fd-primary'], 0.13);
-        $dark['--fd-card-bg']    = self::WithL($light['--fd-primary'], 0.18);
-        $dark['--fd-border']     = self::WithL($light['--fd-primary'], 0.22);
+        $dark['--fd-bg']         = self::_withL($light['--fd-primary'], 0.08);   // brand-tinted near-black
+        $dark['--fd-surface']    = self::_withL($light['--fd-primary'], 0.13);
+        $dark['--fd-card-bg']    = self::_withL($light['--fd-primary'], 0.18);
+        $dark['--fd-border']     = self::_withL($light['--fd-primary'], 0.22);
         $dark['--fd-text']       = '#e8ecf1';
         $dark['--fd-text-muted'] = '#aab3c0';
         // Brand colors: lift lightness for legibility on dark, keep hue/sat.
@@ -454,7 +456,7 @@ class CmsThemeTokens
         $dark['--fd-primary'] = self::HslToHex($ph, $ps, max($pl, 0.55));
         list($ah, $as, $al) = self::HexToHsl($light['--fd-accent']);
         $dark['--fd-accent']  = self::HslToHex($ah, $as, max($al, 0.55));
-        $dark['--fd-primary-contrast'] = self::BestText($dark['--fd-primary']);
+        $dark['--fd-primary-contrast'] = self::_bestText($dark['--fd-primary']);
 
         // Fix round 1 (Task 10 review): --fd-accent-on-primary was inherited from
         // $light via the `$dark = $light;` copy above and never recomputed, so it
@@ -473,8 +475,8 @@ class CmsThemeTokens
             : $dark['--fd-primary-contrast'];
 
         // Contrast safety on derived pairs (nudge derived values, not stored ones).
-        $dark['--fd-text']       = self::EnsureContrast($dark['--fd-text'], $dark['--fd-bg'], 4.5, true);
-        $dark['--fd-text-muted'] = self::EnsureContrast($dark['--fd-text-muted'], $dark['--fd-bg'], 3.0, true);
+        $dark['--fd-text']       = self::_ensureContrast($dark['--fd-text'], $dark['--fd-bg'], 4.5, true);
+        $dark['--fd-text-muted'] = self::_ensureContrast($dark['--fd-text-muted'], $dark['--fd-bg'], 3.0, true);
 
         return array('light' => $light, 'dark' => $dark);
     }
@@ -493,7 +495,7 @@ class CmsThemeTokens
      * A system face is emitted unquoted: `system-ui` is a CSS-wide keyword, and
      * quoting it makes it a (nonexistent) family name instead.
      */
-    private static function FontStack($family)
+    private static function _fontStack($family)
     {
         $cat = self::FontCatalog();
         if (!isset($cat[$family])) {
@@ -530,12 +532,12 @@ class CmsThemeTokens
         return "'" . $family . "', " . $house . $generic;
     }
 
-    private static function Block($selector, $tokens)
+    private static function _block($selector, $tokens)
     {
         $parts = array();
         foreach ($tokens as $k => $v) {
             if ($k === '--fd-font-heading' || $k === '--fd-font-body') {
-                $v = self::FontStack($v);
+                $v = self::_fontStack($v);
             } elseif ($k === '--fd-font-scale') {
                 $v = 'calc(1rem * ' . $v . ')';
             }
@@ -547,8 +549,8 @@ class CmsThemeTokens
     public static function ToCss($userTokens)
     {
         $d = self::Derive($userTokens);
-        return self::Block('.fd-page', $d['light'])
-            . ' ' . self::Block('html[data-theme="dark"] .fd-page', $d['dark']);
+        return self::_block('.fd-page', $d['light'])
+            . ' ' . self::_block('html[data-theme="dark"] .fd-page', $d['dark']);
     }
 
     /**
@@ -569,7 +571,7 @@ class CmsThemeTokens
     public static function ToRootCss($userTokens)
     {
         $d = self::Derive($userTokens);
-        return self::Block(':root', $d['light'])
-            . ' ' . self::Block('html[data-theme="dark"]', $d['dark']);
+        return self::_block(':root', $d['light'])
+            . ' ' . self::_block('html[data-theme="dark"]', $d['dark']);
     }
 }

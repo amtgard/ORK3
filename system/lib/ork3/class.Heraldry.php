@@ -11,13 +11,17 @@ class Heraldry extends Ork3
      *     assets/heraldry/park/01049.png     (5)
      *     assets/heraldry/player/000123.jpg  (6)
      *
-     * Anything that builds a heraldry path MUST read the width from here rather
-     * than re-typing the number. A second copy fails silently, not loudly: it
-     * probes a filename that simply never exists, so the caller sees "this org has
-     * no device" instead of an error. That is exactly what happened —
-     * CmsSite::_heraldryPath() hard-coded 5 for BOTH scopes, so the heraldry
-     * colour extractor never matched a single kingdom device and every kingdom
-     * site silently fell through to the name-hash palette.
+     * Code that builds a heraldry path outside this class reads the width from
+     * here (via PadLength()/BaseName()) rather than re-typing the number, because
+     * a second copy fails silently, not loudly: it probes a filename that simply
+     * never exists, so the caller sees "this org has no device" instead of an
+     * error — e.g. a path builder that assumes 5 for every scope matches no
+     * kingdom device at all, and the CMS heraldry colour extractor then falls
+     * through to the name-hash palette on every kingdom site.
+     *
+     * Some older methods in this class still spell the width inline (GetHeraldry,
+     * the Remove*Heraldry family); they are correct today but should move onto
+     * BaseName() when next touched.
      *
      * @var array<string,int>
      */

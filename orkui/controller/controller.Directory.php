@@ -15,7 +15,7 @@ class Controller_Directory extends Controller
         $this->_indexCommonData();
         $this->data[ 'page_title' ] = 'Kingdoms Directory';
 
-        // #124: the Directory is a distinct surface, so it publishes its OWN
+        // The Directory is a distinct surface, so it publishes its OWN
         // canonical — otherwise it would falsely canonicalize to the site root
         // (duplicate-content ambiguity).
         $this->data[ 'PageMeta' ] = CmsMeta::Build(array(

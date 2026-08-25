@@ -1,14 +1,17 @@
 /* ==========================================================================
  * cms-admin.js — shared CMS admin helpers.
  *
- * Single source of truth for the three helpers that used to be copy-pasted,
- * near-verbatim, across every CMS admin surface (Cms_index / posts / media /
- * nav / sites / dashboard / theme + cms/_block_editor.tpl):
+ * Single source of truth for the helpers shared across every CMS admin surface
+ * (Cms_index / posts / media / nav / sites / dashboard / theme +
+ * cms/_block_editor.tpl):
  *
+ *   CmsAdmin.esc(s)                  HTML-escape a value for string-built markup
  *   CmsAdmin.toast(msg, kind)        transient status toast
  *   CmsAdmin.undoableToast(msg, fn)  toast with an inline Undo button (soft deletes)
  *   CmsAdmin.modal.open(el)          add .cms-open
  *   CmsAdmin.modal.close(el)         remove .cms-open  (backdrop / [data-close-modal] / Esc handled here)
+ *   CmsAdmin.confirm(…)              the shared confirm dialog (cms/_confirm_modal.tpl)
+ *   CmsAdmin.confirmClose()          dismiss it; CmsAdmin.confirmBusy(bool) disables its OK
  *   CmsAdmin.post(endpoint, params)  urlencoded POST → JSON, appends window.CMS_SCOPE
  *                                    and the X-CSRF-Token (window.CMS_CSRF) header
  *   CmsAdmin.installOverflowMenus()  arm the row-action (⋯) dropdown controller
@@ -26,9 +29,9 @@
     'use strict';
 
     /* ---- toast ----
-     * Every CMS surface renders exactly one `.cms-toast` element. The element
-     * *id* varies by page (cmsToast / cmsSitesToast / teToast), so we resolve it
-     * by class — one helper then serves every surface. */
+     * Every CMS surface renders exactly one `.cms-toast` element; resolved by
+     * class so the markup stays owned by the page and one helper serves them
+     * all. */
     var toastTimer = null;
     function toast(msg, kind) {
         var el = document.querySelector('.cms-toast');
@@ -39,13 +42,25 @@
         toastTimer = setTimeout(function () { el.className = 'cms-toast'; }, 3200);
     }
 
+    /* ---- HTML escape ----
+     * Every CMS surface builds some markup as a string (list rows, media cards,
+     * trash tables), so the escaper lives here rather than being re-declared per
+     * page. */
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     /* ---- undoable toast ----
      * Deletes on the list surfaces are SOFT (deleted_at), so the row can be
      * brought back. This variant renders an inline Undo button and dwells longer
      * than a plain toast. Styled inline so it needs no extra CSS class.
-     * Shares `toastTimer` with toast() above — a later plain toast therefore
-     * cancels this one's dwell instead of racing it (the per-page copies this
-     * replaced each kept their OWN timer, so the two could fight). */
+     * Shares `toastTimer` with toast() above, so a later plain toast cancels
+     * this one's dwell rather than racing it for the same element. */
     function undoableToast(msg, undoFn) {
         var el = document.querySelector('.cms-toast');
         if (!el) { return; }
@@ -83,11 +98,10 @@
     }
 
     // opts.preferTextInput — defer focus one tick and prefer the first text input.
-    // OPT-IN on purpose: the block editor's private modal helper did this (its
-    // add-block chooser relies on landing in the search field), and folding the two
-    // controllers together must not silently change focus behaviour for the modals
-    // that were already using this one. Without the flag this is byte-for-byte the
-    // original: synchronous focus on the first focusable, else the dialog itself.
+    // OPT-IN on purpose: only a search-led dialog (the block editor's add-block
+    // chooser) wants to land in a text field, and a modal that opens on a plain
+    // action must not steal focus into whatever input happens to be first.
+    // Without the flag: synchronous focus on the first focusable, else the dialog.
     function openModal(el, opts) {
         if (!el) { return; }
         // Remember the opener so focus can be restored on close.
@@ -171,6 +185,81 @@
             }
         }
     });
+
+    /* ==================================================================
+     * Confirm dialog — the one destructive-action prompt for every CMS surface
+     * (native confirm() is banned). The markup is cms/_confirm_modal.tpl, which
+     * each surface includes; the elements are resolved LAZILY on first use so a
+     * page can call confirm() from a script that runs before or after the
+     * include.
+     *
+     *   confirm(title, message, okLabel, onOk)      the destructive case
+     *   confirm({title, message, okLabel, okKind,   the same dialog with an
+     *            extraHtml, onOk})                  optional detail region;
+     *                                               omit onOk for an info-only
+     *                                               dialog (primary button
+     *                                               hidden, Cancel reads Close)
+     *   confirmClose()      dismiss it (e.g. once the POST it guarded resolved)
+     *   confirmBusy(bool)   disable/enable the primary button while that runs
+     * ================================================================== */
+    var confirmEls = null;
+    var confirmAction = null;
+
+    function confirmElements() {
+        if (confirmEls) { return confirmEls.overlay ? confirmEls : null; }
+        confirmEls = {
+            overlay: document.getElementById('cmsConfirmModal'),
+            title:   document.getElementById('cmsConfirmTitle'),
+            body:    document.getElementById('cmsConfirmBody'),
+            extra:   document.getElementById('cmsConfirmExtra'),
+            ok:      document.getElementById('cmsConfirmOk'),
+            cancel:  document.getElementById('cmsConfirmCancel')
+        };
+        if (!confirmEls.overlay) { return null; }
+        if (confirmEls.ok) {
+            // Armed once. The action is cleared before it runs so a double-click
+            // cannot fire the same delete twice.
+            confirmEls.ok.addEventListener('click', function () {
+                var fn = confirmAction;
+                confirmAction = null;
+                if (typeof fn === 'function') { fn(); }
+            });
+        }
+        return confirmEls;
+    }
+
+    function confirmDialog(opts, message, okLabel, onOk) {
+        if (typeof opts === 'string') {
+            opts = { title: opts, message: message, okLabel: okLabel, onOk: onOk };
+        }
+        opts = opts || {};
+        var els = confirmElements();
+        if (!els) { return; }
+        if (els.title) { els.title.textContent = opts.title || 'Please confirm'; }
+        if (els.body) { els.body.textContent = opts.message || ''; }
+        // extraHtml is caller-built markup (a usage list, a filename); the hosts
+        // escape their own values before handing it over.
+        if (els.extra) { els.extra.innerHTML = opts.extraHtml || ''; }
+        if (els.ok) {
+            els.ok.style.display = opts.onOk ? '' : 'none';
+            els.ok.disabled = false;
+            els.ok.textContent = opts.okLabel || 'Delete';
+            els.ok.className = 'cms-btn ' + (opts.okKind || 'cms-btn-danger');
+        }
+        if (els.cancel) { els.cancel.textContent = opts.onOk ? 'Cancel' : 'Close'; }
+        confirmAction = (typeof opts.onOk === 'function') ? opts.onOk : null;
+        openModal(els.overlay);
+    }
+
+    function confirmClose() {
+        var els = confirmElements();
+        if (els) { closeModal(els.overlay); }
+    }
+
+    function confirmBusy(busy) {
+        var els = confirmElements();
+        if (els && els.ok) { els.ok.disabled = !!busy; }
+    }
 
     /* ---- urlencoded POST → JSON ----
      * Appends the active scope selector (window.CMS_SCOPE) and the CSRF header
@@ -360,7 +449,7 @@
      * opts:
      *   url()         -> the (cache-busted) preview URL to load  (SAVED state)
      *   live()        -> Promise<html> for the editor's CURRENT, UNSAVED state
-     *                    (E2). When present it REPLACES url(): the pane renders
+     *                    When present it REPLACES url(): the pane renders
      *                    what the author is typing rather than the last save.
      *   liveDelay     -> debounce, ms, for schedule() (default 600)
      *   ready()       -> true once previewing is possible at all
@@ -526,10 +615,10 @@
             });
         });
 
-        /* The Theme page's shape, which this review holds up as the model: on a
-         * window wide enough for two columns the rendered result is PRESENT, not
-         * something the author has to go and ask for. 1100px is the editor's own
-         * two-column threshold (see the cms-editor-haspreview media query): the
+        /* Open by default on a window wide enough for two columns: the rendered
+         * result is PRESENT, not something the author has to go and ask for.
+         * 1100px is the editor's own two-column threshold (see the
+         * cms-editor-haspreview media query): the
          * blocks column needs ~430px before its two-up field rows collapse, the
          * pane declares minmax(360px, .95fr), and the rail takes 220-258px.
          * Below that the pane is a toggle that stacks under the form.
@@ -562,7 +651,7 @@
      * this one request. The placeholder says "missing" and keeps the element's
      * footprint, so nothing below it jumps.
      *
-     * Lifted out of Cms_media.tpl (#95), which now delegates here, so the block
+     * Lifted out of Cms_media.tpl, which now delegates here, so the block
      * editor's image fields get the same treatment instead of a second copy.
      *
      *   img   the <img> that errored
@@ -587,10 +676,14 @@
 
     window.CmsAdmin = {
         thumbFallback: thumbFallback,
+        esc: esc,
         toast: toast,
         undoableToast: undoableToast,
         post: post,
         modal: { open: openModal, close: closeModal },
+        confirm: confirmDialog,
+        confirmClose: confirmClose,
+        confirmBusy: confirmBusy,
         installOverflowMenus: installOverflowMenus,
         bulkSelect: bulkSelect,
         autosave: autosave,

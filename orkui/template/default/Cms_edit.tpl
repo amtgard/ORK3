@@ -192,11 +192,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
         <?php
         /* ---- Blocks column + modals + block engine: SHARED partial ---- */
-        $beBlocks    = $blocks;
-        $beCatalog   = $catalog;
-        $beLabels    = $catalogLabels;
-        $bePageTypes = $pageTypes;
-        $beHeading   = 'Blocks';
+        $beHeading = 'Blocks';
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
 
@@ -248,7 +244,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var STATE = {
         pageId:  <?= (int)$pageId ?>,
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
-        // C15: optimistic-concurrency token = the row's updated_at at load. Sent
+        // Optimistic-concurrency token = the row's updated_at at load. Sent
         // as base_version on every save; the server _fails (status 12) if a newer
         // stored version exists, and echoes the fresh version back on success.
         version: <?= json_encode((string)($page['updated_at'] ?? '')) ?>,
@@ -289,7 +285,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     });
     slugInput.addEventListener('input', function () { slugTouched = true; maybeWarnSlugChange(); markDirty(); });
 
-    // C17: changing the slug of an already-published page can break inbound links
+    // Changing the slug of an already-published page can break inbound links
     // (the server-side reserved-slug guard + 301 redirect is the other lane). Warn
     // once, inline (never a native dialog), so the author makes the change knowingly.
     function maybeWarnSlugChange() {
@@ -322,13 +318,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var saveBtn = document.getElementById('cmsSaveBtn');
     var dirty = false;
     var saving = false;
-    // #98: the block engine fires onDirty as it paints the initial starter scaffold
+    // The block engine fires onDirty as it paints the initial starter scaffold
     // (BE.init + seedFromPreset below). Stay un-armed until that first render is done
     // so a brand-new, untouched page never triggers the leave-site prompt.
     var booted = false;
 
     // Debounced autosave (shared: CmsAdmin.autosave).
-    // #45: never autosave an already-published page — a save goes live instantly,
+    // Never autosave an already-published page — a save goes live instantly,
     // so the author must save deliberately. STATE.published flips true on publish.
     var autosaveTimer = CmsAdmin.autosave({
         delay: 3000,
@@ -341,7 +337,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         dirty = true;
         if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
         autosaveTimer.schedule();
-        // E2: keep the preview following the typing. Debounced inside the pane,
+        // Keep the preview following the typing. Debounced inside the pane,
         // and a no-op while the pane has never been opened.
         if (preview) { preview.schedule(); }
     }
@@ -355,7 +351,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
         // a JSON-fallback block with broken JSON blocks save
         if (BE.hasJsonError()) {
-            // C20: jump to + flash the offending block (and name it) rather than a
+            // Jump to + flash the offending block (and name it) rather than a
             // vague toast the author can't act on.
             if (!isAuto && BE.focusFirstError) { BE.focusFirstError(); }
             else if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
@@ -393,7 +389,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (saveWatchdog) { window.clearTimeout(saveWatchdog); saveWatchdog = 0; }
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
-            // C15: concurrent-edit conflict — the stored row is newer than our base.
+            // Concurrent-edit conflict — the stored row is newer than our base.
             if (res && (res.status === 12 || res.code === 12)) {
                 if (savedHint) { savedHint.textContent = ''; }
                 handleSaveConflict(res, isAuto);
@@ -405,7 +401,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 return;
             }
             dirty = false;
-            // C15: adopt the fresh version the server echoes so the NEXT save's
+            // Adopt the fresh version the server echoes so the NEXT save's
             // base_version matches and doesn't spuriously conflict.
             if (res.version) { STATE.version = res.version; }
             // capture id for a freshly-created page so later saves are updates
@@ -431,7 +427,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    // C15: a save was rejected because the stored row is newer than our base
+    // A save was rejected because the stored row is newer than our base
     // version (someone else saved meanwhile). Offer a clear, non-native
     // reload-or-overwrite choice. On autosave we stay quiet (just a hint) so the
     // modal never ambushes the author mid-typing — their next manual save surfaces it.
@@ -494,7 +490,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     statusBadge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
-                // #45: reflect the live-edits warning (and autosave state follows STATE.published).
+                // Reflect the live-edits warning (and autosave state follows STATE.published).
                 var liveNote = document.getElementById('cmsPublishedLiveNote');
                 if (liveNote) { liveNote.style.display = nowPub ? '' : 'none'; }
                 toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
@@ -508,15 +504,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
     if (deleteBtn && BE) {
         deleteBtn.addEventListener('click', function () {
             BE.confirmDialog('Delete page', 'Delete this page and all of its blocks? This cannot be undone.', 'Delete', function () {
-                var okEl = BE.confirmOkEl();
-                if (okEl) { okEl.disabled = true; }
+                BE.confirmBusy(true);
                 post('deletepage', { page_id: STATE.pageId }).then(function (res) {
-                    if (okEl) { okEl.disabled = false; }
+                    BE.confirmBusy(false);
                     BE.closeConfirm();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     dirty = false;
                     window.location.href = UIR + 'Cms/index' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
-                }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
+                }).catch(function () { BE.confirmBusy(false); toast('Network error.', 'error'); });
             });
         });
     }
@@ -525,7 +520,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
        Pane/iframe/device-button wiring is identical between the two editors; only
        the preview URL, the "is it saved yet" test and the toast copy differ. ==== */
     var preview = CmsAdmin.previewPane({
-        // E2: the pane shows what is in the EDITOR, not what is in the database.
+        // The pane shows what is in the EDITOR, not what is in the database.
         // CmsAjax/previewblocks runs the posted block list through the identical
         // validation a save runs (canonical type allowlist, then CmsSanitizer via
         // CmsPage::_normalizeBlocks) and returns a rendered page document.
@@ -568,7 +563,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             BE.seedFromPreset(typeInput.value);
         }
     }
-    // #98: initial scaffold render is complete — from here on, onDirty/markDirty
+    // Initial scaffold render is complete — from here on, onDirty/markDirty
     // reflect genuine user interaction and may arm the unsaved-changes guard.
     booted = true;
 })();

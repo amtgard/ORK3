@@ -1,7 +1,7 @@
 /* ============================================================================
  * cms-block-editor.js — shared block-body editor engine (pages + posts).
  *
- * window.CmsBlockEditor. Lifted verbatim out of cms/_block_editor.tpl (the C27
+ * window.CmsBlockEditor. Lifted verbatim out of cms/_block_editor.tpl (the
  * extraction seam): the body was already 100% static, so it now lives here as a
  * lintable/testable asset. Its only server-provided values arrive via
  * window.CmsBlockEditorBoot, still emitted inline by that partial immediately
@@ -25,7 +25,7 @@ window.CmsBlockEditor = (function () {
     var catalog = [];
     var labels = {};
     var pageTypes = [];
-    var tagCatalog = [];        // C22: existing tags [{slug,name,post_count}] for blog_feed picker
+    var tagCatalog = [];        // existing tags [{slug,name,post_count}] for the blog_feed picker
     var blockAllow = {};        // page-type key -> [allowed block types]
     var pageType = '';          // current page type ('post' for blog bodies)
     var showAllBlocks = false;  // chooser "Show all blocks" toggle state
@@ -41,7 +41,11 @@ window.CmsBlockEditor = (function () {
         if (html != null) { n.innerHTML = html; }
         return n;
     }
+    /* ---- HTML escape (shared: CmsAdmin.esc) ---- */
     function esc(v) {
+        if (window.CmsAdmin && CmsAdmin.esc) { return CmsAdmin.esc(v); }
+        // Fallback must still escape: esc() feeds innerHTML throughout this file,
+        // so a pass-through here would be an XSS hole, not a cosmetic degradation.
         return String(v == null ? '' : v)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -56,15 +60,14 @@ window.CmsBlockEditor = (function () {
 
     /* ---- modal helpers (shared: CmsAdmin.modal) ----
      * The open/close focus handling, the [data-close-modal]/backdrop click
-     * delegate, Esc-close and the Tab focus trap all live in cms-admin.js. This
-     * editor used to install its OWN document-level click + keydown listeners on
-     * top of those, so two controllers ran per event and Esc vs. the X button
-     * restored focus to different elements. Delegating removes the race. */
+     * delegate, Esc-close and the Tab focus trap all live in cms-admin.js, and
+     * this file installs no document-level listeners of its own — one controller
+     * per event is what keeps Esc and the X button restoring focus alike. */
     function openModal(elx) {
-        // preferTextInput reproduces this editor's original private helper: focus on a
-        // short tick, preferring the first text input. The add-block chooser depends on
-        // it (typing must filter immediately). It is opt-in so the admin modals that
-        // already used CmsAdmin.modal keep their previous synchronous focus behaviour.
+        // preferTextInput: focus on a short tick, preferring the first text input.
+        // The add-block chooser depends on it (typing must filter immediately). It
+        // is opt-in so a modal opened from a plain action does not steal focus into
+        // whatever input happens to come first.
         if (window.CmsAdmin && CmsAdmin.modal) { CmsAdmin.modal.open(elx, { preferTextInput: true }); }
     }
     function closeModal(elx) {
@@ -96,7 +99,7 @@ window.CmsBlockEditor = (function () {
        Both spellings are accepted on read (see summarize() / buildBlockBody()). */
     function normBlock(b) {
         return {
-            // C15: carry the stable server row id so a save round-trips it and the
+            // Carry the stable server row id so a save round-trips it and the
             // ReplaceBlocks upsert preserves the row (rather than delete+reinsert,
             // which would churn ids and lose per-block history). New/duplicated/
             // preset blocks have no id → 0, so the server assigns a fresh row.
@@ -409,7 +412,7 @@ window.CmsBlockEditor = (function () {
         });
     }
 
-    /* ---- C31: reinit open editors when the app theme flips at runtime ----
+    /* ---- Reinit open editors when the app theme flips at runtime ----
      * initTiny freezes skin/content_css at construction, so a light↔dark toggle
      * would otherwise leave stale editor chrome until a full renderList. On a real
      * theme change we save each open editor's content, remove it, and rebuild it —
@@ -443,7 +446,7 @@ window.CmsBlockEditor = (function () {
         obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     }
 
-    /* ---- C25: warn (once) when the TinyMCE bundle failed to load, so authors
+    /* ---- Warn (once) when the TinyMCE bundle failed to load, so authors
      * know a rich-text field has silently degraded to a raw-HTML textarea and
      * don't unknowingly save mangled markup. ---- */
     // `scope` is the container that was JUST built — block bodies are built
@@ -457,46 +460,27 @@ window.CmsBlockEditor = (function () {
         toast('Rich-text editor didn’t load — those fields show raw HTML. Check your connection before saving.', 'error');
     }
 
-    /* ================= field builders ================= */
+    /* ================= field builders =================
+     * Two layers, one job. The `*Bound` helpers below (textBound, selectBound,
+     * imageBound, …) are the primitives: they bind a labelled control to
+     * obj[key] for ANY object, which is what repeater rows and column children
+     * need. The `field*` wrappers here are the block-level convenience layer —
+     * they bind to block.fields and drop the 8px row margin the primitives add.
+     * A field* wrapper should be a DELEGATE, never a second copy of a body. */
     function fieldText(block, key, label, opts) {
         opts = opts || {};
-        var wrap = el('div', 'cms-field');
-        wrap.appendChild(el('label', 'cms-label', esc(label)));
-        var input;
-        if (opts.textarea) {
-            input = el('textarea', 'cms-textarea');
-        } else {
-            input = el('input', 'cms-input');
-            input.type = 'text';
-        }
-        if (opts.placeholder) { input.placeholder = opts.placeholder; }
-        input.value = block.fields[key] != null ? block.fields[key] : '';
-        input.addEventListener('input', function () { block.fields[key] = input.value; markDirty(); });
-        wrap.appendChild(input);
-        return wrap;
+        return opts.textarea
+            ? textBoundArea(block.fields, key, label, opts.placeholder, true)
+            : textBound(block.fields, key, label, opts.placeholder, true);
     }
 
-    // Block-level select === selectBound over block.fields, minus the 8px
-    // margin the bound helpers add inside repeater rows.
     function fieldSelect(block, key, label, options, dflt) {
         return selectBound(block.fields, key, label, options, dflt, true);
     }
 
+    // Same select, but the model stores a NUMBER (heading level, column count).
     function fieldNumSelect(block, key, label, options, dflt) {
-        var wrap = el('div', 'cms-field');
-        wrap.appendChild(el('label', 'cms-label', esc(label)));
-        var sel = el('select', 'cms-select');
-        var current = (block.fields[key] != null) ? Number(block.fields[key]) : dflt;
-        options.forEach(function (o) {
-            var op = el('option');
-            op.value = String(o.value); op.textContent = o.label;
-            if (current === o.value) { op.selected = true; }
-            sel.appendChild(op);
-        });
-        block.fields[key] = current;
-        sel.addEventListener('change', function () { block.fields[key] = Number(sel.value); markDirty(); });
-        wrap.appendChild(sel);
-        return wrap;
+        return selectBound(block.fields, key, label, options, dflt, true, true);
     }
 
     function fieldRich(block, key, label) {
@@ -510,7 +494,7 @@ window.CmsBlockEditor = (function () {
         ta.addEventListener('input', function () { block.fields[key] = ta.value; markDirty(); });
         host.appendChild(ta);
         wrap.appendChild(host);
-        // C25: if TinyMCE never loaded, this is a raw-HTML textarea — say so inline.
+        // If TinyMCE never loaded, this is a raw-HTML textarea — say so inline.
         if (!tinyReady) {
             wrap.appendChild(el('div', 'cms-help-warn',
                 '<i class="fas fa-exclamation-triangle"></i> <span>Rich-text editing is unavailable (the editor didn’t load). '
@@ -519,12 +503,12 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    /* ---- E3: the three states of an image field must be TELLABLE APART ----
+    /* ---- The three states of an image field must be TELLABLE APART ----
      * "No image chosen", "here is the image" and "the file this block points at
-     * is gone" used to render as two states plus the browser's broken-image
-     * glyph — and that glyph looks identical to a thumbnail that merely failed
-     * to reach this one request, so an author could not tell a page that is
-     * fine from a page that is publishing a broken image.
+     * is gone" each get their own explicit state. Collapsing the last two onto
+     * the browser's broken-image glyph would not work: that glyph looks identical
+     * to a thumbnail that merely failed to reach this one request, so an author
+     * could not tell a page that is fine from one publishing a broken image.
      *
      * A missing file gets the shared CmsAdmin.thumbFallback placeholder (the
      * same treatment Cms_media.tpl uses on the media grid) plus a caption that
@@ -684,9 +668,9 @@ window.CmsBlockEditor = (function () {
         });
     }
 
-    function textBound(obj, key, label, ph) {
+    function textBound(obj, key, label, ph, noMargin) {
         var wrap = el('div', 'cms-field');
-        wrap.style.marginBottom = '8px';
+        if (!noMargin) { wrap.style.marginBottom = '8px'; }
         wrap.appendChild(el('label', 'cms-label', esc(label)));
         var inp = el('input', 'cms-input'); inp.type = 'text';
         if (ph) { inp.placeholder = ph; }
@@ -695,9 +679,9 @@ window.CmsBlockEditor = (function () {
         wrap.appendChild(inp);
         return wrap;
     }
-    function textBoundArea(obj, key, label, ph) {
+    function textBoundArea(obj, key, label, ph, noMargin) {
         var wrap = el('div', 'cms-field');
-        wrap.style.marginBottom = '8px';
+        if (!noMargin) { wrap.style.marginBottom = '8px'; }
         wrap.appendChild(el('label', 'cms-label', esc(label)));
         var ta = el('textarea', 'cms-textarea');
         if (ph) { ta.placeholder = ph; }
@@ -706,21 +690,28 @@ window.CmsBlockEditor = (function () {
         wrap.appendChild(ta);
         return wrap;
     }
-    function selectBound(obj, key, label, options, dflt, noMargin) {
+    // numeric: the model stores a Number for this key, so the stored value is
+    // coerced on read (and normalized back into the model) and on change.
+    function selectBound(obj, key, label, options, dflt, noMargin, numeric) {
         var wrap = el('div', 'cms-field');
         if (!noMargin) { wrap.style.marginBottom = '8px'; }
         wrap.appendChild(el('label', 'cms-label', esc(label)));
         var sel = el('select', 'cms-select');
         // A stored '' or 0 is a real choice, not "unset" — || would paint the
         // default as selected while the model still held the author's value.
-        var cur = (obj[key] != null && obj[key] !== '') ? obj[key] : dflt;
+        var cur = numeric
+            ? ((obj[key] != null) ? Number(obj[key]) : dflt)
+            : ((obj[key] != null && obj[key] !== '') ? obj[key] : dflt);
         options.forEach(function (o) {
             var op = el('option'); op.value = o.value; op.textContent = o.label;
             if (cur === o.value) { op.selected = true; }
             sel.appendChild(op);
         });
-        if (obj[key] == null) { obj[key] = dflt; }
-        sel.addEventListener('change', function () { obj[key] = sel.value; markDirty(); });
+        if (numeric) { obj[key] = cur; } else if (obj[key] == null) { obj[key] = dflt; }
+        sel.addEventListener('change', function () {
+            obj[key] = numeric ? Number(sel.value) : sel.value;
+            markDirty();
+        });
         wrap.appendChild(sel);
         return wrap;
     }
@@ -729,10 +720,10 @@ window.CmsBlockEditor = (function () {
         return fieldImage(obj, key, label);
     }
 
-    /* ---- icon picker (V1) -------------------------------------------------
-     * A card icon used to be a raw CSS class an author had to know and type
-     * ("Icon (Font Awesome class, e.g. fa-shield-alt)"). This shows the actual
-     * rendered glyph plus a plain-English name instead.
+    /* ---- icon picker -------------------------------------------------
+     * A card icon is picked from rendered glyphs with plain-English names, not
+     * typed as a raw Font Awesome class — an author should never have to know
+     * that "fa-shield-alt" is the spelling for a shield.
      *
      * The set is DERIVED from what the product already uses — the per-block
      * icons in CmsBlockRegistry::BlockDefs() and the glyphs the front-door
@@ -858,12 +849,13 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    /* ---- link chooser (V2) ------------------------------------------------
-     * Every link field in this editor used to be a bare text input labelled
-     * "Link (href)". The value a real page actually carries is
+    /* ---- link chooser ------------------------------------------------
+     * Link fields are chosen from a page list rather than typed as a raw href.
+     * The value a real page carries is
      *   /orkui/index.php?Route=Page/view/mission
-     * i.e. the author's workflow was: open the target page, copy the framework
-     * route out of the address bar, paste it here. That is a developer's URL,
+     * so a bare "Link (href)" text input would mean: open the target page, copy
+     * the framework route out of the address bar, paste it here. That is a
+     * developer's URL,
      * not something a park officer should ever have to see.
      *
      * linkBound() offers two modes instead:
@@ -1034,7 +1026,7 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    function tnFixedAcPosition(input, dropdown) {
+    function cmsFixedAcPosition(input, dropdown) {
         var r = input.getBoundingClientRect();
         dropdown.style.position = 'fixed';
         dropdown.style.left = r.left + 'px';
@@ -1044,7 +1036,7 @@ window.CmsBlockEditor = (function () {
     }
 
     // ONE body-appended autocomplete dropdown for the whole editor instance. The body
-    // append is required so tnFixedAcPosition can position:fixed it outside the
+    // append is required so cmsFixedAcPosition can position:fixed it outside the
     // repeater's overflow context, but the repeater's rebuild() (wrap.innerHTML = '')
     // only detaches the cards — a per-person dropdown would leak one node, with live
     // listeners, on every add/remove/reorder. Created once, repositioned per input.
@@ -1082,7 +1074,7 @@ window.CmsBlockEditor = (function () {
 
         var timer = null, ctrl = null;
         function closeDd() { dd.classList.remove('kn-ac-open'); dd.style.display = 'none'; }
-        function showDd() { tnFixedAcPosition(input, dd); dd.style.display = 'block'; dd.classList.add('kn-ac-open'); }
+        function showDd() { cmsFixedAcPosition(input, dd); dd.style.display = 'block'; dd.classList.add('kn-ac-open'); }
 
         function pick(row) {
             person.mundane_id = parseInt(row.MundaneId, 10) || 0;
@@ -1170,7 +1162,7 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    /* ---- C22: validated tag picker (blog_feed) — a select over EXISTING tags
+    /* ---- Validated tag picker (blog_feed) — a select over EXISTING tags
      * instead of a free-text field (a typo silently rendered an empty feed). Warns
      * inline when the chosen tag currently has no posts, and preserves any stored
      * legacy free-text value as a flagged "unknown tag" option rather than dropping
@@ -1689,7 +1681,7 @@ window.CmsBlockEditor = (function () {
                     }));
                     box.appendChild(personaField);
                     box.appendChild(mundaneField);
-                    // C21: real-name consent gate. Off by default — the public roster
+                    // Real-name consent gate. Off by default — the public roster
                     // suppresses a person's mundane name unless this is explicitly
                     // checked (even when the block's presentation is "Real name leads").
                     box.appendChild(checkBound(person, 'show_mundane', 'Publish this person’s real name',
@@ -1797,7 +1789,7 @@ window.CmsBlockEditor = (function () {
             return body;
         }
 
-        // ----- columns: visual 2/3-column splitter (enh #16) -----
+        // ----- columns: visual 2/3-column splitter -----
         // Representable structures get the visual editor (which only ever emits a
         // valid array-of-arrays-of-blocks, so it can never trip the JSON autosave
         // block). A legacy/edge structure the splitter can't represent degrades to
@@ -1836,10 +1828,11 @@ window.CmsBlockEditor = (function () {
     }
 
     /* ---- shared JSON editor field (columns-advanced + last-resort fallback) ----
-     * C20: an invalid-JSON block sets block._jsonError, which the host uses to
-     * BLOCK the whole page save. That used to be silent — the author got no cue
-     * which block was at fault. We now (a) toast the moment JSON goes invalid,
-     * naming the block, and (b) drive a loud inline banner via reflectBlockError.
+     * An invalid-JSON block sets block._jsonError, which the host uses to
+     * BLOCK the whole page save, so the author must be told which block is at
+     * fault: (a) a toast the moment JSON goes invalid, naming the block, and
+     * (b) a loud inline banner driven by reflectBlockError. A silent block here
+     * strands the author on a save that never explains itself.
      *
      * `errorOwner` is the object the error is RECORDED on. A nested columns-in-
      * columns child is not a member of `model`, so hasJsonError()/focusFirstError()
@@ -1884,7 +1877,7 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    /* ================= columns: visual 2/3-column splitter (enh #16) =================
+    /* ================= columns: visual 2/3-column splitter =================
      * Replaces the raw-JSON textarea for the `columns` LAYOUT block with a visual
      * editor: choose 2 or 3 columns, and fill each with a mini stack of child blocks
      * that REUSE the same per-block card chrome (icon + label + summary + enable /
@@ -1937,7 +1930,7 @@ window.CmsBlockEditor = (function () {
     function askDeleteChild(child, onOk) {
         confirmDialog('Remove block',
             'Remove the “' + labelFor(child.type) + '” block from this column? You can re-add it later.',
-            'Remove', function () { closeModal(confirmModal); onOk(); });
+            'Remove', function () { closeConfirm(); onOk(); });
     }
 
     // A child block's field editor. Bounds nesting: a columns-in-columns child is
@@ -2022,7 +2015,7 @@ window.CmsBlockEditor = (function () {
         add.type = 'button';
         listWrap.appendChild(add);
 
-        // Same surgical treatment the top-level list gets (see "C9: surgical DOM
+        // Same surgical treatment the top-level list gets (see "surgical DOM
         // helpers"): moving or removing ONE child must not rebuild its siblings.
         // A column can hold a rich_text child, and a rebuild would destroy and
         // re-init every sibling's TinyMCE — losing caret, scroll and undo history
@@ -2185,7 +2178,7 @@ window.CmsBlockEditor = (function () {
         return zone;
     }
 
-    /* ================= surgical DOM helpers (C9) =================
+    /* ================= surgical DOM helpers =================
      * Each block is rendered as a "row" = [insert-before zone, card] wrapped in a
      * display:contents div (adds no layout box). Reorder/insert/remove touch a
      * SINGLE row node so we never destroy+rebuild every card — which is what tore
@@ -2307,7 +2300,7 @@ window.CmsBlockEditor = (function () {
         head.appendChild(collapseBtn);
         head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
         head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
-        // #100: author-facing header shows the friendly label + icon only — never
+        // Author-facing header shows the friendly label + icon only — never
         // the raw machine block-type slug (dev jargon).
         var summaryEl = el('span', 'cms-block-summary', esc(summarize(block)));
         card._summaryEl = summaryEl;
@@ -2358,10 +2351,10 @@ window.CmsBlockEditor = (function () {
         head.appendChild(tools);
         card.appendChild(head);
 
-        // The body is built LAZILY, the first time the block is expanded. A
-        // collapsed body used to be a fully-built form sitting behind
+        // The body is built LAZILY, the first time the block is expanded.
+        // Building a collapsed body eagerly would put a full form behind
         // display:none — every input, every repeater and (worse) a live TinyMCE
-        // instance per rich-text block, all constructed for content nobody had
+        // instance per rich-text block, all constructed for content nobody has
         // asked to see. Building on demand also sidesteps initialising TinyMCE
         // inside a hidden container, which sizes its iframe to zero.
         var body = el('div', 'cms-block-body' + (startOpen ? '' : ' cms-collapsed'));
@@ -2370,9 +2363,9 @@ window.CmsBlockEditor = (function () {
         card._collapseBtn = collapseBtn;
         card._built = false;
 
-        // @param {boolean} initEditors init this body's TinyMCE editors now.
-        //   False when the CALLER inits the batch (renderList / insertRowAt),
-        //   matching the same `ready` handshake buildColumnPanel uses.
+        // initEditors: true inits this body's TinyMCE editors immediately; false
+        // when the CALLER inits the batch (renderList / insertRowAt), matching the
+        // same `ready` handshake buildColumnPanel uses.
         card._buildBody = function (initEditors) {
             if (card._built) { return; }
             card._built = true;
@@ -2616,23 +2609,22 @@ window.CmsBlockEditor = (function () {
         toast('Block duplicated.', 'ok');
     }
 
-    /* ---- confirm modal (delete block; also reused by host for delete page/post) ---- */
-    var confirmModal, confirmTitle, confirmBody, confirmOk;
-    var confirmAction = null;
-
+    /* ---- confirm dialog (shared: CmsAdmin.confirm, markup in
+     * cms/_confirm_modal.tpl). Kept as a local name because the host templates
+     * reach it through the exported CmsBlockEditor.confirmDialog for their own
+     * delete page/post prompts. ---- */
     function confirmDialog(title, body, okLabel, fn) {
-        if (!confirmTitle || !confirmBody || !confirmOk) { return; }
-        confirmTitle.textContent = title;
-        confirmBody.textContent = body;
-        confirmOk.textContent = okLabel || 'Delete';
-        confirmAction = fn;
-        openModal(confirmModal);
+        if (!window.CmsAdmin || !CmsAdmin.confirm) { return; }
+        CmsAdmin.confirm(title, body, okLabel || 'Delete', fn);
+    }
+    function closeConfirm() {
+        if (window.CmsAdmin && CmsAdmin.confirmClose) { CmsAdmin.confirmClose(); }
     }
 
     function askDeleteBlock(block) {
         var label = labelFor(block.type);
         confirmDialog('Remove block', 'Remove the "' + label + '" block? You can re-add it later.', 'Remove', function () {
-            closeModal(confirmModal);
+            closeConfirm();
             removeBlock(block);
         });
     }
@@ -2642,10 +2634,10 @@ window.CmsBlockEditor = (function () {
      * at a specific index (insertAt). insertAt === null → append at the end. */
     var addModal, addGroupsEl, addSearchEl, addNoMatchEl, addShowAllWrap, addShowAllBtn;
     var addInsertAt = null;      // index to splice at, or null to append
-    // enh #16: when set, the chooser routes the picked catalog entry to this handler
+    // When set, the chooser routes the picked catalog entry to this handler
     // (a columns child add) instead of inserting a new block into the page model.
     var addPickHandler = null;
-    // enh #16: hide the 'columns' block from the chooser (prevents columns-in-columns).
+    // Hide the 'columns' block from the chooser (prevents columns-in-columns).
     var addExcludeColumns = false;
 
     // Stable group order for the chooser sections.
@@ -2681,7 +2673,7 @@ window.CmsBlockEditor = (function () {
         var descHtml = c.description
             ? '<span class="cms-typecard-desc">' + esc(c.description) + '</span>'
             : '';
-        // #100: the add-block chooser card shows the friendly label + icon +
+        // The add-block chooser card shows the friendly label + icon +
         // description only — never the raw machine block-type slug (dev jargon).
         cardBtn.innerHTML =
             icoHtml +
@@ -2692,7 +2684,7 @@ window.CmsBlockEditor = (function () {
         if (c.available) {
             cardBtn.addEventListener('click', function () {
                 if (addPickHandler) {
-                    // enh #16: route into the columns-child add flow, not the page model.
+                    // Route into the columns-child add flow, not the page model.
                     var h = addPickHandler; addPickHandler = null;
                     closeModal(addModal);
                     h(c);
@@ -2720,7 +2712,7 @@ window.CmsBlockEditor = (function () {
 
         // All addable catalog entries (legacy/non-addable always excluded — the
         // server sets `addable`, including the per-scope gate).
-        // enh #16: a columns child add also excludes 'columns' (no nested columns).
+        // A columns child add also excludes 'columns' (no nested columns).
         var addable = (catalog || []).filter(function (c) {
             return c.addable !== false && !(addExcludeColumns && c.type === 'columns');
         });
@@ -2809,7 +2801,7 @@ window.CmsBlockEditor = (function () {
         if (addSearchEl) { setTimeout(function () { addSearchEl.focus(); }, 30); }
     }
 
-    // enh #16: open the same chooser for a columns child add. The picked catalog
+    // Open the same chooser for a columns child add. The picked catalog
     // entry is passed to `handler` (which appends it into a column) instead of the
     // page model, and 'columns' is hidden so a column can't itself hold columns.
     function openAddChooserForHandler(handler) {
@@ -2862,9 +2854,10 @@ window.CmsBlockEditor = (function () {
     /* ================= Media picker ================= */
     var mediaModal, mediaGrid, mediaSearch, mediaSearchBtn, uploadInput, uploadDrop, uploadAlt, uploadDecorative;
     var mediaCallback = null;
-    // Lazy-load paging state. A large media library used to be fetched + rendered in
-    // one shot; now the picker pulls one page at a time (medialist offset/limit) and
-    // appends more as the author scrolls (IntersectionObserver) or clicks "Load more".
+    // Lazy-load paging state. The picker pulls one page at a time (medialist
+    // offset/limit) and appends more as the author scrolls (IntersectionObserver)
+    // or clicks "Load more", so a large media library is never fetched + rendered
+    // in one shot.
     var MEDIA_PAGE = 24;
     var mediaQuery = '', mediaOffset = 0, mediaHasMore = false, mediaLoading = false;
     var mediaMoreBtn = null, mediaMoreIO = null;
@@ -2902,7 +2895,7 @@ window.CmsBlockEditor = (function () {
                 pick();
             }
         });
-        // #95: a broken thumbnail swaps to the fa-image placeholder (sized to the
+        // A broken thumbnail swaps to the fa-image placeholder (sized to the
         // tile so it never overlaps the caption below), keeping the tile clickable.
         img.addEventListener('error', function () {
             var ph = el('div', 'cms-media-tile-fallback', '<i class="fas fa-image" aria-hidden="true"></i>');
@@ -2913,7 +2906,7 @@ window.CmsBlockEditor = (function () {
 
         tile.appendChild(img);
         tile.appendChild(cap);
-        // #05 + #17: inline alt editing in the picker. Editing here writes the
+        // Inline alt editing in the picker. Editing here writes the
         // description back to the shared media row (CmsAjax/mediaupdate — CSRF- and
         // scope-guarded via post()), so it's reusable everywhere the image appears.
         if (m.media_id) { tile.appendChild(buildAltEditor(m, cap, img)); }
@@ -3063,7 +3056,7 @@ window.CmsBlockEditor = (function () {
         loadMediaPage(true);
     }
 
-    // C1: alt text authored at upload. A "decorative" tick INTENTIONALLY sends an
+    // Alt text authored at upload. A "decorative" tick INTENTIONALLY sends an
     // empty alt (assistive tech then skips the image) — distinct from simply
     // forgetting to describe it, which is why the choice is explicit.
     function uploadAltValue() {
@@ -3170,18 +3163,6 @@ window.CmsBlockEditor = (function () {
         emptyEl = document.getElementById('cmsBlockEmpty');
         // toast is delegated to CmsAdmin.toast, which resolves .cms-toast itself.
 
-        confirmModal = document.getElementById('cmsConfirmModal');
-        confirmTitle = document.getElementById('cmsConfirmTitle');
-        confirmBody  = document.getElementById('cmsConfirmBody');
-        confirmOk    = document.getElementById('cmsConfirmOk');
-        if (confirmOk) {
-            confirmOk.addEventListener('click', function () {
-                var fn = confirmAction;
-                confirmAction = null;
-                if (fn) { fn(); }
-            });
-        }
-
         collapseAllBtn = document.getElementById('cmsCollapseAll');
         if (collapseAllBtn) {
             collapseAllBtn.addEventListener('click', function () {
@@ -3193,7 +3174,7 @@ window.CmsBlockEditor = (function () {
         wireAddBlock();
         wireMediaPicker();
         renderList();
-        observeTheme();   // C31: reskin open editors when the app theme flips
+        observeTheme();   // reskin open editors when the app theme flips
     }
 
     return {
@@ -3202,7 +3183,7 @@ window.CmsBlockEditor = (function () {
             syncTiny();
             return model.map(function (b, i) {
                 return {
-                    // C15: send the stable id (0 = new row) so the server upsert
+                    // Send the stable id (0 = new row) so the server upsert
                     // matches existing rows instead of recreating them.
                     id:      b.id || 0,
                     type:    b.type,
@@ -3235,7 +3216,7 @@ window.CmsBlockEditor = (function () {
         hasJsonError: function () {
             return model.some(function (b) { return b._jsonError; });
         },
-        // C20: jump the author to the first save-blocking (invalid-JSON) block and
+        // Jump the author to the first save-blocking (invalid-JSON) block and
         // name it — call this from the host's save handler when hasJsonError() is
         // true so the block is loud + recoverable instead of a silent failed save.
         focusFirstError: function () {
@@ -3257,8 +3238,10 @@ window.CmsBlockEditor = (function () {
             return false;
         },
         confirmDialog: confirmDialog,
-        closeConfirm: function () { closeModal(confirmModal); },
-        confirmOkEl: function () { return confirmOk; },
+        closeConfirm: closeConfirm,
+        confirmBusy: function (busy) {
+            if (window.CmsAdmin && CmsAdmin.confirmBusy) { CmsAdmin.confirmBusy(busy); }
+        },
         // Open the shared media-library picker; cb receives the chosen media-ref.
         // Lets the host (e.g. a post hero image) reuse the same picker the block
         // image fields use, without duplicating upload/search wiring.

@@ -41,14 +41,17 @@ class Model_CmsMedia extends Model
     {
         return $this->CmsMedia->LastError();
     }
+
     public function scope_usage_bytes($scopeType, $scopeId)
     {
         return $this->CmsMedia->ScopeUsageBytes($scopeType, $scopeId);
     }
+
     public function scope_quota_bytes($scopeType)
     {
         return $this->CmsMedia->ScopeQuotaBytes($scopeType);
     }
+
     /**
      * NOTE: unlike the other scope-taking CmsMedia methods, $scopeType must NOT be
      * null here — the lib signature is a typed non-nullable string, so a null
@@ -62,12 +65,6 @@ class Model_CmsMedia extends Model
     public function get_media($mediaId)
     {
         return $this->CmsMedia->GetMedia($mediaId);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function delete_media($mediaId, $actorId = 0, $scopeType = null, $scopeId = null)
-    {
-        return $this->CmsMedia->DeleteMedia($mediaId, $actorId, $scopeType, $scopeId);
     }
 
     public function delete_media_batch($ids, $actorId = 0, $scopeType = null, $scopeId = null)

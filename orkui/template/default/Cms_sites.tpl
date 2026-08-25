@@ -41,15 +41,6 @@ $statusMeta = function ($status) {
     }
 };
 
-$fmtDate = function ($raw) {
-    $raw = (string)$raw;
-    if ($raw === '' || $raw === '0000-00-00 00:00:00') {
-        return '—';
-    }
-    $ts = strtotime($raw);
-    return $ts ? date('M j, Y g:i A', $ts) : '—';
-};
-
 $totalSites = count($kSites) + count($pSites);
 ?>
 
@@ -102,7 +93,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     <?php
     /* ---- Reusable row renderer for a site table ---- */
-    $renderSiteRows = function ($rows) use ($h, $statusMeta, $fmtDate) {
+    $renderSiteRows = function ($rows) use ($h, $statusMeta, $cmsFmtDate) {
         foreach ($rows as $s):
             list($statusLabel, $statusMod) = $statusMeta($s['status'] ?? 'unbuilt');
             $isPub    = ((string)($s['status'] ?? '') === 'published');
@@ -128,7 +119,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <?= (int)($s['pages_published'] ?? 0) ?> / <?= (int)($s['pages_total'] ?? 0) ?>
             </td>
             <td data-label="Posts" class="cms-sites-metric cms-muted"><?= (int)($s['posts_total'] ?? 0) ?></td>
-            <td data-label="Updated" class="cms-muted"><?= $h($fmtDate($s['updated_at'] ?? '')) ?></td>
+            <td data-label="Updated" class="cms-muted"><?= $h($cmsFmtDate($s['updated_at'] ?? '')) ?></td>
             <td data-label="Actions">
                 <div class="cms-sites-rowactions">
                     <a class="cms-btn cms-btn-sm" href="<?= $h($s['manage_url'] ?? '#') ?>" data-tip="Open this site's CMS admin"><i class="fas fa-sliders-h" aria-hidden="true"></i> Manage</a>
@@ -254,7 +245,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
 </div>
 
-<div class="cms-toast" id="cmsSitesToast" role="status" aria-live="polite" aria-atomic="true"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 (function () {

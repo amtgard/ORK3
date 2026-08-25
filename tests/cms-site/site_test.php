@@ -412,9 +412,21 @@ check(
     '_stampTemplateSeeded() has exactly one call site (no drift-prone duplicate)',
     substr_count($classSrc, '$this->_stampTemplateSeeded(') === 1
 );
+// Scoped to _finishSeed()'s own body, not the whole class: the public
+// EnsureOrgTheme() wrapper is a legitimate second caller (the supported entry
+// point for repairing a theme outside the seed path). What must stay unique is
+// the call INSIDE the completion tail, so a future edit cannot re-introduce a
+// second seed-path call that drifts from the stamp.
+$finishSeedRef  = new ReflectionMethod('CmsSite', '_finishSeed');
+$classLines     = file(__DIR__ . '/../../system/lib/ork3/class.CmsSite.php');
+$finishSeedBody = implode('', array_slice(
+    $classLines,
+    $finishSeedRef->getStartLine() - 1,
+    $finishSeedRef->getEndLine() - $finishSeedRef->getStartLine() + 1
+));
 check(
-    '_seedOrgTheme() has exactly one call site, feeding that same completion path',
-    substr_count($classSrc, '$this->_seedOrgTheme(') === 1
+    '_seedOrgTheme() has exactly one call site inside _finishSeed(), feeding that same completion path',
+    substr_count($finishSeedBody, '$this->_seedOrgTheme(') === 1
 );
 
 // Behavioral guard: the shared completion tail itself really does seed a

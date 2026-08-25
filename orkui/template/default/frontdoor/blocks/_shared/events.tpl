@@ -9,12 +9,9 @@
  * the '#'-means-unset rewrite, the fetch + slice and the entire card grid —
  * lived twice. It now lives here once; the two block files are thin adapters.
  *
- * WHY THIS IS IN A SUBDIRECTORY, and why the adapters keep their exact
- * filenames: render_blocks.tpl:34-38 dispatches on `blocks/{type}.tpl` after
- * running the block type through preg_replace('/[^a-z_]/', '', ...). That
- * sanitizer strips '/' and '.', so no authored block type can ever resolve to
- * `_shared/events.tpl`. Putting the shared body in a subdirectory is therefore
- * a security property, not a stylistic one — a sibling file named
+ * The subdirectory is a security property, not a stylistic one: render_blocks.tpl
+ * dispatches on `blocks/{type}.tpl` after stripping everything but [a-z_] from the
+ * block type, so `_shared/events.tpl` is unreachable while a sibling
  * `blocks/events.tpl` WOULD be reachable as a block type named "events".
  *
  * Caller (adapter) must set, before including:
@@ -31,13 +28,10 @@
  *
  * No GhettoCache wrapper: SearchService caches this call internally (300s).
  */
-$fdEvtScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
-$fdEvtScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
-$fdEvtOrgId     = ($fdEvtScopeType === $fdEvtScopeKind) ? $fdEvtScopeId : 0;
-
 // Dropped on a page outside this block's scope (global front door, or the other
 // org kind) → no single org to source. Render nothing at all rather than a
-// broken or misleading empty box.
+// broken or misleading empty box. (See fdScopedOrgId() in _helpers.tpl.)
+$fdEvtOrgId = fdScopedOrgId($SiteNavScopeType ?? '', $SiteNavScopeId ?? 0, $fdEvtScopeKind);
 if ($fdEvtOrgId <= 0) {
     return;
 }

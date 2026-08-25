@@ -266,7 +266,12 @@ class CmsRenderCache
     }
 
     /* ------------------------------------------------------------------ *
-     * cache mechanics — the ONE place that touches the GhettoCache handle
+     * cache mechanics — the ONE place that probes the GhettoCache handle
+     *
+     * Handle() below is the single implementation of that probe; CmsBase's
+     * protected _ghettoCache() delegates to it, so the CMS libs and the
+     * front-door blocks cannot drift apart on what "no cache configured"
+     * means.
      *
      * The key space above and the read/write below are two halves of one
      * contract (a key format that changes here must flush there), so they live
@@ -282,7 +287,7 @@ class CmsRenderCache
      *
      * @return object|null
      */
-    private static function _handle()
+    public static function Handle()
     {
         return (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
             && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
@@ -340,7 +345,7 @@ class CmsRenderCache
      */
     public static function Remember($ns, $key, $ttl, callable $build, ?callable $storeIf = null)
     {
-        $cache = self::_handle();
+        $cache = self::Handle();
 
         // No cache configured → this is a plain function call.
         if ($cache === null) {
@@ -448,7 +453,7 @@ class CmsRenderCache
             $keys = self::GlobalKeys();
         }
 
-        $cache = self::_handle();
+        $cache = self::Handle();
         if ($cache === null) {
             return 0;
         }

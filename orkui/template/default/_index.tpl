@@ -12,7 +12,7 @@ $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 <?php include $fdDir . '_assets_public.tpl'; ?>
 <?php include $fdDir . '_assets_inshell.tpl'; ?>
 <?php
-// #86 — the front door suppresses the ORK application top bar (#newmenu) so
+// The front door suppresses the ORK application top bar (#newmenu) so
 // anonymous visitors do not see two stacked navbars. That rule names an ORK
 // shell selector, so it lives in frontdoor/css/orkshell-interop.css (linked by
 // _assets_inshell.tpl above), the one file allowed to name one.

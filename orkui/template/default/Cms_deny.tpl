@@ -1,6 +1,6 @@
 <?php
 /**
- * Cms_deny.tpl — bare-chrome "you don't have permission" page (#109).
+ * Cms_deny.tpl — bare-chrome "you don't have permission" page.
  *
  * PLAIN PHP (extract()+include), NOT Smarty. Deliberately self-contained: a
  * denied viewer holds no CMS scope to build the CMS shell from, so this page
@@ -11,7 +11,7 @@
  * headers and includes this file directly, then exits.
  *
  * Receives: $HomeUrl (string) — the "Return to ORK" link target.
- *           $MissingCapability (string) — #129: the single named capability the
+ *           $MissingCapability (string) — the single named capability the
  *           user lacked, or '' when unknown (scope failure / any-of gate), in
  *           which case the page shows only the generic copy.
  */

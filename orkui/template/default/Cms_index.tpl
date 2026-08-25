@@ -41,7 +41,7 @@ $canEdit    = !empty($caps['edit']);
 $canPublish = !empty($caps['publish']);
 $canDelete  = !empty($caps['delete']);
 
-// E128: per-row lifetime view counts (page_id => int). Defensive — a missing or
+// Per-row lifetime view counts (page_id => int). Defensive — a missing or
 // empty map means counts simply don't render.
 $pageViewCounts = isset($pageViewCounts) && is_array($pageViewCounts) ? $pageViewCounts : array();
 
@@ -49,7 +49,7 @@ $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
-// L2: "Jul 8, 2026 5:04 PM" on all 21 rows told an author nothing — every page
+// "Jul 8, 2026 5:04 PM" on all 21 rows told an author nothing — every page
 // was touched in the same import, so the column read as one repeated string.
 // What an author actually wants from it is HOW LONG AGO. The exact timestamp is
 // still one hover away (data-tip on the cell) and the real epoch still drives
@@ -119,11 +119,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php endif; ?>
 
     <div class="cms-table-wrap">
-        <?php /* L2: ONE filter strip. The status <select> used to float above the
-                card while DataTables' raw "Show 25 entries" / "Search:" chrome sat
-                unstyled inside it — two filter controls in two places, one of them
-                undesigned. The DataTables widgets are relocated into this strip on
-                init (see cmsListbarDt below) so all three read as one product. */ ?>
+        <?php /* ONE filter strip: DataTables' length/search widgets are relocated
+                into .cms-listbar on init (see cmsListbarDt below) so status, search
+                and the per-page count read as a single control group instead of
+                sitting in two places. */ ?>
         <?php if (!empty($pages)): ?>
         <div class="cms-listbar" id="cmsListbar">
             <div class="cms-listbar-search" id="cmsListbarSearch"></div>
@@ -186,7 +185,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         $updatedTs = $updated !== '' ? (int)strtotime($updated) : 0;
                         // Human-readable absolute stays reachable on hover; the epoch
                         // is what DataTables sorts on (data-order), never the words.
-                        $updatedAbs = $updatedTs > 0 ? date('F j, Y g:i A', $updatedTs) : '';
+                        $updatedAbs = $updatedTs > 0 ? $cmsFmtDate($updated) : '';
                         $updatedRel = $updatedTs > 0 ? $relTime($updatedTs) : '';
                         $statusWord = $isPub ? 'Published' : 'Draft';
                     ?>
@@ -206,7 +205,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                     <div class="cms-pg-slug">/<?= $h($slug) ?></div>
                                 <?php endif; ?>
                             <?php endif; ?>
-                            <?php // E128: per-row lifetime views — only when the map has this page. ?>
+                            <?php // Per-row lifetime views — only when the map has this page. ?>
                             <?php if (array_key_exists($pid, $pageViewCounts)): ?>
                                 <div class="cms-pg-slug cms-muted" data-tip="Lifetime views on the public site">
                                     <i class="fas fa-chart-line"></i> <?= number_format((int)$pageViewCounts[$pid]) ?> view<?= (int)$pageViewCounts[$pid] === 1 ? '' : 's' ?>
@@ -214,7 +213,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php endif; ?>
                         </td>
                         <td data-label="Type"><?= $h($typeLabel) ?></td>
-                        <?php /* L2: Published is the norm on this list — a chip on every
+                        <?php /* Published is the norm on this list — a chip on every
                                 row is 21 repetitions of "nothing to see". Only the
                                 exceptions get a chip. data-search/data-order keep the
                                 real word as the filter + sort value (DataTables reads
@@ -272,48 +271,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
-<?php /* ---- New-Page type chooser modal ---- */ ?>
-<?php if ($canCreate): ?>
-<div class="cms-modal-overlay" id="cmsNewModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a page type">
-        <div class="cms-modal-head">
-            <h3>Create a page</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
-            <div class="cms-typegrid">
-                <?php foreach ($pageTypes as $pt): ?>
-                    <?php // Plain-language description only — never the raw type slug (dev jargon). ?>
-                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
-                        <strong><?= $h($pt['label']) ?></strong>
-                        <?php if (!empty($pt['description'])): ?>
-                            <span><?= $h($pt['description']) ?></span>
-                        <?php endif; ?>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<?php include __DIR__ . '/cms/_new_page_modal.tpl'; ?>
 
-<?php /* ---- Confirm modal (Delete) ---- */ ?>
-<div class="cms-modal-overlay" id="cmsConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
-        <div class="cms-modal-head">
-            <h3 id="cmsConfirmTitle">Please confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="cmsConfirmBody" style="margin:0;font-size:14px;"></p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsConfirmOk">Delete</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -352,7 +312,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 { targets: [5], orderable: false, searchable: false } // Actions
             ]
         });
-        // L2: fold DataTables' own controls into the designed filter strip. Its
+        // Fold DataTables' own controls into the designed filter strip. Its
         // markup is generated on init, so the move happens here rather than in
         // the template. Guarded — a missing node just leaves the widget where
         // DataTables put it.
@@ -413,14 +373,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ---- toast (shared: CmsAdmin.toast) ---- */
     var toast = CmsAdmin.toast;
 
-    /* ---- C2: undoable toast (shared: CmsAdmin.undoableToast) — delete is a
+    /* ---- Undoable toast (shared: CmsAdmin.undoableToast) — delete is a
        soft-delete (deleted_at), so the row can be brought back and the toast
        offers an Undo that calls the restore endpoint. ---- */
     var undoableToast = CmsAdmin.undoableToast;
 
     /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
     var openModal = CmsAdmin.modal.open;
-    var closeModal = CmsAdmin.modal.close;
 
     /* ---- New Page ---- */
     var newModal = document.getElementById('cmsNewModal');
@@ -456,23 +415,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     });
 
-    /* ---- Confirm modal (no native confirm) — callback-based so single + bulk
-           delete share one dialog. ---- */
-    var confirmModal = document.getElementById('cmsConfirmModal');
-    var confirmBody = document.getElementById('cmsConfirmBody');
-    var confirmOk = document.getElementById('cmsConfirmOk');
-    var confirmAction = null;
+    /* ---- Confirm dialog (shared: CmsAdmin.confirm, markup in
+           cms/_confirm_modal.tpl). Callback-based so single + bulk delete share
+           one dialog; no native confirm(). ---- */
     function askConfirm(message, onYes) {
-        confirmAction = onYes;
-        if (confirmBody) { confirmBody.textContent = message; }
-        openModal(confirmModal);
-    }
-    if (confirmOk) {
-        confirmOk.addEventListener('click', function () {
-            var fn = confirmAction;
-            confirmAction = null;
-            if (typeof fn === 'function') { fn(); }
-        });
+        CmsAdmin.confirm('Please confirm', message, 'Delete', onYes);
     }
 
     /* ---- Single delete ---- */
@@ -481,15 +428,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
             var pid = btn.getAttribute('data-page-id');
             var title = btn.getAttribute('data-title') || 'this page';
             askConfirm('Delete "' + title + '"? This removes the page and all of its blocks. You can undo this right afterward from the toast that appears.', function () {
-                var okBtn = confirmOk;
-                if (okBtn) { okBtn.disabled = true; }
+                CmsAdmin.confirmBusy(true);
                 post('deletepage', { page_id: pid }).then(function (res) {
-                    if (okBtn) { okBtn.disabled = false; }
-                    closeModal(confirmModal);
+                    CmsAdmin.confirmBusy(false);
+                    CmsAdmin.confirmClose();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-page-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
-                    // C2: soft-delete → offer Undo (restorepage). Restoring re-reads
+                    // Soft-delete → offer Undo (restorepage). Restoring re-reads
                     // the list so the row (and its DataTables state) comes back clean.
                     undoableToast('Page deleted.', function () {
                         post('restorepage', { page_id: pid }).then(function (r) {
@@ -497,7 +443,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             else { toast((r && r.error) || 'Restore failed.', 'error'); }
                         }).catch(function () { toast('Network error.', 'error'); });
                     });
-                }).catch(function () { if (okBtn) { okBtn.disabled = false; } toast('Network error.', 'error'); });
+                }).catch(function () { CmsAdmin.confirmBusy(false); toast('Network error.', 'error'); });
             });
         });
     });
@@ -561,7 +507,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             refreshBulkBar();
             syncSelectAll();
             var msg = doneMsg + ' (' + ok + ' done' + (fail ? ', ' + fail + ' failed' : '') + ').';
-            // C2 (bulk): the rows that actually went through can be brought back,
+            // Bulk: the rows that actually went through can be brought back,
             // so offer the same Undo the single-row delete does.
             if (typeof onUndo === 'function' && okIds.length) {
                 undoableToast(msg, function () { onUndo(okIds); });
@@ -589,7 +535,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             } else if (act === 'delete') {
                 var n = ids.length;
                 askConfirm('Delete ' + n + ' page' + (n === 1 ? '' : 's') + '? This removes the pages and all of their blocks. You can undo this right afterward from the toast that appears.', function () {
-                    closeModal(confirmModal);
+                    CmsAdmin.confirmClose();
                     runBulk('deletepage', ids, 'Deleted', true, function (undoIds) {
                         // CmsAdmin.post resolves with the parsed JSON even when
                         // {ok:false} (a revoked cap, a failed scope re-check), so

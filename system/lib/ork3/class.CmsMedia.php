@@ -51,6 +51,14 @@ class CmsMedia extends CmsBase
     public const MAX_SCOPE_BYTES = 536870912;
 
     /**
+     * How many media ids the batched where-used scan folds into one REGEXP
+     * alternation. Small on purpose: a pattern that trips MariaDB's
+     * regexp_time_limit/regexp_stack_limit simply fails to match, which the where-used
+     * delete guard would read as "unreferenced".
+     */
+    public const REF_SCAN_CHUNK = 25;
+
+    /**
      * Why the last Upload() returned null. Upload() reports every rejection the
      * same way (null), which leaves the caller unable to tell "that is not an
      * image" from "your org is out of space" — two failures a user must respond
@@ -61,32 +69,14 @@ class CmsMedia extends CmsBase
      */
     public $LastError = '';
 
-    /**
-     * Accessor for $LastError.
-     *
-     * The model layer reaches this lib through APIModel, which implements
-     * __call() but NOT __get() — so `$this->CmsMedia->LastError` from a model
-     * read an undeclared property and always yielded '', leaving the CmsAjax
-     * 'quota_exceeded' branch permanently unreachable. A method call routes
-     * through __call and reaches the real value. PHP allows a method and a
-     * property to share a name, so the public property stays exactly as-is for
-     * the direct (non-proxied) callers that already set/read it.
-     *
-     * @return string '' when the last Upload() did not record a reason
-     */
-    public function LastError()
-    {
-        return (string)$this->LastError;
-    }
-
     /** Hard upload ceiling: 8 MB of decoded image bytes. */
     private static $MAX_BYTES = 8388608; // 8 * 1024 * 1024
 
     /**
      * Hard pixel-area ceiling (~40 megapixels). GD allocates ~4 bytes/pixel on
      * decode, so a small highly-compressed file declaring, e.g., 30000x30000
-     * would try to allocate ~3.6 GB and kill the FPM worker (decompression bomb,
-     * C18). We reject on declared dimensions BEFORE imagecreatefromstring().
+     * would try to allocate ~3.6 GB and kill the FPM worker (a decompression
+     * bomb). We reject on declared dimensions BEFORE imagecreatefromstring().
      */
     private static $MAX_PIXELS = 40000000; // 40 * 1000 * 1000
 
@@ -94,7 +84,7 @@ class CmsMedia extends CmsBase
     private static $THUMB_MAX_W = 480;
 
     /**
-     * C4/#14: mid-size "display" rendition max width in pixels (~1800px, inside
+     * Mid-size "display" rendition max width in pixels (~1800px, inside
      * the 1600–2000 band). Written as WebP alongside the thumb so front-door
      * partials can serve a right-sized, well-compressed hero image
      * ($ref['display'] ?? $ref['src']) instead of the full-resolution original.
@@ -146,17 +136,27 @@ class CmsMedia extends CmsBase
      */
     private static $displayDirHits = array();
 
-    /**
-     * How many media ids the batched where-used scan folds into one REGEXP
-     * alternation. Small on purpose: a pattern that trips MariaDB's
-     * regexp_time_limit/regexp_stack_limit simply fails to match, which the C8
-     * delete guard would read as "unreferenced".
-     */
-    public const REF_SCAN_CHUNK = 25;
-
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /**
+     * The supported read path for $LastError — ALWAYS use this from a model.
+     *
+     * The model layer reaches this lib through APIModel, which implements
+     * __call() but NOT __get(), so a proxied `$this->CmsMedia->LastError`
+     * property read never reaches this object and silently yields '' (which
+     * would make the CmsAjax 'quota_exceeded' branch unreachable). A method call
+     * routes through __call and returns the real value. PHP allows a method and
+     * a property to share a name, so the public property remains for the direct,
+     * non-proxied callers that set and read it.
+     *
+     * @return string '' when the last Upload() did not record a reason
+     */
+    public function LastError()
+    {
+        return (string)$this->LastError;
     }
 
     /* ------------------------------------------------------------------ *
@@ -244,7 +244,7 @@ class CmsMedia extends CmsBase
             return null;
         }
 
-        // C18: decompression-bomb guard. Reject an image whose declared pixel
+        // Decompression-bomb guard. Reject an image whose declared pixel
         // area exceeds the ceiling BEFORE decoding — the compressed byte cap does
         // NOT bound decoded size (a few KB can declare hundreds of megapixels).
         if ($width * $height > self::$MAX_PIXELS) {
@@ -297,7 +297,7 @@ class CmsMedia extends CmsBase
             imagedestroy($thumb);
         }
 
-        // C4/#14: mid-size (~1800px) WebP "display" rendition, derived from the
+        // Mid-size (~1800px) WebP "display" rendition, derived from the
         // stored path so ToMediaRef can locate it without a schema column. WebP-
         // only: when this GD build lacks imagewebp we simply skip it and the ref
         // omits the "display" key (partials fall back to src). Non-fatal on any
@@ -391,7 +391,7 @@ class CmsMedia extends CmsBase
             'focal'    => (isset($row['focal']) && $row['focal'] !== '') ? (string)$row['focal'] : '50% 50%',
         );
 
-        // C4/#14: expose the mid-size WebP display rendition when it exists on
+        // Expose the mid-size WebP display rendition when it exists on
         // disk (derived deterministically from the stored path — no DB column).
         // When absent (older asset, or a GD build without WebP) the key is
         // OMITTED so partials fall back to 'src' ($ref['display'] ?? $ref['src']).
@@ -487,7 +487,7 @@ class CmsMedia extends CmsBase
     {
         global $DB;
 
-        // C2: never list trashed media.
+        // Never list trashed media.
         $where = array('deleted_at IS NULL');
 
         $DB->Clear();
@@ -647,18 +647,19 @@ class CmsMedia extends CmsBase
      * over-cap list (see MAX_FILTER_IDS) fails CLOSED so a runaway caller can't
      * build an unbounded IN() list.
      *
-     * NOTE: unlike the sibling scope-taking methods (DeleteMedia, RestoreMedia,
-     * PurgeMedia, _scopeOwns), a null $scopeType is NOT accepted here as "no
-     * ownership constraint" — $scopeType is a typed non-nullable string, so
-     * passing null is a fatal TypeError. This is an IDOR filter; it always
-     * requires a concrete scope.
+     * NOTE: this is an IDOR filter, so it always constrains by scope — there is
+     * no "no ownership constraint" mode. $scopeType goes through
+     * CmsBase::_normalizeScopeType(), which coerces anything that is not
+     * 'kingdom' or 'park' (null included) to 'global', matching every sibling
+     * scope-taking method. Pass a concrete scope; a null will filter as global
+     * rather than failing loudly.
      *
      * @param array  $ids       candidate media ids (max MAX_FILTER_IDS)
-     * @param string $scopeType 'global' | 'kingdom' | 'park' (never null)
+     * @param string $scopeType 'global' | 'kingdom' | 'park' (null coerces to 'global')
      * @param int    $scopeId   scope owner id (0 for global)
      * @return array the owned subset, as ints, in input order
      */
-    public function FilterOwnedIds(array $ids, string $scopeType, int $scopeId): array
+    public function FilterOwnedIds(array $ids, $scopeType, $scopeId)
     {
         global $DB;
 
@@ -723,7 +724,7 @@ class CmsMedia extends CmsBase
 
         $DB->Clear();
         $DB->media_id = $mediaId;
-        // C2: a trashed media row is invisible to pickers/consumers.
+        // A trashed media row is invisible to pickers/consumers.
         $row = $this->_firstRow($DB->DataSet(
             'SELECT * FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
@@ -746,7 +747,7 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * Update a media row's authored metadata (C1: alt + title). Only the keys
+     * Update a media row's authored metadata (alt + title). Only the keys
      * present in $data are written; anything else is untouched. Both columns are
      * cleared with '' (not NULL) so an author who intentionally marks an image
      * DECORATIVE (alt='') is persisted rather than dropped by the yapo null-skip.
@@ -849,7 +850,7 @@ class CmsMedia extends CmsBase
      * answer is exactly the one _referenceCount would have given.
      *
      * Semantics match the soft-delete guard, not the purge guard: LIVE owners
-     * only, and the block scan is bound to each media's own scope (#69).
+     * only, and the block scan is bound to each media's own scope.
      *
      * @param array       $ids       candidate media ids (max MAX_FILTER_IDS; over-cap fails closed)
      * @param string|null $scopeType optional ownership filter, as for FilterOwnedIds
@@ -1021,7 +1022,7 @@ class CmsMedia extends CmsBase
         // REGEXP that trips MariaDB's regexp_time_limit/regexp_stack_limit does
         // not match the row, which this guard would read as "unreferenced" and
         // trash media a live block still embeds. Keeping the pattern small keeps
-        // the C8 guard fail-CLOSED.
+        // the where-used guard fail-CLOSED.
         foreach (array_chunk($ids, self::REF_SCAN_CHUNK) as $chunk) {
             $this->_blockReferencedIdsChunk($chunk, $bases, $scopeType, $scopeId, $hit);
         }
@@ -1043,7 +1044,7 @@ class CmsMedia extends CmsBase
 
         $DB->Clear();
         // Same two match forms as _blockReferenceCount: the media_id value inside
-        // fields_json (bounded by a non-digit so 12 never matches 123) and (#68) a
+        // fields_json (bounded by a non-digit so 12 never matches 123) and a
         // TinyMCE-embedded <img src> carrying the asset's opaque path base.
         $DB->pat = '"media_id"[[:space:]]*:[[:space:]]*(' . implode('|', $chunk) . ')([^0-9]|$)';
         $match   = 'b.fields_json REGEXP :pat';
@@ -1062,7 +1063,7 @@ class CmsMedia extends CmsBase
         $DB->st  = $this->_normalizeScopeType((string)$scopeType);
         $DB->sid = (int)$scopeId;
 
-        // Scope binding is the #69 owner join _blockReferenceCount uses.
+        // Scope binding is the owner join _blockReferenceCount uses.
         $sql = 'SELECT b.fields_json AS fj FROM ' . DB_PREFIX . 'cms_block b'
             . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
             . " ON b.owner_type = 'page' AND pg.page_id = b.owner_id"
@@ -1092,8 +1093,8 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * Trash a media row (C2 soft-delete). Files are KEPT so a restore can bring
-     * the asset back. REFUSES (C8) when the media is still referenced anywhere —
+     * Trash a media row (soft-delete). Files are KEPT so a restore can bring
+     * the asset back. REFUSES when the media is still referenced anywhere —
      * a page/post hero, a site logo, or inside any block's fields_json — so a
      * live page can never end up pointing at a vanished image.
      *
@@ -1174,7 +1175,7 @@ class CmsMedia extends CmsBase
 
     /**
      * The trash mutation behind DeleteMedia/DeleteMediaBatch. PRIVATE on
-     * purpose: $referencesChecked disables the C8 where-used guard and is only
+     * purpose: $referencesChecked disables the where-used guard and is only
      * ever true for DeleteMediaBatch, which just answered that exact question
      * for this id via FilterUnreferencedIds in the same request.
      *
@@ -1210,7 +1211,7 @@ class CmsMedia extends CmsBase
             return false;
         }
 
-        // C8: where-used check. Refuse while any reference remains. Skipped only
+        // Where-used check. Refuse while any reference remains. Skipped only
         // when the caller already got this exact answer from FilterUnreferencedIds
         // in the same request (the batch path), so a bulk trash does not re-run
         // the REGEXP block scan once per id.
@@ -1293,7 +1294,7 @@ class CmsMedia extends CmsBase
      * @param int         $actorId   acting mundane_id (for the audit trail)
      * @param string|null $scopeType optional ownership guard: only touch a row in this scope
      * @param int|null    $scopeId   optional ownership guard: scope owner id
-     * @param bool        $override  #68: purge is IRREVERSIBLE (hard DELETE + file
+     * @param bool        $override  purge is IRREVERSIBLE (hard DELETE + file
      *                               unlink). Left false, a WIDE reference scan (any
      *                               scope, incl. TinyMCE embeds) that finds a
      *                               remaining reference BLOCKS the purge. Pass true
@@ -1327,9 +1328,9 @@ class CmsMedia extends CmsBase
             return false;
         }
 
-        // #68 belt-and-suspenders: a purge is IRREVERSIBLE (hard DELETE + file
+        // Belt-and-suspenders: a purge is IRREVERSIBLE (hard DELETE + file
         // unlink), so — unlike the reversible soft-delete guard, which is
-        // scope-bounded for perf (#69) — it uses the WIDE reference scan (every
+        // scope-bounded for perf — it uses the WIDE reference scan (every
         // scope, plus TinyMCE-embedded <img src> URLs). Any remaining reference
         // blocks the purge UNLESS the caller passes an explicit $override
         // acknowledging the destructive unlink.
@@ -1367,7 +1368,7 @@ class CmsMedia extends CmsBase
         if (!empty($row['thumb_path'])) {
             $this->_safeUnlink((string)$row['thumb_path']);
         }
-        // C4/#14: also unlink the derived mid-size WebP display rendition, if any.
+        // Also unlink the derived mid-size WebP display rendition, if any.
         $relDisplay = $this->_displayRelForPath((string)($row['path'] ?? ''));
         if ($relDisplay !== '') {
             $this->_safeUnlink($relDisplay);
@@ -1438,7 +1439,7 @@ class CmsMedia extends CmsBase
         $out['pages'] = $fk['pages'];
         $out['posts'] = $fk['posts'];
         $out['logos'] = $fk['logos'];
-        // Block embeds: the media-ref media_id AND (#68) any TinyMCE-embedded
+        // Block embeds: the media-ref media_id AND any TinyMCE-embedded
         // <img src> whose URL carries the asset's path (so a rich-text embed
         // counts as used). WIDE (all scopes) — the UI wants the full picture.
         $out['blocks'] = $this->_blockReferenceCount($mediaId, $this->_mediaPath($mediaId), null, null);
@@ -1470,13 +1471,13 @@ class CmsMedia extends CmsBase
             return $fk;
         }
 
-        // #69: SCOPE-BOUND block-embed scan. Soft-delete is REVERSIBLE (restore
+        // SCOPE-BOUND block-embed scan. Soft-delete is REVERSIBLE (restore
         // brings the asset back), so narrowing the scan to blocks whose owning
         // page/post shares this media's own scope is a safe perf win here — it
         // bounds the fields_json scan via the owner→page/post join instead of a
         // full-table REGEXP. The IRREVERSIBLE PurgeMedia deliberately uses the
         // WIDE scan (see there) so a cross-scope/forged embed still blocks the
-        // hard unlink. Also matches TinyMCE-embedded <img src> URLs (#68).
+        // hard unlink. Also matches TinyMCE-embedded <img src> URLs.
         $meta = $this->_mediaRefMeta($mediaId);
         return $this->_blockReferenceCount(
             $mediaId,
@@ -1561,12 +1562,12 @@ class CmsMedia extends CmsBase
     /**
      * Count blocks that reference $mediaId. A ref is either the media_id value
      * inside fields_json ({"media_id":<id>, ...} — matched bounded by a non-digit
-     * so 12 never matches 123) OR (#68) a TinyMCE-embedded <img src> whose URL
+     * so 12 never matches 123) OR a TinyMCE-embedded <img src> whose URL
      * carries the asset's opaque path base (shared by the original/thumb/display
      * renditions), so a rich-text embed counts as "in use".
      *
      * When $scopeType is null the scan is WIDE (every block in every scope). When
-     * a scope is supplied (#69) the scan is bounded to blocks whose owning
+     * a scope is supplied the scan is bounded to blocks whose owning
      * page/post shares that scope, via the polymorphic owner join — ork_cms_block
      * carries only owner_type/owner_id, and cms_page/cms_post carry the scope.
      *
@@ -1604,7 +1605,7 @@ class CmsMedia extends CmsBase
             $sql = 'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block b'
                 . ' WHERE (' . $match . ')';
         } else {
-            // #69: bound to blocks whose owning page/post shares the media's scope.
+            // Bound to blocks whose owning page/post shares the media's scope.
             // COALESCE picks the one joined owner's scope per row (the other join
             // is NULL); an orphan block whose owner was hard-deleted (both NULL)
             // can never render, so excluding it is safe. The joins also require
@@ -1794,7 +1795,7 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * C4/#14: build the mid-size "display" copy of $src no wider than
+     * Build the mid-size "display" copy of $src no wider than
      * DISPLAY_MAX_W (aspect preserved). Returns a NEW GD resource (caller
      * destroys it) or false. When the source is already within the cap we still
      * return a full-size copy so a WebP display is always produced (the WebP
@@ -1885,8 +1886,8 @@ class CmsMedia extends CmsBase
     /**
      * The stored relative path with its extension stripped — the opaque base
      * (cms-media/{yyyymm}/{unique}) shared by the original, thumb, and display
-     * renditions. Used to derive the display path (C4/#14) and to build the
-     * embedded-URL where-used LIKE (#68). '' for an empty path.
+     * renditions. Used to derive the display path and to build the
+     * embedded-URL where-used LIKE. '' for an empty path.
      */
     private function _pathBase($relPath)
     {
@@ -1904,7 +1905,7 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * C4/#14: the derived relative path of the mid-size WebP display rendition
+     * The derived relative path of the mid-size WebP display rendition
      * for a stored original path (…/{unique}.jpg → …/{unique}_display.webp).
      * Deterministic so it needs no DB column. '' when the path is empty.
      */
@@ -1915,7 +1916,7 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * C4/#14: does the display rendition exist on disk? Guards ToMediaRef so the
+     * Does the display rendition exist on disk? Guards ToMediaRef so the
      * 'display' key is only exposed when the file is really present (older assets
      * / no-WebP GD builds fall back to 'src').
      *

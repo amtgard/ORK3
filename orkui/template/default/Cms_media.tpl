@@ -27,7 +27,7 @@ $h = function ($v) {
       // once by cms/_shell_top.tpl below — no per-render inline block. ?>
 
 <script>
-// #95: swap a broken media thumbnail for the placeholder. Defined up front
+// Swap a broken media thumbnail for the placeholder. Defined up front
 // (before the grid) so the name exists by the time any <img> onerror fires. Sized
 // via the .cms-media-card-thumb.cms-empty-thumb rule so the fallback keeps the tile
 // footprint and never overlaps the bulk-select checkbox or the caption.
@@ -104,10 +104,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             <?php endif; ?>
                             <div class="cms-media-card-usage" data-media-id="<?= $mid ?>"></div>
                             <?php if (!empty($caps['media'])): ?>
-                                <?php /* L1: the picture is the card. "Where used" is the one thing that
-                                        makes deleting safe, so it stays visible; everything else — including
-                                        Delete, which used to be 21 red buttons at once — rides in the
-                                        hover/focus-within cluster, same shape as the Pages list. */ ?>
+                                <?php /* The picture IS the card. "Where used" is the one thing that
+                                        makes deleting safe, so it stays visible; everything else —
+                                        Delete included — rides in the hover/focus-within cluster so the
+                                        grid never reads as a wall of destructive actions. Same shape as
+                                        the Pages list. */ ?>
                                 <div class="cms-media-card-actions">
                                     <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-usage" data-tip="See where this image is used"><i class="fas fa-link"></i> Where used</button>
                                     <div class="cms-media-card-reveal">
@@ -140,7 +141,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div style="margin-top:4px;">Click or drop an image to upload (JPG, PNG, GIF, WebP — max 8MB)</div>
             <input type="file" id="cmsUploadInput" accept="image/jpeg,image/png,image/gif,image/webp">
         </label>
-        <?php /* C1: alt text authored at upload (kept OUT of the drop <label> so a
+        <?php /* Alt text is authored at upload time (kept OUT of the drop <label> so a
                 click on the field never re-opens the file picker). */ ?>
         <div class="cms-upload-meta" style="margin-top:10px;max-width:520px;">
             <div class="cms-field" style="margin-bottom:6px;">
@@ -153,7 +154,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php endif; ?>
 
     <?php if (!empty($caps['media'])): ?>
-    <?php /* ---- Trash: soft-deleted media, restorable or purgeable (C2). Lazy-loaded
+    <?php /* ---- Trash: soft-deleted media, restorable or purgeable. Lazy-loaded
             on open via CmsAjax/listtrashedmedia; Restore = restoremedia, Purge =
             purgemedia (permanent, confirmed). ---- */ ?>
     <div class="cms-trash-section" style="margin-top:26px;">
@@ -168,27 +169,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
-<?php /* ---- Confirm / info modal (shared: trash-delete, purge, and the
-        "still in use" block message — no native confirm(); title, body, and the
-        primary button are all set by JS per use). ---- */ ?>
-<div class="cms-modal-overlay" id="cmsMediaConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-labelledby="cmsMediaConfirmTitle">
-        <div class="cms-modal-head">
-            <h3 id="cmsMediaConfirmTitle">Confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="cmsMediaConfirmBody" style="margin:0;font-size:14px;"></p>
-            <div id="cmsMediaConfirmExtra"></div>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal id="cmsMediaConfirmCancel">Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsMediaConfirmOk">Delete</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 
-<div class="cms-toast" id="cmsToast"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 (function () {
@@ -196,11 +179,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var UIR = window.CMS_UIR;
     var AJAX = UIR + 'CmsAjax/';
 
-    function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
+    /* ---- HTML escape (shared: CmsAdmin.esc) ---- */
+    var esc = CmsAdmin.esc;
 
     /* ---- toast (shared: CmsAdmin.toast) ---- */
     var toast = CmsAdmin.toast;
@@ -208,49 +188,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ---- POST helper (shared: CmsAdmin.post — CSRF header + scope) ---- */
     var post = CmsAdmin.post;
 
-    /* ---- shared confirm/info modal (no native confirm()/alert()). Title, body,
-       an optional detail region, and the primary button are all set per call.
-       onOk omitted → info-only (single "Close" button). Used by the active-media
-       delete flow, the "still in use" block message, and the Trash purge. ---- */
-    var modalEl     = document.getElementById('cmsMediaConfirmModal');
-    var modalTitle  = document.getElementById('cmsMediaConfirmTitle');
-    var modalBody   = document.getElementById('cmsMediaConfirmBody');
-    var modalExtra  = document.getElementById('cmsMediaConfirmExtra');
-    var modalOk     = document.getElementById('cmsMediaConfirmOk');
-    var modalCancel = document.getElementById('cmsMediaConfirmCancel');
-    var modalAction = null;
-
-    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
-    var openModal = CmsAdmin.modal.open;
-    var closeModal = CmsAdmin.modal.close;
-    function hideModal() { closeModal(modalEl); }
-
-    function showConfirm(opts) {
-        opts = opts || {};
-        if (modalTitle) { modalTitle.textContent = opts.title || 'Confirm'; }
-        if (modalBody)  { modalBody.textContent = opts.message || ''; }
-        if (modalExtra) { modalExtra.innerHTML = opts.extraHtml || ''; }
-        if (modalOk) {
-            if (opts.onOk) {
-                modalOk.style.display = '';
-                modalOk.disabled = false;
-                modalOk.textContent = opts.okLabel || 'Delete';
-                modalOk.className = 'cms-btn ' + (opts.okKind || 'cms-btn-danger');
-            } else {
-                modalOk.style.display = 'none';
-            }
-        }
-        if (modalCancel) { modalCancel.textContent = opts.onOk ? 'Cancel' : 'Close'; }
-        modalAction = (typeof opts.onOk === 'function') ? opts.onOk : null;
-        openModal(modalEl);
-    }
-
-    if (modalOk) {
-        modalOk.addEventListener('click', function () {
-            if (typeof modalAction === 'function') { modalAction(); }
-        });
-    }
-    // Backdrop-click / [data-close-modal] / Esc closing is handled by CmsAdmin.
+    /* ---- confirm / info dialog (shared: CmsAdmin.confirm, markup in
+       cms/_confirm_modal.tpl). Title, body, an optional detail region and the
+       primary button are set per call; omitting onOk makes it info-only with a
+       single "Close" button. Used by the active-media delete flow, the "still in
+       use" block message, and the Trash purge. ---- */
+    var showConfirm = CmsAdmin.confirm;
+    var hideModal   = CmsAdmin.confirmClose;
 
     /* ---- bulk selection state (media_id string → true) ---- */
     var selected = Object.create(null);
@@ -571,7 +515,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 message: '“' + fn + '” will be moved to the Trash. You can restore it later.',
                 okLabel: 'Move to Trash',
                 onOk: function () {
-                    modalOk.disabled = true;
+                    CmsAdmin.confirmBusy(true);
                     post('mediadelete', { media_id: mediaId }).then(function (dr) {
                         hideModal();
                         if (!dr || !dr.ok) { toast((dr && dr.error) || 'Delete failed.', 'error'); return; }
@@ -598,7 +542,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     + 'You can restore anything from the Trash.',
                 okLabel: 'Move to Trash',
                 onOk: function () {
-                    modalOk.disabled = true;
+                    CmsAdmin.confirmBusy(true);
                     post('mediabulkdelete', { media_ids: JSON.stringify(ids) }).then(function (res) {
                         hideModal();
                         if (!res || !res.ok) { toast((res && res.error) || 'Bulk delete failed.', 'error'); return; }
@@ -639,7 +583,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var uploadAlt = document.getElementById('cmsUploadAlt');
     var uploadDecorative = document.getElementById('cmsUploadDecorative');
 
-    // C1: a "decorative" tick INTENTIONALLY uploads an empty alt (assistive tech
+    // A "decorative" tick INTENTIONALLY uploads an empty alt (assistive tech
     // skips the image) — an explicit choice, distinct from forgetting to describe it.
     function uploadAltValue() {
         if (uploadDecorative && uploadDecorative.checked) { return ''; }
@@ -722,8 +666,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         if (!toggle || !panel || !trArea) { return; }
         var loaded = false;
 
-        // The shared confirm/info modal (showConfirm/hideModal) lives in the outer
-        // scope — reuse it here rather than a second, duplicate modal controller.
+        // showConfirm/hideModal are the outer scope's aliases for the shared
+        // CmsAdmin dialog — reused here rather than a second modal controller.
 
         var emptyHtml = '<div class="cms-empty"><div class="cms-empty-icon"><i class="fas fa-trash-alt"></i></div><div class="cms-empty-copy">The Trash is empty.</div></div>';
 
@@ -822,7 +766,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     message: 'Permanently delete “' + pfn + '”? This removes the file for good and cannot be undone.',
                     okLabel: 'Delete permanently',
                     onOk: function () {
-                        modalOk.disabled = true;
+                        CmsAdmin.confirmBusy(true);
                         post('purgemedia', { media_id: pid }).then(function (res) {
                             hideModal();
                             if (!res || !res.ok) { toast((res && res.error) || 'Purge failed.', 'error'); return; }

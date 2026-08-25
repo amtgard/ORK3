@@ -67,8 +67,11 @@ $hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) :
 
 <style type="text/css">
 /* ========================================
-   Home / Landing Page
-   All classes prefixed with hm- to avoid collisions
+   Kingdoms Directory (Directory/index)
+   The hm- class/variable prefix is historical: this page was the ORK home
+   page before the front door took that route, and the prefix was kept so the
+   markup, the styles below and the PHP above still grep as one unit. It does
+   NOT belong to any other page.
    ======================================== */
 
 /* ---- Welcome banner ---- */

@@ -19,10 +19,11 @@ require_once __DIR__ . '/trait.CmsScope.php';
  * through the SAME frontdoor/render_blocks.tpl partial pages use.
  *
  * NOTE on view(): the framework calls the controller's action (e.g. post($slug))
- * to populate data, then calls the base render method view() (zero args) to emit
- * HTML. Our actions are index/post/rss so there's no collision with view(); if a
- * 'view' action were ever added it would need the func_num_args() dispatch pattern
- * Controller_Page uses.
+ * to populate data, then calls the base render method render() to emit HTML. Our
+ * actions are index/post/rss, and the render step is no longer named view(), so a
+ * 'view' action here would collide with nothing. (Where an action name genuinely
+ * doubles as a render entry point, Controller_Cms::edit()/preview() show the
+ * func_num_args() dispatch pattern that disambiguates the two calls.)
  */
 class Controller_Blog extends Controller
 {
@@ -39,7 +40,7 @@ class Controller_Blog extends Controller
         parent::__construct($call, $method);
         unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
         $this->data['menu']['blog'] = array('url' => UIR . 'Blog', 'display' => 'News');
-        // #123: the public blog is a CMS-styled surface (not the front-door home),
+        // The public blog is a CMS-styled surface (not the front-door home),
         // so the brand serif must load — default.theme gates it on this flag.
         $this->data['IsCmsPage'] = true;
         // The global blog belongs to the Amtgard-level site: "Amtgard - News".
@@ -73,11 +74,11 @@ class Controller_Blog extends Controller
         $this->data['tag']         = $tag;
         // Leaf only — the org half ("Amtgard") is published in the constructor.
         $this->data['page_title']  = ($tag !== '') ? ('News: ' . $tag) : 'News';
-        // #123: load the front-door theme tokens on the index too (post() already
+        // Load the front-door theme tokens on the index too (post() already
         // does) so the blog list matches the CMS look.
         $this->_attachFrontDoorTheme();
 
-        // #122: canonical + OG for the blog index (type=website). Page 1 canonicals
+        // Canonical + OG for the blog index (type=website). Page 1 canonicals
         // to /Blog; deeper pages self-canonical with ?p= to avoid duplicate content.
         $canon = UIR . 'Blog'
             . ($tag !== '' ? '/index&tag=' . rawurlencode($tag) : '')
@@ -89,7 +90,7 @@ class Controller_Blog extends Controller
             'og_desc'     => 'Latest news and announcements from the Amtgard Online Record Keeper.',
             'og_sitename' => self::APP_BRAND,
         ));
-        $this->_cmsFab(UIR . 'Cms/posts', 'Manage posts');
+        $this->_blogFab(UIR . 'Cms/posts', 'Manage posts');
     }
 
     /**
@@ -131,14 +132,14 @@ class Controller_Blog extends Controller
         $this->data['hero']        = $hero;
         $this->data['page_title']  = $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';
-        // #122: per-post canonical + OG (type=article; hero → og:image), mirroring
+        // Per-post canonical + OG (type=article; hero → og:image), mirroring
         // Controller_Site::_setPostMeta.
         $this->_setPostMeta($post, $hero);
-        $this->_cmsFab(UIR . 'Cms/editpost/' . (int) $post['post_id'], 'Edit this post');
+        $this->_blogFab(UIR . 'Cms/editpost/' . (int) $post['post_id'], 'Edit this post');
     }
 
     /**
-     * #122: publish a per-post $PageMeta (canonical + og:*) for a global blog post,
+     * Publish a per-post $PageMeta (canonical + og:*) for a global blog post,
      * mirroring Controller_Site::_setPostMeta. Canonical is the post's public
      * Blog/post URL (from UIR); og:image comes from the hero media row when set.
      *
@@ -195,15 +196,15 @@ class Controller_Blog extends Controller
      * may edit. $editUrl/$editTip drive the Edit FAB; CMS post-creators also get
      * a New Post FAB. No-op for signed-out or non-CMS users.
      */
-    private function _cmsFab($editUrl, $editTip)
+    private function _blogFab($editUrl, $editTip)
     {
-        // #29: both gates resolve through the shared CmsCan surface (super-admin, a
+        // Both gates resolve through the shared CmsCan surface (super-admin, a
         // global or matching kingdom/park ork_cms_grant, or the officer AUTH_EDIT
         // bridge). The new-post FAB keeps its DISTINCT create capability — on the
         // global blog a contributor may draft a post without holding page.edit —
         // which is why _cmsFabData takes the capability from the caller.
         $this->_cmsFabData(
-            (int) ($this->session->user_id ?? 0),
+            $this->_uid(),
             self::$SCOPE,
             $editUrl,
             $editTip,

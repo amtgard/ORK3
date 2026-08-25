@@ -18,8 +18,18 @@
  *      "Meeting times coming soon" follows the visitor down every page announcing
  *      that the site is unfinished.
  */
-$psScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
-$psParkId    = ($psScopeType === 'park') ? (int) ($SiteNavScopeId ?? 0) : 0;
+// The sole call site (Site_shell.tpl) includes org_header.tpl one line earlier and
+// that file already require_once's the helpers, so they are in fact always defined
+// here; this is a belt-and-braces guard (_helpers.tpl is idempotent and emits
+// nothing) so this partial does not silently depend on the include order of a file
+// it does not own.
+if (!function_exists('fdBlockCache') && defined('DIR_TEMPLATE')) {
+    require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
+}
+
+// Park scope only — outside it there is no park to source, so render nothing.
+// (See fdScopedOrgId() in _helpers.tpl.)
+$psParkId = fdScopedOrgId($SiteNavScopeType ?? '', $SiteNavScopeId ?? 0, 'park');
 if ($psParkId <= 0) {
     return;
 }
@@ -29,14 +39,6 @@ if ($psParkId <= 0) {
 // (GetParkDetails() alone is three queries) for meeting-day and address data
 // that changes a handful of times a year. Cached whole, exactly like the
 // park-scoped dynamic blocks, through the same read-through wrapper they use.
-// The sole call site (Site_shell.tpl) includes org_header.tpl one line earlier and
-// that file already require_once's the helpers, so fdBlockCache is in fact always
-// defined here; the require_once below is a belt-and-braces guard (_helpers.tpl is
-// idempotent and emits nothing) so this partial does not silently depend on the
-// include order of a file it does not own.
-if (!function_exists('fdBlockCache') && defined('DIR_TEMPLATE')) {
-    require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
-}
 
 $psWhen = '';
 $psWhere = '';
@@ -87,34 +89,9 @@ try {
     $psWhere = (string) ($psData['where'] ?? '');
     $psMap   = (string) ($psData['map'] ?? '');
     $psDays  = (array) ($psData['days'] ?? array());
-    $psBest = null;
-    // Same past-date guard as park_hero.tpl. Park::CalculateNextParkDay() returns
-    // an ALREADY-PAST date for 'week-of-month' (Nth weekday of the current month)
-    // and 'monthly', and the min() below would let that stale candidate win —
-    // pinning a date that has been and gone to the top of every page, and hiding
-    // the park's real weekly day while it did so. Guarded at the consumer: the
-    // calculator is shared and out of scope here.
-    $psTodayTs = strtotime('today');
-    foreach ($psDays as $psDay) {
-        if (!is_array($psDay) || !class_exists('Park')) {
-            continue;
-        }
-        $psNext = Park::CalculateNextParkDay(
-            $psDay['Recurrence'] ?? '', $psDay['WeekOfMonth'] ?? 0, $psDay['MonthDay'] ?? 0,
-            $psDay['WeekDay'] ?? '', null, $psDay['StartDate'] ?? null, $psDay['WeekInterval'] ?? 0
-        );
-        if (!$psNext) {
-            continue;
-        }
-        $psNextTs = strtotime($psNext);
-        if ($psNextTs === false || $psNextTs < $psTodayTs) {
-            continue;
-        }
-        if ($psBest === null || $psNextTs < strtotime($psBest['d'])) {
-            $psBest = array('d' => $psNext, 't' => (string) ($psDay['Time'] ?? ''),
-                            'w' => (string) ($psDay['WeekDay'] ?? ''));
-        }
-    }
+    // Shared with park_hero.tpl, past-date guard included — see fdSoonestParkDay()
+    // in _helpers.tpl for why that guard is load-bearing.
+    $psBest = fdSoonestParkDay($psDays);
     if ($psBest !== null) {
         $psWhen = ($psBest['w'] !== '') ? $psBest['w'] . 's' : date('l', strtotime($psBest['d'])) . 's';
         if ($psBest['t'] !== '' && $psBest['t'] !== '00:00:00') {
@@ -122,10 +99,10 @@ try {
         }
     }
 } catch (\Throwable $e) {
-    // Both fetches now sit inside the closure, so a throw in GetParkDays() drops to
-    // tier 3 where it used to leave tier 2 standing. Accepted: both methods go
-    // through Success(), so any shared cause fails GetParkDetails first and tier 2
-    // would have been empty anyway.
+    // Both fetches sit inside the closure, so a throw from either GetParkDetails()
+    // or GetParkDays() drops straight to tier 3 (no where/when at all). Accepted:
+    // both calls go through Success(), so a shared failure cause would already have
+    // left GetParkDetails empty and tier 2 would never have rendered regardless.
     $psWhen = '';
 }
 

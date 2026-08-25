@@ -28,15 +28,7 @@
  *     /var/www/ork.amtgard.com/db-migrations/2026-08-09-cms-nav-ork-login-label.php
  */
 
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-require_once __DIR__ . '/../startup.php';
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 const OLD_LABEL = 'Record Keeper';
 const NEW_LABEL = 'ORK Login';
@@ -121,4 +113,4 @@ foreach ($rows as $row) {
     }
 }
 
-echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), "\n";
+echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";

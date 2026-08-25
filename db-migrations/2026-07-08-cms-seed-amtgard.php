@@ -21,10 +21,7 @@
  *     /var/www/ork.amtgard.com/db-migrations/.amtgard-assets
  */
 
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 $STG = isset($argv[1]) ? rtrim($argv[1], '/') : (__DIR__ . '/.amtgard-assets');
 if (!is_dir("$STG/specs")) {
@@ -32,20 +29,8 @@ if (!is_dir("$STG/specs")) {
     exit(1);
 }
 
-chdir('/var/www/ork.amtgard.com/orkui');
-define('DONOTWEBSERVICE', true);
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-ob_start();
-require('/var/www/ork.amtgard.com/startup.php');
-ob_end_clean();
 @ini_set('memory_limit', '1024M');
 @set_time_limit(0);
-// Host-agnostic relative internal-link base (matches exemplar seed).
-if (!defined('UIR')) {
-    define('UIR', '/orkui/index.php?Route=');
-}
 
 global $DB;
 $cms   = new CmsPage();
@@ -367,10 +352,9 @@ foreach ($order as $slug) {
     $parentId = (!empty($spec['parent_slug']) && isset($idBySlug[$spec['parent_slug']]))
         ? $idBySlug[$spec['parent_slug']] : null;
 
-    // Update-in-place when the page already exists: preserve its page_id (so nav
-    // relink targets / bookmarks keep resolving) and refresh meta + body, instead
-    // of the old DeletePage+CreatePage churn that minted a new id and orphaned
-    // nav links / blocks each run.
+    // Update-in-place when the page already exists: the page_id is preserved, so
+    // nav relink targets and bookmarks keep resolving across re-runs; only meta +
+    // body are refreshed.
     $pageData = array(
         'slug' => $slug,
         'type' => isset($spec['type']) ? $spec['type'] : 'composed',

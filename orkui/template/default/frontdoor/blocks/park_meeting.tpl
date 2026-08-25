@@ -16,7 +16,7 @@
  *
  * TRUST NOTE: GetParkDetails returns Directions/Description already run through
  * nl2br(stripslashes(...)) but NOT escaped, so they carry officer-entered text
- * with markup injected. They are ORK data, not CMS block fields, so the E36
+ * with markup injected. They are ORK data, not CMS block fields, so the
  * block-field allowlist does not cover them — this partial escapes them here and
  * restores only <br>, which is the one tag nl2br added.
  *

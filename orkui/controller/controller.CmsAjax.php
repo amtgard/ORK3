@@ -1,8 +1,8 @@
 <?php
 
 require_once __DIR__ . '/trait.CmsScope.php';
-// #42/MOD-18: the block-type and page-type REGISTRIES themselves now live in
-// CmsBlockRegistry (an ork3 lib, loaded for every request by startup.php), but
+// The block-type and page-type REGISTRIES live in CmsBlockRegistry (an ork3
+// lib, loaded for every request by startup.php), but
 // the two canonical KEY LISTS the save-time parser gates on are exposed by
 // Controller_Cms — CanonicalPageTypes in particular applies the null-label
 // filter that keeps the chooser-only 'post' context out of the page-type enum.
@@ -35,7 +35,7 @@ require_once __DIR__ . '/controller.Cms.php';
  * thin controller (DB work lives in the libs). Rich-text/HTML block fields are
  * sanitized AUTHORITATIVELY in CmsPage::ReplaceBlocks — the storage choke point
  * every writer passes through (editor, imports, seeding) — so stored content is
- * always clean regardless of entry path (E36/#36: the field-name lists and the
+ * always clean regardless of entry path (the field-name lists and the
  * Clean/IsSafeUrl passes all live there, on CmsPage::HTML_FIELDS /
  * CmsPage::URL_FIELDS). This controller therefore does NOT re-sanitize on the
  * way in — it only decides which block TYPES may be stored (_parseBlocks'
@@ -45,6 +45,32 @@ require_once __DIR__ . '/controller.Cms.php';
 class Controller_CmsAjax extends Controller
 {
     use CmsScopeContext;
+
+    /* ------------------------------------------------------------------ *
+     * _fail() status codes — the `status` int in every error envelope.
+     *
+     * The refusal REASON, machine-readable, alongside the human `error`
+     * string: a client that wants to branch (retry, re-auth, reload) reads
+     * this instead of matching on copy. Values are stable — extend the list
+     * rather than renumbering it.
+     * ------------------------------------------------------------------ */
+
+    /** Missing/invalid input, or the request shape is wrong (e.g. not POST). */
+    public const ERR_VALIDATION = 1;
+    /** The write reached the lib and the lib refused; `error` carries its reason. */
+    public const ERR_SAVE_FAILED = 2;
+    /** Target is reserved/protected: a router-reserved slug, a system page, or an org-only action asked of the global front door. */
+    public const ERR_RESERVED = 3;
+    /** The named target does not exist (or nothing was selected to act on). */
+    public const ERR_NOT_FOUND = 4;
+    /** Authenticated but not permitted for this capability/scope/authorship. */
+    public const ERR_FORBIDDEN = 5;
+    /** Refused because the target is still referenced elsewhere. */
+    public const ERR_IN_USE = 8;
+    /** Missing or expired CSRF token. */
+    public const ERR_CSRF = 9;
+    /** Someone else changed the content after this client loaded it. */
+    public const ERR_CONFLICT = 12;
 
     public function __construct($call = null, $action = null)
     {
@@ -70,11 +96,11 @@ class Controller_CmsAjax extends Controller
 
         // ---- Authorization ----
         // New page → page.create. Existing page → page.edit OR page.edit_own on a
-        // page the user created (C16: page.edit_own was granted to contributors
+        // page the user created (page.edit_own is granted to contributors
         // but never honored, locking them out of their own draft after creating it).
         // _requireOwnerEditable encapsulates the full existing-content gate
         // (auth → not-found → IDOR scope → edit_own ownership) used identically by
-        // savepost/revisions; then C15 optimistic-concurrency on the loaded row.
+        // savepost/revisions; then optimistic-concurrency on the loaded row.
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
@@ -94,11 +120,11 @@ class Controller_CmsAjax extends Controller
         if ($slug === '') {
             $this->_fail('A page slug is required.');
         }
-        // C17: reject a router-shadowed slug (blog/post/p/k/rss/sitemap/robots) up front with a
+        // Reject a router-shadowed slug (blog/post/p/k/rss/sitemap/robots) up front with a
         // specific message — such a page would be unreachable behind the pretty
         // URLs. (CmsPage::CreatePage/UpdatePage also enforce this authoritatively.)
         if ($this->CmsPage->IsReservedPageSlug($slug)) {
-            $this->_fail('The slug "' . $slug . '" is reserved by the site router. Please choose another.', 3);
+            $this->_fail('The slug "' . $slug . '" is reserved by the site router. Please choose another.', self::ERR_RESERVED);
         }
 
         // ---- Blocks (posted as a JSON array string) ----
@@ -133,7 +159,7 @@ class Controller_CmsAjax extends Controller
         }
 
         $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks, $uid);
-        // #40: ReplaceBlocks returns -1 when the post-write verification fails (the
+        // ReplaceBlocks returns -1 when the post-write verification fails (the
         // blocks did NOT persist as intended). Fail loudly instead of reporting a
         // successful save the content didn't actually land in.
         if ($count < 0) {
@@ -145,7 +171,7 @@ class Controller_CmsAjax extends Controller
             'slug'        => $slug,
             'block_count' => $count,
             'is_new'      => $isNew,
-            // #49: the version token is now the latest block revision_id (a
+            // The version token is now the latest block revision_id (a
             // monotonic int), which the client resends as base_version — immune to
             // the second-granular updated_at collision the timestamp token had.
             'version'     => $this->_latestRevisionId('page', $pageId),
@@ -154,7 +180,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
-     * previewblocks — render an UNSAVED editor block list (E2, live preview)
+     * previewblocks — render an UNSAVED editor block list (live preview)
      * ------------------------------------------------------------------ */
 
     /**
@@ -207,7 +233,7 @@ class Controller_CmsAjax extends Controller
         // content, so its own handler is the right place to say out loud that it
         // must not be reachable by a bare cross-site GET.
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-            $this->_fail('Preview must be requested with POST.', 1);
+            $this->_fail('Preview must be requested with POST.', self::ERR_VALIDATION);
         }
         $scope = $this->_scope($uid);
 
@@ -360,9 +386,9 @@ class Controller_CmsAjax extends Controller
         $postId = (int)($_POST['post_id'] ?? 0);
         $isNew  = ($postId <= 0);
 
-        // ---- Authorization (mirrors savepage; C16 page.edit_own honored) ----
+        // ---- Authorization (mirrors savepage; page.edit_own honored) ----
         // Same shared gate as savepage via _requireOwnerEditable (auth → not-found
-        // → IDOR scope → edit_own ownership), then the C15 concurrency guard.
+        // → IDOR scope → edit_own ownership), then the concurrency guard.
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
@@ -432,7 +458,7 @@ class Controller_CmsAjax extends Controller
 
         // Body blocks live in the shared polymorphic store under owner_type='post'.
         $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks, $uid);
-        // #40: -1 means the post-write verification failed — the body blocks did not
+        // -1 means the post-write verification failed — the body blocks did not
         // persist. Fail loudly rather than reporting a save that didn't land.
         if ($count < 0) {
             $this->_fail('Could not save the post content. Please reload and try again.');
@@ -447,7 +473,7 @@ class Controller_CmsAjax extends Controller
             'block_count' => $count,
             'is_new'      => $isNew,
             'tags'        => $tags,
-            // #49: latest block revision_id (see savepage) as the concurrency token.
+            // Latest block revision_id (see savepage) as the concurrency token.
             'version'     => $this->_latestRevisionId('post', $postId),
             'saved_at'    => date('c'),
         ));
@@ -489,7 +515,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ================================================================== *
-     * REVISIONS (C2) — capped block-set history + restore. Shared by pages
+     * REVISIONS — capped block-set history + restore. Shared by pages
      * and posts (the block store is polymorphic).
      *
      * There is NO revision-browser UI wired to these two endpoints today: they
@@ -534,7 +560,7 @@ class Controller_CmsAjax extends Controller
         $this->_requireOwnerEditable($uid, $ownerType, $ownerId, $scope);
 
         if ($revisionId <= 0) {
-            $this->_fail('A revision id is required.', 4);
+            $this->_fail('A revision id is required.', self::ERR_NOT_FOUND);
         }
         $ok = (bool)$this->CmsPage->RestoreRevision($revisionId, $ownerType, $ownerId);
         if (!$ok) {
@@ -544,7 +570,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ================================================================== *
-     * TRASH / UNDO (C2) — restore soft-deleted pages/posts/media + purge.
+     * TRASH / UNDO — restore soft-deleted pages/posts/media + purge.
      * The editor lane's Trash/Undo UI calls these exact route names. All are
      * POST + CSRF-guarded (via _begin) and scope-IDOR-guarded (the lib restore
      * methods re-check the caller's scope where they carry one).
@@ -580,7 +606,7 @@ class Controller_CmsAjax extends Controller
 
         $mediaId = (int)($_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
-            $this->_fail('Media not found.', 4);
+            $this->_fail('Media not found.', self::ERR_NOT_FOUND);
         }
         $this->load_model('CmsMedia');
         // IDOR guard: the target must be in THIS scope's trash. get_media can't be
@@ -604,7 +630,7 @@ class Controller_CmsAjax extends Controller
 
         $mediaId = (int)($_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
-            $this->_fail('Media not found.', 4);
+            $this->_fail('Media not found.', self::ERR_NOT_FOUND);
         }
         $this->load_model('CmsMedia');
         // IDOR guard: the target must be in THIS scope's trash. get_media can't be
@@ -623,7 +649,7 @@ class Controller_CmsAjax extends Controller
      * List trashed posts for the Trash view. GET/POST: none (scope-derived).
      * Gated page.delete in scope (posts share the page.delete capability —
      * mirrors deletepost/restorepost). Returns the same row shape the Posts
-     * list renders, minus the C2 deleted_at IS NULL gate.
+     * list renders, minus the deleted_at IS NULL gate.
      */
     public function listtrashedposts($action = null)
     {
@@ -643,7 +669,7 @@ class Controller_CmsAjax extends Controller
     /**
      * List trashed media for the Trash view. Gated media.manage in scope
      * (mirrors medialist/restoremedia/purgemedia). Returns media-refs enriched
-     * with filename/alt, minus the C2 deleted_at IS NULL gate.
+     * with filename/alt, minus the deleted_at IS NULL gate.
      */
     public function listtrashedmedia($action = null)
     {
@@ -677,7 +703,7 @@ class Controller_CmsAjax extends Controller
 
         $mediaId = (int)($_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
-            $this->_fail('Media not found.', 4);
+            $this->_fail('Media not found.', self::ERR_NOT_FOUND);
         }
 
         // Build the update from only the fields the caller actually sent, so a
@@ -693,7 +719,7 @@ class Controller_CmsAjax extends Controller
             $data['filename'] = (string)$_POST['filename'];
         }
         if (empty($data)) {
-            $this->_fail('Nothing to update.', 4);
+            $this->_fail('Nothing to update.', self::ERR_NOT_FOUND);
         }
 
         $this->load_model('CmsMedia');
@@ -729,7 +755,7 @@ class Controller_CmsAjax extends Controller
 
         $mediaId = (int)($_GET['media_id'] ?? $_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
-            $this->_fail('Media not found.', 4);
+            $this->_fail('Media not found.', self::ERR_NOT_FOUND);
         }
         $this->load_model('CmsMedia');
         // IDOR guard: never disclose usage for a row belonging to another scope.
@@ -756,7 +782,7 @@ class Controller_CmsAjax extends Controller
 
         $mediaId = (int)($_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
-            $this->_fail('Media not found.', 4);
+            $this->_fail('Media not found.', self::ERR_NOT_FOUND);
         }
         $this->load_model('CmsMedia');
         // IDOR guard: never delete a media row belonging to another scope.
@@ -773,14 +799,14 @@ class Controller_CmsAjax extends Controller
                 $this->_fail(
                     'This image is still used in ' . $total . ' place' . ($total === 1 ? '' : 's')
                     . '. Remove those references before deleting it.',
-                    8,
+                    self::ERR_IN_USE,
                     array('usage' => $usage)
                 );
             }
             $this->_fail('Could not delete the media (it may not exist or be in the Trash).');
         }
 
-        // Soft-delete (C2): the media is moved to Trash, recoverable via restore.
+        // Soft-delete: the media is moved to Trash, recoverable via restore.
         $this->_ok(array('media_id' => $mediaId, 'deleted' => true, 'trashed' => true));
     }
 
@@ -798,12 +824,12 @@ class Controller_CmsAjax extends Controller
 
         $ids = $this->_parseIdList($_POST['media_ids'] ?? $_POST['ids'] ?? null);
         if (empty($ids)) {
-            $this->_fail('No media were selected.', 4);
+            $this->_fail('No media were selected.', self::ERR_NOT_FOUND);
         }
 
         $this->load_model('CmsMedia');
 
-        // #21: batch the per-id IDOR/scope check into ONE query instead of a
+        // Batch the per-id IDOR/scope check into ONE query instead of a
         // GetMedia round-trip per id. The query itself is the lib's job — this is
         // the IDOR guard, so it lives with the code that defines what "in scope"
         // and "trashed" mean (CmsMedia::FilterOwnedIds).
@@ -992,7 +1018,7 @@ class Controller_CmsAjax extends Controller
             // a cross-scope nav_id is rejected before any write.
             $ok = (bool)$this->CmsNav->update_item($navId, $data, (string)$scope['type'], (int)$scope['id']);
             if (!$ok) {
-                $this->_fail('Could not update the navigation item.', 4);
+                $this->_fail('Could not update the navigation item.', self::ERR_NOT_FOUND);
             }
         }
 
@@ -1015,14 +1041,14 @@ class Controller_CmsAjax extends Controller
 
         $navId = (int)($_POST['nav_id'] ?? 0);
         if ($navId <= 0) {
-            $this->_fail('Navigation item not found.', 4);
+            $this->_fail('Navigation item not found.', self::ERR_NOT_FOUND);
         }
 
         // Pass the resolved scope so DeleteItem's scope-ownership (IDOR) guard
         // actually fires — a cross-scope nav_id is rejected before any delete.
         $deleted = (bool)$this->CmsNav->delete_item($navId, (string)$scope['type'], (int)$scope['id']);
         if (!$deleted) {
-            $this->_fail('Navigation item not found.', 4);
+            $this->_fail('Navigation item not found.', self::ERR_NOT_FOUND);
         }
 
         $this->_ok(array('nav_id' => $navId, 'deleted' => true));
@@ -1099,10 +1125,10 @@ class Controller_CmsAjax extends Controller
         $this->load_model('CmsMedia');
         $row = $this->CmsMedia->upload($data, $filename, $alt, $uid, $scope);
         if (empty($row)) {
-            // Every rejection used to read the same way, so an org that had simply
-            // run out of space was told its image was the wrong type — and would
-            // keep retrying a file that was never the problem. Report the two
-            // apart, with the numbers needed to act on it.
+            // Report a quota rejection and a file-type rejection APART, with the
+            // numbers needed to act on each. One shared message would tell an org
+            // that had simply run out of space that its image was the wrong type,
+            // and it would keep retrying a file that was never the problem.
             if ($this->CmsMedia->last_error() === 'quota_exceeded') {
                 $scopeType = (string)($scope['type'] ?? 'global');
                 $usedMb    = round($this->CmsMedia->scope_usage_bytes($scopeType, (int)($scope['id'] ?? 0)) / 1048576, 1);
@@ -1190,14 +1216,14 @@ class Controller_CmsAjax extends Controller
         $this->_require($uid, 'theme.manage', $scope);
         $id = (int)($_POST['theme_id'] ?? 0);
         if ($id <= 0) {
-            $this->_fail('Missing theme id.', 4);
+            $this->_fail('Missing theme id.', self::ERR_NOT_FOUND);
         }
         // SetActive's WHERE keys on (scope_type, scope_id), so a foreign theme_id
         // cannot be activated cross-scope — the IDOR guard is inherent here.
         // SetActive returns false when it refuses (stale/forged id): report the
         // refusal instead of echoing a success the DB never performed.
         if (!$this->CmsTheme->set_active((string)$scope['type'], (int)$scope['id'], $id)) {
-            $this->_fail('Could not activate that theme.', 4);
+            $this->_fail('Could not activate that theme.', self::ERR_NOT_FOUND);
         }
         $this->_ok(array('active' => $id));
     }
@@ -1238,7 +1264,7 @@ class Controller_CmsAjax extends Controller
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
         if ($this->_scopeIsGlobal($scope)) {
-            $this->_fail('The global front door is not a publishable org site.', 3);
+            $this->_fail('The global front door is not a publishable org site.', self::ERR_RESERVED);
         }
         $this->_require($uid, 'page.publish', $scope);
 
@@ -1254,7 +1280,7 @@ class Controller_CmsAjax extends Controller
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
         if ($this->_scopeIsGlobal($scope)) {
-            $this->_fail('The global front door is not a publishable org site.', 3);
+            $this->_fail('The global front door is not a publishable org site.', self::ERR_RESERVED);
         }
         $this->_require($uid, 'page.publish', $scope);
 
@@ -1278,7 +1304,7 @@ class Controller_CmsAjax extends Controller
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
         if ($this->_scopeIsGlobal($scope)) {
-            $this->_fail('The global front door has no org site settings.', 3);
+            $this->_fail('The global front door has no org site settings.', self::ERR_RESERVED);
         }
         $this->_require($uid, 'page.edit', $scope);
 
@@ -1304,12 +1330,12 @@ class Controller_CmsAjax extends Controller
         }
 
         if (empty($fields)) {
-            $this->_fail('Nothing to save.', 4);
+            $this->_fail('Nothing to save.', self::ERR_NOT_FOUND);
         }
 
         $res = $this->CmsSite->update_site((int)$site['site_id'], $fields, $uid);
         if ($res !== true) {
-            $this->_fail(is_string($res) && $res !== '' ? $res : 'Could not save the site settings.', 2);
+            $this->_fail(is_string($res) && $res !== '' ? $res : 'Could not save the site settings.', self::ERR_SAVE_FAILED);
         }
 
         // Echo the stored row back so the card can re-render the canonical values
@@ -1328,7 +1354,7 @@ class Controller_CmsAjax extends Controller
      * ------------------------------------------------------------------ */
 
     /**
-     * E71/#71: bust the GhettoCache entries the front-door live-data blocks
+     * Bust the GhettoCache entries the front-door live-data blocks
      * populate (300s TTL), so an officer can force their public site to pick up
      * an officer change / new park immediately instead of waiting the window out.
      * POST + CSRF-guarded (via _begin) and scope-checked (page.edit in scope).
@@ -1338,8 +1364,8 @@ class Controller_CmsAjax extends Controller
      * GhettoCache/Memcached has no prefix scan, so the bounded key space is
      * enumerated exactly. Both the enumeration AND the key formats/clamp bounds
      * it depends on come from CmsRenderCache, which the block partials also read
-     * — the two used to declare them independently, and a drift there fails
-     * silently (this endpoint happily reports a large `cleared` count while
+     * — declaring them independently would let the two drift, and a drift here
+     * fails silently (this endpoint happily reports a large `cleared` count while
      * busting keys nothing ever wrote).
      *
      * Coverage by scope:
@@ -1380,7 +1406,7 @@ class Controller_CmsAjax extends Controller
      * ------------------------------------------------------------------ */
 
     /**
-     * E117/#117: super-admin-only maintenance cleanup — hard-purge long-trashed
+     * Super-admin-only maintenance cleanup — hard-purge long-trashed
      * pages (+ their blocks/revisions), sweep orphaned blocks, and prune zero-usage
      * post tags (all non-destructive to live rows; only trashed/orphaned data is
      * removed). POST + CSRF-guarded. The heavy lifting lives in the CmsPage /
@@ -1456,37 +1482,37 @@ class Controller_CmsAjax extends Controller
     {
         $uid = $this->_begin(false);
         $scope = $this->_scope($uid);
-        // #25: the roster editor is reachable by contributors too — gate on
+        // The roster editor is reachable by contributors too — gate on
         // page.edit OR page.edit_own (an edit_own contributor building their own
         // draft must be able to resolve a persona), not page.edit alone.
         if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
             && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
         ) {
-            $this->_fail('You are not authorized to perform this action.', 5);
+            $this->_fail('You are not authorized to perform this action.', self::ERR_FORBIDDEN);
         }
 
         $mundaneId = (int)($_GET['mundane_id'] ?? $_POST['mundane_id'] ?? 0);
         if ($mundaneId <= 0) {
-            $this->_fail('A valid person id is required.', 4);
+            $this->_fail('A valid person id is required.', self::ERR_NOT_FOUND);
         }
 
         $this->load_model('Player');
         $info = $this->Player->player_info($mundaneId);
         if (!$info || empty($info['Persona'])) {
-            $this->_fail('Person not found.', 4);
+            $this->_fail('Person not found.', self::ERR_NOT_FOUND);
         }
 
-        // #23: real names are resolvable ONLY behind the CMS capability boundary
+        // Real names are resolvable ONLY behind the CMS capability boundary
         // AND only for people WITHIN the caller's resolved scope — a kingdom/park
         // officer must not resolve arbitrary system-wide personas to real names.
         // Global scope (the front door / super-admin) is unrestricted by design.
         $scopeType = (string)$scope['type'];
         $scopeId   = (int)$scope['id'];
         if ($scopeType === 'kingdom' && (int)($info['KingdomId'] ?? 0) !== $scopeId) {
-            $this->_fail('That person is not a member of this site\'s kingdom.', 4);
+            $this->_fail('That person is not a member of this site\'s kingdom.', self::ERR_NOT_FOUND);
         }
         if ($scopeType === 'park' && (int)($info['ParkId'] ?? 0) !== $scopeId) {
-            $this->_fail('That person is not a member of this site\'s park.', 4);
+            $this->_fail('That person is not a member of this site\'s park.', self::ERR_NOT_FOUND);
         }
 
         $mundaneName = trim(($info['GivenName'] ?? '') . ' ' . ($info['Surname'] ?? ''));
@@ -1535,7 +1561,7 @@ class Controller_CmsAjax extends Controller
         if ($pageId > 0) {
             $row = $this->CmsPage->get_page($pageId);
             if (!is_array($row) || !empty($row['deleted_at'])) {
-                $this->_fail('Page not found.', 4);
+                $this->_fail('Page not found.', self::ERR_NOT_FOUND);
             }
             $this->_requireOwned($row, $scope);
             $this->_ok(array('pages' => array($this->_pageChoice($scope, $row, null)), 'count' => 1));
@@ -1555,7 +1581,7 @@ class Controller_CmsAjax extends Controller
         }
 
         // One in-memory parent_id walk for the whole list instead of a PagePath()
-        // DB round-trip per row (#13) — the same map the admin page list builds.
+        // DB round-trip per row — the same map the admin page list builds.
         $pathMap = $this->_buildScopePathMap($rows);
 
         $out = array();
@@ -1669,7 +1695,7 @@ class Controller_CmsAjax extends Controller
             ? $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid)
             : $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
         if (empty($site) || empty($site['site_id'])) {
-            $this->_fail('Could not resolve the site.', 4);
+            $this->_fail('Could not resolve the site.', self::ERR_NOT_FOUND);
         }
         return $site;
     }
@@ -1729,7 +1755,7 @@ class Controller_CmsAjax extends Controller
 
         $uid = $this->_uid();
         if ($uid <= 0) {
-            $this->_fail('You must be logged in.', 5);
+            $this->_fail('You must be logged in.', self::ERR_FORBIDDEN);
         }
 
         // CSRF: a state-changing request must arrive as POST *and* carry the
@@ -1744,7 +1770,7 @@ class Controller_CmsAjax extends Controller
         // and stay exempt.
         $isPost = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST');
         if ($mutating && !$isPost) {
-            $this->_fail('This action must be requested with POST.', 1);
+            $this->_fail('This action must be requested with POST.', self::ERR_VALIDATION);
         }
         // Every POST is token-checked — including a POST to a read-only endpoint.
         // A mutating request has already been forced to POST just above, so this
@@ -1752,7 +1778,7 @@ class Controller_CmsAjax extends Controller
         if ($isPost) {
             $sent = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? ''));
             if ($sent === '' || !hash_equals($this->_csrfToken(), $sent)) {
-                $this->_fail('Invalid or expired request token. Reload the page and try again.', 9);
+                $this->_fail('Invalid or expired request token. Reload the page and try again.', self::ERR_CSRF);
             }
         }
 
@@ -1772,7 +1798,7 @@ class Controller_CmsAjax extends Controller
     {
         $scope = $this->_resolveScope($uid);
         if ($scope === false) {
-            $this->_fail('You are not authorized for this site.', 5);
+            $this->_fail('You are not authorized for this site.', self::ERR_FORBIDDEN);
         }
         return $scope;
     }
@@ -1781,14 +1807,14 @@ class Controller_CmsAjax extends Controller
     private function _require($uid, $capability, $scope)
     {
         if (!$this->CmsAuth->cms_can($uid, $capability, $scope)) {
-            // #129: name the missing capability so the client can surface exactly
+            // Name the missing capability so the client can surface exactly
             // what the user lacks (and window.CMS_CAPS can pre-disable the action).
             $this->_denyCapability($capability);
         }
     }
 
     /**
-     * #129: authorization-denied response that NAMES the missing capability (in
+     * Authorization-denied response that NAMES the missing capability (in
      * both the human message and a machine-readable `capability` key), instead of
      * the generic "not authorized". $capability may be a string or a list of
      * acceptable capabilities (any-of).
@@ -1802,7 +1828,7 @@ class Controller_CmsAjax extends Controller
         $label = implode(' or ', $caps);
         $this->_fail(
             'You are not authorized to perform this action (requires: ' . $label . ').',
-            5,
+            self::ERR_FORBIDDEN,
             array('capability' => (count($caps) === 1) ? $caps[0] : $caps)
         );
     }
@@ -1819,7 +1845,7 @@ class Controller_CmsAjax extends Controller
     private function _requireOwned($row, $scope)
     {
         if (!$this->_rowInScope($row, $scope)) {
-            $this->_fail('You are not authorized to modify this content.', 5);
+            $this->_fail('You are not authorized to modify this content.', self::ERR_FORBIDDEN);
         }
     }
 
@@ -1844,7 +1870,7 @@ class Controller_CmsAjax extends Controller
                 }
             }
         }
-        $this->_fail('You are not authorized to modify this content.', 5);
+        $this->_fail('You are not authorized to modify this content.', self::ERR_FORBIDDEN);
     }
 
     /** Emit {ok:true, ...$extra} and exit. */
@@ -1864,11 +1890,12 @@ class Controller_CmsAjax extends Controller
      * first and stay authoritative.
      *
      * @param string $message
-     * @param int    $status
+     * @param int    $status one of the self::ERR_* codes declared at the top of
+     *                       this class (defaults to ERR_VALIDATION)
      * @param array  $extra
      * @return void (emits JSON + exit)
      */
-    private function _fail($message, $status = 1, $extra = array())
+    private function _fail($message, $status = self::ERR_VALIDATION, $extra = array())
     {
         echo json_encode(array(
             'ok'     => false,
@@ -1900,7 +1927,7 @@ class Controller_CmsAjax extends Controller
             return array();
         }
 
-        // #42: the canonical allowlist comes from Controller_Cms (single source of
+        // The canonical allowlist comes from Controller_Cms (single source of
         // truth); resolve it once, not per block.
         $allowedTypes = Controller_Cms::CanonicalBlockTypes();
 
@@ -1914,14 +1941,14 @@ class Controller_CmsAjax extends Controller
                 continue;
             }
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
-            // #103: defense-in-depth — a `columns` block must never contain another
+            // Defense-in-depth — a `columns` block must never contain another
             // `columns` child (the render side already caps recursion depth). Strip
             // any nested columns at save so the invalid structure never persists.
             if ((string)$block['type'] === 'columns') {
                 $fields = $this->_rejectNestedColumns($fields);
             }
             $out[] = array(
-                // C15: carry the STABLE block id so CmsPage::ReplaceBlocks can
+                // Carry the STABLE block id so CmsPage::ReplaceBlocks can
                 // upsert in place (preserve the row) instead of delete-all/reinsert.
                 // 0/absent = a brand-new block. Editor contract: echo back each
                 // block's server id and resend it on the next save.
@@ -1938,7 +1965,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * #103: strip any `columns` child from a columns block's column lists so a
+     * Strip any `columns` child from a columns block's column lists so a
      * columns-in-columns structure can never be persisted (defense-in-depth; the
      * render side also caps recursion depth). Each entry in fields['columns'] is
      * an ordered list of child block objects ({type,...}); a child of type
@@ -1985,7 +2012,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * Clamp the page type to the supported enum. #110: the allowlist is the
+     * Clamp the page type to the supported enum. The allowlist is the
      * canonical page-type key set owned by Controller_Cms (the SAME list that
      * drives the presets/labels), so a type added to the presets can never be
      * silently clamped back to 'composed' here.
@@ -2030,7 +2057,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * C15 optimistic-concurrency guard. The client sends the version token it
+     * Optimistic-concurrency guard. The client sends the version token it
      * loaded (base_version = the owner row's updated_at at load time). If the
      * stored row is NEWER, someone else saved in the meantime → reject with a
      * conflict (status 12) instead of a silent last-write-wins. A missing token
@@ -2039,7 +2066,7 @@ class Controller_CmsAjax extends Controller
      * Editor contract (seam): read `version` from every load AND every save
      * response, and resend it as POST `base_version` on the next save.
      *
-     * #49: the durable token is the owner's LATEST block revision_id — a
+     * The durable token is the owner's LATEST block revision_id — a
      * monotonic integer bumped by every ReplaceBlocks — which the save responses
      * echo and the client resends. A revision-id token is compared exactly and
      * rejects on ANY change (no more second-granular strtotime() collision, and
@@ -2068,7 +2095,7 @@ class Controller_CmsAjax extends Controller
                 $this->_fail(
                     'This content was changed by someone else after you loaded it. '
                     . 'Reload to get the latest version before saving.',
-                    12
+                    self::ERR_CONFLICT
                 );
             }
             return;
@@ -2085,13 +2112,13 @@ class Controller_CmsAjax extends Controller
             $this->_fail(
                 'This content was changed by someone else after you loaded it. '
                 . 'Reload to get the latest version before saving.',
-                12
+                self::ERR_CONFLICT
             );
         }
     }
 
     /**
-     * #49: the owner's latest block revision_id (0 when none) — the concurrency
+     * The owner's latest block revision_id (0 when none) — the concurrency
      * token. ListRevisions is newest-first, so the first row is the latest.
      *
      * @param string $ownerType 'page' | 'post'
@@ -2109,7 +2136,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * Publish-or-schedule a page/post from a posted published_at (C7). A future
+     * Publish-or-schedule a page/post from a posted published_at. A future
      * timestamp schedules (status='scheduled', promoted to published on read once
      * due); a past/empty timestamp publishes immediately. Returns the resulting
      * status so the caller can echo it.
@@ -2133,7 +2160,7 @@ class Controller_CmsAjax extends Controller
         $when = ($rawWhen !== '') ? strtotime($rawWhen) : false;
 
         if ($when !== false && $when > time()) {
-            // #63: the set_status wrapper now mirrors the lib's 4-param signature
+            // The set_status wrapper now mirrors the lib's 4-param signature
             // and forwards published_at, so a future timestamp schedules correctly
             // (no more __call bypass to reach the 4-param SetStatus).
             $model->set_status((int)$id, 'scheduled', (int)$uid, date('Y-m-d H:i:s', $when));
@@ -2174,7 +2201,7 @@ class Controller_CmsAjax extends Controller
         $id = (int)($_POST[$kind . '_id'] ?? 0);
         $this->_loadOwnedEntity($kind, $id, $scope);
 
-        // C7: a future published_at schedules instead of publishing now; the read
+        // A future published_at schedules instead of publishing now; the read
         // path promotes it to 'published' once that time passes.
         $status = $this->_applyPublish($kind, $id, $uid, $_POST['published_at'] ?? '');
         // Re-read: set_status stamps published_at, and the client renders it.
@@ -2224,7 +2251,7 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * deletepage / deletepost: soft-delete (C2 Trash) the posted id.
+     * deletepage / deletepost: soft-delete (Trash) the posted id.
      * The is_system refusal is page-only — posts carry no such column.
      *
      * @param string $kind  'page' | 'post'
@@ -2241,7 +2268,7 @@ class Controller_CmsAjax extends Controller
         // Includes the IDOR guard: never delete content belonging to another scope.
         $row = $this->_loadOwnedEntity($kind, $id, $scope);
         if ($kind === 'page' && !empty($row['is_system'])) {
-            $this->_fail('System pages cannot be deleted.', 3);
+            $this->_fail('System pages cannot be deleted.', self::ERR_RESERVED);
         }
 
         $deleter = 'delete_' . $kind;
@@ -2250,7 +2277,7 @@ class Controller_CmsAjax extends Controller
             $this->_fail('Could not delete the ' . $kind . '.');
         }
 
-        // Soft-delete (C2): the row is moved to Trash, recoverable via restore.
+        // Soft-delete: the row is moved to Trash, recoverable via restore.
         $this->_ok(array($kind . '_id' => $id, 'deleted' => true, 'trashed' => true));
     }
 
@@ -2271,7 +2298,7 @@ class Controller_CmsAjax extends Controller
 
         $id = (int)($_POST[$kind . '_id'] ?? 0);
         if ($id <= 0) {
-            $this->_fail(ucfirst($kind) . ' not found.', 4);
+            $this->_fail(ucfirst($kind) . ' not found.', self::ERR_NOT_FOUND);
         }
 
         $restore = 'Restore' . ucfirst($kind);
@@ -2319,7 +2346,7 @@ class Controller_CmsAjax extends Controller
             ? (($kind === 'post') ? $this->CmsPost->get_post($id) : $this->CmsPage->get_page($id))
             : null;
         if ($id <= 0 || empty($row)) {
-            $this->_fail(ucfirst($kind) . ' not found.', 4);
+            $this->_fail(ucfirst($kind) . ' not found.', self::ERR_NOT_FOUND);
         }
         $this->_requireOwned($row, $scope);
         return $row;
@@ -2328,7 +2355,7 @@ class Controller_CmsAjax extends Controller
     /**
      * Load an editable page/post owner or emit a JSON error + exit. Enforces the
      * same gate as savepage/savepost: page.edit, OR page.edit_own on content the
-     * user created (C16), plus the scope-ownership IDOR guard. Returns the row.
+     * user created, plus the scope-ownership IDOR guard. Returns the row.
      *
      * @param int    $uid
      * @param string $ownerType 'page' | 'post'
@@ -2343,25 +2370,25 @@ class Controller_CmsAjax extends Controller
         $label = ucfirst($ownerType);
 
         if ($ownerId <= 0) {
-            $this->_fail($label . ' not found.', 4);
+            $this->_fail($label . ' not found.', self::ERR_NOT_FOUND);
         }
         if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
             && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
         ) {
-            // #129: name the acceptable capabilities (either satisfies this gate).
+            // Name the acceptable capabilities (either satisfies this gate).
             $this->_denyCapability(array('page.edit', 'page.edit_own'));
         }
         $row = ($ownerType === 'post')
             ? $this->CmsPost->get_post($ownerId)
             : $this->CmsPage->get_page($ownerId);
         if (empty($row)) {
-            $this->_fail($label . ' not found.', 4);
+            $this->_fail($label . ' not found.', self::ERR_NOT_FOUND);
         }
         $this->_requireOwned($row, $scope);
         if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
             && (int)($row['created_by'] ?? 0) !== $uid
         ) {
-            $this->_fail('You can only edit content you created.', 5);
+            $this->_fail('You can only edit content you created.', self::ERR_FORBIDDEN);
         }
         return $row;
     }

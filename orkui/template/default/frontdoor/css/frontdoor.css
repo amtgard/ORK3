@@ -132,10 +132,9 @@
     color: var(--ink);
 }
 
-/* overflow-wrap is folded in here (it used to be a second .fd-body-text rule
-   further down, next to the media clamps) — no rule between the two sets
-   color or overflow-wrap on .fd-body-text at equal specificity, so merging
-   them is cascade-neutral. */
+/* color and overflow-wrap are set together in this single .fd-body-text rule:
+   no other rule sets either property on .fd-body-text at equal specificity, so
+   one declaration block is enough and there is nothing to override later. */
 .fd-body-text { color: var(--fd-text); overflow-wrap: anywhere; }
 
 /* Lists keep left-aligned contents even inside a center-aligned rich_text block
@@ -283,6 +282,44 @@
     outline-offset: 3px;
 }
 
+/* ---- member_bar block -------------------------------------- */
+/* A deliberately dark band in BOTH themes, like the other --navy surfaces, so
+   its link ink is a fixed light periwinkle rather than a theme-flipping token. */
+.fd-member-bar {
+    --fd-member-bar-link: #cdd7ee;
+
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 9px 24px;
+    background: var(--navy2);
+    color: var(--fd-primary-contrast);
+    font-size: 13px;
+}
+
+.fd-member-bar-greeting {
+    opacity: .85;
+}
+
+.fd-member-bar-greeting b {
+    font-weight: 400;
+    font-size: 15px;
+}
+
+.fd-member-bar-spacer {
+    flex: 1;
+}
+
+.fd-member-bar a {
+    color: var(--fd-member-bar-link);
+    text-decoration: none;
+}
+
+.fd-member-bar a i {
+    margin-right: 5px;
+    color: var(--gold);
+}
+
 /* ---- Card -------------------------------------------------- */
 .fd-card {
     background: var(--fd-card-bg, var(--fd-bg));
@@ -297,6 +334,15 @@
     font-style: italic;
     text-align: center;
     padding: 24px 16px;
+}
+
+/* Whole-page "nothing to show" copy (e.g. Page_view.tpl's "Page not found."),
+   as opposed to .fd-empty's inside-a-block note — hence the roomier padding and
+   the upright face. */
+.fd-empty-page {
+    color: var(--fd-text-muted);
+    text-align: center;
+    padding: 2rem;
 }
 
 /* ---- Preview-only block-render error placeholder ----------- */
@@ -1037,8 +1083,8 @@ html[data-theme="dark"] .fd-btn-ghost {
     .fd-member-bar {
         display: none !important;
         flex-wrap: wrap;
-        gap: 8px 14px !important;
-        padding: 10px 16px !important;
+        gap: 8px 14px;
+        padding: 10px 16px;
     }
     .fd-org .fd-member-bar,
     body.fd-org .fd-member-bar {

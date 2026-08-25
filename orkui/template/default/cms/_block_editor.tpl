@@ -98,7 +98,7 @@ $beHeading = isset($beHeading) ? (string)$beHeading : 'Blocks';
                 <div style="margin-top:6px;">Click or drop an image to upload (JPG, PNG, GIF, WebP — max 8MB)</div>
                 <input type="file" id="cmsUploadInput" accept="image/jpeg,image/png,image/gif,image/webp">
             </label>
-            <?php /* C1: alt text is authored at upload time (kept OUT of the drop
+            <?php /* Alt text is authored at upload time (kept OUT of the drop
                     <label> so clicking the field never re-triggers the file picker). */ ?>
             <div class="cms-upload-meta">
                 <div class="cms-field" style="margin-bottom:6px;">
@@ -119,22 +119,7 @@ $beHeading = isset($beHeading) ? (string)$beHeading : 'Blocks';
     </div>
 </div>
 
-<?php /* ---- Confirm modal (shared: delete block / delete page-or-post) ---- */ ?>
-<div class="cms-modal-overlay" id="cmsConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
-        <div class="cms-modal-head">
-            <h3 id="cmsConfirmTitle">Please confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="cmsConfirmBody" style="margin:0;font-size:14px;"></p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsConfirmOk">Delete</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/_confirm_modal.tpl'; ?>
 
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -143,8 +128,8 @@ $beHeading = isset($beHeading) ? (string)$beHeading : 'Blocks';
  * template's static assets; otherwise fall back to the pinned CDN build. Vendoring
  * the 7.6.0 bundle removes the third-party dependency + the silent-degradation risk
  * (a CDN outage otherwise turns every rich-text field into a raw-HTML textarea with
- * no warning). See the C25 seam note: dropping tinymce.min.js at the path below is
- * an asset-add, not a template change. */
+ * no warning). Dropping tinymce.min.js at the path below is an asset-add, not a
+ * template change. */
 $beTinyLocalFs = __DIR__ . '/../script/tinymce/tinymce.min.js';
 $beTinyBaseUrl = defined('HTTP_TEMPLATE') ? HTTP_TEMPLATE : '';
 $beTinyLocal   = is_file($beTinyLocalFs);

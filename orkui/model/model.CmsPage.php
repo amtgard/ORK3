@@ -17,20 +17,8 @@
  */
 class Model_CmsPage extends Model
 {
-    /** @no-callers — mirror surface. */
-    public function get_page_by_slug($slug, $scopeType = 'global', $scopeId = 0, $publishedOnly = true)
-    {
-        return $this->CmsPage->GetPageBySlug($slug, $scopeType, $scopeId, $publishedOnly);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function get_home_page()
-    {
-        return $this->CmsPage->GetHomePage();
-    }
-
     /**
-     * C1: GhettoCache-backed bundle — the resolved page row + its ENABLED blocks
+     * GhettoCache-backed bundle — the resolved page row + its ENABLED blocks
      * in one call. $slug null → the scope's home page.
      */
     public function get_page_with_blocks($scopeType, $scopeId, $slug = null, $publishedOnly = true)
@@ -38,15 +26,9 @@ class Model_CmsPage extends Model
         return $this->CmsPage->GetPageWithBlocks($scopeType, $scopeId, $slug, $publishedOnly);
     }
 
-    /** @no-callers — mirror surface. */
-    public function get_blocks($ownerType, $ownerId)
-    {
-        return $this->CmsPage->GetBlocks($ownerType, $ownerId);
-    }
-
     /**
-     * C2: ALL blocks for the editor (INCLUDING disabled), unlike the public
-     * get_blocks() which returns enabled-only.
+     * ALL blocks for the editor (INCLUDING disabled), unlike the public
+     * CmsPage::GetBlocks() which returns enabled-only.
      */
     public function get_blocks_for_editor($ownerType, $ownerId)
     {
@@ -54,7 +36,7 @@ class Model_CmsPage extends Model
     }
 
     /**
-     * E2 (live preview): sanitize an UNSAVED editor block list into render shape
+     * Live preview: sanitize an UNSAVED editor block list into render shape
      * WITHOUT writing anything. Runs the same clean a save runs — see
      * CmsPage::SanitizeBlocksForRender.
      */

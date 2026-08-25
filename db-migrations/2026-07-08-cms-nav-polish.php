@@ -26,15 +26,7 @@
  *     /var/www/ork.amtgard.com/db-migrations/2026-07-08-cms-nav-polish.php
  */
 
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-require_once __DIR__ . '/../startup.php';
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 $nav = new CmsNav();
 

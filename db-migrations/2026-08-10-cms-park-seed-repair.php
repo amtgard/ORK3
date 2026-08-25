@@ -38,19 +38,7 @@
  * Run: php db-migrations/2026-08-10-cms-park-seed-repair.php
  */
 
-// Same docroot exposure as its sibling backfill: this file rewrites block rows
-// across every park-scoped page with nothing authenticating the caller, so it
-// must never be reachable over HTTP.
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-
-require_once __DIR__ . '/../startup.php';
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 global $DB;
 

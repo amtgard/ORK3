@@ -46,11 +46,20 @@ require $root . '/system/lib/ork3/class.CmsSanitizer.php';
 if (!defined('DB_PREFIX')) {
     define('DB_PREFIX', 'ork_');
 }
+// Minimal framework base so `class CmsBase extends Ork3` loads under a bare
+// `php` run. Declared, not eval'd, and guarded so a second require is a no-op.
 if (!class_exists('Ork3', false)) {
-    eval('class Ork3 { public function __construct() {} }');
+    class Ork3
+    {
+        public function __construct()
+        {
+        }
+    }
 }
 if (!class_exists('CmsBase', false)) {
-    eval('class CmsBase extends Ork3 {}');
+    class CmsBase extends Ork3
+    {
+    }
 }
 require $root . '/system/lib/ork3/class.CmsPage.php';
 

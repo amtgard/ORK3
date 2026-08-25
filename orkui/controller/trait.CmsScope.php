@@ -223,7 +223,7 @@ trait CmsScopeContext
     }
 
     /**
-     * #29: THE single "may this user edit-FAB / preview this scope" gate for the
+     * THE single "may this user edit-FAB / preview this scope" gate for the
      * public CMS surfaces (Page/Blog/Site). Resolves via CmsCan('page.edit', $scope)
      * so ALL of — an ORK super-admin, a global ork_cms_grant, a matching
      * kingdom/park ork_cms_grant, AND the HasAuthority(AUTH_EDIT) officer bridge —
@@ -429,7 +429,7 @@ trait CmsScopeContext
      * @param array      $scope
      * @param int        $pageId
      * @param string     $pageSlug
-     * @param array|null $pathMap  optional pageId => full-slug-path map (#13) to
+     * @param array|null $pathMap  optional pageId => full-slug-path map to
      *                             resolve nested paths in memory; falls back to a
      *                             PagePath() DB walk for any id it doesn't cover.
      * @return string
@@ -451,7 +451,7 @@ trait CmsScopeContext
         }
         // Nested pages live at their FULL slug path (parent/child/…), not the bare
         // leaf slug — so the live link matches the public Site/page route (which
-        // walks parent_id). #13: prefer the precomputed in-memory path map; only
+        // walks parent_id). Prefer the precomputed in-memory path map; only
         // fall back to a per-row PagePath() DB walk when the map can't resolve it.
         $path = (is_array($pathMap) && isset($pathMap[(int)$pageId]))
             ? (string)$pathMap[(int)$pageId]
@@ -464,7 +464,7 @@ trait CmsScopeContext
     }
 
     /**
-     * #13: build a pageId => full-slug-path map from the already-fetched admin
+     * Build a pageId => full-slug-path map from the already-fetched admin
      * list rows, resolving nested paths with an in-memory parent_id walk — one
      * pass over the rows instead of a PagePath() DB walk per row. A row is only
      * mapped when its ENTIRE ancestor chain is present in the same result set and

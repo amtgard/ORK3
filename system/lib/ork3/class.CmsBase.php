@@ -22,7 +22,12 @@
  * scandir() / alphabetical order, so CmsAuth adds an explicit
  * require_once at its top. The other four CMS classes (CmsMedia, CmsNav,
  * CmsPage, CmsPost) all sort after CmsBase and require nothing extra.
+ * class.CmsRenderCache.php also sorts after this file, so _ghettoCache()
+ * pulls it in explicitly below rather than relying on the scandir sweep
+ * (standalone test harnesses require this file on its own).
  *************************************************************************/
+
+require_once __DIR__ . '/class.CmsRenderCache.php';
 
 class CmsBase extends Ork3
 {
@@ -36,14 +41,14 @@ class CmsBase extends Ork3
     private static $_tableExistsMemo = array();
 
     /**
-     * Per-request guard so the lazy scheduled→published promotion (C7) runs at
+     * Per-request guard so the lazy scheduled→published promotion runs at
      * most once per request. FPM resets statics between requests.
      */
     private static $_promotedThisRequest = false;
 
     /**
      * Ghettocache "call" namespace + fixed key + TTL for the "does any scheduled
-     * content exist?" flag (#10). Lets _promoteScheduled() skip its two UPDATEs
+     * content exist?" flag. Lets _promoteScheduled() skip its two UPDATEs
      * in the overwhelmingly common case where nothing is scheduled. The flag is
      * SELF-HEALING: on an unknown/cold value _promoteScheduled runs the UPDATEs
      * and then recomputes the flag, and _markScheduledContent() flips it to
@@ -53,6 +58,32 @@ class CmsBase extends Ork3
     protected const SCHED_CACHE_KEY  = 'flag';
     protected const SCHED_CACHE_TTL  = 3600;
 
+    /**
+     * GhettoCache "call" namespace + TTL for the per-scope CONTENT VERSION — a
+     * write-time stamp folded into cache keys that depend on a scope's pages,
+     * posts and nav rows (see CmsNav::GetMenu).
+     *
+     * WHY A STAMP AND NOT A CONTENT PROBE: keying the nav cache off a
+     * SUM(CRC32(...)) aggregate over ork_cms_nav_item would be one indexed,
+     * join-free query, but a query on EVERY anonymous pageview all the same,
+     * which is precisely the DB work the cache exists to remove. The version is
+     * bumped by the handful of writers that can change what a scope's nav
+     * resolves instead, so a cache hit costs one memcache get and no DB work at
+     * all. The obligation that buys it: any future writer touching a page/post
+     * title, slug, status, published_at or deleted_at must bump too.
+     *
+     * The stored value is a fresh, never-reused stamp rather than an increment,
+     * so it needs no read-modify-write (Ghettocache exposes no atomic incr): two
+     * concurrent bumps simply store two different fresh values and both are
+     * "not the value any cached tree was stored under", which is the only
+     * property the key needs. A memcache eviction is equally safe — the reader
+     * re-seeds with a fresh stamp, which likewise cannot collide with a stamp
+     * used before (the random component means a collision would need ~1e6 bumps
+     * inside the same second).
+     */
+    protected const CONTENT_VERSION_CALL = 'CmsBase.content_version';
+    protected const CONTENT_VERSION_TTL  = 86400;
+
     public function __construct()
     {
         parent::__construct();
@@ -61,24 +92,24 @@ class CmsBase extends Ork3
     /**
      * Shared GhettoCache handle, or null when the memcache layer isn't wired up.
      *
+     * Delegates to CmsRenderCache::Handle(), which owns the single defensive
+     * probe: a missing/failed Memcached must degrade to uncached work, never to
+     * an error, and the CMS libs and the front-door blocks have to agree on
+     * exactly when that is the case.
+     *
      * @return Ghettocache|null
      */
     protected function _ghettoCache()
     {
-        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
-            && is_object(Ork3::$Lib->ghettocache)
-        ) {
-            return Ork3::$Lib->ghettocache;
-        }
-        return null;
+        return CmsRenderCache::Handle();
     }
 
     /**
-     * #10: flag that scheduled content now exists so the next _promoteScheduled()
+     * Flag that scheduled content now exists so the next _promoteScheduled()
      * runs its UPDATEs instead of taking the fast-path skip. Called by CmsPage /
      * CmsPost / _setStatus whenever a row is written with status='scheduled'
-     * (a future published_at). No-op when memcache isn't wired up (the promote
-     * path then always runs the UPDATEs, i.e. old behavior).
+     * (a future published_at). No-op when memcache isn't wired up — the promote
+     * path then simply always runs its UPDATEs.
      *
      * @return void
      */
@@ -123,7 +154,7 @@ class CmsBase extends Ork3
     }
 
     /**
-     * Lazy scheduling (C7): promote any scheduled page/post whose published_at
+     * Lazy scheduling: promote any scheduled page/post whose published_at
      * has arrived to 'published'. Runs at most once per request (both tables in
      * one pass) so no cron is needed — the next public read sees them live.
      * Best-effort: a failure here never blocks the read. Shared by CmsPage and
@@ -138,7 +169,7 @@ class CmsBase extends Ork3
         }
         self::$_promotedThisRequest = true;
 
-        // #10: fast-path skip. When memcache is wired up AND the flag explicitly
+        // Fast-path skip. When memcache is wired up AND the flag explicitly
         // says "no scheduled content" (sentinel 0), neither UPDATE can promote
         // anything — skip both. A missing/unknown flag (false) falls through to
         // run the UPDATEs and then recompute the flag (self-healing on a cold
@@ -151,7 +182,7 @@ class CmsBase extends Ork3
             }
         }
 
-        // #50: each table UPDATE is wrapped in its own try/catch so a failure on
+        // Each table UPDATE is wrapped in its own try/catch so a failure on
         // one (e.g. a lock timeout) still lets the other run.
         try {
             $DB->Clear();
@@ -202,7 +233,7 @@ class CmsBase extends Ork3
 
         try {
             // Probe the table once per request so this stays silent (and cheap)
-            // before the C14 migration has been applied.
+            // before the cms_audit migration has been applied.
             if (!$this->_tableExists(DB_PREFIX . 'cms_audit')) {
                 return;
             }
@@ -283,7 +314,7 @@ class CmsBase extends Ork3
      * non-alphanumerics to nothing ('My Page' -> 'mypage') while CmsSite
      * hyphenated ('My Kingdom' -> 'my-kingdom'). Both now route through this, so
      * derivation is identical everywhere. Length clamping is handled here too via
-     * $maxLen (see #58 below): CmsSite::DeriveSlug passes 160 and CmsPost::_slugify
+     * $maxLen: CmsSite::DeriveSlug passes 160 and CmsPost::_slugify
      * passes 80, so callers name their column width rather than re-implementing the
      * substr/rtrim themselves.
      *
@@ -291,12 +322,12 @@ class CmsBase extends Ork3
      * inbound URL segment for LOOKUP — the public resolvers deliberately keep
      * their strip-to-charset canonicalization so stored slugs still match.
      *
-     * #58: transliteration + an optional length clamp are folded in here so every
+     * Transliteration + an optional length clamp are folded in here so every
      * caller that routes through this method (pages, posts, sites) derives
-     * identically. With the default arguments the output is unchanged from the
-     * historical behavior except that accented/Unicode input is now transliterated
-     * to ASCII ('Café' -> 'cafe') rather than dropped, so existing callers are
-     * unaffected.
+     * identically. Accented/Unicode input is transliterated to ASCII
+     * ('Café' -> 'cafe') via _translitMap() before the [^a-z0-9]+ hyphenation
+     * runs, so accented letters survive as their base form instead of being
+     * dropped.
      *
      * TAG SLUGS ROUTE THROUGH HERE TOO: CmsPost::_slugify() is a thin wrapper for
      * _normalizeSlug($text, 80) (the ork_cms_tag.slug column width), so a tag slug
@@ -318,7 +349,7 @@ class CmsBase extends Ork3
     {
         $slug = (string)$raw;
 
-        // #58: transliterate to ASCII so accented letters survive as their base
+        // Transliterate to ASCII so accented letters survive as their base
         // form instead of being stripped to nothing. This uses an explicit map
         // rather than iconv('ASCII//TRANSLIT') because iconv's output is
         // libc/locale dependent ('é' -> "e", "'e" or "?" depending on the host),
@@ -763,7 +794,7 @@ class CmsBase extends Ork3
      *     DB layer — see 2026-07-08-cms-slug-live-and-integrity.sql).
      *   - INSERT IGNORE so a concurrent racer that already claimed the live
      *     (scope_type, scope_id, slug) tuple makes OUR insert a silent no-op
-     *     rather than an error (C29).
+     *     rather than an error.
      *   - ROW_COUNT() on the same connection tells us whether WE created the row:
      *     the pre-check closes the common case, but two simultaneous "new" saves
      *     both pass it and only the winner's INSERT lands. If we did NOT create
@@ -778,7 +809,7 @@ class CmsBase extends Ork3
      * @param string $pk     primary-key column ('page_id'|'post_id')
      * @param array  $cols   column => value map (must include slug/scope_type/scope_id)
      * @return int new row id (>0); 0 on a genuine live-slug collision / lost race;
-     *             -1 on a non-collision write failure (#44). Callers treating any
+     *             -1 on a non-collision write failure. Callers treating any
      *             non-positive value as failure keep working.
      */
     protected function _insertWithDupGuard($table, $pk, array $cols)
@@ -805,7 +836,7 @@ class CmsBase extends Ork3
         // Did WE insert (1) or did a concurrent winner already hold the tuple (0)?
         // Read immediately after the Execute — nothing may intervene.
         if ($this->_affectedRows() < 1) {
-            // #44: ROW_COUNT()==0 does NOT prove a slug collision — INSERT IGNORE
+            // ROW_COUNT()==0 does NOT prove a slug collision — INSERT IGNORE
             // also swallows OTHER integrity errors (a bad FK, a NOT-NULL drop,
             // etc.). Re-run the live collision SELECT: only when a live row
             // actually holds the tuple is this a genuine slug collision (0);
@@ -819,7 +850,7 @@ class CmsBase extends Ork3
     }
 
     /**
-     * Soft-delete (C2 trash) a page/post row: stamp deleted_at instead of
+     * Soft-delete (trash) a page/post row: stamp deleted_at instead of
      * physically DELETEing, atomically with any caller-supplied reference
      * cleanup. Shared skeleton for CmsPage::DeletePage / CmsPost::DeletePost —
      * the only per-entity divergence (system-page protection, which inbound
@@ -904,7 +935,7 @@ class CmsBase extends Ork3
         // bump the scope's content version so CmsNav::GetMenu re-keys immediately.
         $this->_bumpContentVersion((string)$row['scope_type'], (int)$row['scope_id']);
 
-        // C14: audit the trash (fire-and-forget).
+        // Audit the trash (fire-and-forget).
         $this->_cmsAudit((int)$actorId, 'delete', $entityType, $id, (string)$row['scope_type'], (int)$row['scope_id']);
 
         return true;
@@ -1039,7 +1070,7 @@ class CmsBase extends Ork3
      * $applyUpdate closure (each has its own whitelist / verify / cache logic).
      *
      *   - 'scheduled' requires a target time (falls back to now == publish now);
-     *     the read path promotes it to 'published' once that time passes (C7).
+     *     the read path promotes it to 'published' once that time passes.
      *   - 'published' stamps published_at only when currently empty (an explicit
      *     $publishedAt always wins); unpublishing leaves the historical stamp.
      *   - anything else clamps to 'draft'.
@@ -1077,7 +1108,7 @@ class CmsBase extends Ork3
         if ($status === 'scheduled') {
             // Scheduling needs a target time; fall back to now (== publish now).
             $data['published_at'] = ($publishedAt !== null) ? $publishedAt : date('Y-m-d H:i:s');
-            // #10: scheduled content now exists — flip the flag so the read-path
+            // Scheduled content now exists — flip the flag so the read-path
             // promotion stops fast-path-skipping.
             $this->_markScheduledContent();
         } elseif ($status === 'published') {
@@ -1098,7 +1129,7 @@ class CmsBase extends Ork3
 
         $ok = $applyUpdate($data);
 
-        // C14: audit the publish-lifecycle transition (fire-and-forget). Read the
+        // Audit the publish-lifecycle transition (fire-and-forget). Read the
         // scope off the row so the audit entry is scope-attributed.
         if ($ok) {
             $DB->Clear();
@@ -1163,32 +1194,6 @@ class CmsBase extends Ork3
     /* ------------------------------------------------------------------ *
      * per-scope content version (cache key input, not a cache itself)
      * ------------------------------------------------------------------ */
-
-    /**
-     * GhettoCache "call" namespace + TTL for the per-scope CONTENT VERSION — a
-     * write-time stamp folded into cache keys that depend on a scope's pages,
-     * posts and nav rows (see CmsNav::GetMenu).
-     *
-     * WHY A STAMP AND NOT A CONTENT PROBE: the nav cache used to derive its key
-     * from a SUM(CRC32(...)) aggregate over ork_cms_nav_item — one indexed,
-     * join-free query, but a query on EVERY anonymous pageview all the same,
-     * which is precisely the DB work the cache exists to remove. The version is
-     * bumped by the handful of writers that can change what a scope's nav
-     * resolves instead, so a cache hit costs one memcache get and no DB work at
-     * all. The obligation that buys it: any future writer touching a page/post
-     * title, slug, status, published_at or deleted_at must bump too.
-     *
-     * The stored value is a fresh, never-reused stamp rather than an increment,
-     * so it needs no read-modify-write (Ghettocache exposes no atomic incr): two
-     * concurrent bumps simply store two different fresh values and both are
-     * "not the value any cached tree was stored under", which is the only
-     * property the key needs. A memcache eviction is equally safe — the reader
-     * re-seeds with a fresh stamp, which likewise cannot collide with a stamp
-     * used before (the random component means a collision would need ~1e6 bumps
-     * inside the same second).
-     */
-    protected const CONTENT_VERSION_CALL = 'CmsBase.content_version';
-    protected const CONTENT_VERSION_TTL  = 86400;
 
     /** GhettoCache key for a scope's content version. */
     private function _contentVersionKey($scopeType, $scopeId)

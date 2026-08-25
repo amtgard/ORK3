@@ -30,21 +30,7 @@
  * No destructive operations; safe to run repeatedly.
  */
 
-// Web-reachable file: refuse any non-CLI (HTTP) invocation.
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-
-require_once __DIR__ . '/../startup.php';
-
-if (!defined('UIR')) {
-    define('UIR', HTTP_UI_REMOTE . 'index.php?Route=');
-}
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 global $DB;
 

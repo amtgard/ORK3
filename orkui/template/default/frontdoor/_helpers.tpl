@@ -37,12 +37,9 @@ if (!function_exists('fdClampLimit')) {
     /**
      * Clamp an authored "how many items to show" field to a usable count.
      *
-     * Replaces the identical read-cast-floor-ceiling idiom that every list block
-     * (blog_feed, events_feed, kingdom_events/officers/parks, kingdoms_teaser,
-     * park_events/meeting/officers) had copy-pasted inline.
-     *
-     * Semantics are EXACTLY the previous inline behaviour, including the two
-     * non-obvious bits:
+     * Shared by every list block (blog_feed, events_feed, kingdom_events/
+     * officers/parks, kingdoms_teaser, park_events/meeting/officers). Two bits
+     * of the contract are non-obvious:
      *  - a value below 1 falls back to $default, NOT to 1. A cleared number input
      *    arrives as 0/''/null, and slicing to an empty grid under a live heading
      *    is worse than showing the default count.
@@ -72,26 +69,109 @@ if (!function_exists('fdClampLimit')) {
     }
 }
 
+if (!function_exists('fdScopedOrgId')) {
+    /**
+     * Resolve the org id an org-scoped partial should source from, or 0.
+     *
+     * Every scoped block/partial (kingdom_* , park_* , _shared/events,
+     * _shared/officers, _park_strip) opens with the same gate: the render-time
+     * site scope must be the kind this partial requires, otherwise there is no
+     * single org to source and the partial renders nothing at all rather than a
+     * broken or misleading empty box. This is that test, named once.
+     *
+     * The scope pair is PASSED IN rather than read here: $SiteNavScopeType /
+     * $SiteNavScopeId are template locals from the render scope, not globals, so
+     * a function cannot reach them. Callers pass `$SiteNavScopeType ?? ''` and
+     * `$SiteNavScopeId ?? 0`.
+     *
+     * @param mixed  $scopeType the current site scope kind ('kingdom'|'park'|…)
+     * @param mixed  $scopeId   the current site scope id
+     * @param string $wantKind  the scope kind this partial requires
+     * @return int the org id when the scope matches and is positive, else 0
+     */
+    function fdScopedOrgId($scopeType, $scopeId, $wantKind)
+    {
+        if ((string) $scopeType !== (string) $wantKind) {
+            return 0;
+        }
+        $id = (int) $scopeId;
+        return $id > 0 ? $id : 0;
+    }
+}
+
+if (!function_exists('fdSoonestParkDay')) {
+    /**
+     * Pick the soonest park day that has not already happened.
+     *
+     * Park::CalculateNextParkDay() can hand back a date in the PAST:
+     * 'week-of-month' resolves the Nth weekday of the CURRENT month (1st Sunday
+     * is 2026-08-02 for the whole of August) and 'monthly' behaves the same way.
+     * A plain min() over its output would therefore publish a date that has been
+     * and gone AND suppress the park's correct weekly day, which is strictly
+     * worse than showing nothing — hence the past-date guard below. It lives at
+     * the consumer because the calculator is shared with the CRM side.
+     *
+     * Both park-scope surfaces call this (park_hero.tpl's "Next game day" line
+     * and _park_strip.tpl's sticky when/where strip), so the guard cannot drift.
+     *
+     * @param array $parkDays the rows from Park::GetParkDays()['ParkDays']
+     * @return array|null ['d' => date string, 't' => Time, 'w' => WeekDay], or
+     *                    null when no row resolves to a present/future date
+     */
+    function fdSoonestParkDay(array $parkDays)
+    {
+        if (!class_exists('Park')) {
+            return null;
+        }
+        $soonest = null;
+        $todayTs = strtotime('today');
+        foreach ($parkDays as $day) {
+            if (!is_array($day)) {
+                continue;
+            }
+            $next = Park::CalculateNextParkDay(
+                $day['Recurrence'] ?? '',
+                $day['WeekOfMonth'] ?? 0,
+                $day['MonthDay'] ?? 0,
+                $day['WeekDay'] ?? '',
+                null,
+                $day['StartDate'] ?? null,
+                $day['WeekInterval'] ?? 0
+            );
+            if (!$next) {
+                continue;
+            }
+            $nextTs = strtotime($next);
+            if ($nextTs === false || $nextTs < $todayTs) {
+                continue;
+            }
+            if ($soonest === null || $nextTs < strtotime($soonest['d'])) {
+                $soonest = array(
+                    'd' => $next,
+                    't' => (string) ($day['Time'] ?? ''),
+                    'w' => (string) ($day['WeekDay'] ?? ''),
+                );
+            }
+        }
+        return $soonest;
+    }
+}
+
 if (!function_exists('fdSiteInternalHref')) {
     /**
      * Re-point a 'Page/view/{slug}' href onto THIS site's own
      * 'Site/page/{siteSlug}/{slug}' route, at RENDER time.
      *
-     * Mirrors org_header.tpl's $orgHref rewrite, which already does exactly
-     * this for CmsNav-sourced nav links — CmsNav resolves page links to the
-     * GLOBAL 'Page/view/' form, and org_header.tpl re-points them onto this
-     * site's own route using the CURRENT $SiteSlug on every render. That is
-     * why nav survives a site-slug rename for free (CmsSite::UpdateSite()
-     * allows editing 'slug') and a block-authored href field otherwise would
-     * not: seeding an already-resolved 'Site/page/{slug}/...' href bakes in
-     * whatever slug existed at SEED time, and nothing re-visits already-seeded
-     * block content when an officer later renames their site.
-     *
-     * Seeding the stable 'Page/view/{slug}' form instead (CmsSite::
-     * _sitePageHref()) and rewriting it HERE on every render, using whatever
-     * $SiteSlug is current for THIS request, means a rename fixes the link
-     * everywhere at once — the same guarantee nav already has. First consumer:
-     * steps.tpl's CTA (the park starter's "Your First Day" → New Players link).
+     * Mirrors org_header.tpl's $orgHref rewrite, which does exactly this for
+     * CmsNav-sourced nav links. Why the rewrite happens at render time rather
+     * than at seed time: CmsSite::UpdateSite() allows editing 'slug', and
+     * nothing re-visits already-seeded block content, so an href baked into the
+     * 'Site/page/{slug}/...' form at SEED time is stranded by a rename. Seeds
+     * therefore store the stable 'Page/view/{slug}' form (CmsSite::
+     * _sitePageHref()) and this resolves it against whatever $SiteSlug is
+     * current for THIS request, so a rename fixes every link at once — the same
+     * guarantee nav has. Consumer: steps.tpl's CTA (the park starter's
+     * "Your First Day" → New Players link).
      *
      * Only ever rewrites the exact prefix this codebase itself seeds/emits —
      * the block editor's href fields are always free text (no internal-page
@@ -105,8 +185,8 @@ if (!function_exists('fdSiteInternalHref')) {
      *                         partial renders inside the org site shell); ''
      *                         when unresolved (e.g. a CMS preview outside the
      *                         site shell), in which case $href passes through
-     *                         unchanged — the same graceful degrade the seed
-     *                         used before render-time resolution existed.
+     *                         unchanged — the stable 'Page/view/{slug}' form is
+     *                         itself a working link, so that degrades cleanly.
      * @return string
      */
     function fdSiteInternalHref($href, $siteSlug)
@@ -206,7 +286,7 @@ if (!function_exists('fdEmptyBlockNotice')) {
     /**
      * Emit the preview-only "this block is empty" note.
      *
-     * Six blocks (cta_band, card_grid, hero_carousel, photo_mosaic, richtext,
+     * Six blocks (cta_band, card_grid, hero_carousel, photo_mosaic, rich_text,
      * steps) share one wrapper: when every field is blank they render nothing at
      * all for a public visitor, and a small hint for an author in preview so the
      * empty block is discoverable in the editor instead of a blank stripe. The

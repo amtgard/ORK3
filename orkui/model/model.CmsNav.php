@@ -15,12 +15,6 @@
  */
 class Model_CmsNav extends Model
 {
-    /** @no-callers — mirror surface. */
-    public function get_menu($menu, $scopeType = 'global', $scopeId = 0)
-    {
-        return $this->CmsNav->GetMenu($menu, $scopeType, $scopeId);
-    }
-
     public function list_items($menu, $scopeType = 'global', $scopeId = 0)
     {
         return $this->CmsNav->ListItems($menu, $scopeType, $scopeId);

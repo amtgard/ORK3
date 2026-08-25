@@ -30,8 +30,8 @@
 # The design doc and the README quote it (the liveness sweep's denominator: every
 # in-scope file gets a rule-appropriate violation appended and must be caught),
 # and a figure re-derived by a hand-written duplicate of the scope logic would
-# drift from the scope logic — the same defect as the model glob that was
-# narrower than the controller glob. One implementation, asked directly.
+# drift from the scope logic — the same defect as a model glob narrower than
+# the controller glob. One implementation, asked directly.
 #
 # Exit 0 = clean, 1 = violations found, 2 = bad invocation.
 # --list always exits 0: it reports scope, not compliance.
@@ -42,12 +42,12 @@
 # ---------------------------------------------------------------------------
 # SCOPE RULES — what is in scope is decided by RULE, never by a file list
 #
-# Every rule below used to name the files it applied to. That made the gate
-# strongest on the files that already existed and blind to everything new: a
-# static <style> block could be put straight back into any of the nine
-# templates whose inline CSS this refactor lifted out, a NEW partial one
-# directory deeper defeated C4, and a new public surface template or a new
-# stylesheet was born with no coverage at all. Scope is now derived:
+# No rule below names the files it applies to. A named file list makes a gate
+# strongest on the files that already exist and blind to everything new: a
+# static <style> block could go straight back into any of the nine templates
+# whose inline CSS this refactor lifted out, a NEW partial one directory deeper
+# would defeat C4, and a new public surface template or a new stylesheet would
+# be born with no coverage at all. Scope is therefore DERIVED:
 #
 #   R1  CMS-OWNED DIRECTORIES. Everything (at any depth) under
 #         orkui/template/default/frontdoor/    -> CMS, PUBLIC tier
@@ -72,12 +72,11 @@
 #       contract: a Cms_ template that renders the public page must be named
 #       Cms_preview<something>.
 #
-#       THE CONTROLLER SET IS NO LONGER A HAND-MAINTAINED LIST. It used to be,
-#       documented as "the single manual step this design keeps" — and a manual
-#       step is a step someone forgets, silently: a new Ogre_view.tpl linking
-#       orkui.css, carrying a static <style> AND writing id="theme_container"
-#       class="ork-card" passed at exit 0, with no rule switched on for it at
-#       all. Three things now close that, and each covers the one before it:
+#       THE CONTROLLER SET IS NOT A HAND-MAINTAINED LIST. A manual step is a
+#       step someone forgets, silently: an Ogre_view.tpl linking orkui.css,
+#       carrying a static <style> AND writing id="theme_container"
+#       class="ork-card" would score exit 0 with no rule switched on for it at
+#       all. Three things close that, and each covers the one before it:
 #
 #         DERIVED (R9)  CMS_CONTROLLERS is read off the filesystem — the
 #                       controllers that use the CmsScopeContext trait, which is
@@ -86,13 +85,12 @@
 #         EVIDENCE (R10) A $TPL_ROOT template that RENDERS CMS CHROME (includes
 #                       a frontdoor/ or cms/ partial, links a stylesheet from
 #                       either) is a CMS surface whoever owns its controller —
-#                       the net under a CMS controller that never used the trait.
-#                       The include destination is RESOLVED by the same resolver
-#                       C4-PATH uses. It used to be a literal string match, which
-#                       matched no include line in this repo — every one of them
-#                       goes through a $fdDir assigned earlier in the file — so
-#                       R10 covered nothing but docblocks and the whole of this
-#                       net was open. See R10 below.
+#                       the net under a CMS controller that does not use the
+#                       trait. The include destination is RESOLVED by the same
+#                       resolver C4-PATH uses, because a literal string match
+#                       matches no include line in this repo — every one of them
+#                       goes through a $fdDir assigned earlier in the file — and
+#                       would cover nothing but docblocks. See R10 below.
 #         FAIL-CLOSED (C8) A $TPL_ROOT/<X>_<action>.tpl with no
 #                       controller.<X>.php is a routed surface the gate cannot
 #                       classify, and is REPORTED rather than skipped.
@@ -103,30 +101,30 @@
 #       is doing its job, not violating anything. There is nothing left to detect
 #       in that case, which is why the residual is principled rather than a gap.
 #
-#   R3  EVERY OTHER STYLESHEET UNDER orkui/template/ IS CRM-OWNED. C5 no longer
-#       watches style/ specifically; it watches "a .css that is not CMS-owned",
+#   R3  EVERY OTHER STYLESHEET UNDER orkui/template/ IS CRM-OWNED. C5 does not
+#       watch style/ specifically; it watches "a .css that is not CMS-owned",
 #       so a stylesheet dropped at orkui/template/default/probe-tween.css — or
 #       anywhere else outside the two CMS directories — is CRM code and is
 #       guarded as CRM code from the moment it lands.
 #
 #   R4  --all CONSIDERS UNTRACKED FILES. git ls-files alone cannot see a file
-#       that has not been `git add`ed yet, so an audit run used to declare a
-#       clean tree while an unguarded new template sat in the working copy.
-#       --all now unions `git ls-files` with `git ls-files --others
+#       that has not been `git add`ed yet, so on its own it would let an audit
+#       run declare a clean tree while an unguarded new template sat in the
+#       working copy. --all unions `git ls-files` with `git ls-files --others
 #       --exclude-standard` over the same pathspecs and names the untracked
 #       files it pulled in.
 #
 #   R5  SYMLINKS ARE REJECTED, NOT SCANNED. In --staged mode `git show :path`
 #       on a symlink returns the LINK TARGET as its content — one short line
-#       that trivially passes every rule — so a symlink was a way to stage
-#       arbitrary CSS/markup into an in-scope path with the gate green. A
+#       that trivially passes every rule — so an unrejected symlink is a way to
+#       stage arbitrary CSS/markup into an in-scope path with the gate green. A
 #       symlink in an in-scope path is reported (C0) in every mode.
 #
-#   R6  THE CRM STYLESHEET SET COMES FROM THE FILESYSTEM. C4 and C6 used to
-#       name three stylesheets (orkui.css, tokens.css, orkshell-interop.css),
-#       so reports.css (55 KB) and custom.css — both of which have sat in
-#       style/ the whole time — were invisible to them, and tomorrow's CRM
-#       stylesheet would have been too. Everything under $TPL_ROOT/style/ is
+#   R6  THE CRM STYLESHEET SET COMES FROM THE FILESYSTEM. C4 and C6 name no
+#       stylesheets: a fixed list of three (orkui.css, tokens.css,
+#       orkshell-interop.css) would leave reports.css (55 KB) and custom.css —
+#       both of which have sat in style/ the whole time — invisible to them,
+#       and tomorrow's CRM stylesheet too. Everything under $TPL_ROOT/style/ is
 #       CRM CSS by R3, so the shell asks the filesystem and hands the list to
 #       the scanner. A CMS stylesheet must therefore not reuse a CRM
 #       stylesheet's basename.
@@ -166,42 +164,41 @@
 #                                                and so has no CMS prefix
 #         frontdoor/**.js, cms/**.js             R1, extended to scripts
 #
-#       The model and domain sets used to be matched on a literal "Cms" prefix
-#       while the controllers were derived, which made the model set NARROWER
-#       than the controller set — and the gap was reachable. Blog and Site are
-#       CMS controllers, so model.BlogZz.php echoing a <style> and a CRM
-#       stylesheet <link>, and model.SiteZz.php defining --ork-brand, both
-#       passed at exit 0. trait.*.php was blind from the other direction:
-#       trait.CmsScope.php sits in the controller directory and is mixed into the
-#       CMS controllers, but the glob only said "controller.". Deriving all four
-#       from CMS_CONTROLLERS means the halves cannot drift, and it adds exactly
-#       one file that exists today (trait.CmsScope.php, clean) — the rest is
-#       coverage for the model.Blog.php that does not exist yet.
+#       ALL FOUR SETS COME FROM ONE DERIVATION over CMS_CONTROLLERS, so the
+#       halves cannot drift. Matching the model and domain sets on a literal
+#       "Cms" prefix while deriving the controllers would make the model set
+#       NARROWER than the controller set, and that gap is reachable: Blog and
+#       Site are CMS controllers, so model.BlogZz.php echoing a <style> and a
+#       CRM stylesheet <link>, or model.SiteZz.php defining --ork-brand, would
+#       score exit 0. A "controller."-only glob is blind from the other
+#       direction: trait.CmsScope.php sits in the controller directory and is
+#       mixed into the CMS controllers. The derivation costs exactly one file
+#       that exists today (trait.CmsScope.php, clean) — the rest is coverage
+#       for the model.Blog.php that does not exist yet.
 #
 #       Only C7 runs on these files. C1-C6 are about how CSS is declared and
 #       linked in stylesheets and templates, and applying them to PHP source
 #       would be a category error.
 #
 #   R9  THE CMS CONTROLLER SET IS DERIVED, NOT LISTED. Every rule above that
-#       says "for <C> in CMS_CONTROLLERS" used to rest on a hand-maintained
-#       list. CMS_CONTROLLERS is now read off the filesystem — the controllers
-#       carrying the CmsScopeContext trait — unioned with the historical list as
-#       a floor so the set can only grow. See R2 above for why, and for the two
-#       rules that back it up.
+#       says "for <C> in CMS_CONTROLLERS" rests on a set read off the
+#       filesystem — the controllers carrying the CmsScopeContext trait —
+#       unioned with a hardcoded floor list so the set can only ever grow. See
+#       R2 above for why, and for the two rules that back it up.
 #
 #  R10  A SURFACE TEMPLATE THAT RENDERS CMS CHROME IS A CMS SURFACE TEMPLATE,
 #       whatever its prefix and whoever owns its controller. Direct evidence,
 #       not inference: it includes a frontdoor/ or cms/ partial, or links a
 #       stylesheet from either directory.
 #
-#       THE INCLUDE DESTINATION IS RESOLVED, not matched as a literal. This was
-#       a grep for the string "frontdoor/<name>.tpl", and every CMS template in
-#       this repo writes `include $fdDir . 'render_blocks.tpl';` against a
-#       $fdDir assigned earlier in the file — so the literal is never on the
-#       include line, and the only lines R10 matched were the DOCBLOCKS that
-#       mention a partial by path. It therefore gave the idiom actually in use
-#       no coverage at all. R10 now calls resolve_include(), the same resolver
-#       C4-PATH calls; see the CLASSIFY block in the scanner.
+#       THE INCLUDE DESTINATION IS RESOLVED, not matched as a literal: R10
+#       calls resolve_include(), the same resolver C4-PATH calls (see the
+#       CLASSIFY block in the scanner). A grep for the string
+#       "frontdoor/<name>.tpl" would cover nothing, because every CMS template
+#       in this repo writes `include $fdDir . 'render_blocks.tpl';` against a
+#       $fdDir assigned earlier in the file: the literal is never on the include
+#       line, and the only lines such a grep matches are the DOCBLOCKS that
+#       mention a partial by path.
 #
 # ---------------------------------------------------------------------------
 # The rules
@@ -237,8 +234,8 @@
 #       file, both tiers, css and templates.
 #   C3  A CMS template may not carry a STATIC inline <style> block.
 #       Scope: EVERY CMS template — R1's frontdoor/**.tpl and cms/*.tpl, and
-#       R2's surface templates. It used to be frontdoor/blocks/*.tpl plus the
-#       cms/ and Cms_* globs, which left _index.tpl, Site_shell.tpl,
+#       R2's surface templates. Anything narrower — frontdoor/blocks/*.tpl plus
+#       the cms/ and Cms_* globs, say — leaves _index.tpl, Site_shell.tpl,
 #       Page_view.tpl, Blog_index.tpl, Blog_post.tpl, org_header.tpl,
 #       render_blocks.tpl, _park_strip.tpl and org_blog_index.tpl — precisely
 #       the templates whose inline CSS this project lifted out — free to take
@@ -247,12 +244,12 @@
 #         (a) interpolates a PHP VARIABLE in a declaration-value position, and
 #         (b) brings no more than C3_MAX_STATIC static declarations with it,
 #             counted cumulatively over the whole file.
-#       (a) alone was all-or-nothing per element, so ONE interpolation
-#       laundered an arbitrarily large static block (1 interpolation + 10
-#       static rules passed). (b) is the budget: it was sized against the last
-#       template that needed an interpolating <style> — blocks/columns.tpl,
+#       (a) alone is all-or-nothing per element, so on its own ONE interpolation
+#       would launder an arbitrarily large static block (1 interpolation + 10
+#       static rules). (b) is the budget, sized against the largest template
+#       that has ever needed an interpolating <style> — blocks/columns.tpl,
 #       which interpolated $fdbCount into grid-template-columns and declared 6
-#       static properties beside it before that CSS moved into blocks.css
+#       static properties beside it, before that CSS moved into blocks.css
 #       behind a .fdb-columns-N class — so the budget is 8, enough headroom for a
 #       genuine per-instance block, far short of a lifted-out stylesheet. It is
 #       per FILE, not per element, because N elements of 8 would be the same
@@ -271,15 +268,15 @@
 #                Scope is the whole tier (C1's scope, stylesheets included so an
 #                @import cannot smuggle one in) with exactly ONE exemption:
 #                frontdoor/_assets_inshell.tpl, the designated link point for
-#                the in-shell surfaces. The old scope was a two-file list, so a
-#                NEW partial — frontdoor/_assets_extra.tpl linking orkui.css,
-#                included from Site_shell.tpl — was the same one-line detour C4
+#                the in-shell surfaces. A two-file scope would not do it: a NEW
+#                partial — frontdoor/_assets_extra.tpl linking orkui.css,
+#                included from Site_shell.tpl — is the same one-line detour C4
 #                exists to close, one directory deeper.
 #                WHAT COUNTS AS A CRM STYLESHEET IS A PATH SHAPE, not a name
 #                list: any path that lands in a style/ directory, plus the
 #                basenames R6 derived from the filesystem. See "WHICH
 #                STYLESHEET A PATH ACTUALLY NAMES" below for why — a literal
-#                prefix missed `HTTP_TEMPLATE . "default/sty" . "le/orkui.css"`,
+#                prefix misses `HTTP_TEMPLATE . "default/sty" . "le/orkui.css"`,
 #                `../style/orkui.css`, `default/frontdoor/../style/orkui.css`
 #                and an href split across two lines, all of them spellings this
 #                codebase writes without trying to evade anything. And it is
@@ -398,7 +395,7 @@
 #         '\x3cstyle\x3e.fd-page{color:red}\x3c/style\x3e' + insertAdjacentHTML
 #         String.fromCharCode(60) + 'sty' + 'le' + String.fromCharCode(62)
 #
-#       Both used to score exit 0. The first is not merely an attack — \x3c is
+#       Undecoded, both score exit 0. The first is not merely an attack — \x3c is
 #       the routine idiom for keeping a literal </script> out of an inline
 #       script, so it is a plausible ACCIDENT, which is why it is decoded rather
 #       than argued about. esc_decode() and fcc_decode() (see above the rules)
@@ -407,7 +404,7 @@
 #       fromCharCode is emitted as a QUOTED literal so the existing
 #       concatenation-joining pass splices '<' + 'sty' + 'le' + '>' into
 #       '<style>'. C3's PHP-fragment net decodes the same way, on the lines that
-#       contain a PHP open tag — `echo "\x3cstyle\x3e"` in a .tpl was the same
+#       contain a PHP open tag — `echo "\x3cstyle\x3e"` in a .tpl is the same
 #       hole. The CSS rules do NOT decode these forms, deliberately: in CSS a
 #       backslash escape means something else (`\x3c` is the letter x then "3c"),
 #       and css_unescape() already handles the CSS spelling.
@@ -437,7 +434,7 @@
 # not an anti-evasion measure — HTML tag and attribute names are
 # case-insensitive, so <STYLE>, <Style>, ID="theme_container" and
 # CLASS="ork-card" are ordinary markup an unsuspecting developer writes, and
-# each one used to walk past C1/C3. CSS custom properties are genuinely
+# each one would walk past C1/C3 unfolded. CSS custom properties are genuinely
 # case-sensitive, so --ork-Brand is a different token from --ork-brand, but it
 # is still CMS code defining into the CRM's namespace and C2 folds it too. The
 # anchored patterns are kept (a class token must still START with "ork-"), so
@@ -445,7 +442,7 @@
 # excluded from the folding: PHP variable names are case-sensitive.
 # Carriage returns are stripped from every line before anything else looks at
 # it. On a CRLF file the trailing \r matches none of the [ \t]*$ anchors these
-# rules use, which silently disarmed C2's wrapped-colon detection and C6's
+# rules use, which would silently disarm C2's wrapped-colon detection and C6's
 # branch tracker on exactly the files a Windows editor produces.
 #
 # Comment handling. Comment text is stripped before the rules run — the files
@@ -453,7 +450,7 @@
 # "<style>" inside PHP docblocks), and documentation is not a violation. The
 # stripper is STRING-AWARE: a quoted string that closes on its own line is
 # copied through verbatim and never scanned for comment openers, so
-# `content: "/*"` or `var s = "<!-- x"` no longer opens a phantom comment that
+# `content: "/*"` or `var s = "<!-- x"` cannot open a phantom comment that
 # blinds the rest of the file. A quote that does NOT close on its line is not
 # treated as a string at all, so an apostrophe in prose ("don't") cannot
 # swallow a line either. Anything that still leaves a comment open at EOF is
@@ -527,11 +524,11 @@ CMS_DOMAIN_DIR="system/lib/ork3"
 
 # R2/R9 — THE CMS CONTROLLER SET IS DERIVED FROM THE FILESYSTEM.
 #
-# This used to be a hand-maintained list, documented as "the one manual step".
-# A manual step is a step someone forgets, and forgetting it was SILENT: a new
-# Ogre_view.tpl linking orkui.css, carrying a static <style> AND writing
-# id="theme_container" class="ork-card" passed at exit 0, because no rule was
-# switched on for it at all. A new surface got NO coverage and said nothing.
+# A hand-maintained list would be a manual step, and a manual step is a step
+# someone forgets — silently: an Ogre_view.tpl linking orkui.css, carrying a
+# static <style> AND writing id="theme_container" class="ork-card" scores exit
+# 0 when no rule is switched on for it at all. A new surface would get NO
+# coverage and say nothing.
 #
 # So the set is derived the way check-layering.sh derives DOMAIN_CLASSES from
 # system/lib/ork3/class.*.php — ask the filesystem, not a list. The marker is
@@ -542,7 +539,7 @@ CMS_DOMAIN_DIR="system/lib/ork3"
 # which is the point: a controller cannot participate in CMS scope resolution
 # without it.
 #
-# The historical list is kept as a FLOOR, not as the source of truth. Union, not
+# A hardcoded list is kept as a FLOOR, not as the source of truth. Union, not
 # replacement: deriving alone would mean that deleting the trait from
 # controller.Blog.php quietly removes every Blog_*.tpl from scope, which is the
 # original failure mode wearing a different hat. The floor makes the set
@@ -560,33 +557,33 @@ CMS_CONTROLLERS=$(
 # R8 — the CMS PHP source set, for C7. ONE derivation, applied to all three
 # directories, so the halves cannot drift apart.
 #
-# Controllers were already derived from CMS_CONTROLLERS, but models and domain
-# classes were matched on a literal "Cms" prefix instead. That is a NARROWER set
-# than the controller set, and the gap was reachable: Blog and Site are CMS
-# controllers, so orkui/model/model.BlogZz.php echoing a <style> and a CRM
-# stylesheet <link>, and orkui/model/model.SiteZz.php defining --ork-brand, both
-# passed at exit 0 — CMS-owned membranes for CMS surfaces, injecting exactly what
-# C7 exists to stop, invisible because nobody had written "Cms" in the filename.
-# orkui/controller/trait.*.php was blind for the same reason from the other
-# direction: trait.CmsScope.php sits in the controller directory and is mixed
-# into the CMS controllers, but the glob only said "controller.".
+# Deriving the controllers while matching models and domain classes on a
+# literal "Cms" prefix would make the model set NARROWER than the controller
+# set, and that gap is reachable: Blog and Site are CMS controllers, so
+# orkui/model/model.BlogZz.php echoing a <style> and a CRM stylesheet <link>,
+# or orkui/model/model.SiteZz.php defining --ork-brand, would score exit 0 —
+# CMS-owned membranes for CMS surfaces, injecting exactly what C7 exists to
+# stop, invisible because nobody wrote "Cms" in the filename. A
+# "controller."-only glob is blind for the same reason from the other
+# direction: orkui/controller/trait.CmsScope.php sits in the controller
+# directory and is mixed into the CMS controllers.
 #
-# So every CMS PHP source is now <prefix>.<C>*.php for <C> in CMS_CONTROLLERS,
-# in the directory that prefix belongs to:
+# So every CMS PHP source is <prefix>.<C>*.php for <C> in CMS_CONTROLLERS, in
+# the directory that prefix belongs to:
 #
 #   orkui/controller/controller.<C>*.php   controller.CmsAjax.php, a future
 #   orkui/controller/trait.<C>*.php        controller.SiteAjax.php, trait.CmsScope.php
 #   orkui/model/model.<C>*.php             model.CmsPage.php, a future model.Blog.php
 #   system/lib/ork3/class.<C>*.php         class.CmsThemeTokens.php, a future class.Site*.php
 #
-# Widening the model and domain sets to Site/Page/Blog adds no file that exists
+# Covering the model and domain sets for Site/Page/Blog adds no file that exists
 # today (there is no model.Site*.php, model.Page*.php, model.Blog*.php or
 # class.{Site,Page,Blog}*.php), so it costs nothing now and covers the next one
 # on the day it lands. It is also the right rule in its own terms for the domain
 # directory: a system/lib/ork3/ class emitting CSS is a layering violation
 # whoever owns it.
 #
-# model.FrontDoor.php is the one name that still has to be written out: the front
+# model.FrontDoor.php is the one name that has to be written out: the front
 # door is rendered by the BASE controller, so its membrane carries no CMS
 # controller prefix to derive from.
 # (CMS_CONTROLLER_DIR, CMS_MODEL_DIR and CMS_DOMAIN_DIR are set above the
@@ -629,16 +626,22 @@ C3_MAX_STATIC=8
 # below-budget direction only — never the above — is forgiven for one run by
 # CSS_STATIC_ALLOW_SLACK=1, mirroring CSS_DUP_ALLOW_SLACK=1.
 #
+# This ratchet is re-pinned BY HAND, unlike its sibling in
+# bin/check-css-duplication.php (--rebaseline / npm run lint:css:dupes:rebaseline),
+# because there is exactly one number here and the failure already prints the
+# file:line and the replacement line to paste. The two share a shape — pin,
+# fail in both directions, one-run below-budget slack — but not a rewriter.
+#
 # Raising it is therefore a deliberate, reviewable act, which is the whole point:
 # the fourth partial is not a judgement call about whether 8 is small, it is a
 # diff that raises a pinned number.
 C3_TOTAL_STATIC=0
 
 # R6 — THE CRM STYLESHEET SET IS DERIVED FROM THE FILESYSTEM, not listed here.
-# C4-link and C6 used to hardcode "orkui.css|tokens.css|orkshell-interop.css",
-# which meant the two other stylesheets that have sat in style/ all along —
-# reports.css (55 KB) and custom.css — were unknown to the gate, and a CRM
-# stylesheet added tomorrow would be unknown to it too. Everything under
+# Hardcoding "orkui.css|tokens.css|orkshell-interop.css" into C4-link and C6
+# would leave the two other stylesheets that have sat in style/ all along —
+# reports.css (55 KB) and custom.css — unknown to the gate, and a CRM
+# stylesheet added tomorrow unknown to it too. Everything under
 # $TPL_ROOT/style/ is CRM CSS by R3, so ask the filesystem what is there. Same
 # idea as check-layering.sh deriving DOMAIN_CLASSES from system/lib/ork3/.
 #
@@ -718,7 +721,7 @@ function str_end(s, i, qc,    j, n, c) {
 
 # Is the "//" at position i a URL rather than a line comment? "https://x",
 # "@import url(//cdn/x.css)", "src=//cdn/x". Getting this wrong swallows the
-# rest of the line, which is how a protocol-relative @import used to hide a
+# rest of the line, which would let a protocol-relative @import hide a
 # #theme_container rule sitting after it.
 function url_slashes(s, i,    p) {
     if (i <= 1) return 0
@@ -1055,7 +1058,7 @@ function style_close(    ) {
 # text case-folded. tolower() preserves length, so positions found in `ls`
 # index `s` exactly — which is how <STYLE> and <Style> get found. HTML tag
 # names are case-insensitive, so uppercasing one is valid markup, not
-# obfuscation, and it used to walk straight past C3.
+# obfuscation, and unfolded it walks straight past C3.
 function scan_style(s, ls,    p, q, seg) {
     while (1) {
         if (!in_style) {
@@ -1162,11 +1165,11 @@ function last_literal(s,    i, n, c, e, lit) {
 # DIR_TEMPLATE . '<literal>', __DIR__ . '<literal>', or another variable already
 # tracked.
 #
-# The DIR_TEMPLATE arm used to be hard-wired to the literal "default/frontdoor/",
-# which was enough while C4-PATH was the only caller — it only ever asks whether
-# an include stays inside frontdoor/. R10 now asks the same resolver WHICH CMS
-# directory a template renders from, and cms/ is one of the two answers, so the
-# arm resolves whichever literal it is actually handed.
+# The DIR_TEMPLATE arm resolves whichever literal it is handed, rather than the
+# hard-wired "default/frontdoor/" that would satisfy C4-PATH alone — C4-PATH
+# only ever asks whether an include stays inside frontdoor/. R10 asks the same
+# resolver WHICH CMS directory a template renders from, and cms/ is one of the
+# two answers.
 #
 # Only the exact `CONST . '<literal>'` shape is accepted. A base with an
 # unproven segment in the middle (DIR_TEMPLATE . $sub . 'x/') stays untracked on
@@ -1214,11 +1217,11 @@ function base_literal(rhs,    lit) {
 # answer as EVIDENCE ("which CMS directory does this template render from?").
 # Both have to agree about what `include $fdDir . 'render_blocks.tpl';` means,
 # and the only way to guarantee that is for there to be one implementation of
-# it. R10 used to carry its own — a grep for the literal string "frontdoor/…",
-# which no include line in this repo contains, because every one of them is
-# written against a $fdDir assigned earlier in the file. So R10 matched nothing
-# but the docblocks that happen to mention a partial by path, and added no
-# protection at all against the idiom actually in use.
+# it. A second implementation in R10 — a grep for the literal string
+# "frontdoor/…" — would match nothing, because no include line in this repo
+# contains that literal: every one is written against a $fdDir assigned earlier
+# in the file, so the grep would find only the docblocks that happen to mention
+# a partial by path, and add no protection against the idiom actually in use.
 function resolve_include(s,    expr, p, lit, base, vn) {
     if (!match(tolower(mask_strings(s)), /(^|[^a-z0-9_$])(include|require)(_once)?[ \t(]/)) return ""
     expr = substr(s, RSTART + RLENGTH - 1)
@@ -1267,9 +1270,10 @@ function check_include(s,    expr, p, tgt) {
 # ---------------------------------------------------------------------------
 # C4-LINK / C6 — WHICH STYLESHEET A PATH ACTUALLY NAMES
 #
-# Both rules used to ask "does this line contain the literal `default/style/…css`
-# or one of three hardcoded basenames?". Every spelling below is idiomatic in
-# this codebase rather than obfuscation, and each one walked straight past:
+# Neither rule asks "does this line contain the literal `default/style/…css` or
+# one of three hardcoded basenames?". Every spelling below is idiomatic in this
+# codebase rather than obfuscation, and each one walks straight past a literal
+# match:
 #
 #   HTTP_TEMPLATE . "default/style/" . "orkui.css"     the literal is split
 #   HTTP_TEMPLATE . "default/sty" . "le/orkui.css"     …anywhere, including mid-dir
@@ -1280,7 +1284,7 @@ function check_include(s,    expr, p, tgt) {
 #   default/style/reports.css                          not one of the three names
 #   @import url("../../style/reports.css")             ditto, from a stylesheet
 #
-# The replacement matches PATH SHAPE, on a resolved path:
+# What runs instead matches PATH SHAPE, on a resolved path:
 #
 #   1. PHP is evaluated as far as string values go. Adjacent literals are
 #      joined, HTTP_TEMPLATE / DIR_TEMPLATE / __DIR__ are known, and a variable
@@ -1307,9 +1311,8 @@ function check_include(s,    expr, p, tgt) {
 # links) from reading as violations.
 #
 # A stylesheet injected by JavaScript, or echoed straight out of a controller,
-# used to be out of reach here: C4 reads templates, and frontdoor/js/ was not
-# scanned by this gate at all. R8 + C7 below bring the CMS PHP and JS sources
-# into scope for exactly that. What no text scanner can follow is a URL that
+# is out of reach of C4 itself, which reads templates only. R8 + C7 below bring
+# the CMS PHP and JS sources into scope for exactly that. What no text scanner can follow is a URL that
 # never appears as text in the tree — tests/cms-css/boundary_test.php is the
 # backstop that reads what a live surface actually serves.
 # ---------------------------------------------------------------------------
@@ -1887,7 +1890,7 @@ BEGIN {
     C3_FIX = "This CSS belongs in " C3_DEST " so it is cacheable, lintable and visible to duplication analysis, instead of being re-sent in the HTML of every render. Only a <style> that interpolates a PHP variable into a declaration value (blocks/columns.tpl) may stay inline."
     C6_FIX = "Standalone public org sites must not download CRM application CSS. Link it only inside the `if (empty($IsOrgSite)):` branch of default.theme; org sites get frontdoor/css/cms-base.css instead."
     C7_WHERE = "CSS reaches a CMS page through three sanctioned channels only: frontdoor/_assets_public.tpl and frontdoor/_assets_inshell.tpl for the public tier, cms/_shell_top.tpl for the admin, and default.theme's $IsOrgSite gate. It LIVES in a stylesheet under frontdoor/css/ or cms/css/."
-    C7_STYLE_FIX = "A controller, model, domain class or script must not put a <style> element on the page — it is re-sent in the HTML of every render, invisible to stylelint and to the duplication ratchet, and it is exactly the injection route this gate was blind to. " C7_WHERE " The one <style> the CMS legitimately emits is default.theme's theme-token block, whose CSS text CmsThemeTokens builds."
+    C7_STYLE_FIX = "A controller, model, domain class or script must not put a <style> element on the page — it is re-sent in the HTML of every render, invisible to stylelint and to the duplication ratchet, and it is exactly the injection route C7 exists to close. " C7_WHERE " The one <style> the CMS legitimately emits is default.theme's theme-token block, whose CSS text CmsThemeTokens builds."
     C7_LINK_FIX = "A controller, model, domain class or script must not link a stylesheet. " C7_WHERE
     C7_IMPORT_FIX = "@import from a CMS PHP source or script injects a stylesheet the gate cannot account for, serially after the linking stylesheet has parsed. " C7_WHERE
     C7_SHELL_FIX = "Naming an ORK application-shell selector from CMS code couples the CMS to the ORK chrome a standalone org site never renders, where the hook styles nothing. Give the element an .fd-/.cms-/.org- class, and put any genuine coupling in frontdoor/css/orkshell-interop.css, which is the designated place for it."
@@ -1905,19 +1908,19 @@ BEGIN {
 #
 # It lives here, inside the scanner, rather than as a grep in the shell,
 # because the question it asks IS resolve_include()'s question — and a second
-# implementation of that drifts from the first. It had: the shell grepped for
-# the literal string "frontdoor/<name>.tpl", while every CMS template in the
-# repo writes
+# implementation of that drifts from the first. A shell-side grep for the
+# literal string "frontdoor/<name>.tpl" would be that second implementation,
+# and it would find nothing: every CMS template in the repo writes
 #
 #     $fdDir = DIR_TEMPLATE . 'default/frontdoor/';
 #     include $fdDir . '_assets_public.tpl';
 #
-# so the literal never appears on an include line and the only thing R10 ever
-# matched was the DOCBLOCKS that mention a partial by path.
+# so the literal never appears on an include line, and the only thing such a
+# grep matches is the DOCBLOCKS that mention a partial by path.
 #
 # EVIDENCE IS CODE, NOT PROSE: the line is decommented before either net reads
 # it, so a template that merely documents frontdoor/render_blocks.tpl in a
-# comment is no longer classified by it.
+# comment is not classified by it.
 # ---------------------------------------------------------------------------
 function cls_emit(tier) {
     if (tier == "PUBLIC") { if (cls_pub) return; cls_pub = 1 }
@@ -2213,9 +2216,9 @@ AWKEOF
 # a heuristic about naming, it is the template saying what it renders.
 # frontdoor/ implies the PUBLIC tier, cms/-only implies ADMIN.
 #
-# THE EVIDENCE IS RESOLVED, NOT PATTERN-MATCHED. This used to be a grep for the
-# literal string "frontdoor/<name>.tpl" on the include line. Every CMS template
-# in this repo writes its includes the other way round:
+# THE EVIDENCE IS RESOLVED, NOT PATTERN-MATCHED. A grep for the literal string
+# "frontdoor/<name>.tpl" on the include line would find nothing: every CMS
+# template in this repo writes its includes the other way round:
 #
 #     $fdDir = DIR_TEMPLATE . 'default/frontdoor/';
 #     ...
@@ -2223,14 +2226,14 @@ AWKEOF
 #     include $fdDir . 'render_blocks.tpl';
 #
 # so the literal never appears on the include line at all, and the only lines
-# R10 ever matched were the DOCBLOCKS that happen to mention a partial by path.
-# Against the idiom actually in use it added nothing: a brand-new routed CMS
+# it would match are the DOCBLOCKS that happen to mention a partial by path.
+# Against the idiom actually in use it adds nothing: a brand-new routed CMS
 # surface whose controller does not use the trait, including its partials the
 # normal way, could link orkui.css, carry a static <style> AND write
 # id="theme_container" class="ork-card" with every gate at exit 0 — reproduced,
 # not theorised.
 #
-# So R10 now asks the SAME resolver C4-PATH asks — resolve_include() in the awk
+# So R10 asks the SAME resolver C4-PATH asks — resolve_include() in the awk
 # program above, which follows an in-file `$var = DIR_TEMPLATE . '…'` assignment
 # one hop, knows __DIR__ and DIR_TEMPLATE, and fails closed when it cannot prove
 # a destination. One resolver, two callers, so the two cannot drift: C4-PATH
@@ -2242,9 +2245,9 @@ AWKEOF
 # 9 admin — the Cms_* screens), and NONE of the other 97 templates under
 # $TPL_ROOT does. Cms_deny.tpl is the one that qualifies on nothing: it includes
 # no partial and links no stylesheet, which is exactly why it is C3-exempt, and
-# R2's prefix rule holds it. The prefix rules already cover all 16, so R10 still
+# R2's prefix rule holds it. The prefix rules already cover all 16, so R10
 # changes no existing file's rule mask — it is purely the net under a future
-# surface, which is the only thing it was ever for.
+# surface, which is the only thing it is for.
 #
 # COST: this lexes every $TPL_ROOT template once per invocation (~1s here), the
 # price of asking the resolver instead of grepping. Do not "optimise" it with a
@@ -2509,8 +2512,8 @@ for f in $CANDIDATES; do
     fi
 
     # R5 — a symlink is never scanned. `git show :path` on one returns the link
-    # TARGET, not the content it resolves to, so a staged symlink used to sail
-    # through every rule while pointing at anything at all.
+    # TARGET, not the content it resolves to, so an unrejected staged symlink
+    # would sail through every rule while pointing at anything at all.
     if [ "$MODE" = "staged" ]; then
         SMODE=$(git ls-files --stage -- "$f" 2>/dev/null | awk 'NR==1{print $1}')
         if [ "$SMODE" = "120000" ]; then
@@ -2701,7 +2704,7 @@ if [ -n "$UNCLASSIFIED" ]; then
         printf "        %s-> The router resolves <Controller>/<action> to \$TPL_ROOT/<Controller>_<action>.tpl, so\n" "$C_DIM"
         echo "           this file is a routed surface with no controller behind it. The gate cannot tell"
         echo "           whether it is a CMS surface or a CRM one, so it runs NO rule on it — which is how a"
-        echo "           new surface used to get zero coverage in silence. Add the controller (a CMS one uses"
+        echo "           new surface would get zero coverage in silence. Add the controller (a CMS one uses"
         echo "           the CmsScopeContext trait, which is what puts its templates in scope automatically),"
         printf "           or rename the file to a partial (leading underscore) if it is not a routed surface.%s\n" "$C_OFF"
     done

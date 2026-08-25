@@ -26,6 +26,10 @@
  *   $Caps       array   capability flags; rail hides nav/media items without them.
  *   UIR                 (constant) controller route base.
  *
+ * Exports back to the page (available after this include):
+ *   $cmsFmtDate callable  render a CMS timestamp as 'M j, Y g:i A', or an
+ *                         em-dash for an empty/zero/unparseable value.
+ *
  * NOTE: $cmsActions is intentionally RAW HTML (button markup the page already
  * builds). Everything else is escaped here.
  */
@@ -52,6 +56,21 @@ $shScopeLabel = isset($CmsScopeLabel) ? (string)$CmsScopeLabel : '';
 
 $shH = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
+
+/**
+ * $cmsFmtDate — the one CMS timestamp format, exported to every surface the
+ * shell wraps so the Pages, Posts, Media, Sites and Dashboard lists all read the
+ * same. Guards the empty string, MySQL's zero-date and an unparseable value,
+ * returning an em-dash rather than "Dec 31, 1969".
+ */
+$cmsFmtDate = function ($raw) {
+    $raw = (string)$raw;
+    if ($raw === '' || $raw === '0000-00-00 00:00:00') {
+        return '—';
+    }
+    $ts = strtotime($raw);
+    return $ts ? date('M j, Y g:i A', $ts) : '—';
 };
 
 // Rail items: [key, label, href, icon, show?]. `show` defaults to true. Each

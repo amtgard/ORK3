@@ -1,8 +1,9 @@
 -- Amtgard CMS — Integrity & Safety-Net migration
 -- =============================================================================
--- Adds the schema behind five hardening changes to the CMS data layer. AUTHOR
--- ONLY — do NOT run this against the shared local DB; it is applied at deploy
--- (MariaDB client, not mysql).
+-- Adds the schema behind five hardening changes to the CMS data layer. Applied
+-- at deploy with the MariaDB client (not mysql); every statement is guarded, so
+-- it is also safe to apply locally (seed-cms-demo.sh does exactly that — the
+-- CMS seeds depend on the columns added here).
 --
 -- Covers:
 --   C2  Content safety net — soft-delete (deleted_at) + revision history table.

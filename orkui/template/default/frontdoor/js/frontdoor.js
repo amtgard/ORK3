@@ -172,13 +172,12 @@
 })();
 
 // ---- staff_roster: shared contact-card modal ------------------------------
-// Moved verbatim out of frontdoor/blocks/staff_roster.tpl (it contained no PHP)
-// so it is downloaded once and cacheable instead of being inlined per render.
-// The partial still emits the single shared #fdRosterModal markup + its CSS;
-// this behaviour is fully class/attribute-delegated off document, so it does
-// not care how many staff_roster blocks are on the page (or whether any are).
-// Keeps its own DOMContentLoaded shim: frontdoor.js has none and the IIFE above
-// runs at parse time, whereas this needs #fdRosterModal to exist in the DOM.
+// Drives the single shared #fdRosterModal contact card that staff_roster.tpl
+// emits. Fully class/attribute-delegated off document, so it does not care how
+// many staff_roster blocks are on the page (or whether any are), and it lives
+// here rather than inline in the partial so it is downloaded once and cacheable.
+// Runs behind its own DOMContentLoaded shim — unlike the IIFE above, which runs
+// at parse time, this one needs #fdRosterModal to already exist in the DOM.
 (function () {
     if (window.__fdRosterModalInit) { return; }
     window.__fdRosterModalInit = true;

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Model_CmsView — thin pass-through to the CmsView lib (usage analytics #09).
+ * Model_CmsView — thin pass-through to the CmsView lib (usage analytics).
  *
  * The base Model constructor auto-instantiates new APIModel('CmsView')
  * (because system/lib/ork3/class.CmsView.php exists), and Model::__call

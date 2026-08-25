@@ -41,7 +41,7 @@ class Controller_Cms extends Controller
     private $_capCache = array();
 
     /**
-     * #21: per-request memo of the block catalog. _blockCatalog() is otherwise
+     * Per-request memo of the block catalog. _blockCatalog() is otherwise
      * recomputed ~15x per Cms/edit — once per _starter() call inside _pageTypes()
      * (each starter re-derived the dynamic-type set from a fresh catalog build) —
      * each rebuild doing a file_exists() probe per block type. Cached here so the
@@ -148,7 +148,7 @@ class Controller_Cms extends Controller
         });
         $recent = array_slice($recent, 0, 6);
 
-        // ---- #09 usage analytics: scope rollup + most-viewed content. Reads are
+        // ---- Usage analytics: scope rollup + most-viewed content. Reads are
         //      best-effort in the lib (pre-migration → zeros/empty), so this never
         //      breaks the dashboard. "Most viewed" links into the editor, mirroring
         //      the recent-items list, so an officer can act on the feedback. ----
@@ -182,7 +182,7 @@ class Controller_Cms extends Controller
         );
         $this->data['TopViewed'] = $topViewed;
 
-        // #128: "Top content (30 days)" panel — the most-viewed pages/posts over
+        // "Top content (30 days)" panel — the most-viewed pages/posts over
         // the rolling window as {title,url,count}, url deep-linking into the editor
         // (mirrors TopViewed so an officer can act on it). Best-effort in the lib
         // (pre-migration → empty), so this never breaks the dashboard.
@@ -401,7 +401,7 @@ class Controller_Cms extends Controller
         //      flag for those that already have a site (so the picker can nudge
         //      toward un-provisioned orgs). Opening a scoped dashboard auto-fires
         //      EnsureSite, so provisioning needs no dedicated endpoint. ----
-        // #17: the picker only needs id + name (+ the has_site flag). GetKingdoms()
+        // The picker only needs id + name (+ the has_site flag). GetKingdoms()
         // loads Common::get_configs() per kingdom (an AtlasColor lookup we never
         // use here) — an N-config fan-out. Kingdom::ListActiveIdName() is the light
         // lister for exactly this: active kingdoms, id + name, name-ordered in SQL
@@ -424,7 +424,7 @@ class Controller_Cms extends Controller
 
         // Rail flag: this is a super-admin so the "All sites" entry is shown.
         $this->data['Caps'] = $this->_capFlags($uid);
-        // #129: held-capability set for window.CMS_CAPS (super-admin → full set).
+        // Held-capability set for window.CMS_CAPS (super-admin → full set).
         $this->data['CmsCaps'] = $this->_capList($uid);
     }
 
@@ -489,7 +489,7 @@ class Controller_Cms extends Controller
 
         $pages = $this->CmsPage->list_pages($filters);
         $pages = is_array($pages) ? $pages : array();
-        // #13: resolve every row's nested slug PATH from the fetched rows ONCE (an
+        // Resolve every row's nested slug PATH from the fetched rows ONCE (an
         // in-memory parent_id walk) instead of a per-row PagePath() DB round-trip
         // (an N+1). Falls back to PagePath for any row whose ancestry can't be
         // resolved in memory (e.g. a filtered list missing an ancestor, or rows
@@ -523,7 +523,7 @@ class Controller_Cms extends Controller
         $this->data['Search']     = $search;
         $this->data['StatusFilter'] = $status;
 
-        // #128: per-row view counts for the list's "Views" column — one batched
+        // Per-row view counts for the list's "Views" column — one batched
         // read (page_id IN …) for the whole page, not an N+1. Best-effort in the
         // lib (pre-migration → empty map); the template falls back to ?? [].
         $this->load_model('CmsView');
@@ -607,9 +607,9 @@ class Controller_Cms extends Controller
                 $this->data['Message'] = 'Page not found.';
                 return;
             }
-            // C2: editing an existing page returns ALL its blocks (incl. disabled)
+            // Editing an existing page returns ALL its blocks (incl. disabled)
             // via GetBlocksForEditor so the editor can toggle them; the public
-            // get_blocks()/renderer path stays enabled-only.
+            // CmsPage::GetBlocks()/renderer path stays enabled-only.
             $blocks = $this->CmsPage->get_blocks_for_editor('page', (int)$page['page_id']);
             $this->data['page_title'] = 'Edit: ' . $page['title'];
         }
@@ -621,7 +621,7 @@ class Controller_Cms extends Controller
         $this->data['BlockCatalog'] = $catalog;
         $this->data['PageTypes']    = $this->_pageTypes();
         $this->data['BlockAllow']   = $this->_blockAllow($catalog);
-        // C22: the existing-tags library feeds the blog_feed block's validated tag
+        // The existing-tags library feeds the blog_feed block's validated tag
         // picker (a free-text tag silently rendered an empty feed on a typo).
         $this->data['AllTags']      = $this->_tagOptions();
     }
@@ -712,7 +712,7 @@ class Controller_Cms extends Controller
         // surface carrying the app navbar plus ~56px of dead space.
         $this->data['IsCmsPage']   = true;
         $this->data['no_index']    = true;
-        // C3: Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
+        // Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
         // inline editor actions carry the token. The constructor already set it
         // (see __construct), so the emit is guaranteed non-empty.
 
@@ -745,7 +745,7 @@ class Controller_Cms extends Controller
         // request scope, so this cannot surface another org's data.
         $this->data['SiteNavScopeType'] = (string)$scope['type'];
         $this->data['SiteNavScopeId']   = (int)$scope['id'];
-        // E2: preview in the ORG'S OWN COLOURS. The saved preview never emitted
+        // Preview in the ORG'S OWN COLOURS. The saved preview never emitted
         // the scope's theme tokens, so a themed kingdom previewed its pages
         // against the default palette and then found a different-looking page
         // once published. CmsThemeTokens builds the CSS; default.theme emits it
@@ -792,7 +792,7 @@ class Controller_Cms extends Controller
         $this->data['TagFilter'] = $tag;
         $this->data['AllTags']   = $this->CmsPost->list_all_tags();
 
-        // #128: per-row view counts for the post list's "Views" column — one
+        // Per-row view counts for the post list's "Views" column — one
         // batched read (post_id IN …), best-effort (template falls back to ?? []).
         $this->load_model('CmsView');
         $sf = $this->_scopeFilters($scope);
@@ -924,7 +924,7 @@ class Controller_Cms extends Controller
                 $this->data['Message']   = 'Post not found.';
                 return;
             }
-            // C2: the editor needs ALL body blocks (incl. disabled) so they can be
+            // The editor needs ALL body blocks (incl. disabled) so they can be
             // toggled; get_post_blocks() is the enabled-only public path.
             $blocks  = $this->CmsPage->get_blocks_for_editor('post', (int)$post['post_id']);
             $heroRef = $this->_heroRef($post, $scope);
@@ -938,7 +938,7 @@ class Controller_Cms extends Controller
         $catalog = $this->_blockCatalog();
         $this->data['BlockCatalog'] = $catalog;
         $this->data['BlockAllow']   = $this->_blockAllow($catalog);
-        // C22: existing-tags library for the blog_feed block's validated tag picker.
+        // Existing-tags library for the blog_feed block's validated tag picker.
         $this->data['AllTags']      = $this->_tagOptions();
     }
 
@@ -1072,7 +1072,7 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * #129: the FLAT list of capability strings the user actually holds in a
+     * The FLAT list of capability strings the user actually holds in a
      * scope, for the shell to emit as window.CMS_CAPS (admin-templates annotates /
      * disables actions the user lacks). A super-admin holds everything, so return
      * the full canonical set for them (nothing gets disabled). Never breaks an
@@ -1217,7 +1217,7 @@ class Controller_Cms extends Controller
             ? (bool)$this->CmsAuth->cms_can($uid, $capability, $scope)
             : (bool)$capability($uid, $scope);
         if (!$ok) {
-            // #129: when the gate is a single named capability, pass it through so
+            // When the gate is a single named capability, pass it through so
             // the deny page can tell the user exactly what they're missing. A
             // callable gate (any-of / dashboard "any capability") has no single
             // name → null.
@@ -1254,7 +1254,7 @@ class Controller_Cms extends Controller
         // The public URL namespace for this scope ('p' for parks, else 'k'), read
         // from the lib that owns the rule so the dashboard stops re-deriving it.
         $this->data['SitePrefix']    = CmsSite::UrlPrefixFor($scope['type'] ?? '');
-        // #129: the caller's held capability set, for the shell to emit as
+        // The caller's held capability set, for the shell to emit as
         // window.CMS_CAPS so the admin UI can annotate/disable actions the user
         // lacks. Every scoped render path funnels through here.
         $this->data['CmsCaps']       = $this->_capList($this->_uid(), $scope);
@@ -1291,7 +1291,7 @@ class Controller_Cms extends Controller
 
     /**
      * Render a self-contained "you don't have permission" page for a logged-in
-     * user who lacks CMS access, then stop. #109: the markup now lives in the
+     * user who lacks CMS access, then stop. The markup lives in the
      * bare-chrome Cms_deny.tpl; the controller keeps only the 403 + X-Robots-Tag
      * headers and renders that template directly (the deny page deliberately
      * bypasses the themed View pipeline — a denied viewer holds no CMS scope to
@@ -1304,7 +1304,7 @@ class Controller_Cms extends Controller
             http_response_code(403);
         }
         $HomeUrl = (string)UIR;
-        // #129: the specific capability the user lacked (when the gate was a single
+        // The specific capability the user lacked (when the gate was a single
         // named capability), for the deny page to name. '' when unknown (a scope
         // failure or an any-of gate) — the template falls back to generic copy.
         $MissingCapability = ($missingCap !== null) ? (string)$missingCap : '';
@@ -1324,12 +1324,12 @@ class Controller_Cms extends Controller
      */
     private function _blockCatalog()
     {
-        // #21: return the per-request memo when present — the editor load builds
+        // Return the per-request memo when present — the editor load builds
         // the catalog once instead of ~15 times (see $_blockCatalogMemo).
         if (is_array($this->_blockCatalogMemo)) {
             return $this->_blockCatalogMemo;
         }
-        // #42: the canonical type => def map is the SINGLE source of truth for
+        // The canonical type => def map is the SINGLE source of truth for
         // block types (CmsBlockRegistry), shared with Controller_CmsAjax (which
         // derives its save-time allowlist from CanonicalBlockTypes()). Pure data,
         // so neither the catalog view nor the parser hand-duplicates it. What
@@ -1376,7 +1376,7 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * #42: the canonical list of valid block-type keys — the shared allowlist
+     * The canonical list of valid block-type keys — the shared allowlist
      * Controller_CmsAjax::_parseBlocks() drops forged/unknown types against.
      * Derived from the ONE registry map so the two can never drift.
      *
@@ -1399,7 +1399,7 @@ class Controller_Cms extends Controller
      */
     private function _pageTypes()
     {
-        // #21: build the catalog ONCE and thread it into every _starter() call so
+        // Build the catalog ONCE and thread it into every _starter() call so
         // the starters below don't each rebuild it (memoized too, belt-and-
         // suspenders). The starter only needs the catalog's dynamic-type flags.
         $catalog = $this->_blockCatalog();
@@ -1485,7 +1485,7 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * #110: the canonical page-type => label map — the SINGLE source of truth for
+     * The canonical page-type => label map — the SINGLE source of truth for
      * which page types exist. Pure static data so both the presets/labels path
      * (here) and Controller_CmsAjax::_normalizeType's save-time allowlist read the
      * SAME key set (via CanonicalPageTypes()). Previously the enum was declared
@@ -1515,7 +1515,7 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * #110: the canonical list of valid page-type keys — the shared write-side
+     * The canonical list of valid page-type keys — the shared write-side
      * allowlist Controller_CmsAjax::_normalizeType clamps unknown types against.
      * Derived from the ONE label map above so the presets and the save allowlist
      * can never drift.
@@ -1538,7 +1538,7 @@ class Controller_Cms extends Controller
         // Dynamic blocks (pull data at render time) are flagged source=dynamic.
         // Derive the set from the catalog's `dynamic` flag so it stays in sync
         // with a single source of truth rather than a duplicated hand-list.
-        // #21: the caller (_pageTypes) passes the already-built catalog so this
+        // The caller (_pageTypes) passes the already-built catalog so this
         // isn't rebuilt per starter; fall back to the memoized build otherwise.
         // CMS-7: the derived set is memoized for the request — _pageTypes fires
         // ~14 starters per editor load and each one re-derived it.

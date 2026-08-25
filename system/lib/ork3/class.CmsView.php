@@ -1,7 +1,7 @@
 <?php
 
 /*************************************************************************
- * CmsView — built-in CMS usage analytics (#09).
+ * CmsView — built-in CMS usage analytics.
  *
  * Backs a lightweight, per-day page/post view counter surfaced on the CMS
  * dashboard so officers get feedback that their content is actually being
@@ -211,7 +211,7 @@ class CmsView extends CmsBase
             $DB->scope_type  = $this->_normalizeScopeType($scopeType);
             $DB->scope_id    = (int)$scopeId;
             $DB->recent_days = self::RECENT_DAYS - 1;   // inclusive window (today + N-1 prior days)
-            // #115: bind the rollup to LIVE entities the same way GetViewStats does
+            // Bind the rollup to LIVE entities the same way GetViewStats does
             // (scope-bound join + deleted_at IS NULL, keeping only rows whose
             // page/post still resolves). Without this, the masthead total counted
             // views of deleted pages while the "most viewed" card — which joins to
@@ -309,7 +309,7 @@ class CmsView extends CmsBase
     }
 
     /**
-     * #128: per-entity all-time view totals for a set of ids, so the page/post
+     * Per-entity all-time view totals for a set of ids, so the page/post
      * ADMIN LISTS can show a "N views" column without an N+1. Scope-bound (a
      * stray cross-scope entity_id can't leak a count) and best-effort (missing
      * table / read error → empty map).
@@ -372,7 +372,7 @@ class CmsView extends CmsBase
     }
 
     /**
-     * #128: the top pages/posts by views over the last $days, for the dashboard
+     * The top pages/posts by views over the last $days, for the dashboard
      * "Top content (30 days)" panel. Scope-bound joins to the LIVE entity so a
      * deleted/foreign entity never appears and each row carries its title + slug.
      *
@@ -482,7 +482,7 @@ class CmsView extends CmsBase
      *
      * Every read in this class resolves a view row's entity the SAME way, and
      * they must stay in lockstep or the dashboard's figures contradict each
-     * other (#115): the join is SCOPE-BOUND (pinned to v.scope_type/v.scope_id,
+     * other: the join is SCOPE-BOUND (pinned to v.scope_type/v.scope_id,
      * so a stray cross-scope entity_id can never leak another org's title/slug)
      * and LIVE-ONLY (deleted_at IS NULL, so views of deleted content drop out).
      *

@@ -237,13 +237,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div class="te-preview-bar">
                 <span class="te-preview-label">Preview</span>
                 <label class="te-dark-toggle" aria-label="Toggle dark mode preview">
-                    <input type="checkbox" id="te-preview-dark">
+                    <input type="checkbox" id="cmsThemePreviewDark">
                     <span class="te-dark-toggle-track"><i class="fas fa-moon" aria-hidden="true"></i></span>
                     Dark
                 </label>
-                <div id="te-contrast-warn" class="te-contrast-warn" style="display:none;">
+                <div id="cmsThemeContrastWarn" class="te-contrast-warn" style="display:none;">
                     <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                    <span id="te-contrast-msg"></span>
+                    <span id="cmsThemeContrastMsg"></span>
                 </div>
             </div>
             <iframe id="fd-theme-preview" class="te-preview-frame"
@@ -257,10 +257,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     <!-- ---- Action bar ---- -->
     <div class="te-actions">
-        <button type="button" id="te-reset" class="te-btn te-btn-ghost">
+        <button type="button" id="cmsThemeReset" class="te-btn te-btn-ghost">
             <i class="fas fa-undo" aria-hidden="true"></i> Reset to defaults
         </button>
-        <div class="te-active-status" id="te-active-status" data-active="<?= $activeId > 0 ? '1' : '0' ?>">
+        <div class="te-active-status" id="cmsThemeActiveStatus" data-active="<?= $activeId > 0 ? '1' : '0' ?>">
             <?php if ($activeId > 0): ?>
                 <i class="fas fa-circle" aria-hidden="true"></i> A saved theme is currently applied to your public site.
             <?php else: ?>
@@ -268,11 +268,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <?php endif; ?>
         </div>
         <div class="te-actions-right">
-            <span class="cms-editbar-hint" id="teDirtyHint"></span>
-            <button type="button" id="te-save" class="te-btn" data-tip="Store your changes as a draft theme without changing your public site.">
+            <span class="cms-editbar-hint" id="cmsThemeDirtyHint"></span>
+            <button type="button" id="cmsThemeSave" class="te-btn" data-tip="Store your changes as a draft theme without changing your public site.">
                 <i class="fas fa-save" aria-hidden="true"></i> Save draft theme
             </button>
-            <button type="button" id="te-activate" class="te-btn te-btn-primary" data-tip="Save and make this the live theme on your public site.">
+            <button type="button" id="cmsThemeActivate" class="te-btn te-btn-primary" data-tip="Save and make this the live theme on your public site.">
                 <i class="fas fa-check" aria-hidden="true"></i> Apply to site
             </button>
         </div>
@@ -286,23 +286,9 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
-<div class="cms-toast" id="teToast" role="status" aria-live="polite" aria-atomic="true"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<div class="cms-modal-overlay" id="teConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-labelledby="teConfirmTitle">
-        <div class="cms-modal-head">
-            <h3 id="teConfirmTitle">Confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="teConfirmBody" style="margin:0;font-size:14px;line-height:1.5;"></p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="teConfirmOk">Confirm</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 
 <script>
 (function () {
@@ -312,7 +298,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
 
     /* ---- Unsaved-work guard (mirrors the page/post editors) ---- */
     var dirty = false;
-    var dirtyHint = document.getElementById('teDirtyHint');
+    var dirtyHint = document.getElementById('cmsThemeDirtyHint');
     function markDirty() {
         dirty = true;
         if (dirtyHint) { dirtyHint.textContent = 'Unsaved changes…'; dirtyHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
@@ -377,7 +363,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
         iframe.addEventListener('load', function () {
             doPreview();
             // Re-apply dark-mode if the toggle was already on.
-            var darkEl = document.getElementById('te-preview-dark');
+            var darkEl = document.getElementById('cmsThemePreviewDark');
             if (darkEl && darkEl.checked) { setPreviewDark('dark'); }
         });
     }
@@ -425,7 +411,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
             doc.documentElement.setAttribute('data-theme', mode);
         }
     }
-    var darkToggle = document.getElementById('te-preview-dark');
+    var darkToggle = document.getElementById('cmsThemePreviewDark');
     if (darkToggle) {
         darkToggle.addEventListener('change', function () {
             setPreviewDark(darkToggle.checked ? 'dark' : 'light');
@@ -512,8 +498,8 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
         ['--fd-text', '--fd-text-muted'].forEach(function (tok) {
             setInlineWarn(tok, warnedTokens[tok] ? warnedTokens[tok] + ' — low contrast' : '');
         });
-        var warnBar = document.getElementById('te-contrast-warn');
-        var warnMsg = document.getElementById('te-contrast-msg');
+        var warnBar = document.getElementById('cmsThemeContrastWarn');
+        var warnMsg = document.getElementById('cmsThemeContrastMsg');
         if (warnBar && warnMsg) {
             if (barWarns.length) {
                 warnMsg.textContent = 'Low contrast: ' + barWarns.join(', ');
@@ -524,39 +510,10 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
         }
     }
 
-    /* ---- Confirm modal ---- */
-    var confirmOverlay = document.getElementById('teConfirmModal');
-    var confirmTitleEl = document.getElementById('teConfirmTitle');
-    var confirmBodyEl  = document.getElementById('teConfirmBody');
-    var confirmOkEl    = document.getElementById('teConfirmOk');
-    var confirmCb      = null;
-
-    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
-    var openModal = CmsAdmin.modal.open;
-    var closeModal = CmsAdmin.modal.close;
-
-    function tnConfirm(opts) {
-        if (confirmTitleEl) { confirmTitleEl.textContent = opts.title || 'Confirm'; }
-        if (confirmBodyEl)  { confirmBodyEl.textContent  = opts.body  || ''; }
-        if (confirmOkEl) {
-            confirmOkEl.textContent = opts.confirmLabel || 'Confirm';
-            confirmOkEl.className   = 'cms-btn ' + (opts.danger ? 'cms-btn-danger' : 'cms-btn-primary');
-        }
-        confirmCb = opts.onConfirm || null;
-        openModal(confirmOverlay);
-    }
-
-    if (confirmOkEl) {
-        confirmOkEl.addEventListener('click', function () {
-            closeModal(confirmOverlay);
-            if (confirmCb) { var cb = confirmCb; confirmCb = null; cb(); }
-        });
-    }
-
     /* ---- Save ---- */
-    var teSaveBtn     = document.getElementById('te-save');
-    var teActivateBtn = document.getElementById('te-activate');
-    var teResetBtn    = document.getElementById('te-reset');
+    var teSaveBtn     = document.getElementById('cmsThemeSave');
+    var teActivateBtn = document.getElementById('cmsThemeActivate');
+    var teResetBtn    = document.getElementById('cmsThemeReset');
 
     function setBusy(busy) {
         [teSaveBtn, teActivateBtn, teResetBtn].forEach(function (b) {
@@ -594,7 +551,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
                     setBusy(false);
                     if (!res || !res.ok) { toast((res && res.error) || 'Activate failed.', 'error'); return; }
                     clearDirty();
-                    var statusEl = document.getElementById('te-active-status');
+                    var statusEl = document.getElementById('cmsThemeActiveStatus');
                     if (statusEl) {
                         statusEl.setAttribute('data-active', '1');
                         statusEl.innerHTML = '<i class="fas fa-circle" aria-hidden="true"></i> A saved theme is currently applied to your public site.';
@@ -608,12 +565,14 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
     /* ---- Reset to defaults ---- */
     if (teResetBtn) {
         teResetBtn.addEventListener('click', function () {
-            tnConfirm({
+            /* Destructive, so it routes through the shared confirm dialog
+               (cms/_confirm_modal.tpl) like every other CMS delete. */
+            CmsAdmin.confirm({
                 title: 'Reset to defaults?',
-                body: 'All theme tokens will return to their default values and any active theme will be deactivated. This cannot be undone.',
-                confirmLabel: 'Reset',
-                danger: true,
-                onConfirm: function () {
+                message: 'All theme tokens will return to their default values and any active theme will be deactivated. This cannot be undone.',
+                okLabel: 'Reset',
+                onOk: function () {
+                    CmsAdmin.confirmClose();
                     setBusy(true);
                     post('resettheme', {}).then(function (res) {
                         setBusy(false);

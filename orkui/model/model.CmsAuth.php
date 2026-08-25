@@ -20,45 +20,9 @@ class Model_CmsAuth extends Model
         return $this->CmsAuth->CmsCan($uid, $capability, $scope);
     }
 
-    /** @no-callers — mirror surface. */
-    public function grant_role($uid, $role, $scopeType, $scopeId, $grantedBy)
-    {
-        return $this->CmsAuth->GrantRole($uid, $role, $scopeType, $scopeId, $grantedBy);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function revoke_role($uid, $role, $scopeType, $scopeId, $actorUid = 0)
-    {
-        return $this->CmsAuth->RevokeRole($uid, $role, $scopeType, $scopeId, $actorUid);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function get_user_grants($uid, $scopeType = null, $scopeId = null)
-    {
-        return $this->CmsAuth->GetUserGrants($uid, $scopeType, $scopeId);
-    }
-
     public function get_user_capabilities($uid, $scope)
     {
         return $this->CmsAuth->GetUserCapabilities($uid, $scope);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function capabilities_for_role($role)
-    {
-        return $this->CmsAuth->CapabilitiesForRole($role);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function list_grants($scopeType = null, $scopeId = null)
-    {
-        return $this->CmsAuth->ListGrants($scopeType, $scopeId);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function is_super_admin($uid)
-    {
-        return $this->CmsAuth->IsSuperAdmin($uid);
     }
 
     /** Callers: Controller_Cms::_capList() (super-admin branch, :1078) and ::_bridgedCaps() (officer bridge, non-super, :1119). */

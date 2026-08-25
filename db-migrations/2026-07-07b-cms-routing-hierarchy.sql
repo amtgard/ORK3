@@ -1,7 +1,8 @@
 -- Amtgard CMS — Routing & Hierarchy migration
 -- =============================================================================
--- Schema behind the L5 routing/architecture changes. AUTHOR ONLY — do NOT run
--- against the shared local DB; applied at deploy (MariaDB client, not mysql).
+-- Schema behind the L5 routing/architecture changes. Applied at deploy with the
+-- MariaDB client (not mysql); guarded, so seed-cms-demo.sh also applies it
+-- locally.
 -- Runs AFTER 2026-07-07-cms-integrity-safety-net.sql (deploy order matters —
 -- that migration converts the CMS tables it references to InnoDB FKs first).
 --

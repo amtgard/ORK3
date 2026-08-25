@@ -9,12 +9,9 @@
  * hydrate/store and the entire markup — lived twice. It now lives here once;
  * the two block files are thin adapters.
  *
- * WHY THIS IS IN A SUBDIRECTORY, and why the adapters keep their exact
- * filenames: render_blocks.tpl:39-41 dispatches on `blocks/{type}.tpl` after
- * running the block type through preg_replace('/[^a-z_]/', '', ...). That
- * sanitizer strips '/' and '.', so no authored block type can ever resolve to
- * `_shared/officers.tpl`. Putting the shared body in a subdirectory is therefore
- * a security property, not a stylistic one — a sibling file named
+ * The subdirectory is a security property, not a stylistic one: render_blocks.tpl
+ * dispatches on `blocks/{type}.tpl` after stripping everything but [a-z_] from the
+ * block type, so `_shared/officers.tpl` is unreachable while a sibling
  * `blocks/officers.tpl` WOULD be reachable as a block type named "officers".
  *
  * Caller (adapter) must set, before including:
@@ -34,13 +31,10 @@
  * players, role labels, avatar resolution) lives in the libs, behind
  * Kingdom::GetPublicOfficers / Park::GetPublicOfficers.
  */
-$fdOffScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
-$fdOffScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
-$fdOffOrgId     = ($fdOffScopeType === $fdOffScopeKind) ? $fdOffScopeId : 0;
-
 // Dropped on a page outside this block's scope (global front door, or the other
 // org kind) → no single org to source. Render nothing at all rather than a
-// broken or misleading empty box.
+// broken or misleading empty box. (See fdScopedOrgId() in _helpers.tpl.)
+$fdOffOrgId = fdScopedOrgId($SiteNavScopeType ?? '', $SiteNavScopeId ?? 0, $fdOffScopeKind);
 if ($fdOffOrgId <= 0) {
     return;
 }
@@ -53,9 +47,9 @@ $fdOffLimit   = fdClampLimit(
     CmsRenderCache::OFFICERS_LIMIT_MAX
 );
 
-// C5: this DYNAMIC block runs on every anonymous public hit and previously did
-// an N+1 — one GetHeraldryUrl call PER officer — inside the render loop below,
-// on top of the GetOfficers query. The lib now resolves the roster AND every
+// This DYNAMIC block runs on every anonymous public hit, so it must not do an
+// N+1 — one GetHeraldryUrl call PER officer — inside the render loop below, on
+// top of the GetOfficers query. The lib resolves the roster AND every
 // avatar in ONE pass (Kingdom/Park::GetPublicOfficers), and the fully-hydrated
 // result is cached in GhettoCache keyed by (org, limit). Public officer data is
 // safe to share across viewers; a short TTL keeps it fresh. Cached hits render

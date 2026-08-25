@@ -201,8 +201,8 @@ body {
     align-self: flex-start;
     position: sticky;
     /* 28px, and deliberately NOT --cms-header-h + 14px.
-       #93 added the navbar height here back when the viewport was the scroller.
-       It no longer is: orkui.css clamps `html, body { overflow-x: hidden }`, so
+       The navbar height belongs in a sticky offset only when the VIEWPORT is the
+       scroller. It is not: orkui.css clamps `html, body { overflow-x: hidden }`, so
        body's overflow is not propagated to the viewport and BODY is the scroll
        container for everything in the admin. A sticky offset is measured from
        that scrollport's top edge, and body's content box already begins at 56px
@@ -949,15 +949,6 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     gap: 6px;
     flex-wrap: wrap;
 }
-.cms-typecard-key {
-    display: none;
-    font-size: 11px;
-    color: var(--ork-text-muted);
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-    margin-top: 3px;
-}
-.cms-typecard:hover .cms-typecard-key,
-.cms-typecard:focus-visible .cms-typecard-key { display: block; }
 .cms-typecard-badge {
     font-size: 10px;
     font-weight: 700;
@@ -1002,7 +993,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-meta-panel {
     position: sticky;
-    top: calc(var(--cms-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
+    top: calc(var(--cms-header-h, 48px) + 14px); /* clear the fixed navbar */
     border: 1px solid var(--ork-border);
     border-radius: 10px;
     background: var(--ork-card-bg);
@@ -1198,11 +1189,6 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     font-size: 13.5px;
     color: var(--ork-text);
 }
-.cms-block-typekey {
-    font-size: 11px;
-    color: var(--ork-text-muted);
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-}
 .cms-block-summary {
     font-size: 12px;
     color: var(--ork-text-muted);
@@ -1351,7 +1337,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-note > i { color: var(--cms-gold, #f0b429); margin-top: 2px; }
 .cms-note a { color: var(--cms-gold-deep, #caa23a); font-weight: 600; }
-/* #45: "edits to a published page go live immediately" — amber warning variant. */
+/* "Edits to a published page go live immediately" — amber warning variant. */
 .cms-note-live {
     border-left-color: var(--cms-warn, #b8860b);
     background: rgba(184, 134, 11, .08);
@@ -1509,7 +1495,7 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
 .cms-media-tile img {
     width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
 }
-/* #95: broken-thumbnail fallback for picker tiles — same 92px footprint as the
+/* Broken-thumbnail fallback for picker tiles — same 92px footprint as the
    image, centered fa-image, sitting above the caption so nothing overlaps. */
 .cms-media-tile-fallback {
     width: 100%; height: 92px; display: flex; align-items: center; justify-content: center;
@@ -1534,6 +1520,12 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
 }
 .cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-upload-drop input[type="file"] { display: none; }
+
+/* ---- Shared confirm dialog body (cms/_confirm_modal.tpl) ---------------- */
+.cms-confirm-body {
+    margin: 0;
+    font-size: 14px;
+}
 
 /* ============================================================================
  * Toast
@@ -1736,12 +1728,11 @@ html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.cu
 /* ============================================================================
  * List filter strip (Pages) — ONE row that looks like the product
  *
- * The page list used to carry its filters in two places: a status <select>
- * floating above the card, and DataTables' stock "Show 25 entries" / "Search:"
- * chrome sitting undesigned INSIDE it. Both now live in this strip across the
- * top of the table card; Cms_index.tpl relocates the two generated widgets into
- * it on init. These rules must stay AFTER the DataTables block above — they tie
- * it on specificity, so source order is what makes them win.
+ * Status, search and the per-page count read as one control group across the top
+ * of the table card: Cms_index.tpl relocates DataTables' generated length/search
+ * widgets into this strip on init. These rules must stay AFTER the DataTables
+ * block above — they tie it on specificity, so source order is what makes them
+ * win.
  * ========================================================================== */
 .cms-listbar {
     display: flex;
@@ -1859,7 +1850,7 @@ html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.cu
     display: none;
     /* JS positions this as position:fixed (left/top set inline) when opened, so it
      * escapes the .cms-table-wrap overflow:hidden clip and flips upward near the
-     * viewport bottom — matches the project's tnFixedAcPosition pattern. */
+     * viewport bottom — the same fixed-anchor pattern the autocomplete dropdowns use. */
     position: fixed;
     z-index: var(--z-modal-top);
     min-width: 168px;
@@ -1911,7 +1902,7 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
 
 .cms-editbar {
     position: sticky;
-    top: var(--cms-header-h, 48px); /* #93: was 0 — hid behind the fixed 48px navbar */
+    top: var(--cms-header-h, 48px); /* clear the fixed navbar; 0 would hide behind it */
     z-index: 30;
     display: flex;
     align-items: center;
@@ -2087,7 +2078,7 @@ html[data-theme="dark"] a.cms-sites-slug:hover {
     background: var(--cms-gold, #f0b429);
     color: #1a1205;
 }
-/* E2: the live preview's status line, between the pane head and the frame.
+/* The live preview's status line, between the pane head and the frame.
    The base state is the quiet "Updating…" tick. .cms-preview-note-error is a
    refresh that FAILED, and it deliberately does not look like an editor error:
    the form is fine and the author's text is safe — only the picture is stale.
@@ -2182,9 +2173,29 @@ html[data-theme="dark"] a.cms-sites-slug:hover {
 /* Staff Roster — persona link chip + autocomplete meta.
    Note: .cms-help and .cms-link-btn already exist above (theme-var based,
    dark-compatible) and are reused as-is; only the new selectors are added here. */
-.cms-persona-chip{display:flex;align-items:center;gap:8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:4px 8px;margin-bottom:6px;font-size:13px;}
-.kn-ac-meta{color:#9aa3b8;font-size:12px;margin-left:6px;}
-html[data-theme="dark"] .cms-persona-chip{background:#1e293b;border-color:#334155;color:#e2e8f0;}
+.cms-persona-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.kn-ac-meta {
+    color: var(--ork-text-muted, #9aa3b8);
+    font-size: 12px;
+    margin-left: 6px;
+}
+
+html[data-theme="dark"] .cms-persona-chip {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
 
 /* Persona-search autocomplete dropdown. It is appended to <body> (outside
    .cms-shell) and fixed-positioned, so it is styled globally here with a SOLID
@@ -2675,7 +2686,7 @@ html[data-theme="dark"] .te-preview-frame { border-color: #2c3650; }
     align-items: center;
 }
 html[data-theme="dark"] .te-actions { border-top-color: #2c3650; }
-/* #97: currently-active-theme indicator in the action bar. */
+/* Currently-active-theme indicator in the action bar. */
 .te-active-status {
     display: inline-flex;
     align-items: center;
@@ -2883,11 +2894,7 @@ html[data-theme="dark"] .cms-scope-banner {
 }
 html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }
 
-/* ---- CMS Sites overview (was inline style element in Cms_sites.tpl) ----
-   Moved verbatim: the template emitted this <style> BEFORE it included
-   cms/_shell_top.tpl, so cms-admin.css already won every same-specificity
-   tie against it. Nothing in this file sets any of these (selector, property)
-   pairs, so position here is free; appended at the end for readability. ---- */
+/* ---- Sites overview (.cms-sites-* / .cms-fd-* / .cms-provision-*) ------- */
 .cms-sites-wrap { display: flex; flex-direction: column; gap: 26px; }
 
 /* Global h1–h6 in orkui.css get a gray pill box — reset the ones we own. */
@@ -2974,8 +2981,12 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
     .cms-fd-actions .cms-btn { flex: 1 1 auto; justify-content: center; }
 }
 
-/* ---- Media library page (was inline style element in Cms_media.tpl) ---- */
-/* L1: the picture IS the card. Wider tiles + a taller thumb so the image is the
+/* ---- Media library page (.cms-media-*) ----------------------------------
+   The media grid is styled in more than one place: the thumbnail primitives are
+   in the Modals/media block above, the picker overrides are under "Block-editor
+   media picker" below, and the missing-image modifier is the last block in this
+   file (its position there is load-bearing — see that header). ---- */
+/* The picture IS the card. Wider tiles + a taller thumb so the image is the
    largest thing on it, and enough room for the one-line action strip below. */
 .cms-media-page-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;
@@ -2995,7 +3006,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
     width: 100%; height: 168px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
     border-radius: 10px 10px 0 0;
 }
-/* #95: broken-image fallback — same footprint, centered fa-image, so it
+/* Broken-image fallback — same footprint, centered fa-image, so it
    never overlaps the top-left bulk-select checkbox or the caption below. */
 .cms-media-card-thumb.cms-empty-thumb {
     display: flex; align-items: center; justify-content: center;
@@ -3011,7 +3022,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-media-card-alt { font-size: 12px; color: var(--ork-text-muted); margin-top: 3px; min-height: 1em; }
 .cms-media-card-alt.cms-media-noalt { font-style: italic; }
 .cms-media-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-/* L1: Edit + the (⋯) that holds Delete are revealed on hover and on keyboard
+/* Edit + the (⋯) that holds Delete are revealed on hover and on keyboard
    focus-within. opacity (not display/visibility) is deliberate: the buttons stay
    in the tab order, so TABBING to one raises :focus-within on the card and shows
    the cluster — a hover-only reveal would put Delete out of a keyboard user's
@@ -3065,7 +3076,10 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 /* Upload drop-zone sits below the library; slimmer than the primary surface */
 .cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
 
-/* ---- Navigation manager (was inline style element in Cms_nav.tpl) ---- */
+/* ---- Navigation manager (.cms-nav-*) ------------------------------------
+   Must stay AFTER the block-card rules above: .cms-nav-item .cms-block-head and
+   .cms-nav-label tie them on specificity, so source order is what makes these
+   win. ---- */
 /* A nav row is a .cms-block-card that contains ONLY a .cms-block-head, and that
    card clips (overflow:hidden) so the head's square corners stay inside its
    radius. Clipping also ate every row-tool tooltip, which is the whole point of
@@ -3098,10 +3112,9 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
 .cms-nav-addchild-row { margin: 0 0 16px 28px; }
 
-/* ---- Block-editor media picker: inline alt editor + Load-more
-   (was inline style element in cms/_block_editor.tpl). Uses ORK theme vars so
-   light/dark are handled without extra overrides. Scoped to #cmsMediaGrid so
-   it only affects THAT picker. ---- */
+/* ---- Block-editor media picker: inline alt editor + Load-more -----------
+   Uses ORK theme vars so light/dark are handled without extra overrides. Scoped
+   to #cmsMediaGrid so it only affects THAT picker. ---- */
 /* Widen picker tiles enough to hold the inline alt editor comfortably. */
 #cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 #cmsMediaGrid .cms-media-tile { cursor: default; }
@@ -3122,8 +3135,8 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-media-alt-deco input { margin: 0; }
 .cms-media-more { display: block; margin: 12px auto 2px; }
 
-/* ---- Block-editor columns visual splitter (enh #16) — theme-aware via ORK
-   vars (was the second inline style element in cms/_block_editor.tpl). ---- */
+/* ---- Block-editor columns visual splitter — theme-aware via ORK
+   vars. ---- */
 .cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
 .cms-cols-countrow .cms-label { margin: 0; }
 /* The segmented control moved to the shared .cms-seg rules at the end of this
@@ -3150,7 +3163,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
 .cms-cols-add { align-self: flex-start; }
 
-/* ---- Icon picker (V1): swatches showing the real glyph + a plain-English
+/* ---- Icon picker: swatches showing the real glyph + a plain-English
    name, with a free-text escape hatch underneath. Theme-aware via the ORK
    vars; the only hard-coded colour is the admin gold (defined for BOTH themes
    on .cms-wrap / .cms-shell above) and the dark ink that sits on it. ---- */
@@ -3225,7 +3238,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
     color: #1a1205;
 }
 
-/* ---- Link chooser (V2): "a page on this site" vs. "another address".
+/* ---- Link chooser: "a page on this site" vs. "another address".
    Theme-aware via the ORK vars; the gold accent is defined for both themes on
    .cms-wrap / .cms-shell at the top of this file. ---- */
 .cms-linkpick-modes { margin-bottom: 8px; }
@@ -3278,7 +3291,7 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 }
 
 /* ============================================================================
- * Missing-image placeholder (E3)
+ * Missing-image placeholder
  *
  * The block editor and the media grid share CmsAdmin.thumbFallback, which
  * swaps a broken <img> for .cms-empty-thumb + this modifier. .cms-empty-thumb
@@ -3292,15 +3305,12 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
  * .cms-media-thumb.cms-empty-thumb are the same specificity, so source order
  * is what makes this modifier win over both.
  * ========================================================================== */
-/* A missing file is news, not an emergency. This started out in the danger
-   palette, which put a blood-red tile on every card whose file is absent — and on
-   a library where the files have not been synced that is the whole grid, shouting.
-   It is also the mistake this surface just finished fixing for Delete: the loudest
-   treatment reserved for the most common state.
-
-   Amber says "look at this" without saying "something broke". The dashed edge is
-   what actually separates it from the neutral "no image chosen" tile; the colour
-   only has to carry attention, not alarm. */
+/* A missing file is news, not an emergency, so this is amber and not the danger
+   palette: on a library whose files have not been synced the missing state is the
+   WHOLE grid, and red there reserves the loudest treatment for the most common
+   state. Amber says "look at this" without saying "something broke". The dashed
+   edge is what actually separates it from the neutral "no image chosen" tile; the
+   colour only has to carry attention, not alarm. */
 .cms-empty-thumb.cms-missing-thumb {
     color: var(--cms-warn, #9c4221);
     background: var(--ork-badge-amber-bg, #fdf3e3);

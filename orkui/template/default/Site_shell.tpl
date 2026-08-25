@@ -24,65 +24,57 @@ $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 $siteMode    = isset($SiteMode) ? (string) $SiteMode : 'home';
 $fdBlocks    = isset($SiteBlocks) && is_array($SiteBlocks) ? $SiteBlocks : [];
 
-// C13/C30 — controller-supplied render data that previously went nowhere.
+// Optional render data from Controller_Site; each degrades to a no-op value.
 $siteCrumbs      = (isset($SiteBreadcrumbs) && is_array($SiteBreadcrumbs)) ? $SiteBreadcrumbs : [];
 $siteHomeWarning = (isset($SiteHomeWarning) && $SiteHomeWarning !== '') ? (string) $SiteHomeWarning : '';
 $sitePageTitle   = isset($page_title) ? (string) $page_title : '';
 
-// C26 — a page already carries exactly one <h1> when a content block supplies it
-// (hero_carousel's first slide). Only then do we suppress the fallback page-title
-// <h1> below, so the outline has one and only one top heading (WCAG 1.3.1).
+// $fdHasBlockH1: does a content block already supply the page's one and only
+// <h1>? Only a hero_carousel can — the editor's Level control
+// (fieldNumSelect(block, 'level', …) in script/cms-block-editor.js) offers
+// H2/H3/H4 only, so no authored heading block is ever level 1. If H1 is ever
+// added to that Level control, a level-1 test MUST be added here with it or such
+// a page renders two <h1>s. When this stays false the fallback page-title <h1>
+// below runs, so the outline always has exactly one top heading (WCAG 1.3.1).
 //
-// A heading block can NOT be that supplier today: the editor's Level control
-// offers H2/H3/H4 only (script/cms-block-editor.js:1231-1232), so no authored
-// heading block is ever level 1 (0 such rows exist). The level-1 test that used
-// to live in this loop was therefore unreachable and has been removed. If H1 is
-// ever added back to that Level control, this test MUST come back with it, or
-// such a page renders two <h1>s.
-//
-// The test must match what hero_carousel.tpl ACTUALLY renders, not merely that
-// a slides array exists. That partial (a) filters slides down to those carrying
-// an image/headline/subcopy/kicker and emits nothing at all for a public visitor
-// when none qualify, and (b) emits the <h1> only for the FIRST surviving slide
-// (hero_carousel.tpl:65-69, 84-86 — later slides get <h2>) and only when that
-// slide's headline is non-empty. An image-only first slide — the exact shape the
-// editor seeds — therefore renders an <img> and no heading at all, so testing
-// anything looser than "first renderable slide has a headline" suppresses the
-// fallback <h1> for a page that ships ZERO h1s.
-// Headline test is `!== ''` with no trim, matching hero_carousel.tpl:84.
-// The slide filter itself is fdHeroRenderableSlides() in frontdoor/_helpers.tpl,
-// which hero_carousel.tpl calls too, so the two cannot drift apart. (org_header.tpl
-// below also require_once's the helpers, but this loop runs before that include.)
+// The test mirrors what hero_carousel.tpl ACTUALLY renders, not merely that a
+// slides array exists: that partial drops slides with no image/headline/subcopy/
+// kicker, and gives the <h1> to the FIRST surviving slide only when its headline
+// is non-empty (later slides get <h2>). An image-only first slide — the shape the
+// editor seeds — therefore renders an <img> and no heading at all, so anything
+// looser than "first renderable slide has a headline" would suppress the fallback
+// on a page that ships ZERO h1s. Headline test is `!== ''` with no trim, matching
+// hero_carousel.tpl. The slide filter is fdHeroRenderableSlides() in
+// frontdoor/_helpers.tpl, which hero_carousel.tpl calls too, so the two cannot
+// drift. (org_header.tpl below also require_once's the helpers, but this loop
+// runs before that include.)
 require_once $fdDir . '_helpers.tpl';
 $fdHasBlockH1 = false;
-foreach ($fdBlocks as $__b) {
-    if (empty($__b['enabled'])) {
+foreach ($fdBlocks as $fdBlock) {
+    if (empty($fdBlock['enabled'])) {
         continue;
     }
-    $__type = isset($__b['type']) ? (string) $__b['type'] : '';
-    if ($__type !== 'hero_carousel') {
+    $fdBlockType = isset($fdBlock['type']) ? (string) $fdBlock['type'] : '';
+    if ($fdBlockType !== 'hero_carousel') {
         continue;
     }
-    $__slides = (isset($__b['fields']['slides']) && is_array($__b['fields']['slides'])) ? $__b['fields']['slides'] : [];
-    $__render = fdHeroRenderableSlides($__slides);
-    if (!empty($__render) && (string) ($__render[0]['headline'] ?? '') !== '') {
+    $fdSlides = (isset($fdBlock['fields']['slides']) && is_array($fdBlock['fields']['slides'])) ? $fdBlock['fields']['slides'] : [];
+    $fdRenderable = fdHeroRenderableSlides($fdSlides);
+    if (!empty($fdRenderable) && (string) ($fdRenderable[0]['headline'] ?? '') !== '') {
         $fdHasBlockH1 = true;
         break;
     }
 }
 
-// G3 — a standalone org site never opts into the blog CSS layer ($fdWantBlog),
-// in ANY mode. F1 had narrowed it to 'blog'/'post' on the assumption that those
-// two emit blog markup; measured against the served HTML, neither does. The
-// 'post' branch below renders .org-post* and the 'blog' branch renders
-// org_blog_index.tpl's .org-blog-* — both styled end to end by orgsite.css,
-// which this template links directly. Every selector in blog.css is .blog-* or
-// .blogp-* (note .org-blog-card is NOT one of them), so blog.css matched 0
-// nodes on every org-site mode: 6,811 bytes of dead CSS on a post page and on
-// the org blog index. blog.css belongs to the IN-SHELL blog alone
-// (Blog_index.tpl / Blog_post.tpl). If an org-site surface ever starts emitting
-// .blog-* / .blogp-* markup, set $fdWantBlog = true immediately before the
-// include below and the layer comes back.
+// A standalone org site never opts into the blog CSS layer ($fdWantBlog), in ANY
+// mode — not even 'blog'/'post'. The 'post' branch below renders .org-post* and
+// the 'blog' branch renders org_blog_index.tpl's .org-blog-*, both styled end to
+// end by orgsite.css, which this template links directly. Every selector in
+// blog.css is .blog-* or .blogp-* (.org-blog-card is NOT one of them), so the
+// layer would match 0 nodes here: 6,811 bytes of dead CSS. blog.css belongs to
+// the IN-SHELL blog alone (Blog_index.tpl / Blog_post.tpl). If an org-site
+// surface ever starts emitting .blog-* / .blogp-* markup, set $fdWantBlog = true
+// immediately before the include below and the layer comes back.
 // tests/cms-css/boundary_test.php asserts this against the running app.
 ?>
 <?php include $fdDir . '_assets_public.tpl'; ?>
@@ -104,18 +96,18 @@ foreach ($fdBlocks as $__b) {
 <?php // .org-home-warning styling lives in frontdoor/css/orgsite.css. ?>
 <div class="org-home-warning" role="status">
     <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-    <span><strong>Manager preview</strong> &mdash; <?= htmlspecialchars($siteHomeWarning) ?></span>
+    <span><strong>Manager preview</strong> &mdash; <?= htmlspecialchars($siteHomeWarning, ENT_QUOTES) ?></span>
 </div>
 <?php endif; ?>
 <?php if ($siteMode === 'comingsoon') : ?>
     <section class="org-notice">
         <div class="org-notice-card">
             <i class="fas fa-hard-hat org-notice-icon" aria-hidden="true"></i>
-            <h1 class="org-notice-title"><?= htmlspecialchars(!empty($SiteName) ? (string) $SiteName : 'This site') ?> is coming soon</h1>
-            <?php // 'Kingdom' / 'Principality' / 'Park' from the site's own scope —
-                  // a principality is stored as a kingdom row, so hard-coding
-                  // "kingdom" here told its visitors the wrong thing. ?>
-            <p class="org-notice-text">This <?= htmlspecialchars(!empty($SiteOrgNoun) ? strtolower((string) $SiteOrgNoun) : 'group') ?> is building its public website. Please check back soon.</p>
+            <h1 class="org-notice-title"><?= htmlspecialchars(!empty($SiteName) ? (string) $SiteName : 'This site', ENT_QUOTES) ?> is coming soon</h1>
+            <?php // 'Kingdom' / 'Principality' / 'Park' from the site's own scope.
+                  // A principality is stored as a kingdom row, so the noun has to come
+                  // from the scope rather than from the table it lives in. ?>
+            <p class="org-notice-text">This <?= htmlspecialchars(!empty($SiteOrgNoun) ? strtolower((string) $SiteOrgNoun) : 'group', ENT_QUOTES) ?> is building its public website. Please check back soon.</p>
         </div>
     </section>
 <?php elseif ($siteMode === 'notfound') : ?>
@@ -123,7 +115,7 @@ foreach ($fdBlocks as $__b) {
         <div class="org-notice-card">
             <i class="fas fa-compass org-notice-icon" aria-hidden="true"></i>
             <h1 class="org-notice-title">Page not found</h1>
-            <p class="org-notice-text"><?= htmlspecialchars(!empty($Message) ? (string) $Message : 'This page could not be found.') ?></p>
+            <p class="org-notice-text"><?= htmlspecialchars(!empty($Message) ? (string) $Message : 'This page could not be found.', ENT_QUOTES) ?></p>
             <?php if (!empty($SiteHomeUrl)) : ?>
             <a class="org-btn" href="<?= htmlspecialchars((string) $SiteHomeUrl, ENT_QUOTES) ?>">Back to home</a>
             <?php endif; ?>
@@ -134,17 +126,15 @@ foreach ($fdBlocks as $__b) {
 <?php elseif ($siteMode === 'post') : ?>
     <article class="org-post">
         <header class="org-post-head">
-            <?php // C26 — the post body's blocks ARE $fdBlocks (fed to render_blocks.tpl
+            <?php // The post body's blocks ARE $fdBlocks (fed to render_blocks.tpl
                   // below), so a hero_carousel in a post supplies the page's h1. Keep the
                   // post title visible but demote it to h2 in that case, so the page still
                   // has one and only one top heading. ?>
-            <?php $__postTitleTag = $fdHasBlockH1 ? 'h2' : 'h1'; ?>
-            <<?= $__postTitleTag ?> class="org-post-title"><?= htmlspecialchars(isset($SitePost['title']) ? (string) $SitePost['title'] : '') ?></<?= $__postTitleTag ?>>
-            <?php if (!empty($SitePost['published_at'])) : ?>
-            <?php $__ts = strtotime((string) $SitePost['published_at']); ?>
-            <?php if ($__ts !== false) : ?>
-            <div class="org-post-meta"><?= htmlspecialchars(date('F j, Y', $__ts)) ?></div>
-            <?php endif; ?>
+            <?php $fdPostTitleTag = $fdHasBlockH1 ? 'h2' : 'h1'; ?>
+            <<?= $fdPostTitleTag ?> class="org-post-title"><?= htmlspecialchars(isset($SitePost['title']) ? (string) $SitePost['title'] : '', ENT_QUOTES) ?></<?= $fdPostTitleTag ?>>
+            <?php $fdDateLabel = fdFormatDate($SitePost['published_at'] ?? '', 'F j, Y'); ?>
+            <?php if ($fdDateLabel !== '') : ?>
+            <div class="org-post-meta"><?= htmlspecialchars($fdDateLabel, ENT_QUOTES) ?></div>
             <?php endif; ?>
         </header>
         <?php include $fdDir . 'render_blocks.tpl'; ?>
@@ -152,38 +142,38 @@ foreach ($fdBlocks as $__b) {
 <?php elseif (!empty($Message) && empty($fdBlocks)) : ?>
     <section class="org-notice">
         <div class="org-notice-card">
-            <h1 class="org-notice-title"><?= htmlspecialchars(!empty($SiteName) ? (string) $SiteName : 'This site') ?></h1>
-            <p class="org-notice-text"><?= htmlspecialchars((string) $Message) ?></p>
+            <h1 class="org-notice-title"><?= htmlspecialchars(!empty($SiteName) ? (string) $SiteName : 'This site', ENT_QUOTES) ?></h1>
+            <p class="org-notice-text"><?= htmlspecialchars((string) $Message, ENT_QUOTES) ?></p>
         </div>
     </section>
 <?php else : ?>
     <?php
-    // C13 — breadcrumb trail (page mode). The controller makes the last crumb the
+    // Breadcrumb trail (page mode). The controller makes the last crumb the
     // current page (url=''); a lone home crumb is skipped so top-level pages stay
     // clean. Linked ancestors, plain current page.
-    $__crumbs = array_values(array_filter(
+    $fdCrumbs = array_values(array_filter(
         $siteCrumbs,
         function ($c) {
             return is_array($c) && trim((string) ($c['label'] ?? '')) !== '';
         }
     ));
     ?>
-    <?php if (count($__crumbs) > 1) : ?>
+    <?php if (count($fdCrumbs) > 1) : ?>
     <?php // .org-breadcrumbs styling lives in frontdoor/css/orgsite.css. ?>
     <nav class="org-breadcrumbs" aria-label="Breadcrumb">
         <ol>
         <?php
-        $__nCrumb = count($__crumbs);
-        foreach ($__crumbs as $__i => $__crumb) :
-            $__label  = (string) ($__crumb['label'] ?? '');
-            $__url    = (string) ($__crumb['url'] ?? '');
-            $__isLast = ($__i === $__nCrumb - 1);
+        $fdCrumbCount = count($fdCrumbs);
+        foreach ($fdCrumbs as $fdCrumbIdx => $fdCrumb) :
+            $fdCrumbLabel  = (string) ($fdCrumb['label'] ?? '');
+            $fdCrumbUrl    = (string) ($fdCrumb['url'] ?? '');
+            $fdCrumbIsLast = ($fdCrumbIdx === $fdCrumbCount - 1);
         ?>
-            <li class="<?= $__isLast ? 'is-current' : '' ?>">
-                <?php if (!$__isLast && $__url !== '') : ?>
-                <a href="<?= htmlspecialchars($__url, ENT_QUOTES) ?>"><?= htmlspecialchars($__label, ENT_QUOTES) ?></a>
+            <li class="<?= $fdCrumbIsLast ? 'is-current' : '' ?>">
+                <?php if (!$fdCrumbIsLast && $fdCrumbUrl !== '') : ?>
+                <a href="<?= htmlspecialchars($fdCrumbUrl, ENT_QUOTES) ?>"><?= htmlspecialchars($fdCrumbLabel, ENT_QUOTES) ?></a>
                 <?php else : ?>
-                <span<?= $__isLast ? ' aria-current="page"' : '' ?>><?= htmlspecialchars($__label, ENT_QUOTES) ?></span>
+                <span<?= $fdCrumbIsLast ? ' aria-current="page"' : '' ?>><?= htmlspecialchars($fdCrumbLabel, ENT_QUOTES) ?></span>
                 <?php endif; ?>
             </li>
         <?php endforeach; ?>
@@ -191,17 +181,17 @@ foreach ($fdBlocks as $__b) {
     </nav>
     <?php endif; ?>
     <?php
-    // C26 — exactly one <h1>. When no content block supplies the top heading
+    // Exactly one <h1>. When no content block supplies the top heading
     // (no hero, no level-1 heading block), promote the page title (page mode) or
     // site name (home) to the page's <h1>. Purely an outline fix; visual weight is
     // class-driven, and .org-page-title in frontdoor/css/orgsite.css resets the
     // orkui global heading gray-box.
-    $__titleH1 = $sitePageTitle !== '' ? $sitePageTitle : (isset($SiteName) ? (string) $SiteName : '');
+    $fdTitleH1 = $sitePageTitle !== '' ? $sitePageTitle : (isset($SiteName) ? (string) $SiteName : '');
     ?>
-    <?php if (!$fdHasBlockH1 && trim($__titleH1) !== '') : ?>
+    <?php if (!$fdHasBlockH1 && trim($fdTitleH1) !== '') : ?>
     <?php // .org-page-title-wrap / .org-page-title styling lives in frontdoor/css/orgsite.css. ?>
     <div class="org-page-title-wrap">
-        <h1 class="org-page-title"><?= htmlspecialchars($__titleH1, ENT_QUOTES) ?></h1>
+        <h1 class="org-page-title"><?= htmlspecialchars($fdTitleH1, ENT_QUOTES) ?></h1>
     </div>
     <?php endif; ?>
     <?php include $fdDir . 'render_blocks.tpl'; ?>

@@ -29,23 +29,23 @@
     "font-family-no-missing-generic-family-keyword": true
   },
   "_rationale": {
-    "_scope": "Lints the CMS CSS ONLY - orkui/template/default/frontdoor/css/*.css + orkui/template/default/cms/css/*.css (7 files). The CRM's orkui/template/default/style/** is in .stylelintignore on purpose: it is mixed tabs/spaces with ~78 !important each, and linting it would mean a repo-wide reformat nobody asked for. The CMS gets to hold a stricter standard than the CRM.",
-    "_indentation": "stylelint REMOVED the 'indentation' rule in v16 (deprecated in 15, dropped in 16 - verified against the installed 16.26.1: node_modules/stylelint/lib/rules/ has no 'indentation' entry). It is therefore NOT configured. 4-space indent is enforced instead by the 'lint:css:tabs' npm script, an awk tab guard that fails if any line in a CMS CSS file starts with a tab; 'npm run lint:css' runs stylelint AND that guard.",
+    "_scope": "CMS CSS only — orkui/template/default/frontdoor/css/*.css + orkui/template/default/cms/css/*.css (7 files). The CRM's orkui/template/default/style/** is in .stylelintignore on purpose: mixed tabs/spaces with ~78 !important each, and linting it would mean a repo-wide reformat nobody asked for. The CMS holds a stricter standard than the CRM.",
+    "_indentation": "Not configured here: stylelint dropped the 'indentation' rule in v16 (verified against the installed 16.26.1). 4-space indent is enforced by the 'lint:css:tabs' npm script, an awk tab guard; 'npm run lint:css' runs stylelint AND that guard.",
     "no-descending-specificity": "off - the light-rules-then-dark-rules structure (html[data-theme=dark] blocks after their light partners) trips this everywhere with no defect behind it.",
-    "selector-class-pattern": "off - the CMS uses short prefixed classes (.pe-card, .te-select, .fd-btn-gold) that no single kebab pattern usefully describes.",
-    "selector-id-pattern": "off - 18 hits, all of them IDs this CSS does not own and cannot rename: #theme_container is emitted by default.theme (ORK shell) and #cmsAddModal by a CMS template. Pure noise.",
-    "keyframes-name-pattern": "off - the CMS names keyframes in camelCase (fdRModalIn, cmsErrFlash). Not autofixable, and renaming means hand-editing every animation: reference for a cosmetic gain.",
-    "declaration-block-no-redundant-longhand-properties": "off - collapsing longhands to shorthand changes which properties a later rule can override; not worth the cascade risk for zero visual gain.",
-    "declaration-block-single-line-max-declarations": "off - 269 hits and NOT autofixable (meta.fixable is false on 16.26.1), so it means 269 hand whitespace edits. Compact single-line rules for one-off overrides are the deliberate house style in blocks.css/cms-admin.css/blog.css. No defect behind any of them.",
+    "selector-class-pattern": "off - short prefixed classes (.pe-card, .te-select, .fd-btn-gold) that no single kebab pattern usefully describes.",
+    "selector-id-pattern": "off - all 18 hits are IDs this CSS does not own and cannot rename (#theme_container from default.theme, #cmsAddModal from a CMS template).",
+    "keyframes-name-pattern": "off - keyframes are camelCase (fdRModalIn, cmsErrFlash); not autofixable, and renaming means hand-editing every animation: reference.",
+    "declaration-block-no-redundant-longhand-properties": "off - collapsing longhands to shorthand changes which properties a later rule can override; cascade risk for zero visual gain.",
+    "declaration-block-single-line-max-declarations": "off - 269 hits, not autofixable on 16.26.1. Compact single-line rules for one-off overrides are the deliberate house style in blocks.css/cms-admin.css/blog.css.",
     "alpha-value-notation": "off - would rewrite hundreds of existing rgba(..., .4) values for zero benefit.",
     "color-function-notation": "off - same: a mass rewrite of legacy comma-separated rgba() for zero benefit.",
-    "media-feature-range-notation": "prefix - keeps the existing (max-width: 900px) syntax rather than rewriting every query to range notation.",
-    "shorthand-property-no-redundant-values": "off - redundant-looking shorthands are written deliberately in places to mirror an adjacent rule; churn with no defect.",
-    "comment-empty-line-before": "off - the CMS files use dense annotated blocks where a blank line before every comment would double the file height.",
+    "media-feature-range-notation": "prefix - keeps the existing (max-width: 900px) syntax rather than rewriting every query.",
+    "shorthand-property-no-redundant-values": "off - redundant-looking shorthands are written deliberately to mirror an adjacent rule; churn with no defect.",
+    "comment-empty-line-before": "off - the CMS files use dense annotated blocks; a blank line before every comment would double the file height.",
     "declaration-empty-line-before": "off - same, applied to custom-property blocks.",
     "rule-empty-line-before": "off - same; the token blocks list many one-line rules intentionally packed.",
     "value-keyword-case": "off - would rewrite vendor/legacy value casing with no defect behind it.",
-    "property-no-vendor-prefix": "off - and this one is a CORRECTNESS reason, not a taste one. The rule IS autofixable, and its fix DELETES the prefixed declaration. All three hits are prefixes Safari/iOS still require: -webkit-backdrop-filter (Safari has no unprefixed backdrop-filter), -webkit-mask-image, and -webkit-text-size-adjust (iOS). Leaving the rule on would let --fix silently regress Safari.",
-    "selector-not-notation": "off - also a correctness reason. The rule IS autofixable and would rewrite :not(.fd-nav):not(.org-footer) to :not(.fd-nav, .org-footer). Those are NOT equivalent: chained :not() contributes one class of specificity per link (0,2,0) while the selector-list form contributes only its most specific argument (0,1,0). The autofix would silently drop specificity and change the cascade."
+    "property-no-vendor-prefix": "off for CORRECTNESS, not taste. The rule is autofixable and its fix DELETES the prefixed declaration. All three hits are prefixes Safari/iOS still require: -webkit-backdrop-filter (Safari has no unprefixed backdrop-filter), -webkit-mask-image, -webkit-text-size-adjust (iOS). On, --fix would silently regress Safari.",
+    "selector-not-notation": "off for CORRECTNESS. The rule is autofixable and would rewrite :not(.fd-nav):not(.org-footer) to :not(.fd-nav, .org-footer). Those are NOT equivalent: chained :not() contributes one class of specificity per link (0,2,0), the selector-list form only its most specific argument (0,1,0). The autofix would silently drop specificity and change the cascade."
   }
 }

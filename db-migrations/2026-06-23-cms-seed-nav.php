@@ -27,31 +27,7 @@
  * No destructive operations; safe to run repeatedly.
  */
 
-// Web-reachable file: refuse any non-CLI (HTTP) invocation.
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-// ---------------------------------------------------------------------------
-// Minimal app bootstrap (CLI). startup.php loads the DB + all libs but does
-// NOT define UIR or a web HTTP host. CmsBlockRegistry::DefaultFrontDoorBlocks()
-// references UIR (and HTTP_TEMPLATE, built from HTTP_HOST), so provide sane
-// CLI-time stand-ins BEFORE startup so the imported defaults are well-formed.
-// ---------------------------------------------------------------------------
-if (empty($_SERVER['HTTP_HOST'])) {
-    // Matches the dev container's external origin (see reference_local_dev_routing).
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-
-require_once __DIR__ . '/../startup.php';
-
-if (!defined('UIR')) {
-    // Host-agnostic RELATIVE internal-link base (matches the sibling CMS seeds).
-    // Do NOT bake HTTP_UI_REMOTE's absolute dev host into the stored nav-item
-    // hrefs — CreateItem persists these urls verbatim.
-    define('UIR', '/orkui/index.php?Route=');
-}
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 // The CmsNav lib (DB store) and CmsBlockRegistry (the canonical front-door
 // defaults) are both auto-loaded by startup from DIR_ORK3.

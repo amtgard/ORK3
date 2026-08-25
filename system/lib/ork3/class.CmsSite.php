@@ -23,7 +23,7 @@ class CmsSite extends CmsBase
      * of these would shadow (or be shadowed by) real routing. Compared
      * case-insensitively against the lowercased slug.
      */
-    private static $reservedSlugs = array(
+    private const RESERVED_SLUGS = array(
         // pretty-URL prefixes + this feature's own controller
         'k', 'p', 'site',
         // real top-level controllers (orkui/controller/controller.*.php)
@@ -119,7 +119,7 @@ class CmsSite extends CmsBase
             return null;
         }
 
-        // #15: cross-request GhettoCache keyed by slug. This is the public
+        // Cross-request GhettoCache keyed by slug. This is the public
         // /k/{slug} router hot path (one lookup per anonymous pageview), yet the
         // row changes only on an officer mutation. Cache the resolved row and let
         // the mutators (UpdateSite/SetPublished/SetDraft/EnsureSite) bust the key.
@@ -207,7 +207,7 @@ class CmsSite extends CmsBase
             return null;
         }
 
-        // #116: finer-grained idempotency. A site row can exist while its starter
+        // Finer-grained idempotency. A site row can exist while its starter
         // template is only PARTIALLY seeded — a first-run that died mid-seed, or a
         // pre-seed legacy row — leaving the nav menu empty and/or home_page_id
         // unset. Rather than short-circuit on "row exists" (which permanently
@@ -317,7 +317,7 @@ class CmsSite extends CmsBase
      * a seed, not a cage.
      *
      * Invoked from BOTH EnsureSite branches: the create branch (right after the
-     * INSERT) and the #116 repair branch (an existing row whose
+     * INSERT) and the repair branch (an existing row whose
      * template_seeded_at is still NULL). $isRepair tells the two apart, because
      * "the org deliberately trashed this starter page" is only meaningful
      * relative to a seed that already happened:
@@ -358,8 +358,8 @@ class CmsSite extends CmsBase
         $now  = date('Y-m-d H:i:s');
 
         // The starter page registry — ONE declaration driving both the page seed
-        // below and the nav menu further down (they used to be two hand-kept lists
-        // that could drift). Built once here: array order IS nav order.
+        // below and the nav menu further down, so the two cannot drift apart.
+        // Built once here: array order IS nav order.
         $starters = $this->_starterPageDefs($scopeType, $scopeId);
 
         // Attributes shared by every seeded page. Seed as PUBLISHED: the
@@ -558,16 +558,12 @@ class CmsSite extends CmsBase
      * taken when the nav menu is found already non-empty under the row lock
      * (a TOCTOU race between two concurrent first-loads, or a legacy
      * pre-migration row being repaired), and the normal end-of-method path
-     * after this method's own nav inserts. Both USED to hand-call
-     * _setSeededHomePage()/_stampTemplateSeeded() independently; only the
-     * normal path was updated to also call _seedOrgTheme() when the theme
-     * seed was added, so a site taking the early-return branch got
-     * template_seeded_at stamped — a PERMANENT one-way marker — with no
-     * theme row, and could never be re-seeded with one. Hoisting both
-     * branches onto this one shared tail makes that class of drift
-     * structurally impossible: there is now exactly one call site for
-     * _stampTemplateSeeded() in the whole class, and it can never run
-     * without _seedOrgTheme() having already run immediately before it.
+     * after this method's own nav inserts. Both funnel through here, in this
+     * order: home page, theme, marker. That is what keeps the class of drift
+     * out: there is exactly ONE call site for _stampTemplateSeeded() in the
+     * whole class, so the PERMANENT one-way marker can never be stamped
+     * without _seedOrgTheme() having run immediately before it, which would
+     * leave a site seeded with no theme row and no way to re-seed one.
      *
      * @param int    $siteId
      * @param string $scopeType 'kingdom'|'park'
@@ -603,16 +599,13 @@ class CmsSite extends CmsBase
      * Single source of truth: the seed loop and the nav loop both read this, so
      * the page list and the menu can no longer drift apart.
      *
-     * SCOPE-AWARE. This registry used to be a scope-blind constant, so a PARK site
-     * was seeded with the kingdom template verbatim: three kingdom-scoped dynamic
-     * blocks (kingdom_events, kingdom_parks, kingdom_parks_map, kingdom_officers)
-     * that each correctly render NOTHING outside a kingdom scope, an "Our Parks"
-     * page for an org that has no parks, and copy calling the park a kingdom. The
-     * blocks and the Add-block chooser were both already scope-correct — only this
-     * seeder was not — so the failure was silent: a brand-new park site opened with
-     * three blank pages and no error anywhere. Park scope now seeds the park_*
-     * counterparts (including park_meeting, the most useful block on a park page)
-     * and drops the parks page entirely.
+     * SCOPE-AWARE, and it must stay that way. A park scope returns its OWN
+     * three-page registry built on the park_* blocks (including park_meeting,
+     * the most useful block on a park page) and no parks page, rather than
+     * sharing the kingdom template: the kingdom-scoped dynamic blocks
+     * (kingdom_events, kingdom_parks, kingdom_parks_map, kingdom_officers)
+     * each correctly render NOTHING outside a kingdom scope, so seeding them
+     * into a park site fails SILENTLY — blank pages, no error anywhere.
      *
      * Copy uses CmsSite::OrgUnitNoun() so a principality reads "Principality" and a
      * park reads "Park" instead of every org being told it is a kingdom.
@@ -637,9 +630,9 @@ class CmsSite extends CmsBase
         };
 
         // A park is not a small kingdom — it gets its OWN three-page design,
-        // not a trimmed copy of the kingdom template. Returns early: none of
-        // the shared $officersBlock/$eventsBlock/$defs scaffolding below is
-        // kingdom-scoped anymore, it never runs for a park.
+        // not a trimmed copy of the kingdom template. Returns early: the shared
+        // $officersBlock/$eventsBlock/$defs scaffolding below is kingdom-scoped,
+        // so it must never run for a park.
         //
         // Three pages only (Home, New Players, Contact) against the kingdom's
         // five. About Us is gone because its seeded body published author
@@ -963,8 +956,8 @@ class CmsSite extends CmsBase
         );
 
         // NOTE: reached by KINGDOM scope only — the park branch above returns its
-        // own three-page array before this point, so there is no park-side "drop
-        // the Our Parks page" step here anymore.
+        // own three-page array before this point, so nothing here needs a
+        // park-side "drop the Our Parks page" carve-out.
         return $defs;
     }
 
@@ -973,23 +966,21 @@ class CmsSite extends CmsBase
      * authored block content (e.g. a CTA field).
      *
      * Deliberately builds the GLOBAL 'Page/view/{pageSlug}' form — the same form
-     * CmsNav already resolves page links to — rather than resolving this site's
-     * slug and baking an already-scoped 'Site/page/{siteSlug}/{pageSlug}' href in
-     * at seed time. An earlier version did the latter and it went stale: officers
-     * can rename a site's slug (CmsSite::UpdateSite() accepts 'slug' as an
-     * editable field), and nothing re-visits already-seeded block content on a
-     * rename, so the baked-in href 404s the moment they do.
+     * CmsNav already resolves page links to — and NEVER an already-scoped
+     * 'Site/page/{siteSlug}/{pageSlug}' href. Officers can rename a site's slug
+     * (CmsSite::UpdateSite() accepts 'slug' as an editable field) and nothing
+     * re-visits already-seeded block content on a rename, so a baked-in scoped
+     * href would 404 the moment they do.
      *
      * The counterpart to this is at RENDER time: frontdoor/_helpers.tpl's
      * fdSiteInternalHref() re-points the 'Page/view/' form seeded here onto this
      * site's CURRENT 'Site/page/{slug}/' route, using the live $SiteSlug for
-     * that render — the exact mechanism org_header.tpl's nav rewrite already
-     * uses, which is why nav already survives a slug rename for free. Seeding
-     * the stable form and resolving it live, instead of resolving once at seed
-     * time, gives block-authored hrefs that same guarantee.
+     * that render — the exact mechanism org_header.tpl's nav rewrite uses, which
+     * is why nav survives a slug rename for free. Seeding the stable form and
+     * resolving it live gives block-authored hrefs that same guarantee.
      *
-     * No DB access needed — this is a pure string builder now that resolution
-     * happens at render time, not seed time.
+     * No DB access needed — resolution happens at render time, not seed time,
+     * so this is a pure string builder.
      *
      * @param string $pageSlug the target page's own slug (flat, e.g. 'new-players')
      * @return string
@@ -1004,8 +995,8 @@ class CmsSite extends CmsBase
      * Home's "who we are" body. Uses the park's own ORK description when it has one
      * (246 of 342 do), so three quarters of parks get a genuinely local paragraph
      * with nobody typing anything. The fallback is a sentence true of every Amtgard
-     * park — never an instruction to the officer, which is what the old seed
-     * published to the open web.
+     * park — never an instruction to the officer, because whatever this seeds is
+     * published to the open web as-is.
      */
     private function _parkIntroBody($parkId)
     {
@@ -1146,7 +1137,7 @@ class CmsSite extends CmsBase
     /**
      * Stamp ork_cms_site.template_seeded_at once, at the end of a successful
      * starter-template seed. This is the explicit "this site HAS been seeded"
-     * marker EnsureSite gates its repair on — see the #116 block there. Written
+     * marker EnsureSite gates its repair on — see the repair block there. Written
      * only when still NULL (re-entrant).
      *
      * Pre-migration DBs are handled by PROBING for the column, not by a
@@ -1192,13 +1183,29 @@ class CmsSite extends CmsBase
     }
 
     /**
+     * Supported public entry point for seeding (or repairing) ONE org's theme
+     * outside the normal site-seed path — e.g. a backfill migration over orgs
+     * provisioned before the theme seed existed. Delegates to _seedOrgTheme()
+     * and returns exactly what it returns, so callers do not have to reach the
+     * private helper through reflection.
+     *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @param int    $updatedBy acting mundane_id (audit)
+     * @return string the chosen '#rrggbb', or '' when no colour could be derived
+     */
+    public function EnsureOrgTheme($scopeType, $scopeId, $updatedBy)
+    {
+        return $this->_seedOrgTheme($scopeType, $scopeId, $updatedBy);
+    }
+
+    /**
      * Give a freshly-provisioned org site its own palette, derived from its own
      * heraldry, and ACTIVATE it.
      *
-     * Before this, a new site seeded no theme row at all, so GetActiveCss()
-     * returned '' and every org fell through to the raw CSS defaults — which is
-     * how all 342 parks ended up rendering in MedievalSharp. Seeding a row is
-     * therefore not a nicety: it is the only thing that makes the org's own
+     * A site with no theme row makes GetActiveCss() return '', which drops the
+     * org through to the raw CSS defaults (MedievalSharp and all). Seeding a row
+     * is therefore not a nicety: it is the only thing that makes the org's own
      * design tokens reachable.
      *
      * Colour cascade: the org's own device, then its PARENT KINGDOM's device (a
@@ -1615,7 +1622,7 @@ class CmsSite extends CmsBase
             . ' WHERE site_id = :site_id'
         );
 
-        // #15: status change alters the cached row served by the /k/{slug} router.
+        // Status change alters the cached row served by the /k/{slug} router.
         $this->_bustSlugCache(isset($row['slug']) ? (string)$row['slug'] : '');
         return true;
     }
@@ -1648,7 +1655,7 @@ class CmsSite extends CmsBase
             . " SET status = 'draft', updated_by = :updated_by WHERE site_id = :site_id"
         );
 
-        // #15: status change alters the cached row served by the /k/{slug} router.
+        // Status change alters the cached row served by the /k/{slug} router.
         $this->_bustSlugCache($slug);
         return true;
     }
@@ -1727,7 +1734,7 @@ class CmsSite extends CmsBase
         if (array_key_exists('home_page_id', $fields)) {
             $homeId = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
                 ? null : (int)$fields['home_page_id'];
-            // C30: a non-null home pointer MUST reference a real (non-trashed) page
+            // A non-null home pointer MUST reference a real (non-trashed) page
             // that belongs to THIS site's own scope — otherwise a published site
             // could point its landing page at an unbuilt/cross-scope id and silently
             // fall through to the "being built" interstitial. Validated inline
@@ -1762,7 +1769,7 @@ class CmsSite extends CmsBase
             . ' WHERE site_id = :site_id'
         );
 
-        // #15: bust the cached row under the old slug, and — when the slug changed —
+        // Bust the cached row under the old slug, and — when the slug changed —
         // under the new slug as well so neither key can serve stale data.
         $this->_bustSlugCache($oldSlug);
         if (isset($binds['slug'])) {
@@ -1795,8 +1802,8 @@ class CmsSite extends CmsBase
     public function DeriveSlug($name)
     {
         // Shared canonical derivation (CmsBase::_normalizeSlug), including the
-        // ork_cms_site.slug column-width clamp — the base helper applies the exact
-        // same rtrim-the-trailing-hyphen clamp this method used to re-implement.
+        // ork_cms_site.slug column-width clamp and its rtrim-the-trailing-hyphen
+        // pass, so a site slug is derived byte-identically to a page/post slug.
         // $emptyFallback stays null so an unslugifiable name still returns '',
         // which callers treat as "no slug derived".
         return $this->_normalizeSlug($name, 160);
@@ -1833,7 +1840,7 @@ class CmsSite extends CmsBase
         if ($slug[0] === '-' || substr($slug, -1) === '-') {
             return 'The web address cannot start or end with a hyphen.';
         }
-        if (in_array($slug, self::$reservedSlugs, true)) {
+        if (in_array($slug, self::RESERVED_SLUGS, true)) {
             return 'That web address is reserved. Please choose another.';
         }
 
@@ -1915,7 +1922,7 @@ class CmsSite extends CmsBase
     }
 
     /**
-     * C30: validate a proposed home_page_id for a site. The page must exist, not
+     * Validate a proposed home_page_id for a site. The page must exist, not
      * be trashed, and share the site's exact (scope_type, scope_id) so a public
      * visitor can never be pointed at a cross-scope or missing page. Returns true
      * when acceptable, or a human-readable error string.

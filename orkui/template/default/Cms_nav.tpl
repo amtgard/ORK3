@@ -63,7 +63,7 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
         'url' => 'fa-globe', 'page' => 'fa-file', 'post' => 'fa-newspaper', 'dynamic' => 'fa-route',
     );
     $lti = isset($linkTypeIcon[$linkType]) ? $linkTypeIcon[$linkType] : 'fa-link';
-    // L3: the middle column repeated the label on most rows ("About" → "About")
+    // The middle column repeated the label on most rows ("About" → "About")
     // and differed on exactly the rows worth noticing ("Join" → "Join Now",
     // "Find a Chapter" → "Atlas"). Repeating it taught an author to stop reading
     // the column, which is where the differences were hiding. Show it only when
@@ -181,17 +181,17 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
         </div>
         <div class="cms-modal-body">
-            <input type="hidden" id="navFieldId" value="0">
-            <input type="hidden" id="navFieldParentId" value="0">
+            <input type="hidden" id="cmsNavFieldId" value="0">
+            <input type="hidden" id="cmsNavFieldParentId" value="0">
 
             <div class="cms-field">
-                <label class="cms-label" for="navFieldLabel">Label</label>
-                <input type="text" class="cms-input" id="navFieldLabel" maxlength="160" placeholder="e.g. About">
+                <label class="cms-label" for="cmsNavFieldLabel">Label</label>
+                <input type="text" class="cms-input" id="cmsNavFieldLabel" maxlength="160" placeholder="e.g. About">
             </div>
 
             <div class="cms-field">
-                <label class="cms-label" for="navFieldType">Link type</label>
-                <select class="cms-select" id="navFieldType">
+                <label class="cms-label" for="cmsNavFieldType">Link type</label>
+                <select class="cms-select" id="cmsNavFieldType">
                     <option value="page">Site Page</option>
                     <option value="post">Blog Post</option>
                     <option value="url">External URL</option>
@@ -200,8 +200,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
 
             <div class="cms-field cms-nav-picker" data-picker="page">
-                <label class="cms-label" for="navFieldPage">Page</label>
-                <select class="cms-select" id="navFieldPage">
+                <label class="cms-label" for="cmsNavFieldPage">Page</label>
+                <select class="cms-select" id="cmsNavFieldPage">
                     <option value="0">— Select a page —</option>
                     <?php foreach ($pages as $pg):
                         $pgId = (int)($pg['page_id'] ?? 0);
@@ -215,8 +215,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
 
             <div class="cms-field cms-nav-picker" data-picker="post">
-                <label class="cms-label" for="navFieldPost">Post</label>
-                <select class="cms-select" id="navFieldPost">
+                <label class="cms-label" for="cmsNavFieldPost">Post</label>
+                <select class="cms-select" id="cmsNavFieldPost">
                     <option value="0">— Select a post —</option>
                     <?php foreach ($posts as $po):
                         $poId = (int)($po['post_id'] ?? 0);
@@ -230,20 +230,20 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
 
             <div class="cms-field cms-nav-picker" data-picker="url">
-                <label class="cms-label" for="navFieldUrl">URL</label>
-                <input type="text" class="cms-input" id="navFieldUrl" maxlength="512" placeholder="https://example.com">
+                <label class="cms-label" for="cmsNavFieldUrl">URL</label>
+                <input type="text" class="cms-input" id="cmsNavFieldUrl" maxlength="512" placeholder="https://example.com">
                 <div class="cms-help">A full external link. Off-site links open in a new tab.</div>
             </div>
 
             <div class="cms-field cms-nav-picker" data-picker="dynamic">
-                <label class="cms-label" for="navFieldRoute">ORK app page</label>
-                <input type="text" class="cms-input" id="navFieldRoute" maxlength="512" placeholder="e.g. Directory/index">
+                <label class="cms-label" for="cmsNavFieldRoute">ORK app page</label>
+                <input type="text" class="cms-input" id="cmsNavFieldRoute" maxlength="512" placeholder="e.g. Directory/index">
                 <div class="cms-help">Links to a built-in ORK application page (not a CMS page). Enter the page's internal address, for example <code>Directory/index</code>. Most menus should use a <strong>CMS Page</strong> or <strong>External URL</strong> instead.</div>
             </div>
 
             <div class="cms-field">
-                <label class="cms-label" for="navFieldParentSel">Parent (drop-down)</label>
-                <select class="cms-select" id="navFieldParentSel">
+                <label class="cms-label" for="cmsNavFieldParentSel">Parent (drop-down)</label>
+                <select class="cms-select" id="cmsNavFieldParentSel">
                     <option value="0">— Top level —</option>
                     <?php foreach ($top as $item):
                         $tid = (int)($item['nav_id'] ?? 0);
@@ -257,7 +257,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
             <div class="cms-field" style="display:flex;align-items:center;gap:10px;">
                 <label class="cms-switch">
-                    <input type="checkbox" id="navFieldEnabled" checked>
+                    <input type="checkbox" id="cmsNavFieldEnabled" checked>
                     <span class="cms-slider"></span>
                 </label>
                 <span class="cms-label" style="margin:0;">Visible in the menu</span>
@@ -270,22 +270,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
 </div>
 
-<?php /* ---- Confirm modal (Delete) ---- */ ?>
-<div class="cms-modal-overlay" id="cmsConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
-        <div class="cms-modal-head">
-            <h3 id="cmsConfirmTitle">Please confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="cmsConfirmBody" style="margin:0;font-size:14px;"></p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsConfirmOk">Delete</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 <?php endif; ?>
 
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -310,16 +295,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     /* ---- Edit/Add modal wiring ---- */
     var modal   = document.getElementById('cmsNavModal');
-    var fId     = document.getElementById('navFieldId');
-    var fParent = document.getElementById('navFieldParentId');
-    var fLabel  = document.getElementById('navFieldLabel');
-    var fType   = document.getElementById('navFieldType');
-    var fPage   = document.getElementById('navFieldPage');
-    var fPost   = document.getElementById('navFieldPost');
-    var fUrl    = document.getElementById('navFieldUrl');
-    var fRoute  = document.getElementById('navFieldRoute');
-    var fParentSel = document.getElementById('navFieldParentSel');
-    var fEnabled = document.getElementById('navFieldEnabled');
+    var fId     = document.getElementById('cmsNavFieldId');
+    var fParent = document.getElementById('cmsNavFieldParentId');
+    var fLabel  = document.getElementById('cmsNavFieldLabel');
+    var fType   = document.getElementById('cmsNavFieldType');
+    var fPage   = document.getElementById('cmsNavFieldPage');
+    var fPost   = document.getElementById('cmsNavFieldPost');
+    var fUrl    = document.getElementById('cmsNavFieldUrl');
+    var fRoute  = document.getElementById('cmsNavFieldRoute');
+    var fParentSel = document.getElementById('cmsNavFieldParentSel');
+    var fEnabled = document.getElementById('cmsNavFieldEnabled');
     var modalTitle = document.getElementById('cmsNavModalTitle');
 
     // Show only the picker that matches the selected link type.
@@ -433,10 +418,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
     }); }
 
     /* ---- Card actions (edit / delete / add child / move) ---- */
-    var confirmModal = document.getElementById('cmsConfirmModal');
-    var confirmBody  = document.getElementById('cmsConfirmBody');
-    var confirmOk    = document.getElementById('cmsConfirmOk');
-    var pendingDeleteId = null;
 
     document.getElementById('cmsNavTree').addEventListener('click', function (e) {
         var btn = e.target.closest('[data-act]');
@@ -451,36 +432,37 @@ include __DIR__ . '/cms/_shell_top.tpl';
         } else if (act === 'addchild') {
             openAdd(parseInt(navId, 10) || 0);
         } else if (act === 'delete') {
-            pendingDeleteId = navId;
-            var label = card.getAttribute('data-label') || 'this item';
-            var isParent = card.getAttribute('data-child') === '0';
-            if (confirmBody) {
-                confirmBody.textContent = 'Delete "' + label + '"?'
-                    + (isParent ? ' This also removes any sub-items under it.' : '')
-                    + ' This cannot be undone.';
-            }
-            openModal(confirmModal);
+            askDeleteNavItem(navId, card);
         } else if (act === 'up' || act === 'down') {
             moveCard(card, act);
         }
     });
 
-    if (confirmOk) {
-        confirmOk.addEventListener('click', function () {
-            if (!pendingDeleteId) { return; }
-            confirmOk.disabled = true;
-            post('deletenavitem', { nav_id: pendingDeleteId }).then(function (res) {
-                confirmOk.disabled = false;
-                closeModal(confirmModal);
-                if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
-                pendingDeleteId = null;
-                toast('Item deleted.', 'ok');
-                reloadAfterOrderFlush();
-            }).catch(function () { confirmOk.disabled = false; toast('Network error.', 'error'); });
-        });
+    /* Deleting a nav item is irreversible, so it goes through the shared confirm
+       dialog (CmsAdmin.confirm / cms/_confirm_modal.tpl). */
+    function askDeleteNavItem(navId, card) {
+        var label = card.getAttribute('data-label') || 'this item';
+        var isParent = card.getAttribute('data-child') === '0';
+        CmsAdmin.confirm(
+            'Please confirm',
+            'Delete "' + label + '"?'
+                + (isParent ? ' This also removes any sub-items under it.' : '')
+                + ' This cannot be undone.',
+            'Delete',
+            function () {
+                CmsAdmin.confirmBusy(true);
+                post('deletenavitem', { nav_id: navId }).then(function (res) {
+                    CmsAdmin.confirmBusy(false);
+                    CmsAdmin.confirmClose();
+                    if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
+                    toast('Item deleted.', 'ok');
+                    reloadAfterOrderFlush();
+                }).catch(function () { CmsAdmin.confirmClose(); toast('Network error.', 'error'); });
+            }
+        );
     }
 
-    /* ---- Reorder rollback (#76) ----
+    /* ---- Reorder rollback ----
      * The click handler is delegated on #cmsNavTree itself, so snapshotting and
      * restoring the tree's innerHTML is safe (no per-card listeners are lost).
      * preMoveOrderHtml holds the last KNOWN-GOOD (persisted) order; it is captured
@@ -602,7 +584,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         flushOrder().then(go, go);
     }
 
-    // #76: the save failed — roll the tree back to the last persisted order so the
+    // The save failed — roll the tree back to the last persisted order so the
     // on-screen order never diverges from what's stored, and surface a persistent
     // error toast prompting a retry (rather than a silent success illusion).
     function revertOrder(msg) {

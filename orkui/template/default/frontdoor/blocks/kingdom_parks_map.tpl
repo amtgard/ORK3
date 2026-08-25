@@ -32,7 +32,7 @@ if ($kpmKingdomId <= 0) {
 $kpmKicker  = isset($blockFields['kicker']) ? trim((string) $blockFields['kicker']) : '';
 $kpmHeading = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Park Map';
 
-// C5-style caching (mirrors kingdom_officers.tpl / kingdom_parks.tpl): this
+// Cached like kingdom_officers.tpl / kingdom_parks.tpl: this
 // DYNAMIC block runs on every anonymous public hit and previously re-queried
 // the map rows, re-ran Parsedown on each park's Directions/Description, AND
 // did a per-row file_exists() heraldry probe. Resolve the whole $kpmParks array

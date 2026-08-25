@@ -1,13 +1,16 @@
 <?php
 
-// system/lib/ork3/class.CmsTheme.php
-// DB persistence for CMS theme token sets. Pure computation is delegated to
-// CmsThemeTokens; this class only reads/writes <prefix>cms_theme.
-//
-// DB idiom (matches class.CmsPage.php): shared global $DB (YapoDb); always
-// Clear() before a raw DataSet()/Execute(); bind values via $DB->field = ...
-// (the SQL uses :field named placeholders). lastInsertId() is unreliable on
-// dup-key under ERRMODE_WARNING, so INSERTs read back by the unique tuple.
+/*************************************************************************
+ * CmsTheme — DB persistence for CMS theme token sets.
+ *
+ * Pure computation is delegated to CmsThemeTokens; this class only
+ * reads/writes <prefix>cms_theme.
+ *
+ * DB idiom (matches class.CmsPage.php): shared global $DB (YapoDb); always
+ * Clear() before a raw DataSet()/Execute(); bind values via $DB->field = ...
+ * (the SQL uses :field named placeholders). lastInsertId() is unreliable on
+ * dup-key under ERRMODE_WARNING, so INSERTs read back by the unique tuple.
+ *************************************************************************/
 
 require_once __DIR__ . '/class.CmsThemeTokens.php';
 
@@ -60,7 +63,7 @@ class CmsTheme extends CmsBase
     /**
      * The <style> inner CSS for the active theme, or '' when none.
      *
-     * C5: the resolved CSS is cached in GhettoCache keyed by (scope, updated_at)
+     * The resolved CSS is cached in GhettoCache keyed by (scope, updated_at)
      * so every anonymous public hit no longer re-runs the token→CSS compile. The
      * key is built FROM the theme row, so the row read still happens first — it is
      * only memoized per request by GetActiveTheme(), not cached across requests.
@@ -92,31 +95,13 @@ class CmsTheme extends CmsBase
     }
 
     /**
-     * The same active-theme CSS as GetActiveCss(), but scoped to :root instead of
-     * .fd-page, or '' when there is no active theme.
-     *
-     * Standalone public org sites only. <html>/<body> sit OUTSIDE .fd-page and
-     * custom properties inherit downward only, so cms-base.css's body rule can
-     * never see the .fd-page token block; without a root-scoped copy a dark org
-     * site paints a white body. See CmsThemeTokens::ToRootCss().
-     *
-     * Caching mirrors GetActiveCss() exactly — same (scope, updated_at, id) key
-     * material (so the theme row is read first, per-request memoized, and a theme
-     * write self-busts both compiles) — but under its OWN namespace
-     * (__CLASS__ . '.GetActiveRootCss'). The namespace MUST differ from
-     * GetActiveCss()'s or the two would collide and serve each other's CSS.
-     */
-    /**
      * The Google Fonts href for the families this scope's theme actually uses.
      *
-     * default.theme used to hardcode a <link> per family for EVERY CMS page —
-     * Archivo, MedievalSharp and Lexend whether the org used them or not — which
-     * meant the loaded set and the pickable set were two hand-maintained lists.
-     * They drifted exactly as you would expect: the seeder wrote Lexend for
-     * every org site while default.theme did not link it, so every site asked
-     * for a webfont that was never loaded and silently fell back to the generic
-     * sans. With a 47-family catalogue that approach is not merely fragile, it
-     * is unaffordable.
+     * The loaded set is derived from the stored token values rather than
+     * hand-listed in default.theme, so the linked families and the pickable
+     * families cannot drift apart: a family an org never selected is never
+     * fetched, and a family it did select always is. With a 47-family
+     * catalogue a hand-maintained <link> list per page is unaffordable anyway.
      *
      * Falls back to the DEFAULT families when a scope has no theme row, because
      * an unthemed front door still renders Archivo and Open Sans and still needs
@@ -145,7 +130,7 @@ class CmsTheme extends CmsBase
      * The css2 QUERY for this scope's families — origin excluded on purpose.
      *
      * default.theme writes the origin as a literal and interpolates only this,
-     * so the CSS-boundary gate can still prove where the stylesheet lands (C6).
+     * so the CSS-boundary gate can still prove where the stylesheet lands.
      */
     public function GetActiveFontQuery($scopeType = 'global', $scopeId = 0)
     {
@@ -169,6 +154,21 @@ class CmsTheme extends CmsBase
         );
     }
 
+    /**
+     * The same active-theme CSS as GetActiveCss(), but scoped to :root instead of
+     * .fd-page, or '' when there is no active theme.
+     *
+     * Standalone public org sites only. <html>/<body> sit OUTSIDE .fd-page and
+     * custom properties inherit downward only, so cms-base.css's body rule can
+     * never see the .fd-page token block; without a root-scoped copy a dark org
+     * site paints a white body. See CmsThemeTokens::ToRootCss().
+     *
+     * Caching mirrors GetActiveCss() exactly — same (scope, updated_at, id) key
+     * material (so the theme row is read first, per-request memoized, and a theme
+     * write self-busts both compiles) — but under its OWN namespace
+     * (__CLASS__ . '.GetActiveRootCss'). The namespace MUST differ from
+     * GetActiveCss()'s or the two would collide and serve each other's CSS.
+     */
     public function GetActiveRootCss($scopeType = 'global', $scopeId = 0)
     {
         $t = $this->GetActiveTheme($scopeType, $scopeId);

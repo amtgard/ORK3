@@ -5,7 +5,7 @@
 $images  = $blockFields['images']  ?? [];
 $caption = htmlspecialchars($blockFields['caption'] ?? '', ENT_QUOTES, 'UTF-8');
 
-// #83: author-configurable CTA tile (optional). Render a real link only when
+// Author-configurable CTA tile (optional). Render a real link only when
 // BOTH a label and a usable href are supplied; otherwise the tile shows just the
 // caption, or is omitted entirely when there's nothing to show.
 $mosaicCtaLabel = trim((string)($blockFields['cta_label'] ?? ''));
@@ -14,7 +14,7 @@ $mosaicHasCta   = ($mosaicCtaLabel !== '' && $mosaicCtaHref !== '' && $mosaicCta
 
 // Mosaic layout: first image spans 2 rows, then up to 3 more, then caption tile.
 // Grid: 3 cols (2fr 1fr 1fr), 2 rows (190px 190px) with 4px gap.
-// C4: prefer the mid-size "display" rendition; fall back to the original src.
+// Prefer the mid-size "display" rendition; fall back to the original src.
 $mosaicSrc = static function ($img) {
     return is_array($img) ? (string)($img['display'] ?? $img['src'] ?? '') : '';
 };
@@ -24,7 +24,7 @@ $img2 = $images[2] ?? null;
 $img3 = $images[3] ?? null;
 
 if (empty($images)) {
-    // #82-style author hint: surface the empty state in the CMS editor/preview
+    // Author hint: surface the empty state in the CMS editor/preview
     // (SitePreview) only, so it's discoverable instead of a silently missing block.
     if ($fdIsPreview) {
         fdEmptyBlockNotice('This photo mosaic has no images yet.');

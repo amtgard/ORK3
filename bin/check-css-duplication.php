@@ -32,13 +32,13 @@
  *                        so the improvement is permanent.
  *   observed == budget   pass.
  *
- * The second case is the whole point of this file's rewrite. The budgets are set
- * EQUAL to the observed counts and only ever moved by hand, so a gate that failed
- * upward alone was a freeze: collapse a group today, the count drops, the gate
- * stays green, and the slack sits there for the next commit to spend on a fresh
- * copy — with the gate green the whole time. Duplication could never improve on
- * paper, because nothing ever lowered the number. Making slack itself a failure
- * captures every improvement the moment it happens.
+ * The second case is what makes this a ratchet rather than a freeze. The budgets
+ * are set EQUAL to the observed counts and only ever moved by hand, so a gate
+ * that failed upward alone would let slack accumulate: collapse a group today,
+ * the count drops, the gate stays green, and the slack sits there for the next
+ * commit to spend on a fresh copy — green the whole time, and duplication never
+ * improving on paper because nothing ever lowers the number. Making slack itself
+ * a failure captures every improvement the moment it happens.
  *
  * Usage:
  *   bin/check-css-duplication.php               # the CMS CSS set; enforce both budgets
@@ -70,81 +70,42 @@
 
 // ---------------------------------------------------------------------------
 // The ratchet. See RE-BASELINING above before touching either number.
-// Last set: 2026-08-22, after F4 lifted the OGRE admin templates' inline <style>
-// blocks into cms-admin.css (22 -> 26 and 78 -> 90).
 //
-// This is a COVERAGE re-baseline, not a duplication re-baseline. Not one
-// duplicate body was authored: 185 lines of CSS that had always been byte-
-// identical to rules in cms-admin.css were sitting inside <style> elements in
-// Cms_sites.tpl / Cms_media.tpl / Cms_nav.tpl / cms/_block_editor.tpl, where no
-// stylesheet analyser could see them. Moving them into the stylesheet is what
-// made the pre-existing duplication visible; the ratchet is being told what the
-// directory actually contained all along. The four newly VISIBLE >= 2-decl
-// groups, all of them cms-admin.css against itself:
-//   font-weight:600;color:var(--ork-text)                    .cms-table .cms-pg-title / .cms-sites-org / .cms-nav-label
-//   background:var(--ork-badge-green-bg);color:...-green-text  .cms-badge-published / .cms-site-badge-published
-//   background:var(--ork-badge-gray-bg);color:...-gray-text    .cms-badge-draft / .cms-site-badge-unbuilt
-//   font-size:12.5px;color:var(--ork-text-muted)             .cms-quick-text span / .cms-sites-count
-// (A fifth existing group, the gold :hover link body, gained a third member:
-// a.cms-sites-slug:hover.) They are collapsible by selector grouping and are
-// the obvious next cleanup — deliberately NOT done here, because collapsing
-// them means moving rules across ~2,000 lines of a file this task was scoped
-// to leave working, and F4's contract was no rendering change.
-// ---------------------------------------------------------------------------
+// MAX_GROUPS_2PLUS is how many duplicate declaration bodies of >= 2 declarations
+// the CMS CSS set currently contains; MAX_GROUPS_ANY counts every duplicate
+// body including one-declaration ones. Both are pinned EQUAL to the observed
+// counts, so any movement in either direction fails and has to be explained in
+// the commit that moves it. Rebaselining is `npm run lint:css:dupes:rebaseline`;
+// the git history of these two constants is the log of why each number moved.
 //
-// 2026-08-22, P1 (authored body-copy links): ANY 90 -> 91, 2PLUS unchanged at 26.
-// One new group, one declaration wide:
-//   color:var(--pk-link, var(--fd-accent))
-//     frontdoor.css   html[data-theme="dark"] .fd-body-text a
-//     orkshell-interop.css  html[data-theme="dark"] #theme_container .fd-body-text a
-// It is deliberate and NOT collapsible by selector grouping, which is the only
-// collapse this gate accepts: a selector list lives in exactly one file, and
-// these two selectors cannot share one. frontdoor.css is public-tier and may not
-// name #theme_container (C1 in bin/check-css-boundaries.sh); orkshell-interop.css
-// is never loaded by a standalone org site, which still needs the declaration.
-// The copies therefore serve disjoint tiers — the ORK-outranks-CMS armour the
-// interop file exists to hold, the same shape cms-admin.css already carries for
-// .cms-btn-primary. Both rules carry a comment saying so.
-// ---------------------------------------------------------------------------
+// WHAT THE REMAINING GROUPS ARE, and why the number does not go to zero. The
+// only collapse this gate accepts is selector grouping, and a selector list
+// lives in exactly one file — so a group whose members are in different
+// stylesheets cannot be collapsed at all. The live examples:
 //
-// 2026-08-22, P3 (ratchet tightens as well as holds): ANY 91 -> 90, 2PLUS
-// unchanged at 26. The first TIGHTENING step, and the first one this gate would
-// have demanded on its own. The largest duplicate body in the CMS CSS was seven
-// copies of `color:var(--cms-gold,#f0b429)` scattered across ~2,300 lines of
-// cms-admin.css; they are now one grouped rule under a "Gold accent text"
-// comment, placed at the position of .cms-editbar-hint-dirty — the one member
-// whose cascade position is load-bearing, because it overrides .cms-editbar-hint
-// at EQUAL specificity and only source order makes it win.
+//   `display:flex` x6      four in cms-admin.css, two in blocks.css.
+//   `position:relative` x2 cms-admin.css `.cms-shell [data-tip], .cms-modal
+//                          [data-tip]` and frontdoor.css `.fd-navitem`. The
+//                          anchor rule genuinely needs that one declaration and
+//                          no other: it establishes the containing block the
+//                          [data-tip] ::after chip is positioned against.
+//                          Padding it to two declarations to duck this counter
+//                          would be the actual defect.
+//   `color:var(--pk-link, var(--fd-accent))` x2
+//                          frontdoor.css and orkshell-interop.css, for the same
+//                          dark-mode body-copy link. frontdoor.css is
+//                          public-tier and may not name #theme_container (C1 in
+//                          bin/check-css-boundaries.sh); orkshell-interop.css is
+//                          never loaded by a standalone org site, which still
+//                          needs the declaration. The copies serve disjoint
+//                          tiers.
 //
-// Equivalence was proved, not assumed. Specificity is unchanged by a move, so
-// the only way a move can change a rendered value on any DOM is by flipping a
-// cascade pair that shares a property at equal specificity in the same at-rule
-// context. All 54,778 such ordered pairs in the file were enumerated before and
-// after; exactly 4 flipped, and all 4 are between class pairs that never appear
-// together on one element in any of the 4,203 distinct class attributes the repo
-// emits (.cms-rail-icon vs .cms-crumb / .cms-icon-danger, .cms-dash-livelink vs
-// .kn-ac-item / .te-btn-ghost). Resolving every property for 4,558 modelled
-// elements gave a byte-identical 215,133-line snapshot before and after.
-//
-// The next-largest group, 6 copies of `display:flex`, is NOT collapsible: four
-// live in cms-admin.css and two in blocks.css, and a selector list lives in
-// exactly one file, so no grouping can take that group below two members.
-//
-// 2026-08-22, L-series (OGRE list surfaces): ANY 89 -> 90, 2PLUS unchanged. The
-// raise is one NEW x2 group of a single declaration, `position:relative`, whose
-// two members are:
-//     cms-admin.css   .cms-shell [data-tip], .cms-modal [data-tip]
-//     frontdoor.css   .fd-navitem
-// It is the same not-collapsible shape as the `display:flex` group above. The
-// admin tier and the public tier are physically separate stylesheets BY RULE
-// (check-css-boundaries.sh C1 exists to keep them from touching), a selector
-// list lives in exactly one file, and the anchor rule genuinely needs that one
-// declaration and no other: it establishes the containing block the [data-tip]
-// ::after chip is positioned against. Padding it to two declarations to duck
-// this counter would be the actual defect. Both rules carry a comment saying so.
+// The admin tier and the public tier are physically separate stylesheets BY
+// RULE, so tier-crossing duplicates of this shape are structural, not sloppy.
+// Each such rule carries a comment at its own site saying so.
 // ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 25;
-const MAX_GROUPS_ANY   = 89;
+const MAX_GROUPS_ANY   = 88;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(
@@ -160,8 +121,8 @@ const CSS_GLOBS = array(
  * text with quote tracking costs nothing and cannot be fooled that way.
  *
  * The quote tracking is cssStringToken(), the same scanner cssRules() and
- * cssSplitDecls() use — so a stray apostrophe (`Foo's`) is a typo here too, and
- * no longer blinds comment stripping for the rest of the file.
+ * cssSplitDecls() use — so a stray apostrophe (`Foo's`) is treated as a typo
+ * here too, and cannot blind comment stripping for the rest of the file.
  */
 function cssStripComments($src)
 {
@@ -201,9 +162,9 @@ function cssStripComments($src)
  *
  * Returning the whole token, not just a yes/no, is deliberate. Four consumers
  * (cssStripComments, the prelude and body scanners in cssRules, and
- * cssSplitDecls) used to re-implement the escape/newline/close loop inline and
- * had already drifted apart on line counting. A divergent copy of this loop
- * silently moves the numbers the ratchet enforces, so there is exactly one.
+ * cssSplitDecls) need the escape/newline/close loop, and inline copies of it
+ * drift apart on line counting. A divergent copy silently moves the numbers the
+ * ratchet enforces, so there is exactly one.
  *
  * @return array{text:string, end:int, lines:int}|null  null = not a string opener.
  *         `text` is the token including both quotes, `end` the index of its last

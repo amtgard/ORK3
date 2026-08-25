@@ -23,7 +23,7 @@ $canEdit    = !empty($caps['edit']);
 $canPublish = !empty($caps['publish']);
 $canDelete  = !empty($caps['delete']);
 
-// E128: per-row lifetime view counts (post_id => int). Defensive — a missing or
+// Per-row lifetime view counts (post_id => int). Defensive — a missing or
 // empty map means counts simply don't render.
 $postViewCounts = isset($postViewCounts) && is_array($postViewCounts) ? $postViewCounts : array();
 
@@ -133,7 +133,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         $dateTs    = $dateSrc !== '' ? (int)strtotime($dateSrc) : 0;
                         // The epoch is what DataTables sorts on (data-order), never
                         // the rendered words; an unparseable date falls back to "—".
-                        $dateFmt   = $dateTs > 0 ? date('M j, Y g:i A', $dateTs) : '—';
+                        $dateFmt   = $cmsFmtDate($dateSrc);
                     ?>
                     <tr data-post-id="<?= $pid ?>">
                         <td class="cms-check-col" data-label="">
@@ -142,7 +142,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <td data-label="Title">
                             <div class="cms-pg-title"><?= $h($title) ?></div>
                             <?php if ($slug !== ''): ?><div class="cms-pg-slug">/<?= $h($slug) ?></div><?php endif; ?>
-                            <?php // E128: per-row lifetime views — only when the map has this post. ?>
+                            <?php // Per-row lifetime views — only when the map has this post. ?>
                             <?php if (array_key_exists($pid, $postViewCounts)): ?>
                                 <div class="cms-pg-slug cms-muted" data-tip="Lifetime views on the public site">
                                     <i class="fas fa-chart-line"></i> <?= number_format((int)$postViewCounts[$pid]) ?> view<?= (int)$postViewCounts[$pid] === 1 ? '' : 's' ?>
@@ -234,22 +234,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
-<?php /* ---- Confirm modal (Delete) ---- */ ?>
-<div class="cms-modal-overlay" id="cmsConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
-        <div class="cms-modal-head">
-            <h3 id="cmsConfirmTitle">Please confirm</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p id="cmsConfirmBody" style="margin:0;font-size:14px;"></p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsConfirmOk">Delete</button>
-        </div>
-    </div>
-</div>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -292,17 +277,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
     }
     <?php endif; ?>
 
+    /* ---- HTML escape (shared: CmsAdmin.esc) ---- */
+    var esc = CmsAdmin.esc;
+
     /* ---- toast (shared: CmsAdmin.toast) ---- */
     var toast = CmsAdmin.toast;
 
-    /* ---- C2: undoable toast (shared: CmsAdmin.undoableToast) — delete is a
+    /* ---- Undoable toast (shared: CmsAdmin.undoableToast) — delete is a
        soft-delete (deleted_at), so the row can be brought back and the toast
        offers an Undo that calls restorepost. ---- */
     var undoableToast = CmsAdmin.undoableToast;
-
-    /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
-    var openModal = CmsAdmin.modal.open;
-    var closeModal = CmsAdmin.modal.close;
 
     /* ---- New Post (navigate to the post editor) ---- */
     function goNewPost() { window.location.href = UIR + 'Cms/editpost/new' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''); }
@@ -341,23 +325,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     });
 
-    /* ---- Confirm modal (no native confirm) — callback-based so single + bulk
-           delete share one dialog. ---- */
-    var confirmModal = document.getElementById('cmsConfirmModal');
-    var confirmBody = document.getElementById('cmsConfirmBody');
-    var confirmOk = document.getElementById('cmsConfirmOk');
-    var confirmAction = null;
+    /* ---- Confirm dialog (shared: CmsAdmin.confirm, markup in
+           cms/_confirm_modal.tpl). Callback-based so single + bulk delete share
+           one dialog; no native confirm(). ---- */
     function askConfirm(message, onYes) {
-        confirmAction = onYes;
-        if (confirmBody) { confirmBody.textContent = message; }
-        openModal(confirmModal);
-    }
-    if (confirmOk) {
-        confirmOk.addEventListener('click', function () {
-            var fn = confirmAction;
-            confirmAction = null;
-            if (typeof fn === 'function') { fn(); }
-        });
+        CmsAdmin.confirm('Please confirm', message, 'Delete', onYes);
     }
 
     /* ---- Single delete ---- */
@@ -366,15 +338,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
             var pid = btn.getAttribute('data-post-id');
             var title = btn.getAttribute('data-title') || 'this post';
             askConfirm('Delete "' + title + '"? This moves the post to the Trash, where it can be restored.', function () {
-                var okEl = confirmOk;
-                if (okEl) { okEl.disabled = true; }
+                CmsAdmin.confirmBusy(true);
                 post('deletepost', { post_id: pid }).then(function (res) {
-                    if (okEl) { okEl.disabled = false; }
-                    closeModal(confirmModal);
+                    CmsAdmin.confirmBusy(false);
+                    CmsAdmin.confirmClose();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-post-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
-                    // C2: soft-delete → offer Undo (restorepost). Restoring re-reads
+                    // Soft-delete → offer Undo (restorepost). Restoring re-reads
                     // the list so the row (and its DataTables state) comes back clean.
                     undoableToast('Post deleted.', function () {
                         post('restorepost', { post_id: pid }).then(function (r) {
@@ -382,7 +353,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                             else { toast((r && r.error) || 'Restore failed.', 'error'); }
                         }).catch(function () { toast('Network error.', 'error'); });
                     });
-                }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
+                }).catch(function () { CmsAdmin.confirmBusy(false); toast('Network error.', 'error'); });
             });
         });
     });
@@ -464,7 +435,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             } else if (act === 'delete') {
                 var n = ids.length;
                 askConfirm('Delete ' + n + ' post' + (n === 1 ? '' : 's') + '? They move to the Trash, where they can be restored.', function () {
-                    closeModal(confirmModal);
+                    CmsAdmin.confirmClose();
                     runBulk('deletepost', ids, 'Deleted', true);
                 });
             }
@@ -482,12 +453,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         var trBody  = document.getElementById('cmsTrashBody');
         var countEl = document.getElementById('cmsTrashCount');
         if (!toggle || !panel || !trBody) { return; }
-
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-            });
-        }
 
         function renderRows(posts) {
             if (countEl) { countEl.textContent = posts.length ? '(' + posts.length + ')' : ''; }

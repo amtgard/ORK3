@@ -9,7 +9,7 @@
  * Callers (home page, CMS pages, blog) set $fdBlocks then `include` this file.
  */
 $fdBlocks    = isset($fdBlocks) && is_array($fdBlocks) ? $fdBlocks : [];
-// #103: columns.tpl re-enters this renderer once per nested column, so a
+// Columns.tpl re-enters this renderer once per nested column, so a
 // columns-in-columns chain recurses back through here. Thread a depth counter
 // (shared across the whole include chain — same variable scope) and render
 // nothing past a small max, so a pathological nesting can't overflow the PHP
@@ -23,7 +23,7 @@ $fdBlockDir  = DIR_TEMPLATE . 'default/frontdoor/blocks/';
 // Shared PLAIN-PHP helpers (fdFormatDate, …) — guarded, so a repeat include (e.g.
 // columns.tpl re-entering render_blocks) is a no-op. Blocks below rely on these.
 require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
-// #90: preview/admin surfaces (an authorized officer previewing an unpublished
+// Preview/admin surfaces (an authorized officer previewing an unpublished
 // site, or the CMS draft preview) get a visible placeholder when a block throws,
 // so authors can see something is wrong. Public visitors keep the silent swallow.
 $fdIsPreview = ! empty($SitePreview) || ! empty($PreviewPage);

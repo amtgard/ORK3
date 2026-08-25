@@ -84,12 +84,12 @@ class CmsPost extends CmsBase
 
         $scopeType = $this->_normalizeScopeType($scopeType);
 
-        // C7: flip any due scheduled rows to published before the read gate.
+        // Flip any due scheduled rows to published before the read gate.
         if ($publishedOnly) {
             $this->_promoteScheduled();
         }
 
-        // C21: never leak a real given_name into a public byline / RSS. When the
+        // Never leak a real given_name into a public byline / RSS. When the
         // author has no persona (or the author row is gone — orphaned authorship
         // after a role revoke, see CmsAuth::RevokeRole), fall back to a neutral
         // org-scoped label ('Staff' globally, 'Kingdom' for an org site) rather
@@ -98,7 +98,7 @@ class CmsPost extends CmsBase
             . ' WHERE p.slug = :slug AND p.scope_type = :scope_type AND p.scope_id = :scope_id'
             . ' AND p.deleted_at IS NULL';   // C2: never serve a trashed post
         if ($publishedOnly) {
-            // C7: live only once the (optional) schedule time has passed.
+            // Live only once the (optional) schedule time has passed.
             $sql .= ' AND ' . $this->_publishedGateSql('p');
         }
         $sql .= ' LIMIT 1';
@@ -155,15 +155,15 @@ class CmsPost extends CmsBase
         $includeDrafts = !empty($opts['includeDrafts']);
         $tag = isset($opts['tag']) && $opts['tag'] !== '' ? (string)$opts['tag'] : '';
 
-        // C7: flip any due scheduled rows before the public read gate.
+        // Flip any due scheduled rows before the public read gate.
         if (!$includeDrafts) {
             $this->_promoteScheduled();
         }
 
-        // C2: trashed posts never appear (admin or public).
+        // Trashed posts never appear (admin or public).
         $where = array('p.scope_type = :scope_type', 'p.scope_id = :scope_id', 'p.deleted_at IS NULL');
         if (!$includeDrafts) {
-            // C7: live only once the (optional) schedule time has passed. One
+            // Live only once the (optional) schedule time has passed. One
             // entry rather than two — the imploded ' AND ' string is identical.
             $where[] = $this->_publishedGateSql('p');
         }
@@ -609,7 +609,7 @@ class CmsPost extends CmsBase
     {
         $now = date('Y-m-d H:i:s');
 
-        // Parity with UpdatePage/UpdatePost (#59): the lib layer — not just the
+        // Parity with UpdatePage/UpdatePost: the lib layer — not just the
         // controller — refuses an empty slug, which would publish the post at
         // 'post/' and collide with any other empty-slug post in the same scope.
         $slug = $this->_normalizeSlug((string)(isset($data['slug']) ? $data['slug'] : ''));
@@ -640,19 +640,19 @@ class CmsPost extends CmsBase
             $cols['published_at'] = $now;
         }
 
-        // Shared dup-guarded insert (C29 + live-slug reuse): the dup pre-check is
+        // Shared dup-guarded insert (live-slug reuse): the dup pre-check is
         // scoped to LIVE rows only, so a new post CAN reuse a TRASHED post's slug.
         // INSERT IGNORE + ROW_COUNT() race arbitration + authoritative
         // read-back-by-live-tuple all live in CmsBase::_insertWithDupGuard.
         $id = $this->_insertWithDupGuard('cms_post', 'post_id', $cols);
         $this->_invalidateListCache();
 
-        // #62: audit the content-creating write (mirrors CmsPage::CreatePage) so
+        // Audit the content-creating write (mirrors CmsPage::CreatePage) so
         // content mutations are trailed, not just delete/restore/publish. Actor =
         // whoever the create attributed the row to; scope from the new row.
         if ($id > 0) {
             $actorId = (int)($cols['updated_by'] ?? ($cols['created_by'] ?? 0));
-            $this->_cmsAudit($actorId, 'update', 'post', $id, $cols['scope_type'], (int)$cols['scope_id']);
+            $this->_cmsAudit($actorId, 'create', 'post', $id, $cols['scope_type'], (int)$cols['scope_id']);
         }
 
         return $id;
@@ -676,7 +676,7 @@ class CmsPost extends CmsBase
 
         $DB->Clear();
         $DB->post_id = $postId;
-        // C2: a trashed post is invisible to editor/publish/delete surfaces;
+        // A trashed post is invisible to editor/publish/delete surfaces;
         // restore reads the trashed row directly (see RestorePost()).
         $row = $this->_firstRow($DB->DataSet(
             $this->_livePostSelectHead()
@@ -711,13 +711,13 @@ class CmsPost extends CmsBase
             return false;
         }
 
-        // #54: existence + not-trashed guard. A nonexistent OR trashed post
+        // Existence + not-trashed guard. A nonexistent OR trashed post
         // short-circuits to false here rather than running a no-op UPDATE that
         // "succeeds" against zero rows. Runs its own Clear()/DataSet(), so it
         // precedes the bind loop below.
         $DB->Clear();
         $DB->post_id = $postId;
-        // Carry scope_type/scope_id too so the #62 audit below has the row's scope
+        // Carry scope_type/scope_id too so the audit below has the row's scope
         // without a second read.
         $existRow = $this->_firstRow($DB->DataSet(
             'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post'
@@ -777,7 +777,7 @@ class CmsPost extends CmsBase
         }
         if (array_key_exists('slug', $data) && $newSlug !== '') {
             // $newSlug was normalized (and dup-checked) up front. Parity with
-            // CmsPage::UpdatePage (#59): never persist an empty slug — silently
+            // CmsPage::UpdatePage: never persist an empty slug — silently
             // keep the existing one rather than writing slug = ''.
             $set[] = 'slug = :slug';
             $DB->slug = $newSlug;
@@ -797,7 +797,7 @@ class CmsPost extends CmsBase
                 ? null : (int)$data['author_id'];
         }
         if (array_key_exists('status', $data)) {
-            // C7: 'scheduled' is a first-class status (promoted to published on
+            // 'scheduled' is a first-class status (promoted to published on
             // read once published_at arrives); anything else clamps to draft.
             $status = (string)$data['status'];
             if ($status !== 'published' && $status !== 'scheduled') {
@@ -835,14 +835,14 @@ class CmsPost extends CmsBase
         }
 
         $DB->post_id = $postId;
-        // #54: the deleted_at IS NULL guard means a post trashed between the top
+        // The deleted_at IS NULL guard means a post trashed between the top
         // existence check and here matches zero rows → ROW_COUNT() < 1 → false.
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_post SET ' . implode(', ', $set)
             . ' WHERE post_id = :post_id AND deleted_at IS NULL'
         );
 
-        // #54: confirm a live row was actually updated. updated_at is bumped on
+        // Confirm a live row was actually updated. updated_at is bumped on
         // every save, so a matching non-trashed row always reports >= 1 changed
         // row; a nonexistent/trashed target reports 0. Read immediately after the
         // Execute on the same connection (before any other query).
@@ -864,7 +864,7 @@ class CmsPost extends CmsBase
                 return false;   // rename didn't take — signal failure
             }
 
-            // #57: 301 the OLD post path to the new one so inbound links / bookmarks
+            // 301 the OLD post path to the new one so inbound links / bookmarks
             // keep resolving. A post target can't use to_page_id (that FK references
             // cms_page), so record the post's NEW path as a relative to_url — the
             // site router resolves it under the org's pretty base. Recorded under
@@ -894,7 +894,7 @@ class CmsPost extends CmsBase
         // harmless; no-op when memcache isn't wired up).
         $this->_bustRssCache($postId);
 
-        // #62: audit the content-mutating write. Scope = the effective (post-edit)
+        // Audit the content-mutating write. Scope = the effective (post-edit)
         // scope — an in-flight scope move wins, else the row's current scope.
         $auditType = array_key_exists('scope_type', $data)
             ? $this->_normalizeScopeType($data['scope_type'])
@@ -924,7 +924,7 @@ class CmsPost extends CmsBase
      * currently empty; unpublishing leaves the historical stamp intact).
      *
      * When $status is 'scheduled' a future $publishedAt is required (the read
-     * path promotes it to 'published' once that time passes — see C7).
+     * path promotes it to 'published' once that time passes).
      *
      * @param int         $postId
      * @param string      $status      'published' | 'draft' | 'scheduled'
@@ -936,7 +936,7 @@ class CmsPost extends CmsBase
     {
         $postId = (int)$postId;
         // Shared publish-lifecycle skeleton (status clamp, published_at stamping,
-        // C14 audit) lives in CmsBase::_setStatus; the column write delegates back
+        // audit) lives in CmsBase::_setStatus; the column write delegates back
         // to UpdatePost so its whitelist/verify/cache path still runs.
         $ok = $this->_setStatus(
             'cms_post',
@@ -960,10 +960,10 @@ class CmsPost extends CmsBase
     }
 
     /**
-     * Trash a post (C2 soft-delete): stamp deleted_at instead of physically
+     * Trash a post (soft-delete): stamp deleted_at instead of physically
      * DELETEing, so the post, its body blocks, tag links and revisions survive
      * for restore. Within the same transaction it NULLs any ork_cms_nav_item.post_id
-     * pointing here (C8; the ON DELETE SET NULL FK does not fire on a soft-delete).
+     * pointing here (the ON DELETE SET NULL FK does not fire on a soft-delete).
      *
      * @param int         $postId
      * @param string|null $scopeType IDOR guard: caller's intended scope_type
@@ -974,8 +974,8 @@ class CmsPost extends CmsBase
     public function DeletePost($postId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
         // Shared soft-delete skeleton (existence + IDOR guard, transactional
-        // stamp, verify, C14 audit). The $refCleanup hook carries the post-only
-        // inbound-nav detach (C8) — the ON DELETE SET NULL FK does not fire on a
+        // stamp, verify, audit). The $refCleanup hook carries the post-only
+        // inbound-nav detach — the ON DELETE SET NULL FK does not fire on a
         // soft-delete, so it runs explicitly inside the transaction before the
         // trash marker is stamped. Body blocks/tags/revisions are retained.
         $ok = $this->_softDelete(
@@ -1021,7 +1021,7 @@ class CmsPost extends CmsBase
     {
         // Shared restore skeleton: existence/IDOR guard, live-slug collision guard
         // (a live post may have claimed this slug while we were trashed — see
-        // CmsBase::_restore), verified un-trash, C14 audit.
+        // CmsBase::_restore), verified un-trash, audit.
         $ok = $this->_restore('cms_post', 'post_id', $postId, $scopeType, $scopeId, $actorId, 'post');
         if ($ok) {
             $this->_invalidateListCache();
@@ -1229,7 +1229,7 @@ class CmsPost extends CmsBase
     /**
      * Browsable per-tag landing data: the tag header plus the published posts
      * carrying it, newest-first, scope-filtered. Reuses ListPosts (which enforces
-     * the C2 trash + C7 schedule gates) so the landing can never surface a
+     * the trash + schedule gates) so the landing can never surface a
      * trashed/unpublished post. The RENDER ROUTE lives in the other lane
      * (controller.Blog); this method only exposes the data + is the seam.
      *
@@ -1275,7 +1275,7 @@ class CmsPost extends CmsBase
      * SQL fragment for the neutral byline fallback used when a post has no
      * persona author (blank persona OR an orphaned/removed author row). Emits a
      * scope-aware label: 'Staff' on the global front door, 'Kingdom' on an org
-     * site — never a member's real given name (C21 PII).
+     * site — never a member's real given name (PII).
      *
      * @return string a CASE expression (references p.scope_type)
      */
@@ -1286,7 +1286,7 @@ class CmsPost extends CmsBase
 
     /**
      * The shared SELECT ... FROM ... JOIN head every full-row post read uses:
-     * the whole post row aliased `p`, plus the C21-safe byline (persona, else the
+     * the whole post row aliased `p`, plus the consent-safe byline (persona, else the
      * neutral org-scoped label) as author_name, over the mundane LEFT JOIN the
      * byline needs. Callers append their own WHERE/GROUP/ORDER/LIMIT.
      *
@@ -1358,13 +1358,12 @@ class CmsPost extends CmsBase
      * Clamped to 80 chars (ork_cms_tag.slug width).
      *
      * Routed through CmsBase::_normalizeSlug() rather than carrying its own
-     * transliteration. This used to call iconv('ASCII//TRANSLIT'), whose output is
-     * libc- and locale-dependent, and a tag slug is BOTH a public URL segment
-     * (Blog_post.tpl renders it into 'Blog/index&tag=') and the de-duplication key
-     * in _upsertTag() — so the same tag name entered on two different hosts
-     * produced two ork_cms_tag rows for one tag. The shared helper is
-     * byte-identical everywhere and already matches what glibc iconv produced, so
-     * slugs stored by the container keep resolving.
+     * transliteration, which MUST stay that way: a tag slug is BOTH a public URL
+     * segment (Blog_post.tpl renders it into 'Blog/index&tag=') and the
+     * de-duplication key in _upsertTag(), so a host-dependent derivation — e.g.
+     * iconv('ASCII//TRANSLIT'), whose output is libc- and locale-dependent —
+     * splits one tag name across two ork_cms_tag rows. The shared helper's
+     * explicit map is byte-identical on every host.
      */
     private function _slugify($text)
     {
@@ -1388,7 +1387,7 @@ class CmsPost extends CmsBase
     }
 
     /**
-     * E117/#117: prune tags with ZERO live post_tag usage from ork_cms_tag. A tag
+     * Prune tags with ZERO live post_tag usage from ork_cms_tag. A tag
      * is deleted only when no ork_cms_post_tag row references it — i.e. it labels
      * no post at all (an empty vocabulary entry left behind after retag/delete).
      * NON-DESTRUCTIVE: any tag still attached to any post is retained; nothing that

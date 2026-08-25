@@ -41,7 +41,7 @@ class Controller_Page extends Controller
 
         $slug = trim((string) $slug);
         $this->load_model('CmsPage');
-        // C1: one GhettoCache-backed bundle (page row + its enabled blocks) instead
+        // One GhettoCache-backed bundle (page row + its enabled blocks) instead
         // of a separate GetPageBySlug() + GetPageBlocks() pair.
         $bundle = ($slug !== '') ? $this->CmsPage->get_page_with_blocks('global', 0, $slug) : null;
         $page   = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
@@ -60,7 +60,7 @@ class Controller_Page extends Controller
         $this->_attachFrontDoorTheme();
         $this->data['page_title'] = $page['title'];
 
-        // #122: per-page canonical + Open Graph (mirrors Controller_Site::_setPageMeta)
+        // Per-page canonical + Open Graph (mirrors Controller_Site::_setPageMeta)
         // so a shared CMS page carries its own canonical/og:* instead of leaking the
         // global front-door defaults.
         $this->_setPageMeta($page, $slug);
@@ -71,10 +71,10 @@ class Controller_Page extends Controller
         $this->data['PageAncestors'] = $this->CmsPage->GetPageAncestors((int) $page['page_id']);
 
         // Show the floating editor FAB to CMS editors (rendered by default.theme).
-        // #29: single shared edit-scope gate (CmsCan-backed). No new-post FAB here
+        // Single shared edit-scope gate (CmsCan-backed). No new-post FAB here
         // — a page surface never offers one.
         $this->_cmsFabData(
-            (int) ($this->session->user_id ?? 0),
+            $this->_uid(),
             self::$SCOPE,
             UIR . 'Cms/edit/' . (int) $page['page_id'],
             'Edit this page'
@@ -82,7 +82,7 @@ class Controller_Page extends Controller
     }
 
     /**
-     * #122: publish a per-page $PageMeta (canonical + og:*) for a global CMS page,
+     * Publish a per-page $PageMeta (canonical + og:*) for a global CMS page,
      * mirroring Controller_Site::_setPageMeta. Canonical is the page's public
      * Page/view URL (built from UIR); og:image comes from the page's hero_media_id
      * when set (else default.theme's ORK fallback applies).

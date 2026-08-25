@@ -35,8 +35,8 @@ class CmsNav extends CmsBase
     /**
      * Allowed link_type enum values — the single source of truth for the
      * ork_cms_nav_item.link_type domain. Public so the CmsAjax nav endpoints can
-     * validate against the SAME list instead of re-declaring it (the two used to
-     * drift). The DATA is shared, not the normalizer: _normalizeLinkType() stays
+     * validate against the SAME list instead of re-declaring it, which is how the
+     * two drift apart. The DATA is shared, not the normalizer: _normalizeLinkType() stays
      * private because it also carries this class's default-to-'page' policy.
      */
     public const LINK_TYPES = array('page', 'post', 'url', 'dynamic');
@@ -91,9 +91,9 @@ class CmsNav extends CmsBase
         // tree assembly) on every anonymous public pageview of an org site.
         //
         // The key is (menu, scope) + the scope's WRITE-TIME content version. That
-        // version replaces the SUM(CRC32(...)) signature probe this cache used to
-        // run: one indexed aggregate over ork_cms_nav_item (no joins) per hit —
-        // cheap, but still a query on EVERY anonymous hit of the front door and
+        // version is read instead of running a SUM(CRC32(...)) signature probe:
+        // one indexed aggregate over ork_cms_nav_item (no joins) per hit is cheap,
+        // but it is still a query on EVERY anonymous hit of the front door and
         // every org-site page, where the point of the cache is to do no DB work
         // at all. The trade is that freshness is now PUSHED by the writers
         // (CmsBase::_bumpContentVersion) instead of pulled by a probe: every
@@ -138,7 +138,7 @@ class CmsNav extends CmsBase
 
         $rows = $this->_fetchItems($menu, $scopeType, $scopeId, true);
 
-        // C22: build a TWO-level dropdown tree (top → child → grandchild), up from
+        // Build a TWO-level dropdown tree (top → child → grandchild), up from
         // the previous one-level-only split. Resolve every enabled row once, index
         // its children by parent id (0 = top level), then attach recursively with a
         // hard depth cap of 2 levels of nesting so a stray deep chain (or a parent
@@ -912,7 +912,7 @@ class CmsNav extends CmsBase
     }
 
     /**
-     * #73: is the JOINed page/post target actually LIVE for a public visitor —
+     * Is the JOINed page/post target actually LIVE for a public visitor —
      * i.e. published, publish time reached (or unset), and not trashed? Mirrors
      * the live-content semantics the public renderer uses so the nav never links
      * a visitor to a draft/scheduled/deleted target it would otherwise 404/hide.
@@ -946,7 +946,7 @@ class CmsNav extends CmsBase
         switch ($linkType) {
             case 'page':
                 $slug = isset($row['page_slug']) ? (string)$row['page_slug'] : '';
-                // #73: on the PUBLIC menu, a page target resolves only when it is
+                // On the PUBLIC menu, a page target resolves only when it is
                 // actually live (published, publish time reached, not trashed) — a
                 // draft/scheduled/deleted page must read as unresolved ('#') so the
                 // nav never links a visitor to content the public renderer hides.

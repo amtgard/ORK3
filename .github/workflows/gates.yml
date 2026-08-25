@@ -114,83 +114,46 @@ jobs:
       # ----------------------------------------------------------------------
       # A SKIPPED SURFACE IS NOT A GREEN RUN.
       #
-      # tests/cms-css/boundary_test.php is the RUNTIME backstop: the check that
-      # catches what the static scanner cannot. It used to be able to lose a
-      # third of itself in silence. With the park org site unpublished the run
-      # dropped from 227 assertions to 194 — the whole park tier and the only
-      # &_pfx=p coverage — and still printed "ALL PASS", still exited 0, and this
-      # job still reported an unqualified green, because the only skip signal it
-      # looked for was a line starting "SKIP:" and a per-surface skip printed
-      # "  note: surface not available, skipped — …" instead.
-      #
-      # The test now ends every run with a machine-readable summary, and this
-      # step parses THAT rather than grepping for a human-facing prefix:
+      # tests/cms-css/boundary_test.php is the RUNTIME backstop: it asserts on
+      # what a live org site actually serves, which is what the static scanner
+      # cannot see. It ends every run with a machine-readable summary, and this
+      # step parses THAT rather than grepping for a human-facing prefix, so a
+      # per-surface skip cannot hide behind a "ALL PASS" line and an exit 0:
       #
       #   RESULT: PASS | PASS-WITH-SKIPS | FAIL
       #   SKIP-KIND: NONE | WHOLE-RUN | PARTIAL
       #   SURFACES: <n> EXPECTED, <n> COVERED, <n> SKIPPED, <n> NOT-APPLICABLE
       #   ASSERTIONS: <n> RAN, <n> FAILED
       #
-      # NOT-APPLICABLE is not a skip and needs no handling here. It is a surface
-      # the DATA cannot produce — the per-tier single-post surface against a
-      # database with no post in that tier's scopes — established from the app's
-      # own RSS feeds, not from a list in the test, and it leaves RESULT: PASS
-      # with SKIP-KIND: NONE. A surface that SHOULD exist and did not render is
-      # still SKIPPED and still fails; see the test's header for the three-way
-      # decision and its fail-closed default.
+      # The contract this step enforces:
       #
-      # and the two kinds of skip are treated differently, deliberately:
+      #   PARTIAL   the app ANSWERED and a named surface still did not run.
+      #             Real coverage loss, never expected. FAILS THE JOB, red.
+      #   WHOLE-RUN nothing answered at all, so there are no assertions to be
+      #             falsely confident about. ::warning annotation + job-summary
+      #             line + banner, and the job stays green. It is the EXPECTED
+      #             state of every run here, because CI has no populated CMS
+      #             database and deliberately does not stand the app up.
+      #   no RESULT: line — this step cannot tell how much of the backstop ran,
+      #             and "cannot tell" is treated as broken, not fine. Red.
       #
-      #   PARTIAL  — the app ANSWERED and a named surface still did not run.
-      #              That is real coverage loss with a real cause, and it is
-      #              the exact defect above. It FAILS THE JOB, red.
-      #   WHOLE-RUN— nothing answered at all: no app, no assertions, nothing to
-      #              be falsely confident about. It emits a ::warning annotation
-      #              (visible on the PR, not buried in a log), a job-summary
-      #              line and a banner, and the job stays green.
+      # NOT-APPLICABLE is not a skip and needs no handling here: it is a surface
+      # the DATA cannot produce (a per-tier single-post surface against a
+      # database with no post in that tier's scopes), established from the app's
+      # own RSS feeds rather than from a list in the test, and it leaves
+      # RESULT: PASS with SKIP-KIND: NONE.
       #
-      # Why WHOLE-RUN is a warning and not red: in this repo it is the EXPECTED
-      # state of every CI run (see below), so making it red would paint every PR
-      # red forever, and a check that is always red is a check nobody reads. The
-      # honest signal is "this ran 0 of 9 surfaces", stated where a reviewer sees
-      # it. PARTIAL, by contrast, should never happen and is never expected, so
-      # it gets the strongest signal available.
-      #
-      # A missing summary is itself a failure: if the backstop ever stops
-      # printing RESULT:, this step cannot tell what ran, and "cannot tell" is
-      # treated as broken rather than fine.
-      #
-      # ----------------------------------------------------------------------
-      # WHY CI DOES NOT STAND THE APP UP — decided, not defaulted.
-      #
-      # docker compose files ARE in the repo (docker-compose.php8.yml et al), so
-      # standing up php + mariadb in the runner is mechanically possible. It is
-      # not worth it, and the reason is data, not containers:
-      #
-      #   * every tracked .sql file except one is an INCREMENTAL migration under
-      #     db-migrations/ (88 of 89);
-      #   * the one exception, ork.sql, is a 2013 phpMyAdmin SCHEMA dump: 38
-      #     CREATE TABLEs, ZERO INSERTs, and not one ork_cms_* table in it — the
-      #     entire CMS schema postdates it.
-      #
-      # So an app stood up in CI would come up against a database with no
-      # ork_cms_site rows, no kingdoms, no parks and no posts. Every org-site
-      # surface would 404, and the backstop — which asserts on what a REAL org
-      # site serves — would have nothing to assert against. It would report
-      # 0 covered surfaces: the same WHOLE-RUN skip, after ten minutes of
-      # container startup. Worse, if anyone later "fixed" that by relaxing the
-      # surface checks, CI would go green off an empty database, which is the
-      # false confidence this whole gate exists to prevent.
-      #
-      # The moment CI does have a populated app, this needs no rewrite: set
-      # ORK_BASE_URL for the job and the loop below runs the backstop with
-      # --strict, in which ANY skip is a failure.
-      #
-      # Until then the runtime backstop is run BY HAND against local docker on
-      # :19080 before merging — `php tests/cms-css/boundary_test.php --strict` —
-      # and this step says so in its own output, in the job summary and in a PR
-      # annotation, so the check never reads as an unqualified green.
-      # See orkui/template/default/frontdoor/css/README.md.
+      # The decision record behind all of that — why WHOLE-RUN warns instead of
+      # failing, and why CI does not stand the app up — lives in
+      # docs/superpowers/specs/2026-08-21-cms-css-separation-design.md and in
+      # orkui/template/default/frontdoor/css/README.md ("Why CI does not stand
+      # the app up"). The day CI does have a populated app this needs no
+      # rewrite: set ORK_BASE_URL for the job and the loop below runs the
+      # backstop with --strict, in which ANY skip is a failure. Until then the
+      # backstop is run BY HAND against local docker on :19080 before merging —
+      # `php tests/cms-css/boundary_test.php --strict` — and this step says so
+      # in its own output, in the job summary and in a PR annotation, so the
+      # check never reads as an unqualified green.
       # ----------------------------------------------------------------------
       - name: 'Gate 4 — CMS test scripts (tests/cms-*/): a FAIL line, a non-zero exit, or a skipped runtime surface fails the job'
         shell: bash
@@ -272,8 +235,8 @@ jobs:
                                   backstop_note="whole-run skip"
                               else
                                   # The app answered and a named surface still did
-                                  # not run. That is coverage loss, and it is what
-                                  # used to pass silently.
+                                  # not run. That is coverage loss — the exact
+                                  # thing a "grep for ALL PASS" check misses.
                                   echo ""
                                   echo "=============================================================="
                                   echo "RUNTIME BACKSTOP RAN PARTIALLY — this is a FAILURE."

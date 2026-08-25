@@ -2,6 +2,17 @@
 
 class Kingdom extends Ork3
 {
+    // Two return shapes live on this class, on purpose:
+    //   - the SOAP/API surface (GetParks, GetOfficers, Set*) answers with the house
+    //     envelope, array('Status' => Success()|InvalidParameter(), ...), because a
+    //     remote caller has no other way to learn a call failed;
+    //   - the read-only projections the front door and the model membrane consume
+    //     (GetKingdomName, ListActiveIdName, GetActiveParks, GetPublicOfficers)
+    //     answer with the value itself — a string, or a plain list — and signal
+    //     "nothing to show" with '' or an empty array, which is what a template
+    //     branches on anyway. They never mutate, so there is no failure to report.
+    // Add a new method to whichever surface it serves and follow that surface's shape.
+
     // Per-request memo caches for the principality-rollup helpers. These are read
     // dozens of times per kingdom-scoped report page; the Kingdom lib is a single
     // instance per request (see startup.php), so caching here is safe and avoids

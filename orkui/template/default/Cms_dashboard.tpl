@@ -15,7 +15,7 @@ $recent = isset($Recent) && is_array($Recent) ? $Recent : array();
 $stats  = isset($Stats) && is_array($Stats) ? $Stats : array();
 $caps   = isset($Caps) && is_array($Caps) ? $Caps : array();
 
-// #09 usage analytics (view counts).
+// Usage analytics (view counts).
 $viewSummary = isset($ViewSummary) && is_array($ViewSummary) ? $ViewSummary : array();
 $topViewed   = isset($TopViewed) && is_array($TopViewed) ? $TopViewed : array();
 $viewTotal   = (int)($viewSummary['total'] ?? 0);
@@ -39,7 +39,7 @@ $canCreate = !empty($caps['create']);
 $canManage = !empty($caps['edit']) || !empty($caps['publish']) || !empty($caps['create']);
 $isSuper   = !empty($caps['super']);
 
-// E128: "Top content (30 days)" panel — [{title,url,count}]. Defensive: a missing
+// "Top content (30 days)" panel — [{title,url,count}]. Defensive: a missing
 // or empty map renders nothing.
 $topContent = isset($topContent) && is_array($topContent) ? $topContent : array();
 
@@ -97,13 +97,11 @@ $cmsActions = '';
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
-    <?php // ONE page title. The masthead above is the shell's own title slot and
-          // every other OGRE surface uses it, so the dashboard keeps it and drops
-          // the second heading that used to sit here — a time-of-day greeting plus
-          // "Welcome to OGRE, the Online Gallery and Resource Engine". That was a
-          // second page title AND onboarding copy in a permanent slot: the acronym
-          // was re-explained on every visit, forever. The name still lives in the
-          // rail wordmark, its tooltip and the rail's screen-reader expansion. ?>
+    <?php // ONE page title. The masthead above is the shell's own title slot, which
+          // every OGRE surface uses — do not add a second page heading here, and do
+          // not put onboarding copy (a greeting, the OGRE expansion) in a permanent
+          // slot where it is re-read on every visit. The name is carried by the rail
+          // wordmark, its tooltip and the rail's screen-reader expansion. ?>
 
     <?php if ($dashIsOrgSite): ?>
     <?php
@@ -152,11 +150,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
-    <?php // Unfinished work FIRST. Picking a half-written page back up is the one
-          // thing an author comes to this page to do, and it used to sit below the
-          // stat tiles and two analytics panels. When there is nothing in progress
-          // the block is omitted entirely rather than spending the best slot on an
-          // empty state — Quick create below offers the same "New Page" action. ?>
+    <?php // Unfinished work FIRST: picking a half-written page back up is the one
+          // thing an author comes to this page to do, so it outranks the stat tiles
+          // and the analytics panels below. When there is nothing in progress the
+          // block is omitted entirely rather than spending the best slot on an empty
+          // state — Quick create below offers the same "New Page" action. ?>
     <?php if (!empty($recent)): ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">Continue editing</h3>
@@ -168,7 +166,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 $isPub   = ($status === 'published');
                 $href    = (string)($r['edit_href'] ?? '#');
                 $updated = (string)($r['updated_at'] ?? '');
-                $when    = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
+                // Shared CMS timestamp format (see cms/_shell_top.tpl).
+                $when    = $cmsFmtDate($updated);
             ?>
                 <div class="cms-recent-item">
                     <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
@@ -212,12 +211,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
-    <?php // Every tile is guarded, not just Views. A brand-new site — the first
-          // thing a first-time author ever sees — used to read "0 Pages / 0 Posts /
-          // 0 Drafts in progress": it reported nothing three times to the one person
-          // who already knows there is nothing. A count of zero is not news, so the
-          // tile is simply absent until there is something to count, and when there
-          // is nothing at all the block says so once and points at the way in. ?>
+    <?php // Every tile is guarded, not just Views. A count of zero is not news to
+          // the one person who already knows the site is empty, so a tile is simply
+          // absent until there is something to count; when there is nothing at all
+          // the block says so ONCE and points at the way in, rather than reporting
+          // nothing three times over. ?>
     <?php $hasGlance = ($statPages > 0 || $statPosts > 0 || $statDrafts > 0 || $viewTotal > 0); ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">At a glance</h3>
@@ -260,7 +258,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <?php endif; ?>
     </div>
 
-    <?php // E128: Top content over the last 30 days — [{title,url,count}]. Rendered
+    <?php // Top content over the last 30 days — [{title,url,count}]. Rendered
           // only when the controller supplied rows (defensive; empty → nothing). ?>
     <?php if (!empty($topContent)): ?>
     <div class="cms-dash-block">
@@ -361,31 +359,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
-<?php /* ---- New-Page type chooser modal (mirrors the Pages list) ---- */ ?>
-<?php if ($canCreate): ?>
-<div class="cms-modal-overlay" id="cmsNewModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a page type">
-        <div class="cms-modal-head">
-            <h3>Create a page</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
-            <div class="cms-typegrid">
-                <?php foreach ($pageTypes as $pt): ?>
-                    <?php // Plain-language description only — never the raw type slug (dev jargon). ?>
-                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
-                        <strong><?= $h($pt['label']) ?></strong>
-                        <?php if (!empty($pt['description'])): ?>
-                            <span><?= $h($pt['description']) ?></span>
-                        <?php endif; ?>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<?php include __DIR__ . '/cms/_new_page_modal.tpl'; ?>
 
 <?php /* ---- Site settings (name / public URL / home page) ---- */ ?>
 <?php if ($dashIsOrgSite && $dashCanEditSite): ?>
@@ -436,29 +410,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
 </div>
 <?php endif; ?>
 
-<?php /* Toast host. Unconditional and OUTSIDE the modal overlay (which is
-         display:none) — cms-admin.js toast() no-ops when .cms-toast is absent,
-         which silently swallowed every save error on this page. Same markup as
-         Cms_nav.tpl:284; z-index 11000 renders it over the still-open modal. */ ?>
-<?php /* ---- Confirm modal (maintenance sweep) — native confirm() is banned. ---- */ ?>
-<?php if ($isSuper): ?>
-<div class="cms-modal-overlay" id="cmsMaintConfirmModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Confirm">
-        <div class="cms-modal-head">
-            <h3>Run maintenance cleanup?</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p style="margin:0;font-size:14px;">This permanently deletes pages trashed more than 30 days ago, plus orphaned blocks and unused tags. It cannot be undone.</p>
-        </div>
-        <div class="cms-modal-foot">
-            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
-            <button type="button" class="cms-btn cms-btn-danger" id="cmsMaintConfirmOk">Run cleanup</button>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
 
+<?php /* Toast host. Unconditional and OUTSIDE the modal overlay (which is
+         display:none), so a save error raised while a modal is open still has
+         somewhere to render — CmsAdmin.toast() no-ops when .cms-toast is absent.
+         z-index 11000 puts it over the still-open modal. */ ?>
 <div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
@@ -592,7 +549,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
     }
 
-    /* ---- E71: refresh the public-site block caches for the acting scope ---- */
+    /* ---- Refresh the public-site block caches for the acting scope ---- */
     var refreshBtn = document.getElementById('cmsRefreshCacheBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', function () {
@@ -612,31 +569,33 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    /* ---- E117: super-admin maintenance sweep (trash purge + orphan/tag cleanup) ---- */
+    /* ---- Super-admin maintenance sweep (trash purge + orphan/tag cleanup) ---- */
     var maintBtn = document.getElementById('cmsRunMaintenanceBtn');
-    var maintModal = document.getElementById('cmsMaintConfirmModal');
-    var maintOk = document.getElementById('cmsMaintConfirmOk');
-    if (maintBtn && maintModal && maintOk) {
-        /* The sweep is irreversible, so it goes through the shared confirm modal
+    if (maintBtn) {
+        /* The sweep is irreversible, so it goes through the shared confirm dialog
            like every other destructive CMS action (native confirm() is banned). */
         maintBtn.addEventListener('click', function () {
-            CmsAdmin.modal.open(maintModal);
-        });
-        maintOk.addEventListener('click', function () {
-            CmsAdmin.modal.close(maintModal);
-            var original = maintBtn.innerHTML;
-            maintBtn.disabled = true;
-            maintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning up…';
-            CmsAdmin.post('runmaintenance', {}).then(function (res) {
-                maintBtn.disabled = false;
-                maintBtn.innerHTML = original;
-                if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Maintenance could not run.', 'error'); return; }
-                CmsAdmin.toast(res.message || 'Maintenance cleanup complete.', 'ok');
-            }).catch(function () {
-                maintBtn.disabled = false;
-                maintBtn.innerHTML = original;
-                CmsAdmin.toast('Network error running maintenance.', 'error');
-            });
+            CmsAdmin.confirm(
+                'Run maintenance cleanup?',
+                'This permanently deletes pages trashed more than 30 days ago, plus orphaned blocks and unused tags. It cannot be undone.',
+                'Run cleanup',
+                function () {
+                    CmsAdmin.confirmClose();
+                    var original = maintBtn.innerHTML;
+                    maintBtn.disabled = true;
+                    maintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning up…';
+                    CmsAdmin.post('runmaintenance', {}).then(function (res) {
+                        maintBtn.disabled = false;
+                        maintBtn.innerHTML = original;
+                        if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Maintenance could not run.', 'error'); return; }
+                        CmsAdmin.toast(res.message || 'Maintenance cleanup complete.', 'ok');
+                    }).catch(function () {
+                        maintBtn.disabled = false;
+                        maintBtn.innerHTML = original;
+                        CmsAdmin.toast('Network error running maintenance.', 'error');
+                    });
+                }
+            );
         });
     }
 })();

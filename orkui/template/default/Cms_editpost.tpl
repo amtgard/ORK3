@@ -176,11 +176,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
         <?php
         /* ---- Body blocks + modals + block engine: SHARED partial ---- */
-        $beBlocks    = $blocks;
-        $beCatalog   = $catalog;
-        $beLabels    = $catalogLabels;
-        $bePageTypes = array(); // posts have no page-type presets
-        $beHeading   = 'Post body';
+        $beHeading = 'Post body';
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
 
@@ -225,7 +221,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
         heroId:  <?= (int)($post['hero_media_id'] ?? 0) ?>,
         published: <?= $isPublished ? 'true' : 'false' ?>,
-        // C15: optimistic-concurrency token = the row's updated_at at load. Sent as
+        // Optimistic-concurrency token = the row's updated_at at load. Sent as
         // base_version on save; the server _fails (status 12) on a stale base and
         // echoes the fresh version back on success.
         version: <?= json_encode((string)($post['updated_at'] ?? '')) ?>,
@@ -235,11 +231,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     var BE = window.CmsBlockEditor;
 
-    function esc(v) {
-        return String(v == null ? '' : v)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
+    /* ---- HTML escape (shared: CmsAdmin.esc) ---- */
+    var esc = CmsAdmin.esc;
     function toast(msg, kind) { if (BE) { BE.toast(msg, kind); } }
 
     /* POST helper (shared: CmsAdmin.post — same CSRF header + scope append, and
@@ -310,7 +303,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var saving = false;
 
     // Debounced autosave (shared: CmsAdmin.autosave).
-    // #45: never autosave an already-published post — a save goes live instantly,
+    // Never autosave an already-published post — a save goes live instantly,
     // so the author must save deliberately. STATE.published flips true on publish.
     var autosaveTimer = CmsAdmin.autosave({
         delay: 3000,
@@ -322,7 +315,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         dirty = true;
         if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
         autosaveTimer.schedule();
-        // E2: keep the preview following the typing. Debounced inside the pane,
+        // Keep the preview following the typing. Debounced inside the pane,
         // and a no-op while the pane has never been opened.
         if (preview) { preview.schedule(); }
     }
@@ -335,7 +328,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             return;
         }
         if (BE.hasJsonError()) {
-            // C20: jump to + name the offending block instead of a vague toast.
+            // Jump to + name the offending block instead of a vague toast.
             if (!isAuto && BE.focusFirstError) { BE.focusFirstError(); }
             else if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
             return;
@@ -360,7 +353,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         post('savepost', params).then(function (res) {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
-            // C15: concurrent-edit conflict — the stored row is newer than our base.
+            // Concurrent-edit conflict — the stored row is newer than our base.
             if (res && (res.status === 12 || res.code === 12)) {
                 if (savedHint) { savedHint.textContent = ''; }
                 handleSaveConflict(res, isAuto);
@@ -372,7 +365,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 return;
             }
             dirty = false;
-            // C15: adopt the fresh version so the NEXT save doesn't spuriously conflict.
+            // Adopt the fresh version so the NEXT save doesn't spuriously conflict.
             if (res.version) { STATE.version = res.version; }
             if (res.is_new && res.post_id) {
                 STATE.postId = res.post_id;
@@ -397,7 +390,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    // C15: save rejected because the stored row is newer than our base version.
+    // Save rejected because the stored row is newer than our base version.
     // Non-native reload-or-overwrite choice; stays quiet on autosave.
     function handleSaveConflict(res, isAuto) {
         dirty = true;
@@ -459,7 +452,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     statusBadge.className = 'ork-badge cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
-                // #45: reflect the live-edits warning (and autosave state follows STATE.published).
+                // Reflect the live-edits warning (and autosave state follows STATE.published).
                 var liveNote = document.getElementById('cmsPublishedLiveNote');
                 if (liveNote) { liveNote.style.display = nowPub ? '' : 'none'; }
                 toast(nowPub ? 'Post published.' : 'Post unpublished.', 'ok');
@@ -473,15 +466,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
     if (deleteBtn && BE) {
         deleteBtn.addEventListener('click', function () {
             BE.confirmDialog('Delete post', 'Delete this post and all of its content blocks? This cannot be undone.', 'Delete', function () {
-                var okEl = BE.confirmOkEl();
-                if (okEl) { okEl.disabled = true; }
+                BE.confirmBusy(true);
                 post('deletepost', { post_id: STATE.postId }).then(function (res) {
-                    if (okEl) { okEl.disabled = false; }
+                    BE.confirmBusy(false);
                     BE.closeConfirm();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     dirty = false;
                     window.location.href = UIR + 'Cms/posts' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
-                }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
+                }).catch(function () { BE.confirmBusy(false); toast('Network error.', 'error'); });
             });
         });
     }
@@ -490,7 +482,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
        Pane/iframe/device-button wiring is identical between the two editors; only
        the preview URL, the "is it saved yet" test and the toast copy differ. ==== */
     var preview = CmsAdmin.previewPane({
-        // E2: same live preview the page editor uses — CmsAjax/previewblocks runs
+        // Same live preview the page editor uses — CmsAjax/previewblocks runs
         // the posted block list through the identical validation a save runs and
         // returns a rendered post document.
         live: function () {

@@ -23,9 +23,9 @@ require_once __DIR__ . '/trait.CmsScope.php';
  *   Site/rss/{slug}                 → rss($slug)    scoped RSS 2.0 feed
  *
  * Pretty URLs (via nginx `location ^~ /k/` and `^~ /p/` — see nginx.ork3.config).
- * /k/ is the KINGDOM namespace, /p/ the PARK namespace (C23); each rewrite adds
+ * /k/ is the KINGDOM namespace, /p/ the PARK namespace; each rewrite adds
  * a &_pfx=k|p hint so _enforcePrefix() can 301 a site reached under the wrong
- * prefix to its canonical one. The page form is multi-segment (C13 nested pages):
+ * prefix to its canonical one. The page form is multi-segment (nested pages):
  *   /k/{slug}                       → Site/view/{slug}
  *   /k/{slug}/blog                  → Site/blog/{slug}
  *   /k/{slug}/rss                   → Site/rss/{slug}
@@ -124,7 +124,7 @@ class Controller_Site extends Controller
             // Don't let the placeholder interstitial get indexed as public content.
             $this->data['no_index'] = true;
 
-            // C30: a PUBLISHED site whose home page is blank / unpublished / missing
+            // A PUBLISHED site whose home page is blank / unpublished / missing
             // would silently show the public "being built" interstitial. Surface an
             // actionable warning to an editing officer (preview only — never public)
             // so the misconfiguration is visible instead of looking like a dead site.
@@ -141,14 +141,14 @@ class Controller_Site extends Controller
             }
         }
         if ($homePageId > 0) {
-            // C6: canonical + OG for the site home (type=website).
+            // Canonical + OG for the site home (type=website).
             if (!empty($homePage) && $homeUsable) {
                 $this->_setPageMeta($site, $homePage, 'website', true);
-                // #09: tally a public view of the home page (best-effort; the
+                // Tally a public view of the home page (best-effort; the
                 // home is a real published in-scope page here).
                 $this->_recordCmsView($site, 'page', $homePageId);
             }
-            $this->_cmsFab($site, UIR . 'Cms/edit/' . $homePageId . $this->_scopeQ($site), 'Edit this page');
+            $this->_siteFab($site, UIR . 'Cms/edit/' . $homePageId . $this->_scopeQ($site), 'Edit this page');
         }
     }
 
@@ -168,7 +168,7 @@ class Controller_Site extends Controller
         $scopeType = (string) $site['scope_type'];
         $scopeId   = (int) $site['scope_id'];
 
-        // C13: $pageSlug may be a NESTED path ("parent/child") — resolve it one
+        // $pageSlug may be a NESTED path ("parent/child") — resolve it one
         // segment at a time by walking parent_id (a single segment is the flat
         // case, unchanged).
         $pageSlug = trim((string) $pageSlug, '/ ');
@@ -179,7 +179,7 @@ class Controller_Site extends Controller
         }
 
         if (empty($page)) {
-            // C17: before the branded 404, honor a 301 redirect for this path (set
+            // Before the branded 404, honor a 301 redirect for this path (set
             // when a page slug was renamed) so old links/bookmarks keep working.
             if ($this->_tryRedirect($site, $pageSlug)) {
                 return;
@@ -194,16 +194,16 @@ class Controller_Site extends Controller
         $this->data['page_title']       = (string) $page['title'];
         $this->data['meta_description'] = isset($page['meta_description']) ? (string) $page['meta_description'] : '';
 
-        // C13: breadcrumbs (root → parent → this page). Dropped before this change.
+        // Breadcrumbs (root → parent → this page).
         $this->data['SiteBreadcrumbs'] = $this->_breadcrumbs($site, $page);
 
-        // C6: per-page canonical + OG derived from the page (hero image → og:image).
+        // Per-page canonical + OG derived from the page (hero image → og:image).
         $this->_setPageMeta($site, $page, 'article');
 
-        // #09: tally a public view of this page (best-effort; gated internally).
+        // Tally a public view of this page (best-effort; gated internally).
         $this->_recordCmsView($site, 'page', $pageId);
 
-        $this->_cmsFab($site, UIR . 'Cms/edit/' . $pageId . $this->_scopeQ($site), 'Edit this page');
+        $this->_siteFab($site, UIR . 'Cms/edit/' . $pageId . $this->_scopeQ($site), 'Edit this page');
     }
 
     /**
@@ -241,7 +241,7 @@ class Controller_Site extends Controller
         // Leaf only — _bootShell published the org half as SiteTitleOrg.
         $this->data['page_title']     = 'News';
 
-        // C6: canonical + OG for the blog index (type=website). Page 1 canonicals
+        // Canonical + OG for the blog index (type=website). Page 1 canonicals
         // to /blog; deeper pages self-canonical with the ?p= arg to avoid dupes.
         $siteName = trim((string) ($this->data['SiteName'] ?? ''));
         $canon    = $this->_siteUrl($site, 'blog') . ($pageNo > 1 ? '?p=' . $pageNo : '');
@@ -253,7 +253,7 @@ class Controller_Site extends Controller
             'og_sitename' => $siteName,
         ));
 
-        $this->_cmsFab($site, UIR . 'Cms/posts' . $this->_scopeQ($site), 'Manage posts', true);
+        $this->_siteFab($site, UIR . 'Cms/posts' . $this->_scopeQ($site), 'Manage posts', true);
     }
 
     /**
@@ -281,7 +281,7 @@ class Controller_Site extends Controller
         }
 
         if (empty($post)) {
-            // C17: honor a redirect for the /post/{slug} path before the 404.
+            // Honor a redirect for the /post/{slug} path before the 404.
             if ($this->_tryRedirect($site, 'post/' . $postSlug)) {
                 return;
             }
@@ -295,13 +295,13 @@ class Controller_Site extends Controller
         $this->data['page_title']       = (string) $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';
 
-        // C6: per-post canonical + OG (hero image → og:image; type=article).
+        // Per-post canonical + OG (hero image → og:image; type=article).
         $this->_setPostMeta($site, $post);
 
-        // #09: tally a public view of this post (best-effort; gated internally).
+        // Tally a public view of this post (best-effort; gated internally).
         $this->_recordCmsView($site, 'post', (int) $post['post_id']);
 
-        $this->_cmsFab($site, UIR . 'Cms/editpost/' . (int) $post['post_id'] . $this->_scopeQ($site), 'Edit this post', true);
+        $this->_siteFab($site, UIR . 'Cms/editpost/' . (int) $post['post_id'] . $this->_scopeQ($site), 'Edit this post', true);
     }
 
     /**
@@ -337,7 +337,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * #126: XML sitemap for a site: Site/sitemap/{slug} (→ /k|/p/{slug}/sitemap.xml).
+     * XML sitemap for a site: Site/sitemap/{slug} (→ /k|/p/{slug}/sitemap.xml).
      *
      * Emits every PUBLISHED, live, in-scope page (full nested paths via PagePath)
      * and every PUBLISHED post, using the SAME published+due filter the public
@@ -461,7 +461,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * #126: per-site robots.txt: Site/robots/{slug} (→ /k|/p/{slug}/robots.txt).
+     * Per-site robots.txt: Site/robots/{slug} (→ /k|/p/{slug}/robots.txt).
      * Advertises the site's sitemap so crawlers can discover it. Only a published
      * public site is served (mirrors sitemap()/rss()); anything else gets a bare
      * 404 so an in-progress site stays indistinguishable from an unknown slug.
@@ -523,7 +523,7 @@ class Controller_Site extends Controller
      * for a viewer who is authorized to preview the site in HTML. Pre-launch
      * content must never reach an aggregator or a crawler.
      *
-     * NOTE for callers: this never returns on failure (_renderRssNotFound and
+     * NOTE for callers: this never returns on failure (_renderBareNotFound and
      * _enforcePrefix both emit and exit), so the result is always a live row.
      *
      * @param string $slug
@@ -533,7 +533,7 @@ class Controller_Site extends Controller
     {
         $site = $this->_resolveSite($slug);
         if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
-            $this->_renderRssNotFound();   // emits a bare 404 and exits
+            $this->_renderBareNotFound();   // emits a bare 404 and exits
             exit;                          // unreachable — never fall through to content
         }
         // No-op on a raw Site/* route (no &_pfx hint); 301s and exits on a mismatch.
@@ -571,7 +571,7 @@ class Controller_Site extends Controller
             return true;
         }
 
-        // C23: enforce the /k (kingdom) vs /p (park) namespace. Slugs share one
+        // Enforce the /k (kingdom) vs /p (park) namespace. Slugs share one
         // global pool, so a park site is ALSO resolvable by slug under /k/ (and
         // vice-versa); the nginx rewrite passes a &_pfx=k|p hint identifying which
         // prefix the visitor actually used. When it disagrees with the resolved
@@ -615,7 +615,7 @@ class Controller_Site extends Controller
     /**
      * True when the current viewer may EDIT this site's org (kingdom/park) — they
      * may preview it before it is published. Resolves through the single shared
-     * _cmsCanEditScope() gate (#29), so a super-admin, a global/matching
+     * _cmsCanEditScope() gate, so a super-admin, a global/matching
      * kingdom/park ork_cms_grant, OR the HasAuthority(AUTH_EDIT) officer bridge
      * all qualify — identically to the edit FAB everywhere else.
      *
@@ -627,11 +627,11 @@ class Controller_Site extends Controller
         if ($this->_canEditMemo !== null) {
             return $this->_canEditMemo;
         }
-        // #29: resolve through the single shared CmsCan-backed edit-scope gate so a
+        // Resolve through the single shared CmsCan-backed edit-scope gate so a
         // kingdom/park (or global) ork_cms_grant — not only a raw HasAuthority
         // officer role — lets its holder preview the unpublished site, matching the
         // edit FAB gate used everywhere else.
-        $uid   = (int) ($this->session->user_id ?? 0);
+        $uid   = $this->_uid();
         $scope = is_array($site)
             ? array('type' => (string) ($site['scope_type'] ?? ''), 'id' => (int) ($site['scope_id'] ?? 0))
             : array('type' => '', 'id' => 0);
@@ -640,7 +640,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * #09 usage analytics: record ONE public view of a page/post for this site's
+     * Usage analytics: record ONE public view of a page/post for this site's
      * scope. Best-effort and non-blocking — it must never slow or break the
      * render, so it fires exactly once per request on a successful in-scope
      * PUBLISHED fetch and swallows every error.
@@ -684,7 +684,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * C23: canonical-prefix guard. Returns true (and issues a 301) when the URL
+     * Canonical-prefix guard. Returns true (and issues a 301) when the URL
      * prefix the visitor used (&_pfx=k|p) does not match the resolved site's real
      * scope_type — the caller should then return. No hint (raw route) → no-op.
      *
@@ -757,14 +757,14 @@ class Controller_Site extends Controller
      * @param bool   $withNewPost also show the "new post" (feather) FAB
      * @return void
      */
-    private function _cmsFab($site, $editUrl, $editTip, $withNewPost = false)
+    private function _siteFab($site, $editUrl, $editTip, $withNewPost = false)
     {
         // An ORG site gates BOTH FABs on the same page.edit decision that governs
         // the unpublished-site preview (_viewerCanPreview) — deliberately NOT the
         // page.create capability Controller_Blog uses for its new-post FAB. The
         // shared helper takes the capability per caller for exactly that reason.
         $this->_cmsFabData(
-            (int) ($this->session->user_id ?? 0),
+            $this->_uid(),
             array('type' => (string) ($site['scope_type'] ?? ''), 'id' => (int) ($site['scope_id'] ?? 0)),
             $editUrl,
             $editTip,
@@ -853,7 +853,7 @@ class Controller_Site extends Controller
     }
 
     /* ==================================================================
-     * C6 — per-page canonical + Open Graph meta
+     * Per-page canonical + Open Graph meta
      * ================================================================== */
 
     /**
@@ -927,7 +927,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * C6: publish a per-page $PageMeta block (canonical + og:*) so default.theme
+     * Publish a per-page $PageMeta block (canonical + og:*) so default.theme
      * emits page-specific tags instead of leaking the GLOBAL ORK branding onto
      * every org-site page. og:image falls back to the site logo, then the theme's
      * ORK default (handled in default.theme) when neither is set.
@@ -977,7 +977,7 @@ class Controller_Site extends Controller
         ));
     }
 
-    /** C6: canonical + OG for a scoped blog POST (/post/{slug}). */
+    /** Canonical + OG for a scoped blog POST (/post/{slug}). */
     private function _setPostMeta($site, $post)
     {
         $canon    = $this->_siteUrl($site, 'post/' . rawurlencode((string) ($post['slug'] ?? '')));
@@ -1015,7 +1015,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * C13: build the breadcrumb trail (root → this page) for a nested page. Each
+     * Build the breadcrumb trail (root → this page) for a nested page. Each
      * crumb is ['label','url']; the current page is the last crumb (no url). A
      * flat page yields a single home crumb + itself.
      *
@@ -1054,7 +1054,7 @@ class Controller_Site extends Controller
     }
 
     /**
-     * C17: issue a 301 for a renamed/aliased path within a site scope, if one is
+     * Issue a 301 for a renamed/aliased path within a site scope, if one is
      * recorded. Returns true when a redirect was sent (caller returns).
      *
      * @param array  $site
@@ -1138,11 +1138,12 @@ class Controller_Site extends Controller
     }
 
     /**
-     * A bare, non-HTML 404 for the RSS endpoint: an aggregator wants a feed, not
-     * the branded HTML shell. Keeps an in-progress / unknown site indistinguish-
-     * able (no name/logo leak) and emits nothing indexable.
+     * A bare, non-HTML 404 for the machine-readable routes (rss/sitemap/robots):
+     * an aggregator or a crawler wants a feed or a directive, not the branded HTML
+     * shell. Keeps an in-progress / unknown site indistinguishable (no name/logo
+     * leak) and emits nothing indexable.
      */
-    private function _renderRssNotFound()
+    private function _renderBareNotFound()
     {
         http_response_code(404);
         header('Content-Type: text/plain; charset=utf-8');

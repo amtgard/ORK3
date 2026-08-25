@@ -7,9 +7,9 @@
  */
 $kicker   = $blockFields['kicker']    ?? '';
 $heading  = $blockFields['heading']   ?? '';
-// #66: a cleared number input arrives as 0/blank → fall back to the default
+// A cleared number input arrives as 0/blank → fall back to the default
 // rather than emptying the grid under a live heading.
-// #11: clamp to a hard max so an authored huge value can't blow out the grid.
+// Clamp to a hard max so an authored huge value can't blow out the grid.
 $limit    = fdClampLimit(
     $blockFields['limit'] ?? null,
     CmsRenderCache::TEASER_LIMIT_DEFAULT,
@@ -18,7 +18,7 @@ $limit    = fdClampLimit(
 $moreHref = $blockFields['more_href'] ?? '';
 $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl($moreHref)) ? $moreHref : '';
 
-// #11: resolve the parent-kingdom teaser list — filter → slice → resolve each
+// Resolve the parent-kingdom teaser list — filter → slice → resolve each
 // heraldry URL (a per-row file_exists() disk probe via resolve_image_ext) — ONCE,
 // then cache the fully-hydrated result in GhettoCache keyed by the clamped limit
 // (mirrors kingdom_parks.tpl $kpResolved/$kpCache). The kingdom set is global and

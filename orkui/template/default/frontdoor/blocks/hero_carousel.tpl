@@ -35,7 +35,7 @@ $ctas       = $blockFields['ctas']        ?? [];
 $slides     = is_array($slides) ? $slides : [];
 $ctas       = is_array($ctas)   ? $ctas   : [];
 
-// #82: keep only slides that actually have something to show (image, headline,
+// Keep only slides that actually have something to show (image, headline,
 // subcopy, or kicker). With no renderable slides, render nothing for visitors;
 // in the author preview (SitePreview) surface a hint so the empty state is
 // discoverable in the editor instead of a blank strip.
@@ -58,7 +58,7 @@ if (empty($renderSlides)) {
         // The first slide's headline is the page H1; later slides (alternate
         // views of the same hero) use H2 so the page keeps a single H1.
         $hlTag     = $isFirst ? 'h1' : 'h2';
-        // C4: prefer the mid-size "display" rendition for the hero background.
+        // Prefer the mid-size "display" rendition for the hero background.
         $imgSrc    = htmlspecialchars($slide['image']['display'] ?? $slide['image']['src'] ?? '', ENT_QUOTES, 'UTF-8');
         $imgAlt    = htmlspecialchars($slide['image']['alt'] ?? '', ENT_QUOTES, 'UTF-8');
         $kicker    = htmlspecialchars($slide['kicker']   ?? '', ENT_QUOTES, 'UTF-8');

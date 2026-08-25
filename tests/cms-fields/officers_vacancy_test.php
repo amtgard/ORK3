@@ -17,11 +17,12 @@ function check($label, $cond)
     }
 }
 
-// The predicate under test, extracted verbatim from _shared/officers.tpl.
+// Mirrors the render predicate in _shared/officers.tpl: a seat renders only
+// when it carries a persona. The role is deliberately NOT consulted — a vacant
+// seat still has a role, and rendering it would advertise an empty office.
 function officer_is_renderable(array $row)
 {
     $persona = trim((string) ($row['Persona'] ?? ''));
-    $role    = trim((string) ($row['OfficerRole'] ?? $row['Role'] ?? ''));
     return $persona !== '';
 }
 

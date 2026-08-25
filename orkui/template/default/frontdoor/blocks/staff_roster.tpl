@@ -4,7 +4,7 @@
  * Receives: $blockFields (kicker, heading, subheading, presentation, people[]), UIR
  * people[] each: image['src','alt'], persona_name, mundane_name, role, bio, mundane_id, href, show_mundane
  *
- * PII/consent (C21): a person's real (mundane) name is PUBLISHED ONLY when they
+ * PII/consent: a person's real (mundane) name is PUBLISHED ONLY when they
  * have explicitly opted in via show_mundane. Without that consent the card shows
  * the Amtgard persona alone — even when the block's presentation is "Real name
  * leads" — so a roster can never expose a member's legal name without opt-in.
@@ -41,7 +41,7 @@ $people       = $blockFields['people']       ?? [];
                 $mid     = (int)($person['mundane_id'] ?? 0);
                 $href    = trim((string)($person['href'] ?? ''));
 
-                // C21 consent gate: the real name is publishable ONLY when opted in.
+                // Consent gate: the real name is publishable ONLY when opted in.
                 // Legacy rows (authored before the opt-in existed) carry no
                 // show_mundane key and therefore default to withheld.
                 $showMundane = !empty($person['show_mundane']);

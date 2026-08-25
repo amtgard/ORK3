@@ -3,26 +3,27 @@
  * Partial: member_bar.tpl
  * Receives: $blockFields (empty), $LoggedIn, $ViewerName, $UserKingdomId, UIR
  * Renders NOTHING unless the user is logged in.
+ *
+ * CSS (light + dark) lives in frontdoor/css/blocks.css's sibling sheet
+ * frontdoor/css/frontdoor.css, under .fd-member-bar — it has to sit there rather
+ * than in blocks.css because the phone-width override lives in frontdoor.css and
+ * would otherwise lose the same-specificity tie to the later-loaded sheet.
  */
 if (empty($LoggedIn)) {
     return;
 }
 ?>
-<div class="fd-member-bar"
-     style="background:var(--navy2);color:var(--fd-primary-contrast);padding:9px 24px;display:flex;align-items:center;gap:18px;font-size:13px;">
-    <span style="opacity:.85;">
+<div class="fd-member-bar">
+    <span class="fd-member-bar-greeting">
         Welcome back,
         <?php if (!empty($ViewerName)): ?>
-            <b class="fd-serif" style="font-weight:400;font-size:15px;"><?= htmlspecialchars($ViewerName, ENT_QUOTES) ?></b>
+            <b class="fd-serif"><?= htmlspecialchars($ViewerName, ENT_QUOTES) ?></b>
         <?php endif; ?>
     </span>
-    <span style="flex:1;"></span>
+    <span class="fd-member-bar-spacer"></span>
     <?php if ((int)($UserKingdomId ?? 0) > 0): ?>
-        <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"
-           style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-crown" style="color:var(--gold);margin-right:5px;"></i>My Kingdom</a>
+        <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"><i class="fas fa-crown"></i>My Kingdom</a>
     <?php endif; ?>
-    <a href="<?= htmlspecialchars(UIR . 'Live', ENT_QUOTES) ?>"
-       style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-broadcast-tower" style="color:var(--gold);margin-right:5px;"></i>Live Attendance</a>
-    <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"
-       style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-tools" style="color:var(--gold);margin-right:5px;"></i>Member Tools</a>
+    <a href="<?= htmlspecialchars(UIR . 'Live', ENT_QUOTES) ?>"><i class="fas fa-broadcast-tower"></i>Live Attendance</a>
+    <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"><i class="fas fa-tools"></i>Member Tools</a>
 </div>

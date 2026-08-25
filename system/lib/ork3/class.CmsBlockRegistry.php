@@ -504,7 +504,7 @@ class CmsBlockRegistry
                 'label'    => 'Live ORK data',
                 'description' => 'A page that fills itself in from the ORK — your parks, your officers, your upcoming events. Nothing to type or keep up to date.',
                 'starters' => array('kingdoms_teaser'),
-                // Every live feed, plus framing blocks. #65: the global
+                // Every live feed, plus framing blocks. The global
                 // events_feed (org-wide, all kingdoms) is dropped from the
                 // chooser in favor of the scope-correct kingdom_events; existing
                 // events_feed blocks still render and stay editable (the chooser
@@ -563,8 +563,8 @@ class CmsBlockRegistry
      */
     public static function DefaultFrontDoorBlocks($ctx = array())
     {
-        $img = HTTP_TEMPLATE . 'default/img/frontdoor/';
-        $logo = ['key' => 'logo', 'src' => $img . 'amtgard-logo.png', 'alt' => 'Amtgard'];
+        $img  = HTTP_TEMPLATE . 'default/img/frontdoor/';
+        $logo = array('key' => 'logo', 'src' => $img . 'amtgard-logo.png', 'alt' => 'Amtgard');
 
         // Internal route base. Internal nav links resolve through UIR so they are
         // host-correct; external links point at the live amtgard.com pages until
@@ -572,132 +572,264 @@ class CmsBlockRegistry
         // the live menu lives in the editable CmsNav 'marketing' store.)
         $uir = defined('UIR') ? UIR : 'index.php?Route=';
 
-        $blocks = [];
+        $blocks = array();
 
-        $blocks[] = [
-            'id' => 'nav', 'type' => 'marketing_nav', 'enabled' => true, 'order' => 10, 'source' => 'authored',
-            'fields' => [
-                'logo' => $logo,
-                'items' => [
-                    ['label' => 'Home', 'href' => $uir],
-                    ['label' => 'About', 'href' => $uir . 'Page/view/about', 'children' => [
-                        ['label' => 'Mission', 'href' => 'https://www.amtgard.com/mission'], ['label' => 'Staff', 'href' => 'https://www.amtgard.com/staff'], ['label' => 'Volunteers', 'href' => 'https://www.amtgard.com/volunteers'],
-                    ]],
-                    ['label' => 'Join', 'href' => $uir . 'Page/view/join', 'children' => [
-                        ['label' => 'Learn the Basics', 'href' => 'https://www.amtgard.com/learn-the-basics'], ['label' => 'Find a Chapter', 'href' => $uir . 'Atlas'], ['label' => 'Start a Chapter', 'href' => 'https://www.amtgard.com/start-a-chapter'],
-                    ]],
-                    ['label' => 'AI Programs', 'href' => 'https://www.amtgard.com/programs', 'children' => [
-                        ['label' => 'Food Fight', 'href' => 'https://www.amtgard.com/foodfight'], ['label' => 'Olympiad', 'href' => 'https://www.amtgard.com/olympiad'],
-                    ]],
-                    ['label' => 'Media', 'href' => $uir . 'Page/view/media-gallery', 'children' => [
-                        ['label' => 'Galleries', 'href' => $uir . 'Page/view/media-gallery'], ['label' => 'Writing', 'href' => $uir . 'Blog/index'],
-                    ]],
-                    ['label' => 'Official Resources', 'href' => 'https://www.amtgard.com/resources', 'children' => [
-                        ['label' => 'Documents', 'href' => 'https://www.amtgard.com/documents'],
-                    ]],
-                    ['label' => 'Merch', 'href' => 'https://www.redbubble.com/people/amtgardmarket/shop'],
-                ],
-                'cta' => ['label' => 'Find a Chapter', 'href' => $uir . 'Atlas'],
-                'login' => ['label' => 'ORK Login', 'href' => $uir . 'Directory'],
-            ],
-        ];
+        $blocks[] = array(
+            'id'      => 'nav',
+            'type'    => 'marketing_nav',
+            'enabled' => true,
+            'order'   => 10,
+            'source'  => 'authored',
+            'fields'  => array(
+                'logo'  => $logo,
+                'items' => array(
+                    array('label' => 'Home', 'href' => $uir),
+                    array(
+                        'label'    => 'About',
+                        'href'     => $uir . 'Page/view/about',
+                        'children' => array(
+                            array('label' => 'Mission', 'href' => 'https://www.amtgard.com/mission'),
+                            array('label' => 'Staff', 'href' => 'https://www.amtgard.com/staff'),
+                            array('label' => 'Volunteers', 'href' => 'https://www.amtgard.com/volunteers'),
+                        ),
+                    ),
+                    array(
+                        'label'    => 'Join',
+                        'href'     => $uir . 'Page/view/join',
+                        'children' => array(
+                            array('label' => 'Learn the Basics', 'href' => 'https://www.amtgard.com/learn-the-basics'),
+                            array('label' => 'Find a Chapter', 'href' => $uir . 'Atlas'),
+                            array('label' => 'Start a Chapter', 'href' => 'https://www.amtgard.com/start-a-chapter'),
+                        ),
+                    ),
+                    array(
+                        'label'    => 'AI Programs',
+                        'href'     => 'https://www.amtgard.com/programs',
+                        'children' => array(
+                            array('label' => 'Food Fight', 'href' => 'https://www.amtgard.com/foodfight'),
+                            array('label' => 'Olympiad', 'href' => 'https://www.amtgard.com/olympiad'),
+                        ),
+                    ),
+                    array(
+                        'label'    => 'Media',
+                        'href'     => $uir . 'Page/view/media-gallery',
+                        'children' => array(
+                            array('label' => 'Galleries', 'href' => $uir . 'Page/view/media-gallery'),
+                            array('label' => 'Writing', 'href' => $uir . 'Blog/index'),
+                        ),
+                    ),
+                    array(
+                        'label'    => 'Official Resources',
+                        'href'     => 'https://www.amtgard.com/resources',
+                        'children' => array(
+                            array('label' => 'Documents', 'href' => 'https://www.amtgard.com/documents'),
+                        ),
+                    ),
+                    array('label' => 'Merch', 'href' => 'https://www.redbubble.com/people/amtgardmarket/shop'),
+                ),
+                'cta'   => array('label' => 'Find a Chapter', 'href' => $uir . 'Atlas'),
+                'login' => array('label' => 'ORK Login', 'href' => $uir . 'Directory'),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'member', 'type' => 'member_bar', 'enabled' => true, 'order' => 20, 'source' => 'dynamic',
-            'fields' => [],
-        ];
+        $blocks[] = array(
+            'id'      => 'member',
+            'type'    => 'member_bar',
+            'enabled' => true,
+            'order'   => 20,
+            'source'  => 'dynamic',
+            'fields'  => array(),
+        );
 
-        $blocks[] = [
-            'id' => 'hero', 'type' => 'hero_carousel', 'enabled' => true, 'order' => 30, 'source' => 'authored',
-            'fields' => [
-                'logo' => $logo,
+        $blocks[] = array(
+            'id'      => 'hero',
+            'type'    => 'hero_carousel',
+            'enabled' => true,
+            'order'   => 30,
+            'source'  => 'authored',
+            'fields'  => array(
+                'logo'        => $logo,
                 'autoplay_ms' => 4500,
-                'slides' => [
-                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'kicker' => 'Worldwide Medieval Combat · Since 1983', 'headline' => 'Take the Field.', 'subcopy' => 'Safe boffer weapons, real glory. Step into a living world of heroic combat, quests, and craft.'],
-                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'kicker' => 'Archery · Magic · Steel', 'headline' => 'Find Your Path.', 'subcopy' => 'Warrior, archer, healer, monster, crafter — there\'s a place for every kind of hero.'],
-                    ['image' => ['key' => 'hero-7', 'src' => $img . 'hero-7.jpg', 'alt' => ''], 'kicker' => 'From First-Timers to Great Wars', 'headline' => 'Answer the Call.', 'subcopy' => 'Hundreds of chapters worldwide. Your first day on the field is always free.'],
-                ],
-                'ctas' => [
-                    ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'],
-                    ['label' => 'Watch & Learn', 'href' => $uir . 'Page/view/learn-the-basics', 'style' => 'ghost'],
-                ],
-            ],
-        ];
+                'slides'      => array(
+                    array(
+                        'image'    => array('key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''),
+                        'kicker'   => 'Worldwide Medieval Combat · Since 1983',
+                        'headline' => 'Take the Field.',
+                        'subcopy'  => 'Safe boffer weapons, real glory. Step into a living world of heroic combat, quests, and craft.',
+                    ),
+                    array(
+                        'image'    => array('key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''),
+                        'kicker'   => 'Archery · Magic · Steel',
+                        'headline' => 'Find Your Path.',
+                        'subcopy'  => 'Warrior, archer, healer, monster, crafter — there\'s a place for every kind of hero.',
+                    ),
+                    array(
+                        'image'    => array('key' => 'hero-7', 'src' => $img . 'hero-7.jpg', 'alt' => ''),
+                        'kicker'   => 'From First-Timers to Great Wars',
+                        'headline' => 'Answer the Call.',
+                        'subcopy'  => 'Hundreds of chapters worldwide. Your first day on the field is always free.',
+                    ),
+                ),
+                'ctas'        => array(
+                    array('label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'),
+                    array('label' => 'Watch & Learn', 'href' => $uir . 'Page/view/learn-the-basics', 'style' => 'ghost'),
+                ),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'whatis', 'type' => 'richtext', 'enabled' => true, 'order' => 40, 'source' => 'authored',
-            'fields' => [
-                'kicker' => 'New here?', 'heading' => 'What is Amtgard?', 'align' => 'center',
-                'body' => 'Amtgard is a world-wide organization dedicated to medieval and fantasy combat sports and recreation. We use padded weapons, fantasy and authentic clothing, and imagination to immerse players in a world of heroic combat, quests, crafts, and more.',
-                'cta' => ['label' => 'The full story →', 'href' => $uir . 'Page/view/about'],
-            ],
-        ];
+        $blocks[] = array(
+            'id'      => 'whatis',
+            'type'    => 'richtext',
+            'enabled' => true,
+            'order'   => 40,
+            'source'  => 'authored',
+            'fields'  => array(
+                'kicker'  => 'New here?',
+                'heading' => 'What is Amtgard?',
+                'align'   => 'center',
+                'body'    => 'Amtgard is a world-wide organization dedicated to medieval and fantasy combat sports and recreation. We use padded weapons, fantasy and authentic clothing, and imagination to immerse players in a world of heroic combat, quests, crafts, and more.',
+                'cta'     => array('label' => 'The full story →', 'href' => $uir . 'Page/view/about'),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'paths', 'type' => 'card_grid', 'enabled' => true, 'order' => 50, 'source' => 'authored',
-            'fields' => [
-                'kicker' => 'There\'s a place for you', 'heading' => 'Find Your Path',
+        $blocks[] = array(
+            'id'      => 'paths',
+            'type'    => 'card_grid',
+            'enabled' => true,
+            'order'   => 50,
+            'source'  => 'authored',
+            'fields'  => array(
+                'kicker'     => 'There\'s a place for you',
+                'heading'    => 'Find Your Path',
                 'subheading' => 'However you like to play, Amtgard has a role for you.',
-                'cards' => [
-                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'icon' => 'fa-shield-alt', 'title' => 'The Warrior', 'blurb' => 'Sword, shield, and the front line', 'href' => $uir . 'Page/view/learn-the-basics'],
-                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'icon' => 'fa-bullseye', 'title' => 'The Archer', 'blurb' => 'Ranged skill and battlefield control', 'href' => $uir . 'Page/view/learn-the-basics'],
-                    ['image' => ['key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''], 'icon' => 'fa-hat-wizard', 'title' => 'The Caster', 'blurb' => 'Spells, healing, and the magic classes', 'href' => $uir . 'Page/view/learn-the-basics'],
-                    ['image' => ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''], 'icon' => 'fa-palette', 'title' => 'The Artisan', 'blurb' => 'Garb, armor, and craft (A&S)', 'href' => $uir . 'Page/view/learn-the-basics'],
-                    ['image' => ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''], 'icon' => 'fa-dragon', 'title' => 'The Monster', 'blurb' => 'Quests, role-play, and the wilds', 'href' => $uir . 'Page/view/learn-the-basics'],
-                    ['image' => ['key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''], 'icon' => 'fa-crown', 'title' => 'The Leader', 'blurb' => 'Reeving, office, and running the realm', 'href' => $uir . 'Page/view/join'],
-                ],
-            ],
-        ];
+                'cards'      => array(
+                    array(
+                        'image' => array('key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''),
+                        'icon'  => 'fa-shield-alt',
+                        'title' => 'The Warrior',
+                        'blurb' => 'Sword, shield, and the front line',
+                        'href'  => $uir . 'Page/view/learn-the-basics',
+                    ),
+                    array(
+                        'image' => array('key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''),
+                        'icon'  => 'fa-bullseye',
+                        'title' => 'The Archer',
+                        'blurb' => 'Ranged skill and battlefield control',
+                        'href'  => $uir . 'Page/view/learn-the-basics',
+                    ),
+                    array(
+                        'image' => array('key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''),
+                        'icon'  => 'fa-hat-wizard',
+                        'title' => 'The Caster',
+                        'blurb' => 'Spells, healing, and the magic classes',
+                        'href'  => $uir . 'Page/view/learn-the-basics',
+                    ),
+                    array(
+                        'image' => array('key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''),
+                        'icon'  => 'fa-palette',
+                        'title' => 'The Artisan',
+                        'blurb' => 'Garb, armor, and craft (A&S)',
+                        'href'  => $uir . 'Page/view/learn-the-basics',
+                    ),
+                    array(
+                        'image' => array('key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''),
+                        'icon'  => 'fa-dragon',
+                        'title' => 'The Monster',
+                        'blurb' => 'Quests, role-play, and the wilds',
+                        'href'  => $uir . 'Page/view/learn-the-basics',
+                    ),
+                    array(
+                        'image' => array('key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''),
+                        'icon'  => 'fa-crown',
+                        'title' => 'The Leader',
+                        'blurb' => 'Reeving, office, and running the realm',
+                        'href'  => $uir . 'Page/view/join',
+                    ),
+                ),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'firstday', 'type' => 'steps', 'enabled' => true, 'order' => 60, 'source' => 'authored',
-            'fields' => [
-                'kicker' => 'It\'s easier than you think', 'heading' => 'Your First Day', 'band' => 'dark',
-                'steps' => [
-                    ['n' => 1, 'title' => 'Find a chapter', 'body' => 'Hundreds of parks meet weekly in public spaces. Find one near you.'],
-                    ['n' => 2, 'title' => 'Just show up', 'body' => 'No experience or gear needed. Wear comfy clothes and bring water.'],
-                    ['n' => 3, 'title' => 'Borrow a sword', 'body' => 'Chapters have loaner weapons. Take the field — your first day is free.'],
-                ],
-                'cta' => ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas'],
-            ],
-        ];
+        $blocks[] = array(
+            'id'      => 'firstday',
+            'type'    => 'steps',
+            'enabled' => true,
+            'order'   => 60,
+            'source'  => 'authored',
+            'fields'  => array(
+                'kicker'  => 'It\'s easier than you think',
+                'heading' => 'Your First Day',
+                'band'    => 'dark',
+                'steps'   => array(
+                    array('n' => 1, 'title' => 'Find a chapter', 'body' => 'Hundreds of parks meet weekly in public spaces. Find one near you.'),
+                    array('n' => 2, 'title' => 'Just show up', 'body' => 'No experience or gear needed. Wear comfy clothes and bring water.'),
+                    array('n' => 3, 'title' => 'Borrow a sword', 'body' => 'Chapters have loaner weapons. Take the field — your first day is free.'),
+                ),
+                'cta'     => array('label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas'),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'events', 'type' => 'events_feed', 'enabled' => true, 'order' => 70, 'source' => 'dynamic',
-            'fields' => ['kicker' => 'Come check one out', 'heading' => 'Upcoming Events', 'limit' => 3, 'more_href' => $uir . 'Search/event'],
-        ];
+        $blocks[] = array(
+            'id'      => 'events',
+            'type'    => 'events_feed',
+            'enabled' => true,
+            'order'   => 70,
+            'source'  => 'dynamic',
+            'fields'  => array(
+                'kicker'    => 'Come check one out',
+                'heading'   => 'Upcoming Events',
+                'limit'     => 3,
+                'more_href' => $uir . 'Search/event',
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'mosaic', 'type' => 'photo_mosaic', 'enabled' => true, 'order' => 80, 'source' => 'authored',
-            'fields' => [
+        $blocks[] = array(
+            'id'      => 'mosaic',
+            'type'    => 'photo_mosaic',
+            'enabled' => true,
+            'order'   => 80,
+            'source'  => 'authored',
+            'fields'  => array(
                 'caption' => 'This is Amtgard',
-                'images' => [
-                    ['key' => 'hero-7', 'src' => $img . 'hero-7.jpg', 'alt' => ''],
-                    ['key' => 'hero-4', 'src' => $img . 'hero-4.jpg', 'alt' => ''],
-                    ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''],
-                    ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''],
-                ],
-            ],
-        ];
+                'images'  => array(
+                    array('key' => 'hero-7', 'src' => $img . 'hero-7.jpg', 'alt' => ''),
+                    array('key' => 'hero-4', 'src' => $img . 'hero-4.jpg', 'alt' => ''),
+                    array('key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''),
+                    array('key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''),
+                ),
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'kingdoms', 'type' => 'kingdoms_teaser', 'enabled' => true, 'order' => 90, 'source' => 'dynamic',
-            'fields' => ['kicker' => 'Explore the realm', 'heading' => 'Kingdoms Around the World', 'limit' => 12, 'more_href' => $uir . 'Directory/index'],
-        ];
+        $blocks[] = array(
+            'id'      => 'kingdoms',
+            'type'    => 'kingdoms_teaser',
+            'enabled' => true,
+            'order'   => 90,
+            'source'  => 'dynamic',
+            'fields'  => array(
+                'kicker'    => 'Explore the realm',
+                'heading'   => 'Kingdoms Around the World',
+                'limit'     => 12,
+                'more_href' => $uir . 'Directory/index',
+            ),
+        );
 
-        $blocks[] = [
-            'id' => 'getinvolved', 'type' => 'cta_band', 'enabled' => true, 'order' => 100, 'source' => 'authored',
-            'fields' => [
-                'logo' => $logo,
+        $blocks[] = array(
+            'id'      => 'getinvolved',
+            'type'    => 'cta_band',
+            'enabled' => true,
+            'order'   => 100,
+            'source'  => 'authored',
+            'fields'  => array(
+                'logo'    => $logo,
                 'heading' => 'Ready to take up arms?',
                 'subcopy' => 'There\'s a chapter near you, and your first day on the field is always free.',
-                'ctas' => [
-                    ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'],
-                    ['label' => 'Official Resources', 'href' => $uir . 'Page/view/resources', 'style' => 'ghost'],
-                ],
-                'links' => 'amtgard.com · play.amtgard.com · Online Record Keeper',
-            ],
-        ];
+                'ctas'    => array(
+                    array('label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'),
+                    array('label' => 'Official Resources', 'href' => $uir . 'Page/view/resources', 'style' => 'ghost'),
+                ),
+                'links'   => 'amtgard.com · play.amtgard.com · Online Record Keeper',
+            ),
+        );
 
         // Already emitted in ascending 'order' (10..100); the CMS reorders via
         // 'order' on the stored copy, not here.

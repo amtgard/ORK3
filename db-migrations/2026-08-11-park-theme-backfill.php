@@ -17,22 +17,7 @@
  *     db-migrations/2026-08-11-park-theme-backfill.php
  */
 
-// This file lives under the docroot and reflectively invokes a private seeder
-// across EVERY org site, so a stray HTTP request to its path would run a
-// site-wide write with no authentication in front of it. Same guard 11 of the 13
-// sibling migrations already carry.
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('CLI only');
-}
-
-// startup.php derives UIR/HTTP_TEMPLATE from HTTP_HOST, which CLI has no reason
-// to set. Same CLI-time default the sibling migrations use.
-if (empty($_SERVER['HTTP_HOST'])) {
-    $_SERVER['HTTP_HOST'] = 'localhost:19080';
-}
-
-require_once __DIR__ . '/../startup.php';
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 global $DB;
 
@@ -53,11 +38,10 @@ if (empty($sites)) {
     return;
 }
 
-$site  = new CmsSite();
-$seed  = new ReflectionMethod('CmsSite', '_seedOrgTheme');
+$site = new CmsSite();
 $n = 0;
 foreach ($sites as $s) {
-    $primary = $seed->invoke($site, $s['type'], $s['id'], 0);
+    $primary = $site->EnsureOrgTheme($s['type'], $s['id'], 0);
     if ($primary !== '') {
         $n++;
         echo "  {$s['type']} {$s['id']}: primary {$primary}\n";

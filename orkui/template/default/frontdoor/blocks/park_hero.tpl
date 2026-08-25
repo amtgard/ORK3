@@ -15,9 +15,9 @@
  *           the editor schema in cms-block-editor.js mirrors — a field declared
  *           in one place and not the other is either uneditable or unpublishable.
  */
-$phScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
-$phScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
-$phParkId    = ($phScopeType === 'park') ? $phScopeId : 0;
+// Outside park scope there is no park to source — render nothing at all.
+// (See fdScopedOrgId() in _helpers.tpl.)
+$phParkId = fdScopedOrgId($SiteNavScopeType ?? '', $SiteNavScopeId ?? 0, 'park');
 if ($phParkId <= 0) {
     return;
 }
@@ -88,34 +88,9 @@ $phData = fdBlockCache(
         $phWeather   = '';
         try {
             $phDays = (new APIModel('Park'))->GetParkDays(array('ParkId' => $phParkId));
-            $phSoonest = null;
-            // Park::CalculateNextParkDay() can return a date that has already happened:
-            // 'week-of-month' resolves the Nth weekday of the CURRENT month (1st Sunday
-            // is 2026-08-02 for the whole of August) and 'monthly' behaves the same way.
-            // Taking the min() below would then let a stale date not only publish "next
-            // game day" in the past, but SUPPRESS the park's correct weekly day, which is
-            // strictly worse than showing nothing. The shared calculator is pre-existing
-            // and used elsewhere, so guard here at the consumer rather than change it.
-            $phTodayTs = strtotime('today');
-            foreach ((array) ($phDays['ParkDays'] ?? array()) as $phDay) {
-                if (!is_array($phDay) || !class_exists('Park')) {
-                    continue;
-                }
-                $phWhen = Park::CalculateNextParkDay(
-                    $phDay['Recurrence'] ?? '', $phDay['WeekOfMonth'] ?? 0, $phDay['MonthDay'] ?? 0,
-                    $phDay['WeekDay'] ?? '', null, $phDay['StartDate'] ?? null, $phDay['WeekInterval'] ?? 0
-                );
-                if (!$phWhen) {
-                    continue;
-                }
-                $phWhenTs = strtotime($phWhen);
-                if ($phWhenTs === false || $phWhenTs < $phTodayTs) {
-                    continue;
-                }
-                if ($phSoonest === null || $phWhenTs < strtotime($phSoonest['d'])) {
-                    $phSoonest = array('d' => $phWhen, 't' => (string) ($phDay['Time'] ?? ''));
-                }
-            }
+            // Shared with _park_strip.tpl, past-date guard included — see
+            // fdSoonestParkDay() in _helpers.tpl for why that guard is load-bearing.
+            $phSoonest = fdSoonestParkDay((array) ($phDays['ParkDays'] ?? array()));
             if ($phSoonest !== null) {
                 $phTs = strtotime($phSoonest['d']);
                 $phNextLabel = date('l, F j', $phTs);

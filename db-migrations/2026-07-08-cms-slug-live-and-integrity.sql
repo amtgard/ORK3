@@ -4,8 +4,8 @@
 -- UNIQUE(scope_type, scope_id, slug) keys on ork_cms_page / ork_cms_post ignore
 -- deleted_at, so trashing a page/post PERMANENTLY reserves its slug — a new
 -- page/post can never reuse the slug of a trashed one, and restoring is the only
--- way to free it. AUTHOR ONLY — do NOT run against the shared local DB; applied
--- at deploy (MariaDB client, not mysql).
+-- way to free it. Applied at deploy with the MariaDB client (not mysql);
+-- guarded, so seed-cms-demo.sh also applies it locally.
 --
 -- Runs AFTER 2026-07-07-cms-integrity-safety-net.sql (which adds deleted_at) and
 -- 2026-07-07b-cms-routing-hierarchy.sql.

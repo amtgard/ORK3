@@ -4,14 +4,15 @@
 /**
  * duplication_ratchet_test.php — the CMS CSS duplication ratchet, both directions.
  *
- * bin/check-css-duplication.php used to fail only when duplication ROSE above a
- * pinned budget. That is a freeze, not a ratchet: the budget was set to the
- * observed count, so a real cleanup lowered the count, the gate stayed green,
- * and the slack sat there for the next commit to spend on a fresh copy. The
- * improvement could never be captured unless a human remembered to edit a
- * constant, and nothing reminded them.
+ * bin/check-css-duplication.php fails in BOTH directions, and that two-sidedness
+ * is the property this test exists to pin. Failing only when duplication ROSE
+ * would be a freeze, not a ratchet: the budget is set equal to the observed
+ * count, so a real cleanup would lower the count, the gate would stay green, and
+ * the slack would sit there for the next commit to spend on a fresh copy — the
+ * improvement captured only if a human remembered to edit a constant, with
+ * nothing to remind them.
  *
- * It is now two-sided, and this test pins all of it:
+ * What is pinned:
  *   observed >  budget  -> exit 1, "DUPLICATION ROSE"
  *   observed <  budget  -> exit 1, "DUPLICATION FELL"  (and CSS_DUP_ALLOW_SLACK=1 forgives)
  *   observed == budget  -> exit 0

@@ -50,7 +50,7 @@ if ($kpMoreHref === '#') {
     $kpMoreHref = '';
 }
 
-// C5-style caching (mirrors kingdom_officers.tpl): this DYNAMIC block runs on
+// Cached like kingdom_officers.tpl: this DYNAMIC block runs on
 // every anonymous public hit and previously re-queried GetParks AND did a per-row
 // file_exists() heraldry probe inside the render loop. Ask the lib for the
 // resolved list (active-filtered, sorted, sliced, crests resolved) once, then

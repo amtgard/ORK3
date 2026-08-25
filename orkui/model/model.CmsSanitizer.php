@@ -23,22 +23,4 @@ class Model_CmsSanitizer extends Model
     {
         return $this->CmsSanitizer->Clean($html);
     }
-
-    /** @no-callers — mirror surface. */
-    public function clean_fragment($html)
-    {
-        return $this->CmsSanitizer->CleanFragment($html);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function is_safe_url($url)
-    {
-        return $this->CmsSanitizer->IsSafeUrl($url);
-    }
-
-    /** @no-callers — mirror surface. */
-    public function safe_markdown($text)
-    {
-        return $this->CmsSanitizer->SafeMarkdown($text);
-    }
 }

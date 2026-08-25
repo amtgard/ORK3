@@ -6,7 +6,7 @@
  *
  * Site_shell.tpl deliberately does NOT include this: a standalone org site does
  * not load orkui.css, so it needs no interop layer. bin/check-css-boundaries.sh
- * (C4) enforces that.
+ * enforces that.
  *
  * Expects $fdDir (filesystem) and $fdAssetBase (URL) already in scope.
  */

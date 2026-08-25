@@ -11,8 +11,8 @@
  * item to a renderable 'href' + 'target' (page/post slug, url, or dynamic
  * route key); see class.CmsNav.php.
  *
- * Fallback: if the store is empty/unavailable, we keep rendering the original
- * $blockFields['items'] hardcoded defaults (no behavioral regression). The
+ * Fallback: if the store is empty/unavailable, this renders
+ * $blockFields['items'] — the block's own authored/default nav items. The
  * logo, cta, and login always come from $blockFields regardless of source.
  */
 $logo  = $blockFields['logo']  ?? [];

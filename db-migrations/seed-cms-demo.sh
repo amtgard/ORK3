@@ -3,10 +3,9 @@
 # seed-cms-demo.sh — populate the full CMS demo/test dataset in one command.
 #
 # Creates everything a tester needs to exercise Project Front Door + the CMS:
-#   1. CMS schema + ALL cms migrations (foundation, theme, site, integrity
-#      safety-net, routing/hierarchy, slug-live, view-analytics, page-type)
-#      applied in date order — later seeds depend on deleted_at / slug_live /
-#      site / theme / view-analytics columns the foundation file alone lacks.
+#   1. CMS schema: every db-migrations/*-cms-*.sql, applied in filename
+#      (== date) order — later seeds depend on columns the foundation file
+#      alone lacks (deleted_at, slug_live, site, theme, view-analytics).
 #   2. Home / front-door page   (the rich landing page)
 #   3. Exemplar pages           (about, join, faq, media-gallery)
 #   4. Staff-roster pages       (board-of-directors, team-leads — drafts)

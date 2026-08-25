@@ -95,6 +95,18 @@ html[data-theme="dark"] #theme_container .fd-body-text a {
     color: var(--pk-link, var(--fd-accent));
 }
 
+/* The member bar is a deliberately dark navy band in BOTH themes, so its link
+   ink is a fixed light periwinkle rather than a theme-flipping token. That ink
+   used to be an inline style attribute, which outranked everything; now that it
+   is a real rule, `.fd-member-bar a` is (0,1,1) and loses in dark mode to
+   `html[data-theme="dark"] #theme_container a { color: #63b3ed; }` at (1,1,2),
+   which would put link-blue text on the navy band. Restate the SAME value the
+   base rule uses via the token frontdoor.css defines on .fd-member-bar, so
+   there is still one source of truth for the colour. */
+html[data-theme="dark"] #theme_container .fd-member-bar a {
+    color: var(--fd-member-bar-link);
+}
+
 /* #86 — the front door hides the ORK application top bar outright. Without this
    the internal #newmenu bar stacks directly beneath the front-door marketing nav
    (.fd-nav), showing anonymous visitors two navbars; the front-door nav already
@@ -122,13 +134,10 @@ html[data-theme="dark"] #theme_container .fd-body-text a {
    plain `body` rule on specificity — body.fd-home is (0,1,1) against (0,0,1) — and
    this file is linked after orkui.css on every in-shell surface.
 
-   REGRESSION HISTORY: the body.fd-home half of this rule was dropped by d370795f,
-   which removed the park-strip rules above it by truncating the file from their
-   comment to EOF and took this with it. The front door carried 72px of dead space
-   (8 body margin + 48 body padding + 10 + 6 from #theme_container) until it was
-   restored. body.cms-page was never covered at all — CMS pages and the blog
-   carried the same 56px from the day #newmenu was first hidden for them.
-   tests/cms-css/boundary_test.php now asserts it is served. */
+   BOTH selectors are load-bearing: every in-shell CMS surface suppresses #newmenu,
+   so without this the front door carries 72px of dead space (8 body margin + 48
+   body padding + 10 + 6 from #theme_container) and CMS pages / the blog carry 56px.
+   tests/cms-css/boundary_test.php asserts this rule is served. */
 body.fd-home,
 body.cms-page {
     padding-top: 0;
