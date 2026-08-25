@@ -123,7 +123,15 @@ $fdItemIsActive = static function ($item) use ($fdHrefMatchesCurrent): bool {
         <?php endforeach; ?>
     </div>
 
-    <?php if (!empty($login['label'])): ?>
+    <?php if (!empty($LoggedIn)): ?>
+        <?php /* Session-aware: a signed-in member gets their own profile instead
+                 of a login prompt (the member bar below already greets them —
+                 showing "ORK Login" beside "Welcome back" reads as a bug). The
+                 seeded login label/href still render for anonymous visitors. */ ?>
+        <a class="fd-nav-login" href="<?= htmlspecialchars(!empty($ViewerId) ? UIR . 'Player/profile/' . (int)$ViewerId : UIR . 'Admin', ENT_QUOTES) ?>">
+            My ORK
+        </a>
+    <?php elseif (!empty($login['label'])): ?>
         <a class="fd-nav-login" href="<?= htmlspecialchars($login['href'] ?? '#', ENT_QUOTES) ?>">
             <?= htmlspecialchars($login['label'], ENT_QUOTES) ?>
         </a>

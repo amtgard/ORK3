@@ -82,6 +82,9 @@ class Controller
             $this->data[ 'page_title' ] = $this->method;
         }
         $this->data['LoggedIn'] = isset($this->session->user_id);
+        // Viewer's own mundane id, for chrome that links to "their" surfaces
+        // (marketing nav's My ORK -> own profile). 0 when logged out.
+        $this->data['ViewerId'] = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
         // Proactive stale-session check: if the session token no longer matches the DB,
         // the user logged in on another device — clear session and redirect to login.
