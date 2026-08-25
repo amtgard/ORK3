@@ -80,3 +80,8 @@ htmlcov/
 .pytest_cache/
 test-results/
 ga-service-account.json
+
+# The amtgard.com replication: specs (page structure + copy) ARE tracked; the
+# asset bytes are not — they are third-party binaries regenerated on demand by
+# db-migrations/fetch-amtgard-assets.php.
+db-migrations/amtgard-specs/assets/

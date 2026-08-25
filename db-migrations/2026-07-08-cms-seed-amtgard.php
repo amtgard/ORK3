@@ -161,12 +161,24 @@ $uploadImage = function ($slug, $file, $alt) use ($media, $DB, $by, $STG, $toRel
         . 'WHERE filename = :filename AND scope_type = \'global\' AND scope_id = 0 '
         . 'AND deleted_at IS NULL LIMIT 1'
     ));
-    if ($hit && (int) $hit['media_id'] > 0) {
+    // Reuse the existing row ONLY if the bytes it names are still on disk. A row
+    // whose file has been cleaned up (assets/cms-media/ is gitignored, so it is
+    // routinely empty on a fresh clone of a DB that was seeded elsewhere) would
+    // otherwise be handed back forever and the page would keep rendering a broken
+    // image with no way to self-heal short of purging the row by hand.
+    if ($hit && (int) $hit['media_id'] > 0 && is_file(DIR_ASSETS . $hit['path'])) {
         $path  = $hit['path'];
-        $thumb = !empty($hit['thumb_path']) ? $hit['thumb_path'] : $hit['path'];
+        $thumb = (!empty($hit['thumb_path']) && is_file(DIR_ASSETS . $hit['thumb_path']))
+            ? $hit['thumb_path'] : $hit['path'];
         return array('key' => 'm' . (int) $hit['media_id'], 'media_id' => (int) $hit['media_id'],
             'src' => '/assets/' . $path, 'thumb' => '/assets/' . $thumb,
             'alt' => (string) $alt, 'focal' => '50% 50%');
+    }
+    if ($hit && (int) $hit['media_id'] > 0) {
+        // Orphaned row: drop it so Upload() below can claim the filename cleanly.
+        $DB->Clear();
+        $DB->mid = (int) $hit['media_id'];
+        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :mid');
     }
     $row = $media->Upload(
         base64_encode($prepBytes($abs)),

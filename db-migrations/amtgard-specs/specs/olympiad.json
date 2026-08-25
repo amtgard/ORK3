@@ -1,0 +1,146 @@
+{
+    "slug": "olympiad",
+    "type": "composed",
+    "parent_slug": "programs",
+    "title": "Olympiad",
+    "meta_description": "Olympiad is Amtgard's premier interkingdom championship testing War skills, Arts & Sciences, and Weapon combat. Learn the rules and how to compete.",
+    "blocks": [
+        {
+            "type": "hero_carousel",
+            "fields": {
+                "autoplay_ms": 5000,
+                "slides": [
+                    {
+                        "image": "1.jpg",
+                        "kicker": "June 11–14, 2026, During Northern Lights Midreign",
+                        "headline": "Olympiad",
+                        "subcopy": "Olympiad is Amtgard’s premier interkingdom championship; a proving ground where the best of the best gather to test their mastery in War skills, Arts & Sciences, and Weapon combat."
+                    }
+                ],
+                "ctas": [
+                    {
+                        "label": "Pre-Register Here",
+                        "href": "https://amtgardnorthernlights.org/product/summer-midreign-olympiad-pre-pay/",
+                        "style": "gold"
+                    },
+                    {
+                        "label": "Book of Olympiad",
+                        "href": "https://docs.google.com/document/d/1O9A2Qv9enhtBOpURvf3ziN0SqAHeQo7iZcUWxnfiHss/edit?usp=sharing",
+                        "style": "ghost"
+                    },
+                    {
+                        "label": "View Schedule",
+                        "href": "https://docs.google.com/spreadsheets/d/1EUVDne_LL3GYijSWoLkp70jrVTUYiCBHHgDtT16ZuVo/edit?usp=drivesdk",
+                        "style": "ghost"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": ""
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "body": "<p>Hosted annually on a rotating basis by the Kingdoms of Amtgard. <strong>Meal plan included with your ticket!</strong></p><p><strong>Olympiad '26 will crown Four champions:</strong></p><ul><li><strong>Battle Olympian:</strong> Champion of the Battlefield</li><li><strong>Weapon Olympian:</strong> Champion of the Tournaments</li><li><strong>Cultural Olympian:</strong> Champion of Arts &amp; Sciences</li><li><strong>Grand Olympian:</strong> The overall champion across disciplines</li></ul>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "A Tradition of Excellence",
+                "body": "<p>For decades, Olympiad has stood as a symbol of interkingdom unity and excellence. A gathering of champions, a celebration of craft, and a showcase of the depth of talent across all of Amtgard.</p><p><strong>To compete at Olympiad is to represent your Kingdom.<br>To win is to etch your name into Amtgard history.</strong></p>",
+                "align": "center"
+            }
+        },
+        {
+            "type": "card_grid",
+            "fields": {
+                "heading": "The Three Paths to Glory",
+                "cards": [
+                    {
+                        "title": "Battle Olympiad",
+                        "blurb": "The Battle Olympiad tests adaptability, teamwork, leadership, and endurance across multiple game formats. The final Battle for Olympian crowns the leader of the last team standing as War Olympian. Players must participate in all rounds of all games to qualify."
+                    },
+                    {
+                        "title": "Culture Olympiad",
+                        "blurb": "The Culture Olympiad tests creativity, craftsmanship, scholarship, and presentation across four distinct disciplines of Arts and Sciences. The highest-scoring artisan across all categories is crowned Cultural Olympian. Competitors must enter one item in each category to qualify."
+                    },
+                    {
+                        "title": "Weapon Olympiad",
+                        "blurb": "The Weapon Olympiad tests precision, endurance, adaptability, and mastery across multiple weapon styles. The top-ranked fighter across all categories is crowned Weapon Olympian. Competitors must enter each weapon category to qualify."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "Our Venue",
+                "heading": "Panhandle Lake 4-H Camp",
+                "body": "<p>370 W Panhandle Lake Rd, Shelton, WA 98584</p><p>Nestled along the shoreline of Panhandle Lake, this dedicated camp facility offers expansive open fields for large-scale battle games, wooded areas for immersive gameplay, and indoor spaces ideal for Arts &amp; Sciences displays and gatherings. With on-site camping and a scenic natural setting, the venue provides both the space and atmosphere worthy of Amtgard’s premier interkingdom championship.</p><p>The venue site, linked below, showcases all of the wonderful accommodations available at the site, including a virtual tour!</p><p><strong>The nearest airport is the Seattle-Tacoma International Airport (SEA), 60 miles away.</strong></p><p>See also <a href=\"https://www.explorehoodcanal.com/dining/shelton\">Local Eateries</a> and <a href=\"https://www.explorehoodcanal.com/lodging/shelton\">Local Lodging</a> near Shelton.</p>",
+                "align": "left",
+                "cta": {
+                    "label": "Venue Website",
+                    "href": "https://www.panhandlecamp.com/"
+                }
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "Panhandle Lake 4-H Camp",
+                "align": "center",
+                "max_width": "600px",
+                "image": "2.webp"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "2.webp",
+                        "alt": "Panhandle Lake 4-H Camp venue"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "align": "center",
+                "max_width": "100%",
+                "image": "3.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "3.jpg",
+                        "alt": "Olympiad Battleground Banner"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Review the Rules",
+                "body": "<p><a href=\"https://docs.google.com/document/d/1O9A2Qv9enhtBOpURvf3ziN0SqAHeQo7iZcUWxnfiHss/edit?usp=sharing\"><strong>Book of Olympiad</strong></a></p>",
+                "align": "center"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Prizes and Honors",
+                "body": "<p>Battle, Culture, and Weapon Olympians will receive a Scroll &amp; Belt Flag.</p><p>The Grand Olympian will receive a Scroll &amp; Viking Hood.</p><p><strong>These honors carry prestige across all Kingdoms.</strong></p>",
+                "align": "center"
+            }
+        }
+    ]
+}

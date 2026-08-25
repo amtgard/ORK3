@@ -1,0 +1,158 @@
+{
+    "slug": "documents",
+    "type": "resource",
+    "parent_slug": "resources",
+    "title": "Documents",
+    "meta_description": "Official Amtgard rulebooks, playtest documents, chapter contract, and policy documents including the Rules of Play, Dor Un Avathar, and more.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Amtgard Rules & Playtest Resources",
+                "level": 2,
+                "align": "center"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "Amtgard Rules of Play",
+                        "url": "amtgard-rules-of-play.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "amtgard-rules-of-play.pdf"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<ul><li><a href=\"https://docs.google.com/document/d/1F0tiuX1cNTBqj4Y3SbRlpsXhASB25I8x6w9RJ7La7VE/edit?usp=sharing\">Current Clarifications</a></li><li><a href=\"https://www.amtgard.com/ropchangelogs\">Change Log Archive</a> (<a href=\"https://drive.google.com/file/d/1eD_uiw5zT-huntjTZidWqfllNCdVmasu/view?usp=drive_link\">Google Drive Mirror</a>)</li><li><a href=\"https://forms.gle/9EdDqKGFitjfT11w5\">Error Report Form</a></li><li><a href=\"https://forms.gle/24js1JJ5nwHFCkAs5\">Rules Feedback Form</a></li></ul>",
+                "align": "center"
+            }
+        },
+        {
+            "type": "divider",
+            "fields": {
+                "style": "line"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Other Rules Resources",
+                "level": 2,
+                "align": "center"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>The Dor Un Avathar XI is a playtest document. Updates are to be released every three months until the next annual summer meeting. Afterwards, the Dor will be updated regularly to align with the Rules of Play.</p>",
+                "align": "center"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "Dor Un Avathar XI (Monster Playtest Rules)",
+                        "url": "dor-un-avathar-xi-monster-playtest-rules.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "Dor Un Avathar X",
+                        "url": "dor-un-avathar-x.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "dor-un-avathar-xi-monster-playtest-rules.pdf"
+                    },
+                    {
+                        "file": "dor-un-avathar-x.pdf"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<ul><li><a href=\"https://docs.google.com/document/d/1pMuZyL551YkhoqVifvWApCIL3I1fKRYHxCeRIAw2-Zc/edit?tab=t.0\">Google Docs Highlights</a></li><li><a href=\"https://forms.gle/B3MtMY6PSeb8cH5b6\">Art submission form</a></li><li><a href=\"https://forms.gle/sfZX3JZbw44W6ppm8\">Dor XI Spring Survey</a></li><li><a href=\"https://forms.gle/2iGgEepjiQHQ6afK6\">Standard/Advanced Monster Survey</a></li><li><a href=\"https://forms.gle/bFhLozNa1yLyLMtc6\">Scenario/Legendary Monster Survey</a></li><li><a href=\"https://drive.google.com/file/d/1OOzSCs4Sl8M3dJZlqLwBTKstNytoKT9n/view?usp=drive_link\">Google Drive Mirror</a></li><li><a href=\"https://forms.gle/9EdDqKGFitjfT11w5\">Error Report Form</a></li></ul>",
+                "align": "center"
+            }
+        },
+        {
+            "type": "divider",
+            "fields": {
+                "style": "line"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Other Official Documentation",
+                "level": 2,
+                "align": "center"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "Chapter Contract",
+                        "url": "chapter-contract.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "Freehold Corpora",
+                        "url": "freehold-corpora.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "Youth Policy",
+                        "url": "youth-policy.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "Whistleblower Policy",
+                        "url": "whistleblower-policy.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "chapter-contract.pdf"
+                    },
+                    {
+                        "file": "freehold-corpora.pdf"
+                    },
+                    {
+                        "file": "youth-policy.pdf"
+                    },
+                    {
+                        "file": "whistleblower-policy.pdf"
+                    }
+                ]
+            }
+        }
+    ]
+}

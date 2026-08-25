@@ -78,12 +78,18 @@ docker exec "$APP_CONTAINER" php "$APP_MIG/2026-06-23-cms-seed-exemplars.php"
 step "4/11  Staff-roster pages (board-of-directors, team-leads — drafts)"
 docker exec "$APP_CONTAINER" php "$APP_MIG/2026-06-27-cms-seed-staff-roster.php"
 
-step "5/11  amtgard.com replication pages (only if staging assets present)"
+step "5/11  amtgard.com replication pages (15 pages, from the committed specs)"
+# The specs (structure + copy) are tracked at db-migrations/amtgard-specs/specs/.
+# Their images/PDFs are NOT — run fetch-amtgard-assets.php first if you want the
+# imagery; without it the seed logs "missing image ..." per asset and still
+# creates every page. A hand-built .amtgard-assets/ staging dir still wins if
+# present, so an operator can override the committed specs.
 if docker exec "$APP_CONTAINER" test -d "$APP_MIG/.amtgard-assets/specs"; then
-    docker exec "$APP_CONTAINER" php "$APP_MIG/2026-07-08-cms-seed-amtgard.php" "$APP_MIG/.amtgard-assets"
+    AMTG_STG="$APP_MIG/.amtgard-assets"
 else
-    echo "    (skipped — no .amtgard-assets/specs staging dir inside the container)"
+    AMTG_STG="$APP_MIG/amtgard-specs"
 fi
+docker exec "$APP_CONTAINER" php "$APP_MIG/2026-07-08-cms-seed-amtgard.php" "$AMTG_STG"
 
 step "6/11  Marketing nav menu"
 docker exec "$APP_CONTAINER" php "$APP_MIG/2026-06-23-cms-seed-nav.php"

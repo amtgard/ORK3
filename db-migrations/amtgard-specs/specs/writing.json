@@ -1,0 +1,51 @@
+{
+    "slug": "writing",
+    "type": "article",
+    "parent_slug": "media",
+    "title": "Writing",
+    "meta_description": "Articles about Amtgard and general LARP themes, plus upcoming blog posts.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Writing",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "Articles",
+                        "blurb": "Articles about Amtgard and general LARP themes",
+                        "href": "https://www.amtgard.com/articles",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "Blog",
+                        "blurb": "New blog posts coming soon!",
+                        "href": "#",
+                        "image": "2.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Newspaper"
+                    },
+                    {
+                        "file": "2.jpg",
+                        "alt": "Notebook and Fountain Pen"
+                    }
+                ]
+            }
+        }
+    ]
+}
