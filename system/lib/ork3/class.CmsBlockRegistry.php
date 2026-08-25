@@ -563,14 +563,26 @@ class CmsBlockRegistry
      */
     public static function DefaultFrontDoorBlocks($ctx = array())
     {
-        $img  = HTTP_TEMPLATE . 'default/img/frontdoor/';
+        // Asset base, forced ROOT-RELATIVE. These URLs are persisted verbatim
+        // into seeded rows (ork_cms_block.fields_json / ork_cms_revision), so an
+        // absolute base bakes the seed machine's origin into content served from
+        // every environment — the CLI bootstrap's HTTP_HOST=localhost:19080
+        // stand-in reached staging's DB exactly this way. Same reasoning as the
+        // bootstrap's host-agnostic UIR; parse_url strips scheme+host and is a
+        // no-op when the constant is already relative.
+        $img  = (parse_url(HTTP_TEMPLATE, PHP_URL_PATH) ?: '/orkui/template/') . 'default/img/frontdoor/';
         $logo = array('key' => 'logo', 'src' => $img . 'amtgard-logo.png', 'alt' => 'Amtgard');
 
-        // Internal route base. Internal nav links resolve through UIR so they are
-        // host-correct; external links point at the live amtgard.com pages until
-        // those sections exist as CMS pages. (This is the fallback / seed source;
-        // the live menu lives in the editable CmsNav 'marketing' store.)
-        $uir = defined('UIR') ? UIR : 'index.php?Route=';
+        // Internal route base, root-relative for the same persisted-verbatim
+        // reason. Internal nav links resolve through it; external links point at
+        // the live amtgard.com pages until those sections exist as CMS pages.
+        // (This is the fallback / seed source; the live menu lives in the
+        // editable CmsNav 'marketing' store.)
+        $uir = defined('UIR') ? UIR : '/orkui/index.php?Route=';
+        $_u  = parse_url($uir);
+        if (!empty($_u['host'])) {
+            $uir = ($_u['path'] ?? '/orkui/index.php') . (isset($_u['query']) ? '?' . $_u['query'] : '');
+        }
 
         $blocks = array();
 
