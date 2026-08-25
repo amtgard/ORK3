@@ -2549,6 +2549,12 @@ window.knInitMap = async function() {
     }
 
     var infowindow = new google.maps.InfoWindow();
+    // Local escaper, matching the knCiEsc/pkCiEsc convention elsewhere in this file —
+    // park names are user-entered and land in InfoWindow HTML.
+    function knMapEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
             var pinBg = loc.prinz ? '#2C5F8B' : '#8B1A1A';
@@ -2561,8 +2567,16 @@ window.knInitMap = async function() {
             });
             google.maps.event.addListener(marker, 'click', function() {
                 var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
-                var tipHtml = '<b><a href="' + KnConfig.uir + 'Park/profile/' + loc.id + '" style="color:#2b6cb0">' + loc.name + '</a></b>'
-                    + (locLine ? '<div style="font-size:12px;color:#718096;margin-top:3px"><i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:3px"></i>' + locLine + '</div>' : '');
+                // Styling lives in .kn-map-popover (revised.css) rather than inline, so the
+                // popover picks up dark mode and stays readable on the dark InfoWindow chrome.
+                var tipHtml = '<div class="kn-map-popover' + (loc.prinz ? ' kn-map-popover-prinz' : '') + '">'
+                    + '<a class="kn-map-popover-name" href="' + KnConfig.uir + 'Park/profile/' + loc.id + '">'
+                    + knMapEsc(loc.name) + '</a>'
+                    + (locLine
+                        ? '<div class="kn-map-popover-meta"><i class="fas fa-map-marker-alt"></i><span>'
+                          + knMapEsc(locLine) + '</span></div>'
+                        : '')
+                    + '</div>';
                 infowindow.setContent(tipHtml);
                 infowindow.open(map, marker);
                 knRenderMapSidebar(loc);
@@ -15761,6 +15775,24 @@ window.orkInitDataTable = function($table, opts) {
     // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
     if ($table.closest('.dataTables_scroll').length) return null;
     if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    // Honor data-sorttype="numeric" headers explicitly. These columns can carry
+    // HTML around the number (trend arrows, spinners) and several are
+    // AJAX-filled after init, so neither DataTables' type sniffing nor the
+    // built-in html-num type gets a clean read. An orthogonal render runs at
+    // every draw against the CURRENT cell content and extracts the leading
+    // number; unfilled cells sort to the bottom.
+    var typeDefs = [];
+    $table.find('thead th').each(function(i) {
+        if ($(this).data('sorttype') === 'numeric') {
+            typeDefs.push({ targets: i, type: 'num', render: function(data, type) {
+                if (type === 'sort' || type === 'type') {
+                    var m = String(data).replace(/<[^>]*>/g, '').match(/-?\d+(\.\d+)?/);
+                    return m ? parseFloat(m[0]) : -Infinity;
+                }
+                return data;
+            } });
+        }
+    });
     var dt = $table.DataTable($.extend(true, {
         dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
         pageLength: 25,
@@ -15769,7 +15801,7 @@ window.orkInitDataTable = function($table, opts) {
         autoWidth: false,
         scrollX: true,
         order: (opts.order || []),
-        columnDefs: (opts.columnDefs || []),
+        columnDefs: (opts.columnDefs || []).concat(typeDefs),
         language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
     }, opts.dt || {}));
     var $top = $(dt.table().container()).find('.ork-dt-top');

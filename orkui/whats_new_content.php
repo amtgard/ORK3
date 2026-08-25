@@ -1,25 +1,45 @@
 <?php
 
-// This file is included from more than one scope (Controller::__construct for the
-// What's New modal, Controller_ReleaseNotes::index for the notes page), so callers
-// use `require`, not `require_once` — with require_once the second caller gets a
-// no-op and $WHATS_NEW_ITEMS is never defined in its scope. The defines below are
-// therefore guarded so repeat includes don't re-declare them.
+// This file is included from more than one place in a single request (the base
+// Controller reads it for every logged-in user, and Controller_ReleaseNotes reads
+// it again for the full list), so it must be safe to include twice. Guard the
+// constants and let the array re-assign; see the note in controller.ReleaseNotes.php.
 
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-07-15');
+    define('WHATS_NEW_VERSION', '2026-08-22');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.4 Walker');
+    define('ORK_VERSION', '3.5.5 Hydra');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
+        ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
+        ['icon' => 'fas fa-laptop', 'title' => 'Stay Signed In on Three Devices', 'body' => 'Signing in on your phone no longer signs you out on your laptop. The ORK now keeps up to three devices signed in at once, so you can check the calendar on your phone at the park, take attendance on a tablet, and still have your reeve reports open on a desktop at home — no more getting bounced back to the login page every time you switch.'],
+        ['icon' => 'fas fa-power-off', 'title' => 'Log Out Everywhere', 'body' => 'Left yourself signed in on a shared computer? A new "Log Out Everywhere" option in your account menu ends every session at once. Before it does, it shows you exactly what is signed in — the browser, the device, and when each one was last used — so you can see whether anything looks unfamiliar. It only appears when you actually have more than one session running.'],
+        ['icon' => 'fas fa-table', 'title' => 'Every Table Works the Same Way', 'body' => 'Parks, principalities, players, recommendations and deleted recommendations across Kingdom, Park and Player pages now all use the same table toolbar: click any header to sort, search the whole table from one box, choose how many rows to show, and export what you are looking at to CSV. Learn it once and it works everywhere.'],
+        ['icon' => 'fas fa-pen-nib', 'title' => 'A Brand New ORK Logo', 'body' => 'We\'re thrilled to debut the new logo for the ORK, courtesy of our graphic designer, Dex of Felfrost, Nine Blades.'],
+
+        // ----- Items flagged notes_only appear on the Release Notes page but NOT in the
+        // What's New modal. Order here is the order both surfaces render in. -----
+        ['icon' => 'fas fa-clipboard-check', 'title' => 'Qualification Test Polish', 'notes_only' => true, 'body' => 'A pass over everything the first release of qualification tests turned up. You can now report any question, not just one you missed. Managers see who reported a question alongside the reason, so a pattern is easy to spot. A "multiple correct" question is allowed to have exactly one correct answer, and multi-answer options now use square checkboxes so you can tell at a glance that more than one pick is expected. Single-answer questions confirm with a Submit button instead of jumping ahead the instant you click. And bulk export now marks multi-answer questions with a [multi] tag that imports back correctly, so a question bank round-trips without losing its answer mode.'],
+        ['icon' => 'fas fa-calendar-check', 'title' => 'Event Schedule Fixes', 'notes_only' => true, 'body' => 'The schedule builder got a round of repairs: the time picker behaves, multi-day events lay out correctly in grid view, schedule cards are usable on a phone, and the grid refreshes itself after you add, edit or delete an item instead of showing you a stale view.'],
+        ['icon' => 'fas fa-mobile-alt', 'title' => 'Mobile Fixes', 'notes_only' => true, 'body' => 'A sweep of the layouts that did not survive a narrow screen, plus the leave-household control on unit pages, whose buttons were too small to reliably tap.'],
+        ['icon' => 'fas fa-moon', 'title' => 'Dark Mode Polish', 'notes_only' => true, 'body' => 'More corners of the ORK that were still washed out or unreadable after dark: kingdom configuration Yes/No toggles had lost their color entirely, the calendar popup\'s "See Full Details" link, the qualification test results, review, library and test-taking screens, and error messages on attendance pages.'],
+        ['icon' => 'fas fa-scroll', 'title' => 'Custom Title Recommendations', 'notes_only' => true, 'body' => 'Recommending someone for a custom title is no longer wrongly rejected as a duplicate of an existing recommendation.'],
+        ['icon' => 'fas fa-search-plus', 'title' => 'Event Heraldry Opens Full Size', 'notes_only' => true, 'body' => 'Clicking an event\'s heraldry now enlarges the image, the way it does everywhere else, instead of opening the edit window.'],
+        ['icon' => 'fas fa-clock', 'title' => 'Late-Night Schedule Items Read Clearly', 'notes_only' => true, 'body' => 'A schedule item that runs past midnight now shows the weekday on its end time, so a bardic that ends at 1 AM Sunday no longer looks like it ran backwards through Saturday.'],
+        ['icon' => 'fas fa-chart-line', 'title' => 'Real Visitor Numbers in the Week in Review', 'notes_only' => true, 'body' => 'The Week in Review now reports how many actual people visited the ORK, rather than a raw hit count inflated by bots and crawlers — so the number means something when you compare one week to the next.'],
+        ['icon' => 'fas fa-palette', 'title' => 'A Real Design System for Color', 'notes_only' => true, 'body' => 'Colors, spacing and layering across the site now come from one shared set of design tokens that understands light and dark mode, instead of being written out by hand on every page. That is why the dark-mode fixes above were one-line changes rather than a hunt through thousands of lines of stylesheet, and it is what will keep dark mode from drifting out of true again.'],
+        ['icon' => 'fas fa-user-slash', 'title' => 'Suspended Players Stand Out in Award Reports', 'notes_only' => true, 'body' => 'The Knights, Masters, Class Masters, and Ladder Awards Grid reports now tint a player\'s row red while they\'re under suspension, with a note explaining why — in both light and dark mode. Dark mode had also been hiding the suspended and dues-paid row colors on several other reports; those now show correctly again.'],
+        ['icon' => 'fas fa-tools', 'title' => 'And a Large Number of Bugfixes and Polishing!', 'notes_only' => true, 'body' => 'A long tail of fixes across the whole ORK: browsing a principality no longer quietly switches which kingdom your session is working in, number columns in park tables sort correctly again, event pages no longer show officer-only RSVP prompts to every visitor, and event staff granted the manage capability can update their event\'s artwork.'],
+    ]],
     ['version' => '3.5.4 Walker', 'date' => '2026-07-15', 'items' => [
         ['icon' => 'fas fa-graduation-cap', 'title' => 'Qualification Tests Arrive', 'body' => 'Kingdoms can now run the Reeve\'s Test and the Corpora Test right inside the ORK. Build your own multiple-choice question banks, set the pass score and how long a pass stays valid, and let players test on their own time with instant auto-grading. A passing score writes straight back into the player\'s official qualifications, so every existing report keeps working — the record-keeping just does itself. Each test type is opt-in per kingdom, so nothing appears until your kingdom turns it on.'],
         ['icon' => 'fas fa-list-ol', 'title' => 'Build and Run Your Own Question Bank', 'body' => 'Test managers get a full dashboard: dial in question count, pass percent, validity window, and retake limits; add questions one at a time or paste a whole batch at once; and pull ready-made questions from a shared library that other kingdoms have opted to publish. You can appoint a subject-matter expert as a test manager without handing over broader officer powers, triage questions players flag as unclear, and reset retakes for a single player or everyone at once.'],

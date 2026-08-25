@@ -71,6 +71,15 @@ $show_chart = $total > 0;
 	align-items: center;
 	gap: 8px;
 }
+.att-error {
+	color: var(--ork-alert-danger-text);
+	background: var(--ork-alert-danger-bg);
+	border: 1px solid var(--ork-alert-danger-border);
+	font-size: 0.82rem;
+	border-radius: 6px;
+	padding: 8px 10px;
+	margin-bottom: 12px;
+}
 .att-form-card-body { padding: 14px 16px; }
 .att-form-group { margin-bottom: 10px; }
 .att-form-label {
@@ -508,7 +517,7 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 				</div>
 				<div class="att-form-card-body">
 <?php if ($Error) : ?>
-					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
+					<div class="att-error"><?=$Error?></div>
 <?php endif; ?>
 <?php if (!empty($ActiveEvent)) : ?>
 					<div class="att-event-nudge">

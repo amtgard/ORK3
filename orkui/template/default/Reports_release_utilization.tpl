@@ -231,6 +231,22 @@ $rfu_fmt_date = static function ($d) {
 	.rfu-shell { flex-direction: column; }
 	.rfu-nav { position: static; flex-basis: auto; width: 100%; }
 }
+
+/* ── Print: full-width content, no chrome, stable KPI grid ─────────────
+   The release rail duplicates the section headings, the site nav is
+   noise on paper, and the narrow print viewport otherwise trips the
+   820px mobile styles (stacking KPI cards one per row across 30+ pages).
+   Chart SVGs are resized by the beforeprint hook below. */
+@media print {
+	#newmenu, .rfu-nav, .rp-header-actions, .rp-context { display: none !important; }
+	body { padding-top: 0 !important; }
+	.rfu-shell { display: block; }
+	.rfu-main { width: 100%; }
+	.rfu-kpis { grid-template-columns: repeat(3, 1fr); }
+	.rfu-kpi, .rfu-feature, .rfu-total { break-inside: avoid; }
+	.rfu-release-head { break-after: avoid; }
+	.rfu-charts > div { max-width: 100% !important; }
+}
 </style>
 
 <div class="rp-root">
@@ -533,6 +549,15 @@ $rfu_fmt_date = static function ($d) {
 
 	buildAll();
 	new MutationObserver(rebuildAll).observe(document.documentElement, { attributeFilter: ['data-theme'] });
+
+	/* Print: Highcharts renders SVG at the on-screen container width, which
+	   clips on paper. Force a page-width render before printing, restore after. */
+	window.addEventListener('beforeprint', function () {
+		charts.forEach(function (c) { try { c.setSize(640, c.chartHeight, false); } catch (e) {} });
+	});
+	window.addEventListener('afterprint', function () {
+		charts.forEach(function (c) { try { c.setSize(null, null, false); c.reflow(); } catch (e) {} });
+	});
 }());
 </script>
 <?php endif; ?>

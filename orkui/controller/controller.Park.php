@@ -86,6 +86,82 @@ class Controller_Park extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card (text-only; image policy pending): park name plus
+        // where it is — the question anyone tapping a shared park link has.
+        $_ogPi = $this->data['park_info']['ParkInfo'];
+        $_ogLoc = trim(implode(', ', array_filter(array(
+            (string)($_ogPi['City'] ?? ''),
+            (string)($_ogPi['Province'] ?? ''),
+        ))));
+        $og = array(
+            'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
+            'url'         => UIR . 'Park/profile/' . (int)$park_id,
+            'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
+        );
+        // Park heraldry over the site logo when it exists (Ken's call).
+        if (!empty($_ogPi['HasHeraldry']) && !empty($this->data['park_info']['Heraldry']['Url'])) {
+            $og['image'] = (string)$this->data['park_info']['Heraldry']['Url'];
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
+
+        // schema.org Event markup for the park's next concrete park days —
+        // Google's guidelines want individual occurrences, not "every
+        // Saturday", so each recurrence rule contributes its next two dates.
+        // This is the "larp near me" surface: a weekly free park day is the
+        // most recruit-friendly event Amtgard runs.
+        $_pdLabels = array(
+            'park-day'         => 'Amtgard Park Day',
+            'fighter-practice' => 'Amtgard Fighter Practice',
+            'arts-day'         => 'Amtgard Arts & Sciences Day',
+            'other'            => 'Amtgard Gathering',
+        );
+        $_pdEvents = array();
+        foreach (($this->data['park_days']['ParkDays'] ?? array()) as $_pd) {
+            if (!empty($_pd['Online'])) {
+                continue; // in-person occurrences only, matching the weather page
+            }
+            // Alternate-location park days carry their own address; default to
+            // the park's.
+            $_pdAlt = !empty($_pd['AlternateLocation']) && trim((string)($_pd['Address'] ?? '')) !== '';
+            foreach (ork_parkday_next_occurrences($_pd) as $_pdDate) {
+                $_pdTime = trim((string)($_pd['Time'] ?? ''));
+                $_pdTimed = ($_pdTime !== '' && $_pdTime !== '00:00:00');
+                $_pdLd = ork_event_jsonld(array(
+                    'name'        => trim(($this->session->park_name ?: 'Amtgard') . ' ' . ($_pdLabels[$_pd['Purpose'] ?? ''] ?? 'Amtgard Park Day')),
+                    'start'       => $_pdDate . ($_pdTimed ? ' ' . $_pdTime : ''),
+                    'all_day'     => !$_pdTimed,
+                    'description' => (string)($_pd['Description'] ?? ''),
+                    'image'       => (string)($og['image'] ?? ''),
+                    'venue'       => (string)($this->session->park_name ?: ''),
+                    'street'      => $_pdAlt ? (string)$_pd['Address'] : (string)($_ogPi['Address'] ?? ''),
+                    'city'        => $_pdAlt ? (string)($_pd['City'] ?? '') : (string)($_ogPi['City'] ?? ''),
+                    'province'    => $_pdAlt ? (string)($_pd['Province'] ?? '') : (string)($_ogPi['Province'] ?? ''),
+                    'postal'      => $_pdAlt ? (string)($_pd['PostalCode'] ?? '') : (string)($_ogPi['PostalCode'] ?? ''),
+                    'organizer'   => (string)($this->session->kingdom_name ?: ''),
+                    'organizer_url' => valid_id($this->session->kingdom_id) ? UIR . 'Kingdom/profile/' . (int)$this->session->kingdom_id : '',
+                    'url'         => $og['url'],
+                ));
+                if ($_pdLd !== array()) {
+                    $_pdEvents[] = $_pdLd;
+                }
+                if (count($_pdEvents) >= 6) {
+                    break 2;
+                }
+            }
+        }
+        if ($_pdEvents !== array()) {
+            $this->data['jsonld'] = $_pdEvents;
+        }
+
+        // "Is there many people at field today?" — distinct players credited
+        // today; the Next Park Day card shows it when today IS a park day.
+        $_fieldToday = $this->Report->GetParkFieldCountToday(array('ParkId' => $park_id));
+        $this->data['TodayAtField'] = (int)($_fieldToday['Count'] ?? 0);
+
         $this->load_model('Weather');
         $this->data['park_weather']     = $this->Weather->for_park($park_id);
         $_park_officers = $this->Park->get_officers($park_id, $this->session->token);

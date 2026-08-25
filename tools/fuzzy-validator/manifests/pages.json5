@@ -1599,6 +1599,15 @@
       "notes": "Registry expansion \u2014 template Recap/kingdom"
     },
     {
+      "id": "recap-trends",
+      "url": "./index.php?Route=Recap/trends",
+      "auth": "login",
+      "waitAfterMs": 1500,
+      "readySelector": "#trends-visitors, body",
+      "driftClass": "natural",
+      "notes": "Platform Trends charts (Highcharts canvases move with weekly data \u2014 expect pixel fuzz zones over the three chart divs)."
+    },
+    {
       "id": "recap-kingdom-2",
       "url": "./index.php?Route=Recap/kingdom/1",
       "auth": "login",

@@ -47,7 +47,7 @@
 .ap-empty i { font-size:20px; display:block; margin-bottom:8px; opacity:.4; }
 
 #ap-admin-table th.tablesorter-header:not(.sorter-false) { cursor:pointer; user-select:none; }
-#ap-admin-table th.tablesorter-header:not(.sorter-false) .tablesorter-header-inner::after { font-family:'Font Awesome 5 Free'; font-weight:900; content:'\f0dc'; margin-left:5px; opacity:.35; font-size:10px; }
+#ap-admin-table th.tablesorter-header:not(.sorter-false) .tablesorter-header-inner::after { font-family:'Font Awesome 7 Free'; font-weight:900; content:'\f0dc'; margin-left:5px; opacity:.35; font-size:10px; }
 #ap-admin-table th.tablesorter-headerAsc .tablesorter-header-inner::after  { content:'\f0de' !important; opacity:1; color:var(--rp-accent); }
 #ap-admin-table th.tablesorter-headerDesc .tablesorter-header-inner::after { content:'\f0dd' !important; opacity:1; color:var(--rp-accent); }
 

@@ -12,9 +12,13 @@ class Controller_ReleaseNotes extends Controller
 
     public function index($action = null)
     {
-        // `require`, not `require_once`: Controller::__construct already includes this
-        // file for logged-in viewers, so require_once would be a no-op here and leave
-        // $WHATS_NEW_ITEMS undefined in this scope (fatal in usort below).
+        // `require`, not `require_once`. The base Controller already reads this
+        // file for every logged-in user (to decide whether to show the What's New
+        // modal), which makes require_once here a no-op -- leaving $WHATS_NEW_ITEMS
+        // undefined in THIS scope and handing usort() a null. The page therefore
+        // returned a 500 to every signed-in visitor while still rendering fine for
+        // anonymous ones, who never trigger the earlier read. The file guards its
+        // own define()s, so reading it again is safe.
         require(DIR_UI . 'whats_new_content.php');
 
         $this->template = 'ReleaseNotes_index.tpl';

@@ -378,9 +378,15 @@
 	?>
 	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
 		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
+		<?php $_pdIsToday = ($nextParkDayDate === $parkLocalToday); ?>
 		<?php if ($nextParkDayDate): ?>
-			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
-			<div class="pk-stat-sub"><?= date('l', strtotime($nextParkDayDate)) ?></div>
+			<div class="pk-stat-value" style="font-size:1.1rem"><?= $_pdIsToday ? 'Today' : date('M j', strtotime($nextParkDayDate)) ?></div>
+			<div class="pk-stat-sub"><?= $_pdIsToday ? date('l, M j', strtotime($nextParkDayDate)) : date('l', strtotime($nextParkDayDate)) ?></div>
+			<?php if ($_pdIsToday && !empty($TodayAtField)): ?>
+				<div class="pk-stat-sub pk-field-count" title="Distinct players credited with attendance today. Parks using QR sign-in links update live; reeve-entered attendance appears when it's typed in.">
+					<i class="fas fa-users"></i> <?= (int)$TodayAtField ?> at field so far
+				</div>
+			<?php endif; ?>
 			<?php if ($nextPdForecast && $nextPdForecast['hi_f'] !== null):
 				// WMO code → emoji (daytime; forecast doesn't distinguish day/night)
 				$fcCode = (int)$nextPdForecast['code'];
@@ -413,7 +419,7 @@
 		<?php else: ?>
 			<div class="pk-stat-value">&mdash;</div>
 		<?php endif; ?>
-		<div class="pk-stat-label">Next Park Day</div>
+		<div class="pk-stat-label"><?= $_pdIsToday ? 'Park Day Today' : 'Next Park Day' ?></div>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('players')">
 		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
@@ -1818,8 +1824,8 @@ var PkBannerConfig = {
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
-					<?php // fa-tasks, not fa-list-check: the ORK loads Font Awesome 5, where the FA6
-					      // name renders as nothing at all — no icon, no error, no broken glyph. ?>
+					<?php // The ORK now loads Font Awesome 7, where fa-tasks is kept as an
+					      // alias of fa-list-check, so this name still resolves. ?>
 					<i class="fas fa-tasks" style="margin-right:6px;color:#a0aec0"></i>Attendance
 					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
 				</div>
@@ -1842,7 +1848,7 @@ var PkBannerConfig = {
 </div>
 
 <!-- QR Code Modal -->
-<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200);align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top);align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
 	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
@@ -2264,7 +2270,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 	position: fixed; inset: 0;
 	background: rgba(0,0,0,0.5);
 	display: flex; align-items: center; justify-content: center;
-	z-index: var(--z-modal, 1100);
+	z-index: var(--z-modal);
 	opacity: 0; pointer-events: none; visibility: hidden;
 	transition: opacity 0.2s, visibility 0s 0.2s;
 }

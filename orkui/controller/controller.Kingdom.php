@@ -2,10 +2,27 @@
 
 class Controller_Kingdom extends Controller
 {
+    // Data endpoints that must NOT repaint the visitor's navigation context.
+    // The kingdom profile page background-fetches several of these for each
+    // child principality (Kingdomnew_index.tpl ~line 2660), and the last async
+    // response to land was silently re-pointing session->kingdom_id at a
+    // principality — breadcrumbs and every session-scoped report (attendance
+    // explorer, knights list) then showed the principality instead of the
+    // kingdom the visitor was on. All of these take an explicit id argument
+    // and never read the session context they were overwriting.
+    private static $CONTEXT_FREE_METHODS = array(
+        'park_monthly_json', 'park_averages_json', 'players_json',
+        'events_more', 'recommendations_panel', 'ics',
+    );
+
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
         $id = preg_replace('/[^0-9]/', '', $id);
+
+        if (in_array($this->method, self::$CONTEXT_FREE_METHODS, true)) {
+            return;
+        }
 
         if ($id != $this->session->kingdom_id) {
             unset($this->session->kingdom_id);
@@ -209,6 +226,23 @@ class Controller_Kingdom extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card: kingdom heraldry over the site logo when it
+        // exists (Ken's call).
+        $_ogKi = $this->data['kingdom_info']['Info']['KingdomInfo'];
+        $og = array(
+            'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
+            'url'         => UIR . 'Kingdom/profile/' . (int)$kingdom_id,
+            'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
+                . ' — parks, players, events and awards on the ORK.',
+        );
+        if (!empty($_ogKi['HasHeraldry']) && !empty($this->data['kingdom_info']['HeraldryUrl']['Url'])) {
+            $og['image'] = (string)$this->data['kingdom_info']['HeraldryUrl']['Url'];
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
+
         $this->data['kingdom_officers']    = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 
@@ -332,8 +366,12 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
+        // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
+        // must mirror that check exactly; gating it on kingdom authority showed
+        // monarchy an Add Park button whose submit the service always refused.
         $this->data['CanAddPark'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
@@ -475,10 +513,26 @@ class Controller_Kingdom extends Controller
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
-        $this->data['IcsUrl'] = UIR . 'Kingdom/ics/' . $kingdom_id;
+        $this->data['IcsUrl'] = self::ics_feed_url((int)$kingdom_id);
     }
 
     // ------------------------------------------------------------------ ICS Feed
+
+    /**
+     * Canonical public URL for a kingdom's calendar subscription feed.
+     *
+     * Served from a clean path (/ics/kingdom/{id}.ics) rather than the ?Route=
+     * front controller so the CDN/WAF can exempt automated calendar fetchers
+     * from the browser challenge with a simple URI-path match. Requires the
+     * matching rewrite in nginx.ork3.config; the ?Route= form still works for
+     * anyone already subscribed to it.
+     */
+    private static function ics_feed_url(int $kingdom_id): string
+    {
+        // HTTP_UI_REMOTE ends in 'orkui/'; the feed is served from the site root.
+        return preg_replace('#orkui/$#', '', HTTP_UI_REMOTE) . 'ics/kingdom/' . $kingdom_id . '.ics';
+    }
+
     public function ics($kingdom_id = null)
     {
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
@@ -491,7 +545,8 @@ class Controller_Kingdom extends Controller
         $icsBody = $this->KingdomProfile->export_ics($kid, $knName);
         $safeName = preg_replace('/[^a-z0-9]/i', '-', $knName);
         header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $safeName . '-events.ics"');
+        // inline, not attachment: this URL is subscribed to, not downloaded.
+        header('Content-Disposition: inline; filename="' . $safeName . '-events.ics"');
         header('Cache-Control: no-cache, must-revalidate');
         echo $icsBody;
         exit();

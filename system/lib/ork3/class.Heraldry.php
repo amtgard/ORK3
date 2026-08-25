@@ -271,6 +271,15 @@ class Heraldry extends Ork3
                 }
                 $this->kingdom->has_heraldry = 0;
                 $this->kingdom->save();
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Kingdom',
+                    (int)$request['KingdomId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();
@@ -320,6 +329,15 @@ class Heraldry extends Ork3
                 $this->park->has_heraldry = 0;
                 $this->park->save();
                 Park::BustParkMemo($request['ParkId']);
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Park',
+                    (int)$request['ParkId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();
@@ -365,6 +383,15 @@ class Heraldry extends Ork3
                 }
                 $this->unit->has_heraldry = 0;
                 $this->unit->save();
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Unit',
+                    (int)$request['UnitId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();
@@ -413,8 +440,16 @@ class Heraldry extends Ork3
 
     public function SetEventHeraldry($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $eventId = (int)($request['EventId'] ?? 0);
+        // Same authority rule as RemoveEventHeraldry below: an ork_authorization
+        // event grant OR event-staff can_manage. The staff path was missing here,
+        // so a fully-granted event staffer could remove the event's logo (and set
+        // its banner — class.Banner accepts staff) but not upload a logo.
+        $planning = new EventPlanning();
+        if ($mundane_id > 0
+                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $eventId, AUTH_EDIT)
+                    || $planning->CanManageEventDetail($mundane_id, $eventId, 0, 'manage'))) {
             $this->event->clear();
             $this->event->event_id = $request['EventId'];
             if ($this->event->find()) {

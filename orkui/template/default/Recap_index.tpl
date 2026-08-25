@@ -83,6 +83,9 @@ $humanize_days = function($days) {
 .recap-hero-eyebrow { color: #c89b3f; font-size: 0.78em; letter-spacing: 0.22em;
 	text-transform: uppercase; font-weight: 700; margin-bottom: 0.4em; }
 .recap-hero-eyebrow .fas { margin-right: 0.4em; }
+.recap-hero-link { color: #1a4c8c; text-decoration: none; font-style: normal; }
+.recap-hero-link:hover { text-decoration: underline; }
+.recap-hero-link .fas { margin-right: 0.3em; color: #c89b3f; }
 /* The site-wide h1-h6 rule in orkui.css applies a light-gray background, border,
  * and text-shadow to every heading — explicitly reset those for our headings. */
 .recap-root h1, .recap-root h2 { background: transparent; border: none;
@@ -202,6 +205,7 @@ html[data-theme="dark"] .recap-hero { border-bottom-color: #4a3b1f; }
 html[data-theme="dark"] .recap-hero-eyebrow { color: #e0b95a; }
 html[data-theme="dark"] .recap-hero h1 { color: #f1f5f9; }
 html[data-theme="dark"] .recap-hero-sub { color: #6b7280; }
+html[data-theme="dark"] .recap-hero-link { color: #63b3ed; }
 html[data-theme="dark"] .recap-section { background: #2d3748; border-color: #4a5568;
 	box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
 html[data-theme="dark"] .recap-section h2 { color: #f1f5f9; }
@@ -243,6 +247,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		</div>
 		<h1><?=htmlspecialchars($week_headline)?></h1>
 		<div class="recap-hero-sub">Weekly recaps are automatically produced early Monday mornings for the previous week.</div>
+		<div class="recap-hero-sub"><a class="recap-hero-link" href="<?=UIR?>Recap/trends"><i class="fas fa-chart-line"></i> Also worth a visit: Platform Trends</a> — visitors, sign-ins and players on the field, week over week.</div>
 	</div>
 
 	<div class="recap-actions">
@@ -514,38 +519,64 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 <?php endif; ?>
 
 <?php
-	// ============================ ORK platform stats (CF) ============================
+	// ============================ ORK platform stats (CF + GA) ============================
 	$ps = $recap['PlatformStats'] ?? null;
-	if (is_array($ps)) :
-		$req_str         = $format_count($ps['Requests']);
-		$cache_hits_str  = $format_count($ps['CacheHits']);
-		$origin_req_str  = $format_count(max(0, $ps['Requests'] - $ps['CacheHits']));
-		$total_gb_str    = $format_bytes($ps['Bytes']);
-		$origin_gb_str   = $format_bytes($ps['OriginBytes'] ?? 0);
-		$cached_gb_str   = $format_bytes($ps['CachedBytes'] ?? 0);
-		$us_str          = $format_count($ps['RequestsUS']);
-		$ca_str          = $format_count($ps['RequestsCA']);
-		$req_total    = max(1, $ps['Requests']);
-		$cache_pct    = round(100 * $ps['CacheHits'] / $req_total);
-		$bytes_total  = max(1, $ps['Bytes']);
-		$cached_pct   = round(100 * ($ps['CachedBytes'] ?? 0) / $bytes_total);
-
-		// WoW delta — only when the prior week ALSO has PlatformStats (i.e. both
-		// weeks are inside CF's retention horizon). Neutral phrasing, no color.
-		$prev_ps = $prev_recap['PlatformStats'] ?? null;
+	// Unique human visitors (GA4). Independent of CF stats — either can be null
+	// (different APIs, different failure modes), so the section renders if we
+	// have at least one of them.
+	$hu = isset($recap['HumanUsers']) && is_numeric($recap['HumanUsers']) ? (int)$recap['HumanUsers'] : null;
+	$hu_delta_line = '';
+	if ($hu !== null) {
+		$prev_hu = $prev_recap['HumanUsers'] ?? null;
+		if (is_numeric($prev_hu) && (int)$prev_hu > 0) {
+			$hu_pct = round(100 * ($hu - (int)$prev_hu) / (int)$prev_hu);
+			$hu_arrow = $hu_pct > 0 ? '↑' : ($hu_pct < 0 ? '↓' : '·');
+			$hu_delta_line = sprintf('%s %s%% from the previous week (%s → %s).',
+				$hu_arrow, $hu_pct >= 0 ? '+' . $hu_pct : $hu_pct,
+				$format_count((int)$prev_hu), $format_count($hu));
+		}
+	}
+	if (is_array($ps) || $hu !== null) :
 		$delta_line = '';
-		if (is_array($prev_ps) && !empty($prev_ps['Requests'])) {
-			$cur  = $ps['Requests'];
-			$prev = $prev_ps['Requests'];
-			$pct  = round(100 * ($cur - $prev) / $prev);
-			$arrow = $pct > 0 ? '↑' : ($pct < 0 ? '↓' : '·');
-			$delta_line = sprintf('%s %s%% from the previous week (%s → %s).',
-				$arrow, $pct >= 0 ? '+' . $pct : $pct,
-				$format_count($prev), $format_count($cur));
+		if (is_array($ps)) {
+			$req_str         = $format_count($ps['Requests']);
+			$cache_hits_str  = $format_count($ps['CacheHits']);
+			$origin_req_str  = $format_count(max(0, $ps['Requests'] - $ps['CacheHits']));
+			$total_gb_str    = $format_bytes($ps['Bytes']);
+			$origin_gb_str   = $format_bytes($ps['OriginBytes'] ?? 0);
+			$cached_gb_str   = $format_bytes($ps['CachedBytes'] ?? 0);
+			$us_str          = $format_count($ps['RequestsUS']);
+			$ca_str          = $format_count($ps['RequestsCA']);
+			$req_total    = max(1, $ps['Requests']);
+			$cache_pct    = round(100 * $ps['CacheHits'] / $req_total);
+			$bytes_total  = max(1, $ps['Bytes']);
+			$cached_pct   = round(100 * ($ps['CachedBytes'] ?? 0) / $bytes_total);
+
+			// WoW delta — only when the prior week ALSO has PlatformStats (i.e. both
+			// weeks are inside CF's retention horizon). Neutral phrasing, no color.
+			$prev_ps = $prev_recap['PlatformStats'] ?? null;
+			if (is_array($prev_ps) && !empty($prev_ps['Requests'])) {
+				$cur  = $ps['Requests'];
+				$prev = $prev_ps['Requests'];
+				$pct  = round(100 * ($cur - $prev) / $prev);
+				$arrow = $pct > 0 ? '↑' : ($pct < 0 ? '↓' : '·');
+				$delta_line = sprintf('%s %s%% from the previous week (%s → %s).',
+					$arrow, $pct >= 0 ? '+' . $pct : $pct,
+					$format_count($prev), $format_count($cur));
+			}
 		}
 ?>
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic this week.</span></span></h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic this week. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
+<?php   if ($hu !== null) : ?>
+		<p class="recap-digest">
+			<strong><?=$format_count($hu)?></strong> people visited the ORK this week.
+		</p>
+<?php     if ($hu_delta_line) : ?>
+		<p class="recap-trend"><em>Visitors <?=$hu_delta_line?></em></p>
+<?php     endif; ?>
+<?php   endif; ?>
+<?php   if (is_array($ps)) : ?>
 		<p class="recap-digest">
 			Cloudflare delivered <strong><?=$req_str?></strong> requests
 			(<strong><?=$total_gb_str?></strong>)
@@ -563,12 +594,14 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
 		</p>
 <?php   endif; ?>
+<?php   endif; // is_array($ps) ?>
 	</section>
 <?php endif; ?>
 
 	<div class="recap-foot">
 		Computed <?=htmlspecialchars($recap['ComputedAt'] ?? '')?> ·
-		<a href="<?=UIR ?><?=$url_json?><?=urlencode($recap['WeekStart'])?>">JSON</a>
+		<a href="<?=UIR ?><?=$url_json?><?=urlencode($recap['WeekStart'])?>">JSON</a> ·
+		<a href="<?=UIR ?>Recap/trends">Trends</a>
 	</div>
 
 <?php endif; // $has_recap ?>

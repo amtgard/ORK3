@@ -13,6 +13,17 @@
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
 <?php endif; ?>
+<?php
+// Non-prod indicator (title prefix + banner below the nav). PROD renders
+// nothing; the staging host gets STAGING, everything else DEV/TEST — so a
+// prod tab and a staging tab are never mistaken for each other.
+$ork_env_label = '';
+if (getenv('ENVIRONMENT') !== 'PROD') {
+	$ork_env_label = (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com')
+		? 'STAGING'
+		: (getenv('ENVIRONMENT') === 'TEST' ? 'TEST' : 'DEV');
+}
+?>
 		<title><?php
 		// Browser tab identity, in three tiers:
 		//
@@ -33,6 +44,9 @@
 		// are author-entered ("Find a Chapter", "A&S Guide") and title-casing them
 		// mangles the author's own capitalization. The ORK-app branch keeps
 		// ucwords() because its titles are bare route/method names.
+		if ($ork_env_label !== '') {
+			echo '[' . htmlspecialchars($ork_env_label, ENT_QUOTES) . '] ';
+		}
 		$_titleOrg  = isset($SiteTitleOrg) ? trim((string)$SiteTitleOrg) : '';
 		$_titleLeaf = trim((string)$page_title);
 		if ($_titleOrg !== '') {
@@ -74,14 +88,22 @@
 		<meta property="og:title" content="<?= htmlspecialchars(!empty($_pm['og_title']) ? (string)$_pm['og_title'] : ucwords((string)$page_title), ENT_QUOTES) ?>">
 		<meta property="og:description" content="<?= htmlspecialchars(!empty($_pm['og_desc']) ? (string)$_pm['og_desc'] : (!empty($meta_description) ? (string)$meta_description : 'The Online Record Keeper for the Amtgard International LARP.'), ENT_QUOTES) ?>">
 		<meta property="og:image" content="<?= htmlspecialchars(!empty($_pm['og_image']) ? (string)$_pm['og_image'] : (HTTP_ASSETS . 'images/clippy_large.png'), ENT_QUOTES) ?>">
-		<?php elseif ($page_title === 'Home') : ?>
-		<meta property="og:type" content="website">
-		<meta property="og:site_name" content="ORK 3 - Amtgard Online Record Keeper">
-		<meta property="og:title" content="ORK 3 - Amtgard Online Record Keeper">
-		<meta property="og:description" content="The Online Record Keeper for the Amtgard International LARP.">
-		<meta property="og:image" content="<?= HTTP_ASSETS ?>images/clippy_large.png">
-		<meta property="og:image:width" content="1075">
-		<meta property="og:image:height" content="1075">
+		<?php else: ?>
+<?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
+<?php /* rel=canonical from the same per-page URL as og:url — Facebook honors
+         og:url but Google only respects this tag. Consolidates parameter
+         variants (&rev=, ordering, aliases) into one indexed URL. Only pages
+         that declare a canonical emit it; occurrence-changing aliases (e.g.
+         Event/detail/<id> without a detail id) 302-redirect before rendering,
+         so the tag never points across content. */ ?>
+<?php if (!empty($og['url'])) : ?>
+		<link rel="canonical" href="<?= htmlspecialchars($og['url'], ENT_QUOTES) ?>">
+<?php endif; ?>
+<?php /* Structured data for search engines (schema.org JSON-LD) — set per
+         page via $this->data['jsonld']; e.g. Event rich results. */ ?>
+<?php if (!empty($jsonld)) : ?>
+		<script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+<?php endif; ?>
 		<?php endif; ?>
 		<?php
 		// RSS auto-discovery: a controller (Controller_Site for org-site pages /
@@ -145,7 +167,7 @@
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?= htmlspecialchars($fdThemeFontQuery, ENT_QUOTES) ?>">
 		<?php endif; ?>
 		<?php endif; ?>
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 		<?php if (!empty($ViewerDyslexiaFonts)) : ?>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
 		<style>
@@ -247,6 +269,8 @@ if (empty($IsOrgSite)):
 
 	/* What's New dark mode */
 	html[data-theme="dark"] .wn-overlay { background: rgba(0,0,0,0.7); }
+	/* Never print the What's New modal over report/page content. */
+	@media print { .wn-overlay { display: none !important; } }
 	html[data-theme="dark"] .wn-modal { background: #2d3748; color: #e2e8f0; }
 	html[data-theme="dark"] .wn-title { color: #e2e8f0; }
 	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
@@ -313,6 +337,11 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
+<?php if ($ork_env_label !== ''): ?>
+		<div id="ork-env-banner" style="background:<?= $ork_env_label === 'STAGING' ? '#6d28d9' : '#0f766e' ?>;color:#fff;text-align:center;padding:5px 12px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;">
+			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
+		</div>
+<?php endif; ?>
 <?php if (empty($IsOrgSite) && !empty($downtime_start)): // ORK app maintenance bar (mobile); the desktop half lives in the gated #newmenu nav ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;font-size:0.8rem;font-weight:600;">
 			<button type="button" aria-expanded="false" aria-controls="nm-mobile-detail" onclick="(function(btn){var d=document.getElementById('nm-mobile-detail');var open=d.style.display==='none';d.style.display=open?'block':'none';btn.setAttribute('aria-expanded',open?'true':'false');})(this)" style="display:block;width:100%;background:none;border:none;color:inherit;font:inherit;text-align:center;padding:6px 12px;cursor:pointer;">
@@ -341,6 +370,100 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 [data-wx-safety]:hover { filter: brightness(1.05); }
 [data-wx-safety]:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }
 </style>
+<?php
+// ── Log Out Everywhere confirm — house-styled dialog matching wx-safety. ──
+// Renders only when the nav link does (>1 live session); shows each session
+// with a friendly client label, source IP, and last activity.
+if (!function_exists('nav_session_client_label')) {
+	function nav_session_client_label($ua)
+	{
+		$ua = (string)$ua;
+		if ($ua === '') return 'Unknown client';
+		// Self-identified clients (X-ORK-Client) and CLI tools first.
+		if (stripos($ua, 'mork') === 0) return $ua;                    // "mORK/2.4 (iOS…)"
+		if (stripos($ua, 'jsork') !== false) return $ua;
+		if (stripos($ua, 'curl') === 0) return 'API client (curl)';
+		if (stripos($ua, 'Mozilla') === false) return substr($ua, 0, 40);
+		// iOS browsers use distinct UA tokens (CriOS/FxiOS/EdgiOS) AND append a
+		// compat "Safari/" token — check them first so iOS Chrome/Firefox/Edge
+		// don't mislabel as "Safari on iOS". Mirrors ork_session_client_label().
+		$browser = 'Browser';
+		if (stripos($ua, 'CriOS/') !== false) $browser = 'Chrome';
+		elseif (stripos($ua, 'FxiOS/') !== false) $browser = 'Firefox';
+		elseif (stripos($ua, 'EdgiOS/') !== false) $browser = 'Edge';
+		elseif (stripos($ua, 'Edg/') !== false) $browser = 'Edge';
+		elseif (stripos($ua, 'OPR/') !== false) $browser = 'Opera';
+		elseif (stripos($ua, 'Chrome/') !== false) $browser = 'Chrome';
+		elseif (stripos($ua, 'Firefox/') !== false) $browser = 'Firefox';
+		elseif (stripos($ua, 'Safari/') !== false) $browser = 'Safari';
+		$os = '';
+		if (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) $os = 'iOS';
+		elseif (stripos($ua, 'Android') !== false) $os = 'Android';
+		elseif (stripos($ua, 'Macintosh') !== false) $os = 'Mac';
+		elseif (stripos($ua, 'Windows') !== false) $os = 'Windows';
+		elseif (stripos($ua, 'Linux') !== false) $os = 'Linux';
+		// In-app webviews (Discord/Facebook links): iOS WebViews omit "Safari/",
+		// Android's carries a "; wv)" marker.
+		if ($browser === 'Browser' && $os === 'iOS') $browser = 'In-app browser';
+		elseif (stripos($ua, '; wv)') !== false) $browser = 'In-app browser';
+		return $os !== '' ? "$browser on $os" : $browser;
+	}
+}
+if (!function_exists('nav_session_ago')) {
+	function nav_session_ago($datetime)
+	{
+		$s = time() - strtotime((string)$datetime);
+		if ($s < 90) return 'just now';
+		if ($s < 5400) return floor($s / 60) . ' min ago';
+		if ($s < 129600) return round($s / 3600) . ' hr ago';
+		return round($s / 86400) . ' days ago';
+	}
+}
+// Computed here (renders before the nav); the nav dropdown reuses it.
+$__laSessions = Ork3::$Lib->authorization->ListSessionsForToken((string)($this->__session->token ?? ''));
+if (count($__laSessions) > 1) : ?>
+<div id="logout-all-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeLogoutAllDialog();">
+	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
+		<div style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1;color:#c53030;"><i class="fas fa-power-off"></i></div>
+		<div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--ork-text,#2d3748);">Log Out Everywhere?</div>
+		<div style="font-size:14px;line-height:1.55;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);text-align:center;">
+			You&rsquo;re signed in on <strong><?=count($__laSessions)?></strong> devices &amp; apps. This signs you out of all of them.
+		</div>
+		<div style="border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;margin-bottom:18px;overflow:hidden;">
+<?php foreach ($__laSessions as $__i => $__s) : ?>
+			<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;<?=$__i > 0 ? 'border-top:1px solid var(--ork-border,#e2e8f0);' : ''?><?=$__s['current'] ? 'background:rgba(66,153,225,0.08);' : ''?>">
+				<span style="color:var(--ork-text,#2d3748);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+					<?=htmlspecialchars(nav_session_client_label($__s['user_agent']))?><?=$__s['current'] ? ' <span style="font-weight:400;color:#4299e1;">(this one)</span>' : ''?>
+				</span>
+				<span style="color:var(--ork-text-secondary,#718096);white-space:nowrap;">
+					<?=htmlspecialchars($__s['ip'])?> &middot; <?=htmlspecialchars(nav_session_ago($__s['last_seen']))?>
+				</span>
+			</div>
+<?php endforeach; ?>
+		</div>
+		<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+			<button type="button" onclick="closeLogoutAllDialog()" style="background:transparent;color:var(--ork-text-secondary,#4a5568);border:1px solid var(--ork-border,#cbd5e0);border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+			<button type="button" onclick="window.location.href='<?=UIR?>Login/logout_all';" style="background:#c53030;color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:14px;cursor:pointer;font-family:inherit;"><i class="fas fa-power-off" style="margin-right:6px;"></i>Log Out All <?=count($__laSessions)?></button>
+		</div>
+	</div>
+</div>
+<script>
+function navLogoutAllConfirm(ev) {
+	ev.preventDefault();
+	var o = document.getElementById('logout-all-overlay');
+	o.style.display = 'flex';
+	return false;
+}
+function closeLogoutAllDialog() {
+	var o = document.getElementById('logout-all-overlay');
+	if (o) o.style.display = 'none';
+}
+document.addEventListener('keydown', function (e) {
+	if (e.key === 'Escape') closeLogoutAllDialog();
+});
+</script>
+<?php endif; ?>
+
 <div id="wx-safety-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
 	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
 		<div id="wx-safety-icon" style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1"></div>
@@ -596,6 +719,14 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 <?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
+<?php
+					// "Log Out Everywhere" only appears when there is actually
+					// somewhere else to log out of (>1 live session). Session
+					// details render inside the modal (computed there, above).
+					if (!empty($__laSessions) && count($__laSessions) > 1) : ?>
+					<a href='<?=UIR?>Login/logout_all' class='nav-dropdown-danger' id='nav-logout-all'
+					   onclick="return navLogoutAllConfirm(event);"><i class='fas fa-power-off'></i> Log Out Everywhere</a>
+<?php				endif; ?>
 				</div>
 			</div>
 <?php endif; ?>

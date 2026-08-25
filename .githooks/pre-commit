@@ -2,7 +2,7 @@
 #
 # ORK3 shared pre-commit hook (versioned; activated via core.hooksPath=.githooks).
 #
-# Does four things:
+# Does five things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
 #   2. Blocks commits that break the ORK3 layer separation (no $DB / Ork3::$Lib / domain
 #      instantiation in orkui/) via bin/check-layering.sh. This one CAN stop a commit —
@@ -11,21 +11,31 @@
 #      cms/css/; the CRM owns style/; frontdoor/css/orkshell-interop.css is the one place
 #      they may touch) via bin/check-css-boundaries.sh. Also blocking, and it shares the
 #      ORK3_ALLOW_LAYER_VIOLATION=1 escape hatch with the layering gate.
-#   4. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar,
-#      then re-stages them. Only files that are FULLY staged are touched — a file with both
-#      staged and unstaged changes is skipped, so unstaged hunks are never swept into the commit.
+#   4. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
+#      --path-mode=intersection makes the fixer honor the excludes in .php-cs-fixer.dist.php
+#      (vendor, tools, import, db-migrations, ...); without it, explicitly-passed paths bypass
+#      the config Finder and third-party code staged with `git add -f` gets reformatted.
+#   5. Normalizes leading-tab indentation to spaces in the CSS/JS files you are committing,
+#      via bin/normalize-leading-tabs.sh (POSIX awk only — no npm/node dependency).
+#      .tpl is deliberately NOT normalized: templates embed multi-line JS template literals
+#      whose leading tabs are string CONTENT, not indentation (see the note in that script).
 #
-# It never blocks a commit because of the formatter (missing php / fixer errors only warn) —
+# For (4) and (5): only files that are FULLY staged are touched — a file with both staged
+# and unstaged changes is skipped, so unstaged hunks are never swept into the commit. The
+# rewritten files are re-staged automatically.
+#
+# It never blocks a commit because of formatting (missing tools / errors only warn) —
 # the two gates are the checks that block.
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT" || exit 0
 
+AUTH_FILE="system/lib/ork3/class.Authorization.php"
+
 # ---------------------------------------------------------------------------
 # 1. Never let class.Authorization.php content slip into a commit.
 #    (Allow its removal from tracking via `git rm --cached`.)
 # ---------------------------------------------------------------------------
-AUTH_FILE="system/lib/ork3/class.Authorization.php"
 if git diff --cached --name-only | grep -q "$AUTH_FILE"; then
     if git diff --cached --name-only --diff-filter=D | grep -q "$AUTH_FILE"; then
         echo "ℹ️  class.Authorization.php is being removed from tracking — allowed."
@@ -34,6 +44,31 @@ if git diff --cached --name-only | grep -q "$AUTH_FILE"; then
         echo "⚠️  class.Authorization.php was unstaged automatically — it is excluded from all commits."
     fi
 fi
+
+# Echo only the FULLY-staged files from a newline-delimited list on stdin (drop
+# any with lingering unstaged changes), warning about the partially-staged ones.
+#   usage: <newline list> | fully_staged "<human label>"
+fully_staged() {
+    label=$1
+    keep=""
+    skipped=""
+    OLDIFS=$IFS
+    IFS='
+'
+    while read -r f; do
+        [ -n "$f" ] || continue
+        [ -f "$f" ] || continue
+        if git diff --name-only -- "$f" | grep -q .; then
+            skipped="$skipped $f"
+        else
+            keep="$keep
+$f"
+        fi
+    done
+    IFS=$OLDIFS
+    [ -n "$skipped" ] && echo "ℹ️  Skipped $label (partially staged — fix & stage manually):$skipped" >&2
+    printf '%s' "$keep" | sed '/^$/d'
+}
 
 # ---------------------------------------------------------------------------
 # 2. Architectural layering gate — BLOCKS the commit.
@@ -86,56 +121,65 @@ fi
 # ---------------------------------------------------------------------------
 # 4. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
-PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
-CONFIG=".php-cs-fixer.dist.php"
+format_php() {
+    PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
+    CONFIG=".php-cs-fixer.dist.php"
 
-# Find a PHP runtime; if none, skip formatting silently-ish (do not block the commit).
-PHP_BIN=$(command -v php 2>/dev/null)
-if [ -z "$PHP_BIN" ] || [ ! -f "$PHAR" ]; then
-    [ -z "$PHP_BIN" ] && echo "ℹ️  php not found on PATH — skipping auto-format (commit continues)."
-    [ ! -f "$PHAR" ]  && echo "ℹ️  $PHAR missing — run 'npm install' or see tools/README.md (commit continues)."
-    exit 0
-fi
-
-# Staged, added/copied/modified .php files (NUL-safe), excluding the auth override.
-STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM -- '*.php' | grep -v "^$AUTH_FILE$")
-[ -z "$STAGED_PHP" ] && exit 0
-
-# Keep only files that are fully staged (no lingering unstaged changes).
-TO_FIX=""
-SKIPPED=""
-OLDIFS=$IFS
-IFS='
-'
-for f in $STAGED_PHP; do
-    [ -f "$f" ] || continue
-    if git diff --name-only -- "$f" | grep -q .; then
-        SKIPPED="$SKIPPED $f"          # partially staged → leave it alone
-    else
-        TO_FIX="$TO_FIX
-$f"
+    PHP_BIN=$(command -v php 2>/dev/null)
+    if [ -z "$PHP_BIN" ] || [ ! -f "$PHAR" ]; then
+        [ -z "$PHP_BIN" ] && echo "ℹ️  php not found on PATH — skipping PHP auto-format (commit continues)."
+        [ ! -f "$PHAR" ]  && echo "ℹ️  $PHAR missing — run 'npm install' or see tools/README.md (commit continues)."
+        return 0
     fi
-done
-IFS=$OLDIFS
 
-if [ -n "$SKIPPED" ]; then
-    echo "ℹ️  Skipped auto-format (partially staged — fix & stage manually):$SKIPPED"
-fi
+    STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM -- '*.php' | grep -v "^$AUTH_FILE$")
+    [ -z "$STAGED_PHP" ] && return 0
 
-# Trim leading newline; bail if nothing left to format.
-TO_FIX=$(printf '%s' "$TO_FIX" | sed '/^$/d')
-[ -z "$TO_FIX" ] && exit 0
+    TO_FIX=$(printf '%s\n' "$STAGED_PHP" | fully_staged "PHP auto-format")
+    [ -z "$TO_FIX" ] && return 0
 
-# Run the fixer on just those files. setUnsupportedPhpVersionAllowed handles newer PHP.
-echo "$TO_FIX" | tr '\n' '\0' | \
-    xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --quiet --using-cache=yes
-FIX_STATUS=$?
+    echo "$TO_FIX" | tr '\n' '\0' | \
+        xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --path-mode=intersection --quiet --using-cache=yes
+    if [ "$?" -ne 0 ]; then
+        echo "⚠️  php-cs-fixer exited non-zero — committing your PHP files as-is (no auto-format applied)."
+        return 0
+    fi
 
-if [ "$FIX_STATUS" -ne 0 ]; then
-    echo "⚠️  php-cs-fixer exited $FIX_STATUS — committing your files as-is (no auto-format applied)."
-    exit 0
-fi
+    # -f because every path here was already staged by the user; without it, a
+    # gitignored-but-force-added file (e.g. vendor/) makes git print "paths are ignored" noise.
+    echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add -f --
+    return 0
+}
 
-# Re-stage anything the fixer rewrote (no-op for unchanged files).
-echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add --
+# ---------------------------------------------------------------------------
+# 5. Normalize leading tabs -> spaces in staged CSS/JS (boy-scout).
+#    Keeps committed assets off hard tabs so the Edit tooling stays reliable.
+#    Minified/generated bundles (*.min.css, *.min.js) are excluded.
+# ---------------------------------------------------------------------------
+normalize_assets() {
+    NORMALIZER="bin/normalize-leading-tabs.sh"
+    if [ ! -f "$NORMALIZER" ]; then
+        echo "ℹ️  $NORMALIZER missing — skipping CSS/JS tab-normalize (commit continues)."
+        return 0
+    fi
+
+    STAGED_ASSETS=$(git diff --cached --name-only --diff-filter=ACM -- '*.css' '*.js' \
+        | grep -vE '\.min\.(css|js)$')
+    [ -z "$STAGED_ASSETS" ] && return 0
+
+    TO_NORM=$(printf '%s\n' "$STAGED_ASSETS" | fully_staged "CSS/JS tab-normalize")
+    [ -z "$TO_NORM" ] && return 0
+
+    echo "$TO_NORM" | tr '\n' '\0' | xargs -0 sh "$NORMALIZER"
+    if [ "$?" -ne 0 ]; then
+        echo "⚠️  tab-normalize reported an error — committing your assets as-is."
+        return 0
+    fi
+
+    echo "$TO_NORM" | tr '\n' '\0' | xargs -0 git add --
+    return 0
+}
+
+format_php
+normalize_assets
 exit 0

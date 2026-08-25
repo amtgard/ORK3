@@ -79,3 +79,4 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 test-results/
+ga-service-account.json

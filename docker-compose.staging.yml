@@ -1,0 +1,52 @@
+# Staging ORK stack for the shared AWS "applications" instance.
+#
+# Deliberately dev-shaped (ENVIRONMENT=DEV -> config.dev.php): bind-mounted
+# repo so deploys are `git pull` + restart-when-needed, seed data restored by
+# hand, migrations applied by hand — the same ritual as a local checkout.
+#
+# Isolation rules for the shared box (wiki/play/go/idp also live there):
+#   - every name (containers, volumes, network) is ork3-stage-* — nothing
+#     collides with, or is ever `docker compose down`-ed out from under,
+#     another app's stack;
+#   - ports bind to 127.0.0.1 only: the app is reachable solely through the
+#     host nginx vhost (which Cloudflare Access gates), the DB solely from a
+#     shell on the instance. Nothing here listens on the public interface.
+#
+# Bring-up:  docker compose -f docker-compose.staging.yml up -d --build
+# (needs a .stage.env next to it; see staging/README.md)
+
+services:
+  ork3app:
+    build:
+      context: ./
+      dockerfile: Dockerfile.nginx-php8
+    ports:
+      - '127.0.0.1:41080:80'
+    working_dir: /var/www
+    volumes:
+      - .:/var/www/ork.amtgard.com
+    env_file: .stage.env
+    environment:
+      - ENVIRONMENT=DEV
+    restart: unless-stopped
+    container_name: ork3-stage-app
+    networks:
+      - ork3-stage-net
+  ork3db:
+    image: mariadb:11
+    command: --sql-mode=''
+    restart: unless-stopped
+    env_file: .stage.env
+    ports:
+      - '127.0.0.1:41306:3306'
+    volumes:
+      - ork3-stage-db-data:/var/lib/mysql
+    container_name: ork3-stage-db
+    networks:
+      - ork3-stage-net
+
+volumes:
+  ork3-stage-db-data: {}
+
+networks:
+  ork3-stage-net:

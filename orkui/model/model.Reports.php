@@ -172,6 +172,7 @@ class Model_Reports extends Model
     public function get_authorization_list($type, $id, $officers)
     {
         $request = array(
+                'Token' => $this->session->token,
                 'Type' => $type,
                 'Id' => $id,
                 'Officers' => $officers

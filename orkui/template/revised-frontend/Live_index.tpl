@@ -104,6 +104,7 @@
 .lv-t-row .lv-t-park { color: var(--ork-link-bright); font-weight: 600; cursor: pointer; }
 .lv-t-row .lv-t-park:hover { text-decoration: underline; }
 .lv-t-row .lv-t-celebrate { color: #d69e2e; font-weight: 700; }
+.lv-t-row .lv-t-self { color: #48bb78; font-size: 0.85em; font-weight: 600; cursor: help; }
 .lv-t-row.enter { animation: lv-enter .35s ease; }
 @keyframes lv-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
@@ -585,7 +586,7 @@
 
 	function pushTicker(s, opts) {
 		const animate = !opts || opts.animate !== false;
-		const [iso, pid, eid, cdid, isFirst] = s;
+		const [iso, pid, eid, cdid, isFirst, isSelf] = s;
 		const isEvent = (pid === 0 && eid && eventsMeta[eid]);
 		const pname  = isEvent ? eventsMeta[eid].name : (parksMeta[pid] ? parksMeta[pid].name : ('Park #' + pid));
 		const icon   = isEvent ? '📅' : (parksMeta[pid] ? (TIER_ICON[parksMeta[pid].title] || '📍') : '📍');
@@ -608,7 +609,12 @@
 				flashNewPlayerMarker(isEvent ? null : pid, isEvent ? eid : null);
 			}
 		} else {
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}</span>`;
+			// Self-service check-ins get a badge — quiet advertising for QR
+			// sign-in links every time one scrolls past.
+			const selfBadge = isSelf
+				? ` <span class="lv-t-self" title="Checked in with a QR sign-in link — parks can offer self sign-in from the attendance page!">📱 self sign-in</span>`
+				: '';
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}${selfBadge}</span>`;
 		}
 		ticker.insertBefore(row, ticker.firstChild);
 		while (ticker.childNodes.length > 80) ticker.removeChild(ticker.lastChild);
