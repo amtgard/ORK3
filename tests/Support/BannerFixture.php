@@ -319,6 +319,7 @@ final class BannerFixture
         foreach ($this->mundaneIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane_design WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $id);
         }
 
@@ -381,6 +382,7 @@ final class BannerFixture
 
         $id = (int) $this->pdo->lastInsertId();
         $this->mundaneIds[] = $id;
+        $this->seedSession($id, $token);
 
         return $id;
     }
@@ -436,5 +438,20 @@ final class BannerFixture
         $this->detailIds[] = $id;
 
         return $id;
+    }
+
+    /**
+     * Multi-device sessions (ork_session) are the authoritative token store;
+     * seed a session row for fixture tokens (mirrors the migration backfill).
+     */
+    private function seedSession(int $mundaneId, string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
     }
 }

@@ -215,6 +215,21 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:nth-child(even) td.lg-col-player { background: #f4f5f7; }
 .lg-table tbody tr:hover td                     { background: #eef2ff !important; }
 
+/* Suspended players — tint the identity columns; award cells keep their group colors */
+.lg-table tbody tr.rp-row-suspended td.lg-col-player,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park {
+	background: var(--rp-row-suspended-bg, #fff5f5) !important;
+}
+.lg-table tbody tr.rp-row-suspended td.lg-col-player .lg-player-link,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park .lg-player-link {
+	color: var(--rp-row-suspended-text, #742a2a) !important;
+}
+.lg-table tbody tr.rp-row-suspended:hover td.lg-col-player,
+.lg-table tbody tr.rp-row-suspended:hover td.lg-col-park {
+	background: var(--rp-row-suspended-hover, #fed7d7) !important;
+}
+
 .lg-table td.lg-col-award {
 	text-align: center; padding: 6px 4px;
 	border-left: 1px solid #f0f0f0;
@@ -343,7 +358,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 /* ── Clickable stat card filter ─────────────────────────────── */
 .rp-stat-card-filter { cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; border: 1px dashed var(--rp-border); }
 .rp-stat-card-filter:hover { box-shadow: 0 0 0 2px var(--rp-accent-mid); border-color: var(--rp-accent-mid); }
-.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 5 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
+.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 7 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
 .rp-stat-card-filter.lg-stat-active {
 	background: var(--rp-accent);
 	color: #fff;
@@ -603,7 +618,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 		}
 	}
 ?>
-			<tr data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
+			<tr<?= !empty($row['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : '' ?> data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
 					<td class="lg-col-player">
 						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>

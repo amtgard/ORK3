@@ -9,14 +9,21 @@ ini_set('display_errors', '1');
 // HTTP
 define('ORK_DIST_NAME', '');
 
-define('HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkservice/');
-define('HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/');
-define('HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/');
+// Scheme-aware so the same dev config serves plain-http localhost AND the
+// TLS-terminated staging host (Cloudflare/nginx set X-Forwarded-Proto);
+// hardcoded http:// there would put http links, og:url and canonicals on
+// an https page.
+$_scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') ? 'https' : 'http';
+
+define('HTTP_SERVICE', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/orkservice/');
+define('HTTP_UI', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/orkui/');
+define('HTTP_UI_REMOTE', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/orkui/');
 define('HTTP_TEMPLATE', HTTP_UI . 'template/');
-define('HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/');
-define('HTTP_WAIVERS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/waivers/');
-define('HTTP_HERALDRY', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/heraldry/');
-define('HTTP_PLAYER_IMAGE', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/players/');
+define('HTTP_ASSETS', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/assets/');
+define('HTTP_WAIVERS', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/assets/waivers/');
+define('HTTP_HERALDRY', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/assets/heraldry/');
+define('HTTP_PLAYER_IMAGE', $_scheme . '://' . $_SERVER['HTTP_HOST'] . '/assets/players/');
 define('HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/');
 define('HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/');
 define('HTTP_KINGDOM_HERALDRY', HTTP_HERALDRY . 'kingdom/');
@@ -90,17 +97,20 @@ if (is_readable($ork3DbProfileFile)) {
 
 $ork3DbProfile = getenv('ORK3_DB_PROFILE') ?: 'prod';
 
+// Env-overridable so the same config serves a local checkout (defaults
+// match docker-compose.php8.yml) and the staging stack (real password,
+// ork3-stage-* container names — see docker-compose.staging.yml).
 define('DB_DRIVER', 'mysql');
-define('DB_USERNAME', 'ork');
-define('DB_PASSWORD', 'secret');
+define('DB_USERNAME', getenv('ORK3_DB_USER') ?: 'ork');
+define('DB_PASSWORD', getenv('ORK3_DB_PASSWORD') ?: 'secret');
 define('DB_PREFIX', 'ork_');
 
 if ($ork3DbProfile === 'dev') {
     define('DB_HOSTNAME', 'ork3-php8-test-db');
     define('DB_DATABASE', 'ork_test');
 } else {
-    define('DB_HOSTNAME', 'ork3-php8-db');
-    define('DB_DATABASE', 'ork');
+    define('DB_HOSTNAME', getenv('ORK3_DB_HOST') ?: 'ork3-php8-db');
+    define('DB_DATABASE', getenv('ORK3_DB_DATABASE') ?: 'ork');
 }
 define('CACHE_HOST', 'ork-dev');
 define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');

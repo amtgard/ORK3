@@ -1,8 +1,64 @@
 <?php
 	require_once(DIR_LIB . 'Parsedown.php');
+
+	// Author-supplied links point off-site; losing the event page mid-read is
+	// disorienting, so every generated anchor opens in a new tab. rel guards
+	// against tabnabbing via window.opener.
+	function ev_link_new_tab(string $html): string {
+		return preg_replace('/<a\s+href=/i', '<a target="_blank" rel="noopener noreferrer" href=', $html);
+	}
+
 	function ev_markdown(string $text): string {
 		$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
-		return preg_replace('/<img[^>]*>/i', '', $html);
+		return ev_link_new_tab(preg_replace('/<img[^>]*>/i', '', $html));
+	}
+
+	// Escape plain text and turn bare http/https URLs into new-tab links.
+	// For description fields that are NOT markdown (schedule items), so that a
+	// pasted URL is clickable instead of a wall of unusable text.
+	//
+	// Splitting on the URL first — rather than escaping up front — keeps '&' in
+	// query strings intact; escaping first would leave '&amp;' inside the match
+	// and corrupt the href. Only http/https ever matches, so 'javascript:' and
+	// friends can never become an anchor.
+	function ev_autolink(string $text): string {
+		$parts = preg_split('~(https?://[^\s<>"\'`]+)~i', (string)$text, -1, PREG_SPLIT_DELIM_CAPTURE);
+		if ($parts === false) {
+			return htmlspecialchars((string)$text);
+		}
+		$out = '';
+		foreach ($parts as $i => $part) {
+			if ($i % 2 === 0) {
+				$out .= htmlspecialchars($part);
+				continue;
+			}
+			// Trailing punctuation almost always belongs to the sentence, not the
+			// URL — "(https://example.com/x)" should not link the closing paren.
+			$tail = '';
+			while ($part !== '') {
+				$last = substr($part, -1);
+				if (strpos('.,;:!?', $last) !== false) {
+					$tail = $last . $tail;
+					$part = substr($part, 0, -1);
+					continue;
+				}
+				// Keep balanced parens (Wikipedia-style URLs); drop an unmatched closer.
+				if ($last === ')' && substr_count($part, ')') > substr_count($part, '(')) {
+					$tail = $last . $tail;
+					$part = substr($part, 0, -1);
+					continue;
+				}
+				break;
+			}
+			if ($part === '') {
+				$out .= htmlspecialchars($tail);
+				continue;
+			}
+			$out .= '<a href="' . htmlspecialchars($part, ENT_QUOTES)
+				. '" target="_blank" rel="noopener noreferrer">'
+				. htmlspecialchars($part) . '</a>' . htmlspecialchars($tail);
+		}
+		return $out;
 	}
 
 	// ---- Normalize data ----
@@ -231,7 +287,7 @@
 #ev-signin-links-table th { color:#718096; text-align:left; padding:4px 6px; font-weight:600; }
 #ev-signin-links-table td { color:#4a5568; }
 /* QR modal */
-#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top, 10200); align-items:center; justify-content:center; }
+#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top); align-items:center; justify-content:center; }
 #ev-qr-overlay .ev-qr-box { background:#fff; border-radius:12px; padding:28px 28px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.22); max-width:320px; width:calc(100vw - 40px); text-align:center; }
 #ev-qr-img { width:220px; height:220px; border:1px solid #e2e8f0; border-radius:6px; display:block; margin:0 auto 14px; }
 .ev-rsvp-th-tooltip { position:relative; display:inline-block; cursor:default; }
@@ -1272,7 +1328,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
-							<td><?= htmlspecialchars($item['Description']) ?></td>
+							<td class="ev-sched-desc"><?= ev_autolink($item['Description']) ?></td>
 							<?php if ($canManageSchedule): ?>
 							<td class="ev-del-cell">
 								<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(<?= (int)$item['EventScheduleId'] ?>, this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0">
@@ -1906,11 +1962,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<?php endforeach; ?>
 						</tbody>
 					</table>
-				<?php elseif ($loggedIn): ?>
-				<div class="ev-empty">
-					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
-				</div>
 				<?php elseif ($rsvpCount === 0): ?>
+				<?php // Keyed on the COUNT, not the list: the roster list is only
+				      // populated for attendance managers, so a plain player on an
+				      // event with RSVPs used to see the counts contradicted by a
+				      // "No RSVPs yet" empty state right below them. ?>
 				<div class="ev-empty">
 					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
 				</div>
@@ -4053,6 +4109,13 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 .ev-grid-popover .ev-gp-row { margin-top:4px; color:#4a5568; font-size:11px; }
 .ev-grid-popover .ev-gp-row i { width:12px; color:#a0aec0; margin-right:4px; }
 
+/* Auto-linked URLs in description fields. --ork-link is defined for both themes,
+   so this needs no separate html[data-theme="dark"] rule. Pasted URLs run long,
+   so allow them to break rather than forcing the table or popover to scroll. */
+.ev-sched-desc, .ev-grid-popover .ev-gp-desc { overflow-wrap:anywhere; }
+.ev-sched-desc a, .ev-grid-popover .ev-gp-desc a { color:var(--ork-link); text-decoration:underline; }
+.ev-sched-desc a:hover, .ev-grid-popover .ev-gp-desc a:hover { text-decoration:none; }
+
 @media (max-width: 700px) {
 	#ev-schedule-grid-container { display:none !important; }
 	#ev-schedule-container      { display:block !important; }
@@ -4403,10 +4466,30 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 		var pop = document.createElement('div');
 		pop.className = 'ev-grid-popover';
 		var safe = function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+		// Mirror of ev_autolink() in PHP: escape the text, but turn bare http/https
+		// URLs into new-tab links. Matching on the raw string before escaping keeps
+		// '&' in query strings from being split across an '&amp;' entity.
+		var linkify = function(s) {
+			var out = '', re = /https?:\/\/[^\s<>"']+/gi, m, last = 0;
+			while ((m = re.exec(s)) !== null) {
+				var url = m[0], tail = '';
+				while (url) {
+					var ch = url.charAt(url.length - 1);
+					if ('.,;:!?'.indexOf(ch) !== -1) { tail = ch + tail; url = url.slice(0, -1); continue; }
+					if (ch === ')' && (url.split(')').length > url.split('(').length)) { tail = ch + tail; url = url.slice(0, -1); continue; }
+					break;
+				}
+				out += safe(s.slice(last, m.index));
+				if (url) { out += '<a href="' + safe(url).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + safe(url) + '</a>'; }
+				out += safe(tail);
+				last = m.index + m[0].length;
+			}
+			return out + safe(s.slice(last));
+		};
 		var html = '<h5>' + safe(title) + '</h5>';
 		if (timeStr) html += '<div class="ev-gp-row"><i class="fas fa-clock"></i>' + safe(timeStr) + '</div>';
 		if (loc)     html += '<div class="ev-gp-row"><i class="fas fa-map-marker-alt"></i>' + safe(loc) + '</div>';
-		if (desc)    html += '<div class="ev-gp-row" style="margin-top:8px;line-height:1.4">' + safe(desc) + '</div>';
+		if (desc)    html += '<div class="ev-gp-row ev-gp-desc" style="margin-top:8px;line-height:1.4">' + linkify(desc) + '</div>';
 		pop.innerHTML = html;
 		document.body.appendChild(pop);
 

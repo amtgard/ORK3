@@ -39,65 +39,150 @@ class Park extends Ork3
         return null;
     }
 
+    // Migrate every member of one park into another, and clear the source park's
+    // officer roster and park-scoped permission grants.
+    //
+    // This deliberately migrates MEMBERSHIP ONLY. It is not a park merge:
+    // attendance, awards, event details, parkdays, tournaments and glicko2
+    // ratings stay with the source park, which also stays active. The function
+    // used to carry a large block of commented-out statements for those tables,
+    // which read as an unfinished merge; they are gone, because the half that
+    // was live (move players + destroy the officer roster) is the whole of what
+    // the UI offers and promises. Anyone wanting a true merge should build it
+    // deliberately rather than uncomment that block.
+    //
+    // Hardened here: the whole migration runs in one transaction, source and
+    // destination must differ and must both exist, and every officer and
+    // authorization row about to be deleted is captured into the audit
+    // prior_state first -- previously they were destroyed with no record of
+    // what had been there.
     public function MergeParks($request)
     {
         logtrace("MergeParks", $request);
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $request[ 'FromParkId' ], AUTH_CREATE)
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $request[ 'ToParkId' ], AUTH_CREATE)
-        ) {
 
-            $to_kingdom_id = $this->GetParkKingdomId($request[ 'ToParkId' ]);
-            /*
-                        $sql = "delete from " . DB_PREFIX . "account where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                        $this->db->query( $sql );
-                        $sql = "delete from " . DB_PREFIX . "configuration where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
-                        $this->db->query( $sql );
-                        $sql = "delete from " . DB_PREFIX . "event where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
-                        $this->db->query( $sql );
-                  */
-            $sql = "delete from `" . DB_PREFIX . "authorization` where authorization_id in (select authorization_id from `" . DB_PREFIX . "officer` where park_id = '" . mysql_real_escape_string($request[ 'FromParkId' ]) . "')";
-            $this->db->query($sql);
-            $sql = "delete from " . DB_PREFIX . "officer where park_id = '" . mysql_real_escape_string($request[ 'FromParkId' ]) . "'";
-            $this->db->query($sql);
-            $sql = "delete from " . DB_PREFIX . "authorization where park_id = '" . mysql_real_escape_string($request[ 'FromParkId' ]) . "'";
-            $this->db->query($sql);
-            /*
-                  $sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "attendance set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "authorization set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "awards set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "awards set at_park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where at_park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "event_calendardetail set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "glicko2 set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-            */
-            $sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string($request[ 'ToParkId' ]) . "', kingdom_id = $to_kingdom_id where park_id = '" . mysql_real_escape_string($request[ 'FromParkId' ]) . "'";
-            $this->db->query($sql);
-            /*
-                  $sql = "update " . DB_PREFIX . "parkday set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-                  $sql = "update " . DB_PREFIX . "tournament set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
-                  $this->db->query( $sql );
-            */
-            logtrace("Parks Merged", null);
-            $from_kingdom_id = $this->GetParkKingdomId($request[ 'FromParkId' ]);
-            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Park', (int)$request['FromParkId'], [
-                'from_park_id'    => (int)$request['FromParkId'],
-                'from_kingdom_id' => (int)$from_kingdom_id,
-                'to_park_id'      => (int)$request['ToParkId'],
-                'to_kingdom_id'   => (int)$to_kingdom_id,
-            ]);
-            return Success();
+        $from_park_id = (int)($request['FromParkId'] ?? 0);
+        $to_park_id   = (int)($request['ToParkId'] ?? 0);
+
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) <= 0
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $from_park_id, AUTH_CREATE)
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $to_park_id, AUTH_CREATE)
+        ) {
+            logtrace("Parks NOT Merged", null);
+            return NoAuthorization();
         }
-        logtrace("Parks NOT Merged", null);
-        return NoAuthorization();
+
+        if (!valid_id($from_park_id) || !valid_id($to_park_id)) {
+            return InvalidParameter('Both a source and a destination park are required.');
+        }
+        if ($from_park_id === $to_park_id) {
+            return InvalidParameter('Cannot migrate a park into itself.');
+        }
+
+        $from_kingdom_id = $this->GetParkKingdomId($from_park_id);
+        $to_kingdom_id   = $this->GetParkKingdomId($to_park_id);
+        if (!valid_id($from_kingdom_id) || !valid_id($to_kingdom_id)) {
+            return InvalidParameter('Source or destination park could not be found.');
+        }
+
+        // Snapshot what is about to be destroyed or moved, before touching it.
+        $prior_state = [
+            'from_park_id'    => $from_park_id,
+            'from_kingdom_id' => (int)$from_kingdom_id,
+            'to_park_id'      => $to_park_id,
+            'to_kingdom_id'   => (int)$to_kingdom_id,
+            'members'         => $this->snapshot_rows(
+                "SELECT mundane_id, park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE park_id = " . $from_park_id
+            ),
+            'officers'        => $this->snapshot_rows(
+                "SELECT * FROM " . DB_PREFIX . "officer WHERE park_id = " . $from_park_id
+            ),
+            'authorizations'  => $this->snapshot_rows(
+                "SELECT * FROM `" . DB_PREFIX . "authorization` WHERE park_id = " . $from_park_id
+                . " OR authorization_id IN (SELECT authorization_id FROM `" . DB_PREFIX . "officer` WHERE park_id = " . $from_park_id . ")"
+            ),
+        ];
+
+        $this->db->BeginTrans();
+        try {
+            $sql = "delete from `" . DB_PREFIX . "authorization` where authorization_id in (select authorization_id from `" . DB_PREFIX . "officer` where park_id = " . $from_park_id . ")";
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked($sql)) {
+                throw new Exception('statement failed: ' . $sql);
+            }
+
+            $sql = "delete from " . DB_PREFIX . "officer where park_id = " . $from_park_id;
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked($sql)) {
+                throw new Exception('statement failed: ' . $sql);
+            }
+
+            $sql = "delete from `" . DB_PREFIX . "authorization` where park_id = " . $from_park_id;
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked($sql)) {
+                throw new Exception('statement failed: ' . $sql);
+            }
+
+            $sql = "update " . DB_PREFIX . "mundane set park_id = " . $to_park_id . ", kingdom_id = " . (int)$to_kingdom_id . " where park_id = " . $from_park_id;
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked($sql)) {
+                throw new Exception('statement failed: ' . $sql);
+            }
+
+            $this->db->CommitTrans();
+        } catch (Exception $e) {
+            $this->db->RollbackTrans();
+            logtrace("Parks NOT Merged: " . $e->getMessage(), null);
+            // Persist the pre-merge snapshot on the FAILURE path too. This is the
+            // one scenario where the snapshot is needed for recovery — a partial
+            // merge may have destroyed officer/authorization rows — and it was
+            // previously discarded here (only the success path audited).
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . "::" . __FUNCTION__,
+                $request,
+                'Park',
+                $from_park_id,
+                $prior_state,
+                [
+                    'outcome' => 'FAILED — rolled back',
+                    'error'   => $e->getMessage(),
+                ]
+            );
+            return ProcessingError('The migration failed and was rolled back: ' . $e->getMessage());
+        }
+
+        logtrace("Parks Merged", null);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . "::" . __FUNCTION__,
+            $request,
+            'Park',
+            $from_park_id,
+            $prior_state,
+            [
+                'from_park_id'      => $from_park_id,
+                'to_park_id'        => $to_park_id,
+                'to_kingdom_id'     => (int)$to_kingdom_id,
+                'members_moved'     => count($prior_state['members']),
+                'officers_removed'  => count($prior_state['officers']),
+                'grants_removed'    => count($prior_state['authorizations']),
+            ]
+        );
+        return Success();
+    }
+
+    // Read a result set fully into an array of associative rows. Used to capture
+    // audit snapshots before a destructive statement runs.
+    private function snapshot_rows($sql)
+    {
+        $rows = array();
+        $this->db->Clear();
+        $rs = $this->db->DataSet($sql);
+        if ($rs) {
+            while ($rs->Next()) {
+                $rows[] = $rs->CurrentFieldSet();
+            }
+        }
+        $this->db->Clear();
+        return $rows;
     }
 
     public function TransferPark($request)
@@ -759,8 +844,18 @@ class Park extends Ork3
 
     public function CreatePark($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $request[ 'KingdomId' ], AUTH_CREATE)
+        // Park creation is GLOBAL ADMIN ONLY, by design. Kingdom monarchy does not
+        // create parks; neither do park-level officers. Cross-kingdom park
+        // operations (TransferPark, MergeParks) are likewise admin-only.
+        //
+        // The scope id is passed as 0 deliberately. HasAuthority ignores the id for
+        // AUTH_ADMIN -- only all-zero-scope admin grants ever match it -- so passing
+        // a KingdomId here (as this call previously did) reads as a per-kingdom
+        // check that does not exist. The explicit 0 states the actual semantics.
+        $kingdom_id = (int)($request['KingdomId'] ?? 0);
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        if ($mundane_id > 0 && valid_id($kingdom_id)
+            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)
         ) {
             $this->log->Write('Park', $mundane_id, LOG_ADD, $request);
             $request[ 'Name' ] = $this->unique_username(trim($request[ 'Name' ]));

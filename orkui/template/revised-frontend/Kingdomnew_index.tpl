@@ -2030,79 +2030,12 @@ var KnBannerConfig = {
 				</div>
 			</div>
 
-			<?php if (!empty($CanAddPark)): ?>
+			<?php /* Kingdom-level managers only -- park officers reach this modal too. */ ?>
+			<?php if (!empty($CanManageKingdom)): ?>
 			<!-- ── Panel: Operations ── -->
-			<?php if ($CanEditKingdom ?? false): ?>
-			<div class="kn-admin-panel" id="kn-admin-panel-signinlink">
-				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-signinlink" aria-expanded="false">
-					<span><i class="fas fa-link" style="margin-right:6px;color:#a0aec0"></i>Sign-in Link</span>
-					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-signinlink"></i>
-				</button>
-				<div class="kn-admin-panel-body" id="kn-admin-body-signinlink" style="display:none">
-					<div class="kn-form-error" id="kn-signinlink-error" style="display:none"></div>
-					<!-- Park selector (optional) -->
-					<div class="kn-admin-field" style="margin-bottom:12px;position:relative">
-						<label>Park <span style="font-weight:400;color:#a0aec0">(optional — leave blank for kingdom-wide)</span></label>
-						<input type="text" id="kn-signinlink-park-name" autocomplete="off"
-							placeholder="Search parks in this kingdom&hellip;"
-							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;color:#2d3748">
-						<input type="hidden" id="kn-signinlink-park-id" value="">
-						<div class="kn-ac-results" id="kn-signinlink-park-results"></div>
-					</div>
-					<div class="pk-att-search-row" style="margin-bottom:12px">
-						<div class="pk-att-field pk-att-field-sm">
-							<label>Duration (hrs)</label>
-							<input type="number" id="kn-signinlink-hours" min="1" max="120" step="1" value="3">
-						</div>
-						<div class="pk-att-field pk-att-field-sm">
-							<label>Credits</label>
-							<input type="number" id="kn-signinlink-credits" min="0.5" max="10" step="0.5" value="1">
-						</div>
-						<div class="pk-att-field pk-att-field-btn">
-							<label>&nbsp;</label>
-							<button class="kn-btn kn-btn-primary" id="kn-signinlink-gen-btn">
-								<i class="fas fa-link"></i> Generate
-							</button>
-						</div>
-					</div>
-					<div id="kn-signinlink-result" style="display:none;margin-bottom:12px">
-						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
-							<input type="text" id="kn-signinlink-url" readonly
-								style="flex:1;min-width:0;font-size:12px;padding:7px 10px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
-							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-copy-btn" style="white-space:nowrap">
-								<i class="fas fa-copy"></i> Copy
-							</button>
-							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-qr-btn" style="white-space:nowrap">
-								<i class="fas fa-qrcode"></i> QR
-							</button>
-						</div>
-						<div id="kn-signinlink-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
-					</div>
-					<p style="margin:0 0 12px;font-size:12px;color:#718096">
-						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
-					</p>
-					<!-- Active links (always visible — typically 0-3 at any time) -->
-					<div id="kn-signinlink-links-wrap" style="border-top:1px solid #e2e8f0;padding-top:10px">
-						<div style="font-size:12px;color:#4a5568;font-weight:600">
-							Active Links <span id="kn-signinlink-links-count" style="color:#a0aec0;font-weight:400"></span>
-						</div>
-						<div id="kn-signinlink-links-body" style="margin-top:8px">
-							<div id="kn-signinlink-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
-							<div id="kn-signinlink-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
-							<table id="kn-signinlink-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
-								<thead><tr style="color:#718096;text-align:left">
-									<th style="padding:4px 6px;font-weight:600">Scope</th>
-									<th style="padding:4px 6px;font-weight:600">Expires</th>
-									<th style="padding:4px 6px;font-weight:600">Cr.</th>
-									<th style="padding:4px 6px"></th>
-								</tr></thead>
-								<tbody id="kn-signinlink-links-tbody"></tbody>
-							</table>
-						</div>
-					</div>
-				</div>
-			</div>
-			<?php endif; ?>
+			<?php /* Sign-in Link generator removed from the kingdom admin modal (2026-08-21):
+			   kingdom-wide sign-in links caused confusion (and the KGD double-credit incident).
+			   Park- and event-scoped link generators remain on their own pages. */ ?>
 
 			<div class="kn-admin-panel">
 				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-ops" aria-expanded="false">
@@ -2836,7 +2769,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 
 <!-- QR Code Modal -->
-<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200)" onclick="if(event.target===this)knCloseQrModal()">
+<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top)" onclick="if(event.target===this)knCloseQrModal()">
 	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
@@ -2928,6 +2861,21 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 			if (footMo) footMo.textContent = moBase.toFixed(1);
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
+		}
+		// DataTables cached the pre-AJAX placeholder cells at init, so without
+		// this, sorting the numeric columns reorders those stale empties — the
+		// table looks like only Park/Type respond. Re-read the DOM and redraw,
+		// keeping the current page and ordering.
+		if (window.jQuery && $.fn && $.fn.dataTable) {
+			$('.kn-parks-dt').each(function() {
+				// isDataTable() alone tells real tables from scrollX header clones:
+				// clones are never registered. (A closest('.dataTables_scroll')
+				// guard would skip the REAL tables too — post-init they're wrapped
+				// in the same scroll container as the clones.)
+				if ($.fn.dataTable.isDataTable(this)) {
+					$(this).DataTable().rows().invalidate().draw(false);
+				}
+			});
 		}
 	}
 

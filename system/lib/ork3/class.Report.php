@@ -12,6 +12,26 @@ I have no apologies for the following code.  It works well enough.
 
 class Report extends Ork3
 {
+    /**
+     * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
+     *
+     * Every Order ladder ends in a masterhood, and most are classified correctly
+     * (Rose, Smith, Lion, Owl, Dragon, Garber, Warlord, Master Crown, Battlemaster
+     * all carry peerage='Master'). These five do not, so filtering on peerage alone
+     * silently drops them from the weekly recap:
+     *
+     *     7 Master Jovius   8 Master Zodiac   9 Master Mask
+     *    10 Master Hydra   11 Master Griffin
+     *
+     * Reported 2026-08-08 ("Week in review missing non-ladder masterhoods").
+     *
+     * This is a recap-scoped compensation, NOT a fix for the underlying data:
+     * ork_award.peerage is deliberately left alone, so the Masters report, the
+     * Knights & Masters report and the State of Amtgard totals still omit these.
+     * Reclassifying the awards would make all of those consistent in one move.
+     */
+    private const RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS = array(7, 8, 9, 10, 11);
+
     public function __construct()
     {
         parent::__construct();
@@ -262,7 +282,7 @@ class Report extends Ork3
         $masters_clause = "or a.award_id IN (select aw.award_id from " . DB_PREFIX . "award aw where aw.peerage = 'Paragon')";
         $attendance = "(SELECT max(att.date) FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = m.mundane_id) as last_attended";
 
-        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, $attendance
+        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, m.suspended, $attendance
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -289,7 +309,8 @@ class Report extends Ork3
                         'KingdomName' => $r->kingdom_name,
                         'Rank' => $r->rank,
                         'AwardName' => $r->award_name,
-                        'LastAttended' => $r->last_attended
+                        'LastAttended' => $r->last_attended,
+                        'Suspended' => (int)$r->suspended
                     );
             }
             $response['Status'] = Success();
@@ -415,7 +436,7 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank,
+              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -449,7 +470,8 @@ class Report extends Ork3
                         'AwardName' => $r->award_name,
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
-                        'EnteredById' => $r->by_whom_id
+                        'EnteredById' => $r->by_whom_id,
+                        'Suspended' => (int)$r->suspended
                     );
             }
             $response['Status'] = Success();
@@ -4188,6 +4210,7 @@ class Report extends Ork3
             'ReturningPlayers' => $this->_RecapReturningPlayers($win, 90),
             'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25),
             'PlatformStats'    => $this->_RecapCloudflareStats($win),
+            'HumanUsers'       => $this->_RecapGaHumanUsers($win),
         );
     }
 
@@ -4209,6 +4232,159 @@ class Report extends Ork3
         }
         $payload['ComputedAt'] = $r->computed_at;
         return $payload;
+    }
+
+    /**
+     * Weekly platform trend series for the public Recap/trends page: one entry
+     * per stored recap week with just the headline numbers, extracted from
+     * payload_json in SQL — the full payloads also carry peerage/event lists
+     * that a trends page has no business shipping.
+     *
+     * Values are null for weeks where a source wasn't available (GA not yet
+     * installed, CF beyond retention, deliberately blanked bot-wave weeks) —
+     * the chart renders those as gaps, which is the honest presentation.
+     *
+     * Cached 1h: the underlying table changes once a day (the 6am cron).
+     */
+    public function GetRecapTrendSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('recap-trend-series'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+            return $cache;
+        }
+        $sql = "SELECT week_start,
+					   JSON_EXTRACT(payload_json, '$.HumanUsers')                        AS visitors,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.Requests')            AS requests,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.BlockedOrChallenged') AS blocked,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.CacheHits')           AS cache_hits,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.Bytes')               AS bytes
+				FROM " . DB_PREFIX . "weekly_recap
+				ORDER BY week_start";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                // JSON_EXTRACT yields the string 'null' for JSON null and PHP
+                // null for a missing key; is_numeric() folds both to null here.
+                $out[] = array(
+                    'WeekStart' => $r->week_start,
+                    'Visitors'  => is_numeric($r->visitors) ? (int)$r->visitors : null,
+                    'Requests'  => is_numeric($r->requests) ? (int)$r->requests : null,
+                    'Blocked'   => is_numeric($r->blocked) ? (int)$r->blocked : null,
+                    'CacheHits' => is_numeric($r->cache_hits) ? (int)$r->cache_hits : null,
+                    'Bytes'     => is_numeric($r->bytes) ? (float)$r->bytes : null,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
+     * Daily sign-in counts from the anonymous tally, grouped into three
+     * reader-facing client families for the public trends page. The tally
+     * stores (day, client-bucket, count) with no player attribution, so this
+     * is aggregation over already-anonymous data.
+     */
+    public function GetSigninTrendSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('signin-trend-series'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
+            return $cache;
+        }
+        $sql = "SELECT day,
+					   SUM(CASE WHEN client LIKE 'mORK%' OR client LIKE 'jsork%' THEN signins ELSE 0 END) AS apps,
+					   SUM(CASE WHEN client LIKE 'In-app browser%' THEN signins ELSE 0 END)               AS inapp,
+					   SUM(CASE WHEN client NOT LIKE 'mORK%' AND client NOT LIKE 'jsork%'
+					             AND client NOT LIKE 'In-app browser%' THEN signins ELSE 0 END)           AS browsers,
+					   SUM(signins) AS total
+				FROM " . DB_PREFIX . "signin_tally
+				GROUP BY day
+				ORDER BY day";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'Day'      => $r->day,
+                    'Browsers' => (int)$r->browsers,
+                    'InApp'    => (int)$r->inapp,
+                    'Apps'     => (int)$r->apps,
+                    'Total'    => (int)$r->total,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
+     * Active sessions per community-app version string ("mORK/1.1.14
+     * (Android)", "jsork/2.0", ...) — the rollout picture for third-party
+     * app developers, published on Platform Trends so nobody needs SQL.
+     * Explicit allowlist matching GetSigninTrendSeries's "Apps" bucket —
+     * a name-slash-digit heuristic also catches curl/python scripts, which
+     * aren't community apps. Aggregate counts only, no identities.
+     */
+    public function GetCommunityAppVersions()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('community-app-versions'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
+        $r = $this->db->query(
+            "SELECT user_agent, COUNT(*) AS sessions, COUNT(DISTINCT mundane_id) AS players
+			   FROM " . DB_PREFIX . "session
+			  WHERE expires > NOW()
+			    AND (user_agent LIKE 'mORK/%' OR user_agent LIKE 'jsork/%')
+			  GROUP BY user_agent
+			  ORDER BY sessions DESC"
+        );
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'Client'   => (string)$r->user_agent,
+                    'Sessions' => (int)$r->sessions,
+                    'Players'  => (int)$r->players,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
+     * Distinct players credited with attendance per week (Monday-anchored,
+     * matching the recap window), across all recorded history — the long
+     * participation curve of the game itself, independent of web analytics.
+     *
+     * This is the expensive one (full aggregation over ork_attendance, ~2s),
+     * so it carries a 24h ghettocache: attendance only ever moves the current
+     * week, and a day of staleness on a decades-long chart is invisible.
+     */
+    public function GetWeeklyActivePlayersSeries()
+    {
+        $key = Ork3::$Lib->ghettocache->key(array('weekly-active-players'));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 86400)) !== false) {
+            return $cache;
+        }
+        // Date guards drop the stray garbage rows (far-future/ancient dates)
+        // that two decades of hand-entered data inevitably contain.
+        $sql = "SELECT DATE_SUB(date, INTERVAL WEEKDAY(date) DAY) AS wk,
+					   COUNT(DISTINCT mundane_id) AS players
+				FROM " . DB_PREFIX . "attendance
+				WHERE date >= '2005-01-01' AND date <= CURDATE()
+				GROUP BY wk
+				ORDER BY wk";
+        $r = $this->db->query($sql);
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out[] = array(
+                    'WeekStart' => $r->wk,
+                    'Players'   => (int)$r->players,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
     }
 
     // Fetches NA-only Cloudflare traffic totals for the week. Returns null on any
@@ -4297,6 +4473,125 @@ class Report extends Ork3
         return json_decode($resp, true);
     }
 
+    /**
+     * Unique human visitors for the recap week, from Google Analytics (GA4).
+     *
+     * This is the only honest "how many people use the site" number we have:
+     * GA only counts clients that execute its JS, which excludes essentially all
+     * bots. (Cloudflare's edge "uniques" counts distinct IPs and is ~99% bot
+     * traffic — see PlatformStats, which is a traffic/security metric, not a
+     * user count. GA undercounts humans somewhat instead: ad-blockers.)
+     *
+     * Auth is a Google service account (GA4 property Viewer) — the JWT-bearer
+     * flow, signed locally with openssl, no SDK. Config lives beside the CF
+     * keys: GA4_PROPERTY_ID (numeric, GA Admin > Property settings) and
+     * GA4_SA_KEY_PATH (the service account's JSON key file, NOT in git).
+     * Returns null on any failure so the recap still ships without it.
+     *
+     * @return int|null distinct activeUsers over the week, or null
+     */
+    private function _RecapGaHumanUsers($win)
+    {
+        return $this->GaActiveUsers($win['WeekStart'], $win['WeekEnd']);
+    }
+
+    /**
+     * Distinct GA4 activeUsers between two Y-m-d dates (inclusive). Public so
+     * ad-hoc callers (bin/ga-probe.php, "how many users this month?") share the
+     * exact plumbing the weekly recap uses. Null on any failure or missing config.
+     *
+     * @param string $start_date Y-m-d
+     * @param string $end_date   Y-m-d
+     * @return int|null
+     */
+    public function GaActiveUsers($start_date, $end_date)
+    {
+        $property = (defined('GA4_PROPERTY_ID') && GA4_PROPERTY_ID !== '') ? GA4_PROPERTY_ID : getenv('GA4_PROPERTY_ID');
+        $key_path = (defined('GA4_SA_KEY_PATH') && GA4_SA_KEY_PATH !== '') ? GA4_SA_KEY_PATH : getenv('GA4_SA_KEY_PATH');
+        if (empty($property) || empty($key_path) || !is_readable($key_path)) {
+            return null;
+        }
+        $token = $this->_gaAccessToken($key_path);
+        if ($token === null) {
+            return null;
+        }
+
+        $ch = curl_init('https://analyticsdata.googleapis.com/v1beta/properties/' . rawurlencode($property) . ':runReport');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode(array(
+                'dateRanges' => array(array('startDate' => $start_date, 'endDate' => $end_date)),
+                'metrics'    => array(array('name' => 'activeUsers')),
+            )),
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 5,
+        ));
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($resp === false || $http !== 200) {
+            return null;
+        }
+        $json = json_decode($resp, true);
+        $value = $json['rows'][0]['metricValues'][0]['value'] ?? null;
+        return $value === null ? null : (int)$value;
+    }
+
+    /**
+     * OAuth2 access token for the GA service account (JWT-bearer grant).
+     * Scope is read-only analytics. Returns null on any failure.
+     */
+    private function _gaAccessToken($key_path)
+    {
+        $key = json_decode((string)file_get_contents($key_path), true);
+        if (!is_array($key) || empty($key['client_email']) || empty($key['private_key'])) {
+            return null;
+        }
+
+        $b64 = function ($data) {
+            return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+        };
+        $now = time();
+        $unsigned = $b64(json_encode(array('alg' => 'RS256', 'typ' => 'JWT')))
+            . '.' . $b64(json_encode(array(
+                'iss'   => $key['client_email'],
+                'scope' => 'https://www.googleapis.com/auth/analytics.readonly',
+                'aud'   => 'https://oauth2.googleapis.com/token',
+                'iat'   => $now,
+                'exp'   => $now + 3600,
+            )));
+        $signature = '';
+        if (!openssl_sign($unsigned, $signature, $key['private_key'], OPENSSL_ALGO_SHA256)) {
+            return null;
+        }
+        $jwt = $unsigned . '.' . $b64($signature);
+
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query(array(
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion'  => $jwt,
+            )),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 5,
+        ));
+        $resp = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($resp === false || $http !== 200) {
+            return null;
+        }
+        $json = json_decode($resp, true);
+        return isset($json['access_token']) ? (string)$json['access_token'] : null;
+    }
+
     // Count of firewall events that actually stopped traffic: outright blocks plus
     // challenges (managed/JS/classic). Excludes "skip", "allow", "log", and the
     // *_solved/*_bypassed actions where the request ultimately got through.
@@ -4378,6 +4673,8 @@ class Report extends Ork3
             'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25, $kingdom_id),
             // PlatformStats stays global — CF doesn't tell us per-kingdom traffic.
             'PlatformStats'    => $global['PlatformStats'] ?? null,
+            // Ditto HumanUsers — GA4 counts site visitors, not kingdom members.
+            'HumanUsers'       => $global['HumanUsers'] ?? null,
             'ComputedAt'       => $computed_at,
         );
         return Ork3::$Lib->ghettocache->cache($call, $key, $payload);
@@ -4461,10 +4758,23 @@ class Report extends Ork3
         $start = mysql_real_escape_string($win['WeekStart']);
         $end   = mysql_real_escape_string($win['WeekEnd']);
         $kid_clause = $kingdom_id ? ' AND m.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
+
+        // Resolve peerage and award id through the same alias-then-kingdomaward
+        // precedence, so both agree on which award a grant actually represents.
+        $peerage_expr  = 'COALESCE(alias.peerage, a.peerage)';
+        $award_expr    = 'COALESCE(alias.award_id, ka.award_id)';
+        $peerage_where = "$peerage_expr IN ($list)";
+        if (in_array('Master', $peerages, true)) {
+            // Pick up the masterhoods ork_award.peerage does not flag as such.
+            $unflagged     = implode(',', array_map('intval', self::RECAP_UNFLAGGED_MASTERHOOD_AWARD_IDS));
+            $peerage_where = "($peerage_where OR $award_expr IN ($unflagged))";
+            // Report them as masterhoods so the returned DTO is self-consistent.
+            $peerage_expr  = "CASE WHEN $award_expr IN ($unflagged) THEN 'Master' ELSE $peerage_expr END";
+        }
         $sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
-					   COALESCE(alias.peerage, a.peerage) AS peerage,
+					   $peerage_expr AS peerage,
 					   COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) AS award_name
 				FROM " . DB_PREFIX . "awards ma
 					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
@@ -4473,7 +4783,7 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
 					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-				WHERE COALESCE(alias.peerage, a.peerage) IN ($list)
+				WHERE $peerage_where
 				  AND ma.revoked = 0
 				  AND ma.date >= '$start' AND ma.date <= '$end'
 				  $kid_clause
@@ -4964,6 +5274,114 @@ class Report extends Ork3
                 $this->_rfuKpi('Players currently qualified', $qualCurrent, null, null, 'standing qualifications that have not yet expired'),
             ),
             'charts' => array($qualOutcomeChart),
+        );
+
+        // ====================================================================
+        // RELEASE 3.5.5 — Hydra  (Multi-Device Sessions)
+        // ====================================================================
+        // ork_session holds one row per live session and the login path prunes
+        // to three per player, so "current" counts read the table directly.
+        // user_agent stores a self-identified client label (Authorize `Client`
+        // field / X-ORK-Client header) when one was sent, else the browser UA.
+        $sessActive = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}session` WHERE expires > NOW()"
+        );
+        $sessPlayers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}session` WHERE expires > NOW()"
+        );
+        $sessMulti2 = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM (
+			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
+			     GROUP BY mundane_id HAVING COUNT(*) = 2) m"
+        );
+        // At the cap: one more login silently evicts their oldest session. A
+        // persistently large number here is the signal the 3-session cap is
+        // too tight.
+        $sessAtCap = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM (
+			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
+			     GROUP BY mundane_id HAVING COUNT(*) >= 3) m"
+        );
+        // Accumulating sign-in counts come from ork_signin_tally (anonymous
+        // per-day/per-client counters bumped in CreateSession) — ork_session
+        // itself can't provide them, since logout / Log Out Everywhere / the
+        // three-session cap all DELETE rows.
+        $signins7 = $this->_rfuScalar(
+            "SELECT COALESCE(SUM(signins),0) AS c FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
+        );
+        $signins30 = $this->_rfuScalar(
+            "SELECT COALESCE(SUM(signins),0) AS c FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        );
+        $signinDayBreak = $this->_rfuBreakdown(
+            "SELECT DATE_FORMAT(day, '%b %e') AS k, SUM(signins) AS c
+			   FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+			  GROUP BY day ORDER BY day ASC"
+        );
+        $signinClientBreak = $this->_rfuBreakdown(
+            "SELECT client AS k, SUM(signins) AS c
+			   FROM `{$p}signin_tally`
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+			  GROUP BY client ORDER BY c DESC LIMIT 14"
+        );
+        // Client breakdown is labeled in PHP so the buckets match the session
+        // list in the account menu (nav_session_client_label in the theme).
+        $sessClientCounts = array();
+        $r = $this->db->query("SELECT user_agent FROM `{$p}session` WHERE expires > NOW()");
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $label = ork_session_client_label($r->user_agent);
+                $sessClientCounts[$label] = ($sessClientCounts[$label] ?? 0) + 1;
+            }
+        }
+        arsort($sessClientCounts);
+        // Self-identified API clients always keep their own bar, however small —
+        // this chart doubles as the adoption tracker for the Client field.
+        // Prefix match: mORK labels carry a platform ("mORK on iOS").
+        $isApiClient = function ($label) {
+            return strncasecmp($label, 'jsork', 5) === 0 || strncasecmp($label, 'mORK', 4) === 0;
+        };
+        $sessClientBreak = array();
+        foreach ($sessClientCounts as $label => $count) {
+            if (count($sessClientBreak) >= 14 && !$isApiClient($label)) {
+                $sessClientBreak['Other'] = ($sessClientBreak['Other'] ?? 0) + $count;
+                continue;
+            }
+            $sessClientBreak[$label] = $count;
+        }
+        $sessClientRows = array();
+        foreach ($sessClientBreak as $label => $count) {
+            $sessClientRows[] = array('k' => $label, 'c' => $count);
+        }
+
+        $featSessions = array(
+            'key'         => 'multi_sessions',
+            'title'       => 'Multi-Device Sessions',
+            'description' => 'Up to three concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu. Live snapshot: these numbers reflect sessions open right now, not a running total.',
+            'kpis' => array(
+                $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
+                $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
+                $this->_rfuKpi('Players with 2+ sessions', $sessMulti2 + $sessAtCap, $sessPlayers, $sessPlayers > 0 ? round((($sessMulti2 + $sessAtCap) / $sessPlayers) * 100, 1) : null, $sessMulti2 . ' on two sessions, ' . $sessAtCap . ' at the three-session cap (their next sign-in evicts their oldest session — if the capped share stays high, the cap may be too tight)', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Sign-ins (7 days)', $signins7, null, null, 'sessions created in the last 7 days — anonymous daily tally, no player attribution'),
+                $this->_rfuKpi('Sign-ins (30 days)', $signins30, null, null, 'sessions created in the last 30 days — anonymous daily tally, no player attribution'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-sessions-client', 'bar', 'Active sessions by client', $sessClientRows, 'Sessions'),
+                $this->_rfuChartFromBreakdown('rfu-signins-day', 'bar', 'Sign-ins per day (last 30 days, all clients)', $signinDayBreak, 'Sign-ins'),
+                $this->_rfuChartFromBreakdown('rfu-signins-client', 'bar', 'Sign-ins by client (last 30 days)', $signinClientBreak, 'Sign-ins'),
+            ),
+        );
+
+        $release355 = array(
+            'version' => '3.5.5',
+            'name'    => 'Hydra',
+            'date'    => '2026-08-22',
+            'blurb'   => 'Engine hardening and multi-device sessions: up to three concurrent sign-ins per player, session visibility with Log Out Everywhere, unified tables, and a broad regression-audit pass.',
+            'features' => array(
+                $featSessions,
+            ),
         );
 
         $release354 = array(
@@ -5880,7 +6298,7 @@ class Report extends Ork3
                 'players_with_design'    => (int)$playersWithDesign,
                 'active_recommendations' => (int)$activeRecommendations,
             ),
-            'releases' => array($release354, $release353, $release352, $release351, $release350),
+            'releases' => array($release355, $release354, $release353, $release352, $release351, $release350),
         );
     }
 
@@ -6295,10 +6713,11 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Players' => [], 'KingdomId' => 0];
         }
 
-        $auth = $this->_authorizeReportPlayerScope($request, $mundaneId);
-        if ($auth !== null) {
-            return array_merge($auth, ['Players' => [], 'KingdomId' => 0]);
-        }
+        // Deliberately UNGATED (C-22 regression, fixed 2026-08-22): this getter
+        // powers the voting-eligibility badge on the PUBLIC player profile, for
+        // any viewer, logged in or not. It discloses only booleans derived from
+        // facts the profile already displays (awards, attendance recency). The
+        // roster-level voting getters remain token-gated.
 
         if ($kingdomId <= 0) {
             $this->db->Clear();
@@ -6323,6 +6742,30 @@ class Report extends Ork3
     /**
      * @return array<string, mixed>
      */
+    /**
+     * Distinct players credited with attendance at a park today — the
+     * "is there many people at field?" number for the public park page.
+     * UNGATED: park-level aggregate, same class of data as the public Live
+     * map. Real-time only for parks using QR sign-in links; reeve-entered
+     * attendance appears when it's typed in.
+     */
+    public function GetParkFieldCountToday($request)
+    {
+        $park_id = valid_id($request['ParkId'] ?? 0) ? (int)$request['ParkId'] : 0;
+        if ($park_id <= 0) {
+            return array('Status' => InvalidParameter(), 'Count' => 0);
+        }
+        $r = $this->db->query(
+            'SELECT COUNT(DISTINCT mundane_id) AS c FROM ' . DB_PREFIX . "attendance
+			 WHERE park_id = $park_id AND date = CURDATE()"
+        );
+        $count = 0;
+        if ($r !== false && $r->size() > 0 && $r->next()) {
+            $count = (int)$r->c;
+        }
+        return array('Status' => Success(), 'Count' => $count);
+    }
+
     public function GetAttendanceDates($request)
     {
         $type = $request['Type'] ?? 'Kingdom';
@@ -6331,10 +6774,10 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Dates' => []];
         }
 
-        $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', $type, $id);
-        if ($auth !== null) {
-            return ['Status' => $auth, 'Dates' => []];
-        }
+        // Deliberately UNGATED (C-22 over-gating, fixed 2026-08-22): this
+        // backs the PUBLIC attendance report (Controller_Reports public list);
+        // it returns only the distinct park-day dates that report already
+        // displays to anonymous visitors.
 
         $col = ($type === 'Kingdom') ? 'kingdom_id' : 'park_id';
         $this->db->Clear();
@@ -6357,19 +6800,11 @@ class Report extends Ork3
     public function GetKingdomOfficerDirectoryMerged($request)
     {
         $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : null;
-        if ($kingdomId === null) {
-            $auth = $this->_authorizeGlobalAdmin($request['Token'] ?? '');
-        } else {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
-        }
-        if ($auth !== null) {
-            return [
-                'Status' => $auth,
-                'Rows' => [],
-                'Mode' => 'kingdoms',
-                'Principalities' => [],
-            ];
-        }
+        // Deliberately UNGATED (C-22 over-gating, fixed 2026-08-22): the
+        // officer directory is on Controller_Reports' PUBLIC report list and
+        // officer identities are already public on every kingdom/park page.
+        // The C-22 gate made the public directory render empty for everyone
+        // but ORK admins.
 
         $r = $this->KingdomOfficerDirectory($request);
         if (($r['Status']['Status'] ?? 1) != 0) {
@@ -6417,11 +6852,7 @@ class Report extends Ork3
         $type = $parkId > 0 ? 'Park' : 'Kingdom';
         $id = $parkId > 0 ? $parkId : $kingdomId;
 
-        if ($parkId > 0) {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_PARK, $parkId);
-        } elseif ($kingdomId > 0) {
-            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
-        } else {
+        if ($parkId <= 0 && $kingdomId <= 0) {
             return [
                 'Status' => InvalidParameter(),
                 'ScopeName' => '',
@@ -6429,9 +6860,14 @@ class Report extends Ork3
                 'GridRows' => [],
             ];
         }
-        if ($auth !== null) {
+        // Any valid session, no officer authority (C-22 over-gating, fixed
+        // 2026-08-22): the kingdom/park Reports tab offers this grid to EVERY
+        // logged-in player, and it shows only award data that is public on
+        // player profiles. The officer-scope gate made it render empty for
+        // ordinary players.
+        if (!valid_id(Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? ''))) {
             return [
-                'Status' => $auth,
+                'Status' => BadToken(),
                 'ScopeName' => '',
                 'LadderAwards' => [],
                 'GridRows' => [],
@@ -6512,7 +6948,7 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, p.park_id, p.name AS park_name, a.award_id,
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
                            GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
@@ -6542,6 +6978,7 @@ class Report extends Ork3
                         'Persona' => $dataResult->persona,
                         'ParkId' => (int) $dataResult->park_id,
                         'ParkName' => $dataResult->park_name ?? '',
+                        'Suspended' => (int) $dataResult->suspended,
                         'Awards' => [],
                     ];
                 }
