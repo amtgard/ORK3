@@ -25,5 +25,12 @@ if (empty($LoggedIn)) {
         <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"><i class="fas fa-crown"></i>My Kingdom</a>
     <?php endif; ?>
     <a href="<?= htmlspecialchars(UIR . 'Live', ENT_QUOTES) ?>"><i class="fas fa-broadcast-tower"></i>Live Attendance</a>
-    <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"><i class="fas fa-tools"></i>Member Tools</a>
+    <?php /* Only for viewers with an actual admin surface: base Controller sets
+             $menu['admin'] solely for ORK admins / kingdom officers / park
+             officers, already pointed at their most-specific Admin page. A
+             plain member got a link to an Admin page that does nothing for
+             them, so no flag -> no link. */ ?>
+    <?php if (!empty($menu['admin']['url'])): ?>
+        <a href="<?= htmlspecialchars($menu['admin']['url'], ENT_QUOTES) ?>"><i class="fas fa-tools"></i>Member Tools</a>
+    <?php endif; ?>
 </div>
