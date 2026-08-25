@@ -25,5 +25,12 @@ if (empty($LoggedIn)) {
         <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"><i class="fas fa-crown"></i>My Kingdom</a>
     <?php endif; ?>
     <a href="<?= htmlspecialchars(UIR . 'Live', ENT_QUOTES) ?>"><i class="fas fa-broadcast-tower"></i>Live Attendance</a>
-    <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"><i class="fas fa-tools"></i>Member Tools</a>
+    <?php /* True ORK admins only — the Admin landing page itself is gated on
+             ORK-admin privileges, so kingdom/park officers (who match the
+             broader $menu['admin'] flag) would click through to a page they
+             cannot use. NavIsOrkAdmin is base Controller's
+             AUTH_ADMIN/0/AUTH_ADMIN probe. */ ?>
+    <?php if (!empty($NavIsOrkAdmin)): ?>
+        <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"><i class="fas fa-tools"></i>Member Tools</a>
+    <?php endif; ?>
 </div>
