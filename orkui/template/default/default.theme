@@ -15,11 +15,15 @@
 // Non-prod indicator (title prefix + banner below the nav). PROD renders
 // nothing; the staging host gets STAGING, everything else DEV/TEST — so a
 // prod tab and a staging tab are never mistaken for each other.
+// Fail-closed opt-in: prod fpm workers run with ENVIRONMENT unset (config
+// selection falls through to config.php), so "not PROD" is NOT a safe test —
+// only an explicit DEV/TEST env or the staging host shows the banner.
 $ork_env_label = '';
-if (getenv('ENVIRONMENT') !== 'PROD') {
-	$ork_env_label = (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com')
-		? 'STAGING'
-		: (getenv('ENVIRONMENT') === 'TEST' ? 'TEST' : 'DEV');
+$_ork_env = getenv('ENVIRONMENT');
+if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
+	$ork_env_label = 'STAGING';
+} elseif ($_ork_env === 'DEV' || $_ork_env === 'TEST') {
+	$ork_env_label = $_ork_env;
 }
 ?>
 		<title><?php echo ($ork_env_label !== '' ? "[{$ork_env_label}] " : '').(strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
