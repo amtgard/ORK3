@@ -923,7 +923,18 @@ class Controller_Admin extends Controller
         }
         $_target = $this->Player->fetch_player($id);
         $_target_park = (int)($_target['ParkId'] ?? 0);
-        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
+        // Self-service exception: the Player-profile upload modal posts photo/
+        // heraldry changes HERE (action 'update' + Update='Update Media'), and
+        // the domain layer (SetImage/SetHeraldry) authorizes self-edits itself —
+        // SetWaiver still requires park authority, so the waiver arm of the same
+        // form stays officer-only. Without this carve-out the gate 302s a
+        // non-officer's own upload, fetch() follows the redirect to a 200, and
+        // the modal reports success while uploading nothing.
+        $_is_self_media_post = ($_uid === $id
+            && isset($action) && $action === 'update'
+            && $this->request->Update === 'Update Media');
+        if (!$_is_self_media_post
+            && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
             header('Location: ' . UIR . 'Player/profile/' . $id);
             exit;
