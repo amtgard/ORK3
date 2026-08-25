@@ -21,13 +21,20 @@
  *     /var/www/ork.amtgard.com/db-migrations/.amtgard-assets
  */
 
-require_once __DIR__ . '/_cms_cli_bootstrap.php';
-
+// Resolve the staging dir and check it BEFORE the bootstrap: the bootstrap
+// chdir()s into orkui/, so a RELATIVE $argv[1] must be resolved against the
+// caller's own cwd, not orkui/. Checking here also means the usage error costs
+// nothing — no DB connection, no app boot, just a message and a non-zero exit.
 $STG = isset($argv[1]) ? rtrim($argv[1], '/') : (__DIR__ . '/.amtgard-assets');
+if ($STG !== '' && $STG[0] !== '/') {
+    $STG = rtrim(getcwd(), '/') . '/' . $STG;
+}
 if (!is_dir("$STG/specs")) {
     fwrite(STDERR, "No specs dir at $STG/specs\n");
     exit(1);
 }
+
+require_once __DIR__ . '/_cms_cli_bootstrap.php';
 
 @ini_set('memory_limit', '1024M');
 @set_time_limit(0);
