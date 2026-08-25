@@ -11,7 +11,18 @@
 		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
-		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
+<?php
+// Non-prod indicator (title prefix + banner below the nav). PROD renders
+// nothing; the staging host gets STAGING, everything else DEV/TEST — so a
+// prod tab and a staging tab are never mistaken for each other.
+$ork_env_label = '';
+if (getenv('ENVIRONMENT') !== 'PROD') {
+	$ork_env_label = (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com')
+		? 'STAGING'
+		: (getenv('ENVIRONMENT') === 'TEST' ? 'TEST' : 'DEV');
+}
+?>
+		<title><?php echo ($ork_env_label !== '' ? "[{$ork_env_label}] " : '').(strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
 		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
@@ -163,6 +174,11 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
+<?php if ($ork_env_label !== ''): ?>
+		<div id="ork-env-banner" style="background:<?= $ork_env_label === 'STAGING' ? '#6d28d9' : '#0f766e' ?>;color:#fff;text-align:center;padding:5px 12px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;">
+			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
+		</div>
+<?php endif; ?>
 <?php if (!empty($downtime_start)): ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
 			<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
