@@ -1631,6 +1631,21 @@ table.tablesorter tbody tr.normal-row td {
     cursor: default;
 }
 
+/* Shared badge pill — the neutral base every prefixed badge component
+   (.kn-badge, .pn-badge, .en-badge, .cms-badge) was re-implementing. The
+   colour pairs live in the --ork-badge-*-bg/-text tokens at the top of this
+   file, so a variant is one declaration pair, not a whole component. */
+.ork-badge {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	line-height: 1.4;
+}
+
 /* =====================================================
    DARK MODE OVERRIDES
    Applied via html[data-theme="dark"] (manual toggle).
@@ -2431,4 +2446,24 @@ html[data-theme="dark"] .rp-stats-filter-notice {
     color: var(--ork-badge-gray-text);
     vertical-align: middle;
     margin-left: 4px;
+}
+
+/* ---- Downtime info box (shared: default.tpl fallback message) ---- */
+.hm-infobox {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--ork-alert-info-bg);
+    border: 1px solid var(--ork-alert-info-border);
+    border-radius: 7px;
+    padding: 11px 16px;
+    margin: 0 0 14px;
+    color: var(--ork-alert-info-text);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.hm-infobox-icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    margin-top: 1px;
 }

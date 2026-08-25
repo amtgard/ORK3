@@ -1,9 +1,15 @@
 <?php
 
-// This file is included from more than one place in a single request (the base
-// Controller reads it for every logged-in user, and Controller_ReleaseNotes reads
-// it again for the full list), so it must be safe to include twice. Guard the
-// constants and let the array re-assign; see the note in controller.ReleaseNotes.php.
+// This file is included from more than one scope, so which include form to use
+// depends on what the caller needs:
+//   - a caller that reads $WHATS_NEW_ITEMS (Controller::__construct for the What's
+//     New modal, Controller_ReleaseNotes::index for the notes page) must use
+//     `require` — with require_once the second such caller gets a no-op and the
+//     array is never defined in its scope;
+//   - a caller that only needs the constants (default.theme, for WHATS_NEW_VERSION
+//     and the footer's ORK_VERSION) may use `require_once` and skip re-building
+//     the array.
+// The defines below are guarded either way, so repeat includes never re-declare them.
 
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.

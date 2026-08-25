@@ -1,0 +1,3329 @@
+
+/* ============================================================================
+ * cms-admin.css — CMS admin page-list + block editor + media-picker modal.
+ *
+ * CMS admin theme: navy + gold brand accent. The generic blue accent
+ * is re-pointed to gold throughout the admin (primary button, active tab, focus
+ * rings, selected states).
+ *
+ * All classes prefixed `cms-`. Dark mode via html[data-theme="dark"] (we reuse
+ * the global --ork-* variables so most surfaces theme automatically; explicit
+ * dark overrides are added only where a hand-picked colour is used).
+ * Responsive: layouts stack on narrow viewports.
+ * ========================================================================== */
+
+/* Warning/accent token used by Cms_media.tpl ("In use" label) and note-live
+   surfaces. Scoped to the admin shell rather than :root — this is a CMS token,
+   and a CMS stylesheet must not define into the CRM's --ork-* namespace
+   (bin/check-css-boundaries.sh C2). */
+.cms-shell,
+.cms-wrap {
+    --cms-warn: #9c4221;
+}
+
+html[data-theme="dark"] .cms-shell,
+html[data-theme="dark"] .cms-wrap {
+    --cms-warn: #fbd38d;
+}
+
+/* ---- Workspace ground --------------------------------------------------
+ * Dark mode gets its structure from contrast for free: default.theme paints
+ * body #1a202c and every card is #2d3748, so a card lifts off the page. Light
+ * mode had no ground at all — body is white, --ork-card-bg is white, and the
+ * only thing between a card and the page was a #e2e8f0 hairline. The Media grid
+ * flattened into a field of text and the loudest thing on the page was whatever
+ * carried a colour.
+ *
+ * --cms-ground is that missing step: one notch below card white, and pulled
+ * toward the admin's navy rather than being a neutral grey, so the navy rail has
+ * a ground that acknowledges it instead of floating on paper. --cms-card is the
+ * surface an object sits on (card white in light; identical to --ork-bg-secondary
+ * in dark, where both tokens are #2d3748 — so promoting a card to it is a
+ * light-mode-only change by construction and cannot regress dark mode).
+ *
+ * These are :root because `body` has to read --cms-ground and body is an
+ * ancestor of the shell. Safe: this stylesheet is linked by cms/_shell_top.tpl
+ * and the OGRE admin templates only, so it reaches no CRM page. --cms-*, never
+ * --ork-* (C2). */
+:root {
+    --cms-ground: #e9eef7;
+    --cms-card: var(--ork-card-bg, #fff);
+    --cms-card-shadow: 0 1px 2px rgba(15, 26, 51, .07), 0 3px 10px rgba(15, 26, 51, .05);
+}
+
+html[data-theme="dark"] {
+    --cms-ground: #1a202c;
+    /* Dark cards separate by value, not by depth; a drop shadow on #2d3748 over
+       #1a202c reads as smudge. */
+    --cms-card-shadow: none;
+}
+
+/* The OGRE admin workspace ground. In dark mode default.theme's
+   `html[data-theme="dark"] body` is (0,1,2) and wins over this (0,0,1) with the
+   same #1a202c --cms-ground carries, so one rule covers both themes and no dark
+   partner is needed. */
+body {
+    background-color: var(--cms-ground);
+}
+
+/* Elevation is a property of "this is an object on the ground", not of each
+   component, so it is one selector list rather than a box-shadow copied into
+   nine rules. In light mode it is the second cue (after the tint) that separates
+   a card from the page; in dark mode --cms-card-shadow is `none`, because a drop
+   shadow under #2d3748 on #1a202c reads as a smudge and the value step already
+   does the work. Component rules that set their own box-shadow (drag-over,
+   selected, error) are all at least (0,2,0) and still win. */
+.cms-table-wrap,
+.cms-block-card,
+.cms-media-card,
+.cms-quick-card,
+.cms-stat-tile,
+.cms-sitecard,
+.cms-recent-list,
+.cms-provision,
+.cms-preview-pane,
+.te-group {
+    box-shadow: var(--cms-card-shadow);
+}
+
+.cms-wrap {
+    /* Admin brand accent tokens, scoped to the admin shell */
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 16px 60px;
+    color: var(--ork-text);
+}
+
+/* ---- Shared bits -------------------------------------------------------- */
+
+.cms-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.cms-topbar h1.cms-title,
+.cms-title {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    margin: 0;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-spacer { flex: 1 1 auto; }
+
+/* ---- Masthead (heraldic mark + wordmark + subtitle) --------------------- */
+.cms-masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 4px 0 2px;
+}
+.cms-masthead-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 24px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-masthead-word {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    color: var(--ork-text);
+    /* reset the global h1-h6 gray pill in case it lands on a heading */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+.cms-masthead-sub {
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    line-height: 1.3;
+    flex: 1 1 100%;
+    margin-top: -2px;
+}
+
+/* ============================================================================
+ * CMS Shell — persistent left rail + masthead workspace.
+ *
+ * Sits inside the global ORK app chrome (default.theme header/footer); the shell
+ * owns the admin workspace. The accent tokens are scoped to .cms-shell here
+ * (the legacy .cms-wrap still carries its own copy for non-shell surfaces).
+ * ========================================================================== */
+
+.cms-shell {
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+    /* The global #newmenu navbar is position:fixed at 48px tall (orkui.css).
+       Sticky elements below must clear it or they hide behind it on scroll.
+       Named --cms-* because a CMS stylesheet must not define into the CRM's
+       --ork-* namespace, even for a value the CRM originates.
+
+       READ THE NOTE ON .cms-rail's `top` BEFORE reaching for this token in a
+       new sticky rule: the scrollport these offsets are measured from already
+       starts below the navbar, so spending this token buys the clearance a
+       second time and pushes the element down the page at rest. */
+    --cms-header-h: 48px;
+
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 12px 14px 36px;
+    color: var(--ork-text);
+}
+
+/* ---- Left rail --------------------------------------------------------- */
+.cms-rail {
+    flex: 0 0 220px;
+    width: 220px;
+    align-self: flex-start;
+    position: sticky;
+    /* 28px, and deliberately NOT --cms-header-h + 14px.
+       The navbar height belongs in a sticky offset only when the VIEWPORT is the
+       scroller. It is not: orkui.css clamps `html, body { overflow-x: hidden }`, so
+       body's overflow is not propagated to the viewport and BODY is the scroll
+       container for everything in the admin. A sticky offset is measured from
+       that scrollport's top edge, and body's content box already begins at 56px
+       down the window — its 8px margin plus the 48px padding-top orkui.css adds
+       precisely to clear the fixed navbar. The navbar is therefore already paid
+       for, and spending --cms-header-h again pinned the rail's top edge at
+       56 + 48 + 14 = 118px while the masthead beside it rests at 84px: the rail
+       started a whole 34px below the page title it is supposed to line up with.
+       Sticky is still what we want for the scrolled state, so keep it and drop
+       only the double count.
+       The usable window is (16px, 28px]. Both ends are measured, not derived:
+
+         upper — 28px is the chrome stacked above the workspace (#theme_container's
+                 10px margin + 6px padding + the shell's own 12px padding). At or
+                 below it the sticky threshold sits above the rail's flow position,
+                 so nothing is displaced and the rail's head and the masthead's head
+                 start on the same line (both at 84px). Above it the rail drifts
+                 back down the page.
+         lower — the document has a SECOND scroller. orkui.css gives html and body
+                 height:100%, and body's 48px navbar padding plus 16px of margin
+                 puts 56px of overflow on <html> itself. A wheel never reaches it,
+                 but scrollIntoView does — CmsBlockEditor.focusFirstError() calls
+                 exactly that. While html is scrolled its full 56px, the rail pins
+                 at viewport y = T rather than 56 + T, so the wordmark (32px tall)
+                 needs T + 32 > 48, i.e. T > 16.
+
+       28px is the top of that window: identical rest alignment to any other value
+       in it, and the most navbar clearance when both scrollers are engaged —
+       measured 24px of clear air versus 10px at 14px. */
+    top: 28px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    /* 8px, not 12px: with the brand block tightened below, this is what brings
+       the first nav item up level with the masthead's subtitle line. */
+    gap: 8px;
+    padding: 12px 11px 14px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    border: 1px solid rgba(240, 180, 41, .22);
+    /* Sits ON the workspace rather than hovering above it. The old
+       0 6px 20px/.28 lifted the rail so far off the page that it read as a
+       separate floating panel next to an unrelated column of content. */
+    box-shadow: 0 2px 10px rgba(11, 17, 32, .18), inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+/* Edit surfaces add the Page-settings panel, so the rail widens to fit a form. */
+.cms-rail-wide { flex-basis: 258px; width: 258px; }
+/* The wordmark's top edge lands at 12px inside the rail; .cms-main's 11px top
+   padding puts the masthead's first line (crumbs where there are any, otherwise
+   the page title) at 11px. That 1px is the whole point of this block and of the
+   two paddings above: the rail's head and the page's head now start on the same
+   line and read as one workspace, where the rail's nav used to begin below the
+   entire masthead. */
+.cms-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 8px 9px;
+    border-bottom: 1px solid rgba(240, 180, 41, .18);
+}
+.cms-rail-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 20px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-rail-word {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    /* OGRE wordmark — a 4-letter acronym reads better with a touch of tracking */
+    letter-spacing: .06em;
+    line-height: 1.1;
+    color: var(--cms-gold, #f0b429);
+}
+/* Visually-hidden text that stays in the a11y tree (same technique the rail
+   already uses to keep icon-only nav labels available to screen readers).
+   Carries the OGRE expansion so the acronym is never read as an opaque token. */
+.cms-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* ---- Tooltips ([data-tip]) ------------------------------------------------
+ * The house rule is data-tip, never a native title=. The rule that actually
+ * PAINTS one lives in revised-frontend/style/revised.css — which the OGRE admin
+ * does not load (default.theme links tokens.css + orkui.css, then this file), so
+ * every data-tip written on an admin surface was inert markup: no tip appeared
+ * on hover, and authors got no explanation of the icon buttons at all.
+ *
+ * Same visual contract as the CRM's tooltip so the two products agree: dark chip
+ * on light, light chip on dark, anchored above. :focus-visible is added on top of
+ * the CRM's hover-only version — an icon button whose only label is a mouse-over
+ * is useless to a keyboard user.
+ * ------------------------------------------------------------------------- */
+/* One declaration on purpose — it exists only to be the containing block the
+   ::after chip is positioned against. It duplicates .fd-navitem in
+   frontdoor.css, which is a separate tier by rule (C1), so the two can never be
+   grouped; both rules carry this note and the ratchet is pinned accordingly. */
+.cms-shell [data-tip],
+.cms-modal [data-tip] { position: relative; }
+.cms-shell [data-tip]:hover::after,
+.cms-shell [data-tip]:focus-visible::after,
+.cms-modal [data-tip]:hover::after,
+.cms-modal [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a202c;
+    color: #fff;
+    font: 500 11px/1.4 inherit;
+    padding: 6px 10px;
+    border-radius: 4px;
+    white-space: pre-line;
+    pointer-events: none;
+    z-index: var(--z-help-overlay); /* above .cms-overflow-menu (--z-modal-top) */
+    min-width: max-content;
+    max-width: 240px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+}
+html[data-theme="dark"] .cms-shell [data-tip]:hover::after,
+html[data-theme="dark"] .cms-shell [data-tip]:focus-visible::after,
+html[data-theme="dark"] .cms-modal [data-tip]:hover::after,
+html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
+    background: #f7fafc;
+    color: #1a202c;
+}
+.cms-rail-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cms-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    color: rgba(226, 232, 240, .82);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.cms-rail-item:hover {
+    background: rgba(255, 255, 255, .06);
+    color: #fff;
+}
+.cms-rail-item.active {
+    background: rgba(240, 180, 41, .12);
+    border-left-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+}
+.cms-rail-item:focus-visible {
+    outline: none;
+    background: rgba(255, 255, 255, .08);
+    box-shadow: 0 0 0 2px var(--cms-gold);
+}
+.cms-rail-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+}
+/* .cms-rail-item.active .cms-rail-icon is gold — see "Gold accent text" below. */
+.cms-rail-label { min-width: 0; }
+.cms-rail-item-quiet { color: rgba(226, 232, 240, .6); font-weight: 500; }
+.cms-rail-item-quiet:hover { color: #fff; }
+.cms-rail-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: rgba(240, 180, 41, .18);
+}
+
+/* ---- Main workspace ---------------------------------------------------- */
+.cms-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 11px 0 0 18px;
+}
+.cms-shell-masthead {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.cms-shell-masthead-text { flex: 1 1 auto; min-width: 0; }
+.cms-shell-title {
+    font-family: 'Open Sans', system-ui, sans-serif;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    margin: 0;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
+/* Ground-level text, not card text: --ork-text-muted is ~4.0:1 on white and
+   ~3.4:1 on --cms-ground, so every label that sits directly on the workspace
+   ground (this, the crumbs, the dashboard section titles, the live-site link,
+   the compact empty line, the sites count) reads --ork-text-secondary instead.
+   Muted stays muted INSIDE cards, where the surface is still white. */
+.cms-shell-sub {
+    color: var(--ork-text-secondary);
+    font-size: 14px;
+    line-height: 1.3;
+    margin-top: 3px;
+    /* Prose keeps a measure even when the workspace does not. */
+    max-width: 78ch;
+}
+.cms-shell-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.cms-shell-body { min-width: 0; }
+
+/* ---- Breadcrumb -------------------------------------------------------- */
+.cms-crumbs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12.5px;
+    margin-bottom: 6px;
+}
+.cms-crumb { color: var(--ork-text-secondary); text-decoration: none; }
+.cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+.cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
+.cms-crumb-sep { color: var(--ork-text-lighter); }
+/* dark .cms-crumb[href]:hover is gold — see "Gold accent text" below. */
+
+/* ---- Width: a workspace, not an article --------------------------------
+ * #theme_container caps every ORK page at a 1600px reading measure. That is
+ * right for a player profile and wrong for a media library: on a wide monitor
+ * the Media grid and the page tables stopped well short of the right edge with a
+ * column of empty page beside them. The OGRE admin gets the window instead.
+ *
+ * The :has() guard means only a container that actually holds the OGRE shell
+ * widens — this stylesheet is linked by cms/_shell_top.tpl alone, but the guard
+ * keeps that true by construction rather than by deployment accident. Naming
+ * #theme_container is legal here: C1's shell-selector ban covers the PUBLIC CMS
+ * tier, and the OGRE admin is definitionally an ORK-hosted app surface.
+ *
+ * Gated at 1200px so nothing about the narrow layouts changes, and so it can
+ * never collide with the CRM's own #theme_container override at max-width 768px.
+ * ------------------------------------------------------------------------- */
+@media (min-width: 1200px) {
+    #theme_container:has(.cms-shell) {
+        width: 97%;
+        max-width: 2040px;
+    }
+    .cms-shell { max-width: 2040px; }
+}
+
+/* ...and the surfaces that are reading or form-filling rather than scanning a
+   grid keep a measure inside that wider workspace. Media, Pages, Posts, Sites
+   and the Theme preview are the ones that take the full width. */
+.cms-dash-block,
+#cmsNavTree,
+.cms-editor {
+    max-width: 1180px;
+}
+
+/* ---- Responsive: collapse the rail to a top horizontal bar ------------- */
+@media (max-width: 900px) {
+    .cms-shell {
+        flex-direction: column;
+        padding: 12px 12px 48px;
+    }
+    .cms-rail {
+        flex: 1 1 auto;
+        width: auto;
+        position: static;
+        top: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        /* A flex item defaults to min-width:auto, which refuses to shrink below its
+           content's min-content width — so the rail laid its seven items out at their
+           full 411px inside a 354px shell and the overflow-x above never engaged. The
+           surplus was then clipped by the ancestor's overflow-x:hidden rather than
+           scrolling, silently cutting the last items off at 390px.
+
+           min-width:0 lets the item shrink; align-self is the other half. The base
+           rule sets align-self:flex-start so the desktop rail does not stretch to
+           the full height of the workspace beside it. Once .cms-shell flips to
+           flex-direction:column the cross axis is horizontal, and flex-start there
+           means shrink-to-fit the CONTENT — which is exactly the 411px. Stretching
+           it back to the container is what makes overflow-x:auto engage. */
+        min-width: 0;
+        align-self: stretch;
+    }
+    .cms-rail-brand {
+        padding: 0 10px 0 4px;
+        margin-right: 4px;
+        border-bottom: none;
+        border-right: 1px solid rgba(240, 180, 41, .18);
+        flex: 0 0 auto;
+    }
+    .cms-rail-nav {
+        flex-direction: row;
+        gap: 4px;
+    }
+    .cms-rail-item {
+        flex: 0 0 auto;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        padding: 7px 11px;
+        white-space: nowrap;
+    }
+    .cms-rail-item.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--cms-gold, #f0b429);
+    }
+    .cms-rail-divider {
+        width: 1px;
+        height: 22px;
+        margin: 0 4px;
+    }
+    .cms-main {
+        padding-left: 0;
+    }
+}
+
+/* Narrow phones: icon-only rail (labels hidden) to keep it on one line. */
+@media (max-width: 560px) {
+    .cms-rail-word { display: none; }
+    .cms-rail-brand { padding: 0 8px 0 4px; }
+    /* Keep the label in the a11y tree (screen readers / accessible name)
+       while hiding it visually — icon-only rail must not strip names. The
+       dashboard's recent-activity buttons collapse the same way and are
+       grouped here rather than restating the body in a second 560px block. */
+    .cms-rail-item .cms-rail-label,
+    .cms-rail-item-quiet .cms-rail-label,
+    .cms-recent-actions .cms-btn-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .cms-rail-item { padding: 8px 10px; }
+    .cms-rail-icon { font-size: 16px; }
+    .cms-shell-actions { margin-left: 0; width: 100%; }
+}
+
+.cms-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    padding: 9px 15px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border-dark);
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .12s, border-color .12s, opacity .12s;
+}
+/* Grouped with the link chooser's page-row hover and the block-card head's
+   (same declaration body — the duplication gate wants one rule, not two
+   copies). All three are :hover, so the grouped rule outranks any of their
+   base rules wherever it sits. */
+.cms-btn:hover,
+.cms-linkpick-opt:hover,
+.cms-recent-item:hover,
+.cms-block-collapsible > .cms-block-head:hover { background: var(--ork-bg-tertiary); }
+.cms-btn:disabled,
+.cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.cms-btn-primary {
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    border-color: var(--cms-gold-deep, #caa23a);
+    color: #1a1205 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.cms-btn-primary:hover { background: linear-gradient(180deg, #f6c14a, var(--cms-gold, #f0b429)); }
+/* Harden against #theme_container a dark-mode link colour winning over the
+   button label when a "New" button is rendered as an <a> (real bug). */
+#theme_container a.cms-btn-primary,
+a.cms-btn-primary,
+a.cms-btn-primary:visited,
+a.cms-btn-primary:hover { color: #1a1205 !important; }
+.cms-btn-ghost {
+    background: transparent;
+    border-color: var(--ork-border-dark);
+    color: var(--ork-text-secondary);
+}
+.cms-btn-ghost:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-btn-danger {
+    background: var(--ork-badge-red-bg);
+    border-color: var(--ork-badge-red-text);
+    color: var(--ork-badge-red-text);
+}
+.cms-btn-danger:hover { filter: brightness(.96); }
+.cms-btn-sm { padding: 5px 10px; font-size: 12.5px; border-radius: 6px; }
+.cms-btn i { font-size: .92em; }
+
+/* Keyboard a11y: shared gold focus ring on all CMS buttons. */
+.cms-icon-btn:focus-visible,
+.cms-btn:focus-visible,
+.cms-devbtn:focus-visible,
+.cms-modal-close:focus-visible {
+    outline: 2px solid var(--cms-gold);
+    outline-offset: 2px;
+}
+
+/* The pill itself comes from the shared `.ork-badge` base in orkui.css (loaded
+   on every admin page); these are the CMS-only semantic colour aliases. Badge
+   markup carries both classes: `class="ork-badge cms-badge cms-badge-draft"`. */
+.cms-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.cms-badge-draft { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+.cms-badge-system { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
+.cms-badge-scope { background: var(--ork-badge-purple-bg); color: var(--ork-badge-purple-text); }
+
+.cms-muted { color: var(--ork-text-muted); }
+
+.cms-notice {
+    background: var(--ork-alert-warning-bg);
+    border: 1px solid var(--ork-alert-warning-border);
+    color: var(--ork-alert-warning-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.cms-input,
+.cms-select,
+.cms-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-input-border);
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+}
+.cms-textarea { resize: vertical; min-height: 46px; line-height: 1.4; }
+.cms-input::placeholder,
+.cms-textarea::placeholder { color: var(--ork-text-lighter); }
+/* One gold focus ring for every text-ish control in the admin, including the
+   DataTables length/filter widgets down in the table section — those were a
+   byte-identical copy of this rule and are grouped here rather than restated.
+   The DataTables selectors are more specific than the generic .cms-table-wrap
+   rules that style the same elements, so hoisting them here does not change
+   which rule wins. */
+.cms-input:focus,
+.cms-select:focus,
+.cms-textarea:focus,
+.cms-table-wrap .dataTables_length select:focus,
+.cms-table-wrap .dataTables_filter input:focus {
+    outline: none;
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
+}
+.cms-field { margin-bottom: 7px; }
+.cms-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ork-text-secondary);
+    margin-bottom: 3px;
+}
+.cms-help { font-size: 11.5px; color: var(--ork-text-muted); margin-top: 3px; }
+
+/* ============================================================================
+ * Page list (Cms_index)
+ * ========================================================================== */
+
+.cms-filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.cms-filters .cms-input { max-width: 280px; }
+.cms-filters .cms-select { max-width: 180px; }
+
+/* ---- Pages / Posts tabs ------------------------------------------------- */
+.cms-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--ork-border-dark);
+}
+.cms-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 9px 16px;
+    color: var(--ork-text-muted);
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    margin-bottom: -1px;
+    transition: color .12s, background .12s, border-color .12s;
+}
+.cms-tab:hover { color: var(--ork-text); background: var(--ork-bg-secondary); }
+.cms-tab-active {
+    color: var(--ork-text);
+    background: var(--ork-bg);
+    border-color: var(--ork-border-dark);
+    border-bottom: 1px solid var(--ork-bg);
+    box-shadow: inset 0 3px 0 var(--cms-gold, #f0b429);
+}
+
+.cms-table-wrap {
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--cms-card);
+}
+.cms-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.cms-table th,
+.cms-table td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--ork-border);
+    vertical-align: middle;
+}
+.cms-table thead th {
+    background: var(--ork-bg-secondary);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ork-text-muted);
+    font-weight: 700;
+}
+.cms-table tbody tr:last-child td { border-bottom: none; }
+.cms-table tbody tr:hover { background: var(--ork-bg-secondary); }
+.cms-table .cms-pg-title { font-weight: 600; color: var(--ork-text); }
+.cms-table .cms-pg-slug { font-size: 12px; color: var(--ork-text-muted); }
+.cms-table a.cms-pg-slug-link { color: var(--ork-text-muted); text-decoration: none; cursor: pointer; }
+.cms-table a.cms-pg-slug-link:hover { text-decoration: underline; }
+.cms-table a.cms-pg-slug-link .fa-external-link-alt { font-size: .78em; opacity: .55; margin-left: 3px; }
+.cms-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.cms-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--ork-text-muted);
+}
+.cms-empty-icon {
+    color: var(--cms-gold, #f0b429);
+    font-size: 44px;
+    line-height: 1;
+    opacity: .9;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .15));
+}
+.cms-empty-copy {
+    font-size: 14px;
+    max-width: 420px;
+    line-height: 1.5;
+}
+.cms-empty-cta {
+    margin-top: 4px;
+}
+/* Compact empty state. .cms-empty is a 48px-tall centred panel with a 44px icon
+   in it — right for "this list is where your work lives and it is empty", far too
+   loud for a secondary analytics panel that is empty because nobody has visited
+   the site yet. One line, stated plainly, in a dashed box so it still reads as a
+   placeholder rather than as content. Colour comes from tokens, so dark mode
+   follows without a second rule. */
+.cms-empty-line {
+    margin: 0;
+    padding: 11px 14px;
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 9px;
+    color: var(--ork-text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+}
+
+/* New-page type chooser (in a modal) */
+.cms-typegrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+/* The flex tile layout (icon chip + text column) is folded in here; it used to
+   be a second .cms-typecard rule ~95 lines down. Nothing between the two rules
+   sets display/align-items/gap on .cms-typecard at equal specificity
+   (.cms-typecard:hover and .cms-typecard strong are more specific / a different
+   subject), so merging them is cascade-neutral. */
+.cms-typecard {
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 9px;
+    padding: 13px 14px;
+    background: var(--ork-bg-secondary);
+    cursor: pointer;
+    text-align: left;
+    color: var(--ork-text);
+    transition: border-color .12s, background .12s;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+.cms-typecard:hover { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
+.cms-typecard strong { display: block; font-size: 14px; margin-bottom: 3px; }
+.cms-typecard span { font-size: 12px; color: var(--ork-text-muted); }
+
+/* Block chooser: searchable + grouped + icon'd tiles */
+.cms-typesearch {
+    position: relative;
+    margin-bottom: 14px;
+}
+.cms-typesearch i {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    pointer-events: none;
+}
+.cms-typesearch .cms-input { padding-left: 32px; width: 100%; box-sizing: border-box; }
+
+.cms-typegroup { margin-bottom: 16px; }
+.cms-typegroup:last-child { margin-bottom: 0; }
+.cms-typegroup-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ork-text-muted);
+    margin: 0 0 8px;
+    padding: 4px 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+}
+.cms-typegroup-title:hover { color: var(--ork-text); }
+.cms-typegroup-caret {
+    font-size: 10px;
+    transition: transform .12s ease;
+}
+.cms-typegroup-count {
+    font-weight: 600;
+    color: var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-radius: 999px;
+    padding: 0 7px;
+    letter-spacing: 0;
+}
+.cms-typegroup-collapsed .cms-typegroup-caret { transform: rotate(-90deg); }
+.cms-typegroup-collapsed .cms-typegrid { display: none; }
+.cms-typegroup-collapsed .cms-typegroup-title { margin-bottom: 0; }
+.cms-typegrid-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--ork-text-muted);
+    font-size: 13px;
+}
+
+/* "Show all blocks" / "Show only suited" toggle in the Add-block chooser */
+.cms-addshowall {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ork-border);
+    text-align: center;
+}
+.cms-link-btn {
+    background: none;
+    border: 0;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-link-btn:hover { color: var(--cms-gold, #f0b429); text-decoration: underline; }
+.cms-link-btn i { font-size: 11px; }
+
+/* Tile layout: icon chip + text column. The .cms-typecard flex rule itself lives
+   with the rest of the .cms-typecard base above. */
+.cms-typecard-icon {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ork-bg-tertiary);
+    color: var(--cms-gold, #f0b429);
+    font-size: 14px;
+}
+.cms-typecard-text { min-width: 0; }
+.cms-typecard-text strong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cms-typecard-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    line-height: 1.5;
+}
+.cms-badge-dynamic { background: var(--ork-badge-blue-bg, #e0ecff); color: var(--ork-badge-blue-text, #1d4ed8); }
+.cms-badge-soon    { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px dashed var(--ork-border-dark); }
+
+.cms-typecard-disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
+.cms-typecard-disabled:hover { border-color: var(--ork-border-dark); background: var(--ork-bg-secondary); }
+.cms-typecard-disabled .cms-typecard-icon { color: var(--ork-text-muted); }
+
+/* Add-block chooser: wide modal → three responsive columns (less vertical
+ * scroll), each card carrying a one-line description of what the block is. */
+#cmsAddModal .cms-typegrid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.cms-typecard-desc {
+    display: block;
+    font-size: 12px;
+    color: var(--ork-text-muted);
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* ============================================================================
+ * Block editor (Cms_edit)
+ * ========================================================================== */
+
+.cms-editor {
+    display: grid;
+    grid-template-columns: 1fr;   /* blocks span the full width; settings live in the rail */
+    gap: 16px;
+    align-items: start;
+}
+.cms-meta-panel {
+    position: sticky;
+    top: calc(var(--cms-header-h, 48px) + 14px); /* clear the fixed navbar */
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    background: var(--ork-card-bg);
+    padding: 16px;
+}
+.cms-meta-panel h2 {
+    font-size: 15px;
+    margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+
+/* ---- Page-settings panel inside the rail (edit page) ------------------- */
+.cms-rail-extra {
+    border-top: 1px solid rgba(240, 180, 41, .18);
+    padding-top: 12px;
+    margin-top: 2px;
+}
+.cms-rail-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    padding: 0 4px;
+    color: var(--cms-gold, #f0b429);
+    background: transparent; border: none; border-radius: 0; text-shadow: none;
+}
+.cms-rail-settings .cms-field { margin-bottom: 9px; }
+.cms-rail-settings .cms-input,
+.cms-rail-settings .cms-select,
+.cms-rail-settings .cms-textarea { font-size: 13px; padding: 7px 9px; }
+.cms-rail-settings .cms-help { font-size: 11px; }
+.cms-btn-block { width: 100%; justify-content: center; }
+.cms-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 14px;
+    font-size: 13px;
+    color: var(--ork-text-secondary);
+}
+.cms-action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.cms-action-row .cms-btn { flex: 1 1 auto; justify-content: center; }
+
+.cms-blocks-col { min-width: 0; }
+.cms-blocks-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.cms-blocks-head h2 {
+    font-size: 15px; margin: 0;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+
+.cms-block-card {
+    border: 1px solid var(--ork-border);
+    border-radius: 10px;
+    background: var(--cms-card);
+    margin-bottom: 9px;
+    overflow: hidden;
+}
+.cms-block-card.cms-block-disabled { opacity: .62; }
+.cms-block-card.cms-dragging { opacity: .4; }
+.cms-block-card.cms-drag-over { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .4); }
+.cms-block-card.cms-block-error { border-color: var(--ork-badge-red-text, #c0392b); box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
+
+/* Block icon chip on the card head */
+.cms-block-icon {
+    flex: 0 0 auto;
+    color: var(--cms-gold, #f0b429);
+    font-size: 14px;
+    width: 18px;
+    text-align: center;
+}
+
+/* Quiet inline error message inside a block body */
+.cms-block-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 12px;
+    padding: 8px 11px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    background: var(--ork-badge-red-bg, #fde8e6);
+    color: var(--ork-badge-red-text, #c0392b);
+    border: 1px solid var(--ork-badge-red-text, #c0392b);
+}
+
+/* A block "row" wraps an insert-before zone + its card WITHOUT adding a layout
+   box (display:contents), so a single-block reorder / insert / remove can move
+   one node instead of rebuilding the whole list — which is what tears down every
+   open TinyMCE editor. Full renderList is reserved for replaceModel/seed. */
+.cms-block-row { display: contents; }
+
+/* Brief highlight when jumping the author to a save-blocking (invalid-JSON) block. */
+.cms-block-card.cms-block-error-flash { animation: cmsErrFlash 1.4s ease; }
+
+@keyframes cmsErrFlash {
+    0%, 100% { box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
+    30% { box-shadow: 0 0 0 4px rgba(192, 57, 43, .5); }
+}
+
+/* Degraded rich-text warning — shown when the TinyMCE bundle fails to load and
+   a rich-text field silently falls back to a raw-HTML textarea (theme-aware). */
+.cms-help-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: var(--ork-badge-orange-bg, #feebc8);
+    color: var(--ork-badge-orange-text, #9c4221);
+    border: 1px solid var(--ork-badge-orange-text, #9c4221);
+}
+
+/* Insert-between hover-reveal "+" zone */
+.cms-inserter {
+    position: relative;
+    height: 10px;
+    margin: -4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-inserter::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    background: var(--cms-gold, #f0b429);
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity .12s;
+}
+.cms-inserter:hover { height: 22px; }
+.cms-inserter:hover::before { opacity: .55; }
+.cms-inserter-btn {
+    position: relative;
+    z-index: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--ork-border);
+    background: var(--ork-card-bg);
+    color: var(--ork-text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(.7);
+    transition: opacity .12s, transform .12s, color .12s, border-color .12s;
+}
+.cms-inserter:hover .cms-inserter-btn,
+.cms-inserter-btn:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+}
+.cms-inserter-btn:hover {
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+}
+.cms-block-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    background: var(--ork-bg-secondary);
+    border-bottom: 1px solid var(--ork-border);
+}
+.cms-drag-handle {
+    cursor: grab;
+    color: var(--ork-text-lighter);
+    font-size: 15px;
+    padding: 2px 4px;
+}
+.cms-drag-handle:active { cursor: grabbing; }
+.cms-block-type {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--ork-text);
+}
+.cms-block-summary {
+    font-size: 12px;
+    color: var(--ork-text-muted);
+    margin-left: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+    /* Give up width to the tools rather than squeezing them (collapsed cards
+       navigate by this line, so it earns space but never at their expense). */
+    flex: 0 1 auto;
+    min-width: 0;
+}
+.cms-block-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+.cms-icon-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ork-text-secondary);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-icon-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Touch: enlarge the block-editor icon controls toward the ~44px minimum and
+   space them out so they aren't clustered below the finger-friendly size. */
+@media (max-width: 680px) {
+    .cms-block-tools { gap: 8px; }
+    .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+}
+
+/* Narrow phones: let the nav-manager row wrap so the action buttons drop to
+   their own full-width row (no off-screen clipping) and stay tappable. */
+@media (max-width: 560px) {
+    .cms-nav-item .cms-block-head { flex-wrap: wrap; }
+    .cms-nav-item .cms-block-tools {
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .cms-nav-item .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+    .cms-nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+.cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
+
+.cms-block-body { padding: 10px 12px; }
+.cms-block-body.cms-collapsed { display: none; }
+
+/* ---- Collapsed-by-default block cards ------------------------------------
+   Block bodies now start closed, which makes the head the primary navigation
+   rather than a label above an already-open form. It therefore has to read as
+   a control: pointer cursor, a hover wash, and a chevron whose direction says
+   which way it goes. .cms-block-collapsible is set only on the page-level
+   cards; a columns child card reuses the same chrome but is always open, so it
+   keeps the plain, non-interactive head. Colours are theme tokens, so the
+   hover wash follows html[data-theme="dark"] with no dark-only override. */
+.cms-block-collapsible > .cms-block-head {
+    cursor: pointer;
+    /* A double-click on the head should open the block, not select its title. */
+    user-select: none;
+}
+
+/* toggle switch */
+.cms-switch { position: relative; display: inline-block; width: 38px; height: 21px; flex: 0 0 auto; }
+.cms-switch input { opacity: 0; width: 0; height: 0; }
+.cms-switch .cms-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: var(--ork-border-dark);
+    border-radius: 999px; transition: background .15s;
+}
+.cms-switch .cms-slider::before {
+    content: ""; position: absolute; height: 15px; width: 15px;
+    left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .15s;
+}
+.cms-switch input:checked + .cms-slider { background: var(--cms-gold, #f0b429); }
+.cms-switch input:checked + .cms-slider::before { transform: translateX(17px); }
+
+/* repeating sub-item lists (slides, cards, ctas) */
+.cms-subitems { margin-top: 4px; }
+.cms-subitem {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background: var(--ork-bg-secondary);
+}
+.cms-subitem-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.cms-subitem-head strong { font-size: 12.5px; color: var(--ork-text-secondary); }
+.cms-subitem-head .cms-block-tools { margin-left: auto; }
+.cms-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* schema-form: grouped object fields (e.g. a CTA's label + href) */
+.cms-group {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 10px 12px 4px;
+    margin-bottom: 14px;
+    background: var(--ork-bg-secondary);
+}
+.cms-group > .cms-label { margin-bottom: 8px; }
+.cms-group-body .cms-field:last-child { margin-bottom: 6px; }
+
+/* schema-form: static info note (e.g. marketing_nav → managed in Navigation tab) */
+.cms-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--ork-text-secondary);
+    background: var(--ork-bg-secondary);
+    border: 1px solid var(--ork-border);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 7px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+.cms-note > i { color: var(--cms-gold, #f0b429); margin-top: 2px; }
+.cms-note a { color: var(--cms-gold-deep, #caa23a); font-weight: 600; }
+/* "Edits to a published page go live immediately" — amber warning variant. */
+.cms-note-live {
+    border-left-color: var(--cms-warn, #b8860b);
+    background: rgba(184, 134, 11, .08);
+}
+.cms-note-live > i { color: var(--cms-warn, #b8860b); }
+html[data-theme="dark"] .cms-note-live { background: rgba(184, 134, 11, .14); }
+
+/* dynamic-block info card (icon + one-line live description) */
+.cms-dyninfo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(180deg, var(--ork-bg-tertiary), var(--ork-bg-secondary));
+    border: 1px solid var(--ork-border);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 9px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+.cms-dyninfo-icon {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--cms-navy, #0b1120);
+    background: var(--cms-gold, #f0b429);
+}
+.cms-dyninfo-text { min-width: 0; }
+.cms-dyninfo-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--cms-gold-deep, #caa23a);
+    margin-bottom: 3px;
+}
+.cms-dyninfo-title > i { margin-right: 4px; }
+.cms-dyninfo-body { font-size: 13px; line-height: 1.45; color: var(--ork-text-secondary); }
+
+html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
+/* dark .cms-note a is gold — see "Gold accent text" below. */
+
+/* media picker field control */
+.cms-media-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.cms-media-thumb {
+    width: 74px; height: 56px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border-dark);
+    object-fit: cover;
+    background: var(--ork-bg-tertiary);
+    flex: 0 0 auto;
+}
+.cms-media-thumb.cms-empty-thumb {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ork-text-lighter); font-size: 18px;
+}
+.cms-media-meta { min-width: 0; flex: 1 1 auto; }
+.cms-media-meta .cms-media-name { font-size: 12.5px; color: var(--ork-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* TinyMCE wrapper keeps a min height while the editor boots */
+.cms-richtext-host { min-height: 220px; }
+
+/* ============================================================================
+ * Modals (media picker, confirm, type chooser) — position:fixed, dark-styled
+ * ========================================================================== */
+
+.cms-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--ork-overlay);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    /* The one tier above #newmenu's stacking context — see tokens.css. */
+    z-index: var(--ork-z-app-modal);
+    padding: 40px 16px;
+    overflow-y: auto;
+}
+.cms-modal-overlay.cms-open { display: flex; }
+.cms-modal {
+    background: var(--ork-card-bg);
+    color: var(--ork-text);
+    border: 1px solid var(--ork-border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 760px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 80px);
+}
+.cms-modal.cms-modal-sm { max-width: 440px; }
+.cms-modal.cms-modal-wide { max-width: 840px; }
+.cms-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--ork-border);
+}
+.cms-modal-head h3 {
+    margin: 0; font-size: 16px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-modal-close {
+    margin-left: auto;
+    border: none; background: transparent;
+    color: var(--ork-text-muted);
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.cms-modal-close:hover { color: var(--ork-text); }
+.cms-modal-body { padding: 18px; overflow-y: auto; }
+.cms-modal-foot {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 14px 18px;
+    border-top: 1px solid var(--ork-border);
+}
+
+/* media library grid */
+.cms-media-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.cms-media-toolbar .cms-input { max-width: 240px; }
+.cms-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+.cms-media-tile {
+    border: 2px solid var(--ork-border);
+    border-radius: 9px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--ork-bg-secondary);
+    transition: border-color .12s, transform .08s;
+}
+.cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); transform: translateY(-1px); }
+.cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
+.cms-media-tile:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
+.cms-media-tile img {
+    width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
+}
+/* Broken-thumbnail fallback for picker tiles — same 92px footprint as the
+   image, centered fa-image, sitting above the caption so nothing overlaps. */
+.cms-media-tile-fallback {
+    width: 100%; height: 92px; display: flex; align-items: center; justify-content: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-lighter, #9aa2ad); font-size: 24px;
+}
+.cms-media-tile .cms-media-cap {
+    font-size: 11px; padding: 6px 8px; color: var(--ork-text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cms-media-empty { padding: 30px; text-align: center; color: var(--ork-text-muted); grid-column: 1 / -1; }
+
+.cms-upload-drop {
+    display: block;
+    box-sizing: border-box;
+    border: 2px dashed var(--ork-border-dark);
+    border-radius: 9px;
+    padding: 18px;
+    text-align: center;
+    color: var(--ork-text-muted);
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+.cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
+.cms-upload-drop input[type="file"] { display: none; }
+
+/* ---- Shared confirm dialog body (cms/_confirm_modal.tpl) ---------------- */
+.cms-confirm-body {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* ============================================================================
+ * Toast
+ * ========================================================================== */
+
+.cms-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: var(--ork-z-app-toast);
+    min-width: 200px;
+    max-width: 360px;
+    padding: 12px 16px;
+    border-radius: 9px;
+    background: var(--ork-text);
+    color: var(--ork-bg);
+    font-size: 13.5px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+}
+.cms-toast.cms-show { opacity: 1; transform: translateY(0); }
+.cms-toast.cms-toast-error { background: var(--ork-badge-red-text); color: #fff; }
+.cms-toast.cms-toast-ok { background: var(--ork-badge-green-text); color: #fff; }
+
+/* spinner */
+.cms-spin {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: cms-spin .7s linear infinite;
+    vertical-align: -2px;
+}
+
+@keyframes cms-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================================
+ * Dark-mode tweaks (variables already flip; these refine hand-picked bits)
+ * ========================================================================== */
+
+html[data-theme="dark"] .cms-toast { background: #f0f2f5; color: #1a202c; }
+/* The neutral dark toast above is (0,2,1) and declared after the .cms-toast.cms-toast-*
+   status colors (0,2,0), so it would otherwise repaint an error toast light-gray and
+   throw away the one signal that matters. Re-assert both at matching specificity. */
+html[data-theme="dark"] .cms-toast.cms-toast-error { background: var(--ork-badge-red-text); color: #fff; }
+html[data-theme="dark"] .cms-toast.cms-toast-ok { background: var(--ork-badge-green-text); color: #fff; }
+/* Gold primary button keeps DARK ink in both themes */
+html[data-theme="dark"] .cms-btn-primary,
+html[data-theme="dark"] #theme_container a.cms-btn-primary,
+html[data-theme="dark"] a.cms-btn-primary { color: #1a1205 !important; }
+html[data-theme="dark"] .cms-switch .cms-slider::before { background: #e2e8f0; }
+html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
+
+/* ============================================================================
+ * DataTables — theme the controls to match the admin theme + .cms-table
+ * (Pages list / Posts list). Neutralize DataTables' default light CSS so it
+ * never clashes with the dark theme.
+ * ========================================================================== */
+
+/* The DataTables wrapper sits inside .cms-table-wrap; give the controls room. */
+.cms-table-wrap .dataTables_wrapper {
+    padding: 12px 14px 4px;
+    color: var(--ork-text);
+    font-size: 13px;
+}
+/* Search box + page-length live above the table. */
+.cms-table-wrap .dataTables_length,
+.cms-table-wrap .dataTables_filter {
+    margin-bottom: 10px;
+}
+.cms-table-wrap .dataTables_filter { text-align: right; }
+.cms-table-wrap .dataTables_length label,
+.cms-table-wrap .dataTables_filter label {
+    color: var(--ork-text-secondary);
+    font-weight: 600;
+    font-size: 12.5px;
+}
+/* Inputs / selects — reuse the cms-input look. */
+.cms-table-wrap .dataTables_length select,
+.cms-table-wrap .dataTables_filter input {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 9px;
+    margin: 0 6px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-input-border);
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    box-sizing: border-box;
+}
+.cms-table-wrap .dataTables_filter input { min-width: 200px; }
+/* Their :focus ring is grouped onto .cms-input:focus in the form-controls
+   section above — same declarations, stated once. */
+/* The DataTables-managed table keeps the .cms-table look; kill DT borders. */
+.cms-table-wrap table.cms-table.dataTable {
+    border-collapse: collapse;
+    margin: 0;
+    border: none;
+}
+.cms-table-wrap table.cms-table.dataTable thead th {
+    border-bottom: 1px solid var(--ork-border);
+}
+/* Sort indicators — gold-tinted, no clashing default background images. */
+.cms-table-wrap table.cms-table.dataTable thead th.sorting,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc {
+    cursor: pointer;
+    position: relative;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting::after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc::after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc::after {
+    content: "\2195"; /* up-down arrow */
+    margin-left: 6px;
+    opacity: .35;
+    font-size: 11px;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc::after { content: "\2191"; opacity: .9; color: var(--cms-gold, #f0b429); }
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc::after { content: "\2193"; opacity: .9; color: var(--cms-gold, #f0b429); }
+/* Remove DataTables' default PNG sprite background on sortable headers. */
+.cms-table-wrap table.cms-table.dataTable thead .sorting,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc_disabled,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc_disabled {
+    background-image: none;
+}
+/* Info text + pager. */
+.cms-table-wrap .dataTables_info {
+    color: var(--ork-text-muted);
+    padding-top: 10px;
+    font-size: 12.5px;
+}
+.cms-table-wrap .dataTables_paginate {
+    padding-top: 8px;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button {
+    box-sizing: border-box;
+    padding: 5px 11px !important;
+    margin-left: 4px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border) !important;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    cursor: pointer;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+    border-color: var(--ork-border-dark) !important;
+    color: var(--ork-text) !important;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.current,
+.cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420) !important;
+    border-color: var(--cms-gold-deep, #caa23a) !important;
+    color: #1a1205 !important;
+    font-weight: 700;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled,
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled:hover {
+    opacity: .4;
+    cursor: not-allowed;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text-muted) !important;
+}
+
+/* ---- Dark mode (html[data-theme="dark"]) ---- */
+html[data-theme="dark"] .cms-table-wrap .dataTables_length select,
+html[data-theme="dark"] .cms-table-wrap .dataTables_filter input {
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    border-color: var(--ork-input-border);
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button {
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    color: #1a1205 !important;
+}
+/* DataTables sets inline odd/even row striping; let the .cms-table hover win. */
+.cms-table-wrap table.cms-table.dataTable tbody tr,
+.cms-table-wrap table.cms-table.dataTable.stripe tbody tr.odd,
+.cms-table-wrap table.cms-table.dataTable.display tbody tr.odd {
+    background: transparent;
+}
+.cms-table-wrap table.cms-table.dataTable tbody tr:hover {
+    background: var(--ork-bg-secondary);
+}
+
+/* ============================================================================
+ * List filter strip (Pages) — ONE row that looks like the product
+ *
+ * Status, search and the per-page count read as one control group across the top
+ * of the table card: Cms_index.tpl relocates DataTables' generated length/search
+ * widgets into this strip on init. These rules must stay AFTER the DataTables
+ * block above — they tie it on specificity, so source order is what makes them
+ * win.
+ * ========================================================================== */
+.cms-listbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+/* The search field is the only strip item that grows, so it absorbs the free
+   space and pushes the page-length widget to the right edge on its own. */
+.cms-listbar-search { flex: 1 1 240px; min-width: 0; }
+.cms-listbar .cms-select { max-width: 170px; flex: 0 0 auto; }
+/* Neutralise the widgets' own spacing/alignment now that they are strip items. */
+.cms-table-wrap .cms-listbar .dataTables_filter,
+.cms-table-wrap .cms-listbar .dataTables_length {
+    margin: 0;
+    text-align: left;
+    white-space: nowrap;
+}
+.cms-table-wrap .cms-listbar .dataTables_filter input {
+    margin: 0;
+    width: 100%;
+    min-width: 0;
+}
+.cms-table-wrap .cms-listbar .dataTables_filter label {
+    display: block;
+    margin: 0;
+}
+.cms-table-wrap .cms-listbar .dataTables_length select { margin: 0 0 0 6px; }
+/* With the controls hoisted into the strip, the wrapper no longer needs the top
+   padding it reserved for them. Scoped to "a strip precedes it" so the lists
+   that still keep their controls inside the wrapper are untouched. */
+.cms-table-wrap .cms-listbar + .dataTables_wrapper { padding-top: 0; }
+
+@media (max-width: 640px) {
+    .cms-listbar .cms-select { max-width: none; flex: 1 1 auto; }
+}
+
+/* ============================================================================
+ * Bulk-select bar + checkbox column + row-action overflow menu
+ * ========================================================================== */
+
+/* Leading checkbox column — keep tight + centered, no wrap. */
+.cms-table th.cms-check-col,
+.cms-table td.cms-check-col {
+    width: 34px;
+    text-align: center;
+    padding-left: 12px;
+    padding-right: 4px;
+}
+.cms-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--cms-gold, #f0b429);
+    vertical-align: middle;
+}
+
+/* Bulk-action bar — hidden until ≥1 row selected. */
+.cms-bulkbar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 9px;
+    background: var(--cms-card);
+}
+.cms-bulkbar.cms-open { display: flex; }
+.cms-bulkbar.cms-busy { opacity: .6; pointer-events: none; }
+.cms-bulkbar-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ork-text);
+}
+.cms-bulkbar-count i { color: var(--cms-gold-deep, #caa23a); margin-right: 6px; }
+.cms-bulkbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+/* Row-action overflow menu (⋯) — lightweight dark-themed dropdown. */
+.cms-overflow {
+    position: relative;
+    display: inline-block;
+}
+.cms-overflow-btn {
+    border: 1px solid var(--ork-border-dark);
+    background: transparent;
+    color: var(--ork-text-secondary);
+    width: 30px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-overflow-btn:hover,
+.cms-overflow-btn:focus-visible {
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+    outline: none;
+}
+.cms-overflow-menu {
+    display: none;
+    /* JS positions this as position:fixed (left/top set inline) when opened, so it
+     * escapes the .cms-table-wrap overflow:hidden clip and flips upward near the
+     * viewport bottom — the same fixed-anchor pattern the autocomplete dropdowns use. */
+    position: fixed;
+    z-index: var(--z-modal-top);
+    min-width: 168px;
+    padding: 5px;
+    border: 1px solid var(--ork-border);
+    border-radius: 9px;
+    background: var(--ork-card-bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+}
+.cms-overflow.cms-open .cms-overflow-menu { display: block; }
+.cms-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 11px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ork-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.cms-overflow-item:hover,
+.cms-overflow-item:focus-visible {
+    background: var(--ork-bg-secondary);
+    outline: none;
+}
+.cms-overflow-item i { width: 15px; text-align: center; color: var(--ork-text-muted); }
+.cms-overflow-item.cms-overflow-danger { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger i { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger:hover,
+.cms-overflow-item.cms-overflow-danger:focus-visible { background: var(--ork-badge-red-bg); }
+.cms-overflow-sep { height: 1px; background: var(--ork-border); margin: 5px 4px; }
+
+html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, .55); }
+
+/* The primary Edit button + the overflow trigger live in the row-actions cluster. */
+.cms-row-actions .cms-overflow { margin-left: 2px; }
+
+/* ============================================================================
+ * Editor — sticky action bar (Save / Publish / Preview, always visible)
+ * ========================================================================== */
+
+.cms-editbar {
+    position: sticky;
+    top: var(--cms-header-h, 48px); /* clear the fixed navbar; 0 would hide behind it */
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .18);
+}
+.cms-editbar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.cms-editbar-author { color: rgba(255, 255, 255, .7); font-size: 12.5px; }
+.cms-editbar-hint {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, .62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-editbar-hint .cms-spin { border-top-color: var(--cms-gold, #f0b429); }
+
+/* ---- Gold accent text -----------------------------------------------------
+ * One declaration that seven unrelated places need. It used to be copied seven
+ * times across ~2,300 lines — the largest duplicate declaration body in the CMS
+ * CSS — and bin/check-css-duplication.php now holds it at one.
+ *
+ * WHY IT LIVES HERE, in the middle of the edit bar rather than in a tidy
+ * accent section: .cms-editbar-hint-dirty is the only member whose position in
+ * the cascade is load-bearing. It overrides .cms-editbar-hint immediately above
+ * at EQUAL specificity (0,1,0), so source order is the only thing that makes it
+ * win, and the grouped rule inherits that constraint for the whole list. The
+ * other six each outrank what they override on specificity alone, so they are
+ * order-independent and follow the one member that is not. Moving this block
+ * earlier silently un-golds the "Unsaved changes…" hint.
+ *
+ * Each of the six former sites keeps a one-line pointer back here.
+ * ------------------------------------------------------------------------- */
+.cms-rail-item.active .cms-rail-icon,
+html[data-theme="dark"] .cms-crumb[href]:hover,
+html[data-theme="dark"] .cms-note a,
+.cms-editbar-hint-dirty,
+html[data-theme="dark"] .cms-frontdoor-text strong,
+html[data-theme="dark"] .cms-dash-livelink:hover,
+html[data-theme="dark"] a.cms-sites-slug:hover {
+    color: var(--cms-gold, #f0b429);
+}
+
+.cms-editbar-hint-saved { color: #8be8a8; }
+.cms-editbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+/* Ghost buttons sit on the navy bar — lighten their text/border for contrast. */
+.cms-editbar .cms-btn-ghost {
+    border-color: rgba(255, 255, 255, .22);
+    color: rgba(255, 255, 255, .9);
+    background: rgba(255, 255, 255, .04);
+}
+.cms-editbar .cms-btn-ghost:hover {
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+}
+.cms-editbar .cms-btn-active {
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+    background: rgba(240, 180, 41, .12);
+}
+
+/* ============================================================================
+ * Editor — front-door identity banner
+ * ========================================================================== */
+
+.cms-frontdoor-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(240, 180, 41, .14), rgba(240, 180, 41, .06));
+}
+.cms-frontdoor-mark {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    color: #1a1205;
+}
+.cms-frontdoor-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cms-frontdoor-text strong { color: var(--ork-text); font-size: 14px; }
+.cms-frontdoor-text span { color: var(--ork-text-muted); font-size: 12.5px; }
+/* dark .cms-frontdoor-text strong is gold — see "Gold accent text" above. */
+
+/* ============================================================================
+ * Editor — in-context preview pane
+ * ========================================================================== */
+
+/* The grid gains a 3rd track only when the pane is open. */
+/* With the live preview open the editor IS a two-column workspace, so it drops
+   the single-column measure and takes the width. */
+.cms-editor-haspreview.cms-preview-active {
+    grid-template-columns: 1fr minmax(360px, 0.95fr);
+    max-width: none;
+}
+.cms-preview-pane {
+    display: none;
+    position: sticky;
+    top: 64px;
+    align-self: start;
+    max-height: calc(100vh - 84px);
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 12px;
+    background: var(--ork-card-bg);
+    overflow: hidden;
+    flex-direction: column;
+}
+.cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+    display: flex;
+}
+.cms-preview-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+.cms-preview-pane-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ork-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-preview-pane-title i { color: var(--cms-gold-deep, #caa23a); }
+.cms-preview-devtoggle {
+    display: inline-flex;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 7px;
+    overflow: hidden;
+    margin-left: 6px;
+}
+.cms-devbtn {
+    border: none;
+    background: var(--ork-bg);
+    color: var(--ork-text-muted);
+    padding: 5px 9px;
+    font-size: 12.5px;
+    cursor: pointer;
+    line-height: 1;
+}
+.cms-devbtn + .cms-devbtn { border-left: 1px solid var(--ork-border-dark); }
+.cms-devbtn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-devbtn-active {
+    background: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+/* The live preview's status line, between the pane head and the frame.
+   The base state is the quiet "Updating…" tick. .cms-preview-note-error is a
+   refresh that FAILED, and it deliberately does not look like an editor error:
+   the form is fine and the author's text is safe — only the picture is stale.
+   Both colours are CRM tokens read (never defined) here, so dark mode arrives
+   with the palette. */
+.cms-preview-note {
+    font-size: 11.5px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg);
+    color: var(--ork-text-muted);
+}
+.cms-preview-note-error {
+    color: var(--ork-badge-red-text, #c0392b);
+    background: var(--ork-badge-red-bg, #fdecea);
+}
+.cms-preview-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    justify-content: center;
+}
+.cms-preview-frame-wrap {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    transition: max-width .18s ease;
+}
+.cms-preview-frame-wrap[data-device="mobile"] {
+    max-width: 390px;
+    box-shadow: 0 0 0 1px var(--ork-border-dark);
+}
+.cms-preview-iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    border: 0;
+    background: #fff;
+    display: block;
+}
+
+/* ============================================================================
+ * Responsive — stack on mobile
+ * ========================================================================== */
+
+@media (max-width: 1100px) {
+    /* Preview pane drops below the editor instead of a 3rd column. */
+    .cms-editor-haspreview.cms-preview-active {
+        grid-template-columns: 320px 1fr;
+    }
+    .cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: 70vh;
+    }
+}
+
+@media (max-width: 860px) {
+    .cms-editor { grid-template-columns: 1fr; }
+    .cms-editor-haspreview.cms-preview-active { grid-template-columns: 1fr; }
+    .cms-meta-panel { position: static; }
+    .cms-editbar-actions { width: 100%; margin-left: 0; }
+    .cms-editbar-status { flex: 1 1 100%; }
+}
+
+@media (max-width: 620px) {
+    .cms-grid2 { grid-template-columns: 1fr; }
+    .cms-typegrid { grid-template-columns: 1fr; }
+    /* Blocks start collapsed, so the summary is how a phone author tells one
+       card from the next — it can no longer be hidden. Wrap the head and give
+       the summary its own full-width line under the block name. */
+    .cms-block-head { flex-wrap: wrap; }
+    .cms-block-summary {
+        order: 3;
+        flex: 1 1 100%;
+        max-width: 100%;
+        margin-left: 28px;
+        white-space: normal;
+    }
+    .cms-table thead { display: none; }
+    .cms-table, .cms-table tbody, .cms-table tr, .cms-table td { display: block; width: 100%; box-sizing: border-box; }
+    .cms-table tr { border-bottom: 1px solid var(--ork-border); padding: 8px 0; }
+    .cms-table td { border: none; padding: 5px 14px; }
+    .cms-row-actions { justify-content: flex-start; }
+    .cms-filters .cms-input,
+    .cms-filters .cms-select { max-width: none; flex: 1 1 100%; }
+    .cms-bulkbar-actions { margin-left: 0; width: 100%; }
+}
+
+/* Staff Roster — persona link chip + autocomplete meta.
+   Note: .cms-help and .cms-link-btn already exist above (theme-var based,
+   dark-compatible) and are reused as-is; only the new selectors are added here. */
+.cms-persona-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.kn-ac-meta {
+    color: var(--ork-text-muted, #9aa3b8);
+    font-size: 12px;
+    margin-left: 6px;
+}
+
+html[data-theme="dark"] .cms-persona-chip {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+/* Persona-search autocomplete dropdown. It is appended to <body> (outside
+   .cms-shell) and fixed-positioned, so it is styled globally here with a SOLID
+   surface + scroll so results never bleed through onto the fields beneath. */
+.cms-persona-ac {
+    box-sizing: border-box;
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .28);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+}
+.cms-persona-ac .kn-ac-item {
+    display: block;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.25;
+    color: var(--ork-text, #1b2a4a);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-persona-ac .kn-ac-item:hover { background: rgba(240, 180, 41, .16); }
+.cms-persona-ac .kn-ac-none { color: var(--ork-text-muted, #8a93a6); cursor: default; }
+.cms-persona-ac .kn-ac-none:hover { background: transparent; }
+html[data-theme="dark"] .cms-persona-ac {
+    background: #1c2333;
+    border-color: #2c3650;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+}
+html[data-theme="dark"] .cms-persona-ac .kn-ac-item { color: #eef1f8; }
+html[data-theme="dark"] .cms-persona-ac .kn-ac-item:hover { background: rgba(240, 180, 41, .18); }
+
+/* ============================================================
+   Theme Editor (.theme-editor)
+   Two-column: controls left, preview right.
+   All dark-mode overrides use html[data-theme="dark"].
+   ============================================================ */
+
+.theme-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+}
+
+/* ---- Presets row ---- */
+.te-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec);
+    margin-bottom: 16px;
+}
+.te-presets-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-right: 4px;
+}
+.te-preset {
+    padding: 5px 13px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 20px;
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.te-preset:hover {
+    background: rgba(240, 180, 41, .14);
+    border-color: rgba(240, 180, 41, .5);
+}
+html[data-theme="dark"] .te-presets { border-bottom-color: #2c3650; }
+html[data-theme="dark"] .te-preset {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c8d0e0;
+}
+html[data-theme="dark"] .te-preset:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: rgba(240, 180, 41, .4);
+}
+
+/* ---- Two-column layout ---- */
+.te-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+    min-height: 0;
+}
+
+@media (max-width: 900px) {
+    .te-layout { grid-template-columns: 1fr; }
+}
+
+/* ---- Controls column ---- */
+.te-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* ---- Token group section ---- */
+.te-group {
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-group-title {
+    /* Reset the global h1–h6 pill style from orkui.css */
+    background: var(--ork-surface, #f4f6fa) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec) !important;
+    border-radius: 0 !important;
+    text-shadow: none !important;
+    padding: 9px 14px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.te-group-title i { font-size: 11px; }
+/* Token-group and Advanced bodies are the same stacked list; grouped rather than
+   renamed so the theme-editor markup is untouched. */
+.te-group-body,
+.te-advanced-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+html[data-theme="dark"] .te-group {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-group-title {
+    background: #151c2b !important;
+    border-bottom-color: #2c3650 !important;
+    color: #7a8ba6 !important;
+}
+
+/* ---- Token row ---- */
+.te-token-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+}
+.te-token-label {
+    flex: 0 0 140px;
+    font-size: 13px;
+    color: var(--ork-text, #1b2a4a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+html[data-theme="dark"] .te-token-label { color: #c0cad8; }
+
+/* Color input */
+.te-color {
+    width: 38px;
+    height: 30px;
+    padding: 2px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    cursor: pointer;
+    background: none;
+    flex: 0 0 auto;
+}
+.te-color::-webkit-color-swatch-wrapper { padding: 0; }
+.te-color::-webkit-color-swatch { border: none; border-radius: 3px; }
+.te-color-hex {
+    flex: 1 1 80px;
+    max-width: 96px;
+    font-size: 12px;
+    font-family: monospace;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+}
+html[data-theme="dark"] .te-color { border-color: #2c3650; }
+/* Dark surface for every theme-editor input control. The hex field, the select
+   and the number field carried three byte-identical copies; grouped here at the
+   first copy's position. Each still beats its own light rule on specificity
+   (html + [data-theme] + class), so the hoist changes nothing. */
+html[data-theme="dark"] .te-color-hex,
+html[data-theme="dark"] .te-select,
+html[data-theme="dark"] .te-number {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-color-hex::placeholder { color: #6b7585; }
+
+/* Select */
+/* ---- Font picker (Cms_theme.tpl) -----------------------------------------
+   A real listbox, not a styled <select>: font-family on an <option> is honoured
+   by Firefox and ignored by Chrome on macOS, so a native control cannot render
+   each family in itself — which is the entire purpose of this picker. The
+   native select stays in the DOM (value holder + no-JS fallback) and is hidden
+   only once the script has upgraded it, so with JS off the plain select shows.
+   -------------------------------------------------------------------------- */
+/* No html[data-theme="dark"] block below on purpose: every token these rules
+   read (--ork-input-bg, --ork-card-bg, --ork-border, --ork-text,
+   --ork-surface-hover) is already flipped by orkui.css's dark :root pair, so
+   restating them here would be a duplicate that says nothing new — and the
+   duplication ratchet counts it. Verified in both themes. */
+.te-font {
+    position: relative;
+    flex: 1 1 auto;
+    max-width: 240px;
+}
+/* Fully hidden, NOT visually-hidden: once the listbox exists it owns the
+   accessible name and the keyboard, so leaving the select in the a11y tree
+   would announce the same control twice. Applied by script only, so with JS
+   off the native select is what you get. */
+.te-font-native-hidden { display: none; }
+.te-font-btn {
+    display: block;
+    width: 100%;
+    padding: 6px 26px 6px 9px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath fill='%238a93a6' d='M0 0h10L5 6z'/%3E%3C/svg%3E") no-repeat right 9px center;
+    /* REQUIRED, not cosmetic: the SVG carries a viewBox but no width/height, so
+       it has no intrinsic size and background-size defaults to the whole
+       positioning area — the caret scales up to fill the entire control. */
+    background-size: 10px 6px;
+    color: var(--ork-text, #1b2a4a);
+    font-size: 15px;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+}
+.te-font-btn:focus-visible {
+    outline: 2px solid var(--ork-blue-link, #3182ce);
+    outline-offset: 1px;
+}
+.te-font-sample {
+    margin-top: 5px;
+    color: var(--ork-text-muted, #5b6472);
+    font-size: 15px;
+    line-height: 1.4;
+    /* A specimen is only useful if it cannot reflow the control column. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* position:FIXED, not absolute. .te-group sets overflow:hidden, so an absolutely
+   positioned panel is clipped by the card it opens inside — the same trap the
+   player-search autocomplete hit inside modals, solved the same way: take the
+   panel out of flow entirely and position it from the button's client rect
+   (teFontPlacePanel), re-running on scroll and resize. */
+.te-font-panel {
+    position: fixed;
+    z-index: var(--z-dropdown);
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 6px;
+    background: var(--ork-card-bg, #fff);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+.te-font-group {
+    padding: 7px 8px 3px;
+    color: var(--ork-text-muted, #5b6472);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.te-font-row {
+    padding: 6px 9px;
+    border-radius: 4px;
+    /* 17px because a blackletter or script face is illegible at control size —
+       the row has to be big enough to actually judge the letterforms. */
+    font-size: 17px;
+    line-height: 1.45;
+    cursor: pointer;
+}
+.te-font-row:hover,
+.te-font-row:focus-visible {
+    background: var(--ork-surface-hover, #edf2f7);
+    outline: none;
+}
+.te-font-row.is-selected {
+    background: var(--ork-blue-link, #3182ce);
+    color: #fff;
+}
+
+.te-select {
+    flex: 1 1 auto;
+    max-width: 200px;
+    padding: 5px 8px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+}
+/* Its dark surface is grouped onto html[data-theme="dark"] .te-color-hex above. */
+
+/* Range + number */
+.te-range-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+}
+.te-range {
+    flex: 1 1 80px;
+    accent-color: var(--cms-gold, #f0b429);
+}
+.te-number {
+    width: 60px;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    text-align: right;
+}
+.te-unit {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+}
+/* Its dark surface is grouped onto html[data-theme="dark"] .te-color-hex above. */
+
+/* ---- Advanced details ---- */
+.te-advanced {
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-advanced-summary {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+    background: var(--ork-surface, #f4f6fa);
+    user-select: none;
+    list-style: none;
+}
+.te-advanced-summary::-webkit-details-marker { display: none; }
+.te-advanced-summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 7px;
+    font-size: 10px;
+    transition: transform .15s;
+}
+.te-advanced[open] .te-advanced-summary::before { transform: rotate(90deg); }
+/* .te-advanced-body is grouped onto .te-group-body in the token-group section
+   above — same stacked-list body, stated once. */
+.te-advanced-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    margin: 0 0 6px;
+}
+html[data-theme="dark"] .te-advanced {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-advanced-summary {
+    background: #151c2b;
+    color: #7a8ba6;
+}
+
+/* ---- Preview column ---- */
+.te-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: sticky;
+    top: 16px;
+}
+.te-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+}
+.te-preview-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+}
+html[data-theme="dark"] .te-preview-bar {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+
+/* Dark toggle */
+.te-dark-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+}
+.te-dark-toggle input { margin: 0; accent-color: var(--cms-gold, #f0b429); }
+.te-dark-toggle-track i { font-size: 11px; }
+
+/* Contrast warning */
+.te-contrast-warn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 5px;
+    padding: 3px 9px;
+}
+/* Dark amber for both contrast warnings — the panel-level chip and the per-token
+   inline chip appended by JS further down. Grouped at the first copy's position;
+   each still outranks its own light rule on specificity, so nothing moves. */
+html[data-theme="dark"] .te-contrast-warn,
+html[data-theme="dark"] .te-contrast-warn-inline {
+    color: #fbbf24;
+    background: #27200a;
+    border-color: #78500a;
+}
+
+/* Preview iframe */
+.te-preview-frame {
+    display: block;
+    width: 100%;
+    height: 540px;
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+}
+html[data-theme="dark"] .te-preview-frame { border-color: #2c3650; }
+
+.te-preview-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    text-align: center;
+}
+
+/* ---- Action bar ---- */
+.te-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0 4px;
+    border-top: 1px solid var(--ork-border, #e2e6ec);
+    margin-top: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.te-actions-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+html[data-theme="dark"] .te-actions { border-top-color: #2c3650; }
+/* Currently-active-theme indicator in the action bar. */
+.te-active-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--ork-text-muted, #5b6472);
+}
+.te-active-status[data-active="1"] { color: var(--ork-text-secondary, #47506a); }
+.te-active-status[data-active="1"] > i { color: #16a34a; font-size: 9px; }
+.te-active-status[data-active="0"] > i { color: var(--ork-text-lighter, #9aa2ad); font-size: 10px; }
+
+/* ---- Shared button styles for the editor ---- */
+.te-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--ork-border, #d8dde6);
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    transition: background .15s, border-color .15s;
+}
+.te-btn:hover {
+    background: var(--ork-surface, #f4f6fa);
+}
+.te-btn-ghost {
+    background: transparent;
+    border-color: var(--ork-border, #d8dde6);
+    color: var(--ork-text-muted, #8a93a6);
+}
+.te-btn-ghost:hover {
+    background: var(--ork-surface, #f4f6fa);
+    color: var(--ork-text, #1b2a4a);
+}
+.te-btn-primary {
+    background: var(--cms-navy, #1b3b6f);
+    border-color: var(--cms-navy, #1b3b6f);
+    color: #fff;
+}
+.te-btn-primary:hover {
+    background: #142e58;
+    border-color: #142e58;
+}
+html[data-theme="dark"] .te-btn {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn:hover { background: #232e44; }
+html[data-theme="dark"] .te-btn-ghost {
+    background: transparent;
+    border-color: #2c3650;
+    color: #7a8ba6;
+}
+html[data-theme="dark"] .te-btn-ghost:hover {
+    background: #1c2333;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn-primary {
+    background: #2a5298;
+    border-color: #2a5298;
+    color: #fff;
+}
+html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
+
+/* Per-token inline contrast warning chip (appended to .te-token-row by JS) */
+.te-contrast-warn-inline {
+    font-size: 11px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+/* Its dark amber is grouped onto html[data-theme="dark"] .te-contrast-warn above. */
+
+/* ============================================================================
+   Dashboard (Cms_dashboard.tpl) — moved out of the page's inline style element so the
+   rules are fetched once and cached across CMS admin views. Reuses cms-/ork-
+   tokens; dark-mode via those vars + explicit html[data-theme] overrides.
+   ============================================================================ */
+/* .cms-dash-greet / .cms-dash-lede removed with the dashboard's second page
+   title ("Good evening." + the OGRE acronym expansion). The shell masthead is
+   the one title slot. */
+.cms-dash-section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ork-text-secondary); font-weight: 700; margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.cms-dash-block { margin-bottom: 30px; }
+
+/* Quick-create cards */
+.cms-quick-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+}
+.cms-quick-card {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--ork-border-dark); border-radius: 11px;
+    background: var(--cms-card); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text);
+    transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
+}
+.cms-quick-card:hover {
+    border-color: var(--cms-gold, #f0b429); transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+.cms-quick-ico {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420); color: #1a1205;
+}
+.cms-quick-text strong { display: block; font-size: 15px; }
+.cms-quick-text span { font-size: 12.5px; color: var(--ork-text-muted); }
+
+/* Stat tiles */
+.cms-stat-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
+}
+.cms-stat-tile {
+    border: 1px solid var(--ork-border); border-radius: 11px;
+    background: var(--cms-card); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text); display: block;
+    transition: border-color .12s;
+}
+a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
+.cms-stat-num { font-size: 28px; font-weight: 800; line-height: 1; color: var(--ork-text); }
+.cms-stat-lbl { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 6px; }
+.cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
+
+/* Continue-editing list */
+.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; background: var(--cms-card); }
+/* The list is the card; a row paints nothing of its own so it inherits the card
+   surface. It used to be --ork-bg, which in dark mode is the page ground
+   (#1a202c) — the rows sat at ground level inside their own container. */
+.cms-recent-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border-bottom: 1px solid var(--ork-border); background: transparent;
+}
+.cms-recent-item:last-child { border-bottom: none; }
+/* .cms-recent-item:hover is grouped with the other --ork-bg-tertiary hovers up
+   at .cms-btn:hover. It moved off --ork-bg-secondary because that token is
+   identical to --ork-card-bg in dark mode, so the hover was invisible there once
+   the rows took the card surface. */
+.cms-recent-kind {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
+}
+.cms-recent-main { flex: 1 1 auto; min-width: 0; }
+.cms-recent-title { font-weight: 600; color: var(--ork-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
+.cms-recent-actions { flex: 0 0 auto; }
+
+/* Public-site status card (Multi-Site) */
+.cms-sitecard {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
+    border-radius: 11px; background: var(--cms-card); padding: 16px 18px;
+}
+.cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
+.cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.cms-sitecard-title .fa-globe-americas { color: var(--cms-gold-deep, #caa23a); }
+.cms-sitecard-sub { font-size: 13px; color: var(--ork-text-muted); margin-top: 5px; }
+.cms-sitecard-sub code { background: var(--ork-bg-tertiary); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+.cms-sitecard-badge { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.cms-sitecard-badge-pub { background: #1f7a3d; color: #fff; }
+.cms-sitecard-badge-draft { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px solid var(--ork-border); }
+.cms-sitecard-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
+.cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
+html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
+
+.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-secondary); text-decoration: none; font-size: 13.5px; }
+.cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+/* dark .cms-dash-livelink:hover is gold — see "Gold accent text" above. */
+
+/* ============================================================================
+   Scope-context banner (cms/_shell_top.tpl) — moved out of the shell's inline
+   style element so it isn't duplicated on every scoped admin render. Dark-mode via
+   html[data-theme].
+   ============================================================================ */
+.cms-scope-banner {
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 0 18px; padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 9px;
+    background: #fff8e6; color: #4a3b12;
+    font-size: 13.5px; line-height: 1.35;
+}
+.cms-scope-banner .fa-globe-americas,
+.cms-scope-banner .cms-scope-ico { color: var(--cms-gold-deep, #caa23a); font-size: 16px; }
+.cms-scope-banner strong { font-weight: 700; }
+.cms-scope-banner .cms-scope-hint { color: #6b5a29; }
+html[data-theme="dark"] .cms-scope-banner {
+    background: rgba(240, 180, 41, .10);
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--ork-text, #e8e2d0);
+}
+html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }
+
+/* ---- Sites overview (.cms-sites-* / .cms-fd-* / .cms-provision-*) ------- */
+.cms-sites-wrap { display: flex; flex-direction: column; gap: 26px; }
+
+/* Global h1–h6 in orkui.css get a gray pill box — reset the ones we own. */
+.cms-sites-wrap h2 {
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none; margin: 0; font-size: 16px; font-weight: 700;
+    color: var(--ork-text);
+}
+
+/* Pinned front-door card */
+.cms-fd-card {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 18px 20px; border-radius: 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a); border-left-width: 5px;
+    background: linear-gradient(180deg, #fffaec, #fff6dd);
+}
+html[data-theme="dark"] .cms-fd-card {
+    background: rgba(240, 180, 41, .08);
+    border-color: var(--cms-gold, #f0b429);
+}
+.cms-fd-mark {
+    flex: 0 0 auto; width: 54px; height: 54px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cms-gold, #f0b429); color: #1a1205; font-size: 24px;
+}
+.cms-fd-text { flex: 1 1 220px; min-width: 0; }
+.cms-fd-name { font-size: 18px; font-weight: 700; color: var(--ork-text); }
+.cms-fd-sub  { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 2px; }
+.cms-fd-stats { display: flex; gap: 22px; flex: 0 0 auto; flex-wrap: wrap; }
+.cms-fd-stat { text-align: center; }
+.cms-fd-stat-num { font-size: 19px; font-weight: 700; color: var(--ork-text); line-height: 1.1; }
+.cms-fd-stat-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ork-text-muted); }
+.cms-fd-actions { display: flex; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
+
+/* Section blocks */
+.cms-sites-section-head {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+}
+.cms-sites-count { font-size: 12.5px; color: var(--ork-text-secondary); }
+
+/* Table (reuses .cms-table; a couple of overview-specific tweaks) */
+.cms-sites-table td, .cms-sites-table th { vertical-align: middle; }
+.cms-sites-org { font-weight: 600; color: var(--ork-text); }
+.cms-sites-slug {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--ork-text-muted); text-decoration: none;
+}
+a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+/* dark a.cms-sites-slug:hover is gold — see "Gold accent text" above. */
+.cms-sites-metric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Status badges: green / amber / gray */
+.cms-site-badge {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+.cms-site-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+.cms-site-badge-draft { background: var(--ork-badge-orange-bg); color: var(--ork-badge-orange-text); }
+.cms-site-badge-unbuilt { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+
+.cms-sites-rowactions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Provision panel */
+.cms-provision {
+    padding: 18px 20px; border-radius: 12px;
+    border: 1px solid var(--ork-border-dark); background: var(--cms-card);
+}
+.cms-provision-grid {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
+}
+.cms-provision-col { flex: 1 1 260px; min-width: 220px; }
+.cms-provision-label {
+    display: block; font-size: 12.5px; font-weight: 600;
+    color: var(--ork-text-secondary); margin-bottom: 6px;
+}
+.cms-provision-row { display: flex; gap: 8px; }
+.cms-provision-row .cms-select { flex: 1 1 auto; }
+.cms-provision-hint { font-size: 12px; color: var(--ork-text-muted); margin-top: 8px; }
+.cms-optnosite { font-weight: 700; }
+
+@media (max-width: 640px) {
+    .cms-fd-stats { width: 100%; justify-content: space-between; }
+    .cms-fd-actions { width: 100%; }
+    .cms-fd-actions .cms-btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---- Media library page (.cms-media-*) ----------------------------------
+   The media grid is styled in more than one place: the thumbnail primitives are
+   in the Modals/media block above, the picker overrides are under "Block-editor
+   media picker" below, and the missing-image modifier is the last block in this
+   file (its position there is load-bearing — see that header). ---- */
+/* The picture IS the card. Wider tiles + a taller thumb so the image is the
+   largest thing on it, and enough room for the one-line action strip below. */
+.cms-media-page-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;
+}
+.cms-media-card {
+    position: relative;
+    border: 1px solid var(--ork-border); border-radius: 11px;
+    background: var(--cms-card); display: flex; flex-direction: column;
+}
+.cms-media-card.cms-media-selected {
+    border-color: var(--ork-accent, #c9a24b);
+    box-shadow: 0 0 0 2px var(--ork-accent, #c9a24b) inset;
+}
+/* The card no longer clips (a clipped card ate the row's tooltips), so the
+   thumb carries the top rounding the card used to impose on it. */
+.cms-media-card-thumb {
+    width: 100%; height: 168px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
+    border-radius: 10px 10px 0 0;
+}
+/* Broken-image fallback — same footprint, centered fa-image, so it
+   never overlaps the top-left bulk-select checkbox or the caption below. */
+.cms-media-card-thumb.cms-empty-thumb {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ork-text-lighter, #9aa2ad); font-size: 30px;
+}
+.cms-media-card-body { padding: 10px 12px; }
+.cms-media-card-name {
+    font-weight: 600; font-size: 13px; color: var(--ork-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cms-media-card-title { font-size: 12px; color: var(--ork-text); margin-top: 2px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-media-card-alt { font-size: 12px; color: var(--ork-text-muted); margin-top: 3px; min-height: 1em; }
+.cms-media-card-alt.cms-media-noalt { font-style: italic; }
+.cms-media-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+/* Edit + the (⋯) that holds Delete are revealed on hover and on keyboard
+   focus-within. opacity (not display/visibility) is deliberate: the buttons stay
+   in the tab order, so TABBING to one raises :focus-within on the card and shows
+   the cluster — a hover-only reveal would put Delete out of a keyboard user's
+   reach. pointer-events keeps an invisible button from swallowing a click.
+   The fade is applied to the CONTROLS, not to the .cms-media-card-reveal box: the
+   (⋯) menu is a descendant, and an ancestor at opacity 0 would take the open menu
+   down with it the moment the pointer left the card. */
+.cms-media-card-reveal { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.cms-media-card-reveal > .cms-btn,
+.cms-media-card-reveal .cms-overflow-btn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .13s ease;
+}
+.cms-media-card:hover .cms-media-card-reveal > .cms-btn,
+.cms-media-card:hover .cms-media-card-reveal .cms-overflow-btn,
+.cms-media-card:focus-within .cms-media-card-reveal > .cms-btn,
+.cms-media-card:focus-within .cms-media-card-reveal .cms-overflow-btn,
+.cms-media-card-reveal .cms-overflow.cms-open .cms-overflow-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+/* Touch devices have no hover to reveal with — show the cluster outright. */
+@media (hover: none) {
+    .cms-media-card-reveal > .cms-btn,
+    .cms-media-card-reveal .cms-overflow-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+.cms-media-card-usage { font-size: 11px; color: var(--ork-text-muted); margin-top: 6px; min-height: 1em; }
+.cms-media-card-usage.cms-media-inuse { color: var(--cms-warn, #b8860b); font-weight: 600; }
+/* Per-card bulk-select checkbox (top-left overlay on the thumb) */
+.cms-media-card-sel {
+    position: absolute; top: 7px; left: 7px; z-index: 2;
+    background: rgba(0,0,0,.45); border-radius: 6px; padding: 3px 4px; line-height: 0;
+}
+.cms-media-card-sel input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--ork-accent, #c9a24b); }
+/* Inline edit form (rename + alt + title) */
+.cms-media-edit-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.cms-media-edit-form .cms-label { font-size: 11px; margin-bottom: 2px; }
+/* Bulk action bar — appears when 1+ cards are selected */
+.cms-media-bulkbar {
+    display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 12px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--ork-border); background: var(--cms-card);
+}
+.cms-media-bulkbar.cms-show { display: flex; }
+.cms-media-bulkbar-count { font-weight: 600; font-size: 13px; color: var(--ork-text); }
+.cms-usage-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ork-text-muted); }
+/* Upload drop-zone sits below the library; slimmer than the primary surface */
+.cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
+
+/* ---- Navigation manager (.cms-nav-*) ------------------------------------
+   Must stay AFTER the block-card rules above: .cms-nav-item .cms-block-head and
+   .cms-nav-label tie them on specificity, so source order is what makes these
+   win. ---- */
+/* A nav row is a .cms-block-card that contains ONLY a .cms-block-head, and that
+   card clips (overflow:hidden) so the head's square corners stay inside its
+   radius. Clipping also ate every row-tool tooltip, which is the whole point of
+   naming those five identical glyphs — so the row stops clipping and the head
+   carries the rounding itself instead. With no card body under it the head's
+   border-bottom was doubling the card's own bottom border; it goes too. */
+.cms-nav-item { margin-bottom: 8px; overflow: visible; }
+.cms-nav-item .cms-block-head { border-radius: 9px; border-bottom: none; }
+.cms-nav-children { margin: 4px 0 12px 28px; border-left: 2px solid var(--ork-border); padding-left: 12px; }
+.cms-nav-children .cms-nav-item { margin-bottom: 6px; }
+/* Nav rows only. This was a bare `.cms-block-type` while it lived inline on
+   Cms_nav.tpl; as a global rule it would also hit the block editor's
+   .cms-block-type <span> (cms-block-editor.js) and turn it into a flex box.
+   Scoped to .cms-nav-item, which exists only on the nav page. The generic
+   .cms-block-type rule above sets font only, so nothing ties. */
+/* Grouped with the icon picker's custom-class row below (same declaration
+   body — the duplication gate wants one rule, not two copies). */
+.cms-nav-item .cms-block-type,
+.cms-iconpick-custom { display: flex; align-items: center; gap: 8px; }
+.cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
+.cms-nav-label { font-weight: 600; color: var(--ork-text); }
+/* Shown only on the rows where the target differs from the label, so it now
+   reads as a fact about THIS row rather than as a column of repeats. */
+.cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; max-width: 40%; min-width: 0; display: flex; align-items: center; }
+/* The ellipsis lives on the inner text, not on .cms-nav-target itself: an
+   element that clips also clips its own ::after, and the tip is what carries the
+   full target when it is too long to show. */
+.cms-nav-target-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-nav-target-arrow { font-size: 10px; opacity: .6; margin-right: 5px; flex: 0 0 auto; }
+.cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
+.cms-nav-addchild-row { margin: 0 0 16px 28px; }
+
+/* ---- Block-editor media picker: inline alt editor + Load-more -----------
+   Uses ORK theme vars so light/dark are handled without extra overrides. Scoped
+   to #cmsMediaGrid so it only affects THAT picker. ---- */
+/* Widen picker tiles enough to hold the inline alt editor comfortably. */
+#cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+#cmsMediaGrid .cms-media-tile { cursor: default; }
+#cmsMediaGrid .cms-media-tile img,
+#cmsMediaGrid .cms-media-tile .cms-media-cap { cursor: pointer; }
+.cms-media-alt {
+    padding: 7px 8px;
+    border-top: 1px solid var(--ork-border);
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cms-media-alt-row { display: flex; gap: 6px; align-items: center; }
+.cms-media-alt-input { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 4px 6px; }
+.cms-media-alt-save { flex: 0 0 auto; }
+.cms-media-alt-deco { font-size: 11px; color: var(--ork-text-secondary); display: flex; align-items: center; gap: 4px; }
+.cms-media-alt-deco input { margin: 0; }
+.cms-media-more { display: block; margin: 12px auto 2px; }
+
+/* ---- Block-editor columns visual splitter — theme-aware via ORK
+   vars. ---- */
+.cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+.cms-cols-countrow .cms-label { margin: 0; }
+/* The segmented control moved to the shared .cms-seg rules at the end of this
+   file — the columns splitter and the link chooser both use it. */
+.cms-cols-grid { display: grid; gap: 12px; align-items: start; }
+.cms-cols-grid-2 { grid-template-columns: 1fr 1fr; }
+.cms-cols-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+@media (max-width: 720px) { .cms-cols-grid-2, .cms-cols-grid-3 { grid-template-columns: 1fr; } }
+.cms-cols-col {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--ork-bg-secondary);
+    min-width: 0;
+}
+.cms-cols-col-head {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ork-text-secondary); margin-bottom: 8px;
+}
+.cms-cols-childlist { display: flex; flex-direction: column; gap: 8px; }
+.cms-cols-childcard { margin: 0; background: var(--ork-bg); }
+.cms-cols-childcard .cms-block-body { padding: 8px 10px; }
+.cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
+.cms-cols-add { align-self: flex-start; }
+
+/* ---- Icon picker: swatches showing the real glyph + a plain-English
+   name, with a free-text escape hatch underneath. Theme-aware via the ORK
+   vars; the only hard-coded colour is the admin gold (defined for BOTH themes
+   on .cms-wrap / .cms-shell above) and the dark ink that sits on it. ---- */
+.cms-iconpick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.cms-iconswatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 9px 4px;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text-secondary);
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+}
+.cms-iconswatch:hover {
+    border-color: var(--cms-gold, #f0b429);
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+.cms-iconswatch i {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--cms-gold, #f0b429);
+}
+.cms-iconswatch span {
+    font-size: 10.5px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.cms-iconswatch-active {
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: inset 0 0 0 1px var(--cms-gold, #f0b429);
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+.cms-iconswatch-none i { color: var(--ork-text-muted); }
+/* .cms-iconpick-custom's own flex body is grouped up with
+   .cms-nav-item .cms-block-type (see the navigation-manager section). */
+.cms-iconpick-custom .cms-input { flex: 1 1 auto; min-width: 0; }
+.cms-iconpick-preview {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-tertiary);
+    color: var(--cms-gold, #f0b429);
+    font-size: 15px;
+}
+
+/* ---- Shared segmented control. Two-plus mutually-exclusive buttons where one
+   is on: the columns splitter's 2/3 count and the link chooser's
+   page-vs-address mode. (Was .cms-cols-seg, columns-only.) ---- */
+.cms-seg { display: inline-flex; gap: 6px; }
+.cms-seg .cms-btn { min-width: 42px; justify-content: center; }
+.cms-seg .cms-seg-active {
+    background: var(--cms-gold, #f0b429);
+    border-color: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+
+/* ---- Link chooser: "a page on this site" vs. "another address".
+   Theme-aware via the ORK vars; the gold accent is defined for both themes on
+   .cms-wrap / .cms-shell at the top of this file. ---- */
+.cms-linkpick-modes { margin-bottom: 8px; }
+.cms-linkpick-filter { margin-bottom: 6px; }
+.cms-linkpick-list {
+    max-height: 186px;
+    overflow-y: auto;
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-secondary);
+}
+.cms-linkpick-opt {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--ork-border);
+    background: none;
+    color: var(--ork-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.cms-linkpick-opt:last-child { border-bottom: 0; }
+/* .cms-linkpick-opt:hover is grouped up with .cms-btn:hover. */
+.cms-linkpick-opt-active {
+    background: var(--ork-bg-tertiary);
+    box-shadow: inset 3px 0 0 var(--cms-gold, #f0b429);
+}
+.cms-linkpick-opt-title {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cms-linkpick-opt-meta {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--ork-text-muted);
+}
+.cms-linkpick-empty {
+    padding: 9px 10px;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--ork-text-muted);
+}
+
+/* ============================================================================
+ * Missing-image placeholder
+ *
+ * The block editor and the media grid share CmsAdmin.thumbFallback, which
+ * swaps a broken <img> for .cms-empty-thumb + this modifier. .cms-empty-thumb
+ * on its own is the NEUTRAL "nothing chosen yet" state; a file that 404s is a
+ * different fact — the page is publishing a broken image right now — so it
+ * gets the danger tokens and a dashed edge instead of reading as empty.
+ *
+ * Both tokens are CRM badge colours READ (never defined) here, so the dark
+ * values arrive with html[data-theme="dark"] and need no override. Placed at
+ * the end of the file deliberately: .cms-media-card-thumb.cms-empty-thumb and
+ * .cms-media-thumb.cms-empty-thumb are the same specificity, so source order
+ * is what makes this modifier win over both.
+ * ========================================================================== */
+/* A missing file is news, not an emergency, so this is amber and not the danger
+   palette: on a library whose files have not been synced the missing state is the
+   WHOLE grid, and red there reserves the loudest treatment for the most common
+   state. Amber says "look at this" without saying "something broke". The dashed
+   edge is what actually separates it from the neutral "no image chosen" tile; the
+   colour only has to carry attention, not alarm. */
+.cms-empty-thumb.cms-missing-thumb {
+    color: var(--cms-warn, #9c4221);
+    background: var(--ork-badge-amber-bg, #fdf3e3);
+    border-style: dashed;
+    border-color: var(--cms-warn, #9c4221);
+}
+
+html[data-theme="dark"] .cms-empty-thumb.cms-missing-thumb {
+    background: #2b2113;
+}
+
+.cms-missing-label {
+    color: var(--cms-warn, #9c4221);
+    font-weight: 600;
+    white-space: nowrap;
+}

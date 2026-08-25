@@ -1,0 +1,258 @@
+<?php
+/**
+ * Partial: kingdom_parks_map.tpl — DYNAMIC block (org-scoped).
+ *
+ * An interactive Google map of the kingdom's ACTIVE parks with a click-to-load
+ * sidebar (heraldry + name + city/state + directions + description + profile
+ * link) — the Amtgard Atlas map/sidebar pattern, scoped to one kingdom.
+ *
+ * Self-sourcing: reads ready-to-render rows via new APIModel('Map')->
+ * GetPublicParkMapLocations(['KingdomId' => $kid]). Which parks are plottable,
+ * how the Location blob is decoded, how officer-authored Directions/Description
+ * are sanitized, and where heraldry lives are all decided there, in the domain —
+ * this template only caches, json_encodes and renders. The array is json_encode'd
+ * with JSON_HEX_TAG|JSON_HEX_AMP for safe <script> embedding.
+ *
+ * Scope: derives kingdom_id from the render-time site scope ($SiteNavScopeType /
+ * $SiteNavScopeId). Renders NOTHING outside a kingdom scope, and nothing when no
+ * park has usable coordinates — never a broken/empty map box.
+ *
+ * Instance-safe: a unique id per block + a one-time Maps loader with a callback
+ * queue, so more than one map block on a page won't clash or double-load the API.
+ *
+ * Receives: $blockFields { kicker?, heading? }, UIR, $SiteNavScope*.
+ */
+$kpmScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
+$kpmScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
+$kpmKingdomId = ($kpmScopeType === 'kingdom') ? $kpmScopeId : 0;
+if ($kpmKingdomId <= 0) {
+    return;
+}
+
+$kpmKicker  = isset($blockFields['kicker']) ? trim((string) $blockFields['kicker']) : '';
+$kpmHeading = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Park Map';
+
+// Cached like kingdom_officers.tpl / kingdom_parks.tpl: this
+// DYNAMIC block runs on every anonymous public hit and previously re-queried
+// the map rows, re-ran Parsedown on each park's Directions/Description, AND
+// did a per-row file_exists() heraldry probe. Resolve the whole $kpmParks array
+// once and cache it in GhettoCache keyed by kingdom_id. Public park geo is safe
+// to share across viewers; a short TTL keeps it fresh. Cached hits skip the DB,
+// Parsedown, and disk probes entirely.
+$kpmParks = fdBlockCache(
+    CmsRenderCache::NS_KINGDOM_PARKS_MAP,
+    CmsRenderCache::ParksMapKey($kpmKingdomId),
+    CmsRenderCache::TTL,
+    function () use ($kpmKingdomId) {
+        $kpmParks = [];
+        if (class_exists('APIModel')) {
+            try {
+                $kpmModel  = new APIModel('Map');
+                $kpmResult = $kpmModel->GetPublicParkMapLocations(['KingdomId' => $kpmKingdomId]);
+                $kpmParks  = array_values((array) ($kpmResult['Parks'] ?? []));
+            } catch (\Throwable $e) {
+                $kpmParks = [];
+            }
+        }
+
+        return $kpmParks;
+    }
+);
+
+// Nothing to plot → render nothing (the parks LIST block still stands on its own).
+if (empty($kpmParks)) {
+    return;
+}
+
+$kpmId  = 'kpm-' . substr(md5(uniqid('', true)), 0, 10);
+// Per-env Maps key only — NO hardcoded fallback. Shipping a literal key in public
+// page source exposes a shared credential to quota abuse across every kingdom site.
+// When the key is missing/empty we render a graceful "map unavailable" fallback
+// rather than injecting a broken Maps <script> that 403s in the browser.
+$kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
+    ? (string) GOOGLE_MAPS_API_KEY
+    : '';
+?>
+<div class="fd-pad fd-section-light kpm-block" id="<?= $kpmId ?>">
+    <?php if ($kpmKicker !== '' || $kpmHeading !== ''): ?>
+        <div class="kpm-head">
+            <?php if ($kpmKicker !== ''): ?>
+                <div class="fd-kicker fd-kicker-d"><?= htmlspecialchars($kpmKicker, ENT_QUOTES) ?></div>
+            <?php endif; ?>
+            <?php if ($kpmHeading !== ''): ?>
+                <h3 class="kpm-title fd-sec-title"><?= htmlspecialchars($kpmHeading, ENT_QUOTES) ?></h3>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    <div class="kpm-layout">
+        <div>
+            <?php if ($kpmKey === ''): ?>
+                <div class="kpm-unavailable">
+                    <div class="kpm-unavailable-icon"><i class="fas fa-map-marked-alt"></i></div>
+                    <p>The interactive map is temporarily unavailable.</p>
+                </div>
+            <?php else: ?>
+                <div class="kpm-loading" data-kpm-loading><i class="fas fa-spinner fa-spin"></i> Loading map&hellip;</div>
+                <div class="kpm-map" data-kpm-map style="display:none;"></div>
+                <div class="kpm-hint"><i class="fas fa-hand-point-up"></i> Click a park pin &mdash; or a park below &mdash; for details.</div>
+                <ul class="kpm-list" aria-label="Parks on this map">
+                    <?php foreach (array_values($kpmParks) as $__ki => $__kp): ?>
+                        <?php
+                        $__kloc = trim(implode(', ', array_filter([(string) ($__kp['city'] ?? ''), (string) ($__kp['province'] ?? '')])));
+                        $__khex = preg_replace('/[^0-9a-fA-F]/', '', substr((string) ($__kp['color'] ?? '718096'), 0, 6));
+                        if ($__khex === '') {
+                            $__khex = '718096';
+                        }
+                        ?>
+                        <li>
+                            <button type="button" class="kpm-list-item" data-kpm-index="<?= (int) $__ki ?>">
+                                <span class="kpm-list-dot" style="background:#<?= $__khex ?>"></span>
+                                <span class="kpm-list-text">
+                                    <span class="kpm-list-name"><?= $__kp['name'] // pre-escaped when $kpmParks was built ?></span>
+                                    <?php if ($__kloc !== ''): ?><span class="kpm-list-loc"><?= $__kloc // city/province pre-escaped ?></span><?php endif; ?>
+                                </span>
+                            </button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+        <div class="kpm-sidebar">
+            <div class="kpm-empty" data-kpm-empty>
+                <div class="kpm-empty-icon"><i class="fas fa-map-marker-alt"></i></div>
+                <?php if ($kpmKey === ''): ?>
+                    <p>Park details are temporarily unavailable.</p>
+                <?php else: ?>
+                    <p>Click any park pin on the map to see its details here.</p>
+                <?php endif; ?>
+            </div>
+            <div class="kpm-park" data-kpm-park aria-live="polite" aria-atomic="true">
+                <div class="kpm-hero" data-kpm-hero></div>
+                <div class="kpm-body" data-kpm-body></div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php if ($kpmKey !== ''): ?>
+<script>
+(function () {
+    var ROOT = document.getElementById('<?= $kpmId ?>');
+    if (!ROOT) { return; }
+    var LOCS = <?= json_encode(array_values($kpmParks), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+    var UIR  = <?= json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+    function isLight(hex) {
+        var r = parseInt(hex.substring(0, 2), 16), g = parseInt(hex.substring(2, 4), 16), b = parseInt(hex.substring(4, 6), 16);
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
+    }
+    function renderSidebar(loc) {
+        var hex = (loc.color && loc.color.length === 6) ? loc.color : '718096';
+        var light = isLight(hex);
+        var txt = light ? '#1a202c' : '#ffffff';
+        var muted = light ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.85)';
+        var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
+        var crest = loc.heraldry
+            ? '<div class="kpm-crest"><img src="' + loc.heraldry + '" alt="' + loc.name + ' heraldry" onerror="this.style.display=\'none\'"></div>'
+            : '<div class="kpm-crest"><span class="kpm-crest-ph" style="color:' + hex + '"><i class="fas fa-shield-alt"></i></span></div>';
+        var hero = crest
+            + '<div class="kpm-hero-name" style="color:' + txt + '">' + loc.name + '</div>'
+            + (locLine ? '<div class="kpm-hero-loc" style="color:' + muted + '"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + locLine + '</div>' : '');
+        var body = '';
+        if (loc.dir) { body += '<div class="kpm-section-label">Directions</div><div class="kpm-section-text">' + loc.dir + '</div>'; }
+        if (loc.desc) { body += '<div class="kpm-section-label">About</div><div class="kpm-section-text">' + loc.desc + '</div>'; }
+        body += '<a class="kpm-profile-btn" href="' + UIR + 'Park/profile/' + loc.id + '"><i class="fas fa-external-link-alt"></i> View Park Profile</a>';
+        var heroEl = ROOT.querySelector('[data-kpm-hero]');
+        heroEl.innerHTML = hero;
+        heroEl.style.background = 'linear-gradient(135deg, #' + hex + 'dd, #' + hex + '99)';
+        ROOT.querySelector('[data-kpm-body]').innerHTML = body;
+        ROOT.querySelector('[data-kpm-empty]').style.display = 'none';
+        ROOT.querySelector('[data-kpm-park]').style.display = 'flex';
+    }
+    // Live map handle (set once init() runs) so the keyboard list can pan it.
+    var MAP = null;
+    // Keyboard-accessible park list: each real <button> selects a park via the
+    // SAME renderSidebar handler the map pins use, and pans/zooms the map to it.
+    // If the map has not lazy-loaded yet, kick off the load (the sidebar is
+    // already populated, and the pan will apply on the next selection).
+    ROOT.querySelectorAll('[data-kpm-index]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var idx = parseInt(btn.getAttribute('data-kpm-index'), 10);
+            var loc = LOCS[idx];
+            if (!loc) { return; }
+            renderSidebar(loc);
+            if (MAP && window.google && window.google.maps) {
+                MAP.panTo(new google.maps.LatLng(loc.lat, loc.lng));
+                MAP.setZoom(Math.max(MAP.getZoom() || 4, 11));
+            } else {
+                loadMaps();
+            }
+        });
+    });
+    async function init() {
+        var loadingEl = ROOT.querySelector('[data-kpm-loading]');
+        var mapEl = ROOT.querySelector('[data-kpm-map]');
+        if (!mapEl) { return; }
+        if (loadingEl) { loadingEl.style.display = 'none'; }
+        mapEl.style.display = 'block';
+        await google.maps.importLibrary('maps');
+        var markerLib = await google.maps.importLibrary('marker');
+        var map = new google.maps.Map(mapEl, { center: { lat: 39, lng: -98 }, zoom: 4, mapId: 'ORK3_MAP_ID' });
+        MAP = map;
+        var info = new google.maps.InfoWindow();
+        var bounds = new google.maps.LatLngBounds();
+        LOCS.forEach(function (loc) {
+            var color = loc.color ? '#' + loc.color : '#718096';
+            var pos = new google.maps.LatLng(loc.lat, loc.lng);
+            var pin = new markerLib.PinElement({ background: color, scale: 0.8 });
+            var marker = new markerLib.AdvancedMarkerElement({ position: pos, map: map, title: loc.name, content: pin.element });
+            bounds.extend(pos);
+            google.maps.event.addListener(marker, 'click', function () {
+                var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
+                info.setContent('<b><a href="' + UIR + 'Park/profile/' + loc.id + '" style="color:#2b6cb0">' + loc.name + '</a></b>'
+                    + (locLine ? '<div style="font-size:12px;color:#718096;margin-top:3px">' + locLine + '</div>' : ''));
+                info.open(map, marker);
+                renderSidebar(loc);
+            });
+        });
+        if (LOCS.length === 1) { map.setCenter(bounds.getCenter()); map.setZoom(11); }
+        else { map.fitBounds(bounds, 48); }
+    }
+    // One-time Maps loader shared by every kpm block on the page. The Maps CDN
+    // <script> is only injected once the map scrolls into view (IntersectionObserver),
+    // so an off-screen map never blocks the page on a third-party request.
+    // STARTED is a synchronous per-instance latch: the list click handler and the
+    // IntersectionObserver can both reach loadMaps() before MAP is assigned, and
+    // without it init() would run twice on this block (duplicate markers/listeners).
+    var STARTED = false;
+    function loadMaps() {
+        if (STARTED) { return; }
+        STARTED = true;
+        if (window.google && window.google.maps && window.google.maps.importLibrary) {
+            init();
+            return;
+        }
+        (window.__kpmQueue = window.__kpmQueue || []).push(init);
+        if (!window.__kpmLoading) {
+            window.__kpmLoading = true;
+            window.__kpmReady = function () { (window.__kpmQueue || []).forEach(function (f) { try { f(); } catch (e) {} }); window.__kpmQueue = []; };
+            var s = document.createElement('script');
+            s.src = 'https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($kpmKey, ENT_QUOTES) ?>&callback=__kpmReady&v=weekly&libraries=marker';
+            s.async = true;
+            document.head.appendChild(s);
+        }
+    }
+    // Lazy-load: defer the Maps CDN until this block is near the viewport.
+    var observeTarget = ROOT.querySelector('[data-kpm-map]') || ROOT;
+    if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries, obs) {
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting) { obs.disconnect(); loadMaps(); return; }
+            }
+        }, { rootMargin: '200px' });
+        io.observe(observeTarget);
+    } else {
+        loadMaps();
+    }
+})();
+</script>
+<?php endif; ?>

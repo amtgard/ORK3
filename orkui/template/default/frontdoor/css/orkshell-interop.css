@@ -1,0 +1,158 @@
+/* ============================================================
+ * orkshell-interop.css — the ONLY place CMS CSS may name an ORK selector.
+ *
+ * The front door, CMS pages, the blog and the OGRE admin all render INSIDE the
+ * ORK application shell, so orkui.css and default.theme's inline chrome are in
+ * their cascade. A handful of CMS controls therefore lose to ORK rules that win
+ * on ID specificity (`#theme_container a` is (1,0,1); `html[data-theme="dark"]
+ * #theme_container a` is (1,1,1)). The overrides that fix that are collected
+ * here rather than scattered through frontdoor.css, so the coupling is visible,
+ * greppable and deletable.
+ *
+ * NOT loaded by Site_shell.tpl. A standalone org site does not load orkui.css
+ * at all (see default.theme's $IsOrgSite gate), so it needs none of this — and
+ * bin/check-css-boundaries.sh (C4) fails the build if the link is ever added.
+ *
+ * Every rule below is here because an ORK rule outranks a CMS rule. If you find
+ * yourself adding a rule for any other reason, it belongs in frontdoor.css.
+ * ============================================================ */
+
+/* Gold-filled buttons are <a> tags; `#theme_container a` forces link-blue text
+   in dark mode. Override at matching specificity, restating the SAME dark ink
+   the base .fd-btn-gold / .fd-nav-cta rules already use (#1a1205 — no "ink on
+   accent" token exists in CmsThemeTokens, and both base rules already hard-code
+   this exact value, so restating it keeps one source of truth rather than
+   inventing a second near-black). #1a1205 on gold measures ~10.7:1. */
+#theme_container a.fd-btn-gold,
+#theme_container a.fd-btn-gold:hover,
+#theme_container a.fd-nav-cta,
+#theme_container a.fd-nav-cta:hover {
+    color: #1a1205 !important;
+}
+
+/* Ghost buttons sit on the DARK hero field (not on gold), where white is the
+   correct, legible choice — kept separate from the gold-filled pair above so a
+   future contrast fix to one never silently changes the other. */
+#theme_container a.fd-btn-ghost,
+#theme_container a.fd-btn-ghost:hover {
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+
+/* Same trap for the outline login button: `#theme_container a` is (1,0,1), so a
+   plain .fd-nav-login colour never lands and the button renders link-blue.
+   Restate both themes at ID specificity. (`inherit` is NOT the shortcut here —
+   it would pull the nav bar's colour, not the button's.) */
+#theme_container a.fd-nav-login {
+    color: #56607a;
+}
+#theme_container a.fd-nav-login:hover {
+    color: var(--fd-text);
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login {
+    color: #c8d2e6;
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
+    color: #fff;
+}
+
+/* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
+   their title/blurb are meant to be white. `#theme_container a` drags the link
+   and its inherited children to link-blue in dark mode; restore white at
+   matching specificity. Colour only (no text-shadow) so light mode — already
+   white via .fd-path — is visually unchanged. The gold icon keeps its own
+   color:var(--gold) and is deliberately not matched here. */
+#theme_container a.fd-path,
+#theme_container a.fd-path:hover,
+#theme_container a.fd-path .fd-path-label,
+#theme_container a.fd-path .fd-serif {
+    color: #fff !important;
+}
+
+/* Authored body-copy links. frontdoor.css styles them once for all three tiers
+   (`.fd-body-text a`, plus a dark partner at (0,2,1) that clears orkui.css's
+   `html[data-theme="dark"] a` at (0,1,1)). In the ORK shell that is not enough:
+   default.theme's own dark chrome emits
+   `html[data-theme="dark"] #theme_container a { color: #63b3ed; }` at (1,1,2),
+   which outranks any class-only selector, so an authored link rendered in-shell
+   went ORK link-blue in dark mode while the same link on a standalone org site
+   took the org's --pk-link. Restate the CMS value at (1,2,2).
+
+   No :hover partner is needed, and adding one would be wrong: (1,2,2) already
+   outranks `#theme_container a:hover` (1,1,2), so this colour holds through
+   hover — which is exactly what a standalone org site does in dark mode, where
+   the dark rule outranks the light `:hover` rule the same way. Light mode is
+   untouched here: default.theme sets no light `#theme_container a`, so
+   frontdoor.css's `.fd-body-text a:hover` lands on its own.
+
+   DELIBERATE DUPLICATE of frontdoor.css's dark partner, and it cannot be
+   collapsed by selector grouping: one selector list has to live in one file,
+   frontdoor.css may not name `#theme_container` (C1), and a standalone org site
+   never loads this file — so the two copies are needed on disjoint tiers. This
+   is the +1 on MAX_GROUPS_ANY in bin/check-css-duplication.php; the same
+   ID-armour pattern already exists at .cms-btn-primary in cms-admin.css. */
+html[data-theme="dark"] #theme_container .fd-body-text a {
+    color: var(--pk-link, var(--fd-accent));
+}
+
+/* The member bar is a deliberately dark navy band in BOTH themes, so its link
+   ink is a fixed light periwinkle rather than a theme-flipping token. That ink
+   used to be an inline style attribute, which outranked everything; now that it
+   is a real rule, `.fd-member-bar a` is (0,1,1) and loses in dark mode to
+   `html[data-theme="dark"] #theme_container a { color: #63b3ed; }` at (1,1,2),
+   which would put link-blue text on the navy band. Restate the SAME value the
+   base rule uses via the token frontdoor.css defines on .fd-member-bar, so
+   there is still one source of truth for the colour. */
+html[data-theme="dark"] #theme_container .fd-member-bar a {
+    color: var(--fd-member-bar-link);
+}
+
+/* #86 — the front door hides the ORK application top bar outright. Without this
+   the internal #newmenu bar stacks directly beneath the front-door marketing nav
+   (.fd-nav), showing anonymous visitors two navbars; the front-door nav already
+   carries the single clearly-labelled Record Keeper / Log in entry point.
+
+   This lives here, and not inline in _index.tpl where it started, because it is
+   CMS CSS naming an ORK shell selector — exactly the coupling this file exists
+   to hold in one greppable place, and exactly what the C1 rule of
+   bin/check-css-boundaries.sh forbids everywhere else on the public side. The
+   front door already links this stylesheet via frontdoor/_assets_inshell.tpl.
+
+   !important because orkui.css paints #newmenu at ID specificity and the bar is
+   the ORK shell's, not ours, to restyle; `display` is the only property either
+   side sets on it, so nothing here is being overridden in turn. */
+/* Every CMS surface that hides the ORK navbar. Both the front door (body.fd-home)
+   and CMS pages / the blog (body.cms-page) suppress #newmenu — measured: display
+   none, height 0 on all of them — and ship their own marketing nav, so orkui.css's
+   `body { padding-top: 48px }` — the
+   clearance for a fixed navbar that is never painted here — reserves 48px of dead
+   space, and the UA's default 8px body margin adds to it. #theme_container's own
+   10px/6px inset is deliberate and stays: it gives the rounded nav bar its gutter.
+
+   This lives here, not in orkui.css, because it is a CMS rule and the CRM must not
+   style CMS surfaces (bin/check-css-boundaries.sh C5). It wins over orkui.css's
+   plain `body` rule on specificity — body.fd-home is (0,1,1) against (0,0,1) — and
+   this file is linked after orkui.css on every in-shell surface.
+
+   BOTH selectors are load-bearing: every in-shell CMS surface suppresses #newmenu,
+   so without this the front door carries 72px of dead space (8 body margin + 48
+   body padding + 10 + 6 from #theme_container) and CMS pages / the blog carry 56px.
+   tests/cms-css/boundary_test.php asserts this rule is served. */
+body.fd-home,
+body.cms-page {
+    padding-top: 0;
+    margin-top: 0;
+}
+
+body.fd-home #newmenu {
+    display: none !important;
+}
+
+/* The saved CMS draft preview renders in-shell without fd-home/cms-page, so
+   #newmenu is painted there — but its sticky banner needs NO `top` override:
+   BODY is the scroll container (orkui.css clamps `html, body { overflow-x: hidden }`)
+   and body's 8px margin + 48px padding-top already pay for the navbar, so `top: 0`
+   pins the banner clear of it. The only unhandled state is the rare second scroller
+   (<html> scrolled its own 56px, reachable by scrollIntoView, never by a wheel);
+   no single `top` value fixes that and the at-rest position both. See
+   cms/css/cms-admin.css:203-230 for the full measurement. */

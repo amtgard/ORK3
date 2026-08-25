@@ -1,0 +1,7 @@
+node_modules/**
+vendor/**
+orkui/template/default/script/**
+orkui/template/revised-frontend/**
+orkui/template/default/style/**
+tools/fuzzy-validator/evidence/**
+build/**

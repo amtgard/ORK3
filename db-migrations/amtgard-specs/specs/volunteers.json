@@ -1,0 +1,21 @@
+{
+    "slug": "volunteers",
+    "type": "article",
+    "parent_slug": "about",
+    "title": "Volunteers",
+    "meta_description": "Learn about volunteering with Amtgard International and view current volunteer vacancies.",
+    "blocks": [
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Volunteer Opportunities",
+                "body": "<p>Welcome to the Volunteer Portal for Amtgard International! If you want to learn more about our volunteers, or apply for one of our volunteer vacancies, you've come to the right place!</p>",
+                "align": "center",
+                "cta": {
+                    "label": "Current Vacancies",
+                    "href": "https://www.amtgard.com/vacancies"
+                }
+            }
+        }
+    ]
+}

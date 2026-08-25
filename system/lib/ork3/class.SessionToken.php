@@ -18,6 +18,6 @@ class SessionToken extends Ork3
             return false;
         }
 
-        return (string) $rs->token === $token;
+        return hash_equals((string) $rs->token, $token);
     }
 }

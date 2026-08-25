@@ -1,0 +1,299 @@
+# ORK3 architectural + CSS gates, in CI.
+#
+# WHY THIS EXISTS. Every gate in this repo has been enforced by a local git
+# hook (.githooks/pre-commit, .githooks/pre-push, activated by `npm install`
+# running the `prepare` script). That leaves two holes a reviewer cannot see:
+#
+#   * `git commit --no-verify` / `git push --no-verify` walks straight past
+#     both hooks — verified, not assumed;
+#   * a contributor who clones and never runs `npm install` has
+#     core.hooksPath unset, so there is no gate at all.
+#
+# CI closes both. The hooks stay the FAST PATH — they fail in seconds, on the
+# staged blob, before the commit exists — and this workflow is the BACKSTOP
+# that a human reviewing a PR can actually see. Nothing here replaces a hook;
+# it re-runs the same scripts over the whole tree so a red check on the PR is
+# the last word.
+#
+# Reference: docs/superpowers/specs/2026-08-21-cms-css-separation-design.md
+#            orkui/template/default/frontdoor/css/README.md
+#
+# Action versions are pinned to release major tags, never @master. If this repo
+# later adopts commit-SHA pinning, these four are the lines to change.
+
+name: Gates
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Layering / CSS boundary / CSS lint / CMS tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # composer.json requires php >=8.2, so CI runs the FLOOR: anything that
+      # needs a newer PHP is a real finding, not a CI quirk.
+      # ext-curl is what tests/cms-css/boundary_test.php uses; ext-mbstring is
+      # what tests/cms-fields/allowlist_test.php uses.
+      - name: Set up PHP 8.2 (composer.json floor)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, curl
+          coverage: none
+          tools: none
+
+      # stylelint 16 requires Node >= 18.12; 22 is the current LTS line.
+      # No `cache: 'npm'` and no `npm ci`: both key off a lockfile, and this repo
+      # deliberately gitignores package-lock.json (.gitignore:2). Asking for
+      # either fails the job before a single gate runs.
+      - name: Set up Node 22 (stylelint)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # --ignore-scripts on purpose: `prepare` only sets core.hooksPath (moot in
+      # CI, we call the scripts directly) and `postinstall` copies FullCalendar
+      # dist files and runs esbuild into the tracked asset tree — build output
+      # no gate below reads, and mutating the checkout would only muddy the run.
+      # stylelint needs no install script.
+      - name: Install npm dev dependencies (stylelint)
+        run: npm install --no-audit --no-fund --ignore-scripts
+
+      # ----------------------------------------------------------------------
+      # Gate 1 — PHP layer separation.
+      # DB work lives in system/lib/ork3/; orkui/ reaches it only through
+      # orkui/model/ wrappers. A failure here names the file:line and the rule.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 1 — PHP layering: no $DB / domain classes in orkui (bin/check-layering.sh --all)'
+        run: bin/check-layering.sh --all
+
+      # ----------------------------------------------------------------------
+      # Gate 2 — CMS/CRM CSS boundary, rules C0-C7.
+      # C1 ORK shell selectors on the public CMS tier, C2 --ork-* token
+      # definitions, C3 static inline <style>, C4 CRM CSS on the org-site render
+      # path, C5 CMS selectors in CRM CSS, C6 default.theme's $IsOrgSite gate,
+      # C7 CSS injected from CMS PHP/JS.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 2 — CMS/CRM CSS boundary C0-C7 (bin/check-css-boundaries.sh --all)'
+        run: bin/check-css-boundaries.sh --all
+
+      # ----------------------------------------------------------------------
+      # Gate 3 — three checks behind one npm script, exactly as the pre-push
+      # hook and the sign-off loop run it:
+      #   stylelint 16 over frontdoor/css/ + cms/css/
+      #   lint:css:tabs   CMS CSS is 4-space indent, never tabs
+      #   lint:css:dupes  the duplication ratchet (FAILS IN BOTH DIRECTIONS —
+      #                   if duplication FELL, run
+      #                   `npm run lint:css:dupes:rebaseline` and commit it)
+      # Advisory on pre-push; BLOCKING here.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 3 — CSS lint: stylelint + tab-indent + duplication ratchet (npm run lint:css)'
+        run: npm run lint:css
+
+      # ----------------------------------------------------------------------
+      # Gate 4 — the tests/cms-*/ scripts.
+      # They are standalone `php <file>` scripts, deliberately outside
+      # phpunit.xml.dist, so bin/run-unit-tests.sh does not pick them up and
+      # this loop is the only thing that runs them. Each exits non-zero on
+      # failure AND prints a `FAIL  <label>` line; both are checked, because a
+      # script that one day forgets to exit non-zero must not pass silently.
+      #
+      # ----------------------------------------------------------------------
+      # A SKIPPED SURFACE IS NOT A GREEN RUN.
+      #
+      # tests/cms-css/boundary_test.php is the RUNTIME backstop: it asserts on
+      # what a live org site actually serves, which is what the static scanner
+      # cannot see. It ends every run with a machine-readable summary, and this
+      # step parses THAT rather than grepping for a human-facing prefix, so a
+      # per-surface skip cannot hide behind a "ALL PASS" line and an exit 0:
+      #
+      #   RESULT: PASS | PASS-WITH-SKIPS | FAIL
+      #   SKIP-KIND: NONE | WHOLE-RUN | PARTIAL
+      #   SURFACES: <n> EXPECTED, <n> COVERED, <n> SKIPPED, <n> NOT-APPLICABLE
+      #   ASSERTIONS: <n> RAN, <n> FAILED
+      #
+      # The contract this step enforces:
+      #
+      #   PARTIAL   the app ANSWERED and a named surface still did not run.
+      #             Real coverage loss, never expected. FAILS THE JOB, red.
+      #   WHOLE-RUN nothing answered at all, so there are no assertions to be
+      #             falsely confident about. ::warning annotation + job-summary
+      #             line + banner, and the job stays green. It is the EXPECTED
+      #             state of every run here, because CI has no populated CMS
+      #             database and deliberately does not stand the app up.
+      #   no RESULT: line — this step cannot tell how much of the backstop ran,
+      #             and "cannot tell" is treated as broken, not fine. Red.
+      #
+      # NOT-APPLICABLE is not a skip and needs no handling here: it is a surface
+      # the DATA cannot produce (a per-tier single-post surface against a
+      # database with no post in that tier's scopes), established from the app's
+      # own RSS feeds rather than from a list in the test, and it leaves
+      # RESULT: PASS with SKIP-KIND: NONE.
+      #
+      # The decision record behind all of that — why WHOLE-RUN warns instead of
+      # failing, and why CI does not stand the app up — lives in
+      # docs/superpowers/specs/2026-08-21-cms-css-separation-design.md and in
+      # orkui/template/default/frontdoor/css/README.md ("Why CI does not stand
+      # the app up"). The day CI does have a populated app this needs no
+      # rewrite: set ORK_BASE_URL for the job and the loop below runs the
+      # backstop with --strict, in which ANY skip is a failure. Until then the
+      # backstop is run BY HAND against local docker on :19080 before merging —
+      # `php tests/cms-css/boundary_test.php --strict` — and this step says so
+      # in its own output, in the job summary and in a PR annotation, so the
+      # check never reads as an unqualified green.
+      # ----------------------------------------------------------------------
+      - name: 'Gate 4 — CMS test scripts (tests/cms-*/): a FAIL line, a non-zero exit, or a skipped runtime surface fails the job'
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          BACKSTOP="tests/cms-css/boundary_test.php"
+
+          failed=""
+          ran=0
+          backstop_seen=0
+          backstop_line="did not run (script not found in tests/cms-*/)"
+          backstop_note=""
+
+          for t in $(git ls-files 'tests/cms-*/*.php' | sort); do
+              # The runtime backstop runs STRICT the moment CI actually has an
+              # app to point it at. Plain string, not an array: "--strict" has no
+              # spaces, and an empty unquoted expansion is simply no argument.
+              args=""
+              if [ "$t" = "$BACKSTOP" ] && [ -n "${ORK_BASE_URL:-}" ]; then
+                  args="--strict"
+              fi
+
+              echo "::group::php $t $args"
+              # shellcheck disable=SC2086
+              if out=$(php "$t" $args 2>&1); then rc=0; else rc=$?; fi
+              printf '%s\n' "$out"
+              echo "::endgroup::"
+              ran=$((ran + 1))
+
+              # The machine-readable summary, if this script emits one.
+              result=$(printf '%s\n'   "$out" | sed -n 's/^RESULT: *//p'     | tail -n 1)
+              skipkind=$(printf '%s\n' "$out" | sed -n 's/^SKIP-KIND: *//p'  | tail -n 1)
+              surfaces=$(printf '%s\n' "$out" | sed -n 's/^SURFACES: *//p'   | tail -n 1)
+              asserts=$(printf '%s\n'  "$out" | sed -n 's/^ASSERTIONS: *//p' | tail -n 1)
+
+              bad=0
+              if [ "$rc" -ne 0 ]; then
+                  echo "::error file=$t,title=CMS test failed::$t exited $rc"
+                  bad=1
+              fi
+              if printf '%s\n' "$out" | grep -qE '^[[:space:]]*FAIL'; then
+                  echo "::error file=$t,title=CMS test reported FAIL::$t printed at least one FAIL line"
+                  printf '%s\n' "$out" | grep -E '^[[:space:]]*FAIL' | sed 's/^/    /'
+                  bad=1
+              fi
+              if [ "$result" = "FAIL" ]; then
+                  echo "::error file=$t,title=CMS test reported RESULT: FAIL::$t — $surfaces"
+                  bad=1
+              fi
+
+              if [ "$t" = "$BACKSTOP" ]; then
+                  backstop_seen=1
+                  if [ -z "$result" ]; then
+                      # It printed no summary at all: this step cannot tell how
+                      # much of the backstop ran. "Cannot tell" is broken.
+                      echo "::error file=$t,title=Runtime backstop printed no machine-readable summary::$t emitted no 'RESULT:' line, so CI cannot tell which surfaces ran. Restore the summary block (see the header of $t)."
+                      backstop_line="UNKNOWN — no RESULT: line; CI cannot tell what ran"
+                      bad=1
+                  else
+                      backstop_line="$result — $surfaces; $asserts"
+                      case "$result" in
+                          PASS)
+                              ;;
+                          PASS-WITH-SKIPS)
+                              if [ "$skipkind" = "WHOLE-RUN" ]; then
+                                  echo ""
+                                  echo "=============================================================="
+                                  echo "RUNTIME BACKSTOP DID NOT RUN."
+                                  echo "  $t"
+                                  echo "  $surfaces"
+                                  echo "  $asserts"
+                                  echo "Nothing answered at the base URL, so ZERO of the CMS surfaces"
+                                  echo "were checked. This job is NOT a full green: run the backstop"
+                                  echo "by hand against local docker before merging —"
+                                  echo "    php tests/cms-css/boundary_test.php --strict"
+                                  echo "=============================================================="
+                                  echo "::warning file=$t,title=Runtime CSS backstop did not run in CI::$surfaces. No app answered, so the runtime half of the CMS/CRM CSS separation was NOT checked by this job. Run 'php tests/cms-css/boundary_test.php --strict' against local docker on :19080 before merging."
+                                  backstop_note="whole-run skip"
+                              else
+                                  # The app answered and a named surface still did
+                                  # not run. That is coverage loss — the exact
+                                  # thing a "grep for ALL PASS" check misses.
+                                  echo ""
+                                  echo "=============================================================="
+                                  echo "RUNTIME BACKSTOP RAN PARTIALLY — this is a FAILURE."
+                                  echo "  $surfaces"
+                                  echo "  $asserts"
+                                  printf '%s\n' "$out" | grep '^SURFACE: .* SKIPPED ' | sed 's/^/    /'
+                                  echo "=============================================================="
+                                  echo "::error file=$t,title=Runtime CSS backstop skipped a surface::$surfaces — the app answered but a named surface did not run, so part of the backstop silently did not execute. Fix the surface or the environment; do not merge on a partial run."
+                                  backstop_note="PARTIAL skip — failed"
+                                  bad=1
+                              fi
+                              ;;
+                          FAIL)
+                              backstop_note="failed"
+                              ;;
+                          *)
+                              echo "::error file=$t,title=Runtime backstop reported an unknown RESULT::$t printed 'RESULT: $result', which this workflow does not know how to interpret."
+                              backstop_line="UNKNOWN RESULT: $result"
+                              bad=1
+                              ;;
+                      esac
+                  fi
+              fi
+
+              [ "$bad" -eq 1 ] && failed="$failed $t"
+          done
+
+          if [ "$backstop_seen" -eq 0 ]; then
+              echo "::error title=Runtime backstop missing::$BACKSTOP was not found by 'git ls-files tests/cms-*/*.php'. The runtime half of the CSS separation has no coverage in CI."
+              failed="$failed $BACKSTOP(missing)"
+          fi
+
+          {
+              echo "### CMS test scripts"
+              echo ""
+              echo "Ran \`$ran\` script(s) from \`tests/cms-*/\`."
+              echo ""
+              echo "**Runtime CSS backstop (\`$BACKSTOP\`):** $backstop_line"
+              if [ "$backstop_note" = "whole-run skip" ]; then
+                  echo ""
+                  echo "> :warning: **The runtime backstop did not run in this job.** No app answered, so 0 CMS surfaces were checked. CI has no populated CMS database (the repo carries incremental \`db-migrations/\` and a 2013 schema-only \`ork.sql\` with no \`ork_cms_*\` tables), so this is expected — but it means the static scanner is the only CSS gate this job actually exercised. Run \`php tests/cms-css/boundary_test.php --strict\` against local docker on :19080 before merging."
+              fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$failed" ]; then
+              echo ""
+              echo "FAILED:$failed"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "**Failed:**$failed" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+          fi
+
+          echo ""
+          if [ "$backstop_note" = "whole-run skip" ]; then
+              echo "$ran CMS test script(s) passed — but the RUNTIME BACKSTOP DID NOT RUN."
+          else
+              echo "All $ran CMS test script(s) passed."
+          fi
+          echo "Runtime CSS backstop: $backstop_line"

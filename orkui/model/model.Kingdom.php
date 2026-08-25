@@ -13,6 +13,14 @@ class Model_Kingdom extends Model
         $this->Search = new JSONModel('Search');
     }
 
+    // Minimal active-kingdom list (id + name, name-sorted) for pickers. Thin
+    // pass-through to the Kingdom lib's light lister — GetKingdoms() fans out
+    // Common::get_configs() per kingdom and is the wrong tool for a picker.
+    public function list_active_id_name()
+    {
+        return $this->Kingdom->ListActiveIdName();
+    }
+
     public function get_principalities($kingdom_id)
     {
         return $this->Kingdom->GetPrincipalities(array('KingdomId' => $kingdom_id));

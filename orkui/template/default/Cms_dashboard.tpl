@@ -1,0 +1,602 @@
+<?php
+/**
+ * Cms_dashboard.tpl — CMS landing / overview.
+ * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
+ *
+ * Receives (from Controller_Cms::dashboard):
+ *   $Recent     list of ['kind'=>'page'|'post','id','title','status','updated_at','edit_href']
+ *   $Stats      ['pages','posts','page_drafts','post_drafts','drafts' => int]
+ *   $PageTypes  list of ['type','label'] for the New-Page chooser
+ *   $Caps       ['create','edit','publish','delete','media','nav','roles' => bool]
+ *   UIR, HTTP_TEMPLATE (constants)
+ */
+
+$recent = isset($Recent) && is_array($Recent) ? $Recent : array();
+$stats  = isset($Stats) && is_array($Stats) ? $Stats : array();
+$caps   = isset($Caps) && is_array($Caps) ? $Caps : array();
+
+// Usage analytics (view counts).
+$viewSummary = isset($ViewSummary) && is_array($ViewSummary) ? $ViewSummary : array();
+$topViewed   = isset($TopViewed) && is_array($TopViewed) ? $TopViewed : array();
+$viewTotal   = (int)($viewSummary['total'] ?? 0);
+$viewRecent  = (int)($viewSummary['recent'] ?? 0);
+$viewDays    = (int)($viewSummary['recent_days'] ?? 30);
+// Human-readable thousands separators for the tallies.
+$nf = function ($n) {
+    return number_format((int)$n);
+};
+
+$pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
+    array('type' => 'composed',   'label' => 'Landing page'),
+    array('type' => 'article',    'label' => 'Article'),
+    array('type' => 'media',      'label' => 'Photo gallery'),
+    array('type' => 'resource',   'label' => 'Documents & downloads'),
+    array('type' => 'blog_index', 'label' => 'News index'),
+    array('type' => 'dynamic',    'label' => 'Live ORK data'),
+);
+
+$canCreate = !empty($caps['create']);
+$canManage = !empty($caps['edit']) || !empty($caps['publish']) || !empty($caps['create']);
+$isSuper   = !empty($caps['super']);
+
+// "Top content (30 days)" panel — [{title,url,count}]. Defensive: a missing
+// or empty map renders nothing.
+$topContent = isset($topContent) && is_array($topContent) ? $topContent : array();
+
+$statPages  = (int)($stats['pages'] ?? 0);
+$statPosts  = (int)($stats['posts'] ?? 0);
+$statDrafts = (int)($stats['drafts'] ?? 0);
+
+$h = function ($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
+
+// --- Scope context (CMS Multi-Site Phase 3) ---
+$scopeQ        = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
+$dashScope     = isset($CmsScope) && is_array($CmsScope) ? $CmsScope : array('type' => 'global', 'id' => 0);
+$dashIsOrgSite = ($dashScope['type'] ?? 'global') !== 'global';
+$dashSite      = isset($CmsSite) && is_array($CmsSite) ? $CmsSite : array();
+$dashSiteStatus = (string)($dashSite['status'] ?? 'unbuilt');
+$dashSiteSlug   = (string)($dashSite['slug'] ?? '');
+$dashCanPublish = !empty($CanPublishSite);
+// Site settings (name / URL slug / home page). Naming is edit-tier; the public
+// URL is admin-tier (page.publish), so the slug field is read-only without it.
+$dashSiteName   = (string)($dashSite['site_name'] ?? '');
+$dashSiteHomeId = (int)($dashSite['home_page_id'] ?? 0);
+// Bridge-aware, like $CanPublishSite above — $caps['edit'] is grant-row-only and
+// would hide this from an officer whose CMS rights come from office.
+$dashCanEditSite = !empty($CanEditSite);
+$dashSitePages  = isset($PickerPages) && is_array($PickerPages) ? $PickerPages : array();
+// Public URL namespace for this scope — parks are served at /p/{slug}, everyone
+// else at /k/{slug}. Supplied by the controller from CmsSite::UrlPrefixFor(), the
+// single owner of the rule (Controller_Site::_prefixFor reads the same method), so
+// this no longer re-derives it. Falls back for a render that predates the var.
+$dashSitePrefix = isset($SitePrefix) && $SitePrefix !== ''
+    ? (string)$SitePrefix
+    : (((string)($dashScope['type'] ?? '') === 'park') ? 'p' : 'k');
+// Who may change the web address differs by scope (kingdom: monarch/regent;
+// park: the park's own officers) — keep the copy scope-neutral.
+$dashSiteAdminTerm = 'a site administrator';
+// The org-unit NOUN for this scope: 'Kingdom', 'Principality' or 'Park'. Amtgard
+// stores a principality as an ork_kingdom row with a parent kingdom, so a
+// principality's site IS a kingdom-scoped site — but calling it a kingdom in
+// front of its officers states something untrue about their org. Falls back to
+// the neutral 'site' when the controller did not resolve one.
+$dashOrgNoun      = trim((string)($CmsScopeNoun ?? ''));
+$dashOrgNounLower = ($dashOrgNoun !== '') ? strtolower($dashOrgNoun) : 'site';
+?>
+
+<?php // Dashboard-specific styling (.cms-dash-*/.cms-sitecard-*) lives in the
+      // shared, cacheable cms-admin.css (loaded above) — no per-render inline block. ?>
+<?php
+/* ---- CMS shell setup (persistent rail + masthead) ---- */
+$cmsActive  = 'dashboard';
+$cmsTitle   = 'Dashboard';
+$cmsSub     = 'Overview of your site content';
+$cmsActions = '';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
+
+    <?php // ONE page title. The masthead above is the shell's own title slot, which
+          // every OGRE surface uses — do not add a second page heading here, and do
+          // not put onboarding copy (a greeting, the OGRE expansion) in a permanent
+          // slot where it is re-read on every visit. The name is carried by the rail
+          // wordmark, its tooltip and the rail's screen-reader expansion. ?>
+
+    <?php if ($dashIsOrgSite): ?>
+    <?php
+        $siteIsPublished = ($dashSiteStatus === 'published');
+        $siteBadgeClass  = $siteIsPublished ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft';
+        $siteBadgeText   = $siteIsPublished ? 'Published' : ($dashSiteStatus === 'draft' ? 'Draft' : 'Not yet published');
+    ?>
+    <div class="cms-dash-block">
+        <div class="cms-sitecard" id="cmsSiteCard"
+             data-status="<?= $h($dashSiteStatus) ?>"
+             data-can-publish="<?= $dashCanPublish ? '1' : '0' ?>">
+            <div class="cms-sitecard-main">
+                <div class="cms-sitecard-title">
+                    <i class="fas fa-globe-americas"></i> Public site
+                    <span class="cms-sitecard-badge <?= $siteBadgeClass ?>" id="cmsSiteBadge"><?= $h($siteBadgeText) ?></span>
+                </div>
+                <div class="cms-sitecard-sub" id="cmsSiteSub">
+                    <?php if ($siteIsPublished): ?>
+                        Your public site is live<?php if ($dashSiteSlug !== ''): ?> at <code>/<?= $h($dashSitePrefix) ?>/<?= $h($dashSiteSlug) ?></code><?php endif; ?>.
+                    <?php else: ?>
+                        Your public site is not visible to the public yet.
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="cms-sitecard-actions">
+                <?php if ($dashCanEditSite): ?>
+                    <button type="button" class="cms-btn cms-btn-ghost" id="cmsSiteSettingsBtn"
+                            data-tip="Name your public site, set its web address and choose its home page.">
+                        <i class="fas fa-cog"></i> Site settings
+                    </button>
+                <?php endif; ?>
+                <?php if ($dashCanPublish): ?>
+                    <button type="button" class="cms-btn cms-btn-primary" id="cmsSitePublishBtn"<?= $siteIsPublished ? ' style="display:none;"' : '' ?>>
+                        <i class="fas fa-globe"></i> Publish site
+                    </button>
+                    <button type="button" class="cms-btn cms-btn-ghost" id="cmsSiteUnpublishBtn"<?= $siteIsPublished ? '' : ' style="display:none;"' ?>>
+                        <i class="fas fa-eye-slash"></i> Unpublish
+                    </button>
+                <?php else: ?>
+                    <span class="cms-sitecard-note" data-tip="Only <?= $h($dashSiteAdminTerm) ?> can publish this <?= $h($dashOrgNounLower) ?>&#39;s public site.">
+                        <i class="fas fa-lock"></i> Only <?= $h($dashSiteAdminTerm) ?> can publish this site.
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php // Unfinished work FIRST: picking a half-written page back up is the one
+          // thing an author comes to this page to do, so it outranks the stat tiles
+          // and the analytics panels below. When there is nothing in progress the
+          // block is omitted entirely rather than spending the best slot on an empty
+          // state — Quick create below offers the same "New Page" action. ?>
+    <?php if (!empty($recent)): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Continue editing</h3>
+        <div class="cms-recent-list">
+            <?php foreach ($recent as $r):
+                $isPage  = (($r['kind'] ?? 'page') === 'page');
+                $title   = (string)($r['title'] ?? '(untitled)');
+                $status  = (string)($r['status'] ?? 'draft');
+                $isPub   = ($status === 'published');
+                $href    = (string)($r['edit_href'] ?? '#');
+                $updated = (string)($r['updated_at'] ?? '');
+                // Shared CMS timestamp format (see cms/_shell_top.tpl).
+                $when    = $cmsFmtDate($updated);
+            ?>
+                <div class="cms-recent-item">
+                    <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
+                        <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
+                    </span>
+                    <div class="cms-recent-main">
+                        <div class="cms-recent-title"><?= $h($title) ?></div>
+                        <div class="cms-recent-meta">
+                            <span class="ork-badge cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
+                            &nbsp;Updated <?= $h($when) ?>
+                        </div>
+                    </div>
+                    <div class="cms-recent-actions">
+                        <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($canCreate): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Quick create</h3>
+        <div class="cms-quick-row">
+            <a class="cms-quick-card" id="cmsDashNewPage" href="<?= UIR ?>Cms/edit/new<?= $scopeQ ?>" role="button">
+                <span class="cms-quick-ico"><i class="fas fa-file-alt"></i></span>
+                <span class="cms-quick-text">
+                    <strong>New Page</strong>
+                    <span>Create a landing or content page</span>
+                </span>
+            </a>
+            <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new<?= $scopeQ ?>" role="button">
+                <span class="cms-quick-ico"><i class="fas fa-plus"></i></span>
+                <span class="cms-quick-text">
+                    <strong>New Post</strong>
+                    <span>Write a blog post or announcement</span>
+                </span>
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php // Every tile is guarded, not just Views. A count of zero is not news to
+          // the one person who already knows the site is empty, so a tile is simply
+          // absent until there is something to count; when there is nothing at all
+          // the block says so ONCE and points at the way in, rather than reporting
+          // nothing three times over. ?>
+    <?php $hasGlance = ($statPages > 0 || $statPosts > 0 || $statDrafts > 0 || $viewTotal > 0); ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">At a glance</h3>
+        <?php if (!$hasGlance): ?>
+        <p class="cms-empty-line"><?= $canCreate
+            ? 'Nothing here yet. Start a page or a post above and your counts will show up here.'
+            : 'Nothing has been created here yet.' ?></p>
+        <?php else: ?>
+        <div class="cms-stat-row">
+            <?php if ($statPages > 0): ?>
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/index<?= $scopeQ ?>">
+                <div class="cms-stat-num"><?= $statPages ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-file-alt"></i> Page<?= $statPages === 1 ? '' : 's' ?></div>
+            </a>
+            <?php endif; ?>
+            <?php if ($statPosts > 0): ?>
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/posts<?= $scopeQ ?>">
+                <div class="cms-stat-num"><?= $statPosts ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-newspaper"></i> Post<?= $statPosts === 1 ? '' : 's' ?></div>
+            </a>
+            <?php endif; ?>
+            <?php if ($statDrafts > 0): ?>
+            <a class="cms-stat-tile cms-stat-tile-drafts" href="<?= UIR ?>Cms/index&status=draft<?= $scopeQ ?>">
+                <div class="cms-stat-num"><?= $statDrafts ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
+            </a>
+            <?php endif; ?>
+            <?php // #09: scope-wide view rollup. Not a link (no analytics drill-down yet).
+                  // Suppressed while nothing has ever been viewed: a "0 Views" tile sitting
+                  // directly above a "No views recorded yet" panel stated the same fact twice,
+                  // and the panel states it in words. Once a single view lands, the tile
+                  // returns and is the more useful of the two. ?>
+            <?php if ($viewTotal > 0): ?>
+            <div class="cms-stat-tile" data-tip="<?= $h($nf($viewTotal)) ?> total views all-time on published pages &amp; posts">
+                <div class="cms-stat-num"><?= $h($nf($viewRecent)) ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-chart-line"></i> View<?= $viewRecent === 1 ? '' : 's' ?> (last <?= (int)$viewDays ?> days)</div>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <?php // Top content over the last 30 days — [{title,url,count}]. Rendered
+          // only when the controller supplied rows (defensive; empty → nothing). ?>
+    <?php if (!empty($topContent)): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Top content (30 days)</h3>
+        <div class="cms-recent-list">
+            <?php foreach ($topContent as $tc):
+                $tcTitle = (string)($tc['title'] ?? '(untitled)');
+                $tcUrl   = (string)($tc['url'] ?? '');
+                $tcCount = (int)($tc['count'] ?? 0);
+            ?>
+                <div class="cms-recent-item">
+                    <span class="cms-recent-kind" data-tip="Views in the last 30 days">
+                        <i class="fas fa-chart-line"></i>
+                    </span>
+                    <div class="cms-recent-main">
+                        <div class="cms-recent-title">
+                            <?php if ($tcUrl !== ''): ?>
+                                <a href="<?= $h($tcUrl) ?>" target="_blank" rel="noopener"><?= $h($tcTitle) ?></a>
+                            <?php else: ?>
+                                <?= $h($tcTitle) ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="cms-recent-meta">
+                            <strong><?= $h($nf($tcCount)) ?></strong> view<?= $tcCount === 1 ? '' : 's' ?> in the last 30 days
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php // #09: most-viewed content — closes the "does anyone see this?" loop. ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Most viewed</h3>
+        <?php // Compact empty state. The full .cms-empty panel (icon floating in a
+              // tall box) gave a third of the page to "nothing has happened yet" —
+              // one line says it, and says it in the only slot that has to. ?>
+        <?php if (empty($topViewed)): ?>
+            <p class="cms-empty-line">No views recorded yet. Once people visit your published pages and posts, your most-read content appears here.</p>
+        <?php else: ?>
+            <div class="cms-recent-list">
+                <?php foreach ($topViewed as $tv):
+                    $isPage = (($tv['kind'] ?? 'page') === 'page');
+                    $title  = (string)($tv['title'] ?? '(untitled)');
+                    $href   = (string)($tv['edit_href'] ?? '#');
+                    $total  = (int)($tv['total'] ?? 0);
+                    $recentViews = (int)($tv['recent'] ?? 0);
+                ?>
+                    <div class="cms-recent-item">
+                        <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
+                            <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
+                        </span>
+                        <div class="cms-recent-main">
+                            <div class="cms-recent-title"><?= $h($title) ?></div>
+                            <div class="cms-recent-meta">
+                                <strong><?= $h($nf($total)) ?></strong> total view<?= $total === 1 ? '' : 's' ?>
+                                &nbsp;·&nbsp; <?= $h($nf($recentViews)) ?> in the last <?= (int)$viewDays ?> days
+                            </div>
+                        </div>
+                        <div class="cms-recent-actions">
+                            <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <?php // E71 / E117: site maintenance tools. Refresh-cache is for anyone who can
+          // manage content (scope-checked server-side); the destructive-adjacent
+          // cleanup sweep is super-admin-only. Both POST via CmsAdmin.post. ?>
+    <?php if ($canManage || $isSuper): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Site tools</h3>
+        <div class="cms-quick-row">
+            <?php if ($canManage): ?>
+            <button type="button" class="cms-btn cms-btn-ghost" id="cmsRefreshCacheBtn"
+                    data-tip="Rebuilds the cached officer / parks / map panels on your public front door.">
+                <i class="fas fa-sync-alt"></i> Refresh public site cache
+            </button>
+            <?php endif; ?>
+            <?php if ($isSuper): ?>
+            <button type="button" class="cms-btn cms-btn-ghost" id="cmsRunMaintenanceBtn"
+                    data-tip="Purges trashed pages, orphaned blocks, and unused tags. Never touches live content.">
+                <i class="fas fa-broom"></i> Run maintenance cleanup
+            </button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div class="cms-dash-block">
+        <a class="cms-dash-livelink" href="<?= htmlspecialchars(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>" target="_blank" rel="noopener">
+            <i class="fas fa-external-link-alt"></i> View live site
+        </a>
+    </div>
+
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
+
+<?php include __DIR__ . '/cms/_new_page_modal.tpl'; ?>
+
+<?php /* ---- Site settings (name / public URL / home page) ---- */ ?>
+<?php if ($dashIsOrgSite && $dashCanEditSite): ?>
+<div class="cms-modal-overlay" id="cmsSiteModal">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Site settings">
+        <div class="cms-modal-head">
+            <h3>Site settings</h3>
+            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
+        </div>
+        <div class="cms-modal-body">
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteNameInput">Site name</label>
+                <input type="text" class="cms-input" id="cmsSiteNameInput" maxlength="160"
+                       value="<?= $h($dashSiteName) ?>" placeholder="e.g. Kingdom of the Burning Lands">
+            </div>
+
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteSlugInput">Web address</label>
+                <input type="text" class="cms-input" id="cmsSiteSlugInput" maxlength="80"
+                       value="<?= $h($dashSiteSlug) ?>"
+                       <?= $dashCanPublish ? '' : 'readonly disabled data-tip="Only ' . $h($dashSiteAdminTerm) . ' can change the site&#39;s web address."' ?>>
+                <div class="cms-muted" style="font-size:12px;margin-top:4px;">
+                    Your site lives at <code>/<?= $h($dashSitePrefix) ?>/<span id="cmsSiteSlugPreview"><?= $h($dashSiteSlug) ?></span></code>.
+                    <?php if (!$dashCanPublish): ?>Only <?= $h($dashSiteAdminTerm) ?> can change this.<?php endif; ?>
+                </div>
+            </div>
+
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteHomeSelect">Home page</label>
+                <select class="cms-select" id="cmsSiteHomeSelect">
+                    <option value="">— No home page chosen —</option>
+                    <?php foreach ($dashSitePages as $sp):
+                        $spId = (int)($sp['page_id'] ?? 0);
+                        $spT  = (string)($sp['title'] ?? '(untitled)');
+                        $spS  = (string)($sp['slug'] ?? '');
+                        $spSt = (string)($sp['status'] ?? '');
+                    ?>
+                        <option value="<?= $spId ?>"<?= $spId === $dashSiteHomeId ? ' selected' : '' ?>><?= $h($spT) ?><?= $spS !== '' ? ' (/' . $h($spS) . ')' : '' ?><?= $spSt === 'draft' ? ' — draft' : '' ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <div class="cms-modal-foot">
+            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
+            <button type="button" class="cms-btn cms-btn-primary" id="cmsSiteSaveBtn">Save settings</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php include __DIR__ . '/cms/_confirm_modal.tpl'; ?>
+
+<?php /* Toast host. Unconditional and OUTSIDE the modal overlay (which is
+         display:none), so a save error raised while a modal is open still has
+         somewhere to render — CmsAdmin.toast() no-ops when .cms-toast is absent.
+         z-index 11000 puts it over the still-open modal. */ ?>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+(function () {
+    'use strict';
+    /* Same declaration every other CMS surface makes (Cms_index.tpl, Cms_posts.tpl,
+       …): the shell only emits window.CMS_UIR, so a bare UIR would throw here. */
+    var UIR = window.CMS_UIR;
+    <?php if ($canCreate): ?>
+    /* The New Page quick-card opens the type chooser (falls through to its href
+       if JS is unavailable). */
+    var newModal = document.getElementById('cmsNewModal');
+    var newPageCard = document.getElementById('cmsDashNewPage');
+    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
+    if (newPageCard && newModal) {
+        newPageCard.addEventListener('click', function (e) {
+            e.preventDefault();
+            CmsAdmin.modal.open(newModal);
+        });
+    }
+    <?php endif; ?>
+
+    /* ---- Public-site publish / unpublish (org scope only) ---- */
+    var siteCard = document.getElementById('cmsSiteCard');
+    if (siteCard) {
+        var pubBtn   = document.getElementById('cmsSitePublishBtn');
+        var unpubBtn = document.getElementById('cmsSiteUnpublishBtn');
+        var badge    = document.getElementById('cmsSiteBadge');
+        var subEl    = document.getElementById('cmsSiteSub');
+
+        function siteAction(endpoint, btn) {
+            var original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Working…';
+            var url = UIR + 'CmsAjax/' + endpoint
+                + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
+            fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
+                body: ''
+            }).then(function (r) { return r.json(); }).then(function (d) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                if (!d || d.ok !== true) {
+                    if (subEl) { subEl.textContent = (d && d.error) ? d.error : 'That action could not be completed.'; }
+                    return;
+                }
+                var published = (d.status === 'published');
+                /* Keep the attribute in step with the badge — the Site settings
+                   save handler reads it to word its confirmation copy. */
+                siteCard.setAttribute('data-status', published ? 'published' : 'draft');
+                if (badge) {
+                    badge.textContent = published ? 'Published' : 'Draft';
+                    badge.className = 'cms-sitecard-badge ' + (published ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft');
+                }
+                if (subEl) {
+                    subEl.textContent = published
+                        ? 'Your public site is live.'
+                        : 'Your public site is not visible to the public yet.';
+                }
+                if (pubBtn) { pubBtn.style.display = published ? 'none' : ''; }
+                if (unpubBtn) { unpubBtn.style.display = published ? '' : 'none'; }
+            }).catch(function () {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                if (subEl) { subEl.textContent = 'Network error — please try again.'; }
+            });
+        }
+
+        if (pubBtn) { pubBtn.addEventListener('click', function () { siteAction('publishsite', pubBtn); }); }
+        if (unpubBtn) { unpubBtn.addEventListener('click', function () { siteAction('unpublishsite', unpubBtn); }); }
+
+        /* ---- Site settings (name / public URL / home page) ---- */
+        var setBtn    = document.getElementById('cmsSiteSettingsBtn');
+        var setModal  = document.getElementById('cmsSiteModal');
+        var setSave   = document.getElementById('cmsSiteSaveBtn');
+        var setName   = document.getElementById('cmsSiteNameInput');
+        var setSlug   = document.getElementById('cmsSiteSlugInput');
+        var setHome   = document.getElementById('cmsSiteHomeSelect');
+        var slugPrev  = document.getElementById('cmsSiteSlugPreview');
+        /* The home-page <select> is built from a capped page list, so the current
+           home page may not appear as an option. Sending the browser-defaulted
+           first option would silently NULL home_page_id on a rename-only save —
+           so only send it when the user actually changed it. */
+        var homeOrig  = setHome ? setHome.value : '';
+        /* The public URL is admin-tier: an edit-only officer may rename the site
+           but never move it, so the slug is not sent at all in that case. */
+        var canEditSlug = <?= $dashCanPublish ? 'true' : 'false' ?>;
+        /* /k/ for kingdoms, /p/ for parks — must match the server's prefix. */
+        var sitePrefix = '<?= $h($dashSitePrefix) ?>';
+
+        if (setBtn && setModal) {
+            setBtn.addEventListener('click', function () {
+                CmsAdmin.modal.open(setModal);
+            });
+        }
+        if (setSlug && slugPrev && canEditSlug) {
+            setSlug.addEventListener('input', function () { slugPrev.textContent = setSlug.value; });
+        }
+        if (setSave) {
+            setSave.addEventListener('click', function () {
+                var params = { site_name: setName ? setName.value : '' };
+                if (setHome && setHome.value !== homeOrig) { params.home_page_id = setHome.value; }
+                if (canEditSlug && setSlug) { params.slug = setSlug.value; }
+                var original = setSave.innerHTML;
+                setSave.disabled = true;
+                setSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+                CmsAdmin.post('savesite', params).then(function (res) {
+                    setSave.disabled = false;
+                    setSave.innerHTML = original;
+                    if (!res || res.ok !== true) {
+                        CmsAdmin.toast((res && res.error) ? res.error : 'Could not save the site settings.', 'error');
+                        return;
+                    }
+                    if (setHome) { homeOrig = setHome.value; }
+                    /* Echo back the stored (normalized) values. */
+                    if (setSlug) { setSlug.value = res.slug || ''; }
+                    if (slugPrev) { slugPrev.textContent = res.slug || ''; }
+                    if (subEl && siteCard.getAttribute('data-status') === 'published') {
+                        subEl.textContent = 'Your public site is live at /' + sitePrefix + '/' + (res.slug || '') + '.';
+                    }
+                    CmsAdmin.modal.close(setModal);
+                    CmsAdmin.toast('Site settings saved.', 'ok');
+                }).catch(function () {
+                    setSave.disabled = false;
+                    setSave.innerHTML = original;
+                    CmsAdmin.toast('Network error — please try again.', 'error');
+                });
+            });
+        }
+    }
+
+    /* ---- Refresh the public-site block caches for the acting scope ---- */
+    var refreshBtn = document.getElementById('cmsRefreshCacheBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            var original = refreshBtn.innerHTML;
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing…';
+            CmsAdmin.post('clearrendercache', {}).then(function (res) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = original;
+                if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Could not refresh the cache.', 'error'); return; }
+                CmsAdmin.toast(res.message || 'Public site cache refreshed.', 'ok');
+            }).catch(function () {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = original;
+                CmsAdmin.toast('Network error refreshing the cache.', 'error');
+            });
+        });
+    }
+
+    /* ---- Super-admin maintenance sweep (trash purge + orphan/tag cleanup) ---- */
+    var maintBtn = document.getElementById('cmsRunMaintenanceBtn');
+    if (maintBtn) {
+        /* The sweep is irreversible, so it goes through the shared confirm dialog
+           like every other destructive CMS action (native confirm() is banned). */
+        maintBtn.addEventListener('click', function () {
+            CmsAdmin.confirm(
+                'Run maintenance cleanup?',
+                'This permanently deletes pages trashed more than 30 days ago, plus orphaned blocks and unused tags. It cannot be undone.',
+                'Run cleanup',
+                function () {
+                    CmsAdmin.confirmClose();
+                    var original = maintBtn.innerHTML;
+                    maintBtn.disabled = true;
+                    maintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning up…';
+                    CmsAdmin.post('runmaintenance', {}).then(function (res) {
+                        maintBtn.disabled = false;
+                        maintBtn.innerHTML = original;
+                        if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Maintenance could not run.', 'error'); return; }
+                        CmsAdmin.toast(res.message || 'Maintenance cleanup complete.', 'ok');
+                    }).catch(function () {
+                        maintBtn.disabled = false;
+                        maintBtn.innerHTML = original;
+                        CmsAdmin.toast('Network error running maintenance.', 'error');
+                    });
+                }
+            );
+        });
+    }
+})();
+</script>

@@ -1,0 +1,110 @@
+{
+    "slug": "start-a-chapter",
+    "type": "composed",
+    "parent_slug": "join",
+    "title": "Start a Chapter",
+    "meta_description": "How to start a new Amtgard chapter: pick a name, apply, design heraldry, connect with kingdoms, and sign a contract.",
+    "blocks": [
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Starting a Chapter",
+                "body": "<p>It’s always more fun to play with others. Unfortunately, sometimes you have to bring the others to you! If you’ve taken a look at the <a href=\"UIRPLACEHOLDER/Atlas\">Amtgard Atlas</a> and discovered there are no existing parks nearby, don’t fret. Starting a new chapter is a pretty simple process; at least the administrative parts are.</p><p>Attracting your first members can be a challenge, but founding a chapter is also a rewarding experience. Lucky for you, new chapters have been formed literally hundreds of times in the past so there are some very experienced people who would be happy to give you advice. This guide covers the administrative details and legal requirements for starting a chapter.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "href": "#",
+                "align": "center",
+                "max_width": "960px",
+                "image": "1.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Starting a chapter"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Step One: Pick a Name",
+                "body": "<p>Before you can get started with contracts, you need a name, of course. Once you have a couple of ideas in mind, you should stop by the <a href=\"UIRPLACEHOLDER/Atlas\">Amtgard Atlas</a> or do a search on the <a href=\"http://amtwiki.net/\">Amtwiki</a> to make sure the name you want hasn’t already been used. Multiple chapters with the same name is confusing!</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Step Two: Submit an Application",
+                "body": "<p>Starting a group that uses the name Amtgard requires a contractual relationship with Amtgard International. This is the legal entity that represents Amtgard as a whole. To register as a new Amtgard chapter and host Amtgard activities, the applicant chapter must complete <a href=\"https://goo.gl/forms/cWv40UDddlhbeU0y1\">this application</a>. The application provides insight and guidelines for approval. It may take a week or so before you receive a reply. Please feel free to contact the contracts team at <a href=\"mailto:contracts@amtgard.com\">contracts@amtgard.com</a> if you would like to see where your application is in the process.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Step Three: Create Your Chapter Heraldry",
+                "body": "<p>While the team reviews your contract application, you should develop a heraldic device unique to your chapter. Most chapters have a heraldry somehow related to their geography, their name, or an important event in their formation. Some have heraldry that just plain looked cool. Be as creative as you like! All that matters is that the heraldry is unique.</p><p>If you’d like more information in Heraldry, take a look at the <a href=\"http://amtwiki.net/\">Amtwiki article on Heraldry</a>. The Amtwiki also has a page showing <a href=\"http://amtwiki.net/amtwiki/index.php/Park_Heraldry\">heraldry for all parks</a>.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Step Four: Talk to nearby Kingdoms and Chapters",
+                "body": "<p>If you haven’t already, now is a good time to start talking to the kingdom your chapter will be a member of. Kingdoms hold sway over geographic regions, so there’s likely already a Kingdom in your area for you to join. During the application process you should have identified the closest Kingdom(s) and Chapter(s). Take this time to start a conversation and relationship with those Amtgard programs. A key aspect of the Amtgard game is in growing the community and cooperating with other Amtgard chapters. Those nearby Kingdoms and Parks will likely be asked for input during your application process, so build that positive network as soon as possible.</p><p>You can always look on the <a href=\"UIRPLACEHOLDER/Atlas\">Amtgard Atlas</a> for your closest kingdom or Amtgard International can help you get the contact info of the right people when dealing with contracts. If you’re really far-flung, you may be eligible for sponsorship by a number of kingdoms, or you may remain a freehold. Otherwise, the Circle of Monarchs has issued some <a href=\"http://electricsamurai.com/forums/viewtopic.php?f=58&amp;t=28060\">guidelines</a> about the distances between new groups and kingdoms. Don’t worry, again, Amtgard International can help you through these issues when you start your chapter.</p><p>Here is a list of the current <a href=\"http://amtwiki.net/amtwiki/index.php/Kingdom#Kingdoms_of_Amtgard\">Kingdoms of Amtgard</a>.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Step Five: Sign a Contract",
+                "body": "<p>After the application has been reviewed and the application is deemed positive for both parties, a Chapter Agreement/Contract with Amtgard International Inc will be sent to the applicant to be completed. This contract requires your group to abide by the Freehold Corpora, that is, a set of rules for how your chapter will be structured, until you join a kingdom. Freehold is a catchall term for groups that are not part of a kingdom.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "New Chapter Materials",
+                "body": "",
+                "align": "left"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "Chapter Contract",
+                        "url": "chapter-contract.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "Freehold Corpora",
+                        "url": "freehold-corpora.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "chapter-contract.pdf"
+                    },
+                    {
+                        "file": "freehold-corpora.pdf"
+                    }
+                ]
+            }
+        }
+    ]
+}

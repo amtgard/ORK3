@@ -4,6 +4,7 @@
 		<script>
 		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}})();
 		</script>
+<?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — do not load on standalone org sites ?>
 		<!-- Google Tag Manager -->
 		<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 		new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -11,6 +12,7 @@
 		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
+<?php endif; ?>
 <?php
 // Non-prod indicator (title prefix + banner below the nav). PROD renders
 // nothing; the staging host gets STAGING, everything else DEV/TEST — so a
@@ -26,7 +28,41 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	$ork_env_label = $_ork_env;
 }
 ?>
-		<title><?php echo ($ork_env_label !== '' ? "[{$ork_env_label}] " : '').(strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
+		<title><?php
+		// Browser tab identity, in three tiers:
+		//
+		//   public site pages  "{Org} - {Page}"   e.g. "Amtgard - About",
+		//                                              "Kingdom of the Burning Lands - Home",
+		//                                              "Wolf's Den - Home"
+		//   org site, no name  "{Page}"           (site_name not yet set)
+		//   the ORK app itself "ORK 3: {Page}"    (unchanged)
+		//
+		// $SiteTitleOrg is published by whichever controller owns the surface:
+		// Controller::index (front door) and Controller_Page/Controller_Blog use
+		// Controller::PUBLIC_SITE_BRAND ('Amtgard'); Controller_Site::_bootShell
+		// uses the kingdom's or park's own name. Those controllers set only the
+		// LEAF in $page_title — they must not prefix the org name themselves, or
+		// it appears twice.
+		//
+		// Note the deliberate lack of ucwords() on this branch: page titles here
+		// are author-entered ("Find a Chapter", "A&S Guide") and title-casing them
+		// mangles the author's own capitalization. The ORK-app branch keeps
+		// ucwords() because its titles are bare route/method names.
+		if ($ork_env_label !== '') {
+			echo '[' . htmlspecialchars($ork_env_label, ENT_QUOTES) . '] ';
+		}
+		$_titleOrg  = isset($SiteTitleOrg) ? trim((string)$SiteTitleOrg) : '';
+		$_titleLeaf = trim((string)$page_title);
+		if ($_titleOrg !== '') {
+			echo htmlspecialchars($_titleLeaf !== '' ? ($_titleOrg . ' - ' . $_titleLeaf) : $_titleOrg, ENT_QUOTES);
+		} elseif (!empty($IsOrgSite)) {
+			// Org site whose site_name is still empty: show the page alone rather
+			// than a dangling separator.
+			echo htmlspecialchars($_titleLeaf, ENT_QUOTES);
+		} else {
+			echo htmlspecialchars((strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title), ENT_QUOTES);
+		}
+		?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
 		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
@@ -35,9 +71,28 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
-<?php /* Per-page link-preview tags — controllers override via $this->data['og'];
-         defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
+		<meta name="description" content="<?= htmlspecialchars(!empty($meta_description) ? $meta_description : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
+		<?php
+		// C6: per-page canonical + Open Graph. A controller (Controller_Site for
+		// org sites, Controller::index for the front-door HOME) may publish a
+		// $PageMeta block { canonical, og_type, og_title, og_desc, og_image,
+		// og_sitename }. When present it OVERRIDES the hardcoded global ORK
+		// branding below, so an org page no longer leaks the ORK-International
+		// title/description/image into link previews. Absent → the legacy Home
+		// fallback still applies (no behavior change for existing pages).
+		$_pm = (isset($PageMeta) && is_array($PageMeta)) ? $PageMeta : null;
+		?>
+		<?php if ($_pm !== null): ?>
+		<?php if (!empty($_pm['canonical'])): ?>
+		<link rel="canonical" href="<?= htmlspecialchars((string)$_pm['canonical'], ENT_QUOTES) ?>">
+		<meta property="og:url" content="<?= htmlspecialchars((string)$_pm['canonical'], ENT_QUOTES) ?>">
+		<?php endif; ?>
+		<meta property="og:type" content="<?= htmlspecialchars(!empty($_pm['og_type']) ? (string)$_pm['og_type'] : 'website', ENT_QUOTES) ?>">
+		<meta property="og:site_name" content="<?= htmlspecialchars(!empty($_pm['og_sitename']) ? (string)$_pm['og_sitename'] : 'ORK 3 - Amtgard Online Record Keeper', ENT_QUOTES) ?>">
+		<meta property="og:title" content="<?= htmlspecialchars(!empty($_pm['og_title']) ? (string)$_pm['og_title'] : ucwords((string)$page_title), ENT_QUOTES) ?>">
+		<meta property="og:description" content="<?= htmlspecialchars(!empty($_pm['og_desc']) ? (string)$_pm['og_desc'] : (!empty($meta_description) ? (string)$meta_description : 'The Online Record Keeper for the Amtgard International LARP.'), ENT_QUOTES) ?>">
+		<meta property="og:image" content="<?= htmlspecialchars(!empty($_pm['og_image']) ? (string)$_pm['og_image'] : (HTTP_ASSETS . 'images/clippy_large.png'), ENT_QUOTES) ?>">
+		<?php else: ?>
 <?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
 <?php /* rel=canonical from the same per-page URL as og:url — Facebook honors
          og:url but Google only respects this tag. Consolidates parameter
@@ -53,12 +108,67 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 <?php if (!empty($jsonld)) : ?>
 		<script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
 <?php endif; ?>
+		<?php endif; ?>
+		<?php
+		// RSS auto-discovery: a controller (Controller_Site for org-site pages /
+		// scoped blog index; the global Blog index could publish it too) sets
+		// $rss_feed_url to the scoped feed so readers/aggregators discover it.
+		// Conditional so ordinary app pages emit no bogus feed link.
+		if (!empty($rss_feed_url)):
+		?>
+		<link rel="alternate" type="application/rss+xml" title="<?= htmlspecialchars(!empty($rss_feed_title) ? (string)$rss_feed_title : 'RSS', ENT_QUOTES) ?>" href="<?= htmlspecialchars((string)$rss_feed_url, ENT_QUOTES) ?>">
+		<?php endif; ?>
+		<?php
+		// The CRM application stylesheets are for the ORK app shell. A standalone
+		// public org site ($IsOrgSite, Controller_Site) renders no ORK nav, no ORK
+		// footer and no ORK components — it got 91 KB of CSS it never used, whose
+		// global element rules (the h1-h6 gray pill, p{text-align:justify},
+		// a{color:#333}) then had to be undone in 37 places across the CMS CSS.
+		// Org sites get the minimal cms-base.css instead. Every other surface —
+		// the front door, CMS pages, the blog, and the OGRE admin — genuinely
+		// renders inside the ORK shell and keeps the CRM stylesheets.
+		//
+		// GUARDED: bin/check-css-boundaries.sh rule C6 fails the build if a
+		// stylesheet under default/style/ (or orkshell-interop.css) is linked
+		// anywhere in this file that a standalone org site can reach — the
+		// else: branch below, or outside this conditional altogether. C6 is
+		// branch-aware and fail-closed, so restructuring this gate means
+		// teaching the checker the new shape.
+		if (empty($IsOrgSite)):
+		?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
+		<?php else: ?>
+		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/frontdoor/css/cms-base.css?v=<?=filemtime(DIR_TEMPLATE.'default/frontdoor/css/cms-base.css')?>" rel="stylesheet" />
+		<?php endif; ?>
 
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+		<?php
+		// Open Sans above is unconditional: it is the CRM's face too, and it is
+		// the fallback every CMS text face routes through (CmsThemeTokens::
+		// FontStack), so it must be present whatever the org picked.
+		//
+		// Below is the CMS's own type, and it is RESOLVED, not hardcoded. Never
+		// link a family list from here: a hardcoded LOADED set and the PICKABLE
+		// set in the theme catalogue are two hand-maintained lists and they drift
+		// — a site then asks for a webfont nobody loaded and silently falls back
+		// to the generic sans. With a 47-family catalogue, hardcoding is not just
+		// fragile but unaffordable.
+		// The ORIGIN is a literal here on purpose: C6 fails closed on a
+		// stylesheet href built from an unresolvable variable, and rightly so —
+		// such a href could name any file, orkui.css included. Only the query
+		// varies. The controllers resolve the scope's own two families into
+		// $fdThemeFontQuery (CmsTheme::GetActiveFontQuery), so a page requests
+		// exactly what it renders: two families, or one when heading and body
+		// agree, or none when both are system faces.
+		?>
+		<?php if (!empty($IsFrontDoor) || !empty($IsOrgSite) || !empty($IsCmsPage)): ?>
+		<?php if (!empty($fdThemeFontQuery)): ?>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?= htmlspecialchars($fdThemeFontQuery, ENT_QUOTES) ?>">
+		<?php endif; ?>
+		<?php endif; ?>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 		<?php if (!empty($ViewerDyslexiaFonts)) : ?>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
@@ -69,7 +179,29 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		}
 		</style>
 		<?php endif; ?>
+<?php
+// The ORK application JS bundle: jQuery 1.7.1 + jQuery UI + tablesorter + the
+// CRM's own app code, 1,032,786 bytes, render-blocking in <head>. A standalone
+// public org site ($IsOrgSite, Controller_Site) uses none of it. Audited across
+// all 44 files on the org-site render path (Site_shell.tpl + everything under
+// frontdoor/, block templates and frontdoor/js/frontdoor.js included): zero
+// occurrences of `$(`, `jQuery`, `$.`, or any of orkui.js's top-level globals;
+// every inline script an org site serves (the gallery lightbox and the parks
+// map) is plain DOM; and orkui.js's three $(document).ready handlers bind
+// .info-container, .hasDatePicker and .restricted-image-type, none of which any
+// org-site template emits. Authored content cannot reintroduce the dependency
+// either: CmsSanitizer strips <script> and every on* handler from richtext /
+// raw_html before it is stored.
+//
+// Gate it with the shell it belongs to. This is the same argument as the CSS
+// gate above, one layer out, and it is 11x the CSS this separation removed.
+// If an org-site surface ever genuinely needs jQuery, do NOT ungate this —
+// nothing else on that path wants a 1 MB bundle. Load what that surface needs.
+if (empty($IsOrgSite)):
+?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+<?php endif; ?>
+<?php if (empty($IsOrgSite)): // ORK's own gtag.js + Cloudflare Web Analytics — do not load on standalone org sites ?>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
 		<script>
@@ -79,11 +211,31 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
+<?php endif; ?>
 
+<?php
+// ---------------------------------------------------------------------------
+// ORK APPLICATION CHROME (CSS). Every rule below styles a piece of the ORK app
+// shell — the offline banner, the stacked app nav, the What's New modal, the
+// nav dark-mode toggle, .information-table, the maintenance popover. A
+// standalone public org site ($IsOrgSite, Controller_Site) renders none of that
+// markup: it is all gated off further down this file, so shipping the CSS was
+// dead weight AND actively harmful. In particular
+//
+//     html[data-theme="dark"] body { background-color:#1a202c; color:#e2e8f0; }
+//
+// is (0,1,2) and beat cms-base.css's own `body` (0,0,1), repainting a dark org
+// site in ORK slate instead of the site's own --fd-bg. Gate the CSS with the
+// markup it styles: both or neither.
+if (empty($IsOrgSite)):
+?>
 	<style>
 	/* Offline banner */
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
 	html[data-theme="dark"] #ork-offline-banner { background:#78350f; }
+
+	/* CMS/blog pages render their own site_header nav — suppress the stacked app nav */
+	body.cms-page #newmenu { display:none !important; }
 
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
@@ -151,22 +303,26 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 
 	/* Dark mode global overrides */
 	html[data-theme="dark"] body { background-color: #1a202c; color: #e2e8f0; }
-	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] .information-table { background-color: #2d3748; border-color: #4a5568; }
 	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
+	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
-
 	</style>
+<?php endif; // /ORK application chrome (CSS) ?>
 </head>
-	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
+	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : (!empty($IsCmsPage) ? 'cms-page' : '') ?>">
+<?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — omit on standalone org sites ?>
 		<!-- Google Tag Manager (noscript) -->
 		<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5HZHGSLT"
 		height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 		<!-- End Google Tag Manager (noscript) -->
+<?php endif; ?>
+<?php if (empty($IsOrgSite)): // ORK app offline banner. Its CSS is gated in <head> and its wiring JS at the foot of this file — gate all three together or none. ?>
 <div id="ork-offline-banner"><i class="fas fa-wifi" style="margin-right:6px;opacity:0.8"></i>You&rsquo;re currently offline &mdash; changes may not save until your connection is restored.</div>
+<?php endif; ?>
 <?php
 // -----------------------------------------------------------------------
 // SCHEDULED MAINTENANCE NOTICE
@@ -183,10 +339,12 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
 		</div>
 <?php endif; ?>
-<?php if (!empty($downtime_start)): ?>
-		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
-			<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
-			<div id="nm-mobile-detail" style="display:none;font-weight:400;font-size:0.78rem;padding-top:5px;border-top:1px solid rgba(255,255,255,0.3);margin-top:5px;">
+<?php if (empty($IsOrgSite) && !empty($downtime_start)): // ORK app maintenance bar (mobile); the desktop half lives in the gated #newmenu nav ?>
+		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;font-size:0.8rem;font-weight:600;">
+			<button type="button" aria-expanded="false" aria-controls="nm-mobile-detail" onclick="(function(btn){var d=document.getElementById('nm-mobile-detail');var open=d.style.display==='none';d.style.display=open?'block':'none';btn.setAttribute('aria-expanded',open?'true':'false');})(this)" style="display:block;width:100%;background:none;border:none;color:inherit;font:inherit;text-align:center;padding:6px 12px;cursor:pointer;">
+				<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
+			</button>
+			<div id="nm-mobile-detail" style="display:none;font-weight:400;font-size:0.78rem;padding:5px 12px 6px;border-top:1px solid rgba(255,255,255,0.3);margin-top:0;">
 				<span class="nm-time"></span>
 <?php if (!empty($downtime_note)): ?>
 				<span style="display:block;margin-top:3px;opacity:0.9;"><?= htmlspecialchars($downtime_note) ?></span>
@@ -196,6 +354,7 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 		<style>@media (max-width:767px){#nav-maintenance-mobile{display:block!important;}}</style>
 <?php endif; ?>
 
+<?php if (empty($IsOrgSite)): // ORK app weather-safety dialog: only ORK event/weather badges carry data-wx-safety, and the overlay's inline styles read --ork-card-bg / --ork-text, whose dark values live in orkui.css — which org sites no longer load, so it would render light-on-dark. ?>
 <!-- Weather safety info dialog (Extreme heat / Frostbite risk).
      Defined BEFORE $CONTROLLER_CONTENTS so the wxSafetyDialog / wxSafetyAttrs
      / wxSafetyIconHtml JS globals exist before any content template's inline
@@ -257,8 +416,9 @@ if (!function_exists('nav_session_ago')) {
 		return round($s / 86400) . ' days ago';
 	}
 }
-// Computed here (renders before the nav); the nav dropdown reuses it.
-$__laSessions = Ork3::$Lib->authorization->ListSessionsForToken((string)($this->__session->token ?? ''));
+// Supplied by Controller::__construct as $NavSessions (a template's $this is the
+// View, which holds no models); the nav dropdown below reuses it.
+$__laSessions = isset($NavSessions) ? $NavSessions : array();
 if (count($__laSessions) > 1) : ?>
 <div id="logout-all-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeLogoutAllDialog();">
 	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
@@ -402,6 +562,7 @@ document.addEventListener('keydown', function (e) {
 	};
 })();
 </script>
+<?php endif; // /weather-safety dialog (ORK app chrome) ?>
 
 <?php
 	echo $CONTROLLER_CONTENTS;
@@ -409,8 +570,9 @@ document.addEventListener('keydown', function (e) {
 
 		</div>
 
+<?php if (empty($IsOrgSite)): // standalone org sites render their own header, not the global ORK nav ?>
 	<nav id='newmenu'>
-		<a id='nav-mobile-home' href='<?=UIR?>'><i class='fas fa-home'></i></a>
+		<a id='nav-mobile-home' href='<?=UIR?>' aria-label='Home'><i class='fas fa-home' aria-hidden='true'></i></a>
 		<!-- Left: breadcrumb navigation -->
 		<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
 		<div id='navmenu'>
@@ -464,7 +626,7 @@ document.addEventListener('keydown', function (e) {
 		<div id='controls'>
 			<!-- Universal search -->
 			<div id='nav-search-wrap'>
-				<a class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' title='Search'><i class='fas fa-search'></i></a>
+				<button type='button' class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' aria-label='Search'><i class='fas fa-search' aria-hidden='true'></i></button>
 				<div id='nav-search-input-wrap'>
 					<input id='UniversalSearch' placeholder='Search active players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
 					<div id='nav-search-dropdown'></div>
@@ -510,6 +672,7 @@ document.addEventListener('keydown', function (e) {
 					<a href='https://discord.gg/YTS82nxnsh' target='_blank'><i class='fab fa-discord'></i> Amtgard ORK Discord</a>
 					<?php endif; ?>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
+					<a href='<?=UIR?>Directory/index'><i class='fas fa-crown'></i> Kingdoms Directory</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!', '<?= UIR ?>ReleaseNotes', 'In the meantime, see the release notes');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
 				</div>
@@ -545,6 +708,9 @@ document.addEventListener('keydown', function (e) {
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
+<?php if (!empty($CanManageCms)): ?>
+					<a href='<?=UIR?>Cms/dashboard'><i class='fas fa-file-alt'></i> OGRE Site Manager</a>
+<?php endif; ?>
 <?php if ($NavIsOrkAdmin): ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
@@ -564,8 +730,10 @@ document.addEventListener('keydown', function (e) {
 <?php endif; ?>
 		</div>
 	</nav>
+<?php endif; // /IsOrgSite global-nav suppression ?>
 
 
+<?php if (empty($IsOrgSite)): // Wiring for the global #newmenu nav, gated away above: universal search, the avatar/resources dropdowns, the maintenance popover, and the ORK-documentation info dialog. Every element it touches is inside that nav, and the info dialog's inline styles read --ork-card-bg / --ork-text from orkui.css, which org sites no longer load. ?>
 	<script>
 	// ---- Search toggle ----
 	function nsToggle(btn) {
@@ -781,13 +949,16 @@ document.addEventListener('keydown', function (e) {
 		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
 	}
 	</script>
+<?php endif; // /global-nav wiring + info dialog (ORK app chrome) ?>
 
-<?php require_once(DIR_UI . 'whats_new_content.php'); ?>
+	
+<?php if (empty($IsOrgSite)): // global-only logged-in chrome (What's New + email prompt); org sites omit it — it uses base-Controller data ($DB / session / release constants) that Controller_Site does not set, and would fatal mid-render, truncating the page before the editor FAB. ?>
+<?php require_once(DIR_UI . 'whats_new_content.php'); // constants only (WHATS_NEW_VERSION below, ORK_VERSION in the footer); they are define-guarded, so require_once is right here — the $WHATS_NEW_ITEMS array is not read in this scope ?>
 <?php if ($this->__session->token != null) : ?>
 <?php
 // --- What's New modal ---
 // ShowWhatsNew + WhatsNewRelease are set on Controller::$data and exposed via View::$__data.
-// Do not re-read $WHATS_NEW_ITEMS here: Controller already require_once'd whats_new_content.php
+// Do not re-read $WHATS_NEW_ITEMS here: Controller already require'd whats_new_content.php
 // in a different scope, so require_once in this theme would leave $WHATS_NEW_ITEMS unset.
 $__wnShow = !empty($this->__data['ShowWhatsNew']);
 $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
@@ -855,7 +1026,7 @@ endif;
 .emp-body { font-size:13px; color:#4a5568; line-height:1.6; margin-bottom:14px; }
 .emp-field { margin-bottom:12px; }
 .emp-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px; }
-.emp-field input[type="email"] { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #e2e8f0; border-radius:5px; font-size:14px; color:#2d3748; }
+.emp-field input[type="email"] { width:100%; box-sizing:border-box; padding:7px 10px; border:1px solid #e2e8f0; border-radius:5px; font-size:16px; color:#2d3748; }
 .emp-field input[type="email"]:focus { outline:none; border-color:#4299e1; box-shadow:0 0 0 3px rgba(66,153,225,.15); }
 .emp-error { display:none; color:#e53e3e; font-size:12px; margin-top:4px; }
 .emp-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:4px; }
@@ -873,6 +1044,18 @@ endif;
 .emp-suggestion-use:hover { background:#2b6cb0; }
 .emp-suggestion-dismiss { background:none; border:none; color:#90cdf4; font-size:16px; line-height:1; cursor:pointer; padding:0 2px; flex-shrink:0; }
 .emp-suggestion-dismiss:hover { color:#4299e1; }
+
+/* Recovery-email modal dark mode */
+html[data-theme="dark"] .emp-overlay { background:rgba(0,0,0,0.7); }
+html[data-theme="dark"] .emp-modal { background:#2d3748; color:#e2e8f0; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .emp-title { color:#e2e8f0; }
+html[data-theme="dark"] .emp-body { color:#cbd5e0; }
+html[data-theme="dark"] .emp-field label { color:#cbd5e0; }
+html[data-theme="dark"] .emp-field input[type="email"] { background:#1a202c; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .emp-field input[type="email"]:focus { border-color:#63b3ed; box-shadow:0 0 0 3px rgba(99,179,237,.2); }
+html[data-theme="dark"] .emp-skip { color:#718096; }
+html[data-theme="dark"] .emp-skip:hover { color:#a0aec0; }
+html[data-theme="dark"] .emp-suggestion { background:#2c3e50; border-color:#4a5568; color:#90cdf4; }
 </style>
 <div class="emp-overlay" id="emp-overlay">
   <div class="emp-modal" role="dialog" aria-modal="true" aria-labelledby="emp-title">
@@ -982,7 +1165,9 @@ endif;
 })();
 </script>
 <?php endif; ?>
+<?php endif; // /global-only logged-in chrome (What's New + email prompt) ?>
 
+<?php if (empty($IsOrgSite)): // standalone org sites render their own footer ?>
 <footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
@@ -1005,7 +1190,9 @@ endif;
   <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
 <?php endif; ?>
 </footer>
+<?php endif; // /IsOrgSite global-footer suppression ?>
 
+<?php if (empty($IsOrgSite)): // global-only chrome; org sites omit it (and it needs $_epToday, which Controller_Site does not set) ?>
 <!-- Era Phoenice popover — mirrors electricsamurai.com/ad -->
 <div id="ork-ep-overlay"
      onclick="if(event.target===this)orkCloseEpPopover()"
@@ -1132,8 +1319,10 @@ function orkCloseEpPopover() {
     if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
 }
 </script>
+<?php endif; // /Era Phoenice popover (global-only chrome) ?>
 
 <script>
+<?php if (empty($IsOrgSite)): // gated with the #ork-offline-banner div and its CSS ?>
 /* Offline banner */
 (function() {
   var banner = document.getElementById('ork-offline-banner');
@@ -1143,6 +1332,7 @@ function orkCloseEpPopover() {
   window.addEventListener('online',  update);
   update();
 })();
+<?php endif; ?>
 
 /* Global dark mode toggle — runs on every page.
    Skips init if revised.js already defined orkInitTheme (revised-frontend pages). */
@@ -1232,6 +1422,7 @@ function orkCloseEpPopover() {
   }
 })();
 
+<?php if (empty($IsOrgSite)): // Highcharts is an ORK app dependency; no org-site surface loads it ?>
 /* Highcharts dark mode — setOptions for backgroundColor (tooltip handled via CSS) */
 if (typeof Highcharts !== 'undefined') {
   (function() {
@@ -1245,8 +1436,38 @@ if (typeof Highcharts !== 'undefined') {
     }
   })();
 }
+<?php endif; // /Highcharts dark mode ?>
 </script>
 
 
+<?php if (!empty($cmsEditUrl) || !empty($cmsNewPostUrl)): ?>
+<style>
+.cms-fab-stack{position:fixed;right:22px;bottom:22px;display:flex;gap:12px;z-index:1200;}
+.cms-fab{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;color:#fff;box-shadow:0 4px 14px rgba(20,30,60,.28);text-decoration:none;border:none;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;position:relative;}
+.cms-fab:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(20,30,60,.35);color:#fff;}
+.cms-fab-primary{background:#1b3a6b;}
+.cms-fab-secondary{background:#b8862b;}
+.cms-fab[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);right:0;background:#1f2937;color:#fff;font-size:12px;line-height:1.3;white-space:normal;width:max-content;max-width:200px;padding:5px 9px;border-radius:6px;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s ease,transform .12s ease;}
+.cms-fab[data-tip]:hover::after{opacity:1;transform:translateY(0);}
+html[data-theme="dark"] .cms-fab-primary{background:#2a4d86;}
+html[data-theme="dark"] .cms-fab-secondary{background:#caa24a;}
+html[data-theme="dark"] .cms-fab[data-tip]::after{background:#0b1220;}
+@media print{.cms-fab-stack{display:none;}}
+</style>
+<div class="cms-fab-stack">
+    <?php if (!empty($cmsNewPostUrl)): ?>
+        <a class="cms-fab cms-fab-secondary" href="<?= htmlspecialchars($cmsNewPostUrl, ENT_QUOTES) ?>" data-tip="<?= htmlspecialchars(!empty($cmsNewPostTip) ? $cmsNewPostTip : 'New post', ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(!empty($cmsNewPostTip) ? $cmsNewPostTip : 'New post', ENT_QUOTES) ?>"><i class="fas fa-feather-alt"></i></a>
+    <?php endif; ?>
+    <?php if (!empty($cmsEditUrl)): ?>
+        <a class="cms-fab cms-fab-primary" href="<?= htmlspecialchars($cmsEditUrl, ENT_QUOTES) ?>" data-tip="<?= htmlspecialchars(!empty($cmsEditTip) ? $cmsEditTip : 'Edit this page', ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(!empty($cmsEditTip) ? $cmsEditTip : 'Edit this page', ENT_QUOTES) ?>"><i class="fas fa-pen"></i></a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+<?php if (!empty($IsOrgSite) && !empty($fdThemeCssRoot)): // Standalone org sites only: body/html sit OUTSIDE .fd-page and cannot inherit tokens scoped to it, so cms-base.css's body rule needs a :root copy. MUST stay BEFORE the .fd-page block below — equal specificity, so source order decides, and the scoped block has to keep winning inside the page. ?>
+<style id="fd-theme-tokens-root"><?= $fdThemeCssRoot ?></style>
+<?php endif; ?>
+<?php if (!empty($fdThemeCss)): ?>
+<style id="fd-theme-tokens"><?= $fdThemeCss ?></style>
+<?php endif; ?>
 </body>
 </html>

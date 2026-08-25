@@ -2,6 +2,63 @@
 
 class Heraldry extends Ork3
 {
+    /**
+     * SINGLE SOURCE OF TRUTH for the zero-pad width of a heraldry FILENAME.
+     *
+     * These widths are not a style choice, they are the on-disk reality, and they
+     * DIFFER per scope type:
+     *     assets/heraldry/kingdom/0007.jpg   (4)
+     *     assets/heraldry/park/01049.png     (5)
+     *     assets/heraldry/player/000123.jpg  (6)
+     *
+     * Code that builds a heraldry path outside this class reads the width from
+     * here (via PadLength()/BaseName()) rather than re-typing the number, because
+     * a second copy fails silently, not loudly: it probes a filename that simply
+     * never exists, so the caller sees "this org has no device" instead of an
+     * error — e.g. a path builder that assumes 5 for every scope matches no
+     * kingdom device at all, and the CMS heraldry colour extractor then falls
+     * through to the name-hash palette on every kingdom site.
+     *
+     * Some older methods in this class still spell the width inline (GetHeraldry,
+     * the Remove*Heraldry family); they are correct today but should move onto
+     * BaseName() when next touched.
+     *
+     * @var array<string,int>
+     */
+    public const PAD_LENGTHS = array(
+        'player'  => 6,
+        'mundane' => 6,   // the player table's own name, accepted as an alias
+        'park'    => 5,
+        'kingdom' => 4,
+        'unit'    => 5,
+        'event'   => 5,
+    );
+
+    /**
+     * Zero-pad width for a heraldry scope type, case-insensitive.
+     *
+     * @param string $type 'player'|'park'|'kingdom'|'unit'|'event'
+     * @return int width, or 0 for an unknown type
+     */
+    public static function PadLength($type)
+    {
+        $key = strtolower((string) $type);
+        return isset(self::PAD_LENGTHS[$key]) ? self::PAD_LENGTHS[$key] : 0;
+    }
+
+    /**
+     * Zero-padded heraldry basename, e.g. ('kingdom', 7) => '0007'.
+     *
+     * @param string $type
+     * @param int    $id
+     * @return string basename without extension, or '' for an unknown type
+     */
+    public static function BaseName($type, $id)
+    {
+        $pad = self::PadLength($type);
+        return ($pad > 0) ? sprintf('%0' . $pad . 'd', (int) $id) : '';
+    }
+
     public function __construct()
     {
         parent::__construct();
@@ -31,15 +88,15 @@ class Heraldry extends Ork3
     {
         $response = array('Url' => '');
         switch ($request['Type']) {
-            case 'Player': $response['Url'] = $this->resolve_heraldry_url(HTTP_PLAYER_HERALDRY, DIR_PLAYER_HERALDRY, 6, $request['Id']);
+            case 'Player': $response['Url'] = $this->resolve_heraldry_url(HTTP_PLAYER_HERALDRY, DIR_PLAYER_HERALDRY, self::PadLength('player'), $request['Id']);
                 break;
-            case 'Park': $response['Url'] = $this->resolve_heraldry_url(HTTP_PARK_HERALDRY, DIR_PARK_HERALDRY, 5, $request['Id']);
+            case 'Park': $response['Url'] = $this->resolve_heraldry_url(HTTP_PARK_HERALDRY, DIR_PARK_HERALDRY, self::PadLength('park'), $request['Id']);
                 break;
-            case 'Kingdom': $response['Url'] = $this->resolve_heraldry_url(HTTP_KINGDOM_HERALDRY, DIR_KINGDOM_HERALDRY, 4, $request['Id']);
+            case 'Kingdom': $response['Url'] = $this->resolve_heraldry_url(HTTP_KINGDOM_HERALDRY, DIR_KINGDOM_HERALDRY, self::PadLength('kingdom'), $request['Id']);
                 break;
-            case 'Unit': $response['Url'] = $this->resolve_heraldry_url(HTTP_UNIT_HERALDRY, DIR_UNIT_HERALDRY, 5, $request['Id']);
+            case 'Unit': $response['Url'] = $this->resolve_heraldry_url(HTTP_UNIT_HERALDRY, DIR_UNIT_HERALDRY, self::PadLength('unit'), $request['Id']);
                 break;
-            case 'Event': $response['Url'] = $this->resolve_heraldry_url(HTTP_EVENT_HERALDRY, DIR_EVENT_HERALDRY, 5, $request['Id']);
+            case 'Event': $response['Url'] = $this->resolve_heraldry_url(HTTP_EVENT_HERALDRY, DIR_EVENT_HERALDRY, self::PadLength('event'), $request['Id']);
                 break;
         }
         return $response;
@@ -96,7 +153,7 @@ class Heraldry extends Ork3
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
                 $request = $this->fetch_url_heraldry($request);
-                $this->store_heraldry($request, DIR_PLAYER_HERALDRY, 6, 'mundane');
+                $this->store_heraldry($request, DIR_PLAYER_HERALDRY, self::PadLength('mundane'), 'mundane');
                 $this->mundane->save();
                 return Success();
             } else {
@@ -191,7 +248,7 @@ class Heraldry extends Ork3
             $this->kingdom->kingdom_id = $request['KingdomId'];
             if ($this->kingdom->find()) {
                 $request = $this->fetch_url_heraldry($request);
-                $this->store_heraldry($request, DIR_KINGDOM_HERALDRY, 4, 'kingdom');
+                $this->store_heraldry($request, DIR_KINGDOM_HERALDRY, self::PadLength('kingdom'), 'kingdom');
                 $this->kingdom->save();
                 return Success();
             } else {
@@ -245,8 +302,11 @@ class Heraldry extends Ork3
             $this->park->park_id = $request['ParkId'];
             if ($this->park->find()) {
                 $request = $this->fetch_url_heraldry($request);
-                $this->store_heraldry($request, DIR_PARK_HERALDRY, 5, 'park');
+                $this->store_heraldry($request, DIR_PARK_HERALDRY, self::PadLength('park'), 'park');
                 $this->park->save();
+                // has_heraldry is one of the columns Park::GetParkDetails() memoizes
+                // per request, so this write has to drop that memo.
+                Park::BustParkMemo($request['ParkId']);
                 return Success();
             } else {
                 return InvalidParameter();
@@ -272,6 +332,7 @@ class Heraldry extends Ork3
                 }
                 $this->park->has_heraldry = 0;
                 $this->park->save();
+                Park::BustParkMemo($request['ParkId']);
                 // Removing heraldry unlinks a file from disk; it wrote no audit row.
                 Ork3::$Lib->dangeraudit->audit(
                     __CLASS__ . '::' . __FUNCTION__,
@@ -299,7 +360,7 @@ class Heraldry extends Ork3
             $this->unit->unit_id = $request['UnitId'];
             if ($this->unit->find()) {
                 $request = $this->fetch_url_heraldry($request);
-                $this->store_heraldry($request, DIR_UNIT_HERALDRY, 5, 'unit');
+                $this->store_heraldry($request, DIR_UNIT_HERALDRY, self::PadLength('unit'), 'unit');
                 $this->unit->save();
                 return Success();
             } else {
@@ -397,7 +458,7 @@ class Heraldry extends Ork3
             $this->event->event_id = $request['EventId'];
             if ($this->event->find()) {
                 $request = $this->fetch_url_heraldry($request);
-                $this->store_heraldry($request, DIR_EVENT_HERALDRY, 5, 'event');
+                $this->store_heraldry($request, DIR_EVENT_HERALDRY, self::PadLength('event'), 'event');
                 $this->event->save();
                 Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();

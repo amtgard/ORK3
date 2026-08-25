@@ -1,0 +1,93 @@
+{
+    "slug": "foodfight",
+    "type": "composed",
+    "parent_slug": "programs",
+    "title": "Food Fight",
+    "meta_description": "Amtgard Food Fight: a month-long fundraising and service event every September where Kingdoms compete to fight hunger in their communities.",
+    "blocks": [
+        {
+            "type": "hero_carousel",
+            "fields": {
+                "autoplay_ms": 5000,
+                "slides": [
+                    {
+                        "image": "1.jpg",
+                        "kicker": "",
+                        "headline": "Food Fight",
+                        "subcopy": "Amtgard Food Fight is a month-long fundraising and service event that is celebrated in every Kingdom of our game. We come together and fight hunger in our local communities every September and naturally to compete amongst ourselves to see which Kingdom can do the most good."
+                    }
+                ],
+                "ctas": [
+                    {
+                        "label": "Contact",
+                        "href": "mailto:communityoutreach@amtgard.com",
+                        "style": "gold"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Food Fight community photo"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "staff_roster",
+            "fields": {
+                "kicker": "2025 Food Fight",
+                "heading": "Autocrat",
+                "subheading": "",
+                "people": [
+                    {
+                        "role": "Winter's Edge",
+                        "image": "2.jpg",
+                        "persona_name": "Xion Snow"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "2.jpg",
+                        "alt": "Xion Snow, 2025 Food Fight Autocrat"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "",
+                "heading": "Word From The Autocrat",
+                "body": "<p>As the Autocrat for Food Fight the last few years, I’m proud to share our goal based on Kingdom participation: raising $50,000 and 3,000 pounds of food to directly combat food scarcity in our communities. Every dollar raised will go toward stocking food banks and expanding access to nutritious meals for families in need. The urgency of this mission cannot be overstated — with homeless individuals in the US and Canada creeping over 860,000, and nearly 40% of those being completely unsheltered; and 60 million additional people living in food insecurity (~60,000 homeless and 9 million food insecure in Canada), this fundraiser is not just an event, but a call to action.</p><p>One of the cornerstones of my approach this year is to build strong, meaningful partnerships with local businesses. When businesses step up as leaders, they can create lasting, positive change. Whether through direct donations, in-kind contributions, or employee matching programs; every partnership brings us closer to our goal. It’s also a unique opportunity for businesses to demonstrate their commitment to their local community, gain visibility, and inspire others to give back. We invite companies of all sizes to join us, and will be thanking any partners in social media posts and with a mention on the Amtgard website.</p><p>On a more personal note, this event means a lot to me because of my own experiences with homelessness and food insecurity. And I know there are many other members currently facing similar issues. The National charities are, as always, Feeding America and Food Banks Canada; but I encourage every local chapter to choose a local food bank or shelter. Build up your communities. Bring attention to the cause. And let’s make this year a powerful statement of what’s possible when we come together for a worthy cause.</p><p><em>Xion Snow</em></p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "gallery",
+            "fields": {
+                "columns": 2,
+                "caption": "*Accurate as of 9/8/25",
+                "images": [
+                    "3.png",
+                    "4.png"
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "3.png",
+                        "alt": "Food Fight data icon"
+                    },
+                    {
+                        "file": "4.png",
+                        "alt": "Food Fight Data chart, accurate as of 9/8/25"
+                    }
+                ]
+            }
+        }
+    ]
+}

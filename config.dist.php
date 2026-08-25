@@ -9,6 +9,33 @@ ini_set('display_errors', '1');
 // HTTP
 define('ORK_DIST_NAME', 'ork');
 
+// Canonical hosts: this deployment's own hostname(s), as a comma- or
+// whitespace-separated list of 'host' or 'host:port' entries (matching is
+// case-insensitive and ignores a trailing dot and a redundant :80/:443).
+//
+// Every HTTP_*/HTTPS_* constant below is built from the CLIENT-SUPPLIED
+// Host header, so a request carrying `Host: evil.example` is otherwise
+// echoed into every absolute URL on the page. When this list is set, the
+// guard call below replaces a non-canonical Host with the FIRST entry
+// before those constants are minted, and CmsMeta uses the same list for
+// <link rel="canonical"> / og:url.
+//
+// To enable it, uncomment the define — that is the only line to change; the
+// guard call underneath is unconditional and is simply a no-op while the
+// list is unset, which keeps the legacy request-derived behaviour.
+//
+// LIST EVERY HOSTNAME THIS DEPLOYMENT LEGITIMATELY ANSWERS ON — staging
+// aliases, the container IP, any internal health-check name. A legitimate
+// but unlisted host is rewritten to the canonical one, and class.Session.php
+// derives the session-cookie domain from $_SERVER['HTTP_HOST'], so the
+// browser drops a cookie scoped to a domain it is not on and login silently
+// stops working there. (Same reason the guard also closes the Host-keyed
+// cache-poisoning vector in class.GhettoCache.php, which prefixes its keys
+// with HTTP_HOST.)
+require_once(dirname(__FILE__) . '/host-guard.php');
+// define('ORK_CANONICAL_HOSTS', 'ork.amtgard.com www.amtgard.com');
+ork_enforce_canonical_host();
+
 define('HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkservice/');
 define('HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/');
 define('HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/');

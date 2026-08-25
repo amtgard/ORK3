@@ -2,6 +2,17 @@
 
 class Kingdom extends Ork3
 {
+    // Two return shapes live on this class, on purpose:
+    //   - the SOAP/API surface (GetParks, GetOfficers, Set*) answers with the house
+    //     envelope, array('Status' => Success()|InvalidParameter(), ...), because a
+    //     remote caller has no other way to learn a call failed;
+    //   - the read-only projections the front door and the model membrane consume
+    //     (GetKingdomName, ListActiveIdName, GetActiveParks, GetPublicOfficers)
+    //     answer with the value itself — a string, or a plain list — and signal
+    //     "nothing to show" with '' or an empty array, which is what a template
+    //     branches on anyway. They never mutate, so there is no failure to report.
+    // Add a new method to whichever surface it serves and follow that surface's shape.
+
     // Per-request memo caches for the principality-rollup helpers. These are read
     // dozens of times per kingdom-scoped report page; the Kingdom lib is a single
     // instance per request (see startup.php), so caching here is safe and avoids
@@ -14,6 +25,86 @@ class Kingdom extends Ork3
         parent::__construct();
         $this->kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
         $this->kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
+    }
+
+    /**
+     * Lightweight single-column read of a kingdom's display name (or '' when the
+     * id is unknown). Keeps raw $DB out of the CMS controller/trait layer — the
+     * admin scope-context banner calls this via the model pass-through.
+     *
+     * Alias of GetKingdomName() so both entry points share one implementation.
+     *
+     * @param int $id kingdom_id
+     * @return string
+     */
+    public function GetName($id)
+    {
+        return $this->GetKingdomName($id);
+    }
+
+    /**
+     * The minimal active-kingdom list: id + name only, ordered by name in SQL.
+     *
+     * GetKingdoms() cannot serve this — it calls Common::get_configs() once per
+     * kingdom to attach AtlasColor, an N-config fan-out that callers wanting only
+     * a picker's id/name pairs pay for and never use. This is the light lister:
+     * a parameterless, static query (no user input reaches it, so nothing to
+     * bind/escape), sorted in SQL so callers need no post-sort.
+     *
+     * @return array<int,array{kingdom_id:int,name:string}> ordered by name ASC
+     */
+    public function ListActiveIdName()
+    {
+        global $DB;
+        $out = array();
+        $DB->Clear();
+        $rows = $DB->DataSet(
+            'SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom'
+            . " WHERE active = 'Active' ORDER BY name ASC"
+        );
+        if ($rows !== false) {
+            while ($rows->Next()) {
+                $kid = (int)$rows->kingdom_id;
+                if ($kid <= 0) {
+                    continue;
+                }
+                $out[] = array('kingdom_id' => $kid, 'name' => (string)$rows->name);
+            }
+        }
+        $DB->Clear();
+        return $out;
+    }
+
+    /**
+     * A kingdom's display name by id — nothing else.
+     *
+     * GetKingdomShortInfo() answers the same question but costs a yapo find()
+     * plus a second banner-column query, and GetKingdomDetails() costs far more
+     * still; callers that only need to label something (the park hero's
+     * "{Title} · {Kingdom}" eyebrow, breadcrumbs) should not pay for either.
+     * Single bound parameter; returns '' for an unknown/invalid id so callers can
+     * concatenate the result without a null check.
+     *
+     * @param  int $kingdomId
+     * @return string the kingdom's name, or '' when it does not resolve
+     */
+    public function GetKingdomName($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        if ($kingdomId <= 0) {
+            return '';
+        }
+
+        global $DB;
+        $DB->Clear();
+        $DB->kingdom_id = $kingdomId;
+        $rs = $DB->DataSet(
+            'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = :kingdom_id LIMIT 1'
+        );
+        // DataSet() needs an explicit Next() before any field read.
+        $name = ($rs !== false && $rs->Next()) ? trim((string)$rs->name) : '';
+        $DB->Clear();
+        return $name;
     }
 
     public function GetKingdomByAbbreviation($request)
@@ -520,6 +611,116 @@ class Kingdom extends Ork3
         return $response;
     }
 
+    /**
+     * The ACTIVE parks of one kingdom, ordered and sliced for public display.
+     *
+     * GetParks() is the raw lister: it returns retired parks too, and orders by
+     * park class. A public park list answers a different question — which parks
+     * COUNT (only 'Active'; the comparison is case-insensitive because the shared
+     * local DB may hold lowercase status keys), in WHAT ORDER (name / city→name /
+     * province→city→name, case-insensitive, empty keys last), HOW MANY, and where
+     * each park's heraldry crest lives. Those are domain decisions, so they live
+     * here instead of in the block partial that renders the answer.
+     *
+     * @param array $request {
+     *     @var int    KingdomId     required; <= 0 yields an empty list
+     *     @var string Sort          'name' (default) | 'city' | 'state'
+     *     @var int    Limit         max rows returned; <= 0 means no cap
+     *     @var bool   WithHeraldry  resolve each park's crest URL (one
+     *                               file_exists() probe per park)
+     * }
+     * @return array<int,array{park_id:int,name:string,loc:string,title:string,crest:string}>
+     */
+    public function GetActiveParks($request)
+    {
+        $kingdomId = isset($request['KingdomId']) ? (int)$request['KingdomId'] : 0;
+        if ($kingdomId <= 0) {
+            return array();
+        }
+        $sort = isset($request['Sort']) ? (string)$request['Sort'] : 'name';
+        if (!in_array($sort, array('name', 'city', 'state'), true)) {
+            $sort = 'name';
+        }
+        $limit        = isset($request['Limit']) ? (int)$request['Limit'] : 0;
+        $withHeraldry = !empty($request['WithHeraldry']);
+
+        $result = $this->GetParks(array('KingdomId' => $kingdomId));
+        $parks  = (isset($result['Parks']) && is_array($result['Parks'])) ? $result['Parks'] : array();
+
+        // GetParks does NOT filter status — keep only active parks.
+        $rows = array();
+        foreach ($parks as $park) {
+            if (strcasecmp(trim((string)($park['Active'] ?? '')), 'Active') === 0) {
+                $rows[] = $park;
+            }
+        }
+
+        // Sort key: case-insensitive, and empty values sort after non-empty ones.
+        $cmpKey = static function ($v) {
+            $v = strtolower(trim((string)$v));
+            return $v === '' ? "\xff" : $v;
+        };
+        usort($rows, static function ($a, $b) use ($sort, $cmpKey) {
+            $an = $cmpKey($a['Name'] ?? '');
+            $bn = $cmpKey($b['Name'] ?? '');
+            if ($sort === 'state') {
+                $ap = $cmpKey($a['Province'] ?? '');
+                $bp = $cmpKey($b['Province'] ?? '');
+                if ($ap !== $bp) {
+                    return strcmp($ap, $bp);
+                }
+                $ac = $cmpKey($a['City'] ?? '');
+                $bc = $cmpKey($b['City'] ?? '');
+                if ($ac !== $bc) {
+                    return strcmp($ac, $bc);
+                }
+                return strcmp($an, $bn);
+            }
+            if ($sort === 'city') {
+                $ac = $cmpKey($a['City'] ?? '');
+                $bc = $cmpKey($b['City'] ?? '');
+                if ($ac !== $bc) {
+                    return strcmp($ac, $bc);
+                }
+                return strcmp($an, $bn);
+            }
+            return strcmp($an, $bn);
+        });
+        if ($limit > 0) {
+            $rows = array_slice($rows, 0, $limit);
+        }
+
+        $out = array();
+        foreach ($rows as $row) {
+            $parkId = (int)($row['ParkId'] ?? 0);
+            $name   = trim((string)($row['Name'] ?? ''));
+            if ($parkId <= 0 || $name === '') {
+                continue;
+            }
+            $locParts = array_filter(
+                array(trim((string)($row['City'] ?? '')), trim((string)($row['Province'] ?? ''))),
+                static function ($v) {
+                    return $v !== '';
+                }
+            );
+            $crest = '';
+            if ($withHeraldry && !empty($row['HasHeraldry']) && isset(Ork3::$Lib->heraldry)) {
+                $h = Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Park', 'Id' => $parkId));
+                if (is_array($h) && !empty($h['Url'])) {
+                    $crest = (string)$h['Url'];
+                }
+            }
+            $out[] = array(
+                'park_id' => $parkId,
+                'name'    => $name,
+                'loc'     => implode(', ', $locParts),
+                'title'   => trim((string)($row['Title'] ?? '')),
+                'crest'   => $crest,
+            );
+        }
+        return $out;
+    }
+
     public function SetKingdomParkTitles($request)
     {
         $response = array();
@@ -826,6 +1027,21 @@ class Kingdom extends Ork3
             $response['Status'] = InvalidParameter();
         }
         return $response;
+    }
+
+    /**
+     * PUBLIC (anonymous) kingdom officer roster, ready to render.
+     *
+     * Thin adapter: the officer vocabulary and the whole public projection live on
+     * Officer, which owns them for both org scopes. This stays because it is the
+     * model membrane's entry point and the front-door officer block calls it.
+     *
+     * @param array $request { KingdomId: int, Limit?: int }
+     * @return array list of array{persona:string,role:string,mundane_id:int,avatar:string}
+     */
+    public function GetPublicOfficers($request)
+    {
+        return Officer::PublicRoster('kingdom', (int)($request['KingdomId'] ?? 0), (int)($request['Limit'] ?? 0));
     }
 
     public function SetOfficer($request)

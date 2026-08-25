@@ -1,0 +1,53 @@
+{
+    "slug": "about",
+    "type": "composed",
+    "parent_slug": null,
+    "title": "About",
+    "meta_description": "Learn about Amtgard as an organization, meet the Staff who run it, and find volunteer opportunities.",
+    "blocks": [
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "About Amtgard",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "About Amtgard",
+                        "blurb": "Learn about Amtgard itself as an organization",
+                        "href": "UIRPLACEHOLDER/Page/view/mission",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "Staff",
+                        "blurb": "Meet the folks running the ship",
+                        "href": "UIRPLACEHOLDER/Page/view/staff",
+                        "image": "2.png"
+                    },
+                    {
+                        "title": "Volunteers",
+                        "blurb": "Looking to Volunteer?  Look for opportunities here!",
+                        "href": "UIRPLACEHOLDER/Page/view/volunteers",
+                        "image": "3.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "About Amtgard"
+                    },
+                    {
+                        "file": "2.png",
+                        "alt": "Staff"
+                    },
+                    {
+                        "file": "3.jpg",
+                        "alt": "Volunteers"
+                    }
+                ]
+            }
+        }
+    ]
+}

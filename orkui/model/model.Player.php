@@ -487,6 +487,11 @@ class Model_Player extends Model
         return $this->_player()->GetHomeKingdom($mundane_id);
     }
 
+    public function get_viewer_display_name(int $mundane_id): string
+    {
+        return $this->_player()->GetViewerDisplayName($mundane_id);
+    }
+
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
         return $this->_player()->CheckUsernameAvailable($username, $exclude_mundane_id);

@@ -63,6 +63,11 @@
     --ork-z-nav:        9999;   /* #newmenu in orkui.css */
     --ork-z-nav-dropdown: 10000; /* nav avatar/resources dropdown menu */
     --ork-z-nav-overlay: 10001; /* nav search dropdown */
+    /* App-level layers that must cover the whole nav subtree (#newmenu is
+       position:fixed with z-index:var(--ork-z-nav), forming its own stacking
+       context) read these instead of inventing a private number. */
+    --ork-z-app-modal: 10000; /* app-level modal overlay, above #newmenu */
+    --ork-z-app-toast: 11000; /* app-level toast, above its own modal */
 
     /* ----- Transitions -------------------------------------------------- */
     --ork-transition-base:      border-color 0.15s, box-shadow 0.15s;

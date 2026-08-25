@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# ORK3 shared pre-push hook (versioned; activated via core.hooksPath=.githooks).
+#
+# Runs the architectural layering gate and the CMS/CRM CSS boundary gate over
+# every commit being pushed, so a violation that slipped past pre-commit
+# (`git commit --no-verify`, a rebase, a cherry-pick, or a branch built before
+# the gates existed) cannot reach the fork and turn into a PR.
+#
+# Both gates BLOCK the push and share one override:
+#     ORK3_ALLOW_LAYER_VIOLATION=1 git push …
+#
+# stylelint also runs, over the CMS CSS directories only, but is ADVISORY — it
+# reports and never blocks, and is skipped entirely when node_modules is absent
+# so a fresh clone that has not run `npm install` can still push.
+#
+# stdin: <local ref> <local sha> <remote ref> <remote sha>, one line per ref.
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -z "$REPO_ROOT" ] && exit 0
+cd "$REPO_ROOT" || exit 0
+
+# At least one gate must be present; each call below is individually guarded, so
+# a missing script skips its own check instead of skipping the other one too.
+if [ ! -x bin/check-layering.sh ] && [ ! -x bin/check-css-boundaries.sh ]; then
+    exit 0
+fi
+
+ZERO=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+FAILED=0
+
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    # Branch deletion — nothing to inspect.
+    [ "$LOCAL_SHA" = "$ZERO" ] && continue
+
+    if [ "$REMOTE_SHA" = "$ZERO" ]; then
+        # New branch on the remote: diff against wherever it forked from master.
+        BASE=$(git merge-base "$LOCAL_SHA" refs/remotes/origin/master 2>/dev/null) \
+            || BASE=$(git merge-base "$LOCAL_SHA" master 2>/dev/null)
+        [ -z "$BASE" ] && continue      # cannot establish a range — do not block
+        RANGE="$BASE..$LOCAL_SHA"
+    else
+        RANGE="$REMOTE_SHA..$LOCAL_SHA"
+    fi
+
+    # Nothing new to push on this ref.
+    [ -z "$(git rev-list -1 "$RANGE" 2>/dev/null)" ] && continue
+
+    # Both gates run against THIS ref's range. They must stay inside the loop —
+    # after it $RANGE holds only the last ref's value, or nothing at all.
+    if [ -x bin/check-layering.sh ]; then
+        echo "🔍 Layering gate: $RANGE"
+        bin/check-layering.sh --range "$RANGE" || FAILED=1
+    fi
+
+    if [ -x bin/check-css-boundaries.sh ]; then
+        echo "🎨 CSS boundary gate: $RANGE"
+        bin/check-css-boundaries.sh --range "$RANGE" || FAILED=1
+    fi
+done
+
+# stylelint over the CMS CSS directories. ADVISORY — it never blocks a push, and
+# it is skipped when the devDependency is not installed so a fresh clone works.
+if [ -x node_modules/.bin/stylelint ]; then
+    if ! npm run --silent lint:css; then
+        echo "⚠️  stylelint reported CMS CSS problems above (not blocking the push)."
+        echo "   Fix with: npm run lint:css:fix"
+    fi
+fi
+
+if [ "$FAILED" = 1 ]; then
+    if [ "${ORK3_ALLOW_LAYER_VIOLATION:-}" = "1" ]; then
+        echo ""
+        echo "⚠️  ORK3_ALLOW_LAYER_VIOLATION=1 — pushing despite the violations above."
+        exit 0
+    fi
+    echo ""
+    echo "❌ Push blocked: commits on this branch break the ORK3 layer separation"
+    echo "   or the CMS/CRM CSS boundary (see the gate output above)."
+    echo ""
+    echo "   Domain logic and SQL live in system/lib/ork3/; orkui/ reaches it only"
+    echo "   through orkui/model/ wrappers. CMS CSS lives under frontdoor/css/ and"
+    echo "   cms/css/; frontdoor/css/orkshell-interop.css is the one legal seam."
+    echo ""
+    echo "   Audit the whole tree:  bin/check-layering.sh --all"
+    echo "                          bin/check-css-boundaries.sh --all"
+    echo "   Deliberate exception:  ORK3_ALLOW_LAYER_VIOLATION=1 git push …"
+    echo ""
+    exit 1
+fi
+
+exit 0

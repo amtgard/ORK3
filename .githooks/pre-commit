@@ -2,22 +2,30 @@
 #
 # ORK3 shared pre-commit hook (versioned; activated via core.hooksPath=.githooks).
 #
-# Does three things:
+# Does five things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
-#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
+#   2. Blocks commits that break the ORK3 layer separation (no $DB / Ork3::$Lib / domain
+#      instantiation in orkui/) via bin/check-layering.sh. This one CAN stop a commit —
+#      override a deliberate exception with ORK3_ALLOW_LAYER_VIOLATION=1 git commit …
+#   3. Blocks commits that cross the CMS/CRM CSS boundary (the CMS owns frontdoor/css/ and
+#      cms/css/; the CRM owns style/; frontdoor/css/orkshell-interop.css is the one place
+#      they may touch) via bin/check-css-boundaries.sh. Also blocking, and it shares the
+#      ORK3_ALLOW_LAYER_VIOLATION=1 escape hatch with the layering gate.
+#   4. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar.
 #      --path-mode=intersection makes the fixer honor the excludes in .php-cs-fixer.dist.php
 #      (vendor, tools, import, db-migrations, ...); without it, explicitly-passed paths bypass
 #      the config Finder and third-party code staged with `git add -f` gets reformatted.
-#   3. Normalizes leading-tab indentation to spaces in the CSS/JS files you are committing,
+#   5. Normalizes leading-tab indentation to spaces in the CSS/JS files you are committing,
 #      via bin/normalize-leading-tabs.sh (POSIX awk only — no npm/node dependency).
 #      .tpl is deliberately NOT normalized: templates embed multi-line JS template literals
 #      whose leading tabs are string CONTENT, not indentation (see the note in that script).
 #
-# For (2) and (3): only files that are FULLY staged are touched — a file with both staged
+# For (4) and (5): only files that are FULLY staged are touched — a file with both staged
 # and unstaged changes is skipped, so unstaged hunks are never swept into the commit. The
 # rewritten files are re-staged automatically.
 #
-# It never blocks a commit because of formatting (missing tools / errors only warn).
+# It never blocks a commit because of formatting (missing tools / errors only warn) —
+# the two gates are the checks that block.
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT" || exit 0
@@ -63,7 +71,55 @@ $f"
 }
 
 # ---------------------------------------------------------------------------
-# 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
+# 2. Architectural layering gate — BLOCKS the commit.
+#    Runs before the formatter so a rejected commit leaves your files untouched.
+# ---------------------------------------------------------------------------
+if [ -x bin/check-layering.sh ]; then
+    if ! bin/check-layering.sh --staged; then
+        if [ "${ORK3_ALLOW_LAYER_VIOLATION:-}" = "1" ]; then
+            echo ""
+            echo "⚠️  ORK3_ALLOW_LAYER_VIOLATION=1 — committing despite the layering violations above."
+        else
+            echo ""
+            echo "❌ Commit blocked: staged changes break the ORK3 layer separation."
+            echo "   Domain logic and SQL live in system/lib/ork3/; orkui/ reaches it only"
+            echo "   through orkui/model/ wrappers. Fix the sites above, or if this is a"
+            echo "   deliberate exception:"
+            echo ""
+            echo "       ORK3_ALLOW_LAYER_VIOLATION=1 git commit …"
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. CMS/CRM CSS boundary gate — BLOCKS the commit.
+#    Shares the layering gate's escape hatch; also runs before the formatter so a
+#    rejected commit leaves your files untouched.
+# ---------------------------------------------------------------------------
+if [ -x bin/check-css-boundaries.sh ]; then
+    if ! bin/check-css-boundaries.sh --staged; then
+        if [ "${ORK3_ALLOW_LAYER_VIOLATION:-}" = "1" ]; then
+            echo ""
+            echo "⚠️  ORK3_ALLOW_LAYER_VIOLATION=1 — committing despite the CSS boundary violations above."
+        else
+            echo ""
+            echo "❌ Commit blocked: staged changes cross the CMS/CRM CSS boundary."
+            echo "   The CMS is a separate product hosted inside the ORK; its CSS lives under"
+            echo "   frontdoor/css/ and cms/css/, and the ONE place the layers may touch is"
+            echo "   frontdoor/css/orkshell-interop.css. Fix the sites above, or if this is a"
+            echo "   deliberate exception:"
+            echo ""
+            echo "       ORK3_ALLOW_LAYER_VIOLATION=1 git commit …"
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
 format_php() {
     PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
@@ -96,7 +152,7 @@ format_php() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Normalize leading tabs -> spaces in staged CSS/JS (boy-scout).
+# 5. Normalize leading tabs -> spaces in staged CSS/JS (boy-scout).
 #    Keeps committed assets off hard tabs so the Edit tooling stays reliable.
 #    Minified/generated bundles (*.min.css, *.min.js) are excluded.
 # ---------------------------------------------------------------------------

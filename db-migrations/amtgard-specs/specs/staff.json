@@ -1,0 +1,125 @@
+{
+    "slug": "staff",
+    "type": "composed",
+    "parent_slug": "about",
+    "title": "Staff",
+    "meta_description": "Meet Amtgard International's Board of Directors and volunteer team leads who help run the organization.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Staff",
+                "level": 2,
+                "align": "center"
+            }
+        },
+        {
+            "type": "staff_roster",
+            "fields": {
+                "kicker": "Amtgard International, Inc.",
+                "heading": "Board of Directors",
+                "subheading": "The current board as of October 2025. B.O.D. Contact: aibod@amtgard.com · Contracts Info: contracts@amtgard.com",
+                "people": [
+                    {
+                        "persona_name": "Lisa Belkie",
+                        "role": "President"
+                    },
+                    {
+                        "persona_name": "Jennifer Stewart",
+                        "role": "Treasurer",
+                        "bio": "Been with Amtgard since 2016 as a resident of Thorn Mountain. Not only has Jennifer held many internal club officer positions in Amtgard, she also has spent over a decade running an animal shelter and animal services department. She even currently serves on her local Animal Advisory Board as an Exofficio member."
+                    },
+                    {
+                        "persona_name": "Shannon Cartwright",
+                        "role": "Secretary",
+                        "bio": "Shannon has been adjacent to the community since 2008 but didn’t get fully involved until 2020. She’s often found in either leadership (usually Prime Minister) or other committees within the Desert Winds. Her passion lies in helping make everything run smoother for the next leadership teams and for the game as a whole. Building strong relationships is tantamount for this process. It’ll be an adventure!"
+                    },
+                    {
+                        "persona_name": "Sonya Duran",
+                        "role": "Board Member",
+                        "bio": "Started in 2016, Sonya had their first major experience at Gathering of the clans doing volunteer work on their second day. Since then, they have autocrated several GotC and have done other Crat positions. Having served at all levels of Amtgard, they have multiple areas of expertise within the game. Sonya has achieved Knight of the Flame in 2023 for their volunteering work."
+                    },
+                    {
+                        "persona_name": "Amber Hodges",
+                        "role": "Board Member (Communications)",
+                        "bio": "Amber has been a part of Amtgard for 22+ years. First starting in a group under Burning Lands in Huntington, WV, moving to Crystal Groves and then settling in the Rising Winds. She has served as park monarchy for most of that time venturing into working as an Amtgard Ombudsman, running events and serving at higher levels of offices since September 2024. Outside of Amtgard, she volunteers her time to help with Crisis intervention and trauma survivors. Amber’s main goal as part of the AIBOD is to use her experience in the game and her other volunteering to give a voice to her Kingdom as well as help in situations where her skill sets might shine as well as just helping the game grow using her long time experience. She has seen changes between multiple Rule books and the game’s culture and wishes to make a difference. She is always availible on Facebook if needed."
+                    },
+                    {
+                        "persona_name": "Jason Bonette",
+                        "role": "Executive Committee Chair",
+                        "bio": "Jason Bonnette has been a part of Amtgard Since 1992. Playing the game for extended tenures in both the Wetlands and the Celestial Kingdom. He has served as the Executive Chair of the Amtgard International Circle of Monarchs Committee since late 2019, and holds an ex-officio seat on the board of directors. Jason’s main goal as Executive Chair is to continue to improve meaningful communication between kingdoms and ensure efficient operation of the Circle of Monarchs, allowing the business of Amtgard to be conducted effectively in a way that benefits all of its players."
+                    },
+                    {
+                        "persona_name": "Vidalia Darby",
+                        "role": "Executive Committee Secretary",
+                        "bio": "Vidalia keeps the Executive Committee in line, recording what’s said and making sure nothing is forgotten. Like her onion namesake, she has layers—quiet precision when taking notes, sharpness when it’s time to cut through the noise. On the field she fights with the same focus she brings to her role, and when the battle is done, her art leaves its mark just as surely as her blade. In the end, every stroke of ink that the voice of Amtgard is remembered."
+                    },
+                    {
+                        "persona_name": "Dale Churchill",
+                        "role": "Executive Committee Seat",
+                        "bio": "Dale Churchill, a.k.a. Sir Ried, has been an active member of Amtgard since 2007. Over the years, he has held numerous leadership positions at both the park and kingdom levels, including Monarch, Champion, and Board President, guiding the community with a balance of battlefield prowess and organizational leadership. Knighted for his service and leadership, Sir Ried has consistently worked to strengthen his local park and the Kingdom of the Burning Lands through service, mentorship, and event leadership. His dedication reflects a deep commitment to the game, its players, and the values of honor, growth, and community."
+                    },
+                    {
+                        "persona_name": "J.P. Prentiss",
+                        "role": "General Counsel"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "staff_roster",
+            "fields": {
+                "kicker": "",
+                "heading": "Team Leads",
+                "subheading": "Amtgard International's volunteer team leads",
+                "people": [
+                    {
+                        "persona_name": "Jennifer Palmer",
+                        "role": "Executive Director",
+                        "bio": "generalmanager@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Robin Keirnan",
+                        "role": "Volunteer Engagement",
+                        "bio": "peopleops@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Pix Wright",
+                        "role": "Process Strategy",
+                        "bio": "pwright@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Eric Lloyd",
+                        "role": "Data Science",
+                        "bio": "elloyd@amtgard.com"
+                    },
+                    {
+                        "persona_name": "David Syas",
+                        "role": "Member Services",
+                        "bio": "memberservicesad@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Ken Walker",
+                        "role": "Technical Resources",
+                        "bio": "technicalad@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Dusty Marshall",
+                        "role": "Engagement",
+                        "bio": "engagementadsr@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Madison Chapel",
+                        "role": "Engagement",
+                        "bio": "engagementad@amtgard.com"
+                    },
+                    {
+                        "persona_name": "Outreach",
+                        "role": "General Outreach",
+                        "bio": "outreach@amtgard.com"
+                    }
+                ]
+            }
+        }
+    ]
+}

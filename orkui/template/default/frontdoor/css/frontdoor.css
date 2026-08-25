@@ -1,0 +1,1132 @@
+/* ============================================================
+ * Front Door stylesheet — fd- namespace
+ * Scoped under .fd-page; never bleeds into the ORK shell.
+ * ============================================================ */
+
+/* ---- Palette & base ---------------------------------------- */
+.fd-page {
+    /* Theme tokens (overridable by the theme engine).
+       stylelint's color-hex-length is off for this block ONLY: these values are
+       compared BYTE-FOR-BYTE against CmsThemeTokens::Defaults() by
+       tests/cms-theme/tokens_test.php, and that authority emits the long form.
+       Shortening #ffffff to #fff here is the same colour but breaks the parity
+       test, which is the whole point of the block. */
+    /* stylelint-disable color-hex-length */
+    --fd-primary: #0b1120;
+    --fd-accent:  #f0b429;
+    --fd-bg:      #ffffff;
+    --fd-surface: #f7f8fa;
+    --fd-text:    #1a2236;
+    --fd-text-muted: #5b6472;
+    --fd-border:  #e2e6ec;
+    --fd-primary-contrast: #ffffff;
+    /* stylelint-enable color-hex-length */
+    /* These MUST match CmsThemeTokens::Defaults() as rendered by its FontStack()
+       helper. CmsThemeTokens is the authority — it is what the theme editor
+       writes and what "reset to default" restores — and these are the fallback
+       for a surface with NO ork_cms_theme row, which in practice means the front
+       door and the blog (global scope has no theme row, so they emit no
+       "fd-theme-tokens" style element). When the two disagree, the front door
+       and a site saved at defaults render in different fonts.
+       tests/cms-theme/tokens_test.php fails if they drift again.
+       Not a faux-medieval face: a new site seeds no theme row, so whatever is
+       defaulted here is what every org actually ships — and faux-medieval type
+       is exactly the cosplay the brand rule forbids. MedievalSharp remains
+       selectable in the theme editor (see the PHP allowlist) for orgs that
+       deliberately want it. */
+    --fd-font-heading: 'Archivo', 'Open Sans', sans-serif;
+    --fd-font-body: 'Open Sans', sans-serif;
+    /* A LENGTH, not a ratio. CmsThemeTokens::Block() emits this token as
+       `calc(1rem * <ratio>)`, so every consumer must multiply it by a UNITLESS
+       number — `var(--fd-font-scale) * 0.6875rem` is rem x rem, which is invalid
+       at computed-value time and silently drops the whole declaration. Any
+       `var(--fd-font-scale, …)` fallback must therefore be `1rem`, never `1`. */
+    --fd-font-scale: 1rem;
+    --fd-radius: 12px;
+    --fd-space: 1;
+    --fd-border-width: 1px;
+    --fd-shadow: 0 12px 50px rgba(0, 0, 0, .4);
+
+    /* ---- Park paper scale -------------------------------------------------
+       Three values, not two. The old #fff / #f7f8fb alternation is a 4% step,
+       i.e. invisible, which is why a long page reads as sameness. These carry
+       the org's own hue at low chroma so the "white" is faintly wine or faintly
+       forest — considered rather than unstyled. --fd-primary supplies the hue
+       via --fd-primary-h, set alongside it by CmsThemeTokens::Derive(). */
+    --pk-paper:  hsl(var(--fd-primary-h, 220) 34% 98.5%);
+    --pk-vellum: hsl(var(--fd-primary-h, 220) 26% 95.5%);
+    --pk-line:   hsl(var(--fd-primary-h, 220) 18% 88%);
+    --pk-link:   var(--fd-primary);
+
+    /* The crest plate and its monogram ink. These two are the ONLY park tokens
+       that must NOT flip in dark mode — a heraldry device is artwork drawn for a
+       light field, so the disc behind it stays light and the initials on it stay
+       dark whatever the page is doing. See the dark block near the foot of this
+       file: --pk-paper et al are remapped there and these two deliberately are
+       not. */
+    --pk-seal-plate: hsl(var(--fd-primary-h, 220) 34% 98.5%);
+    --pk-seal-ink:   hsl(var(--fd-primary-h, 220) 42% 24%);
+
+    /* Legacy aliases (existing rules still reference these) */
+    /* STATIC navy — NOT aliased to --fd-primary, which dark mode redefines to a
+       periwinkle (#3b62c2). The always-dark brand bands (steps dark band,
+       photo_mosaic caption, kingdoms_teaser "+N more", cta_band, nav dropdown)
+       must stay navy in both themes. */
+    --navy:  #0b1120;
+    --navy2: #121a30;
+    --gold:  var(--fd-accent);
+    --ink:   var(--fd-text);
+
+    font-family: var(--fd-font-body);
+    color: var(--fd-text);
+    border-radius: var(--fd-radius);
+    overflow: hidden;
+    box-shadow: var(--fd-shadow);
+}
+
+.fd-page * {
+    box-sizing: border-box;
+}
+
+/* ---- Global heading reset (overrides orkui.css gray-box) --- */
+.fd-page h1,
+.fd-page h2,
+.fd-page h3,
+.fd-page h4,
+.fd-page h5,
+.fd-page h6 {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+
+/* ---- Typography helpers ------------------------------------ */
+.fd-serif {
+    font-family: var(--fd-font-heading);
+}
+
+/* Longhands, NOT the `font` shorthand: `font:` resets font-family, so the
+   shorthand silently overrode --fd-font-body on every themed site. */
+.fd-kicker {
+    font-family: var(--fd-font-body);
+    font-weight: 700;
+    /* Unit comes from the variable (a length), the literal is the bare ratio —
+       see the --fd-font-scale note in the token block above. */
+    font-size: calc(var(--fd-font-scale, 1rem) * 0.6875);
+    line-height: 1;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+
+.fd-kicker-d {
+    color: #8a6608;
+}
+
+.fd-sec-title {
+    font-family: var(--fd-font-heading);
+    font-size: 30px;
+    margin: 0;
+    color: var(--ink);
+}
+
+/* color and overflow-wrap are set together in this single .fd-body-text rule:
+   no other rule sets either property on .fd-body-text at equal specificity, so
+   one declaration block is enough and there is nothing to override later. */
+.fd-body-text { color: var(--fd-text); overflow-wrap: anywhere; }
+
+/* Lists keep left-aligned contents even inside a center-aligned rich_text block
+   (otherwise bullets ragged-center). */
+.fd-body-text ul,
+.fd-body-text ol { text-align: left; }
+
+/* ---- Authored body-copy links ------------------------------
+   A link an author writes inside a richtext / raw_html block must be
+   distinguishable from the copy around it. Neither tier managed that on its own:
+   a standalone org site loads no `a { color }` at all (cms-base.css deliberately
+   omits one), so those links fell to the UA default; and in the ORK shell
+   orkui.css's `a { color: #333; text-decoration: none }` landed instead, ~1.15:1
+   against .fd-body-text's own #1a2236 with nothing but colour to go on — a WCAG
+   1.4.1 failure, because colour was the only signal and it was the same colour.
+
+   The underline is the part that satisfies 1.4.1 *independently of colour*; keep
+   it. --pk-link is the org's own link ink (--fd-primary light, --fd-accent dark,
+   see the .fd-page token blocks), so a themed site tints its links and the front
+   door — which has no theme row — gets the token defaults.
+
+   This lives in frontdoor.css, not orgsite.css, because all three surface tiers
+   render authored body copy. `.fd-body-text a` is (0,1,1) and beats orkui.css's
+   `a` (0,0,1) on specificity alone, so the light case needs no #theme_container
+   armour. Dark mode does: default.theme emits
+   `html[data-theme="dark"] #theme_container a` at (1,1,2), which outranks the
+   partner below — the matching override is in orkshell-interop.css, where an
+   ORK-outranks-CMS fix belongs, and a standalone org site (no ORK shell, no
+   interop sheet) never needs it. */
+.fd-body-text a {
+    color: var(--pk-link, var(--fd-primary));
+    text-decoration: underline;
+}
+
+.fd-body-text a:hover,
+.fd-body-text a:focus-visible {
+    color: var(--fd-text);
+}
+
+/* Outbound-link affordance on off-site links in body copy. */
+.fd-body-text a[href^="http"]::after {
+    content: " \2197";
+    font-size: .85em;
+    opacity: .7;
+}
+
+/* Clamp embedded media/tables/code so pasted rich-text (richtext + its rich_text
+   alias) can't force horizontal scroll on phones. */
+.fd-body-text img { max-width: 100%; height: auto; }
+.fd-body-text table { display: block; max-width: 100%; overflow-x: auto; }
+.fd-body-text pre { overflow-x: auto; max-width: 100%; }
+
+.fd-pad {
+    padding: 42px 44px;
+}
+
+/* ---- Section bands ----------------------------------------- */
+/* Light default supplied by the class (not inline style) so the dark-mode
+   override below can win. `.fd-section-light` used by richtext / events_feed /
+   blog_feed / kingdom_* section wrappers. */
+/* Bands read TOKENS, not literals. Until this change per-org theming stopped at
+   the hero: every section below it was hard-coded #fff / #f7f8fb regardless of
+   the park's palette. */
+.fd-section-light {
+    background: var(--pk-paper);
+    /* Skip style/layout/paint for off-screen block sections (below the fold).
+       The above-the-fold hero uses .fd-carousel (NOT a section wrapper), so it
+       is never lazy-rendered. `contain-intrinsic-size: auto <h>` seeds a
+       placeholder height, then remembers the real rendered size once painted —
+       keeping scrollbar length and #anchor offsets stable. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+}
+
+/* Muted band — the soft off-white used by card_grid / kingdoms_teaser section
+   wrappers. Real base rule (not a fragile inline `style="background:#f7f8fb"`
+   coupled to an attribute-selector dark override); the dark-mode override for
+   `.fd-section-muted` lives with the other section overrides below. */
+.fd-section-muted {
+    background: var(--pk-vellum);
+    /* See .fd-section-light — same off-screen render skipping; hero excluded. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+}
+
+/* ---- Buttons & links --------------------------------------- */
+.fd-btn-gold {
+    display: inline-block;
+    background: var(--gold);
+    color: #1a1205;
+    font-weight: 700;
+    padding: 14px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    box-shadow: 0 6px 18px rgba(240, 180, 41, .4);
+    text-decoration: none;
+}
+
+.fd-btn-ghost {
+    display: inline-block;
+    border: 1.5px solid rgba(255, 255, 255, .6);
+    color: #fff;
+    font-weight: 600;
+    padding: 14px 26px;
+    border-radius: 8px;
+    font-size: 15px;
+    text-decoration: none;
+}
+
+.fd-link {
+    color: var(--pk-link);
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.fd-link:hover {
+    text-decoration: underline;
+}
+
+/* ---- Keyboard focus (WCAG 2.4.7) — branded gold focus ring - */
+/* Custom border:0 controls (dots, lightbox buttons, nav toggle, CTA) have no
+   default focus indicator; give every interactive element a visible ring. */
+.fd-page a:focus-visible,
+.fd-page button:focus-visible,
+.fd-dot:focus-visible,
+.fd-nav-toggle:focus-visible,
+.fd-nav-cta:focus-visible,
+.fd-carousel-toggle:focus-visible,
+.fdb-gallery-thumb:focus-visible,
+.fdb-gallery-lb-btn:focus-visible,
+.fdb-gallery-lb-close:focus-visible {
+    outline: 3px solid var(--fd-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Controls sitting on the dark hero scrim get a touch more offset so the ring
+   reads clearly against the imagery. */
+.fd-slide a:focus-visible,
+.fd-dot:focus-visible,
+.fd-carousel-toggle:focus-visible,
+.fdb-gallery-lb-btn:focus-visible,
+.fdb-gallery-lb-close:focus-visible {
+    outline-offset: 3px;
+}
+
+/* ---- member_bar block -------------------------------------- */
+/* A deliberately dark band in BOTH themes, like the other --navy surfaces, so
+   its link ink is a fixed light periwinkle rather than a theme-flipping token. */
+.fd-member-bar {
+    --fd-member-bar-link: #cdd7ee;
+
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 9px 24px;
+    background: var(--navy2);
+    color: var(--fd-primary-contrast);
+    font-size: 13px;
+}
+
+.fd-member-bar-greeting {
+    opacity: .85;
+}
+
+.fd-member-bar-greeting b {
+    font-weight: 400;
+    font-size: 15px;
+}
+
+.fd-member-bar-spacer {
+    flex: 1;
+}
+
+.fd-member-bar a {
+    color: var(--fd-member-bar-link);
+    text-decoration: none;
+}
+
+.fd-member-bar a i {
+    margin-right: 5px;
+    color: var(--gold);
+}
+
+/* ---- Card -------------------------------------------------- */
+.fd-card {
+    background: var(--fd-card-bg, var(--fd-bg));
+    border: 1px solid var(--pk-line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ---- Empty state ------------------------------------------- */
+.fd-empty {
+    color: var(--fd-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 24px 16px;
+}
+
+/* Whole-page "nothing to show" copy (e.g. Page_view.tpl's "Page not found."),
+   as opposed to .fd-empty's inside-a-block note — hence the roomier padding and
+   the upright face. */
+.fd-empty-page {
+    color: var(--fd-text-muted);
+    text-align: center;
+    padding: 2rem;
+}
+
+/* ---- Preview-only block-render error placeholder ----------- */
+/* Emitted by render_blocks.tpl when a block throws (preview/admin only). Themed
+   so the dark-mode preview isn't a light-only card on a dark page. */
+.fd-block-error {
+    margin: 12px 16px;
+    padding: 14px 16px;
+    border: 1px dashed #c9a227;
+    border-radius: 10px;
+    background: #fbf6e7;
+    color: #5c4a12;
+    font-size: 14px;
+    line-height: 1.5;
+}
+html[data-theme="dark"] .fd-block-error {
+    border-color: #7a5b10;
+    background: #241d0c;
+    color: #e6cf8a;
+}
+
+/* ---- events_feed card sub-text (contrast on dark cards) ----
+   Light-mode values match the block's original inline colors; the dark
+   overrides lift them to >=4.5:1 on the #1b2233 card (was #778 / #1d4ed8,
+   both failing on the dark surface). */
+.fd-ev-sub {
+    font-size: 12px;
+    color: var(--fd-text-muted);
+}
+.fd-ev-rsvp {
+    font-size: 12px;
+    color: var(--pk-link);
+    margin-top: 6px;
+    font-weight: 600;
+}
+html[data-theme="dark"] .fd-ev-sub { color: #b6c0d4; }
+html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
+
+/* Event date label — darkened from #b8860b (2.9:1 on white, fails AA) to
+   #8a5d00 (>=4.5:1), matching the .fd-ev-sub treatment. Dark override keeps the
+   warm gold legible on the #1b2233 card. */
+.fd-ev-date {
+    font-size: 12px;
+    color: #8a5d00;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
+
+/* ---- Hero Carousel ----------------------------------------- */
+.fd-carousel {
+    position: relative;
+    height: 480px;
+}
+
+.fd-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+    display: flex;
+    align-items: center;
+}
+
+.fd-slide.is-active {
+    opacity: 1;
+}
+
+/* Respect reduced-motion: drop the cross-fade (JS also suppresses autoplay). */
+@media (prefers-reduced-motion: reduce) {
+    .fd-slide {
+        transition: none;
+    }
+}
+
+.fd-slide-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fd-slide-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(95deg, rgba(11, 17, 32, .94) 0%, rgba(11, 17, 32, .72) 40%, rgba(11, 17, 32, .15) 100%);
+}
+
+.fd-slide-body {
+    position: relative;
+    padding: 0 56px;
+    color: #fff;
+    max-width: 660px;
+}
+
+.fd-dots {
+    position: absolute;
+    bottom: 74px;
+    left: 56px;
+    display: flex;
+    gap: 8px;
+    z-index: 3;
+}
+
+.fd-dot {
+    position: relative;
+    width: 30px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, .35);
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+}
+
+/* Expand the pointer/touch hit target to >=24px tall (WCAG 2.5.8) without
+   changing the visible 30x4 pill. The pseudo is part of the button, so clicks
+   on it register as the dot; it extends vertically only, clearing sibling dots. */
+.fd-dot::before {
+    content: "";
+    position: absolute;
+    top: -11px;
+    bottom: -11px;
+    left: 0;
+    right: 0;
+}
+
+.fd-dot.on {
+    background: var(--gold);
+}
+
+/* Auto-advance pause/play toggle (WCAG 2.2.2) */
+.fd-carousel-toggle {
+    position: absolute;
+    bottom: 72px;
+    right: 56px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(7, 11, 22, .55);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fd-carousel-toggle:hover {
+    background: rgba(7, 11, 22, .82);
+}
+
+/* ---- Stat ticker (pinned to carousel base) ----------------- */
+.fd-stat-ticker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    /* Solid semi-opaque fill instead of backdrop-filter: blur() — the blur
+       recomputed every frame over the animating carousel behind it (jank on
+       low-end GPUs). A solid rgba reads the same and costs nothing. */
+    background: rgba(7, 11, 22, .85);
+    border-top: 1px solid rgba(240, 180, 41, .3);
+    display: flex;
+    color: #fff;
+}
+
+.fd-stat-ticker-cell {
+    flex: 1;
+    text-align: center;
+    padding: 13px 8px;
+    border-right: 1px solid rgba(255, 255, 255, .1);
+}
+
+.fd-stat-ticker-cell:last-child {
+    border-right: none;
+}
+
+.fd-stat-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--gold);
+}
+
+.fd-stat-label {
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    opacity: .7;
+}
+
+/* ---- Ways-to-Play (path) cards ----------------------------- */
+.fd-path {
+    position: relative;
+    height: 180px;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    color: #fff;
+    text-decoration: none;
+}
+
+.fd-path img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .3s;
+}
+
+.fd-path:hover img {
+    transform: scale(1.06);
+}
+
+/* Disabled ("Coming soon") card: not a link, so no hover zoom / pointer. */
+.fd-path-disabled {
+    cursor: default;
+}
+
+.fd-path-disabled:hover img {
+    transform: none;
+}
+
+/* Stronger low/mid stops so titles stay legible over pale card imagery. */
+.fd-path-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(11, 17, 32, .95) 0%, rgba(11, 17, 32, .45) 60%, rgba(11, 17, 32, 0) 100%);
+}
+
+.fd-path-label {
+    position: relative;
+    padding: 14px 16px;
+}
+
+/* "Coming soon" pill — gold-on-navy, sits inline after the card title. */
+.fd-path-badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--navy);
+    color: var(--gold);
+    font-family: var(--fd-font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(240, 180, 41, .5);
+}
+
+/* ---- Marketing nav ----------------------------------------- */
+.fd-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--fd-bg);
+    border-bottom: 1px solid var(--pk-line);
+    padding: 10px 24px;
+    position: relative;
+}
+
+.fd-logo {
+    height: 40px;
+    margin-right: 18px;
+}
+
+.fd-navlinks {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+}
+
+/* Deliberate duplicate of the one-declaration `position:relative` body that
+   cms-admin.css uses to anchor its [data-tip] chip: the public and admin tiers
+   are separate stylesheets by rule (check-css-boundaries.sh C1) and a selector
+   list lives in exactly one file, so the two can never be grouped. */
+.fd-navitem {
+    position: relative;
+}
+
+.fd-navitem > a {
+    display: block;
+    padding: 10px 13px;
+    color: var(--fd-text);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 6px;
+}
+
+.fd-navitem > a:hover {
+    background: #f2f4f8;
+    color: #8a6608;
+}
+
+/* Active top-level nav item (current page or one of its children). */
+.fd-navitem > a.is-active {
+    color: #8a6608;
+    box-shadow: inset 0 -2px 0 var(--gold);
+    border-radius: 6px 6px 0 0;
+}
+
+.fd-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 180px;
+    background: var(--navy);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+    padding: 6px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: all .15s;
+    z-index: 30;
+}
+
+.fd-navitem:hover .fd-dropdown,
+.fd-navitem:focus-within .fd-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(2px);
+}
+
+.fd-dropdown a {
+    display: block;
+    color: #dce3f3;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 5px;
+}
+
+.fd-dropdown a:hover {
+    background: rgba(240, 180, 41, .18);
+    color: var(--gold);
+}
+
+.fd-nav-cta {
+    background: var(--gold);
+    color: #1a1205;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 9px 16px;
+    border-radius: 7px;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+/* Secondary button, deliberately NOT gold: "Find a Chapter" is the single primary
+   CTA on this bar, so this gets an outline treatment at matching metrics rather
+   than a second filled button competing with it. */
+.fd-nav-login {
+    background: transparent;
+    border: 1px solid var(--fd-border, #e2e6ec);
+    color: #56607a;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 8px 15px; /* 1px less than .fd-nav-cta's 9px/16px to absorb the border */
+    border-radius: 7px;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.fd-nav-login:hover {
+    background: rgba(240, 180, 41, .12);
+    border-color: var(--gold, #f0b429);
+    color: var(--fd-text);
+}
+
+/* Mobile nav toggle (hidden by default, shown at ≤680px) */
+.fd-nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1.5px solid #ccd0db;
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--ink);
+    margin-left: auto;
+}
+
+/* ---- Wayfinding breadcrumbs (CMS Page_view) ---------------- */
+.fd-breadcrumbs {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 14px 44px 0;
+    font-size: 12.5px;
+    color: var(--fd-text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.fd-breadcrumbs a {
+    color: var(--fd-text-muted);
+    text-decoration: none;
+}
+
+.fd-breadcrumbs a:hover {
+    color: var(--gold);
+    text-decoration: underline;
+}
+
+.fd-crumb-sep {
+    color: #aeb6c4;
+}
+
+.fd-crumb-current {
+    color: var(--fd-text);
+    font-weight: 600;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs,
+html[data-theme="dark"] .fd-breadcrumbs a {
+    color: #9aa6bd;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs a:hover {
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-crumb-current {
+    color: #dce3f3;
+}
+
+@media (max-width: 900px) {
+    .fd-breadcrumbs { padding: 12px 24px 0; }
+}
+
+@media (max-width: 680px) {
+    .fd-breadcrumbs { padding: 10px 16px 0; }
+}
+
+/* ============================================================
+ * DARK MODE — html[data-theme="dark"]
+ * Navy/dark bands stay as-is; light bands get dark surfaces.
+ * ============================================================ */
+html[data-theme="dark"] .fd-page {
+    /* Dark-mode token defaults (keep UNTHEMED dark looking like today) */
+    --fd-bg: #0e1626;
+    --fd-surface: #16203a;
+    /* Card plate — a surface one step ABOVE the band so cards stay visible when
+       the band and the page share --fd-bg in dark. Derive() emits a per-org
+       value for this token; this is only the UNTHEMED fallback. */
+    --fd-card-bg: #1e2a3e;
+    --fd-border: #243049;
+    --fd-text: #e8ecf1;
+    --fd-text-muted: #aab3c0;
+    --fd-primary: #3b62c2;
+    --fd-accent: #f0b429;
+    --pk-paper:  var(--fd-bg);
+    --pk-vellum: var(--fd-surface);
+    --pk-line:   var(--fd-border);
+    --pk-link:   var(--fd-accent);
+    /* Direct color rule preserves current dark page-text (#dce3f3) exactly */
+    color: #dce3f3;
+}
+
+/* Generic section backgrounds — NO literal repaint here: the light rules already
+   read --pk-paper / --pk-vellum, and the .fd-page block above remaps those onto
+   the dark token set (per-org in dark, not just in light). */
+html[data-theme="dark"] .fd-section-light {
+    color: #dce3f3;
+}
+
+html[data-theme="dark"] .fd-section-muted {
+    color: #dce3f3;
+}
+
+/* Cards — background comes from --fd-card-bg, border from --pk-line; both are
+   remapped for dark on .fd-page, so a themed org keeps its own palette. */
+html[data-theme="dark"] .fd-card {
+    color: #dce3f3;
+}
+
+html[data-theme="dark"] .fd-navitem > a {
+    color: #dce3f3;
+}
+
+html[data-theme="dark"] .fd-navitem > a:hover {
+    background: var(--fd-card-bg, #1e2a3e);
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-navitem > a.is-active {
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-nav-login {
+    border-color: #2f3a52;
+    color: #c8d2e6;
+}
+
+html[data-theme="dark"] .fd-nav-login:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: var(--gold, #f0b429);
+    color: #fff;
+}
+
+html[data-theme="dark"] .fd-dropdown {
+    background: #0b1120;
+}
+
+html[data-theme="dark"] .fd-nav-toggle {
+    /* The mobile hamburger is the ONLY nav opener <=680px; the old #1a2236 made
+       it near-invisible (~1.2:1) on the dark nav. Use a light glyph color. */
+    color: #e8edf8;
+}
+
+/* Section titles and body text */
+html[data-theme="dark"] .fd-sec-title {
+    color: #e8edf8;
+}
+
+html[data-theme="dark"] .fd-body-text { color: #c8d3ea; }
+
+/* Dark partner of the authored body-copy link rule above. --pk-link is remapped
+   to --fd-accent by the dark .fd-page token block, so it names no second colour;
+   it restates the token so the (0,2,1) selector can outrank orkui.css's
+   `html[data-theme="dark"] a` (0,1,1).
+
+   It is also what holds the HOVER colour in dark mode: (0,2,1) outranks the
+   `.fd-body-text a:hover` rule above at (0,1,1), so a dark link keeps --pk-link
+   on hover instead of dropping to --fd-text. That is the behaviour standalone
+   org sites have always had (the rule was `.fd-org`-scoped before it moved
+   here), and deleting this block silently changes it — measured: org dark hover
+   goes #f0b429 -> #e8ecf1. Do not "simplify" it away.
+
+   In the ORK shell it is outranked in turn by default.theme's
+   `html[data-theme="dark"] #theme_container a` (1,1,2); orkshell-interop.css
+   carries that override. */
+html[data-theme="dark"] .fd-body-text a {
+    color: var(--pk-link, var(--fd-accent));
+}
+
+html[data-theme="dark"] .fd-kicker-d {
+    color: #c9940c;
+}
+
+/* Links */
+html[data-theme="dark"] .fd-link {
+    color: #7ba3f5;
+}
+
+html[data-theme="dark"] .fd-link:hover {
+    color: #a5c2ff;
+}
+
+/* Empty state */
+html[data-theme="dark"] .fd-empty {
+    color: #89a;
+}
+
+/* Buttons: gold stays, ghost border brightens slightly */
+html[data-theme="dark"] .fd-btn-ghost {
+    border-color: rgba(255, 255, 255, .5);
+}
+
+/* Member bar (navy2) already dark — no change needed */
+
+/* Stat ticker already dark — no change needed */
+
+/* Path cards: dark scrim already covers images — no change needed */
+
+/* ============================================================
+ * RESPONSIVE
+ * ============================================================ */
+
+/* ---- 900px: 3-col grids → 2 col; mosaic stacks ----------- */
+@media (max-width: 900px) {
+    .fd-pad {
+        padding: 32px 24px;
+    }
+
+    /* Path grid */
+    .fd-paths-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Events grid */
+    .fd-events-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Kingdoms grid */
+    .fd-kingdoms-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    /* Photo mosaic: stack into single column */
+    .fd-mosaic {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+    }
+
+    .fd-mosaic > * {
+        grid-row: span 1 !important;
+        /* !important beats the tile's inline height:100% so stacked tiles are a
+           uniform 200px on phones (otherwise the image height wins). */
+        height: 200px !important;
+    }
+
+    .fd-mosaic > * img {
+        object-fit: cover;
+    }
+}
+
+/* ---- 680px: carousel height, hero text, nav hamburger ----- */
+@media (max-width: 680px) {
+    .fd-carousel {
+        height: 360px;
+    }
+
+    .fd-slide-body {
+        padding: 0 24px;
+    }
+
+    .fd-hero-headline {
+        font-size: 34px !important;
+    }
+
+    /* Raised above the 2-row (2×2) stat ticker so the dots + play/pause toggle
+       don't collide with it on phones (ticker wraps to ~double height here). */
+    .fd-dots {
+        left: 24px;
+        bottom: 150px;
+    }
+
+    .fd-carousel-toggle {
+        right: 24px;
+        bottom: 148px;
+    }
+
+    /* Stat ticker: 2×2 grid */
+    .fd-stat-ticker {
+        flex-wrap: wrap;
+    }
+
+    .fd-stat-ticker-cell {
+        flex: 0 0 50%;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .fd-stat-ticker-cell:nth-child(odd) {
+        border-right: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .fd-stat-ticker-cell:nth-last-child(-n+2) {
+        border-bottom: none;
+    }
+
+    /* Nav: hide links, show hamburger toggle */
+    .fd-navlinks {
+        display: none;
+        flex-direction: column;
+        align-items: flex-start;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--fd-bg);
+        border-bottom: 1px solid var(--pk-line);
+        padding: 8px 16px 16px;
+        z-index: 50;
+        gap: 0;
+    }
+
+    .fd-nav.fd-nav-open .fd-navlinks {
+        display: flex;
+    }
+
+    .fd-nav-toggle {
+        display: inline-flex;
+    }
+
+    .fd-navitem {
+        width: 100%;
+    }
+
+    .fd-navitem > a {
+        padding: 11px 8px;
+        font-size: 14px;
+    }
+
+    .fd-dropdown {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        box-shadow: none;
+        background: rgba(11, 17, 32, .05);
+        border-radius: 6px;
+        margin: 0 0 4px 16px;
+        padding: 4px;
+    }
+
+    .fd-dropdown a {
+        color: var(--ink);
+    }
+
+    .fd-nav-login,
+    .fd-nav-cta {
+        display: none;
+    }
+
+    .fd-nav.fd-nav-open .fd-nav-login,
+    .fd-nav.fd-nav-open .fd-nav-cta {
+        display: block;
+        text-align: center;
+        margin-top: 8px;
+        width: 100%;
+    }
+
+    /* Member bar stays VISIBLE on phones for org sites. The original rule hid it
+       "to reclaim above-the-fold", which is right for the global marketing front
+       door and exactly backwards for a park: the highest-frequency visit a park
+       site ever gets is a member checking the time on a phone in a parking lot. */
+    .fd-member-bar {
+        display: none !important;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        padding: 10px 16px;
+    }
+    .fd-org .fd-member-bar,
+    body.fd-org .fd-member-bar {
+        display: flex !important;
+    }
+
+    /* Path grid already 2-col from 900px break */
+    /* Events: single col */
+    .fd-events-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Kingdoms: 3-col */
+    .fd-kingdoms-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+
+    /* Pad sections */
+    .fd-pad {
+        padding: 28px 16px;
+    }
+
+    /* Dark mode nav open override */
+    html[data-theme="dark"] .fd-dropdown {
+        background: rgba(255, 255, 255, .05);
+    }
+
+    html[data-theme="dark"] .fd-dropdown a {
+        color: #dce3f3;
+    }
+}
+
+/* ---- 520px: path grid collapses to a single column --------- */
+/* !important required: the 900px rule setting 2-col is itself !important, so an
+   unmarked 1-col rule here would lose the importance tie. Mirrors the
+   gallery/kingdoms/events step-down to one column on phones. */
+@media (max-width: 520px) {
+    .fd-paths-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 420px) {
+    /* !important required: the <=680px 3-col rule above is itself !important, so
+       an unmarked 2-col rule here would lose the specificity/importance tie. */
+    .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
