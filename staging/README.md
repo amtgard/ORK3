@@ -52,8 +52,28 @@ interface.
 
 ```bash
 # from the instance; backup file however you get it there (scp via apps-aws)
-sudo docker exec -i ork3-stage-db sh -c 'mariadb -u ork -p"$MARIADB_PASSWORD" ork' < seed-backup.sql
+awk 'BEGIN{print "SET autocommit=0;"} {print} NR%100000==0{print "COMMIT;"} END{print "COMMIT;"}' seed-backup.sql \
+  | sudo docker exec -i ork3-stage-db sh -c 'mariadb -u ork -p"$MARIADB_PASSWORD" ork'
 ```
+
+The awk wrapper matters: prod backups are single-row-INSERT dumps, so piping
+one straight into `mariadb` commits (and fsyncs) every row — a prod-size seed
+took ~28× longer that way (measured 2026-08-24: ~26 KB/s vs ~726 KB/s, an
+overnight import vs ~40 minutes). Batching 100k rows per COMMIT is the fix;
+the cap keeps any one transaction from bloating the undo log on the 4 GB box.
+On a dump that already uses multi-row INSERTs the wrapper is harmless.
+
+Optional extra headroom for the duration of an import (both revert on
+container restart; nothing pins them):
+
+```bash
+sudo docker exec -it ork3-stage-db sh -c 'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" \
+  -e "SET GLOBAL innodb_flush_log_at_trx_commit = 2; SET GLOBAL innodb_buffer_pool_size = 1073741824"'
+```
+
+(The stock 128 MB buffer pool thrashes on `ork_attendance` secondary-index
+updates once the dataset outgrows it; 1 GB fits the working set and leaves
+plenty for the box's other tenants.)
 
 ### 3. DNS + Cloudflare (matching the go/play/wiki pattern)
 
