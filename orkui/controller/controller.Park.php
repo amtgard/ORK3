@@ -89,16 +89,59 @@ class Controller_Park extends Controller
 
         // Link-preview card (text-only; image policy pending): park name plus
         // where it is — the question anyone tapping a shared park link has.
+        // Also the search snippet (default.theme reuses og description for
+        // <meta name=description>), so it carries the meeting schedule too:
+        // "where" and "when" are the two things a searcher wants.
         $_ogPi = $this->data['park_info']['ParkInfo'];
         $_ogLoc = trim(implode(', ', array_filter(array(
             (string)($_ogPi['City'] ?? ''),
             (string)($_ogPi['Province'] ?? ''),
         ))));
+        $_ogMeets = array();
+        // Main park day first: rows come in DB order, but the description
+        // should lead with Purpose 'park-day' (Felfrost: Sunday is the park
+        // day, Tue/Wed are practices — Sunday must not fall off the cap).
+        $_ogPdRows = (array)($this->data['park_days']['ParkDays'] ?? array());
+        usort($_ogPdRows, function ($a, $b) {
+            return (($a['Purpose'] ?? '') === 'park-day' ? 0 : 1)
+                <=> (($b['Purpose'] ?? '') === 'park-day' ? 0 : 1);
+        });
+        foreach ($_ogPdRows as $_ogPd) {
+            $_ogWd  = ucfirst(strtolower((string)($_ogPd['WeekDay'] ?? '')));
+            $_ogLbl = '';
+            switch ((string)($_ogPd['Recurrence'] ?? '')) {
+                case 'weekly':
+                    $_ogLbl = $_ogWd !== '' ? $_ogWd . 's' : '';
+                    break;
+                case 'week-of-month':
+                    $_ogOrd = array(1 => '1st', 2 => '2nd', 3 => '3rd', 4 => '4th', 5 => '5th');
+                    $_ogWom = (int)($_ogPd['WeekOfMonth'] ?? 0);
+                    $_ogLbl = ($_ogWd !== '' && isset($_ogOrd[$_ogWom])) ? 'the ' . $_ogOrd[$_ogWom] . ' ' . $_ogWd : '';
+                    break;
+                case 'every-x-weeks':
+                    $_ogN = (int)($_ogPd['WeekInterval'] ?? 0);
+                    $_ogLbl = $_ogN > 1 ? 'every ' . $_ogN . ' weeks' : '';
+                    break;
+            }
+            if ($_ogLbl === '') {
+                continue;
+            }
+            $_ogT = trim((string)($_ogPd['Time'] ?? ''));
+            if ($_ogT !== '' && ($_ogTs = strtotime($_ogT)) !== false) {
+                $_ogLbl .= ' at ' . date('g:i A', $_ogTs);
+            }
+            $_ogMeets[] = $_ogLbl;
+            if (count($_ogMeets) >= 2) {
+                break;
+            }
+        }
+        $_ogParkName = (string)($_ogPi['ParkName'] ?? '') ?: (string)($this->session->park_name ?: 'Amtgard Park');
         $og = array(
-            'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
+            'title'       => $_ogParkName,
             'url'         => UIR . 'Park/profile/' . (int)$park_id,
-            'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
-                . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
+            'description' => $_ogParkName . ' — Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '') . '.'
+                . (!empty($_ogMeets) ? ' Meets ' . implode(' and ', $_ogMeets) . '.' : ''),
         );
         // Park heraldry over the site logo when it exists (Ken's call).
         if (!empty($_ogPi['HasHeraldry']) && !empty($this->data['park_info']['Heraldry']['Url'])) {

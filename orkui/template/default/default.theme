@@ -35,7 +35,11 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
+<?php /* Search snippet: reuse the page's link-card description when the
+         controller published one ($og['description'] — park/kingdom/player/
+         event pages), else the generic site line. Without this every page
+         shared one duplicated description, which search tools flag. */ ?>
+		<meta name="description" content="<?= htmlspecialchars(!empty($og['description']) ? preg_replace('/\s+/', ' ', trim((string)$og['description'])) : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
 <?php /* Per-page link-preview tags — controllers override via $this->data['og'];
          defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
 <?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
