@@ -138,7 +138,13 @@ class Controller_Park extends Controller
         $_ogParkName = (string)($_ogPi['ParkName'] ?? '') ?: (string)($this->session->park_name ?: 'Amtgard Park');
         // A defunct park must not advertise a meeting schedule in search
         // snippets — say what it is (historical record) and point onward.
+        // Ken's call (2026-08-26): defunct parks are also noindexed — the page
+        // stays reachable for community history, but search impressions should
+        // go to active chapters, not retired ones.
         $_ogInactive = (trim((string)($_ogPi['Active'] ?? 'Active')) !== 'Active');
+        if ($_ogInactive) {
+            $this->data['no_index'] = true;
+        }
         $og = array(
             'title'       => $_ogParkName,
             'url'         => UIR . 'Park/profile/' . (int)$park_id,
