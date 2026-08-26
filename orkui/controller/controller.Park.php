@@ -136,12 +136,19 @@ class Controller_Park extends Controller
             }
         }
         $_ogParkName = (string)($_ogPi['ParkName'] ?? '') ?: (string)($this->session->park_name ?: 'Amtgard Park');
+        // A defunct park must not advertise a meeting schedule in search
+        // snippets — say what it is (historical record) and point onward.
+        $_ogInactive = (trim((string)($_ogPi['Active'] ?? 'Active')) !== 'Active');
         $og = array(
             'title'       => $_ogParkName,
             'url'         => UIR . 'Park/profile/' . (int)$park_id,
-            'description' => $_ogParkName . ' — Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
-                . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '') . '.'
-                . (!empty($_ogMeets) ? ' Meets ' . implode(' and ', $_ogMeets) . '.' : ''),
+            'description' => $_ogInactive
+                ? $_ogParkName . ' — former Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                    . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '')
+                    . '. No longer active; historical roster and awards. Find active chapters on the Amtgard Atlas.'
+                : $_ogParkName . ' — Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                    . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '') . '.'
+                    . (!empty($_ogMeets) ? ' Meets ' . implode(' and ', $_ogMeets) . '.' : ''),
         );
         // Park heraldry over the site logo when it exists (Ken's call).
         if (!empty($_ogPi['HasHeraldry']) && !empty($this->data['park_info']['Heraldry']['Url'])) {
