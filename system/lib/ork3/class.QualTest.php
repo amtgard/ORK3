@@ -4,6 +4,14 @@ class QualTest
 {
     private $db;
 
+    /**
+     * Per-request memo for the two auth lookups can() repeats. A single page render
+     * asks for all four capability flags, which re-ran the same uid+kingdom queries
+     * once per probe. Instance-scoped on purpose -- no cross-request caching.
+     */
+    private $crownOfficerMemo = [];
+    private $testManagerMemo  = [];
+
     public function __construct()
     {
         global $DB;
@@ -14,41 +22,129 @@ class QualTest
     // Auth
     // -----------------------------------------------------------------------
 
+    /** Configure pass criteria, validity, retakes and the manager list. */
+    public const CAP_CONFIG    = 'config';
+    /** Author and edit the question bank and draft sets. */
+    public const CAP_QUESTIONS = 'questions';
+    /** Publish a draft set so players can take it. */
+    public const CAP_PUBLISH   = 'publish';
+    /** Read results, attempt detail and question statistics. */
+    public const CAP_RESULTS   = 'results';
+
+    /** Capability -> RBAC permission key. */
+    private static $capPermissions = [
+        self::CAP_CONFIG    => 'kingdom.qualtest.config',
+        self::CAP_QUESTIONS => 'kingdom.qualtest.questions.edit',
+        self::CAP_PUBLISH   => 'kingdom.qualtest.publish',
+        self::CAP_RESULTS   => 'kingdom.qualtest.results.view',
+    ];
+
     /**
-     * Returns true if $uid may manage qualification tests for this kingdom.
-     * Grants access to: kingdom editors and officers with role Monarch/Regent/Prime Minister.
+     * Returns true if $uid holds a specific qualification-test capability in this kingdom.
+     *
+     * Resolution order, first hit wins:
+     *   1. RBAC permission for the capability (AuthorizationGate, which also falls back
+     *      to the legacy ork_authorization kingdom grant).
+     *   2. Crown officers. The GMR is included because the Corpora makes them THE test
+     *      administrator ("Shall write and administer the Reeve and Corpora tests") yet
+     *      they get no kingdom authorization row -- 0 of 38 in prod -- so an authority
+     *      check alone locks out the one officer who owns this job.
+     *   3. The per-kingdom test-manager list, which grants question authoring ONLY.
+     *      That list exists so a kingdom can hand question writing to a subject-matter
+     *      expert who is not an officer; it was never meant to also let them rewrite
+     *      pass criteria or push a draft live, so it maps to CAP_QUESTIONS alone.
+     *
+     * @param int    $uid
+     * @param int    $kingdom_id
+     * @param string $capability  One of the CAP_* constants
+     * @return bool
      */
-    public function canManage($uid, $kingdom_id)
+    public function can($uid, $kingdom_id, $capability)
     {
-        if ($uid <= 0 || !valid_id($kingdom_id)) {
+        $uid = (int)$uid;
+        if ($uid <= 0 || !valid_id($kingdom_id) || !isset(self::$capPermissions[$capability])) {
             return false;
         }
 
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+        if (isset(Ork3::$Lib->authorizationgate) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $uid,
+            self::$capPermissions[$capability],
+            'kingdom',
+            (int)$kingdom_id,
+            AUTH_EDIT
+        )) {
             return true;
         }
 
-        // Kingdom-level officers who may run the tests. The GMR is included because the
-        // Corpora makes them THE test administrator ("Shall write and administer the Reeve
-        // and Corpora tests"; "All Reeve and Corpora testing is administered and approved
-        // by the current GMR") — yet they were the one officer locked out: unlike
-        // Monarch/Regent/Prime Minister, GMRs get no kingdom authorization row (0 of 38 in
-        // prod data), so the HasAuthority check above is false for every one of them.
-        // Scoped to qual-test management only; this grants no other kingdom powers.
+        if ($this->isCrownOfficer($uid, $kingdom_id)) {
+            return true;
+        }
+
+        return $capability === self::CAP_QUESTIONS && $this->isTestManager($uid, $kingdom_id);
+    }
+
+    /**
+     * Coarse gate: may $uid reach the test-administration screens at all?
+     * True when ANY capability is held. Individual actions still check their own
+     * capability via can() -- this only decides whether the door opens.
+     */
+    public function canManage($uid, $kingdom_id)
+    {
+        foreach (array_keys(self::$capPermissions) as $capability) {
+            if ($this->can($uid, $kingdom_id, $capability)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Kingdom-level Monarch/Regent/Prime Minister/GMR.
+     *
+     * Matches BOTH stored forms of the role. The officer position migration rewrites
+     * ork_officer.role from the display name to the canonical key, so a literal
+     * 'Prime Minister' here stops matching every PM in every kingdom the moment that
+     * migration runs -- and unlike the single-word roles, the ci collation does not
+     * paper over it, because 'prime_minister' differs by more than case.
+     */
+    private function isCrownOfficer($uid, $kingdom_id)
+    {
+        $key = (int)$uid . ':' . (int)$kingdom_id;
+        if (isset($this->crownOfficerMemo[$key])) {
+            return $this->crownOfficerMemo[$key];
+        }
+
+        // Both stored forms of each crown role. These are bound, not interpolated --
+        // the values come from a fixed registry map, but binding keeps the one rule
+        // ("never build SQL from strings") uniform across this file.
+        $roles = PermissionRegistry::OfficerRoleVariants(['Monarch', 'Regent', 'Prime Minister', 'GMR']);
+        $placeholders = [];
+
         $this->db->Clear();
+        foreach (array_values($roles) as $i => $role) {
+            $ph = 'co_role' . $i;
+            $placeholders[] = ':' . $ph;
+            $this->db->$ph = $role;
+        }
         $r = $this->db->DataSet(
             'SELECT 1 FROM ' . DB_PREFIX . 'officer
              WHERE mundane_id = ' . (int)$uid . '
                AND kingdom_id = ' . (int)$kingdom_id . '
                AND park_id = 0
-               AND role IN (\'Monarch\',\'Regent\',\'Prime Minister\',\'GMR\')
+               AND role IN (' . implode(',', $placeholders) . ')
              LIMIT 1'
         );
-        if ($r && $r->Next()) {
-            return true;
+        return $this->crownOfficerMemo[$key] = (bool)($r && $r->Next());
+    }
+
+    /** Per-kingdom test-manager list (ork_qual_manager). */
+    private function isTestManager($uid, $kingdom_id)
+    {
+        $key = (int)$uid . ':' . (int)$kingdom_id;
+        if (isset($this->testManagerMemo[$key])) {
+            return $this->testManagerMemo[$key];
         }
 
-        // Test manager list
         $this->db->Clear();
         $m = $this->db->DataSet(
             'SELECT 1 FROM ' . DB_PREFIX . 'qual_manager
@@ -56,11 +152,7 @@ class QualTest
                AND mundane_id = ' . (int)$uid . '
              LIMIT 1'
         );
-        if ($m && $m->Next()) {
-            return true;
-        }
-
-        return false;
+        return $this->testManagerMemo[$key] = (bool)($m && $m->Next());
     }
 
     // -----------------------------------------------------------------------
@@ -182,6 +274,7 @@ class QualTest
              (kingdom_id, mundane_id)
              VALUES (' . $kingdom_id . ', ' . $mundane_id . ')'
         );
+        unset($this->testManagerMemo[$mundane_id . ':' . $kingdom_id]);
         return true;
     }
 
@@ -198,6 +291,7 @@ class QualTest
              WHERE kingdom_id = ' . $kingdom_id . '
                AND mundane_id = ' . $mundane_id
         );
+        unset($this->testManagerMemo[$mundane_id . ':' . $kingdom_id]);
         return true;
     }
 
@@ -906,7 +1000,9 @@ class QualTest
         // The caller's value survives only as a fallback for a set with no label (legacy rows).
         $set = $this->getPublishedSet($kingdom_id, $test_type);
         if ($set !== null) {
-            if (trim((string)$set['RulesVersion']) !== '') { $rules_version = $set['RulesVersion']; }
+            if (trim((string)$set['RulesVersion']) !== '') {
+                $rules_version = $set['RulesVersion'];
+            }
             $set_id_sql = (int)$set['SetId'];
             $set_name   = $this->esc((string)$set['Name']);
         } else {
@@ -995,7 +1091,9 @@ class QualTest
         // The caller's value survives only as a fallback for a set with no label (legacy rows).
         $set = $this->getPublishedSet($kingdom_id, $test_type);
         if ($set !== null) {
-            if (trim((string)$set['RulesVersion']) !== '') { $rules_version = $set['RulesVersion']; }
+            if (trim((string)$set['RulesVersion']) !== '') {
+                $rules_version = $set['RulesVersion'];
+            }
             $set_id_sql = (int)$set['SetId'];
             $set_name   = $this->esc((string)$set['Name']);
         } else {
@@ -1244,7 +1342,9 @@ class QualTest
         // soft-referenced id still resolves. The snapshot text is unaffected.
         $qids = [];
         foreach ($questions as $q) {
-            if (!empty($q['QuestionId'])) { $qids[(int)$q['QuestionId']] = true; }
+            if (!empty($q['QuestionId'])) {
+                $qids[(int)$q['QuestionId']] = true;
+            }
         }
         $archived = [];
         $in_live  = [];
@@ -2669,7 +2769,7 @@ class QualTest
         $published = $this->getPublishedSet($kingdom_id, $test_type);
         $draft     = $this->getDraftSet($kingdom_id, $test_type);
         $pid = $published ? (int)$published['SetId'] : 0;
-        $did = $draft     ? (int)$draft['SetId']     : 0;
+        $did = $draft ? (int)$draft['SetId'] : 0;
 
         $this->db->Clear();
         $rs = $this->db->DataSet(

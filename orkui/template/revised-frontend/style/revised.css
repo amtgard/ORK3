@@ -2788,6 +2788,53 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 #kn-award-overlay .kn-form-error, #kn-rec-overlay .pk-form-error,
 #pk-award-overlay .pk-form-error, #pk-rec-overlay .pk-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
 #kn-award-overlay .kn-char-count, #kn-rec-overlay .pk-char-count { font-size:11px; color:var(--ork-text-muted); margin-top:3px; display:block; }
+/* ---- Officer history backfill / edit modals (Kingdom + Park) ---- */
+#kn-oh-backfill-overlay .kn-modal-box, #kn-oh-edit-overlay .kn-modal-box,
+#pk-oh-backfill-overlay .pk-modal-box, #pk-oh-edit-overlay .pk-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-oh-backfill-overlay .kn-modal-header, #kn-oh-edit-overlay .kn-modal-header,
+#pk-oh-backfill-overlay .pk-modal-header, #pk-oh-edit-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
+#kn-oh-backfill-overlay .kn-modal-title, #kn-oh-edit-overlay .kn-modal-title,
+#pk-oh-backfill-overlay .pk-modal-title, #pk-oh-edit-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
+#kn-oh-backfill-overlay .kn-modal-close-btn, #kn-oh-edit-overlay .kn-modal-close-btn,
+#pk-oh-backfill-overlay .pk-modal-close-btn, #pk-oh-edit-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; padding:0 4px; }
+#kn-oh-backfill-overlay .kn-modal-close-btn:hover, #kn-oh-edit-overlay .kn-modal-close-btn:hover,
+#pk-oh-backfill-overlay .pk-modal-close-btn:hover, #pk-oh-edit-overlay .pk-modal-close-btn:hover { color:var(--ork-text); }
+#kn-oh-backfill-overlay .kn-modal-body, #kn-oh-edit-overlay .kn-modal-body,
+#pk-oh-backfill-overlay .pk-modal-body, #pk-oh-edit-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#kn-oh-backfill-overlay .kn-modal-footer, #kn-oh-edit-overlay .kn-modal-footer,
+#pk-oh-backfill-overlay .pk-modal-footer, #pk-oh-edit-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border); display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0; }
+#kn-oh-backfill-overlay .kn-acct-field, #kn-oh-edit-overlay .kn-acct-field,
+#pk-oh-backfill-overlay .pk-acct-field, #pk-oh-edit-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
+#kn-oh-backfill-overlay .kn-acct-field label, #kn-oh-edit-overlay .kn-acct-field label,
+#pk-oh-backfill-overlay .pk-acct-field label, #pk-oh-edit-overlay .pk-acct-field label { display:block; font-size:12px; font-weight:600; color:var(--ork-text-secondary); margin-bottom:4px; }
+#kn-oh-backfill-overlay .kn-acct-field input[type=text],
+#kn-oh-backfill-overlay .kn-acct-field input[type=date],
+#kn-oh-backfill-overlay .kn-acct-field select,
+#kn-oh-backfill-overlay .kn-acct-field textarea,
+#kn-oh-edit-overlay .kn-acct-field input[type=text],
+#kn-oh-edit-overlay .kn-acct-field input[type=date],
+#kn-oh-edit-overlay .kn-acct-field select,
+#kn-oh-edit-overlay .kn-acct-field textarea,
+#pk-oh-backfill-overlay .pk-acct-field input[type=text],
+#pk-oh-backfill-overlay .pk-acct-field input[type=date],
+#pk-oh-backfill-overlay .pk-acct-field select,
+#pk-oh-backfill-overlay .pk-acct-field textarea,
+#pk-oh-edit-overlay .pk-acct-field input[type=text],
+#pk-oh-edit-overlay .pk-acct-field input[type=date],
+#pk-oh-edit-overlay .pk-acct-field select,
+#pk-oh-edit-overlay .pk-acct-field textarea { width:100%; padding:8px 10px; border:1px solid var(--ork-input-border); border-radius:6px; font-size:14px; color:var(--ork-text); background:var(--ork-input-bg); box-sizing:border-box; }
+#kn-oh-backfill-overlay .kn-acct-field input:focus,
+#kn-oh-backfill-overlay .kn-acct-field select:focus,
+#kn-oh-backfill-overlay .kn-acct-field textarea:focus,
+#kn-oh-edit-overlay .kn-acct-field input:focus,
+#kn-oh-edit-overlay .kn-acct-field select:focus,
+#kn-oh-edit-overlay .kn-acct-field textarea:focus,
+#pk-oh-backfill-overlay .pk-acct-field input:focus,
+#pk-oh-backfill-overlay .pk-acct-field select:focus,
+#pk-oh-backfill-overlay .pk-acct-field textarea:focus,
+#pk-oh-edit-overlay .pk-acct-field input:focus,
+#pk-oh-edit-overlay .pk-acct-field select:focus,
+#pk-oh-edit-overlay .pk-acct-field textarea:focus { outline:none; border-color:var(--ork-blue-link); box-shadow:var(--ork-shadow-focus); }
 /* ---- Events calendar container ---- */
 #kn-events-cal {
     background: var(--ork-card-bg);

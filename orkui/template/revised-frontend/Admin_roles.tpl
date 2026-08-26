@@ -17,6 +17,7 @@ $heraldryUrl = $hasHeraldry
 $roleAssignments = is_array($RoleAssignments ?? null) ? $RoleAssignments : [];
 $availableRoles  = is_array($AvailableRoles ?? null)  ? $AvailableRoles  : [];
 $customRoles     = is_array($CustomRoles ?? null)      ? $CustomRoles     : [];
+$systemRoles     = is_array($SystemRoles ?? null)      ? $SystemRoles     : [];
 $allPermissions  = is_array($AllPermissions ?? null)   ? $AllPermissions  : [];
 $userEffPerms    = is_array($UserEffectivePermissions ?? null) ? $UserEffectivePermissions : [];
 $isAdmin         = !empty($IsOrkAdmin);
@@ -152,7 +153,7 @@ foreach ($roleAssignments as $a) {
 
 /* Modal */
 .ar-modal-overlay {
-	display: none; position: fixed; inset: 0; z-index: 3000;
+	display: none; position: fixed; inset: 0; z-index: var(--z-modal);
 	background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
 }
 .ar-modal-overlay.ar-open { display: flex; }
@@ -188,7 +189,9 @@ foreach ($roleAssignments as $a) {
 }
 .ar-field textarea { resize: vertical; min-height: 60px; }
 .ar-field-ac { position: relative; }
-.ar-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: 9999; }
+/* tnFixedAcPosition switches this to position:fixed when opened from a modal; the
+   token keeps it above the modal, matching Admin_kingdom.tpl's equivalent rule. */
+.ar-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: var(--z-modal-top); }
 
 /* Permission checklist */
 .ar-perm-group { margin-bottom: 14px; }
@@ -217,9 +220,21 @@ foreach ($roleAssignments as $a) {
 .ar-role-card-stats { display: flex; gap: 14px; font-size: 11px; color: #a0aec0; margin-bottom: 8px; }
 .ar-role-card-actions { display: flex; gap: 6px; }
 
+/* Built-in (system) roles: read-only, so they read as a quieter surface than the
+   editable custom-role cards. Tokens rather than literals -- these need the same
+   dark pairing the rest of the page uses. */
+.ar-card-note { font-size: 11px; color: var(--ork-text-muted, #718096); font-weight: 500; }
+.ar-role-card-system { background: var(--ork-bg-secondary, #f7fafc); }
+.ar-role-scope-pill {
+	display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 10px;
+	font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+	vertical-align: middle;
+	background: var(--ork-badge-blue-bg, #ebf8ff); color: var(--ork-badge-blue-text, #2b6cb0);
+}
+
 /* Feedback toast */
 .ar-toast {
-	position: fixed; bottom: 20px; right: 20px; z-index: 4000;
+	position: fixed; bottom: 20px; right: 20px; z-index: var(--z-modal-top);
 	padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
 	color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 	transform: translateY(80px); opacity: 0; transition: all 0.3s;
@@ -227,6 +242,55 @@ foreach ($roleAssignments as $a) {
 .ar-toast.ar-toast-show { transform: translateY(0); opacity: 1; }
 .ar-toast-success { background: #38a169; }
 .ar-toast-error { background: #e53e3e; }
+
+/* Dark mode */
+html[data-theme="dark"] .ar-card,
+html[data-theme="dark"] .ar-modal,
+html[data-theme="dark"] .ar-role-card {
+	background: var(--ork-card-bg); border-color: var(--ork-border);
+}
+html[data-theme="dark"] .ar-card-header {
+	background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .ar-card-title,
+html[data-theme="dark"] .ar-modal-title,
+html[data-theme="dark"] .ar-role-card-name,
+html[data-theme="dark"] .ar-perm-item-label,
+html[data-theme="dark"] .ar-table td { color: var(--ork-text); }
+html[data-theme="dark"] .ar-card-empty,
+html[data-theme="dark"] .ar-perm-item-desc,
+html[data-theme="dark"] .ar-role-card-stats { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ar-table th,
+html[data-theme="dark"] .ar-perm-group-title,
+html[data-theme="dark"] .ar-role-card-desc {
+	color: var(--ork-text-secondary); border-color: var(--ork-border);
+}
+html[data-theme="dark"] .ar-table td { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ar-table tr:hover td { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ar-modal-header,
+html[data-theme="dark"] .ar-modal-footer { border-color: var(--ork-border); }
+html[data-theme="dark"] .ar-modal-close:hover {
+	color: var(--ork-badge-red-text); background: var(--ork-badge-red-bg);
+}
+html[data-theme="dark"] .ar-field input,
+html[data-theme="dark"] .ar-field select,
+html[data-theme="dark"] .ar-field textarea,
+html[data-theme="dark"] .ar-filter-row select,
+html[data-theme="dark"] .ar-filter-row input {
+	background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ar-btn-outline {
+	color: var(--ork-text-secondary); border-color: var(--ork-border);
+}
+html[data-theme="dark"] .ar-role-system {
+	background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text);
+}
+html[data-theme="dark"] .ar-role-custom {
+	background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text);
+}
+html[data-theme="dark"] .ar-card-note { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ar-role-card-system { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ar-role-scope-pill { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
 </style>
 
 <!-- =============================================
@@ -282,7 +346,7 @@ foreach ($roleAssignments as $a) {
 			<?php foreach ($kdAssignments as $a): ?>
 				<tr data-role-id="<?= (int)$a['RoleId'] ?>" data-ur-id="<?= (int)$a['UserRoleId'] ?>">
 					<td>
-						<a href="<?= $uir ?>Player/index/<?= (int)$a['MundaneId'] ?>" style="color:#3182ce;text-decoration:none;font-weight:600">
+						<a href="<?= $uir ?>Player/index/<?= (int)$a['MundaneId'] ?>" style="color:var(--ork-link);text-decoration:none;font-weight:600">
 							<?= htmlspecialchars($a['Persona'] ?: $a['Username']) ?>
 						</a>
 					</td>
@@ -340,7 +404,7 @@ foreach ($roleAssignments as $a) {
 			<?php foreach ($parkAssignments as $a): ?>
 				<tr data-role-id="<?= (int)$a['RoleId'] ?>" data-ur-id="<?= (int)$a['UserRoleId'] ?>">
 					<td>
-						<a href="<?= $uir ?>Player/index/<?= (int)$a['MundaneId'] ?>" style="color:#3182ce;text-decoration:none;font-weight:600">
+						<a href="<?= $uir ?>Player/index/<?= (int)$a['MundaneId'] ?>" style="color:var(--ork-link);text-decoration:none;font-weight:600">
 							<?= htmlspecialchars($a['Persona'] ?: $a['Username']) ?>
 						</a>
 					</td>
@@ -366,7 +430,46 @@ foreach ($roleAssignments as $a) {
 </div>
 
 <!-- =============================================
-     SECTION 3: CUSTOM ROLES
+     SECTION 3: BUILT-IN ROLES
+     The starter set seeded by migrations/rbac-seed.sql. Read-only: these are
+     shared by every kingdom (kingdom_id = 0), so editing one here would change
+     it everywhere. Shown because they are otherwise invisible on this page --
+     Custom Roles filters is_system = 0, and before this card the only place a
+     built-in role appeared was inside a <select>.
+     ============================================= -->
+<div class="ar-card">
+	<div class="ar-card-header">
+		<h2 class="ar-card-title"><i class="fas fa-shield-alt"></i> Built-in Roles</h2>
+		<span class="ar-card-note">Available in every <?= strtolower($entityLabel) ?> &middot; assign with <strong>Assign Role</strong> above</span>
+	</div>
+	<div class="ar-card-body">
+		<?php if (empty($systemRoles)): ?>
+		<div class="ar-card-empty">No built-in roles found &mdash; the RBAC seed migration has not been run.</div>
+		<?php else: ?>
+		<div class="ar-role-cards">
+			<?php foreach ($systemRoles as $sr): ?>
+			<div class="ar-role-card ar-role-card-system" data-role-id="<?= (int)$sr['RoleId'] ?>">
+				<div class="ar-role-card-name">
+					<?= htmlspecialchars($sr['DisplayName']) ?>
+					<span class="ar-role-scope-pill"><?= htmlspecialchars(ucfirst($sr['ScopeType'])) ?></span>
+				</div>
+				<div class="ar-role-card-desc"><?= htmlspecialchars($sr['Description'] ?: 'No description') ?></div>
+				<div class="ar-role-card-stats">
+					<span><i class="fas fa-key"></i> <?= (int)$sr['PermCount'] ?> permissions</span>
+					<span><i class="fas fa-users"></i> <?= (int)$sr['UserCount'] ?> assigned here</span>
+				</div>
+				<div class="ar-role-card-actions">
+					<button class="ar-btn ar-btn-outline ar-btn-sm" onclick="arOpenViewRoleModal(<?= htmlspecialchars(json_encode($sr), ENT_QUOTES) ?>)"><i class="fas fa-eye"></i> View Permissions</button>
+				</div>
+			</div>
+			<?php endforeach; ?>
+		</div>
+		<?php endif; ?>
+	</div>
+</div>
+
+<!-- =============================================
+     SECTION 4: CUSTOM ROLES
      ============================================= -->
 <div class="ar-card">
 	<div class="ar-card-header">
@@ -460,7 +563,7 @@ foreach ($roleAssignments as $a) {
 			<input type="hidden" id="ar-role-editor-id" value="">
 			<div class="ar-field">
 				<label>Machine Name <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="ar-role-editor-name" placeholder="e.g. herald_assistant" pattern="[a-z0-9_]+" title="Lowercase letters, numbers, underscores only">
+				<input type="text" id="ar-role-editor-name" placeholder="e.g. herald_assistant" pattern="[a-z0-9_]+" data-tip="Lowercase letters, numbers, underscores only" title="Lowercase letters, numbers, underscores only">
 			</div>
 			<div class="ar-field">
 				<label>Display Name <span style="color:#e53e3e">*</span></label>
@@ -472,7 +575,7 @@ foreach ($roleAssignments as $a) {
 			</div>
 			<div class="ar-field">
 				<label>Permissions</label>
-				<div id="ar-role-editor-perms" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+				<div id="ar-role-editor-perms" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--ork-border); border-radius: 6px; padding: 10px;">
 					<?php foreach ($permsByCategory as $cat => $perms): ?>
 					<div class="ar-perm-group">
 						<div class="ar-perm-group-title"><?= htmlspecialchars(ucfirst($cat)) ?></div>
@@ -494,7 +597,7 @@ foreach ($roleAssignments as $a) {
 		</div>
 		<div class="ar-modal-footer">
 			<button class="ar-btn ar-btn-outline" onclick="arCloseModal('ar-role-editor-overlay')">Cancel</button>
-			<button class="ar-btn ar-btn-primary" onclick="arSubmitRoleEditor()"><i class="fas fa-save"></i> Save Role</button>
+			<button class="ar-btn ar-btn-primary" id="ar-role-editor-save" onclick="arSubmitRoleEditor()"><i class="fas fa-save"></i> Save Role</button>
 		</div>
 	</div>
 </div>
@@ -509,7 +612,7 @@ foreach ($roleAssignments as $a) {
 			<button class="ar-modal-close" onclick="arCloseModal('ar-confirm-overlay')">&times;</button>
 		</div>
 		<div class="ar-modal-body">
-			<p id="ar-confirm-msg" style="font-size:14px;color:#2d3748;margin:0"></p>
+			<p id="ar-confirm-msg" style="font-size:14px;color:var(--ork-text);margin:0"></p>
 		</div>
 		<div class="ar-modal-footer">
 			<button class="ar-btn ar-btn-outline" onclick="arCloseModal('ar-confirm-overlay')">Cancel</button>
@@ -641,6 +744,7 @@ foreach ($roleAssignments as $a) {
 
 	// === CREATE ROLE MODAL ===
 	window.arOpenCreateRoleModal = function() {
+		arSetEditorReadOnly(false);
 		document.getElementById('ar-role-editor-id').value = '';
 		document.getElementById('ar-role-editor-name').value = '';
 		document.getElementById('ar-role-editor-name').disabled = false;
@@ -654,8 +758,41 @@ foreach ($roleAssignments as $a) {
 		arOpenModal('ar-role-editor-overlay');
 	};
 
+	// === ROLE EDITOR: EDITABLE / READ-ONLY ===
+	// Built-in roles are shared by every kingdom (kingdom_id = 0), so the editor is
+	// reused to SHOW one without ever letting it be saved from a kingdom's page.
+	function arSetEditorReadOnly(readOnly) {
+		document.querySelectorAll('#ar-role-editor-overlay input, #ar-role-editor-overlay textarea')
+			.forEach(function(el) {
+				if (el.id === 'ar-role-editor-id') return;   // hidden field, never user-editable
+				el.disabled = readOnly;
+			});
+		var save = document.getElementById('ar-role-editor-save');
+		if (save) save.style.display = readOnly ? 'none' : '';
+	}
+
+	window.arOpenViewRoleModal = function(roleData) {
+		if (typeof roleData === 'string') roleData = JSON.parse(roleData);
+		document.getElementById('ar-role-editor-id').value = roleData.RoleId || '';
+		document.getElementById('ar-role-editor-name').value = roleData.Name || '';
+		document.getElementById('ar-role-editor-display').value = roleData.DisplayName || '';
+		document.getElementById('ar-role-editor-desc').value = roleData.Description || '';
+		document.getElementById('ar-role-editor-title').textContent = 'Built-in Role: ' + (roleData.DisplayName || '');
+		document.querySelectorAll('#ar-role-editor-perms input[type="checkbox"]').forEach(function(cb) {
+			cb.checked = false;
+		});
+		(roleData.Permissions || []).forEach(function(p) {
+			var key = p.Key || p.key || p;
+			var cb = document.querySelector('#ar-role-editor-perms input[value="' + key + '"]');
+			if (cb) cb.checked = true;
+		});
+		arSetEditorReadOnly(true);
+		arOpenModal('ar-role-editor-overlay');
+	};
+
 	// === EDIT ROLE MODAL ===
 	window.arOpenEditRoleModal = function(roleId, roleData) {
+		arSetEditorReadOnly(false);
 		if (typeof roleData === 'string') roleData = JSON.parse(roleData);
 		document.getElementById('ar-role-editor-id').value = roleId;
 		document.getElementById('ar-role-editor-name').value = roleData.Name || '';
@@ -800,12 +937,24 @@ foreach ($roleAssignments as $a) {
 	}
 
 	// Fixed position helper for autocomplete in modals
+	// The house modal-autocomplete positioner. revised.js (its usual home) is not loaded
+	// on this page, so it is polyfilled here under the same guard the other admin pages
+	// use. The zIndex line is load-bearing: without it the dropdown stacks inside the
+	// modal's own var(--z-modal) context and is clipped -- the exact failure this helper
+	// exists to prevent.
+	if (typeof window.tnFixedAcPosition !== 'function') {
+		window.tnFixedAcPosition = function (input, dropdown) {
+			if (!input || !dropdown) return;
+			var r = input.getBoundingClientRect();
+			dropdown.style.position = 'fixed';
+			dropdown.style.top = (r.bottom + 2) + 'px';
+			dropdown.style.left = r.left + 'px';
+			dropdown.style.width = r.width + 'px';
+			dropdown.style.zIndex = '10001';
+		};
+	}
 	function arFixAcPosition(inputEl, dropdownEl) {
-		var rect = inputEl.getBoundingClientRect();
-		dropdownEl.style.position = 'fixed';
-		dropdownEl.style.left = rect.left + 'px';
-		dropdownEl.style.top = rect.bottom + 'px';
-		dropdownEl.style.width = rect.width + 'px';
+		window.tnFixedAcPosition(inputEl, dropdownEl);
 	}
 
 	// Initialize player search autocomplete

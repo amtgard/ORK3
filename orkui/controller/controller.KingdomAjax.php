@@ -807,12 +807,13 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
+        $this->load_model('RBACService');
+
         if ($action === 'getroles') {
-            $roles = Ork3::$Lib->rbacservice->GetAvailableRoles($kingdom_id);
+            $roles = $this->RBACService->GetAvailableRoles($kingdom_id);
             echo json_encode(['status' => 0, 'roles' => $roles]);
 
         } elseif ($action === 'getassignments') {
-            $this->load_model('RBACService');
             $assignments = $this->RBACService->GetKingdomRoleAssignments($kingdom_id, true);
             echo json_encode(['status' => 0, 'assignments' => $assignments]);
 
@@ -821,13 +822,20 @@ class Controller_KingdomAjax extends Controller
             $role_id    = (int)($_POST['RoleId'] ?? 0);
             $scope_type = trim($_POST['ScopeType'] ?? 'kingdom');
             $scope_id   = (int)($_POST['ScopeId'] ?? $kingdom_id);
+            // A kingdom-scoped grant may only target the kingdom this request was authorized
+            // for. GrantRole's escalation check already blocks granting permissions you lack
+            // at the target scope, but that is the last line, not the first -- pin the scope
+            // here so a POSTed ScopeId cannot aim the grant at another kingdom at all.
+            if ($scope_type === 'kingdom') {
+                $scope_id = $kingdom_id;
+            }
 
             if (!valid_id($target_id) || !valid_id($role_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Invalid player or role.']);
                 exit;
             }
 
-            $r = Ork3::$Lib->rbacservice->GrantRole($uid, $target_id, $role_id, $scope_type, $scope_id);
+            $r = $this->RBACService->GrantRole($uid, $target_id, $role_id, $scope_type, $scope_id);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -842,7 +850,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = Ork3::$Lib->rbacservice->RevokeRole($uid, $user_role_id);
+            $r = $this->RBACService->RevokeRole($uid, $user_role_id);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -861,7 +869,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = Ork3::$Lib->rbacservice->CreateRole($uid, $kingdom_id, $name, $display_name, $description, $scope_type, $perm_keys ?: []);
+            $r = $this->RBACService->CreateRole($uid, $kingdom_id, $name, $display_name, $description, $scope_type, $perm_keys ?: []);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0, 'role_id' => $r['Detail'] ?? 0]);
             } else {
@@ -879,7 +887,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = Ork3::$Lib->rbacservice->EditRole($uid, $role_id, $perm_keys ?: [], $display_name, $description);
+            $r = $this->RBACService->EditRole($uid, $role_id, $perm_keys ?: [], $display_name, $description, $kingdom_id);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -894,7 +902,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = Ork3::$Lib->rbacservice->DeleteRole($uid, $role_id);
+            $r = $this->RBACService->DeleteRole($uid, $role_id, $kingdom_id);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -911,7 +919,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $perms = Ork3::$Lib->rbacservice->GetEffectivePermissions($target_id, $scope_type, $scope_id);
+            $perms = $this->RBACService->GetEffectivePermissions($target_id, $scope_type, $scope_id);
             echo json_encode(['status' => 0, 'permissions' => $perms]);
 
         } elseif ($action === 'getrolepermissions') {
@@ -920,7 +928,7 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid role.']);
                 exit;
             }
-            $perms = Ork3::$Lib->rbacservice->GetRolePermissions($role_id);
+            $perms = $this->RBACService->GetRolePermissions($role_id);
             echo json_encode(['status' => 0, 'permissions' => $perms]);
 
         } else {

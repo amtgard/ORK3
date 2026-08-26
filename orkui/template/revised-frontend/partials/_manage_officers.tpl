@@ -45,10 +45,10 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 	</div>
 </div>
 
-<!-- ============ Manage Officers — Sub-modals (z-index >= 9000 to layer above host modal) ============ -->
+<!-- ============ Manage Officers — Sub-modals (--z-modal-top / --z-help-overlay, above the host modal) ============ -->
 
 <!-- Create/Edit Position Modal -->
-<div id="mo-pos-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="mo-pos-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal-top);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="mo-modal-box" style="width:560px;max-width:calc(100vw - 40px)">
 		<div class="mo-modal-header">
 			<h3 class="mo-modal-title"><i class="fas fa-user-shield" style="margin-right:8px;color:#2b6cb0"></i><span id="mo-pos-title">Create Position</span></h3>
@@ -124,7 +124,7 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 </div>
 
 <!-- Set Occupant Modal -->
-<div id="mo-occ-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="mo-occ-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal-top);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="mo-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="mo-modal-header">
 			<h3 class="mo-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Set Occupant &mdash; <span id="mo-occ-title"></span></h3>
@@ -167,7 +167,7 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 </div>
 
 <!-- Confirm (Retire / Vacate) Modal -->
-<div id="mo-confirm-overlay" style="display:none;position:fixed;inset:0;z-index:9001;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="mo-confirm-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-help-overlay);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="mo-modal-box" style="width:460px;max-width:calc(100vw - 40px)">
 		<div class="mo-modal-header">
 			<h3 class="mo-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#dd6b20"></i><span id="mo-confirm-title">Confirm</span></h3>
@@ -666,8 +666,14 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	function moPost(action, data, onOk) {
 		$.post(base() + action, data, function(resp) {
 			if (resp && resp.status === 0) { onOk(resp); }
-			else { alert((resp && resp.error) ? resp.error : 'Action failed.'); }
-		}, 'json').fail(function() { alert('Network error.'); });
+			else {
+				try { console.error('[ManageOfficers] ' + action + ' failed:', resp); } catch (e) {}
+				moShowNotice('Action Failed', esc((resp && resp.error) ? resp.error : 'Action failed.'));
+			}
+		}, 'json').fail(function(xhr, st, err) {
+			try { console.error('[ManageOfficers] ' + action + ' network error:', (xhr && xhr.status), err || st); } catch (e) {}
+			moShowNotice('Network Error', 'The request could not be completed. Please check your connection and try again.');
+		});
 	}
 
 	window.moReclassify = function(pid, cls) {
@@ -715,23 +721,47 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		moConfirmFn = fn;
 		document.getElementById('mo-confirm-overlay').style.display = 'flex';
 	}
+	// Notice = the same modal with a single dismiss action (native alert() is banned).
+	function moShowNotice(title, bodyHtml) {
+		moShowConfirm(title, bodyHtml, 'OK', function() { moCloseConfirm(); });
+	}
 	window.moCloseConfirm = function() { document.getElementById('mo-confirm-overlay').style.display = 'none'; moConfirmFn = null; };
 	window.moConfirmGo = function() { if (moConfirmFn) moConfirmFn(); };
 
 	// ---------- Create/Edit Position modal ----------
+	// A failed fetch is NOT an empty list: surface the error in the modal + console and
+	// leave the cache null so the next open retries instead of showing a bogus "none".
+	function moLoadFailed(what, detail) {
+		try { console.error('[ManageOfficers] Failed to load ' + what + ':', detail); } catch (e) {}
+		var el = document.getElementById('mo-pos-error');
+		if (el) {
+			el.textContent = 'Could not load ' + what + '. Please try again or reload the page.';
+			el.style.display = '';
+		}
+	}
 	function ensureRoles(cb) {
 		if (moRoles) { cb(); return; }
 		$.getJSON(base() + 'roles', function(resp) {
-			moRoles = (resp && resp.status === 0) ? (resp.data || []) : [];
+			if (resp && resp.status === 0) { moRoles = resp.data || []; }
+			else { moRoles = null; moLoadFailed('officer roles', (resp && resp.error) || resp); }
 			cb();
-		}).fail(function() { moRoles = []; cb(); });
+		}).fail(function(xhr, st, err) {
+			moRoles = null;
+			moLoadFailed('officer roles', 'HTTP ' + ((xhr && xhr.status) || '?') + ' ' + (err || st || ''));
+			cb();
+		});
 	}
 	function ensurePerms(cb) {
 		if (moPerms) { cb(); return; }
 		$.getJSON(base() + 'permissions', function(resp) {
-			moPerms = (resp && resp.status === 0) ? (resp.data || []) : [];
+			if (resp && resp.status === 0) { moPerms = resp.data || []; }
+			else { moPerms = null; moLoadFailed('officer permissions', (resp && resp.error) || resp); }
 			cb();
-		}).fail(function() { moPerms = []; cb(); });
+		}).fail(function(xhr, st, err) {
+			moPerms = null;
+			moLoadFailed('officer permissions', 'HTTP ' + ((xhr && xhr.status) || '?') + ' ' + (err || st || ''));
+			cb();
+		});
 	}
 
 	function renderRoleSelect(selectedId) {
@@ -750,17 +780,42 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	};
 
 	// Populate "Reports To" from the currently-loaded positions (crown + supporting),
-	// excluding the position being edited (no self-parenting). selectedId pre-selects.
+	// excluding the position being edited AND its whole descendant subtree - picking a
+	// descendant would build a cycle the server (OfficerPosition::WouldCreateCycle)
+	// rejects, so never offer it. selectedId pre-selects.
+	function collectSubtree(list, rootId) {
+		var excluded = {};
+		rootId = parseInt(rootId || 0, 10);
+		if (!rootId) return excluded;
+		var childrenOf = {};
+		list.forEach(function(p) {
+			var par = parseInt(p.ParentPositionId || 0, 10);
+			if (par) { (childrenOf[par] = childrenOf[par] || []).push(parseInt(p.PositionId, 10)); }
+		});
+		var queue = [rootId];
+		while (queue.length) {
+			var id = queue.shift();
+			if (excluded[id]) continue;      // guard against pre-existing cycles in the data
+			excluded[id] = true;
+			(childrenOf[id] || []).forEach(function(kid) { if (!excluded[kid]) queue.push(kid); });
+		}
+		return excluded;
+	}
 	function renderParentSelect(selectedId, excludeId) {
 		var sel = document.getElementById('mo-pos-parent');
 		if (!sel) return;
 		var all = (moData.crown || []).concat(moData.supporting || []);
+		// Options come from active positions only, but the DESCENDANT map must also walk
+		// retired ones: RetirePosition sets retired_at and never reparents children, so an
+		// active position can still reach its ancestor through a retired node. Excluding
+		// retired rows here offered a descendant as a parent, and the server rejected it.
+		var excluded = collectSubtree(all.concat(moData.retired || []), excludeId);
 		var opts = '<option value="">\u2014 None (top-level) \u2014</option>';
 		all.slice().sort(function(a, b) {
 			return (parseInt(a.SortOrder || 0, 10)) - (parseInt(b.SortOrder || 0, 10));
 		}).forEach(function(pos) {
 			var pid = parseInt(pos.PositionId, 10);
-			if (excludeId && pid === parseInt(excludeId, 10)) return; // can't report to itself
+			if (excluded[pid]) return; // itself or one of its descendants would be a cycle
 			var label = pos.DisplayTitle || pos.Title || ('#' + pid);
 			opts += '<option value="' + pid + '"' + (pid === parseInt(selectedId || 0, 10) ? ' selected' : '') + '>' + esc(label) + '</option>';
 		});
@@ -847,6 +902,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var lockEl = document.getElementById('mo-pos-class-lock');
 		lockEl.style.display = moPinnedClass ? '' : 'none';
 		document.querySelectorAll('#mo-pos-class-seg .mo-seg-btn').forEach(function(b){ b.disabled = moPinnedClass; });
+		// EditPosition refuses a reparent of a pinned/system position, and it returns BEFORE
+		// applying anything -- so leaving this enabled would silently discard the title and
+		// sort-order edits in the same submit. Lock it the way classification is locked.
+		var parentSel = document.getElementById('mo-pos-parent');
+		if (parentSel) { parentSel.disabled = moPinnedClass; }
 		moPinnedClass = false; // allow moSetClass to set initial value
 		moSetClass(pos.Classification === 'crown' ? 'crown' : 'supporting');
 		moPinnedClass = parseInt(pos.IsPinned, 10) === 1;
@@ -977,6 +1037,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var results = document.getElementById('mo-occ-player-results');
 		if (!input) return;
 		var debounce;
+		function moAcSelect(el) {
+			if (!el) return;
+			input.value  = el.getAttribute('data-persona') || '';
+			hidden.value = el.getAttribute('data-id') || '';
+			results.innerHTML = '';
+			results.classList.remove('kn-ac-open');
+		}
 		input.addEventListener('input', function() {
 			clearTimeout(debounce);
 			hidden.value = '';
@@ -996,21 +1063,39 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 						var el = document.createElement('div');
 						el.className = 'kn-ac-item';
 						el.setAttribute('data-id', d.MundaneId);
+						el.setAttribute('data-persona', d.Persona || '');
 						el.innerHTML = esc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + esc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
-						el.addEventListener('click', (function(dd) {
-							return function() {
-								input.value = dd.Persona;
-								hidden.value = dd.MundaneId;
-								results.innerHTML = '';
-								results.classList.remove('kn-ac-open');
-							};
-						})(d));
+						el.addEventListener('click', (function(node) {
+							return function() { moAcSelect(node); };
+						})(el));
 						results.appendChild(el);
 					}
 					if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
 					results.classList.add('kn-ac-open');
 				});
 			}, 250);
+		});
+		input.addEventListener('keydown', function(e) {
+			var items = results.querySelectorAll('.kn-ac-item[data-id]');
+			if (!items.length) return;
+			var focused = results.querySelector('.kn-ac-focused');
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				var next = focused ? (focused.nextElementSibling || items[0]) : items[0];
+				if (focused) focused.classList.remove('kn-ac-focused');
+				if (next && next.getAttribute('data-id')) next.classList.add('kn-ac-focused');
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				var prev = focused ? (focused.previousElementSibling || items[items.length - 1]) : items[items.length - 1];
+				if (focused) focused.classList.remove('kn-ac-focused');
+				if (prev && prev.getAttribute('data-id')) prev.classList.add('kn-ac-focused');
+			} else if (e.key === 'Enter' && focused) {
+				e.preventDefault();
+				moAcSelect(focused);
+			} else if (e.key === 'Escape') {
+				results.innerHTML = '';
+				results.classList.remove('kn-ac-open');
+			}
 		});
 		document.addEventListener('click', function(e) {
 			if (!results.contains(e.target) && e.target !== input) {

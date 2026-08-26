@@ -255,7 +255,12 @@ class Controller_Player extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                // Match the canonical key, never the display name. ork_officer.role holds
+                // 'Prime Minister' on rows written before the officer position migration
+                // and 'prime_minister' after it, and PHP in_array is case-sensitive -- so a
+                // display-name literal here matched NOTHING once that migration had run,
+                // silently emptying the officer preload list for every kingdom.
+                if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
                 }
             }
@@ -265,7 +270,7 @@ class Controller_Player extends Controller
             $parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
                     }
                 }
@@ -494,7 +499,7 @@ class Controller_Player extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0) {
+                if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
                 }
             }
@@ -504,7 +509,7 @@ class Controller_Player extends Controller
             $parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
                     }
                 }
@@ -653,7 +658,7 @@ class Controller_Player extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], ['Monarch', 'Regent', 'Prime Minister']) && $officer['MundaneId'] > 0) {
+                if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent', 'prime_minister'], true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
                 }
             }
@@ -662,7 +667,7 @@ class Controller_Player extends Controller
             $parkOfficers = $this->Park->get_officers($playerParkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], ['Monarch', 'Regent', 'Prime Minister']) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent', 'prime_minister'], true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
                     }
                 }

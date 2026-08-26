@@ -127,7 +127,7 @@ $totalAttendance = $TotalAttendance ?? 0;
 .ka-ts-lbl { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
 .ka-ts-sub { font-size: 11px; color: #a0aec0; margin-top: 2px; }
 @media (max-width: 900px) { .ka-ts-row { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 500px) { .ka-ts-row { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .ka-ts-row { grid-template-columns: 1fr; } }
 
 /* Layout */
 .ka-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
@@ -200,7 +200,7 @@ $totalAttendance = $TotalAttendance ?? 0;
 
 /* Modal overlay */
 .ka-overlay {
-	display: none; position: fixed; inset: 0; z-index: 2000;
+	display: none; position: fixed; inset: 0; z-index: var(--z-modal);
 	background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
 	padding: 16px;
 	overflow: hidden;
@@ -243,9 +243,12 @@ $totalAttendance = $TotalAttendance ?? 0;
 	outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
 }
 .ka-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 480px) { .ka-field-row { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .ka-field-row { grid-template-columns: 1fr; } }
 .ka-field-ac { position: relative; }
-.ka-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: 9999; }
+/* Dropdown is positioned with position:fixed by tnFixedAcPosition() so the modal's
+   own stacking/overflow context can't clip it; z-index rides the token scale
+   (matches revised.css's modal autocomplete rule) instead of a magic 9999. */
+.ka-field-ac .kn-ac-results { z-index: var(--z-modal-top); }
 .ka-hint { font-size: 11px; color: #a0aec0; font-weight: 400; }
 
 /* Feedback */
@@ -375,7 +378,7 @@ $totalAttendance = $TotalAttendance ?? 0;
 
 /* Confirm overlay */
 .ka-confirm-overlay {
-	display: none; position: fixed; inset: 0; z-index: 3000;
+	display: none; position: fixed; inset: 0; z-index: var(--z-modal-top);
 	background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
 }
 .ka-confirm-overlay.ka-open { display: flex; }
@@ -495,7 +498,7 @@ html[data-theme="dark"] .ka-form-hint { color: var(--ork-text-secondary); }
    MANAGE OFFICERS HOST MODAL (.ka-mo-*)
    ============================================= */
 .ka-mo-overlay {
-	display: none; position: fixed; inset: 0; z-index: 8000;
+	display: none; position: fixed; inset: 0; z-index: var(--z-modal);
 	background: rgba(0,0,0,0.5); align-items: flex-start; justify-content: center;
 	padding: 32px 16px; overflow-y: auto;
 }
@@ -687,6 +690,51 @@ html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 				</div>
 			</div>
 
+			<?php if (!empty($CanManageTests)): ?>
+			<!-- Qualification Tests (Walker). Moved here from the Kingdom profile's
+			     "Admin Tasks" tab, which this page replaced. Each card is gated on its
+			     own capability rather than one blanket flag, so a test manager who may
+			     only author questions does not see Configure or the results reports.
+			     No help button here: the docs modal lives in revised.js, which this page
+			     does not load -- QualTest/manage carries it, one click away. -->
+			<div class="ka-section">
+				<div class="ka-section-title"><i class="fas fa-clipboard-check"></i> Qualification Tests</div>
+				<div class="ka-action-tiles">
+					<a class="ka-action-card" href="<?= UIR ?>QualTest/manage/<?= $kid ?>">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-clipboard-check"></i></div>
+						<div class="ka-action-label">Test Workspace</div>
+						<div class="ka-action-desc">Pass criteria, versions, managers and publishing</div>
+					</a>
+					<?php if (!empty($CanEditTestQuestions)): ?>
+					<a class="ka-action-card" href="<?= UIR ?>QualTest/questions/<?= $kid ?>/reeve">
+						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-gavel"></i></div>
+						<div class="ka-action-label">Reeve's Test Questions</div>
+						<div class="ka-action-desc">Author and edit the Reeve's question bank</div>
+					</a>
+					<a class="ka-action-card" href="<?= UIR ?>QualTest/questions/<?= $kid ?>/corpora">
+						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-scroll"></i></div>
+						<div class="ka-action-label">Corpora Test Questions</div>
+						<div class="ka-action-desc">Author and edit the Corpora question bank</div>
+					</a>
+					<?php endif; ?>
+					<?php if (!empty($CanViewTestResults) && !empty($QualTestReeveEnabled)): ?>
+					<a class="ka-action-card" href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kid ?>">
+						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-chart-bar"></i></div>
+						<div class="ka-action-label">Reeve's Test Results</div>
+						<div class="ka-action-desc">Who has passed, and how the questions performed</div>
+					</a>
+					<?php endif; ?>
+					<?php if (!empty($CanViewTestResults) && !empty($QualTestCorporaEnabled)): ?>
+					<a class="ka-action-card" href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kid ?>">
+						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-chart-bar"></i></div>
+						<div class="ka-action-label">Corpora Test Results</div>
+						<div class="ka-action-desc">Who has passed, and how the questions performed</div>
+					</a>
+					<?php endif; ?>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<!-- Players -->
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-user"></i> Players</div>
@@ -796,7 +844,6 @@ html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 			</div>
 			<ul class="ka-report-list">
 				<li><a href="<?= UIR ?>Kingdom/profile/<?= $kid ?>"><i class="fas fa-arrow-left"></i><span>Back to Kingdom Profile<span class="ka-report-list-desc"><?= $kingdomName ?></span></span></a></li>
-				<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kid ?>"><i class="fas fa-user-clock"></i><span>Suspensions<span class="ka-report-list-desc">Manage player suspensions</span></span></a></li>
 				<li><a href="<?= UIR ?>Attendance/kingdom/<?= $kid ?>"><i class="fas fa-clipboard-list"></i><span>Enter Attendance<span class="ka-report-list-desc">Record kingdom attendance</span></span></a></li>
 			</ul>
 		</div>
@@ -1181,7 +1228,7 @@ html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 			<div class="ka-feedback" id="ka-mp-feedback"></div>
 			<div class="ka-field ka-field-ac">
 				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="ka-mp-player-name" autocomplete="off" placeholder="Search all players...">
+				<input type="text" id="ka-mp-player-name" autocomplete="off" placeholder="Search players...">
 				<input type="hidden" id="ka-mp-player-id">
 				<div class="kn-ac-results" id="ka-mp-player-results"></div>
 			</div>
@@ -1353,7 +1400,7 @@ html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 </div>
 
 <?php if ($mo_can_manage): ?>
-<!-- ---- Manage Officers Host Modal (z-index 8000; partial sub-modals render at >=9000) ---- -->
+<!-- ---- Manage Officers Host Modal (--z-modal; partial sub-modals render at --z-modal-top / --z-help-overlay) ---- -->
 <div class="ka-mo-overlay" id="ka-mo-overlay">
 	<div class="ka-mo-box">
 		<div class="ka-mo-header">
@@ -1409,6 +1456,10 @@ var KaConfig = {
 	systemAwards:     <?= json_encode($SystemAwards ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminInfo:        <?= json_encode($AdminInfo ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 };
+// tnFixedAcPosition comes from partials/_manage_officers.tpl, included unconditionally
+// above at the Manage Officers modal — its guarded polyfill runs first, so a second
+// identical copy here could never execute. revised.js (the usual home) is not loaded
+// on this page.
 </script>
 <script>
 (function() {
@@ -1463,7 +1514,6 @@ var KaConfig = {
 	var _kaConfirmCb = null;
 	function kaConfirm(message, onConfirm, title) {
 		var overlay = gid('ka-confirm-overlay');
-		if (!overlay) { if (confirm(message)) onConfirm(); return; }
 		gid('ka-confirm-message').textContent = message;
 		if (title) gid('ka-confirm-title').childNodes[1].textContent = ' ' + title;
 		_kaConfirmCb = onConfirm;
@@ -1491,6 +1541,7 @@ var KaConfig = {
 		function acOpen(items) {
 			if (!items.length) {
 				results.innerHTML = '<div class="kn-ac-item" style="color:#a0aec0;pointer-events:none">No results</div>';
+				if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
 				results.classList.add('kn-ac-open');
 				return;
 			}
@@ -1500,15 +1551,8 @@ var KaConfig = {
 					+ (item.extra !== undefined ? '" data-extra="' + encodeURIComponent(item.extra) : '')
 					+ '">' + item.html + '</div>';
 			}).join('');
-			// Fixed positioning for modals
-			var modal = input.closest('.ka-overlay');
-			if (modal) {
-				var rect = input.getBoundingClientRect();
-				results.style.position = 'fixed';
-				results.style.left = rect.left + 'px';
-				results.style.top = rect.bottom + 'px';
-				results.style.width = rect.width + 'px';
-			}
+			// Fixed positioning for modals (shared helper)
+			if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
 			results.classList.add('kn-ac-open');
 		}
 		function selectItem(item) {
@@ -1560,12 +1604,14 @@ var KaConfig = {
 	/* ── Search helpers ───────────────────────────── */
 	function kaEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+	/* Kingdom-scoped player search (house rule: player search is scoped, &q= form).
+	   This page is a single kingdom's admin console, so scope=own is correct. */
 	function kaSearchPlayers(q, cb) {
-		fetch(UIR + 'SearchAjax/universal&focus=player&q=' + encodeURIComponent(q) + '&inactive=1')
+		fetch(UIR + 'KingdomAjax/playersearch/' + KaConfig.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=own&include_inactive=1&include_suspended=1')
 		.then(function(r){return r.json();}).then(function(d) {
-			cb((d.players || []).map(function(p) {
-				var inactive = p.active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-				return { id: p.id, label: p.name, html: kaEsc(p.name) + ' <span style="color:#a0aec0;font-size:11px">(' + kaEsc(p.abbr) + ' &middot; ' + kaEsc(p.park) + ')</span>' + inactive };
+			cb((d || []).map(function(p) {
+				var inactive = Number(p.Active) === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+				return { id: p.MundaneId, label: p.Persona, html: kaEsc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + kaEsc(p.KAbbr) + ' &middot; ' + kaEsc(p.ParkName) + ')</span>' + inactive };
 			}));
 		}).catch(function(){cb([]);});
 	}
@@ -1841,8 +1887,7 @@ var KaConfig = {
 				var td = document.createElement('td');
 				var inp = document.createElement('input');
 				inp.type = type;
-				inp.className = type === 'number' ? '' : '';
-				inp.style.cssText = type === 'number' ? 'width:56px;padding:4px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;text-align:center' : 'width:100%;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px';
+						inp.style.cssText = type === 'number' ? 'width:56px;padding:4px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;text-align:center' : 'width:100%;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px';
 				inp.value = val;
 				if (type === 'number') inp.min = '0';
 				inp.dataset.field = field;

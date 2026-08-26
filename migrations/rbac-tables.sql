@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `ork_permission` (
   `is_system` tinyint(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (`permission_id`),
   UNIQUE KEY `uk_permission_key` (`key`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
 -- 2. ork_role — Named roles (system defaults + kingdom-custom)
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `ork_role` (
   `modified_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`role_id`),
   UNIQUE KEY `uk_role_name_kingdom` (`name`, `kingdom_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
 -- 3. ork_role_permission — Maps permissions to roles (M:N)
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `ork_role_permission` (
   UNIQUE KEY `uk_role_permission` (`role_id`, `permission_id`),
   KEY `idx_rp_role` (`role_id`),
   KEY `idx_rp_permission` (`permission_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
 -- 4. ork_user_role — Assigns roles to users at scopes
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS `ork_user_role` (
   KEY `idx_ur_role` (`role_id`),
   KEY `idx_ur_kingdom` (`kingdom_id`),
   KEY `idx_ur_park` (`park_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
 -- 5. ork_rbac_audit — Audit trail for all RBAC changes
@@ -92,4 +92,4 @@ CREATE TABLE IF NOT EXISTS `ork_rbac_audit` (
   KEY `idx_audit_created` (`created_at`),
   KEY `idx_audit_target` (`target_mundane_id`),
   KEY `idx_audit_role` (`role_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

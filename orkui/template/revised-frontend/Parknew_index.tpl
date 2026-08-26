@@ -39,6 +39,10 @@
 		if ($_ck === 'regent')  $regent  = $o;
 	}
 
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
+
 	// Parse park main location for map links
 	$parkLat = null; $parkLng = null;
 	if (!empty($parkInfo['Location'])) {
@@ -1292,11 +1296,9 @@
 				<div class="pk-oh-toolbar">
 					<select id="pk-oh-role-filter" class="pk-oh-filter-select" onchange="pkLoadOfficerHistory()">
 						<option value="">All Roles</option>
-						<option value="Monarch">Monarch</option>
-						<option value="Regent">Regent</option>
-						<option value="Prime Minister">Prime Minister</option>
-						<option value="Champion">Champion</option>
-						<option value="GMR">GMR</option>
+						<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+						<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+						<?php endforeach; ?>
 					</select>
 					<?php if (!empty($CanManagePark)): ?>
 					<button class="pk-btn pk-btn-secondary" onclick="pkOpenOhBackfillModal()">
@@ -1506,7 +1508,7 @@
 
 <!-- Officer History Backfill Modal -->
 <?php if (!empty($CanManagePark)): ?>
-<div id="pk-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="pk-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
 			<h3 class="pk-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#276749"></i>Add Officer History Record</h3>
@@ -1529,11 +1531,9 @@
 				<label>Role <span style="color:#e53e3e">*</span></label>
 				<select id="pk-oh-bf-role">
 					<option value="">Select role...</option>
-					<option value="Monarch">Monarch</option>
-					<option value="Regent">Regent</option>
-					<option value="Prime Minister">Prime Minister</option>
-					<option value="Champion">Champion</option>
-					<option value="GMR">GMR</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
 				</select>
 			</div>
 
@@ -1563,7 +1563,7 @@
 </div>
 <!-- Officer History Edit Modal -->
 <?php if (!empty($CanManagePark)): ?>
-<div id="pk-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="pk-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
 			<h3 class="pk-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#276749"></i>Edit Officer History Record</h3>
@@ -1584,11 +1584,9 @@
 			<div class="pk-acct-field">
 				<label>Role <span style="color:#e53e3e">*</span></label>
 				<select id="pk-oh-ed-role">
-					<option value="Monarch">Monarch</option>
-					<option value="Regent">Regent</option>
-					<option value="Prime Minister">Prime Minister</option>
-					<option value="Champion">Champion</option>
-					<option value="GMR">GMR</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
 				</select>
 			</div>
 
@@ -1659,85 +1657,6 @@
 .pk-oh-bf-success {
 	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
 	font-size:13px; margin-bottom:12px; text-align:center;
-}
-/* Officer History Backfill Modal */
-#pk-oh-backfill-overlay .pk-modal-box {
-	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
-	max-height:90vh; display:flex; flex-direction:column;
-}
-#pk-oh-backfill-overlay .pk-modal-header {
-	display:flex; align-items:center; justify-content:space-between;
-	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
-}
-#pk-oh-backfill-overlay .pk-modal-title {
-	font-size:16px; font-weight:700; color:#2d3748; margin:0;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
-}
-#pk-oh-backfill-overlay .pk-modal-close-btn {
-	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
-}
-#pk-oh-backfill-overlay .pk-modal-close-btn:hover { color:#4a5568; }
-#pk-oh-backfill-overlay .pk-modal-body {
-	padding:20px; overflow-y:auto; flex:1;
-}
-#pk-oh-backfill-overlay .pk-modal-footer {
-	padding:14px 20px; border-top:1px solid #e2e8f0;
-	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
-}
-#pk-oh-backfill-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
-#pk-oh-backfill-overlay .pk-acct-field label {
-	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
-}
-#pk-oh-backfill-overlay .pk-acct-field input[type=text],
-#pk-oh-backfill-overlay .pk-acct-field input[type=date],
-#pk-oh-backfill-overlay .pk-acct-field select,
-#pk-oh-backfill-overlay .pk-acct-field textarea {
-	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
-	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
-}
-#pk-oh-backfill-overlay .pk-acct-field input:focus,
-#pk-oh-backfill-overlay .pk-acct-field select:focus,
-#pk-oh-backfill-overlay .pk-acct-field textarea:focus {
-	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
-}
-#pk-oh-edit-overlay .pk-modal-box {
-	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
-	max-height:90vh; display:flex; flex-direction:column;
-}
-#pk-oh-edit-overlay .pk-modal-header {
-	display:flex; align-items:center; justify-content:space-between;
-	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
-}
-#pk-oh-edit-overlay .pk-modal-title {
-	font-size:16px; font-weight:700; color:#2d3748; margin:0;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
-}
-#pk-oh-edit-overlay .pk-modal-close-btn {
-	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
-}
-#pk-oh-edit-overlay .pk-modal-close-btn:hover { color:#4a5568; }
-#pk-oh-edit-overlay .pk-modal-body {
-	padding:20px; overflow-y:auto; flex:1;
-}
-#pk-oh-edit-overlay .pk-modal-footer {
-	padding:14px 20px; border-top:1px solid #e2e8f0;
-	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
-}
-#pk-oh-edit-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
-#pk-oh-edit-overlay .pk-acct-field label {
-	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
-}
-#pk-oh-edit-overlay .pk-acct-field input[type=text],
-#pk-oh-edit-overlay .pk-acct-field input[type=date],
-#pk-oh-edit-overlay .pk-acct-field select,
-#pk-oh-edit-overlay .pk-acct-field textarea {
-	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
-	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
-}
-#pk-oh-edit-overlay .pk-acct-field input:focus,
-#pk-oh-edit-overlay .pk-acct-field select:focus,
-#pk-oh-edit-overlay .pk-acct-field textarea:focus {
-	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
 }
 #pk-oh-edit-overlay .pk-form-error {
 	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
@@ -3696,17 +3615,20 @@ function pkHtmlEsc(s) {
 }
 
 function pkDeleteOhRecord(ohid) {
-    if (!confirm('Delete this officer history record?')) return;
-    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteofficerhistory',
-        { OfficerHistoryId: ohid },
-        function(resp) {
-            if (resp.status === 0) {
-                pkLoadOfficerHistory();
-            } else {
-                alert(resp.error || 'Failed to delete record.');
-            }
-        }, 'json'
-    ).fail(function() { alert('Network error.'); });
+    // knConfirm/orkAlert (revised.js) — native confirm()/alert() are banned house-wide.
+    // The Kingdom twin of this function already uses them; this copy had drifted.
+    knConfirm('Delete this officer history record?', function() {
+        $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteofficerhistory',
+            { OfficerHistoryId: ohid },
+            function(resp) {
+                if (resp.status === 0) {
+                    pkLoadOfficerHistory();
+                } else {
+                    orkAlert(resp.error || 'Failed to delete record.');
+                }
+            }, 'json'
+        ).fail(function() { orkAlert('Network error.'); });
+    });
 }
 
 // Backfill modal

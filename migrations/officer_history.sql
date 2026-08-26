@@ -6,7 +6,10 @@ CREATE TABLE IF NOT EXISTS `ork_officer_history` (
   `kingdom_id` int(11) NOT NULL,
   `park_id` int(11) NOT NULL DEFAULT 0,
   `mundane_id` int(11) NOT NULL,
-  `role` enum('Monarch','Regent','Prime Minister','Champion','GMR') NOT NULL,
+  -- VARCHAR, not the legacy ENUM: officer history records custom positions and
+  -- per-kingdom aliases by canonical key, which no fixed enum can enumerate.
+  -- officer-position.sql widens this too, for databases created before this change.
+  `role` varchar(80) NOT NULL,
   `start_date` date DEFAULT NULL,
   `end_date` date DEFAULT NULL,
   `changed_by` int(11) DEFAULT NULL,
@@ -16,4 +19,4 @@ CREATE TABLE IF NOT EXISTS `ork_officer_history` (
   KEY `idx_oh_kingdom_park_role` (`kingdom_id`, `park_id`, `role`),
   KEY `idx_oh_mundane` (`mundane_id`),
   KEY `idx_oh_kingdom_park_role_end` (`kingdom_id`, `park_id`, `role`, `end_date`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

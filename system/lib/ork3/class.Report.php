@@ -3261,6 +3261,14 @@ class Report extends Ork3
 
     public function KingdomOfficerDirectory($request)
     {
+        // Officer roles are matched as REPLACE(o.role,' ','_') because ork_officer.role
+        // holds the display name ('Prime Minister') on rows written before the officer
+        // position migration and the canonical key ('prime_minister') on rows written
+        // after it. The column is utf8mb4_unicode_ci, so case alone never mattered --
+        // but 'Prime Minister' and 'prime_minister' differ by a separator, so a literal
+        // comparison silently blanked every PM column here the moment that migration ran.
+        // Normalizing the separator matches both forms; these are select-list aggregates,
+        // not WHERE predicates, so no index is affected.
         $kingdom_id = valid_id($request['KingdomId']) ? (int)$request['KingdomId'] : null;
 
         if ($kingdom_id) {
@@ -3268,31 +3276,31 @@ class Report extends Ork3
             $sql = "SELECT
 						p.park_id    AS entity_id,
 						p.name       AS entity_name,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "park p
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.park_id = p.park_id
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
@@ -3306,31 +3314,31 @@ class Report extends Ork3
             $sql = "SELECT
 						k.kingdom_id AS entity_id,
 						k.name       AS entity_name,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "kingdom k
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id

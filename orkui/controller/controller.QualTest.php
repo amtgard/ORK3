@@ -63,8 +63,8 @@ class Controller_QualTest extends Controller
             $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
-        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
-            $this->data['Error'] = 'You do not have permission to manage qualification tests for this kingdom.';
+        if (!$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_QUESTIONS)) {
+            $this->data['Error'] = 'You do not have permission to edit question banks for this kingdom.';
             return;
         }
 
@@ -127,7 +127,7 @@ class Controller_QualTest extends Controller
                 $this->data['Error'] = 'Question not found.';
                 return;
             }
-            if (!$this->QualTest->can_manage($uid, $q['KingdomId'])) {
+            if (!$this->QualTest->can($uid, (int)$q['KingdomId'], Model_QualTest::CAP_QUESTIONS)) {
                 $this->data['Error'] = 'You do not have permission to edit this question.';
                 return;
             }
@@ -138,7 +138,7 @@ class Controller_QualTest extends Controller
             // create
             $kingdom_id = (int)preg_replace('/[^0-9]/', '', $param1 ?? '');
             $test_type  = ($param2 === 'corpora') ? 'corpora' : 'reeve';
-            if (!valid_id($kingdom_id) || !$this->QualTest->can_manage($uid, $kingdom_id)) {
+            if (!valid_id($kingdom_id) || !$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_QUESTIONS)) {
                 $this->data['Error'] = 'Invalid kingdom or insufficient permissions.';
                 return;
             }
@@ -281,7 +281,7 @@ class Controller_QualTest extends Controller
         // Same gate as the rest of test management, checked against the SET's own kingdom —
         // never a kingdom id from the request, or this would export any kingdom's bank
         // (answers included) to anyone who could guess a set id.
-        if (!$this->QualTest->can_manage($uid, (int)$set['KingdomId'])) {
+        if (!$this->QualTest->can($uid, (int)$set['KingdomId'], Model_QualTest::CAP_QUESTIONS)) {
             $this->data['Error'] = 'You do not have permission to export this test.';
             return;
         }

@@ -853,7 +853,19 @@ class Kingdom extends Ork3
                             'Surname' => $fetchprivate ? "" : $r->surname,
                             'Persona' => $r->persona,
                             'OfficerId' => $r->officer_id,
-                            'OfficerRole' => $r->canonical_key !== null ? $r->canonical_key : $r->officer_role
+                            // Two shapes on purpose. OfficerRoleKey is the canonical key and is
+                            // what code compares against; OfficerRole stays a human label because
+                            // templates fall back to it for display (Kingdom_index/Park_index use
+                            // DisplayTitle ?? OfficerRole, and Admin_setofficers builds its form
+                            // field names off it). Emitting the raw canonical key under the display
+                            // name rendered offices as "prime_minister" and broke every consumer
+                            // that still compared against 'Prime Minister'.
+                            'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole(
+                                $r->canonical_key !== null ? $r->canonical_key : $r->officer_role
+                            ),
+                            'OfficerRole' => PermissionRegistry::OfficerRoleLabel(
+                                $r->canonical_key !== null ? $r->canonical_key : $r->officer_role
+                            )
                         );
             }
             $response['Status'] = Success();
@@ -921,15 +933,23 @@ class Kingdom extends Ork3
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if ($mundane_id > 0) {
             if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer.vacate', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
+                // Resolve the position_id for this Role (accepts canonical key or legacy display string).
+                $_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$request['KingdomId'], $request['Role']);
+                $_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$request['KingdomId'], $request['Role']);
+
                 $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
                 $_priorOfficer->clear();
                 $_priorOfficer->kingdom_id = (int)$request['KingdomId'];
                 $_priorOfficer->park_id    = 0;
-                $_priorOfficer->role       = $request['Role'];
+                if ($_positionId > 0) {
+                    $_priorOfficer->position_id = $_positionId;
+                } else {
+                    $_priorOfficer->role = $request['Role'];
+                }
                 $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
                 $c = new Common();
-                $c->set_officer($request['KingdomId'], 0, 0, $request['Role'], 0, $mundane_id);
+                $c->set_officer($request['KingdomId'], 0, 0, $_canonicalKey, 0, $mundane_id, $_positionId);
 
                 if ($_priorMundaneId > 0) {
                     $_audit_req = $request;
@@ -969,13 +989,21 @@ class Kingdom extends Ork3
 		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
 		         WHERE oh.kingdom_id = " . $kingdom_id . " AND oh.park_id = 0";
 
+        // Bound, never interpolated. mysql_real_escape_string() in this codebase is a
+        // no-op shim (startup.php: `return $str;`), so the previous concatenation put a
+        // caller-supplied string straight into the WHERE clause.
         if ($role_filter !== null) {
-            $sql .= " AND oh.role = '" . mysql_real_escape_string($role_filter) . "'";
+            $sql .= " AND oh.role = :oh_role";
         }
 
         $sql .= " ORDER BY oh.role, oh.start_date DESC, oh.officer_history_id DESC";
 
-        $r = $this->db->query($sql);
+        global $DB;
+        $DB->Clear();
+        if ($role_filter !== null) {
+            $DB->oh_role = $role_filter;
+        }
+        $r = $DB->DataSet($sql);
         $response = ['Status' => Success(), 'History' => []];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
@@ -1007,24 +1035,31 @@ class Kingdom extends Ork3
         ) {
             $kid       = (int)$request['KingdomId'];
             $mid       = (int)$request['MundaneId'];
-            $role_esc  = mysql_real_escape_string(trim($request['Role']));
-            $start     = mysql_real_escape_string(trim($request['StartDate'] ?? ''));
-            $end       = isset($request['EndDate']) && strlen(trim($request['EndDate'])) > 0
-                         ? "'" . mysql_real_escape_string(trim($request['EndDate'])) . "'" : 'NULL';
+            $role      = trim($request['Role'] ?? '');
+            $start     = trim($request['StartDate'] ?? '');
+            $end       = trim($request['EndDate'] ?? '');
             $notes_raw = isset($request['Notes']) ? trim($request['Notes']) : '';
-            $notes     = strlen($notes_raw) > 0
-                         ? "'" . mysql_real_escape_string($notes_raw) . "'" : 'NULL';
 
-            if ($mid <= 0 || strlen($role_esc) === 0 || strlen($start) === 0) {
+            if ($mid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
                 return InvalidParameter(null, 'MundaneId, Role, and StartDate are required.');
             }
 
+            // Every caller-supplied value is BOUND. mysql_real_escape_string() is a no-op
+            // shim here (startup.php: `return $str;`), so the previous string concatenation
+            // was a straight injection through Role / StartDate / EndDate / Notes.
             global $DB;
             $DB->Clear();
+            $DB->oh_kid   = $kid;
+            $DB->oh_mid   = $mid;
+            $DB->oh_role  = $role;
+            $DB->oh_start = $start;
+            $DB->oh_end   = strlen($end) > 0 ? $end : null;
+            $DB->oh_cb    = (int)$mundane_id;
+            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
             $DB->Execute(
                 "INSERT INTO " . DB_PREFIX . "officer_history
 				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, notes, created_at)
-				 VALUES (" . $kid . ", 0, " . $mid . ", '" . $role_esc . "', '" . $start . "', " . $end . ", " . (int)$mundane_id . ", " . $notes . ", NOW())"
+				 VALUES (:oh_kid, 0, :oh_mid, :oh_role, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
             );
             $response = Success();
         } else {
@@ -1042,25 +1077,29 @@ class Kingdom extends Ork3
         ) {
             $ohid      = (int)$request['OfficerHistoryId'];
             $kid       = (int)$request['KingdomId'];
-            $role_esc  = mysql_real_escape_string(trim($request['Role']));
-            $start     = mysql_real_escape_string(trim($request['StartDate'] ?? ''));
-            $end       = isset($request['EndDate']) && strlen(trim($request['EndDate'])) > 0
-                         ? "'" . mysql_real_escape_string(trim($request['EndDate'])) . "'" : 'NULL';
+            $role      = trim($request['Role'] ?? '');
+            $start     = trim($request['StartDate'] ?? '');
+            $end       = trim($request['EndDate'] ?? '');
             $notes_raw = isset($request['Notes']) ? trim($request['Notes']) : '';
-            $notes     = strlen($notes_raw) > 0
-                         ? "'" . mysql_real_escape_string($notes_raw) . "'" : 'NULL';
 
-            if ($ohid <= 0 || strlen($role_esc) === 0 || strlen($start) === 0) {
+            if ($ohid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
                 return InvalidParameter(null, 'OfficerHistoryId, Role, and StartDate are required.');
             }
 
+            // Bound, not concatenated -- see AddOfficerHistory for why the shim is not escaping.
             global $DB;
             $DB->Clear();
+            $DB->oh_role  = $role;
+            $DB->oh_start = $start;
+            $DB->oh_end   = strlen($end) > 0 ? $end : null;
+            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
+            $DB->oh_id    = $ohid;
+            $DB->oh_kid   = $kid;
             $DB->Execute(
                 "UPDATE " . DB_PREFIX . "officer_history
-				 SET role = '" . $role_esc . "', start_date = '" . $start . "', end_date = " . $end . ", notes = " . $notes . "
-				 WHERE officer_history_id = " . $ohid . "
-				   AND kingdom_id = " . $kid . "
+				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes
+				 WHERE officer_history_id = :oh_id
+				   AND kingdom_id = :oh_kid
 				   AND park_id = 0"
             );
             $response = Success();

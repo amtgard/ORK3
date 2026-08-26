@@ -807,7 +807,8 @@ class Common
         global $DB;
         // Resolve whether this position bypasses the ork_authorization path.
         // Prefer the registry has_auth_role flag; fall back to the legacy string check.
-        $bypass_auth = ('Champion' == $role || 'GMR' == $role);
+        $_role_key = PermissionRegistry::CanonicalOfficerRole($role);
+        $bypass_auth = ('champion' === $_role_key || 'gmr' === $_role_key);
         if ((int)$position_id > 0) {
             $DB->Clear();
             $DB->pid = (int)$position_id;

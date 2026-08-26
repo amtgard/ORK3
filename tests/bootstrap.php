@@ -76,6 +76,7 @@ require_once DIR_UI . 'model/model.Attendance.php';
 require_once DIR_UI . 'model/model.Player.php';
 require_once DIR_UI . 'model/model.Reports.php';
 require_once DIR_UI . 'model/model.Award.php';
+require_once DIR_UI . 'model/model.QualTest.php';
 require_once DIR_UI . 'controller/controller.PlayerAjax.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
 

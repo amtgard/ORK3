@@ -1257,7 +1257,7 @@ class Controller_Admin extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                if (in_array($officer['OfficerRoleKey'] ?? '', array('monarch', 'regent'), true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
                 }
             }
@@ -1267,7 +1267,7 @@ class Controller_Admin extends Controller
             $parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', array('monarch', 'regent'), true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
                     }
                 }
@@ -1877,7 +1877,7 @@ class Controller_Admin extends Controller
         $this->data['IsOrkAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
         // Available roles (system + custom for this kingdom)
-        $this->data['AvailableRoles'] = Ork3::$Lib->rbacservice->GetAvailableRoles($id);
+        $this->data['AvailableRoles'] = $this->RBACService->GetAvailableRoles($id);
 
         // All role assignments scoped to this kingdom
         $this->data['RoleAssignments'] = $this->RBACService->GetKingdomRoleAssignments($id);
@@ -1887,30 +1887,16 @@ class Controller_Admin extends Controller
         $this->data['park_summary'] = $r;
 
         // All permissions from registry
-        $this->data['AllPermissions'] = PermissionRegistry::GetAll();
+        $this->data['AllPermissions'] = $this->RBACService->GetAllPermissions();
 
         // Effective permissions for current user (escalation prevention)
-        $this->data['UserEffectivePermissions'] = Ork3::$Lib->rbacservice->GetEffectivePermissions($uid, 'kingdom', $id);
+        $this->data['UserEffectivePermissions'] = $this->RBACService->GetEffectivePermissions($uid, 'kingdom', $id);
 
         // Custom roles with permission counts
-        $customRoles = [];
-        foreach ($this->data['AvailableRoles'] as $role) {
-            if (!$role['IsSystem'] && $role['KingdomId'] == $id) {
-                $perms = Ork3::$Lib->rbacservice->GetRolePermissions($role['RoleId']);
-                $userCount = $this->RBACService->GetRoleUserCount($role['RoleId']);
-                $customRoles[] = [
-                    'RoleId'       => $role['RoleId'],
-                    'Name'         => $role['Name'],
-                    'DisplayName'  => $role['DisplayName'],
-                    'Description'  => $role['Description'],
-                    'ScopeType'    => $role['ScopeType'],
-                    'Permissions'  => $perms,
-                    'PermCount'    => count($perms),
-                    'UserCount'    => $userCount,
-                ];
-            }
-        }
-        $this->data['CustomRoles'] = $customRoles;
+        $this->data['CustomRoles'] = $this->RBACService->GetCustomRolesWithCounts($id);
+        // The seeded starter roles (kingdom_id=0, is_system=1). CustomRoles filters
+        // is_system=0 by definition, so without this the page never showed them.
+        $this->data['SystemRoles'] = $this->RBACService->GetSystemRolesWithCounts($id);
 
         $this->template = '../revised-frontend/Admin_roles.tpl';
     }
@@ -1925,6 +1911,18 @@ class Controller_Admin extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Front-door gate, BEFORE any data loading: the individual cards are each
+        // capability-gated, but the page itself (kingdom details, park summary, the
+        // Reports link list) should not render for someone with no administrative
+        // standing here. Placed above get_kingdom_details()/get_park_summary() -- the
+        // latter is a 26-week attendance aggregate -- so a rejected request does not
+        // pay for a page it will never see.
+        if (!$this->admin_has_kingdom_standing((int)($this->session->user_id ?? 0), (int)$id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
         $this->kingdom_route($id);
         $kd = $this->Kingdom->get_kingdom_details($id);
         foreach ($kd as $key => $detail) {
@@ -1945,7 +1943,26 @@ class Controller_Admin extends Controller
         $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
 
-        $knConfigs  = Common::get_configs($id, CFG_KINGDOM);
+        // Qualification tests (Walker) moved here from the Kingdom profile's Admin
+        // Tasks tab. The four capabilities are separate on purpose: a subject-matter
+        // expert on the test-manager list may write questions without being able to
+        // change pass criteria or push a draft live.
+        $this->load_model('QualTest');
+        $qtCaps = $this->QualTest->capabilities($uid, (int)$id);
+        $this->data['CanManageTests']       = $uid > 0 && in_array(true, $qtCaps, true);
+        $this->data['CanConfigTests']       = $uid > 0 && $qtCaps['Config'];
+        $this->data['CanEditTestQuestions'] = $uid > 0 && $qtCaps['Questions'];
+        $this->data['CanPublishTests']      = $uid > 0 && $qtCaps['Publish'];
+        $this->data['CanViewTestResults']   = $uid > 0 && $qtCaps['Results'];
+
+        // One config read serves the qual-test toggles and AwardRecsPublic below.
+        $knConfigs = Common::get_configs($id, CFG_KINGDOM);
+        $this->data['QualTestReeveEnabled'] = isset($knConfigs['QualTestReeveEnabled'])
+            ? (bool)(int)$knConfigs['QualTestReeveEnabled']['Value']
+            : false;
+        $this->data['QualTestCorporaEnabled'] = isset($knConfigs['QualTestCorporaEnabled'])
+            ? (bool)(int)$knConfigs['QualTestCorporaEnabled']['Value']
+            : false;
         $this->data['AwardRecsPublic'] = isset($knConfigs['AwardRecsPublic'])
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
 
@@ -2207,6 +2224,23 @@ class Controller_Admin extends Controller
             exit;
         }
         if (!in_array($type, array('kingdom', 'park')) || !valid_id($id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
+        // This route renders Admin_kingdom.tpl / the park equivalent below, so it needs the
+        // same front-door check Admin::kingdom() applies -- without it the whole admin page
+        // (kingdom details, park summary, Reports list) was served to any logged-in player
+        // at a second URL, even though reset_waivers itself correctly refused.
+        $_uid = (int)($this->session->user_id ?? 0);
+        if ($type === 'kingdom') {
+            $_standingKingdomId = (int)$id;
+        } else {
+            $this->load_model('Park');
+            $_pi = $this->Park->get_park_info($id);
+            $_standingKingdomId = (int)($_pi['ParkInfo']['KingdomId'] ?? 0);
+        }
+        if (!$this->admin_has_kingdom_standing($_uid, $_standingKingdomId)) {
             header('Location: ' . UIR);
             exit;
         }
@@ -2725,6 +2759,37 @@ class Controller_Admin extends Controller
     {
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
         $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
+    }
+
+    /**
+     * Does $uid have ANY administrative standing in this kingdom?
+     *
+     * The Admin_kingdom template exposes kingdom details, the park summary and the whole
+     * Reports link list, so the page itself needs a front door even though each card is
+     * separately capability-gated. Every route that renders that template must ask this --
+     * Admin::kingdom() is not the only one (Admin::resetwaivers() renders it too, and was
+     * serving the full page to any logged-in player).
+     *
+     * The qualification-test capabilities count: a non-officer test manager legitimately
+     * reaches this page for the Qualification Tests section.
+     */
+    private function admin_has_kingdom_standing(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (
+            $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kingdomId, AUTH_EDIT)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', $kingdomId, AUTH_CREATE)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', $kingdomId, AUTH_EDIT)
+        ) {
+            return true;
+        }
+        $this->load_model('QualTest');
+        return in_array(true, $this->QualTest->capabilities($uid, $kingdomId), true);
     }
 
 }

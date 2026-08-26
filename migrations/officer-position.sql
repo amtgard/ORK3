@@ -1,6 +1,9 @@
 -- Migration: Officer Admin Expansion — position registry, ENUM->VARCHAR, position_id columns
 -- Run via: docker exec -i ork3-php8-db mariadb -u root -proot ork < migrations/officer-position.sql
--- Idempotent where practical.
+-- Idempotent: every DDL statement uses IF [NOT] EXISTS and every seed uses INSERT IGNORE,
+-- so the whole file is safe to re-run. The role-normalisation UPDATEs in step 5 are
+-- naturally idempotent (they rewrite display names to canonical keys; a second run
+-- matches nothing).
 
 -- 1. Widen ork_officer.role ENUM -> VARCHAR (fixes GMR coercion bug; admits custom keys)
 ALTER TABLE `ork_officer` MODIFY `role` VARCHAR(80) NOT NULL;
@@ -29,8 +32,9 @@ CREATE TABLE IF NOT EXISTS `ork_officer_position` (
   PRIMARY KEY (`position_id`),
   UNIQUE KEY `uq_kingdom_key` (`kingdom_id`, `canonical_key`),
   KEY `idx_grouped_read` (`kingdom_id`, `classification`, `retired_at`, `sort_order`),
-  KEY `idx_parent_position` (`parent_position_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_parent_position` (`parent_position_id`),
+  KEY `idx_rbac_role` (`rbac_role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3b. New table: per-kingdom alias of shared system (Core-Five) rows
 CREATE TABLE IF NOT EXISTS `ork_officer_position_alias` (
@@ -40,7 +44,7 @@ CREATE TABLE IF NOT EXISTS `ork_officer_position_alias` (
   `title_alias`   varchar(80)  NOT NULL DEFAULT '',
   PRIMARY KEY (`alias_id`),
   UNIQUE KEY `uq_kingdom_canonical` (`kingdom_id`, `canonical_key`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Seed the 5 system positions (kingdom_id=0, is_system=1, is_pinned=1, classification='crown')
 INSERT IGNORE INTO `ork_officer_position`
@@ -65,7 +69,7 @@ SELECT 0,'gmr','Guildmaster of Reeves','','crown',1,1,r.role_id,0,50,NULL,0,NOW(
   FROM `ork_role` r WHERE r.name='gmr' AND r.kingdom_id=0 AND r.is_system=1;
 
 -- 5. Add position_id to ork_officer + backfill (normalize display strings -> canonical keys)
-ALTER TABLE `ork_officer` ADD COLUMN `position_id` INT NOT NULL DEFAULT 0;
+ALTER TABLE `ork_officer` ADD COLUMN IF NOT EXISTS `position_id` INT NOT NULL DEFAULT 0;
 -- 5a. Normalize coerced/empty GMR rows back to the canonical key first (risk-3 reconciliation)
 UPDATE `ork_officer` SET `role`='gmr'
   WHERE (`role`='' OR `role`='GMR') AND `authorization_id`=0;
@@ -82,8 +86,8 @@ UPDATE `ork_officer` o JOIN `ork_officer_position` p
 
 -- 6. Add position_id + display_label to ork_officer_history + backfill
 ALTER TABLE `ork_officer_history`
-  ADD COLUMN `position_id` INT NOT NULL DEFAULT 0,
-  ADD COLUMN `display_label` VARCHAR(80) NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS `position_id` INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS `display_label` VARCHAR(80) NOT NULL DEFAULT '';
 UPDATE `ork_officer_history` SET `display_label`=`role` WHERE `display_label`='';
 UPDATE `ork_officer_history` SET `role`='monarch'        WHERE `role`='Monarch';
 UPDATE `ork_officer_history` SET `role`='regent'         WHERE `role`='Regent';
@@ -95,5 +99,8 @@ UPDATE `ork_officer_history` h JOIN `ork_officer_position` p
   SET h.position_id=p.position_id;
 
 -- 7. Drop blanket unique; add non-unique scoped index
-ALTER TABLE `ork_officer` DROP INDEX `kingdom_id`;
-ALTER TABLE `ork_officer` ADD INDEX `idx_kingdom_park_position` (`kingdom_id`,`park_id`,`position_id`);
+ALTER TABLE `ork_officer` DROP INDEX IF EXISTS `kingdom_id`;
+ALTER TABLE `ork_officer` ADD INDEX IF NOT EXISTS `idx_kingdom_park_position` (`kingdom_id`,`park_id`,`position_id`);
+-- ReconcileRoleBinding and RetirePosition query `WHERE position_id = ?` with no
+-- kingdom/park predicate, so the composite above is not a usable prefix for them.
+ALTER TABLE `ork_officer` ADD INDEX IF NOT EXISTS `idx_officer_position` (`position_id`);

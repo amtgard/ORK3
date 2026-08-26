@@ -1,3 +1,7 @@
+-- NOTE: officer roles are matched in BOTH stored forms. officer-position.sql renames
+-- ork_officer.role from the display name to the canonical key, and this script may run
+-- either before or after it; 'Prime Minister' vs 'prime_minister' differ by a separator,
+-- so the ci collation does not paper that over the way it does for the one-word roles.
 -- Migration: Backfill ork_user_role from existing ork_officer records
 -- Run via: docker exec -i ork3-php8-db mariadb -u root -proot ork < migrations/rbac-migrate-officers.sql
 --
@@ -19,7 +23,7 @@ SELECT
   NULL
 FROM `ork_officer` o
 JOIN `ork_role` r ON r.name = 'monarch' AND r.kingdom_id = 0
-WHERE o.role = 'Monarch'
+WHERE o.role IN ('Monarch', 'monarch')
   AND o.mundane_id > 0;
 
 -- Regent officers -> regent role
@@ -34,7 +38,7 @@ SELECT
   NULL
 FROM `ork_officer` o
 JOIN `ork_role` r ON r.name = 'regent' AND r.kingdom_id = 0
-WHERE o.role = 'Regent'
+WHERE o.role IN ('Regent', 'regent')
   AND o.mundane_id > 0;
 
 -- Prime Minister officers -> prime_minister role
@@ -49,7 +53,7 @@ SELECT
   NULL
 FROM `ork_officer` o
 JOIN `ork_role` r ON r.name = 'prime_minister' AND r.kingdom_id = 0
-WHERE o.role = 'Prime Minister'
+WHERE o.role IN ('Prime Minister', 'prime_minister')
   AND o.mundane_id > 0;
 
 -- Champion officers -> champion role
@@ -64,7 +68,7 @@ SELECT
   NULL
 FROM `ork_officer` o
 JOIN `ork_role` r ON r.name = 'champion' AND r.kingdom_id = 0
-WHERE o.role = 'Champion'
+WHERE o.role IN ('Champion', 'champion')
   AND o.mundane_id > 0;
 
 -- GMR officers -> gmr role
@@ -79,5 +83,5 @@ SELECT
   NULL
 FROM `ork_officer` o
 JOIN `ork_role` r ON r.name = 'gmr' AND r.kingdom_id = 0
-WHERE o.role = 'GMR'
+WHERE o.role IN ('GMR', 'gmr')
   AND o.mundane_id > 0;

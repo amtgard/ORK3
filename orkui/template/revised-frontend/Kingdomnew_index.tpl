@@ -49,6 +49,10 @@
 		if ($_ck === 'regent')  $regent  = $o;
 	}
 
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
+
 	// Players loaded via AJAX (players_json) — not available at render time
 	$knAllPlayers    = [];
 	$knPlayerPeriods = [];
@@ -353,11 +357,10 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<li data-kntab="admin">
-					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
-				</li>
-				<?php endif; ?>
+				<?php // "Admin Tasks" retired: every item it carried now lives on the kingdom
+				      // Admin page (Admin/kingdom/{id}), linked from the Admin button in the hero
+				      // above. The last holdout was the Walker qualification-test group, which
+				      // moved there with per-capability gating. ?>
 			</ul>
 			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
@@ -884,9 +887,9 @@
 							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
-							<?php // Test Results now live under Admin Tasks -> Tests, with the rest of the test
-							      // workspace (configure, questions, results). They are officer-only, so they were
-							      // the only gated entries in this otherwise-public group. ?>
+							<?php // Test Results live on the kingdom Admin page under Qualification Tests,
+							      // with the rest of the test workspace. They are capability-gated, so they
+							      // were the only non-public entries in this otherwise-public group. ?>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -911,11 +914,9 @@
 			<div class="kn-oh-toolbar">
 				<select id="kn-oh-role-filter" class="kn-oh-filter-select" onchange="knLoadOfficerHistory()">
 					<option value="">All Roles</option>
-					<option value="Monarch">Monarch</option>
-					<option value="Regent">Regent</option>
-					<option value="Prime Minister">Prime Minister</option>
-					<option value="Champion">Champion</option>
-					<option value="GMR">GMR</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
 				</select>
 				<?php if ($CanEditKingdom ?? false): ?>
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenOhBackfillModal()">
@@ -947,60 +948,6 @@
 		</div>
 
 
-
-		<!-- Admin Tab -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
-			<div class="kn-report-cols">
-				<?php if ($CanManageKingdom ?? false): ?>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-users-cog"></i> Players</h5>
-					<ul>
-						<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
-						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
-						<li><a href="#" onclick="knOpenMergePlayerModal();return false;">Merge Players</a></li>
-						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
-					</ul>
-				</div>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-cog"></i> Kingdom</h5>
-					<ul>
-						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
-						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-					</ul>
-				</div>
-				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<div class="kn-report-group">
-					<h5>
-						<i class="fas fa-clipboard-check"></i> Tests
-						<button type="button" class="kn-help-btn" data-doc="qualtests"
-						        title="How the Reeve's and Corpora tests work" aria-label="Help: qualification tests">
-							<i class="fas fa-question-circle"></i>
-						</button>
-					</h5>
-					<ul>
-						<li><a href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">Configure Tests</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/reeve">Reeve's Test Questions</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/corpora">Corpora Test Questions</a></li>
-						<?php // Results belong with the rest of the test workspace: whoever configures a
-						      // test and writes its questions is the same person who reads who passed it,
-						      // and they were a tab away in Reports. Same audience as this whole group
-						      // (the enclosing check is CanManageKingdom || CanManageTests), so only the
-						      // per-test "is it switched on" condition is needed here. Still listed under
-						      // Reports too, for anyone who goes looking for a report where reports live. ?>
-						<?php if (!empty($QualTestReeveEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kingdom_id ?>">Reeve's Test Results</a></li>
-						<?php endif; ?>
-						<?php if (!empty($QualTestCorporaEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kingdom_id ?>">Corpora Test Results</a></li>
-						<?php endif; ?>
-					</ul>
-				</div>
-				<?php endif; ?>
-			</div>
-		</div>
-		<?php endif; ?>
 
 		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
 		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
@@ -1055,7 +1002,7 @@
 
 <!-- Officer History Backfill Modal -->
 <?php if ($CanEditKingdom ?? false): ?>
-<div id="kn-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="kn-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#2b6cb0"></i>Add Officer History Record</h3>
@@ -1078,11 +1025,9 @@
 				<label>Role <span style="color:#e53e3e">*</span></label>
 				<select id="kn-oh-bf-role">
 					<option value="">Select role...</option>
-					<option value="Monarch">Monarch</option>
-					<option value="Regent">Regent</option>
-					<option value="Prime Minister">Prime Minister</option>
-					<option value="Champion">Champion</option>
-					<option value="GMR">GMR</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
 				</select>
 			</div>
 
@@ -1112,7 +1057,7 @@
 </div>
 <!-- Officer History Edit Modal -->
 <?php if ($CanEditKingdom ?? false): ?>
-<div id="kn-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+<div id="kn-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
 	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2b6cb0"></i>Edit Officer History Record</h3>
@@ -1133,11 +1078,9 @@
 			<div class="kn-acct-field">
 				<label>Role <span style="color:#e53e3e">*</span></label>
 				<select id="kn-oh-ed-role">
-					<option value="Monarch">Monarch</option>
-					<option value="Regent">Regent</option>
-					<option value="Prime Minister">Prime Minister</option>
-					<option value="Champion">Champion</option>
-					<option value="GMR">GMR</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
 				</select>
 			</div>
 
@@ -2507,85 +2450,9 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
 	font-size:13px; margin-bottom:12px; text-align:center;
 }
-/* Officer History Backfill Modal */
-#kn-oh-backfill-overlay .kn-modal-box {
-	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
-	max-height:90vh; display:flex; flex-direction:column;
-}
-#kn-oh-backfill-overlay .kn-modal-header {
-	display:flex; align-items:center; justify-content:space-between;
-	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
-}
-#kn-oh-backfill-overlay .kn-modal-title {
-	font-size:16px; font-weight:700; color:#2d3748; margin:0;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
-}
-#kn-oh-backfill-overlay .kn-modal-close-btn {
-	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
-}
-#kn-oh-backfill-overlay .kn-modal-close-btn:hover { color:#4a5568; }
-#kn-oh-backfill-overlay .kn-modal-body {
-	padding:20px; overflow-y:auto; flex:1;
-}
-#kn-oh-backfill-overlay .kn-modal-footer {
-	padding:14px 20px; border-top:1px solid #e2e8f0;
-	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
-}
-#kn-oh-backfill-overlay .kn-acct-field { position:relative; margin-bottom:14px; }
-#kn-oh-backfill-overlay .kn-acct-field label {
-	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
-}
-#kn-oh-backfill-overlay .kn-acct-field input[type=text],
-#kn-oh-backfill-overlay .kn-acct-field input[type=date],
-#kn-oh-backfill-overlay .kn-acct-field select,
-#kn-oh-backfill-overlay .kn-acct-field textarea {
-	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
-	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
-}
-#kn-oh-backfill-overlay .kn-acct-field input:focus,
-#kn-oh-backfill-overlay .kn-acct-field select:focus,
-#kn-oh-backfill-overlay .kn-acct-field textarea:focus {
-	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
-}
-#kn-oh-edit-overlay .kn-modal-box {
-	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
-	max-height:90vh; display:flex; flex-direction:column;
-}
-#kn-oh-edit-overlay .kn-modal-header {
-	display:flex; align-items:center; justify-content:space-between;
-	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
-}
-#kn-oh-edit-overlay .kn-modal-title {
-	font-size:16px; font-weight:700; color:#2d3748; margin:0;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
-}
-#kn-oh-edit-overlay .kn-modal-close-btn {
-	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
-}
-#kn-oh-edit-overlay .kn-modal-close-btn:hover { color:#4a5568; }
-#kn-oh-edit-overlay .kn-modal-body {
-	padding:20px; overflow-y:auto; flex:1;
-}
-#kn-oh-edit-overlay .kn-modal-footer {
-	padding:14px 20px; border-top:1px solid #e2e8f0;
-	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
-}
-#kn-oh-edit-overlay .kn-acct-field { position:relative; margin-bottom:14px; }
-#kn-oh-edit-overlay .kn-acct-field label {
-	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
-}
-#kn-oh-edit-overlay .kn-acct-field input[type=text],
-#kn-oh-edit-overlay .kn-acct-field input[type=date],
-#kn-oh-edit-overlay .kn-acct-field select,
-#kn-oh-edit-overlay .kn-acct-field textarea {
-	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
-	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
-}
-#kn-oh-edit-overlay .kn-acct-field input:focus,
-#kn-oh-edit-overlay .kn-acct-field select:focus,
-#kn-oh-edit-overlay .kn-acct-field textarea:focus {
-	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
-}
+/* Officer History modals: the shell (box/header/title/close/body/footer and the
+   .kn-acct-field controls) is one grouped, token-based rule in revised.css shared
+   with the #pk-oh-* pair. Only the rules unique to this page stay here. */
 #kn-oh-edit-overlay .kn-form-error {
 	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
 	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
@@ -3581,17 +3448,18 @@ function knHtmlEsc(s) {
 }
 
 function knDeleteOhRecord(ohid) {
-    if (!confirm('Delete this officer history record?')) return;
-    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deleteofficerhistory',
-        { OfficerHistoryId: ohid },
-        function(resp) {
-            if (resp.status === 0) {
-                knLoadOfficerHistory();
-            } else {
-                alert(resp.error || 'Failed to delete record.');
-            }
-        }, 'json'
-    ).fail(function() { alert('Network error.'); });
+    knConfirm('Delete this officer history record?', function() {
+        $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deleteofficerhistory',
+            { OfficerHistoryId: ohid },
+            function(resp) {
+                if (resp.status === 0) {
+                    knLoadOfficerHistory();
+                } else {
+                    orkAlert(resp.error || 'Failed to delete record.');
+                }
+            }, 'json'
+        ).fail(function() { orkAlert('Network error.'); });
+    });
 }
 
 // Backfill modal

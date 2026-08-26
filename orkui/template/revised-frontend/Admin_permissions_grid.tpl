@@ -313,6 +313,85 @@
 	.pg-section-header td { cursor: default; }
 	.pg-table tbody tr.pg-row.pg-hidden { display: table-row !important; }
 }
+
+/* -----------------------------------------------
+   DARK MODE OVERRIDES (pg-*)
+   .pg-header (navy gradient) and .pg-table thead th
+   are intentionally left alone — correct in both themes.
+   ----------------------------------------------- */
+html[data-theme="dark"] .pg-card {
+	background: var(--ork-card-bg);
+}
+html[data-theme="dark"] .pg-stats-bar {
+	background: var(--ork-bg-secondary);
+	border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .pg-stat-item:not(.pg-stat-total) {
+	background: var(--ork-card-bg);
+	border-color: var(--ork-border);
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .pg-stat-item:not(.pg-stat-total) .pg-stat-value {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .pg-stat-fraction {
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .pg-stat-bar-fill {
+	background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .pg-legend {
+	background: var(--ork-card-bg);
+	border-bottom-color: var(--ork-border);
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .pg-legend-icon-dash {
+	color: var(--ork-text-lighter);
+}
+html[data-theme="dark"] .pg-section-header td {
+	background: var(--ork-bg-tertiary);
+	color: var(--ork-text);
+	border-top-color: var(--ork-border);
+	border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .pg-section-header td:hover {
+	background: var(--ork-border);
+}
+html[data-theme="dark"] .pg-section-header .pg-section-icon {
+	background: var(--ork-card-bg);
+	border-color: var(--ork-border);
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .pg-section-header .pg-chevron,
+html[data-theme="dark"] .pg-section-header .pg-section-count {
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .pg-table tbody tr.pg-row:nth-child(odd) td {
+	background: var(--ork-card-bg);
+}
+html[data-theme="dark"] .pg-table tbody tr.pg-row:nth-child(even) td {
+	background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .pg-table tbody tr.pg-row td {
+	border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .pg-table tbody tr.pg-row td:first-child {
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .pg-icon-dash {
+	color: var(--ork-text-lighter);
+}
+/* The 6% blue column-hover tint reads over #fff/#f7fafc rows but disappears
+   over the dark stripes; the JS at the foot of this file adds/removes
+   .pg-col-highlight on mouseover, so the cue has to survive the theme. */
+html[data-theme="dark"] .pg-table tbody td.pg-col-highlight {
+	background: rgba(66, 153, 225, 0.18) !important;
+}
+/* #dd6b20 on the dark section header falls to ~2.7:1; lift it to the
+   badge-orange text token's dark value. */
+html[data-theme="dark"] .pg-section-header .pg-section-note {
+	color: #f6ad55;
+}
 </style>
 
 <div class="pg-card">
@@ -1129,7 +1208,6 @@
 	});
 
 	/* ----- Column hover highlight ----- */
-	var allCells = table.querySelectorAll('th[data-col], td');
 	table.addEventListener('mouseover', function(e) {
 		var cell = e.target.closest('td, th');
 		if (!cell) return;

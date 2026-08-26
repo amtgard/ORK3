@@ -87,6 +87,14 @@ class Controller_Park extends Controller
             exit;
         }
 
+        // Officer-history role options from the position REGISTRY (all positions, including
+        // vacant and retired): history records who HELD an office, so a currently-empty
+        // seat must still be selectable. Park positions live under the park's kingdom.
+        $this->load_model('OfficerPosition');
+        $this->data['OfficerHistoryRoleOptions'] = $this->OfficerPosition->history_role_options(
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0)
+        );
+
         // Link-preview card (text-only; image policy pending): park name plus
         // where it is — the question anyone tapping a shared park link has.
         $_ogPi = $this->data['park_info']['ParkInfo'];
