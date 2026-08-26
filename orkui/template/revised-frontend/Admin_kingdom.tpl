@@ -692,19 +692,22 @@ html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 
 			<?php if (!empty($CanManageTests)): ?>
 			<!-- Qualification Tests (Walker). Moved here from the Kingdom profile's
-			     "Admin Tasks" tab, which this page replaced. Each card is gated on its
-			     own capability rather than one blanket flag, so a test manager who may
-			     only author questions does not see Configure or the results reports.
+			     "Admin Tasks" tab, which this page replaced. The section itself opens on
+			     ANY of the four test capabilities, but each card inside is gated on the
+			     capability it actually needs, so a test manager who may only author
+			     questions does not see the workspace or the results reports.
 			     No help button here: the docs modal lives in revised.js, which this page
 			     does not load -- QualTest/manage carries it, one click away. -->
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-clipboard-check"></i> Qualification Tests</div>
 				<div class="ka-action-tiles">
+					<?php if (!empty($CanConfigTests) || !empty($CanPublishTests)): ?>
 					<a class="ka-action-card" href="<?= UIR ?>QualTest/manage/<?= $kid ?>">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-clipboard-check"></i></div>
 						<div class="ka-action-label">Test Workspace</div>
 						<div class="ka-action-desc">Pass criteria, versions, managers and publishing</div>
 					</a>
+					<?php endif; ?>
 					<?php if (!empty($CanEditTestQuestions)): ?>
 					<a class="ka-action-card" href="<?= UIR ?>QualTest/questions/<?= $kid ?>/reeve">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-gavel"></i></div>

@@ -23,6 +23,28 @@ class OfficerPosition extends Ork3
 {
     public const CROWN_LOCK_TIMEOUT = 5; // seconds for GET_LOCK on crown assignment
 
+    /**
+     * The DisplayTitle resolution rule, as a SQL expression.
+     *
+     * A position's shown title is: the kingdom's alias if the row is a shared
+     * system position (kingdom_id = 0), else the row's own title_alias, else its
+     * title. This was written out at seven call sites across four files, in two
+     * different column-alias conventions -- so the "NEVER COALESCE" rule in this
+     * file's header had to hold in seven places at once, and adding a tier (a
+     * park-level alias, say) meant finding SQL fragments no grep relates.
+     *
+     * @param string $pos    Table alias for officer_position
+     * @param string $alias  Table alias for officer_position_alias
+     * @return string  SQL expression; caller supplies its own `AS <name>`
+     */
+    public static function DisplayTitleSql($pos = 'p', $alias = 'a')
+    {
+        return 'IF(' . $pos . '.kingdom_id = 0,'
+            . ' IF(' . $alias . '.title_alias IS NOT NULL AND ' . $alias . ".title_alias != '', "
+            . $alias . '.title_alias, ' . $pos . '.title),'
+            . ' IF(' . $pos . ".title_alias != '', " . $pos . '.title_alias, ' . $pos . '.title))';
+    }
+
     // ================================================================
     // REGISTRY READS
     // ================================================================
@@ -44,9 +66,7 @@ class OfficerPosition extends Ork3
         $kingdom_id = (int) $kingdom_id;
 
         $sql = "SELECT p.*,
-				IF(p.kingdom_id = 0,
-				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle
+				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 			  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
@@ -96,9 +116,7 @@ class OfficerPosition extends Ork3
         $DB->gp_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT p.*,
-				IF(p.kingdom_id = 0,
-				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle
+				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 			  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
@@ -230,18 +248,11 @@ class OfficerPosition extends Ork3
      */
     private function NormalizeToCanonicalKey($roleOrKey)
     {
-        $roleOrKey = trim((string) $roleOrKey);
-        $map = [
-            'Monarch'        => 'monarch',
-            'Regent'         => 'regent',
-            'Prime Minister' => 'prime_minister',
-            'Champion'       => 'champion',
-            'GMR'            => 'gmr',
-        ];
-        if (isset($map[ $roleOrKey ])) {
-            return $map[ $roleOrKey ];
-        }
-        return $this->Slugify($roleOrKey);
+        // PermissionRegistry owns the Core Five display-name -> key map and returns
+        // null for anything outside it, which is exactly the kingdom-custom case:
+        // fall through to the slug. Keeping a second copy of that map here meant
+        // adding a sixth core office required editing two files that no grep relates.
+        return PermissionRegistry::CanonicalOfficerRole($roleOrKey) ?? $this->Slugify($roleOrKey);
     }
 
     /**
@@ -912,9 +923,7 @@ class OfficerPosition extends Ork3
         $sql = "SELECT o.officer_id, o.mundane_id, o.position_id, o.role,
 				p.canonical_key, p.classification, p.sort_order,
 				p.parent_position_id, p.hide_when_vacant,
-				IF(p.kingdom_id = 0,
-				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle,
+				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
 				m.persona, m.given_name, m.surname, m.username
 			FROM " . DB_PREFIX . "officer o
 			JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
@@ -1027,9 +1036,7 @@ class OfficerPosition extends Ork3
             $DB->cp_pos = $position_id;
             $conflict = $DB->DataSet(
                 "SELECT o.kingdom_id, o.park_id, o.position_id,
-					IF(p.kingdom_id = 0,
-					   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-					   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle,
+					" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
 					k.name AS kingdom_name, pk.name AS park_name
 				 FROM " . DB_PREFIX . "officer o
 				 JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id

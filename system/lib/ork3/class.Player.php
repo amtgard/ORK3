@@ -98,7 +98,7 @@ class Player extends Ork3
         $this->db->Clear();
         $officerSql = "SELECT o.role, o.park_id, o.position_id,
             op.canonical_key AS canonical_key,
-            IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) AS display_title,
+            " . OfficerPosition::DisplayTitleSql('op', 'al') . " AS display_title,
             CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
                  WHEN k.parent_kingdom_id > 0 THEN 'Principality'
                  ELSE 'Kingdom' END AS entity_type,

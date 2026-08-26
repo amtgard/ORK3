@@ -123,14 +123,6 @@ class Controller_OfficerAdminAjax extends Controller
         echo json_encode(['status' => $status ?: 1, 'error' => $msg]);
     }
 
-    /** Slugify a title into a canonical key (lowercase, underscores, alnum). */
-    private function slugify($value)
-    {
-        $value = strtolower(trim((string)$value));
-        $value = preg_replace('/[^a-z0-9]+/', '_', $value);
-        return trim($value, '_');
-    }
-
     /** Normalize a POSTed permission-keys value (array or comma string) into a clean array. */
     private function parsePermissionKeys($raw)
     {
@@ -363,9 +355,6 @@ class Controller_OfficerAdminAjax extends Controller
         if ($rbac_choice === null) {
             echo json_encode(['status' => 1, 'error' => 'An RBAC role binding (existing role or custom permissions) is required.']);
             return;
-        }
-        if ($canonical_key === '') {
-            $canonical_key = $this->slugify($title);
         }
 
         // "Reports To" nesting + hide-when-vacant. 0/'' = no parent (top-level).

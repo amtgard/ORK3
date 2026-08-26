@@ -24,6 +24,13 @@ class RBACService extends Ork3
     private $cache;
     private $cache_ttl = 120; // seconds
 
+    // Per-request memos for the admin/ban probes. Both run on EVERY HasPermission()
+    // call, above the GhettoCache lookup (they have to -- the cache stores only the
+    // direct+cascade answer, so an admin would read a cached `false`). Granting a
+    // 55-permission role therefore fired 55 identical pairs of queries before this.
+    private $adminMemo = [];
+    private $bannedMemo = [];
+
     public function __construct()
     {
         parent::__construct();
@@ -203,16 +210,25 @@ class RBACService extends Ork3
     // ================================================================
 
     /**
-     * Check if a user is an admin (has role='admin' in ork_authorization).
+     * Check if a user is a TRUE global admin.
+     *
+     * Delegates rather than re-querying ork_authorization. The hand-rolled find()
+     * this replaced accepted ANY row with role='admin', including a park- or
+     * kingdom-scoped one -- Authorization::HasAuthority() only honours a grant whose
+     * park_id/kingdom_id/unit_id/event_id are all zero, precisely because a scoped
+     * admin row silently conferring system-wide authority is the bug that let
+     * compromised park-officer accounts edit players in other kingdoms. This is the
+     * global bypass for every RBAC check plus the escalation guards on
+     * Grant/Create/Edit/DeleteRole, so it has to agree with that rule exactly.
      */
     private function IsAdmin($mundane_id)
     {
-        global $DB;
-        $auth = new yapo($DB, DB_PREFIX . 'authorization');
-        $auth->clear();
-        $auth->mundane_id = (int) $mundane_id;
-        $auth->role = AUTH_ADMIN;
-        return ($auth->find() && $auth->size() > 0);
+        $mundane_id = (int) $mundane_id;
+        if (!isset($this->adminMemo[$mundane_id])) {
+            $this->adminMemo[$mundane_id] =
+                Ork3::$Lib->authorizationgate->check($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE);
+        }
+        return $this->adminMemo[$mundane_id];
     }
 
     /**
@@ -220,14 +236,19 @@ class RBACService extends Ork3
      */
     private function IsBanned($mundane_id)
     {
+        $mundane_id = (int) $mundane_id;
+        if (isset($this->bannedMemo[$mundane_id])) {
+            return $this->bannedMemo[$mundane_id];
+        }
+
         global $DB;
         $mundane = new yapo($DB, DB_PREFIX . 'mundane');
         $mundane->clear();
-        $mundane->mundane_id = (int) $mundane_id;
-        if ($mundane->find()) {
-            return ($mundane->penalty_box == 1);
-        }
-        return true; // If user not found, treat as banned
+        $mundane->mundane_id = $mundane_id;
+        $banned = $mundane->find() ? ($mundane->penalty_box == 1) : true; // unknown user => banned
+
+        $this->bannedMemo[$mundane_id] = $banned;
+        return $banned;
     }
 
     // ================================================================
@@ -851,6 +872,12 @@ class RBACService extends Ork3
         $DB->Clear();
         $DB->Execute("DELETE FROM " . DB_PREFIX . "role_permission WHERE role_id = " . $role_id);
 
+        // How many holders are about to lose this role. Read BEFORE the DELETE so the
+        // audit trail (and the caller) records the real number -- a park-scoped grant is
+        // invisible to the kingdom-scoped badge on the roles page, so the UI can claim
+        // "0 users" while this DELETE strips a dozen park officers.
+        $assignment_count = $this->GetRoleUserCount($role_id);
+
         // Delete user-role assignments
         $DB->Clear();
         $DB->Execute("DELETE FROM " . DB_PREFIX . "user_role WHERE role_id = " . $role_id);
@@ -869,10 +896,10 @@ class RBACService extends Ork3
             0,
             0,
             0,
-            'Deleted custom role: ' . $display_name
+            'Deleted custom role: ' . $display_name . ' (' . $assignment_count . ' assignment(s) removed)'
         );
 
-        return Success();
+        return Success('Deleted custom role: ' . $display_name . ' (' . $assignment_count . ' assignment(s) removed)');
     }
 
     // ================================================================
@@ -1348,7 +1375,13 @@ class RBACService extends Ork3
         }
 
         $DB->Clear();
-        $scope = $count_kingdom_id > 0 ? " AND kingdom_id = " . $count_kingdom_id : "";
+        // A park-scoped grant stores kingdom_id = 0 / park_id = <park>, so scoping the
+        // count to kingdom_id alone reported 0 for every park-scoped assignment. Count
+        // the kingdom's whole tree: its own kingdom-scoped rows plus rows on its parks.
+        $scope = $count_kingdom_id > 0
+            ? " AND ( kingdom_id = " . $count_kingdom_id
+                . " OR park_id IN (SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = " . $count_kingdom_id . ") )"
+            : "";
         $sql = "SELECT role_id, COUNT(*) AS cnt
 			FROM " . DB_PREFIX . "user_role
 			WHERE role_id IN (" . $id_list . ")" . $scope . "
@@ -1374,13 +1407,19 @@ class RBACService extends Ork3
      *
      * Rows whose expires_at has passed are excluded.
      *
+     * Both halves of the scope predicate stay on ork_user_role so idx_ur_kingdom and
+     * idx_ur_park remain usable. Testing the park side as `pk.kingdom_id = N` against
+     * the LEFT-JOINed ork_park instead reads the same but forces a full scan of
+     * ork_user_role -- which holds one row per occupied office across every kingdom.
+     *
      * @param int  $kingdom_id
-     * @param bool $with_park_names  When true, each row also carries a 'ParkName'
-     *                               key resolved from ork_park (empty string when
-     *                               the assignment is not park-scoped).
+     * @param bool $with_park_names  Defaults to true: each row also carries a
+     *                               'ParkName' key resolved from ork_park (empty
+     *                               string when the assignment is not park-scoped).
+     *                               Pass false to skip that lookup.
      * @return array  Array of assignment records
      */
-    public function GetKingdomRoleAssignments($kingdom_id, $with_park_names = false)
+    public function GetKingdomRoleAssignments($kingdom_id, $with_park_names = true)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
@@ -1398,7 +1437,8 @@ class RBACService extends Ork3
 			JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ur.mundane_id
 			LEFT JOIN " . DB_PREFIX . "mundane g ON g.mundane_id = ur.granted_by
 			LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = ur.park_id
-			WHERE ur.kingdom_id = " . $kingdom_id . "
+			WHERE ( ur.kingdom_id = " . $kingdom_id . "
+			        OR ur.park_id IN (SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = " . $kingdom_id . ") )
 			  AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
 			ORDER BY r.display_name, m.persona";
 

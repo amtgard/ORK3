@@ -920,9 +920,7 @@ class Common
                 $DB->dl_pid = $posid;
                 $DB->dl_kid = $kid;
                 $dl = $DB->DataSet(
-                    "SELECT IF(p.kingdom_id = 0,
-					             IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-					             IF(p.title_alias != '', p.title_alias, p.title)) AS display_title
+                    "SELECT " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
 					 FROM " . DB_PREFIX . "officer_position p
 					 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 					   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key

@@ -26,6 +26,12 @@ class Controller_QualTest extends Controller
             return;
         }
 
+        // can_manage() above is only the coarse page-ENTRY gate: a manager who may do any
+        // one of the four things still reaches this workspace. What that workspace SHOWS is
+        // decided per capability, so a questions-only expert gets the read-only overview and
+        // the question-bank links without the pass criteria, the manager roster or retakes.
+        $caps = $this->QualTest->capabilities($uid, $kingdom_id);
+
         $kingdom_name = $this->QualTest->kingdom_name($kingdom_id);
 
         $reeve_config   = $this->QualTest->config($kingdom_id, 'reeve');
@@ -37,8 +43,13 @@ class Controller_QualTest extends Controller
         $this->data['CorporaConfig'] = $corpora_config;
         $this->data['ReeveCount']    = $this->QualTest->count_active_questions($kingdom_id, 'reeve');
         $this->data['CorporaCount']  = $this->QualTest->count_active_questions($kingdom_id, 'corpora');
-        $this->data['Managers']      = $this->QualTest->managers($kingdom_id);
+        // Not merely hidden: without CAP_CONFIG the roster never enters the page source.
+        $this->data['Managers']      = $caps['Config'] ? $this->QualTest->managers($kingdom_id) : [];
         $this->data['Uid']           = $uid;
+        $this->data['CanConfig']     = $caps['Config'];
+        $this->data['CanQuestions']  = $caps['Questions'];
+        $this->data['CanPublish']    = $caps['Publish'];
+        $this->data['CanResults']    = $caps['Results'];
 
         // The rules/corpora version belongs to the published VERSION, not to these settings —
         // settings shows it read-only. Two editable copies of one fact drift, and the config

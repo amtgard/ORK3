@@ -644,7 +644,6 @@ html[data-theme="dark"] .ar-role-scope-pill { background: var(--ork-badge-blue-b
 		clearTimeout(toastTimer);
 		toastTimer = setTimeout(function() { el.classList.remove('ar-toast-show'); }, 3000);
 	}
-	window.arToast = arToast;
 
 	// === MODAL HELPERS ===
 	window.arCloseModal = function(id) {
