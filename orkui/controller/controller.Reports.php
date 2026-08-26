@@ -860,7 +860,19 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_parkattendanceexplorer.tpl';
         $this->data['page_title'] = "Park Attendance Explorer";
 
+        // Honour an explicit scope (the kingdom admin console links here with the
+        // kingdom being administered, which is not always the viewer's own), but
+        // only for a viewer who actually holds authority over that kingdom.
         $kingdom_id = $this->session->kingdom_id;
+        if (valid_id($this->request->KingdomId)) {
+            $_requested = (int)$this->request->KingdomId;
+            $_uid       = (int)$this->session->user_id;
+            if ($_requested === (int)$kingdom_id
+                || $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_requested, AUTH_CREATE)) {
+                $kingdom_id = $_requested;
+            }
+        }
         if (!valid_id($kingdom_id)) {
             $this->data['no_kingdom'] = true;
             return;

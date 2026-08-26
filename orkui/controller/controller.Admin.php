@@ -1901,7 +1901,7 @@ class Controller_Admin extends Controller
         $this->template = '../revised-frontend/Admin_roles.tpl';
     }
 
-    public function kingdom($id = null)
+    private function load_kingdom_admin_data($id = null)
     {
         if (empty($this->session->user_id)) {
             header('Location: ' . UIR . 'Login/login/Admin/kingdom/' . (int)$id);
@@ -2027,6 +2027,42 @@ class Controller_Admin extends Controller
             $this->data['SystemAwards'] = $sysAwards;
         }
 
+        // The template reads these; before this they were never assigned on the
+        // Admin route, so the hero art fell back to the placeholder, both hero
+        // counters and all four trend cards rendered 0, and the Parks admin table
+        // and every park-title select built from KaConfig came up empty.
+        $this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($id);
+
+        $dash = $this->Kingdom->get_admin_dashboard((int)$id);
+        $this->data['AdminDashboard'] = $dash;
+        $this->data['ActiveParkCount'] = $dash['Standing']['Parks'];
+        $this->data['ActivePlayers']   = $dash['Standing']['ActivePlayers'];
+        $this->data['TotalAttendance'] = $dash['Standing']['AttendanceYtd'];
+
+        $this->data['ParkTitleId_options'] = [];
+        foreach ($kd['ParkTitles'] ?? [] as $pt) {
+            $this->data['ParkTitleId_options'][$pt['ParkTitleId']] = $pt['Title'];
+        }
+
+        $this->data['park_edit_lookup'] = [];
+        $rawParks = $this->Kingdom->get_parks($id);
+        foreach (($rawParks['Parks'] ?? []) as $p) {
+            $this->data['park_edit_lookup'][(int)$p['ParkId']] = [
+                'ParkId'       => (int)$p['ParkId'],
+                'Name'         => $p['Name'],
+                'Abbreviation' => $p['Abbreviation'] ?? '',
+                'ParkTitleId'  => (int)($p['ParkTitleId'] ?? 0),
+                'Active'       => $p['Active'],
+            ];
+        }
+    }
+
+    /**
+     * Kingdom admin console.
+     */
+    public function kingdom($id = null)
+    {
+        $this->load_kingdom_admin_data($id);
         $this->template = '../revised-frontend/Admin_kingdom.tpl';
     }
 

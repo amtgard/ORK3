@@ -30,6 +30,148 @@ class Kingdom extends Ork3
         return null;
     }
 
+    /**
+     * Headline numbers and the work queue for the kingdom admin console.
+     *
+     * Two different jobs, deliberately in one call because they share the scope
+     * and are all cheap COUNTs: "Standing" is how the kingdom is doing, "Queue"
+     * is what is waiting on the officer reading the page. Every Queue entry is a
+     * set someone can actually work, and every count describes exactly the set
+     * the card's drill-through opens -- the unwaivered count therefore matches
+     * the unwaivered roster report (active players with no waiver) rather than
+     * applying an activity window the report cannot express.
+     *
+     * Scope differs by half, on purpose: "Standing" follows GetStatsKingdomIds()
+     * so it folds in child principalities when IncludePrincipalityInStatistics
+     * is on, while "Queue" stays kingdom-only because a principality's officers
+     * work their own queue.
+     *
+     * Note this does NOT match the park-averages summary rendered beside it:
+     * Report::GetKingdomParkAverages() is deliberately parent-only (park LISTS
+     * stay parent-only; only aggregates fold). On a parent kingdom with the
+     * toggle on, hero Parks will therefore read HIGHER than that summary. That
+     * is the project's rule, not a defect -- do not "reconcile" them by folding
+     * principality parks into a park list.
+     *
+     * Officer roles are matched on both stored forms (display name and canonical
+     * key) because ork_officer.role migrated from one to the other and the column
+     * collation hides the difference in SQL but not in PHP.
+     *
+     * The thresholds the counts use are returned in 'Windows' so callers can
+     * describe them without restating literals that would drift from the SQL.
+     *
+     * @param int $kingdom_id
+     * @return array  ['Standing' => [...], 'Queue' => [...], 'Windows' => [...]]
+     */
+    public function GetAdminDashboard($kingdom_id)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $quietParkDays = 60;
+        $coreOffices   = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
+        $out = [
+            'Standing' => ['Parks' => 0, 'ActivePlayers' => 0, 'AttendanceYtd' => 0],
+            'Queue'    => ['OpenRecommendations' => 0, 'UnwaiveredActive' => 0, 'QuietParks' => 0, 'VacantCrownOffices' => 0],
+            'Windows'  => [
+                'QuietParkDays'     => $quietParkDays,
+                'CrownOffices'      => $coreOffices,
+                'CrownOfficeCount'  => count($coreOffices),
+            ],
+        ];
+        if ($kingdom_id <= 0) {
+            return $out;
+        }
+
+        // ---- Standing -------------------------------------------------------
+        // Standing follows the kingdom-vs-principality stat scope, like every other
+        // aggregate. See the docblock: the park-averages summary on the same page
+        // is parent-only by design, so these two legitimately disagree.
+        $statIds    = array_map('intval', $this->GetStatsKingdomIds($kingdom_id));
+        $statIdList = implode(', ', $statIds);
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "park
+                  WHERE kingdom_id IN (" . $statIdList . ") AND active = 'Active') AS parks,
+                (SELECT COUNT(DISTINCT a.mundane_id) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.kingdom_id IN (" . $statIdList . ")
+                    AND a.date >= (CURDATE() - INTERVAL 182 DAY)) AS active_players,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.kingdom_id IN (" . $statIdList . ")
+                    AND a.date_year = YEAR(CURDATE())) AS attendance_ytd"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Standing']['Parks']         = (int) $r->parks;
+            $out['Standing']['ActivePlayers'] = (int) $r->active_players;
+            $out['Standing']['AttendanceYtd'] = (int) $r->attendance_ytd;
+        }
+
+        // ---- Queue ----------------------------------------------------------
+        // "Open" for a recommendation is deleted_at IS NULL, matching the Recs
+        // Manager; snoozed and passed-to-local rows are somebody else's problem.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations rc
+                    JOIN " . DB_PREFIX . "mundane rm ON rm.mundane_id = rc.mundane_id
+                  WHERE rm.kingdom_id = " . $kingdom_id . "
+                    AND rc.deleted_at IS NULL
+                    AND COALESCE(rc.snoozed_by_id, 0) = 0
+                    AND COALESCE(rc.passed_to_local, 0) = 0) AS open_recs,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.kingdom_id = " . $kingdom_id . "
+                    AND m.waivered = 0 AND m.active = 1) AS unwaivered_active"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Queue']['OpenRecommendations'] = (int) $r->open_recs;
+            $out['Queue']['UnwaiveredActive']    = (int) $r->unwaivered_active;
+        }
+
+        // Parks with nothing recorded in the quiet window. Grouped rather than NOT EXISTS so
+        // a park with zero attendance rows at all is still counted.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT COUNT(*) AS quiet FROM (
+                SELECT pk.park_id
+                  FROM " . DB_PREFIX . "park pk
+                  LEFT JOIN " . DB_PREFIX . "attendance a
+                         ON a.park_id = pk.park_id
+                        AND a.date >= (CURDATE() - INTERVAL " . $quietParkDays . " DAY)
+                 WHERE pk.kingdom_id = " . $kingdom_id . " AND pk.active = 'Active'
+                 GROUP BY pk.park_id
+                HAVING COUNT(a.attendance_id) = 0
+             ) q"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Queue']['QuietParks'] = (int) $r->quiet;
+        }
+
+        // Vacant crown offices. Counts DISTINCT filled offices against the Core
+        // Five rather than the position registry, so this answers correctly on a
+        // database where officer-position.sql has not been applied yet.
+        $core = PermissionRegistry::OfficerRoleVariants($coreOffices);
+        $quoted = [];
+        foreach ($core as $variant) {
+            $quoted[] = "'" . str_replace("'", "''", (string) $variant) . "'";
+        }
+        if (!empty($quoted)) {
+            $DB->Clear();
+            $r = $DB->DataSet(
+                "SELECT COUNT(DISTINCT LOWER(REPLACE(o.role, ' ', '_'))) AS filled
+                   FROM " . DB_PREFIX . "officer o
+                  WHERE o.kingdom_id = " . $kingdom_id . "
+                    AND o.park_id = 0
+                    AND o.mundane_id > 0
+                    AND o.role IN (" . implode(', ', $quoted) . ")"
+            );
+            if ($r !== false && $r->Next()) {
+                $out['Queue']['VacantCrownOffices'] = max(0, count($coreOffices) - (int) $r->filled);
+            }
+        }
+
+        return $out;
+    }
+
     public function GetKingdomShortInfo($request)
     {
         $this->kingdom->clear();

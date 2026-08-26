@@ -1,0 +1,580 @@
+/* ==========================================================================
+   Kingdom Admin console -- shared chrome
+   ==========================================================================
+   Lifted verbatim out of the inline <style> block in Admin_kingdom.tpl so the
+   browser can cache it instead of re-parsing ~484 lines on every page load, and
+   so the stylesheet is visible to bin/check-css-boundaries.sh.
+   Light-mode values are still literal hex here; that is how they arrived, and
+   converting them to --ork-* tokens is a separate change with its own risk.
+   ========================================================================== */
+
+/* Hero */
+.ka-hero {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    margin-top: 3px;
+    min-height: 140px;
+    background: linear-gradient(135deg, #1a365d 0%, #2d3748 60%, #1a202c 100%);
+}
+.ka-hero-bg {
+    position: absolute;
+    top: -10px; left: -10px; right: -10px; bottom: -10px;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.12;
+    filter: blur(6px);
+}
+.ka-hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    padding: 28px 32px;
+    gap: 22px;
+}
+.ka-heraldry-frame {
+    width: 72px; height: 72px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+}
+.ka-heraldry-frame img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none; padding: 0; margin: 0;
+    max-width: none;
+}
+.ka-hero-info { flex: 1; min-width: 0; }
+.ka-hero-title {
+    font-size: 24px; font-weight: 700; color: #fff; margin: 0 0 4px;
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+/* Back link + linked title. Matches .ar-hero-back on the roles page so the two
+   admin surfaces get out the same way. */
+.ka-hero-back {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    color: rgba(255,255,255,0.7); font-size: 12px; text-decoration: none;
+    transition: color 0.15s;
+}
+.ka-hero-back:hover, .ka-hero-back:focus-visible { color: #fff; text-decoration: none; }
+.ka-hero-title a { color: inherit; text-decoration: none; }
+.ka-hero-title a:hover { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.ka-hero-back:focus-visible, .ka-hero-title a:focus-visible {
+    outline: 2px solid rgba(255,255,255,0.85); outline-offset: 3px; border-radius: 3px;
+}
+.ka-hero-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
+.ka-hero-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.ka-hero-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+    color: rgba(255,255,255,0.85); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase; border-radius: 20px; padding: 3px 10px;
+}
+.ka-hero-stats {
+    display: flex; gap: 20px; flex-shrink: 0; align-items: center;
+}
+.ka-hero-stat { text-align: center; }
+.ka-hero-stat-val {
+    display: block; font-size: 28px; font-weight: 700; color: #fff; line-height: 1;
+}
+.ka-hero-stat-lbl {
+    display: block; font-size: 11px; color: rgba(255,255,255,0.55); text-transform: uppercase;
+    letter-spacing: 0.05em; margin-top: 3px;
+}
+.ka-hero-stat-div { width: 1px; height: 40px; background: rgba(255,255,255,0.2); }
+
+/* Trend stats row — reuses cp-ts pattern with ka- prefix */
+.ka-ts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.ka-ts-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; }
+.ka-ts-icon { width: 38px; height: 38px; border-radius: 8px; background: #ebf4ff; color: #3182ce; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.ka-ts-body { min-width: 0; }
+.ka-ts-num { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ka-ts-val { font-size: 22px; font-weight: 700; color: #1a202c; line-height: 1; }
+.ka-ts-trend { font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.ka-ts-up   { background: #f0fff4; color: #276749; }
+.ka-ts-down { background: #fff5f5; color: #c53030; }
+.ka-ts-flat { color: #a0aec0; background: #f7fafc; }
+.ka-ts-lbl { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+.ka-ts-sub { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* Queue cards. A card with work on it is a link to the report that lists it; a
+   card that is clear goes quiet so the eye skips it. */
+.ka-ts-card-link { text-decoration: none; color: inherit; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
+.ka-ts-card-link:hover {
+    border-color: #4299e1; background: #ebf8ff;
+    box-shadow: 0 2px 8px rgba(66,153,225,0.15);
+    text-decoration: none; color: inherit;
+}
+.ka-ts-card-clear { background: #fbfdfe; }
+.ka-ts-card-clear .ka-ts-icon { background: #f0fff4; color: var(--ork-badge-green-text); }
+.ka-ts-card-clear .ka-ts-val  { font-size: 18px; color: var(--ork-badge-green-text); }
+.ka-ts-card-clear .ka-ts-lbl  { color: #718096; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 13px; }
+html[data-theme="dark"] .ka-ts-card-link:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.25); }
+/* These three must out-specify the generic dark .ka-ts-* rules ~300 lines below,
+   which carry the same (0,2,1) weight and therefore win on source order alone.
+   Doubling the class on the card, and keeping the descendant overrides for icon
+   and value, is what makes the clear state survive in dark mode -- without them a
+   clear card is pixel-identical to an open one. */
+html[data-theme="dark"] .ka-ts-card.ka-ts-card-clear { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-icon { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-val  { color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-lbl  { color: var(--ork-text-secondary); }
+@media (max-width: 900px) { .ka-ts-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .ka-ts-row { grid-template-columns: 1fr; } }
+
+/* Layout */
+.ka-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .ka-layout { grid-template-columns: 1fr; } }
+
+/* Sections stack in one column. They used to sit in a 1fr 1fr grid, where every
+   row is as tall as its tallest section -- so a one-tile section beside a
+   five-tile one left a column of dead space, and tiles were squeezed to ~110px
+   inside a half-width column. Full width lets the tile grid below breathe. */
+.ka-sections-grid { display: grid; grid-template-columns: 1fr; gap: 22px; }
+.ka-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    color: #718096; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+/* Tiles within a section. Grid, not flex-grow: with `flex: 1 1 33.333%` a fourth
+   tile wrapped onto its own row and stretched to full width, so Manage Officers,
+   Manage Awards and Corpora Test Results rendered as wide cards purely from wrap
+   arithmetic -- which reads as importance they do not have. */
+.ka-action-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 10px; }
+@media (max-width: 600px) { .ka-action-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+.ka-action-card {
+    display: flex; flex-direction: column; align-items: flex-start;
+    padding: 14px 16px; background: #fff; border: 1.5px solid #e2e8f0;
+    border-radius: 8px; text-decoration: none; color: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    cursor: pointer; font-family: inherit;
+}
+.ka-action-card:hover {
+    border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.15); background: #ebf8ff;
+    text-decoration: none; color: inherit;
+}
+/* Keyboard focus. The cards are <button>/<a> so they were focusable already, but
+   the only indicator was the UA default ring on top of a fully custom card. */
+.ka-action-card:focus-visible,
+.ka-report-list a:focus-visible,
+.ka-ts-card-link:focus-visible {
+    outline: 2px solid #2b6cb0; outline-offset: 2px;
+}
+html[data-theme="dark"] .ka-action-card:focus-visible,
+html[data-theme="dark"] .ka-report-list a:focus-visible,
+html[data-theme="dark"] .ka-ts-card-link:focus-visible {
+    outline-color: var(--ork-link-bright);
+}
+.ka-action-icon {
+    width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 15px; margin-bottom: 8px; flex-shrink: 0;
+}
+.ka-action-icon-blue   { background: #ebf8ff; color: #3182ce; }
+.ka-action-icon-green  { background: #f0fff4; color: #276749; }
+.ka-action-icon-orange { background: #fffaf0; color: #c05621; }
+.ka-action-icon-purple { background: #faf5ff; color: #6b46c1; }
+.ka-action-icon-red    { background: #fff5f5; color: #c53030; }
+.ka-action-icon-gray   { background: #f7fafc; color: #4a5568; }
+.ka-action-icon-gold   { background: #fffbeb; color: #b7791f; }
+.ka-action-label { font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.3; width: 100%; text-align: left; }
+.ka-action-desc { font-size: 11px; color: #718096; margin-top: 3px; line-height: 1.4; width: 100%; text-align: left; }
+
+/* Sidebar cards */
+.ka-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 24px; }
+.ka-card-header { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; background: #f7fafc; display: flex; align-items: center; justify-content: space-between; }
+.ka-card-title {
+    font-size: 14px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0;
+}
+.ka-report-list { list-style: none; padding: 0; margin: 0; }
+.ka-report-list li { border-bottom: 1px solid #edf2f7; }
+.ka-report-list li:last-child { border-bottom: none; }
+.ka-report-list a {
+    display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+    text-decoration: none; color: #2d3748; font-size: 13px; font-weight: 500;
+    transition: background 0.12s;
+}
+.ka-report-list a:hover { background: #ebf8ff; color: #2b6cb0; text-decoration: none; }
+.ka-report-list a i { width: 18px; text-align: center; color: #a0aec0; font-size: 13px; flex-shrink: 0; }
+.ka-report-list a span { flex: 1; }
+.ka-report-list-desc {
+    display: block; font-size: 11px; color: #a0aec0; font-weight: 400; margin-top: 2px;
+}
+.ka-report-filter-wrap { padding: 10px 14px; border-bottom: 1px solid #edf2f7; }
+.ka-report-filter {
+    width: 100%; box-sizing: border-box; padding: 6px 10px;
+    font-size: 12px; font-family: inherit; color: #2d3748;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.ka-report-filter:focus { outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }
+.ka-report-empty { padding: 14px 18px; font-size: 12px; color: #a0aec0; }
+html[data-theme="dark"] .ka-report-filter-wrap { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-report-filter {
+    background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ka-report-filter::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
+
+.ka-report-section-lbl {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #a0aec0; padding: 8px 18px 4px; margin: 0;
+    background: transparent; border: none; border-radius: 0; text-shadow: none;
+}
+
+/* Modal overlay */
+.ka-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal);
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+}
+.ka-overlay.ka-open { display: flex; }
+.ka-modal-box {
+    background: #fff; border-radius: 10px; width: 520px; max-width: 100%;
+    max-height: 80vh; height: auto; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden;
+}
+.ka-modal-header {
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ka-modal-title {
+    font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.ka-modal-close:hover { color: #2d3748; }
+.ka-modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.ka-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
+
+/* Mobile: full-screen modals */
+@media (max-width: 600px) {
+    .ka-overlay { padding: 0; }
+    .ka-modal-box { width: 100% !important; max-width: 100%; max-height: 100vh; border-radius: 0; }
+    .ka-modal-footer { border-radius: 0; position: sticky; bottom: 0; }
+}
+
+/* Field styles */
+.ka-field { margin-bottom: 14px; }
+.ka-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.ka-field input[type=text], .ka-field input[type=url], .ka-field input[type=email], .ka-field input[type=password],
+.ka-field input[type=number], .ka-field select, .ka-field textarea {
+    width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
+}
+.ka-field input:focus, .ka-field select:focus, .ka-field textarea:focus {
+    outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
+}
+.ka-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) { .ka-field-row { grid-template-columns: 1fr; } }
+.ka-field-ac { position: relative; }
+/* Dropdown is positioned with position:fixed by tnFixedAcPosition() so the modal's
+   own stacking/overflow context can't clip it; z-index rides the token scale
+   (matches revised.css's modal autocomplete rule) instead of a magic 9999. */
+.ka-field-ac .kn-ac-results { z-index: var(--z-modal-top); }
+.ka-hint { font-size: 11px; color: #a0aec0; font-weight: 400; }
+
+/* Feedback */
+.ka-feedback { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-bottom: 14px; display: none; }
+.ka-feedback-ok  { background: #c6f6d5; color: #276749; border: 1px solid #9ae6b4; }
+.ka-feedback-err { background: #fed7d7; color: #9b2c2c; border: 1px solid #feb2b2; }
+
+/* Admin tables (reuse kn-admin-table styles inline) */
+.ka-admin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ka-admin-table th { text-align: left; font-weight: 700; color: #4a5568; padding: 6px 4px; border-bottom: 1.5px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.ka-admin-table td { padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.ka-admin-table input[type=text] { width: 100%; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
+.ka-admin-table input[type=number] { width: 56px; padding: 4px 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; text-align: center; box-sizing: border-box; }
+.ka-admin-table select { padding: 4px 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; }
+.ka-admin-table .ka-tdel { background: none; border: none; color: #e53e3e; cursor: pointer; font-size: 12px; padding: 4px; opacity: 0.6; }
+.ka-admin-table .ka-tdel:hover { opacity: 1; }
+.ka-admin-table .ka-tsave { background: none; border: none; color: #3182ce; cursor: pointer; font-size: 12px; padding: 4px; opacity: 0.6; }
+.ka-admin-table .ka-tsave:hover { opacity: 1; }
+.ka-admin-table-wrap { overflow-x: auto; }
+/* Award group headers */
+.ka-award-group-hdr td {
+    background: #f7fafc; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #4a5568; padding: 8px 6px !important;
+    border-bottom: 1.5px solid #e2e8f0; cursor: pointer; user-select: none;
+}
+.ka-award-group-hdr td:hover { background: #edf2f7; }
+.ka-award-group-chev {
+    display: inline-block; transition: transform 0.15s; font-size: 10px; margin-right: 6px; color: #a0aec0;
+}
+.ka-award-group-hdr.ka-collapsed .ka-award-group-chev { transform: rotate(-90deg); }
+.ka-award-group-count { font-weight: 400; color: #a0aec0; margin-left: 4px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.ka-admin-park-retired { opacity: 0.45; }
+
+/* Toggle switch */
+.ka-toggle { position: relative; display: inline-block; cursor: pointer; }
+.ka-toggle input { opacity: 0; position: absolute; }
+.ka-toggle-track {
+    display: inline-block; width: 34px; height: 18px; background: #cbd5e0;
+    border-radius: 9px; position: relative; transition: background 0.2s; vertical-align: middle;
+}
+.ka-toggle-track::after {
+    content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px;
+    background: #fff; border-radius: 50%; transition: transform 0.2s;
+}
+.ka-toggle input:checked + .ka-toggle-track { background: #48bb78; }
+.ka-toggle input:checked + .ka-toggle-track::after { transform: translateX(16px); }
+
+/* Save / action buttons */
+.ka-save-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 16px; background: #3182ce; color: #fff; border: none;
+    border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s;
+}
+.ka-save-btn:hover:not(:disabled) { opacity: 0.85; }
+.ka-save-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Ops row */
+.ka-ops-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 0; border-bottom: 1px solid #edf2f7;
+}
+.ka-ops-row:last-child { border-bottom: none; }
+.ka-ops-info { flex: 1; }
+.ka-ops-info strong { font-size: 14px; color: #2d3748; }
+.ka-ops-info p { font-size: 12px; color: #718096; margin: 3px 0 0; }
+.ka-ops-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    background: #fff; font-size: 12px; font-weight: 600; color: #4a5568;
+    cursor: pointer; white-space: nowrap; transition: border-color 0.15s, background 0.15s;
+}
+.ka-ops-btn:hover { border-color: #cbd5e0; background: #f7fafc; }
+.ka-ops-btn-danger { border-color: #fed7d7; color: #c53030; }
+.ka-ops-btn-danger:hover { background: #fff5f5; border-color: #feb2b2; }
+@media (max-width: 480px) {
+    .ka-ops-row { flex-direction: column; align-items: stretch; }
+    .ka-ops-btn { justify-content: center; }
+    .ka-award-row-fields { flex-direction: column; }
+    .ka-award-row-fields .ka-field { width: 100%; }
+    .ka-award-row-fields input[style*="width:64px"] { width: 100% !important; }
+}
+
+/* Warning box */
+.ka-warning { background: #fffbeb; border: 1px solid #f6e05e; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #744210; margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start; }
+.ka-warning i { flex-shrink: 0; margin-top: 2px; }
+
+/* Radio group */
+.ka-radio-group { display: flex; gap: 16px; }
+.ka-radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+
+/* Alias dropdown */
+.ka-alias-picker-wrap { position: relative; }
+.ka-alias-trigger {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    font-size: 13px; color: #2d3748; background: #fff; cursor: pointer; text-align: left;
+}
+.ka-alias-trigger:hover { border-color: #cbd5e0; }
+.ka-alias-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 99;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-height: 250px; overflow-y: auto;
+}
+.ka-alias-search { width: 100%; padding: 8px 10px; border: none; border-bottom: 1px solid #edf2f7; font-size: 13px; box-sizing: border-box; outline: none; }
+.ka-alias-list { max-height: 200px; overflow-y: auto; }
+.ka-alias-item { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.ka-alias-item:hover { background: #ebf8ff; }
+.ka-alias-empty { padding: 12px; color: #a0aec0; font-size: 12px; text-align: center; }
+.ka-alias-hint { color: #a0aec0; font-size: 10px; margin-left: 4px; cursor: help; }
+
+/* Award add buttons row */
+.ka-award-add-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ka-add-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border: 1.5px dashed #cbd5e0; border-radius: 6px;
+    background: transparent; font-size: 12px; font-weight: 600; color: #4a5568;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.ka-add-btn:hover { border-color: #90cdf4; background: #ebf8ff; color: #2b6cb0; }
+.ka-add-award-wrap { margin-top: 14px; padding: 14px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ka-add-award-title { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
+.ka-form-hint { font-size: 12px; color: #718096; margin: 0 0 10px; line-height: 1.5; }
+.ka-award-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.ka-field-grow { flex: 1; min-width: 140px; }
+.ka-field-center { text-align: center; }
+
+/* Confirm overlay */
+.ka-confirm-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal-top);
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+}
+.ka-confirm-overlay.ka-open { display: flex; }
+.ka-confirm-box { width: 400px; }
+
+/* =============================================
+   DARK MODE OVERRIDES (ka-*)
+   ============================================= */
+/* orkui.css paints every h1-h6 as a filled pill and repeats it under
+   html[data-theme="dark"] at a specificity the plain-class resets below cannot
+   beat, so each of these -- all real heading elements -- renders inside a grey
+   slab in dark mode unless the background is cleared here as well. */
+html[data-theme="dark"] .ka-hero-title,
+html[data-theme="dark"] .ka-report-section-lbl,
+html[data-theme="dark"] .ka-modal-title,
+html[data-theme="dark"] .ka-mo-title {
+    background-color: transparent;
+    border-color: transparent;
+}
+html[data-theme="dark"] .ka-hero-title { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+/* The hero band is navy in BOTH themes, so its links stay white in both. Needed
+   explicitly because orkui.css's `html[data-theme="dark"] a` is (0,1,2) and beats
+   the plain `.ka-hero-back` (0,1,0) and `.ka-hero-title a` (0,1,1) rules above --
+   without these the back link and title render link-blue on navy. */
+html[data-theme="dark"] .ka-hero-title a { color: #fff; }
+html[data-theme="dark"] .ka-hero-back { color: rgba(255,255,255,0.7); }
+html[data-theme="dark"] .ka-hero-back:hover,
+html[data-theme="dark"] .ka-hero-back:focus-visible { color: #fff; }
+/* Trend stat cards */
+html[data-theme="dark"] .ka-ts-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-ts-icon { background: var(--ork-badge-blue-bg); color: #90cdf4; }
+html[data-theme="dark"] .ka-ts-val { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ts-lbl { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ts-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-up   { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-down { background: var(--ork-badge-red-bg);   color: var(--ork-badge-red-text); }
+html[data-theme="dark"] .ka-ts-flat { background: var(--ork-bg-tertiary);    color: var(--ork-text-muted); }
+
+/* Section titles */
+html[data-theme="dark"] .ka-section-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-section-title::after { background: var(--ork-border); }
+html[data-theme="dark"] .ka-report-section-lbl { color: var(--ork-text-muted); }
+
+/* Action cards */
+html[data-theme="dark"] .ka-action-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-card:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.25); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-label { color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-desc { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-icon-blue   { background: var(--ork-badge-blue-bg);   color: #90cdf4; }
+html[data-theme="dark"] .ka-action-icon-green  { background: var(--ork-badge-green-bg);  color: #9ae6b4; }
+html[data-theme="dark"] .ka-action-icon-orange { background: var(--ork-badge-orange-bg); color: #fbd38d; }
+html[data-theme="dark"] .ka-action-icon-purple { background: var(--ork-badge-purple-bg); color: #d6bcfa; }
+html[data-theme="dark"] .ka-action-icon-red    { background: var(--ork-badge-red-bg);    color: #feb2b2; }
+html[data-theme="dark"] .ka-action-icon-gray   { background: var(--ork-bg-tertiary);     color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-icon-gold   { background: var(--ork-badge-gold-bg);   color: #f6e05e; }
+
+/* Sidebar cards */
+html[data-theme="dark"] .ka-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+html[data-theme="dark"] .ka-card-header { background: var(--ork-bg-tertiary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-report-list li { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-report-list a { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-report-list a:hover { background: var(--ork-bg-tertiary); color: #90cdf4; }
+html[data-theme="dark"] .ka-report-list a i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-report-list-desc { color: var(--ork-text-muted); }
+
+/* Modal box / overlay */
+html[data-theme="dark"] .ka-modal-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-footer { background: var(--ork-bg-tertiary); border-top-color: var(--ork-border); }
+
+/* Form fields */
+html[data-theme="dark"] .ka-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-field input[type=text], html[data-theme="dark"] .ka-field input[type=url],
+html[data-theme="dark"] .ka-field input[type=email], html[data-theme="dark"] .ka-field input[type=password],
+html[data-theme="dark"] .ka-field input[type=number], html[data-theme="dark"] .ka-field select,
+html[data-theme="dark"] .ka-field textarea {
+    background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ka-field input::placeholder, html[data-theme="dark"] .ka-field textarea::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-hint { color: var(--ork-text-muted); }
+
+/* Feedback */
+html[data-theme="dark"] .ka-feedback-ok  { background: var(--ork-alert-success-bg); color: var(--ork-alert-success-text); border-color: var(--ork-alert-success-border); }
+html[data-theme="dark"] .ka-feedback-err { background: var(--ork-alert-error-bg);   color: var(--ork-alert-error-text);   border-color: var(--ork-alert-error-border); }
+
+/* Admin tables */
+html[data-theme="dark"] .ka-admin-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-admin-table td { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-admin-table input[type=text], html[data-theme="dark"] .ka-admin-table input[type=number],
+html[data-theme="dark"] .ka-admin-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-award-group-hdr td { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-award-group-hdr td:hover { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-award-group-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-award-group-count { color: var(--ork-text-muted); }
+
+/* Toggle */
+html[data-theme="dark"] .ka-toggle-track { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-toggle-track::after { background: #e2e8f0; }
+
+/* Ops rows / buttons */
+html[data-theme="dark"] .ka-ops-row { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-info strong { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ops-info p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn:hover { background: var(--ork-bg); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-btn-danger { background: var(--ork-badge-red-bg); border-color: var(--ork-alert-error-border); color: #feb2b2; }
+html[data-theme="dark"] .ka-ops-btn-danger:hover { background: #742a2a; border-color: #feb2b2; }
+
+/* Warning box */
+html[data-theme="dark"] .ka-warning { background: var(--ork-alert-warning-bg); border-color: var(--ork-alert-warning-border); color: var(--ork-alert-warning-text); }
+
+/* Radio group */
+html[data-theme="dark"] .ka-radio-group label { color: var(--ork-text); }
+
+/* Alias dropdown */
+html[data-theme="dark"] .ka-alias-trigger { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-trigger:hover { border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-dropdown { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .ka-alias-search { background: var(--ork-input-bg); color: var(--ork-text); border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-item { color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-item:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-alias-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-alias-hint { color: var(--ork-text-muted); }
+
+/* Save button stays accented (fine in dark); add/dashed buttons */
+html[data-theme="dark"] .ka-add-btn { color: var(--ork-text-secondary); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-add-btn:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; color: #90cdf4; }
+html[data-theme="dark"] .ka-add-award-wrap { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-add-award-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-form-hint { color: var(--ork-text-secondary); }
+
+/* =============================================
+   MANAGE OFFICERS HOST MODAL (.ka-mo-*)
+   ============================================= */
+.ka-mo-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal);
+    background: rgba(0,0,0,0.5); align-items: flex-start; justify-content: center;
+    padding: 32px 16px; overflow-y: auto;
+}
+.ka-mo-overlay.ka-open { display: flex; }
+.ka-mo-box {
+    background: #fff; border-radius: 10px; width: 1000px; max-width: 100%;
+    max-height: calc(100vh - 64px); display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden; margin: auto;
+}
+.ka-mo-header {
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ka-mo-title {
+    font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-mo-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.ka-mo-close:hover { color: #2d3748; }
+.ka-mo-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+@media (max-width: 600px) {
+    .ka-mo-overlay { padding: 0; }
+    .ka-mo-box { width: 100% !important; max-width: 100%; max-height: 100vh; border-radius: 0; }
+}
+html[data-theme="dark"] .ka-mo-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-mo-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-mo-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-mo-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
