@@ -1715,7 +1715,19 @@ git commit -m "Enhancement: reject unranked ladder grants below max rank"
 
 `Kingdomnew_recommendations_panel.tpl:75` buckets rows with `(int)$rec['Rank'] > 0 ? 'below' : 'nonladder'` — using *rank present* as a proxy for *is a ladder*. A kingdom-ladder recommendation has no rank today, so it files under "Non-Ladder Awards & Titles" and the officer is told to Grant-or-Delete a ranked award as if it were flat.
 
+**Also carries a gap Task 3 surfaced.** `Player::RecommendAward`
+(`system/lib/ork3/class.Player.php`, the custom-award detection near the
+"Custom awards (is_ladder = 0 AND is_title = 0)" comment) tests **official**
+`is_ladder`, so a kingdom ladder is misdetected as a custom award — and custom
+awards are deliberately allowed unlimited duplicates and unlimited
+recommendations. A kingdom-ladder recommendation therefore bypasses the
+duplicate and top-rank guards that every official ladder gets. That is
+requirement 3 ("recommendations must recognise kingdom ladders"), so it belongs
+here rather than in Task 3, whose named lines did not include it. Converting it
+needs a `ka` join that method does not currently have.
+
 **Files:**
+- Modify: `system/lib/ork3/class.Player.php` (`RecommendAward` custom-award detection — add the `ka` join and use `Award::LadderSql()`)
 - Modify: `orkui/template/revised-frontend/Kingdomnew_recommendations_panel.tpl:75` (bucketing) and `:111` (the Grant button's rank passthrough)
 - Modify: `system/lib/ork3/class.Report.php` (`recommended_awards`, `recommended_awards_count`) so the rows carry the effective-ladder flag
 - Test: `tests/Integration/RecommendationBucketTest.php` (create)
