@@ -98,6 +98,9 @@ final class PlayerLadderProgressTest extends TestCase
 
     public function testZodiacMaxRankTwelve(): void
     {
+        // Order of the Zodiac (award_id 30) is a monthly ladder: MaxRank stays the
+        // ceremonial 12, but 'Rank' now mirrors the uncapped grant Count, not a
+        // clamped rank. A single legacy grant with no recorded month is one grant.
         $response = $this->player->GetLadderProgress([
             'MundaneId' => 0,
             'Awards' => [
@@ -107,7 +110,10 @@ final class PlayerLadderProgressTest extends TestCase
 
         $tile = $this->tileByAwardId($response['Detail'], 30);
         $this->assertSame(12, $tile['MaxRank']);
-        $this->assertSame(12, $tile['Rank']);
+        $this->assertSame(1, $tile['Rank']);
+        $this->assertSame(1, $tile['Count']);
+        $this->assertSame([], $tile['MonthsHeld'], 'legacy rank is never read as a month');
+        $this->assertSame(1, $tile['Unmonthed']);
     }
 
     public function testDuplicateRanksDoNotInflateEffectiveCount(): void

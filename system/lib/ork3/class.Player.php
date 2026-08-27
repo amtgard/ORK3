@@ -1225,6 +1225,7 @@ class Player extends Ork3
                         'MundaneId' => $r->mundane_id,
                         'Rank' => $r->rank,
                         'Date' => $r->date,
+                        'ZodiacMonth' => (int) $r->zodiac_month,
                         'GivenById' => $r->given_by_id,
                         'Note' => $r->note,
                         // "Where given" comes from at_park_id / at_kingdom_id / at_event_id.
@@ -1611,8 +1612,14 @@ class Player extends Ork3
      * a false "needs reconciling" is a dismissible prompt, whereas a false "bonus"
      * silently hides a genuinely broken record.
      *
-     * @param list<array{Rank: int|string, Date: string}> $grants
-     * @return array{Rank: int, MaxRank: int, Approx: bool, BonusCount: int}
+     * Monthly ladders (Order of the Zodiac, award_id 30) branch out at the top and
+     * return early: their twelve positions are calendar months, not ranks, duplicates
+     * are legitimate, and there is no cap on the total. 'Count' replaces the meaning
+     * of 'Rank' for these; 'BonusCount' is always 0 — there is no "past max" for a
+     * monthly award.
+     *
+     * @param list<array{Rank: int|string, Date: string, ZodiacMonth?: int}> $grants
+     * @return array{Rank: int, MaxRank: int, Approx: bool, BonusCount: int, Count?: int, MonthsHeld?: list<int>, MonthDates?: array<int, list<string>>, Unmonthed?: int}
      */
     public function ClassifyLadderGrants(
         int $awardId,
@@ -1620,6 +1627,43 @@ class Player extends Ork3
         array $grants,
         bool $hasMaster
     ): array {
+        if (Award::IsMonthlyLadder($awardId)) {
+            $monthsHeld = [];
+            $monthDates = [];
+            $unmonthed  = 0;
+
+            foreach ($grants as $grant) {
+                $month = (int) ($grant['ZodiacMonth'] ?? 0);
+                if (Award::IsValidZodiacMonth($month)) {
+                    $monthsHeld[$month] = true;
+                    // Repeats are kept here even though the strip fills one circle:
+                    // the tooltip lists every grant date for that month.
+                    $monthDates[$month][] = (string) $grant['Date'];
+                } else {
+                    // Never fall back to rank: 1,193 grants carry rank 1 and none of
+                    // them means January.
+                    $unmonthed++;
+                }
+            }
+            ksort($monthsHeld);
+            ksort($monthDates);
+
+            return [
+                // Total granted, uncapped. Not distinct months, not highest rank --
+                // 35 players already hold duplicates and a total can exceed 12.
+                'Count'      => count($grants),
+                'MonthsHeld' => array_keys($monthsHeld),
+                'MonthDates' => $monthDates,
+                'Unmonthed'  => $unmonthed,
+                // ~ keeps its shape but changes its words: for Zodiac it means
+                // "month not recorded", not "rank not recorded".
+                'Approx'     => $unmonthed > 0 && !$hasMaster,
+                'Rank'       => count($grants),
+                'MaxRank'    => 12,
+                'BonusCount' => 0,
+            ];
+        }
+
         $maxRank = Award::MaxRankFor($awardId, $kaMaxLevel);
 
         $rankSet = [];
@@ -1789,6 +1833,7 @@ class Player extends Ork3
             $progress[$aid]['Grants'][] = [
                 'Rank' => $rank,
                 'Date' => (string)($a['Date'] ?? ''),
+                'ZodiacMonth' => (int)($a['ZodiacMonth'] ?? 0),
             ];
         }
 
@@ -1799,10 +1844,12 @@ class Player extends Ork3
                 $lp['Grants'],
                 (bool)$lp['HasMaster']
             );
-            $lp['Rank'] = $classified['Rank'];
-            $lp['MaxRank'] = $classified['MaxRank'];
-            $lp['Approx'] = $classified['Approx'];
-            $lp['BonusCount'] = $classified['BonusCount'];
+            // Monthly ladders (Zodiac) return extra keys (Count/MonthsHeld/MonthDates/
+            // Unmonthed) alongside the ranked-path ones -- merge everything so both
+            // shapes flow through untouched rather than hand-picking a fixed subset.
+            foreach ($classified as $k => $v) {
+                $lp[$k] = $v;
+            }
             unset($lp['Grants'], $lp['KaMaxLevel']);
         }
         unset($lp);
@@ -1841,7 +1888,7 @@ class Player extends Ork3
 
         $tiles = [];
         foreach ($progress as $aid => $lp) {
-            $tiles[] = [
+            $tile = [
                 'AwardId' => (int)$aid,
                 'Name' => $lp['Name'],
                 'Short' => $lp['Short'],
@@ -1851,6 +1898,15 @@ class Player extends Ork3
                 'Approx' => !empty($lp['Approx']),
                 'BonusCount' => (int) ($lp['BonusCount'] ?? 0),
             ];
+            // Monthly ladders (Zodiac) carry these on top of the ranked-path keys
+            // above -- present only when ClassifyLadderGrants took the monthly branch.
+            if (array_key_exists('MonthsHeld', $lp)) {
+                $tile['Count'] = (int) ($lp['Count'] ?? 0);
+                $tile['MonthsHeld'] = $lp['MonthsHeld'];
+                $tile['MonthDates'] = $lp['MonthDates'];
+                $tile['Unmonthed'] = (int) ($lp['Unmonthed'] ?? 0);
+            }
+            $tiles[] = $tile;
         }
         usort($tiles, function ($a, $b) {
             return strcmp($a['Name'], $b['Name']);
