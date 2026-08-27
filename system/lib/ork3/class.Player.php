@@ -3564,6 +3564,32 @@ class Player extends Ork3
                 }
             }
 
+            // Rule 1: an unranked grant of an effective ladder award is allowed only
+            // when the recipient is already at or past max -- the star path. Granting
+            // a ladder award with no rank to someone below max is the mistake that
+            // produced the rankless ladder grants this feature exists to stop. Order
+            // of the Zodiac (award_id 30) is exempt: it is granted once per calendar
+            // month, so a monthless grant must still be accepted for the 2,024 that
+            // already exist.
+            $rank = (int) ($request['Rank'] ?? 0);
+            if ($rank === 0 && !Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                $ladder = $this->GetLadderContext((int) $request['KingdomAwardId']);
+                if ($ladder['is_ladder']) {
+                    $maxRank = Award::MaxRankFor((int) $request['AwardId'], $ladder['max_level']);
+                    $currentRank = $this->CurrentLadderRank((int) $request['RecipientId'], (int) $request['KingdomAwardId']);
+                    if (!Award::OffersStar((int) $request['AwardId'], $ladder['max_level'], $currentRank)) {
+                        $awardName = $ladder['award_name'] !== '' ? $ladder['award_name'] : 'This award';
+
+                        return InvalidParameter(sprintf(
+                            '%s is a ranked award — choose a rank, or use %s if they have already reached %d.',
+                            $awardName,
+                            "\u{2731}",
+                            $maxRank
+                        ));
+                    }
+                }
+            }
+
             $awards->save();
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
@@ -3572,6 +3598,53 @@ class Player extends Ork3
         } else {
             return NoAuthorization();
         }
+    }
+
+    /**
+     * Ladder context for a kingdomaward row, resolved in one query: whether it is an
+     * effective ladder (Award::LadderSql() -- official OR kingdom-raised, never just
+     * the official flag), its max_level (0 = unspecified, resolved by
+     * Award::MaxRankFor()), and a display name for the Rule 1 rejection message
+     * (the kingdom's own name for the award, falling back to the base award's name).
+     *
+     * @return array{is_ladder: bool, max_level: int, award_name: string}
+     */
+    private function GetLadderContext(int $kingdomAwardId): array
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ' . Award::LadderSql('ka', 'a') . ' AS is_ladder, ka.max_level,
+                    COALESCE(NULLIF(ka.name, \'\'), a.name, \'\') AS award_name
+             FROM ' . DB_PREFIX . 'kingdomaward ka
+             LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+             WHERE ka.kingdomaward_id = ' . $kingdomAwardId
+        );
+        if (!$rs || !$rs->Next()) {
+            return ['is_ladder' => false, 'max_level' => 0, 'award_name' => ''];
+        }
+
+        return [
+            'is_ladder' => (int) $rs->is_ladder === 1,
+            'max_level' => (int) $rs->max_level,
+            'award_name' => (string) $rs->award_name,
+        ];
+    }
+
+    /**
+     * The recipient's highest currently-held (non-revoked) rank on this ladder
+     * award -- the star test compares this against Award::MaxRankFor().
+     */
+    private function CurrentLadderRank(int $recipientId, int $kingdomAwardId): int
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT MAX(`rank`) AS max_rank FROM ' . DB_PREFIX . 'awards
+             WHERE mundane_id = ' . $recipientId . '
+               AND kingdomaward_id = ' . $kingdomAwardId . '
+               AND revoked = 0'
+        );
+
+        return ($rs && $rs->Next()) ? (int) $rs->max_rank : 0;
     }
 
     private function revoke_award(& $awards, $revocation, $revoker_id)

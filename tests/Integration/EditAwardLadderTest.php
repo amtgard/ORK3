@@ -28,16 +28,16 @@ final class EditAwardLadderTest extends TestCase
      * Token resolves mundane_id 0 and is refused before it ever reaches the
      * ladder-writing code this test exercises. The brief's test body omits
      * Token, so setUp() here manufactures one officer, authorized on
-     * kingdom_id = 1 (the same kingdom every seed() row belongs to), following
-     * the same mundane/session/authorization pattern already used by
-     * EventPlanningFixture/AttendanceFixture. ork_test ships with zero
+     * kingdom_id = 1 (the same kingdom every seed() row belongs to), via the
+     * shared AuthorizedOfficerFixture (Task 8 extracted this out of this file
+     * so LadderGrantRuleTest could share it). ork_test ships with zero
      * ork_mundane rows on this branch, so there is no template row to clone
      * from (the fixtures' usual approach) -- every NOT NULL column is
      * supplied explicitly instead. See task-4-report.md "Concerns" for the
      * full explanation of this deviation from the brief's literal test code.
      */
     private string $token;
-    private int $officerMundaneId;
+    private AuthorizedOfficerFixture $officer;
 
     /** @var list<int> kingdomaward ids whose ork_awards grants must be cleaned up */
     private array $grantIdsToClean = [];
@@ -54,7 +54,8 @@ final class EditAwardLadderTest extends TestCase
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         $this->kingdom = new Kingdom();
-        $this->token = $this->createAuthorizedOfficer();
+        $this->officer = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
+        $this->token = $this->officer->createAuthorizedOfficer();
     }
 
     protected function tearDown(): void
@@ -65,65 +66,7 @@ final class EditAwardLadderTest extends TestCase
         $this->grantIdsToClean = [];
 
         $this->pdo->exec("DELETE FROM ork_kingdomaward WHERE name LIKE '" . self::MARKER . "%'");
-        if (isset($this->officerMundaneId)) {
-            $this->pdo->exec('DELETE FROM ork_session WHERE mundane_id = ' . $this->officerMundaneId);
-            $this->pdo->exec('DELETE FROM ork_authorization WHERE mundane_id = ' . $this->officerMundaneId);
-            $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id = ' . $this->officerMundaneId);
-        }
-    }
-
-    private function createAuthorizedOfficer(): string
-    {
-        $token = md5(self::MARKER . bin2hex(random_bytes(8)));
-        $username = strtolower(self::MARKER . '_' . substr($token, 0, 12));
-
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO ork_mundane
-                (given_name, surname, other_name, username, persona, email, park_id, kingdom_id,
-                 token, waiver_ext, password_expires, password_salt, xtoken, reeve_qualified_until)
-             VALUES
-                (:given_name, :surname, :other_name, :username, :persona, :email, 0, :kingdom_id,
-                 :token, :waiver_ext, :password_expires, :password_salt, :xtoken, :reeve_qualified_until)'
-        );
-        $stmt->execute([
-            ':given_name' => self::MARKER,
-            ':surname' => 'Officer',
-            ':other_name' => '',
-            ':username' => $username,
-            ':persona' => self::MARKER . ' Officer',
-            ':email' => $username . '@example.test',
-            ':kingdom_id' => self::KINGDOM_ID,
-            ':token' => $token,
-            ':waiver_ext' => '',
-            ':password_expires' => '2099-01-01 00:00:00',
-            ':password_salt' => '',
-            ':xtoken' => '',
-            ':reeve_qualified_until' => '2000-01-01',
-        ]);
-        $this->officerMundaneId = (int) $this->pdo->lastInsertId();
-
-        // NOW()/DATE_ADD() computed in SQL, not PHP date(): startup.php sets the
-        // default timezone to America/Chicago, so a PHP-side date()/time() value
-        // compared against the DB's (UTC) NOW() reads as already-expired.
-        $this->pdo->prepare(
-            'INSERT INTO ork_session (mundane_id, token, created, last_seen, expires)
-             VALUES (:mundane_id, :token, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 1 HOUR))'
-        )->execute([
-            ':mundane_id' => $this->officerMundaneId,
-            ':token' => $token,
-        ]);
-
-        // role = 'create' (AUTH_CREATE) satisfies checkPermissionOrAuthority()'s
-        // legacy HasAuthority() branch for kingdom.award.edit unconditionally.
-        $this->pdo->prepare(
-            'INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role)
-             VALUES (:mundane_id, 0, :kingdom_id, 0, 0, \'create\')'
-        )->execute([
-            ':mundane_id' => $this->officerMundaneId,
-            ':kingdom_id' => self::KINGDOM_ID,
-        ]);
-
-        return $token;
+        $this->officer->cleanup();
     }
 
     private function seed(int $awardId): int

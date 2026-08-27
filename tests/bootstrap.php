@@ -59,6 +59,7 @@ if (!class_exists('Memcached', false)) {
 
 require_once ORK3_ROOT . '/startup.php';
 
+require_once __DIR__ . '/Support/AuthorizedOfficerFixture.php';
 require_once __DIR__ . '/Support/EventRsvpFixture.php';
 require_once __DIR__ . '/Support/AuthorizationAddFixture.php';
 require_once __DIR__ . '/Support/BannerFixture.php';
