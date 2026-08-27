@@ -585,14 +585,12 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 			(<?= 100 - $cache_pct ?>%, <?=$origin_gb_str?>) were served by the ORK itself;
 			the remaining <?=$cache_hits_str?>
 			(<?=$cache_pct?>%, <?=$cached_gb_str?>) were served from Cloudflare's cache.
+<?php   if (!empty($ps['BlockedOrChallenged'])) : ?>
+			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
+<?php   endif; ?>
 		</p>
 <?php   if ($delta_line) : ?>
 		<p class="recap-trend"><em>Total requests <?=$delta_line?></em></p>
-<?php   endif; ?>
-<?php   if (!empty($ps['BlockedOrChallenged'])) : ?>
-		<p class="recap-digest">
-			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
-		</p>
 <?php   endif; ?>
 <?php   if (!empty($ps['RequestsGlobal'])) :
 			$req_global_str   = $format_count($ps['RequestsGlobal']);
