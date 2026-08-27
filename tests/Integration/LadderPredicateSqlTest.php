@@ -8,6 +8,12 @@ use PHPUnit\Framework\TestCase;
  * Proves Award::LadderSql() classifies rows the way the deleted
  * pseudoLadderKingdomAwardIds() array did: kingdom ladders are found by column,
  * and an official ladder can never be lowered by its kingdom row.
+ *
+ * testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup() additionally
+ * calls the real Award::GetAwardOptionGroups() -- AwardOptionGroupsTest's
+ * "mirror" tests reimplement the classification loop over sample rows and
+ * never call production code, so this is the only test that exercises
+ * requirement 1 against code that actually runs.
  */
 final class LadderPredicateSqlTest extends TestCase
 {
@@ -17,6 +23,8 @@ final class LadderPredicateSqlTest extends TestCase
 
     /** @var list<int> */
     private array $kingdomAwardIds = [];
+
+    private ?int $kingdomIdForGrouping = null;
 
     protected function setUp(): void
     {
@@ -46,21 +54,54 @@ final class LadderPredicateSqlTest extends TestCase
             return;
         }
         $this->pdo->exec("DELETE FROM ork_kingdomaward WHERE name LIKE '" . self::MARKER . "%'");
+        if ($this->kingdomIdForGrouping !== null) {
+            $stmt = $this->pdo->prepare('DELETE FROM ork_kingdom WHERE kingdom_id = :id');
+            $stmt->execute([':id' => $this->kingdomIdForGrouping]);
+        }
     }
 
-    private function seedKingdomAward(int $awardId, int $isLadder): int
+    private function seedKingdomAward(int $awardId, int $isLadder, int $kingdomId = 0): int
     {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ork_kingdomaward (kingdom_id, award_id, name, is_ladder, max_level)
-             VALUES (0, :award_id, :name, :is_ladder, 0)'
+             VALUES (:kingdom_id, :award_id, :name, :is_ladder, 0)'
         );
         $stmt->execute([
-            ':award_id'  => $awardId,
-            ':name'      => self::MARKER . '-' . $awardId . '-' . $isLadder . '-' . uniqid(),
-            ':is_ladder' => $isLadder,
+            ':kingdom_id' => $kingdomId,
+            ':award_id'   => $awardId,
+            ':name'       => self::MARKER . '-' . $awardId . '-' . $isLadder . '-' . uniqid(),
+            ':is_ladder'  => $isLadder,
         ]);
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    private function seedKingdom(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_kingdom (name, abbreviation, parent_kingdom_id) VALUES (:name, :abbr, 0)'
+        );
+        $stmt->execute([
+            ':name' => self::MARKER . '-Kingdom-' . uniqid(),
+            ':abbr' => 'LSQ',
+        ]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * @param list<array{Label: string, Items: list<array<string, mixed>>}> $groups
+     * @return list<int>
+     */
+    private function groupKingdomAwardIds(array $groups, string $label): array
+    {
+        foreach ($groups as $group) {
+            if (($group['Label'] ?? null) === $label) {
+                return array_map('intval', array_column($group['Items'] ?? [], 'KingdomAwardId'));
+            }
+        }
+
+        return [];
     }
 
     private function effectiveLadderFor(int $kingdomAwardId): int
@@ -111,5 +152,50 @@ final class LadderPredicateSqlTest extends TestCase
                 "kingdomaward_id {$kingdomAwardId} is flagged but LadderSql() missed it"
             );
         }
+    }
+
+    /**
+     * Calls the real Award::GetAwardOptionGroups() -- not a mirror -- so a
+     * regression in requirement 1 (an official ladder must never be
+     * un-toggleable by a kingdom) fails this test, not just a copy of the logic.
+     */
+    public function testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup(): void
+    {
+        $this->kingdomIdForGrouping = $this->seedKingdom();
+
+        // Tie-break case: award-backed (a.is_ladder = 1) but the kingdom row
+        // itself says no. LadderSql()'s GREATEST() makes this effectively 1
+        // regardless -- production must classify it as official, not kingdom.
+        $officialBackedId = $this->seedKingdomAward(21, 0, $this->kingdomIdForGrouping);
+        // Kingdom-only: no Amtgard parent, raised purely by the kingdom's own flag.
+        $kingdomOnlyId = $this->seedKingdomAward(0, 1, $this->kingdomIdForGrouping);
+
+        $result = (new Award())->GetAwardOptionGroups(['KingdomId' => $this->kingdomIdForGrouping]);
+        $this->assertSame(0, $result['Status']['Status'] ?? null, 'GetAwardOptionGroups() must succeed against the seeded kingdom');
+
+        $officialIds = $this->groupKingdomAwardIds($result['Groups'] ?? [], 'Official Ladder Awards');
+        $kingdomIds  = $this->groupKingdomAwardIds($result['Groups'] ?? [], 'Kingdom Ladder Awards');
+
+        $this->assertContains(
+            $officialBackedId,
+            $officialIds,
+            'award_id=21 (a.is_ladder=1) must classify as official even with ka.is_ladder=0'
+        );
+        $this->assertNotContains(
+            $officialBackedId,
+            $kingdomIds,
+            'requirement 1: an official ladder must never be presented as kingdom-only'
+        );
+
+        $this->assertContains(
+            $kingdomOnlyId,
+            $kingdomIds,
+            'a kingdom-only ka.is_ladder=1 row must classify as a kingdom ladder'
+        );
+        $this->assertNotContains(
+            $kingdomOnlyId,
+            $officialIds,
+            'a kingdom-only award must not appear as an official Amtgard order'
+        );
     }
 }

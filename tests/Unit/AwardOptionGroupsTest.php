@@ -149,6 +149,12 @@ final class AwardOptionGroupsTest extends TestCase
      * ka.is_ladder = 1 flag (Award::LadderSql(), Task 1) for a row that carries no
      * official award_id.
      *
+     * This REIMPLEMENTS the classification loop rather than calling the production
+     * method -- it never runs Award::GetAwardOptionGroups() itself, so do not read
+     * these tests as end-to-end coverage; LadderPredicateSqlTest's
+     * testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup() carries the
+     * test against the real method.
+     *
      * @return array<string, list<array<string, mixed>>>
      */
     private function mirrorCategorizeSampleAwards(): array
