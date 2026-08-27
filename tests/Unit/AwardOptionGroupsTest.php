@@ -20,17 +20,17 @@ final class AwardOptionGroupsTest extends TestCase
         $this->awardModel = new Model_Award();
     }
 
-    public function testPseudoLadderIds(): void
+    public function testLadderAwardsSplitIntoOfficialAndKingdomGroups(): void
     {
-        $expected = [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
-        $actual = Award::pseudoLadderKingdomAwardIds();
+        $groups = $this->mirrorCategorizeSampleAwards();
 
-        $this->assertSame($expected, $actual);
-        $this->assertCount(24, $actual);
+        $this->assertArrayHasKey('Official Ladder Awards', $groups);
+        $this->assertArrayHasKey('Kingdom Ladder Awards', $groups);
+        $this->assertNotSame(
+            $groups['Official Ladder Awards'],
+            $groups['Kingdom Ladder Awards'],
+            'Official and kingdom ladders must be visibly distinct groups (requirement 4)'
+        );
     }
 
     public function testPeerageBuckets(): void
@@ -78,7 +78,15 @@ final class AwardOptionGroupsTest extends TestCase
         $html = $this->awardModel->fetch_award_option_list(0);
         $this->assertIsString($html);
 
-        $ladderPos = strpos($html, "optgroup label='Ladder Awards'");
+        // Requirement 4 split "Ladder Awards" into two labeled optgroups; either
+        // (or both) may appear, so take whichever comes first.
+        $ladderPos = false;
+        foreach (["optgroup label='Official Ladder Awards'", "optgroup label='Kingdom Ladder Awards'"] as $needle) {
+            $pos = strpos($html, $needle);
+            if ($pos !== false && ($ladderPos === false || $pos < $ladderPos)) {
+                $ladderPos = $pos;
+            }
+        }
         if ($ladderPos === false) {
             $this->markTestSkipped('No Ladder Awards optgroup in seed data.');
         }
@@ -95,35 +103,41 @@ final class AwardOptionGroupsTest extends TestCase
     }
 
     /**
-     * @return list<int>
-     */
-    private function mirrorPseudoLadderIds(): array
-    {
-        return [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
-    }
-
-    /**
+     * Mirrors Award::GetAwardOptionGroups()'s categorization loop over sample rows
+     * shaped like its per-award array. 'IsLadder' mirrors a.is_ladder (official);
+     * membership in the sample kingdom-ladder id set mirrors a kingdom's own
+     * ka.is_ladder = 1 flag (Award::LadderSql(), Task 1) for a row that carries no
+     * official award_id.
+     *
      * @return array<string, list<array<string, mixed>>>
      */
     private function mirrorCategorizeSampleAwards(): array
     {
-        $award = new Award();
-        $response = $award->GetAwardList(['IsLadder' => null, 'IsTitle' => null]);
-        $this->assertSame(0, $response['Status']['Status']);
+        $kingdomLadderIds = [9001];
+        $rows = [
+            // Official ladder: is_ladder => 1 (a.is_ladder), no kingdom flag needed.
+            ['KingdomAwardId' => 21, 'AwardName' => 'Order of the Rose', 'IsLadder' => 1, 'Peerage' => '', 'IsTitle' => 0, 'TitleClass' => 0],
+            // Kingdom ladder: is_ladder => 0, but ka_is_ladder => 1 (flagged via id membership).
+            ['KingdomAwardId' => 9001, 'AwardName' => 'Order of the Comet', 'KingdomAwardName' => 'Order of the Comet', 'IsLadder' => 0, 'Peerage' => '', 'IsTitle' => 0, 'TitleClass' => 0],
+            ['KingdomAwardId' => 101, 'AwardName' => 'Sir Something', 'IsLadder' => 0, 'Peerage' => 'Knight', 'IsTitle' => 0, 'TitleClass' => 0],
+            ['KingdomAwardId' => 102, 'AwardName' => 'Master Something', 'IsLadder' => 0, 'Peerage' => 'Master', 'IsTitle' => 0, 'TitleClass' => 0],
+            ['KingdomAwardId' => 103, 'AwardName' => 'Paragon Something', 'IsLadder' => 0, 'Peerage' => 'Paragon', 'IsTitle' => 0, 'TitleClass' => 0],
+            ['KingdomAwardId' => 104, 'AwardName' => 'Squire Something', 'IsLadder' => 0, 'Peerage' => 'Squire', 'IsTitle' => 0, 'TitleClass' => 0],
+        ];
 
-        $pseudoLadderIds = $this->mirrorPseudoLadderIds();
-        $knighthoods = $masterhoods = $paragons = $associates = [];
+        $officialLadder = $kingdomLadder = $knighthoods = $masterhoods = $paragons = $associates = [];
 
-        foreach ($response['Awards'] as $row) {
+        foreach ($rows as $row) {
             $sysName = $row['AwardName'] ?? $row['KingdomAwardName'] ?? '';
-            if (in_array((int) ($row['KingdomAwardId'] ?? 0), $pseudoLadderIds, true)) {
-                continue;
-            }
-            if (($row['Peerage'] ?? '') === 'Knight') {
+            $isOfficialLadder = !empty($row['IsLadder']);
+            $isKingdomLadder = !$isOfficialLadder
+                && in_array((int) ($row['KingdomAwardId'] ?? 0), $kingdomLadderIds, true);
+
+            if ($isOfficialLadder) {
+                $officialLadder[] = $row;
+            } elseif ($isKingdomLadder) {
+                $kingdomLadder[] = $row;
+            } elseif (($row['Peerage'] ?? '') === 'Knight') {
                 $knighthoods[] = $row;
             } elseif (($row['Peerage'] ?? '') === 'Paragon') {
                 $paragons[] = $row;
@@ -137,6 +151,8 @@ final class AwardOptionGroupsTest extends TestCase
         }
 
         return [
+            'Official Ladder Awards' => $officialLadder,
+            'Kingdom Ladder Awards' => $kingdomLadder,
             'Knighthoods' => $knighthoods,
             'Masterhoods' => $masterhoods,
             'Paragons' => $paragons,

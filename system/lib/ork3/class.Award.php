@@ -477,18 +477,25 @@ class Award extends Ork3
             return strcmp($a['KingdomAwardName'] ?? '', $b['KingdomAwardName'] ?? '');
         });
 
-        $pseudoLadderIds = self::pseudoLadderKingdomAwardIds();
-        $custom = $ladder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
+        // Effective-ladder kingdomaward ids (Task 1's Award::LadderSql()), replacing the
+        // retired static id list. Only meaningful when a kingdom's own ka.is_ladder flag
+        // could be in play; the system-award list (kingdomId == 0) has no kingdom row to ask.
+        $effectiveLadderIds = $kingdomId > 0 ? $this->fetchEffectiveLadderKingdomAwardIds() : [];
+        $custom = $officialLadder = $kingdomLadder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
 
         foreach ($items as $award) {
             $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            $isPseudoLadder = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-            if ($isPseudoLadder) {
-                $ladder[] = $award;
+            // a.is_ladder = 1: one of the 16 official Amtgard orders. Requirement 1 --
+            // a kingdom can never lower an official ladder, so this check wins ties.
+            $isOfficialLadder = !empty($award['IsLadder']);
+            $isKingdomLadder = !$isOfficialLadder
+                && in_array((int) ($award['KingdomAwardId'] ?? 0), $effectiveLadderIds, true);
+            if ($isOfficialLadder) {
+                $officialLadder[] = $award;
+            } elseif ($isKingdomLadder) {
+                $kingdomLadder[] = $award;
             } elseif ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
                 $custom[] = $award;
-            } elseif (!empty($award['IsLadder'])) {
-                $ladder[] = $award;
             } elseif (in_array($sysName, ['Defender', 'Master'], true)) {
                 $nobles[] = $award;
             } elseif ($sysName === 'Weaponmaster') {
@@ -512,8 +519,13 @@ class Award extends Ork3
         }
 
         $groups = [];
-        if ($ladder !== []) {
-            $groups[] = ['Label' => 'Ladder Awards', 'Items' => $ladder];
+        // Requirement 4: official and kingdom ladders must be visibly distinguishable
+        // everywhere, so this is two groups instead of one shared "Ladder Awards" bucket.
+        if ($officialLadder !== []) {
+            $groups[] = ['Label' => 'Official Ladder Awards', 'Items' => $officialLadder];
+        }
+        if ($kingdomLadder !== []) {
+            $groups[] = ['Label' => 'Kingdom Ladder Awards', 'Items' => $kingdomLadder];
         }
         foreach ([
             'Knighthoods' => $knighthoods,
@@ -532,7 +544,6 @@ class Award extends Ork3
             'Status' => Success(),
             'Groups' => $groups,
             'StandaloneOptions' => $custom,
-            'PseudoLadderIds' => $pseudoLadderIds,
         ];
     }
 
@@ -554,7 +565,6 @@ class Award extends Ork3
             return false;
         }
 
-        $pseudoLadderIds = $grouped['PseudoLadderIds'] ?? self::pseudoLadderKingdomAwardIds();
         $options = '';
 
         foreach ($grouped['Groups'] ?? [] as $group) {
@@ -566,10 +576,11 @@ class Award extends Ork3
             $options .= "<optgroup label='" . htmlspecialchars($label, ENT_QUOTES) . "'>";
             foreach ($items as $award) {
                 $extra = '';
-                if ($label === 'Ladder Awards') {
-                    $isPseudo = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-                    $awardId = $isPseudo ? 0 : ($award['AwardId'] ?? 0);
-                    $extra = " data-is-ladder='1' data-award-id='" . htmlspecialchars($awardId, ENT_QUOTES) . "'";
+                if ($label === 'Kingdom Ladder Awards') {
+                    // No official award backs this rung -- data-award-id stays 0.
+                    $extra = " data-is-ladder='1' data-award-id='0'";
+                } elseif ($label === 'Official Ladder Awards') {
+                    $extra = " data-is-ladder='1' data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "'";
                 } elseif ($label === 'Masterhoods') {
                     $extra = " data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "' data-peerage='Master'";
                 }
@@ -594,14 +605,26 @@ class Award extends Ork3
     }
 
     /**
+     * Kingdomaward ids the effective-ladder predicate (Award::LadderSql(), Task 1)
+     * currently flags. Live replacement for the retired static id list -- see
+     * GetAwardOptionGroups(), the only caller.
+     *
      * @return list<int>
      */
-    public static function pseudoLadderKingdomAwardIds(): array
+    private function fetchEffectiveLadderKingdomAwardIds(): array
     {
-        return [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
+        $ids = [];
+        $sql = 'select ka.kingdomaward_id
+                from ' . DB_PREFIX . 'kingdomaward ka
+                left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
+                where ' . self::LadderSql() . ' = 1';
+        $r = $this->db->query($sql);
+        if ($r !== false) {
+            while ($r->next()) {
+                $ids[] = (int) $r->kingdomaward_id;
+            }
+        }
+
+        return $ids;
     }
 }
