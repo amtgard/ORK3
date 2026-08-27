@@ -1232,10 +1232,13 @@ Changes*, saw the modal close, and would reasonably believe their edits landed.
 if (!force && el.classList.contains('ka-open') && kaIsDirty(el)) {
     var saver = KA_MODAL_SAVE[id];
     kaConfirm('Discard your changes?', function() { kaCloseModal(id, true); }, 'Unsaved Changes', {
-        okLabel: 'Discard Changes',
-        danger: true,
-        altLabel: saver ? 'Save Changes' : null,
-        onAlt: saver ? function() { saver(function(ok) { if (ok) kaCloseModal(id, true); }); } : null
+        // Button DOM order is cancel | alt | ok, so the destructive action takes
+        // the ALT slot to land in the middle. Putting Discard on `ok` would render
+        // Go Back | Save Changes | Discard Changes — the wrong order.
+        cancelLabel: 'Go Back',
+        okLabel: 'Save Changes',
+        altLabel: 'Discard Changes',
+        onAlt: function() { kaCloseModal(id, true); }
     });
     return;
 }
