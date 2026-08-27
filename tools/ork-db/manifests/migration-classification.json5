@@ -91,6 +91,6 @@
     "2026-07-14-qualification-tests.sql": { "class": "S+RC", "render": "full", "notes": "Qualification test schema plus idempotent per-kingdom config defaults" },
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
     "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
-    "2026-08-27-kingdomaward-ladder-columns.sql": { "class": "S", "render": "full", "notes": "Adds is_ladder/max_level to ork_kingdomaward; both exist in prod via direct DB access but were never migrated, so fresh builds lacked them. Idempotent ADD COLUMN IF NOT EXISTS, no backfill." }
+    "2026-08-27-kingdomaward-ladder-columns.sql": { "class": "S", "render": "full", "notes": "Adds is_ladder/max_level/disabled to ork_kingdomaward. All three exist in prod via direct DB access but were never migrated, so fresh builds lacked them; disabled backs award soft-delete (95944b80). Idempotent ADD COLUMN IF NOT EXISTS, no backfill." }
   }
 }
