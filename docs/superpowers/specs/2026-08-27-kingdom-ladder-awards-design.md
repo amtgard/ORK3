@@ -106,6 +106,26 @@ Note `GetLadderMasterMap()` holds 14 entries, not 16: Walker (31) is deliberatel
 and Order of the Flame (34) is missing — it falls through to 10, which is its correct
 value, but by accident rather than by declaration. The helper makes that explicit.
 
+**The Zodiac predicate.** Order of the Zodiac (30) is granted once per calendar month, so
+its twelve positions are months rather than levels — nobody advances from March to April.
+It is the **only** award of that nature; no other ladder has an alternate progression.
+
+That does not warrant a kind taxonomy, which would imply a family that does not exist. It
+warrants one named predicate, so the special case lives in a single place instead of
+being spelled out wherever it is needed:
+
+```php
+Award::IsMonthlyLadder(int $awardId): bool   // true for 30, false for everything else
+```
+
+This is the same discipline as `DisplayTitleSql()` — not an abstraction over a set, just
+a name for a fact that several call sites need. This spec is already deleting three
+scattered `$awardId === 30` literals; it must not add a fourth.
+
+Everything in this document is written for ordinary ranked ladders, which is every ladder
+except Zodiac. Zodiac's behaviour is specified separately in
+`2026-08-27-zodiac-monthly-awards-design.md`, which depends on this predicate.
+
 ### 2. Rank display vs. rank offering
 
 These are separate questions and are currently conflated. Separating them is what makes
