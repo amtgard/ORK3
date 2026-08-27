@@ -426,6 +426,37 @@ class Kingdom extends Ork3
         $this->kingdomaward->month_limit = $request['MonthLimit'];
         $this->kingdomaward->is_title = $request['IsTitle'];
         $this->kingdomaward->title_class = $request['TitleClass'];
+
+        // Is this row one of the 16 official Amtgard ladders? If so its ladder
+        // configuration belongs to Amtgard, not to the kingdom (requirement 1).
+        $this->db->Clear();
+        $officialRs = $this->db->DataSet(
+            'select IFNULL(a.is_ladder, 0) as official_is_ladder
+             from ' . DB_PREFIX . 'kingdomaward ka
+             left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
+             where ka.kingdomaward_id = ' . (int) $request['KingdomAwardId']
+        );
+        $officialLadder = false;
+        if ($officialRs && $officialRs->Next()) {
+            $officialLadder = (int) $officialRs->official_is_ladder === 1;
+        }
+
+        if (!$officialLadder) {
+            // yapo drops null, so write 0 rather than null to clear the flag.
+            $isLadder = isset($request['IsLadder']) && (int) $request['IsLadder'] === 1 ? 1 : 0;
+            $this->kingdomaward->is_ladder = $isLadder;
+            if ($isLadder === 1) {
+                // Ladder and Title? are mutually exclusive.
+                $this->kingdomaward->is_title = 0;
+            }
+
+            $maxLevel = (int) ($request['MaxLevel'] ?? 0);
+            if ($maxLevel < 0) {
+                $maxLevel = 0;
+            }
+            $this->kingdomaward->max_level = min(12, $maxLevel); // Rule 2
+        }
+
         $this->kingdomaward->save();
         return Success();
     }
