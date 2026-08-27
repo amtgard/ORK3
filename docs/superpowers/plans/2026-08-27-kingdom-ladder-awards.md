@@ -432,19 +432,60 @@ In `tests/Unit/AwardOptionGroupsTest.php`, replace `testPseudoLadderIds()` (line
 ```php
     public function testLadderAwardsSplitIntoOfficialAndKingdomGroups(): void
     {
+        // Assert MEMBERSHIP, not just that the two groups differ. A test that only
+        // checks the keys exist and the arrays are not identical still passes when
+        // the classification is swapped — which is the exact rule this is guarding.
         $groups = $this->mirrorCategorizeSampleAwards();
 
-        $this->assertArrayHasKey('Official Ladder Awards', $groups);
-        $this->assertArrayHasKey('Kingdom Ladder Awards', $groups);
-        $this->assertNotSame(
-            $groups['Official Ladder Awards'],
-            $groups['Kingdom Ladder Awards'],
-            'Official and kingdom ladders must be visibly distinct groups (requirement 4)'
+        $officialIds = array_column($groups['Official Ladder Awards'] ?? [], 'KingdomAwardId');
+        $kingdomIds  = array_column($groups['Kingdom Ladder Awards'] ?? [], 'KingdomAwardId');
+
+        $this->assertContains(
+            self::SAMPLE_OFFICIAL_KAID,
+            $officialIds,
+            'an award backed by a.is_ladder=1 belongs in the official group'
+        );
+        $this->assertNotContains(
+            self::SAMPLE_OFFICIAL_KAID,
+            $kingdomIds,
+            'requirement 1: an official ladder must never fall into the kingdom bucket'
+        );
+
+        $this->assertContains(
+            self::SAMPLE_KINGDOM_KAID,
+            $kingdomIds,
+            'an award raised only by ka.is_ladder=1 belongs in the kingdom group'
+        );
+        $this->assertNotContains(
+            self::SAMPLE_KINGDOM_KAID,
+            $officialIds,
+            'a kingdom ladder must not be presented as an Amtgard order'
+        );
+    }
+
+    public function testAnAwardThatIsBothOfficialAndKingdomFlaggedGroupsAsOfficial(): void
+    {
+        // The tie-break. GREATEST() makes both flags 1 for an official award, so the
+        // classifier must resolve the overlap in official's favour (requirement 1).
+        $groups = $this->mirrorCategorizeSampleAwards();
+
+        $this->assertContains(
+            self::SAMPLE_BOTH_FLAGGED_KAID,
+            array_column($groups['Official Ladder Awards'] ?? [], 'KingdomAwardId')
+        );
+        $this->assertNotContains(
+            self::SAMPLE_BOTH_FLAGGED_KAID,
+            array_column($groups['Kingdom Ladder Awards'] ?? [], 'KingdomAwardId')
         );
     }
 ```
 
-Update `mirrorCategorizeSampleAwards()`'s sample rows so at least one carries `ka_is_ladder => 1` with `is_ladder => 0`, and one carries `is_ladder => 1`.
+Give the test class three id constants — `SAMPLE_OFFICIAL_KAID`,
+`SAMPLE_KINGDOM_KAID`, `SAMPLE_BOTH_FLAGGED_KAID` — and update
+`mirrorCategorizeSampleAwards()`'s sample rows to cover all three cases:
+one row official only (`IsLadder => 1`), one kingdom only (effective-ladder
+but `IsLadder => 0`), and one flagged BOTH ways. The third is what proves
+the tie-break; without it requirement 1 is untested at the PHP layer.
 
 - [ ] **Step 6: Confirm nothing else calls the deleted method**
 
