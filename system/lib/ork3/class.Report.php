@@ -6938,18 +6938,67 @@ class Report extends Ork3
                 }
                 $name = $awardResult->award_name;
                 $awardCols[(int) $awardResult->award_id] = [
+                    'AwardId' => (int) $awardResult->award_id,
                     'Name' => $name,
                     'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
                     'KnightGroup' => $knightGroupMap[$name] ?? '',
                 ];
             }
         }
+        $officialAwardIds = array_keys($awardCols);
+
+        // Kingdom-scoped grid only: a second, separated group of the kingdom's OWN
+        // ladders (ka.is_ladder=1) that are not already official ladders. These are
+        // not comparable across kingdoms (a kingdom-raised custom award can share the
+        // generic award_id=94 "Custom Award" placeholder with a wholly different
+        // kingdom's award of the same name), so they are keyed on kingdomaward_id,
+        // never on award_id, and rendered after every official column.
+        $kingdomCols = [];
+        if ($kingdomId > 0) {
+            $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
+                     FROM ' . DB_PREFIX . 'kingdomaward ka
+                     JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                     WHERE ka.kingdom_id = ' . $kingdomId . '
+                       AND ka.disabled = 0
+                       AND ' . Award::LadderSql() . ' = 1
+                       AND NOT (' . Award::OfficialLadderSql() . ') AND a.award_id != 31
+                     ORDER BY IFNULL(ka.name, a.name)';
+
+            $this->db->Clear();
+            $kaResult = $this->db->DataSet($kaSql);
+            if ($kaResult) {
+                while ($kaResult->Next()) {
+                    $kaid = (int) $kaResult->kingdomaward_id;
+                    if (!$kaid) {
+                        continue;
+                    }
+                    $name = $kaResult->award_name;
+                    $kingdomCols['k' . $kaid] = [
+                        'AwardId' => (int) $kaResult->award_id,
+                        'KingdomAwardId' => $kaid,
+                        'Scope' => 'kingdom',
+                        'Name' => $name,
+                        'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
+                        'KnightGroup' => $knightGroupMap[$name] ?? '',
+                    ];
+                }
+            }
+        }
+        $kingdomAwardIds = array_map(static function ($c) {
+            return $c['KingdomAwardId'];
+        }, $kingdomCols);
+
+        // Union preserves $awardCols' key order (official) then appends the keys that
+        // only exist in $kingdomCols (kingdom) -- official columns always come first.
+        $awardCols = $awardCols + $kingdomCols;
 
         if ($awardCols === []) {
             return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
         }
 
-        $awardIds = implode(',', array_keys($awardCols));
+        // Fold both id sets into the cache key so a kingdom marking/unmarking a
+        // custom award as ladder busts the cached grid, same as an official change.
+        $awardIds = implode(',', $officialAwardIds) . '|' . implode(',', $kingdomAwardIds);
         $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
@@ -6964,42 +7013,88 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
-                           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
-                    FROM " . DB_PREFIX . 'mundane m
-                    LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
-                    JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
-                    JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND ' . Award::OfficialLadderSql() . '
-                      AND a.award_id IN (' . $awardIds . ")
-                      AND (ma.revoked = 0 OR ma.revoked IS NULL)
-                      {$locationClause}
-                    GROUP BY m.mundane_id, a.award_id
-                    ORDER BY m.persona";
-
-        $this->db->Clear();
-        $dataResult = $this->db->DataSet($dataSql);
         $playerData = [];
-        if ($dataResult) {
-            while ($dataResult->Next()) {
-                $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
-                    continue;
+
+        if ($officialAwardIds !== []) {
+            $officialAwardIdsCsv = implode(',', $officialAwardIds);
+            $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
+                               GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+                        FROM " . DB_PREFIX . 'mundane m
+                        LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+                        JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
+                        JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                        JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                        WHERE m.active = 1 AND ' . Award::OfficialLadderSql() . '
+                          AND a.award_id IN (' . $officialAwardIdsCsv . ")
+                          AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                          {$locationClause}
+                        GROUP BY m.mundane_id, a.award_id
+                        ORDER BY m.persona";
+
+            $this->db->Clear();
+            $dataResult = $this->db->DataSet($dataSql);
+            if ($dataResult) {
+                while ($dataResult->Next()) {
+                    $mid = (int) $dataResult->mundane_id;
+                    $aid = (int) $dataResult->award_id;
+                    if (!$mid || !$aid) {
+                        continue;
+                    }
+                    if (!isset($playerData[$mid])) {
+                        $playerData[$mid] = [
+                            'MundaneId' => $mid,
+                            'Persona' => $dataResult->persona,
+                            'ParkId' => (int) $dataResult->park_id,
+                            'ParkName' => $dataResult->park_name ?? '',
+                            'Suspended' => (int) $dataResult->suspended,
+                            'Awards' => [],
+                        ];
+                    }
+                    $val = (int) $dataResult->award_count;
+                    $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
                 }
-                if (!isset($playerData[$mid])) {
-                    $playerData[$mid] = [
-                        'MundaneId' => $mid,
-                        'Persona' => $dataResult->persona,
-                        'ParkId' => (int) $dataResult->park_id,
-                        'ParkName' => $dataResult->park_name ?? '',
-                        'Suspended' => (int) $dataResult->suspended,
-                        'Awards' => [],
-                    ];
+            }
+        }
+
+        // Kingdom-own ladder ranks -- grouped and filtered on kingdomaward_id, never on
+        // award_id, so two kingdoms' custom ladders sharing the award_id=94 placeholder
+        // (or any other collision) can never merge into one column's data.
+        if ($kingdomAwardIds !== []) {
+            $kingdomAwardIdsCsv = implode(',', $kingdomAwardIds);
+            $kaDataSql = 'SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, ma.kingdomaward_id,
+                               GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+                        FROM ' . DB_PREFIX . 'mundane m
+                        LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+                        JOIN ' . DB_PREFIX . "awards ma ON ma.mundane_id = m.mundane_id
+                        WHERE m.active = 1
+                          AND ma.kingdomaward_id IN ({$kingdomAwardIdsCsv})
+                          AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                          {$locationClause}
+                        GROUP BY m.mundane_id, ma.kingdomaward_id
+                        ORDER BY m.persona";
+
+            $this->db->Clear();
+            $kaDataResult = $this->db->DataSet($kaDataSql);
+            if ($kaDataResult) {
+                while ($kaDataResult->Next()) {
+                    $mid = (int) $kaDataResult->mundane_id;
+                    $kaid = (int) $kaDataResult->kingdomaward_id;
+                    if (!$mid || !$kaid) {
+                        continue;
+                    }
+                    if (!isset($playerData[$mid])) {
+                        $playerData[$mid] = [
+                            'MundaneId' => $mid,
+                            'Persona' => $kaDataResult->persona,
+                            'ParkId' => (int) $kaDataResult->park_id,
+                            'ParkName' => $kaDataResult->park_name ?? '',
+                            'Suspended' => (int) $kaDataResult->suspended,
+                            'Awards' => [],
+                        ];
+                    }
+                    $val = (int) $kaDataResult->award_count;
+                    $playerData[$mid]['Awards']['k' . $kaid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
                 }
-                $val = (int) $dataResult->award_count;
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
             }
         }
 
