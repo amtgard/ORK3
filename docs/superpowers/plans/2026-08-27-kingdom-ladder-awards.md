@@ -1872,7 +1872,7 @@ git commit -m "Enhancement: star pill for recognition past the top of a ladder"
 ### Task 8: Rule 1 — a ladder grant must carry a rank
 
 **Files:**
-- Modify: `system/lib/ork3/class.Player.php:3386` (`AddAward`)
+- Modify: `system/lib/ork3/class.Player.php` — `AddAward` (now ~:3483; the plan's original :3386 is stale, the file has grown)
 - Create: `tests/Support/AuthorizedOfficerFixture.php` — extract `createAuthorizedOfficer()` out of `tests/Integration/EditAwardLadderTest.php` (Task 4) so both it and this task's test share one implementation. `AddAward` is token-gated; a test without a token gets a refusal, not a rule-1 rejection, and would pass for entirely the wrong reason.
 - Modify: `tests/Integration/EditAwardLadderTest.php` — use the extracted fixture
 - Test: `tests/Integration/LadderGrantRuleTest.php` (create)
@@ -1965,7 +1965,7 @@ Expected: FAIL — the unranked grant is accepted.
 
 - [ ] **Step 3: Implement Rule 1**
 
-In `Player::AddAward` (`class.Player.php:3386`), before the insert:
+In `Player::AddAward` (now ~`class.Player.php:3483` — line refs in this plan predate several tasks' edits; find the method by name, not by line), before the insert:
 
 ```php
         // Rule 1: an unranked grant of an effective ladder award is allowed only when
@@ -2070,19 +2070,25 @@ Expected: FAIL — the kingdom-ladder row buckets as `nonladder`.
 
 - [ ] **Step 3: Move the bucketing onto the effective-ladder flag**
 
-At `Kingdomnew_recommendations_panel.tpl:75`, replace:
+At `Kingdomnew_recommendations_panel.tpl:75` the real expression has **three**
+branches, not two — an `already` case comes first and must be preserved:
 
 ```php
-$bucket = (int)$rec['Rank'] > 0 ? 'below' : 'nonladder';
+data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>"
 ```
 
-with:
+Change only the inner test, leaving the `already` branch exactly as it is:
 
 ```php
-// Bucket on what the award *is*, not on whether this row happens to carry a rank.
-// A kingdom-ladder recommendation has no rank yet and must not file as non-ladder.
-$bucket = (int) $rec['IsLadder'] === 1 ? 'below' : 'nonladder';
+data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['IsLadder'] === 1 ? 'below' : 'nonladder') ?>"
 ```
+
+Bucket on what the award **is**, not on whether this row happens to carry a rank.
+A kingdom-ladder recommendation has no rank yet and must not file as non-ladder.
+
+**Do not collapse this to a two-branch expression.** `already` marks recommendations
+for an award the player already holds, and dropping it would silently refile every
+one of them.
 
 - [ ] **Step 4: Make the Grant button carry the max rank**
 
