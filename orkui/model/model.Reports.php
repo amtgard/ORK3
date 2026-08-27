@@ -343,7 +343,7 @@ class Model_Reports extends Model
     }
 
     /**
-     * @return array{ScopeName: string, LadderAwards: array<int, array<string, mixed>>, GridRows: list<array<string, mixed>>}
+     * @return array{ScopeName: string, LadderAwards: array<int|string, array<string, mixed>>, GridRows: list<array<string, mixed>>}
      */
     public function ladder_award_grid(string $type, int $kingdomId, int $parkId): array
     {

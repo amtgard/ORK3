@@ -6863,7 +6863,7 @@ class Report extends Ork3
     /**
      * Ladder awards grid report assembly (T-RPT-01).
      *
-     * @return array{ScopeName: string, LadderAwards: array<int, array<string, mixed>>, GridRows: list<array<string, mixed>>}
+     * @return array{ScopeName: string, LadderAwards: array<int|string, array<string, mixed>>, GridRows: list<array<string, mixed>>}
      */
     public function GetLadderAwardGrid($request)
     {
@@ -6916,9 +6916,15 @@ class Report extends Ork3
             }
         }
 
-        // The global Ladder Grid compares players across kingdoms, and kingdom ladders
-        // are not comparable across kingdoms (two kingdoms' "Order of the Hunter" are
-        // different rows) -- so this surface, alone, stays official-only.
+        // Only the UNSCOPED (bare Park-only, no KingdomId at all) Ladder Grid compares
+        // players across kingdoms -- kingdom ladders are not comparable there (two
+        // kingdoms' "Order of the Hunter" are different rows), so THAT surface alone
+        // stays official-only. A Park-scoped request that also carries a KingdomId
+        // (the live route: Reports/ladder_grid falls through KingdomId -> Park without
+        // resetting $kingdom_id, see controller.Reports.php::ladder_grid) is NOT that
+        // case -- a park sits inside exactly one kingdom, so that kingdom's ladders ARE
+        // directly comparable for every player on the grid, and are deliberately
+        // included below (kingdom-column gate is on $kingdomId, not on $parkId).
         if ($kingdomId > 0) {
             $kSql = 'SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
                      FROM ' . DB_PREFIX . 'kingdomaward ka
@@ -6954,12 +6960,17 @@ class Report extends Ork3
         }
         $officialAwardIds = array_keys($awardCols);
 
-        // Kingdom-scoped grid only: a second, separated group of the kingdom's OWN
-        // ladders (ka.is_ladder=1) that are not already official ladders. These are
-        // not comparable across kingdoms (a kingdom-raised custom award can share the
-        // generic award_id=94 "Custom Award" placeholder with a wholly different
-        // kingdom's award of the same name), so they are keyed on kingdomaward_id,
-        // never on award_id, and rendered after every official column.
+        // Whenever a KingdomId is known -- Kingdom-scoped OR Park-scoped-within-a-
+        // kingdom (see the intent note above $kSql) -- append a second, separated
+        // group of the kingdom's OWN ladders (ka.is_ladder=1) that are not already
+        // official ladders. These are not comparable ACROSS kingdoms (a kingdom-raised
+        // custom award can share the generic award_id=94 "Custom Award" placeholder
+        // with a wholly different kingdom's award of the same name), so they are keyed
+        // on kingdomaward_id, never on award_id, and rendered after every official
+        // column. $locationClause below (park_id when set, else kingdom_id) still
+        // scopes the row data to the park when this is the Park-scoped case -- the
+        // kingdom's ladder COLUMNS are kingdom-wide, but the ROWS never widen past the
+        // requested park.
         $kingdomCols = [];
         if ($kingdomId > 0) {
             $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class

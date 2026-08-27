@@ -212,6 +212,66 @@ final class LadderGridTest extends TestCase
     }
 
     /**
+     * controller.Reports.php::ladder_grid() sets $kingdom_id in its KingdomId
+     * branch and never resets it when a later ParkId branch overrides $type to
+     * 'Park' -- so the live Park Ladder Grid route always forwards a non-zero
+     * KingdomId alongside a non-zero ParkId. That is deliberately NOT the
+     * "unscoped" case the spec protects (two kingdoms' same-named ladders being
+     * incomparable): a park sits inside exactly one kingdom, so that kingdom's
+     * ladders ARE directly comparable for every player on the grid. This test
+     * mirrors the real request shape and asserts both halves of that intent:
+     * the kingdom group is present, and the rows still stay park-scoped (the
+     * columns are kingdom-wide, the rows are not).
+     */
+    public function testParkScopedGridAlsoShowsItsKingdomsLadders(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 94, 'T10RPT Park-Scoped Hunter', true);
+
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $otherParkId = $this->fixture->secondParkIdInKingdom($kid, $parkId);
+
+        $inPark = $this->fixture->createPlayer($parkId, 'park-ladder-in');
+        $this->fixture->insertLadderAward($inPark['mundane_id'], $parkId, $kid, $ka, 94, 4);
+
+        $outOfParkMundaneId = null;
+        if ($otherParkId > 0) {
+            $outOfPark = $this->fixture->createPlayer($otherParkId, 'park-ladder-out');
+            $this->fixture->insertLadderAward($outOfPark['mundane_id'], $otherParkId, $kid, $ka, 94, 4);
+            $outOfParkMundaneId = $outOfPark['mundane_id'];
+        }
+
+        $editor = $this->fixture->createPlayer($parkId, 'park-ladder-editor');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $report = new Report();
+        // Both ids set, exactly as the live controller forwards them for a Park request.
+        $assembly = $report->GetLadderAwardGrid([
+            'KingdomId' => $kid,
+            'ParkId' => $parkId,
+            'Token' => $editor['token'],
+        ]);
+
+        $scopes = array_map(fn ($c) => $c['Scope'] ?? 'official', $assembly['LadderAwards']);
+        $this->assertContains(
+            'kingdom',
+            $scopes,
+            "a park sits inside exactly one kingdom, so a Park request that also carries KingdomId must still show that kingdom's ladder group"
+        );
+
+        $mundaneIds = array_column($assembly['GridRows'], 'MundaneId');
+        $this->assertContains($inPark['mundane_id'], $mundaneIds, 'player in the requested park must appear');
+        if ($outOfParkMundaneId !== null) {
+            $this->assertNotContains(
+                $outOfParkMundaneId,
+                $mundaneIds,
+                'kingdom ladder columns are kingdom-wide, but rows must stay scoped to the requested park'
+            );
+        }
+    }
+
+    /**
      * @return array{KingdomId: int, ParkId: int, Token: string}
      */
     private function kingdomGridRequest(int $kid): array
