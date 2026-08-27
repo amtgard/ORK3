@@ -805,8 +805,15 @@ final class EditAwardLadderTest extends TestCase
         $this->kingdom = new Kingdom();
     }
 
+    /** @var list<int> kingdomaward ids whose ork_awards grants must be cleaned up */
+    private array $grantIdsToClean = [];
+
     protected function tearDown(): void
     {
+        foreach ($this->grantIdsToClean as $kingdomAwardId) {
+            $this->pdo->exec("DELETE FROM ork_awards WHERE kingdomaward_id = " . (int) $kingdomAwardId);
+        }
+        $this->grantIdsToClean = [];
         $this->pdo->exec("DELETE FROM ork_kingdomaward WHERE name LIKE '" . self::MARKER . "%'");
     }
 
@@ -902,6 +909,11 @@ final class EditAwardLadderTest extends TestCase
         $this->kingdom->EditAward([
             'KingdomAwardId' => $id, 'KingdomId' => 1, 'IsLadder' => 1, 'MaxLevel' => 10,
         ]);
+        // Track it so tearDown removes it. NOT an inline delete after the assertion:
+        // if the assertion below ever fails — which is exactly the regression this
+        // test exists to catch — an inline cleanup never runs, and ork_awards has no
+        // FK back to ork_kingdomaward, so nothing else would collect the row either.
+        $this->grantIdsToClean[] = $id;
         $this->pdo->exec(
             "INSERT INTO ork_awards (mundane_id, kingdomaward_id, `rank`, date)
              VALUES (1, {$id}, 4, '2020-01-01')"
@@ -914,8 +926,6 @@ final class EditAwardLadderTest extends TestCase
         $stmt = $this->pdo->prepare('SELECT `rank` FROM ork_awards WHERE kingdomaward_id = :id');
         $stmt->execute([':id' => $id]);
         $this->assertSame(4, (int) $stmt->fetchColumn());
-
-        $this->pdo->exec("DELETE FROM ork_awards WHERE kingdomaward_id = {$id}");
     }
 }
 ```
