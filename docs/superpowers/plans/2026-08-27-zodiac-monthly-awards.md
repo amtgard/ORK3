@@ -409,6 +409,72 @@ git commit -m "Enhancement: grant and recommend a Zodiac by calendar month"
 
 ---
 
+### Task 3A: Zodiac has no top, so the "topped out" recommendation guard must not apply
+
+**Added mid-execution.** Zodiac Task 3's implementer flagged this and it checks out
+against the spec.
+
+`Player::AddAwardRecommendation()` blocks a recommendation when the award is in
+`Award::GetLadderMasterMap()` and the player has "topped out" — either
+`max(rank) >= MaxRank`, or they hold the Master-peerage companion award. Zodiac is
+map entry 30 (`MaxRank => 12`, `MasterAwardIds => [8]`), so that guard fires for it.
+
+Under the monthly model there is no top. The spec's requirement 3 is explicit:
+
+> A player who already holds a month can be granted **or recommended** that month
+> **again** — indicated, never blocked.
+
+and §3 gives the reasoning the star pill already follows: *"The star exists to
+express recognition past the top of a ladder; Zodiac has no top."* Zodiac is
+already exempt from Rule 1 and from the star for exactly this reason; the
+recommendation guard is the remaining place that still treats it as a ranked ladder.
+
+**Live impact, measured against the dev database:** 5 players cannot currently be
+recommended for a Zodiac — 1 holding a legacy rank-12 grant, 4 holding Master
+Zodiac. It grows as the monthly model is used, since "topped out" never becomes
+true in a meaningful sense.
+
+**Files:**
+- Modify: `system/lib/ork3/class.Player.php` (`AddAwardRecommendation`)
+- Modify: `tests/Integration/ZodiacGrantTest.php`
+
+- [ ] **Step 1: Exempt Zodiac from the topped-out guard**
+
+Guard the Case-B block with `!Award::IsMonthlyLadder($recAwardId)`, matching how
+Rule 1 and the star already exempt it. Leave the guard fully intact for every other
+ladder — this is a Zodiac carve-out, not a relaxation.
+
+**Do not touch Case A** (a direct recommendation for a Master peerage the player
+already holds). Recommending someone for Master Zodiac when they hold it is still
+a genuine duplicate.
+
+- [ ] **Step 2: Preserve the `~` behaviour the spec protects**
+
+Spec §8 says `GetLadderMasterMap()`'s Zodiac→Master Zodiac mapping and the
+`~`-marker suppression that hangs off it are **preserved as-is**. Your change must
+not disturb either — it applies only to the recommendation guard.
+
+- [ ] **Step 3: Tests**
+
+Add to `tests/Integration/ZodiacGrantTest.php`:
+
+- a player holding a legacy rank-12 Zodiac **can** be recommended for another
+- a player holding Master Zodiac **can** be recommended for a Zodiac
+- a player who has topped out a **non-Zodiac** ladder is **still blocked** — the
+  carve-out must not leak
+- recommending someone for **Master Zodiac** when they already hold it is still
+  blocked (Case A intact)
+
+Prove non-vacuousness: remove the exemption, watch the first two fail, restore.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "Bugfix: Zodiac has no top, so topped-out never blocks its recommendations" -- system/lib/ork3/class.Player.php tests/Integration/ZodiacGrantTest.php
+```
+
+---
+
 ### Task 4: Month pills
 
 **Files:**
