@@ -87,7 +87,7 @@ define('DB_PREFIX', 'ork_');
 define('CACHE_HOST', 'ork.amtgard.com');
 
 // System Config
-define('LOGIN_TIMEOUT', 72 * 60 * 60);
+define('LOGIN_TIMEOUT', 30 * 24 * 60 * 60);
 define('APP_STAGE', 'DEV');
 define('UI_LOCALITY', 'LOCAL'); // REMOTE
 define('ORK3_SERVICE_URL', HTTP_SERVICE);
