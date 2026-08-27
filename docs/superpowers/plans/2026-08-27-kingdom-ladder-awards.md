@@ -29,6 +29,19 @@
 - **Official-lock tooltip, verbatim:** *"Standard Amtgard ladder award — this can't be changed."*
 - **Walker (`award_id = 31`) stays excluded from ladder reports.** Unchanged by this plan.
 - **Test baseline before any change: 184 tests, 427 assertions, 4 errors, 17 failures.** These pre-existing errors/failures are not yours. Any *new* error or failure is. Re-run and compare against this baseline, never against zero.
+- **Domain write methods are TOKEN-GATED.** `Player::AddAward`, `Player::UpdateAward`,
+  `Player::ReconcileAward`, `Player::AddAwardRecommendation` and `Kingdom::EditAward`
+  all refuse any write without a valid `Token` in the request, and there is no bypass
+  (`TokenGatedCallSiteTest` documents the pattern). `ork_test` ships with **zero**
+  `ork_mundane` and `ork_kingdom` rows, so a test cannot clone an existing session
+  either — it must seed mundane + session + authorization rows itself.
+  **Task 4 already solved this**: `tests/Integration/EditAwardLadderTest.php` has a
+  working `createAuthorizedOfficer()` returning a usable token, following the same
+  pattern as the existing `EventPlanningFixture` / `AttendanceFixture`. Reuse it —
+  Task 8 extracts it to `tests/Support/` (see that task), and every later test that
+  calls a domain write method takes it from there rather than re-deriving it.
+  Test code in this plan that calls those methods without a `Token` is **incomplete**;
+  add one.
 - **Tests run on the HOST, not in Docker.** Host is PHP 8.5 / PHPUnit 11.5.56; the
   `ork3app` container is PHP 8.1 and has no `vendor/bin/phpunit` at all. Run:
   `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit` (add `--filter <TestName>` to scope).
@@ -1574,6 +1587,8 @@ git commit -m "Enhancement: star pill for recognition past the top of a ladder"
 
 **Files:**
 - Modify: `system/lib/ork3/class.Player.php:3386` (`AddAward`)
+- Create: `tests/Support/AuthorizedOfficerFixture.php` — extract `createAuthorizedOfficer()` out of `tests/Integration/EditAwardLadderTest.php` (Task 4) so both it and this task's test share one implementation. `AddAward` is token-gated; a test without a token gets a refusal, not a rule-1 rejection, and would pass for entirely the wrong reason.
+- Modify: `tests/Integration/EditAwardLadderTest.php` — use the extracted fixture
 - Test: `tests/Integration/LadderGrantRuleTest.php` (create)
 
 **Interfaces:**

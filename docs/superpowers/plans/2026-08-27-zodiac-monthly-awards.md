@@ -14,7 +14,13 @@
 
 ## Global Constraints
 
-Everything in the companion plan's Global Constraints applies here unchanged. In addition:
+Everything in the companion plan's Global Constraints applies here unchanged —
+**including that domain write methods are token-gated**. Every `AddAward`,
+`UpdateAward`, `ReconcileAward` and `AddAwardRecommendation` call in this plan's
+test code omits `Token` and is therefore incomplete as written; take a token from
+`tests/Support/AuthorizedOfficerFixture.php` (extracted in the companion plan's
+Task 8). Without one the call is refused before any Zodiac logic runs, so a test
+can pass or fail for reasons that have nothing to do with months. In addition:
 
 - **`rank` is never written for Zodiac by any UI path, and never read as a month.** Existing ranks stay exactly as they are. The **one** exception is the SOAP/JSON write path, which keeps accepting inbound `Rank` for backwards compatibility — see Task 9.
 - **`zodiac_month`: `1`–`12` = January–December. `0` = no month recorded.** A month outside 1–12 is rejected server-side.
