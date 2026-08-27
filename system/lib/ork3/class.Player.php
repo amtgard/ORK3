@@ -3640,29 +3640,18 @@ class Player extends Ork3
             }
 
             // Rule 1: an unranked grant of an effective ladder award is allowed only
-            // when the recipient is already at or past max -- the star path. Granting
-            // a ladder award with no rank to someone below max is the mistake that
-            // produced the rankless ladder grants this feature exists to stop. Order
-            // of the Zodiac (award_id 30) is exempt: it is granted once per calendar
-            // month, so a monthless grant must still be accepted for the 2,024 that
-            // already exist.
+            // when the recipient is already at or past max -- the star path. See
+            // RejectUnrankedLadderGrant()'s docblock. This is a create, so there is
+            // no existing row to exclude from the held-rank check.
             $rank = (int) ($request['Rank'] ?? 0);
-            if ($rank === 0 && !Award::IsMonthlyLadder((int) $request['AwardId'])) {
-                $ladder = $this->GetLadderContext((int) $request['KingdomAwardId']);
-                if ($ladder['is_ladder']) {
-                    $maxRank = Award::MaxRankFor((int) $request['AwardId'], $ladder['max_level']);
-                    $currentRank = $this->CurrentLadderRank((int) $request['RecipientId'], (int) $request['KingdomAwardId']);
-                    if (!Award::OffersStar((int) $request['AwardId'], $ladder['max_level'], $currentRank)) {
-                        $awardName = $ladder['award_name'] !== '' ? $ladder['award_name'] : 'This award';
-
-                        return InvalidParameter(sprintf(
-                            '%s is a ranked award — choose a rank, or use %s if they have already reached %d.',
-                            $awardName,
-                            "\u{2731}",
-                            $maxRank
-                        ));
-                    }
-                }
+            $rejection = $this->RejectUnrankedLadderGrant(
+                (int) $request['AwardId'],
+                (int) $request['KingdomAwardId'],
+                (int) $request['RecipientId'],
+                $rank
+            );
+            if ($rejection !== null) {
+                return $rejection;
             }
 
             $awards->save();
@@ -3708,8 +3697,15 @@ class Player extends Ork3
     /**
      * The recipient's highest currently-held (non-revoked) rank on this ladder
      * award -- the star test compares this against Award::MaxRankFor().
+     *
+     * $excludeAwardsId (0 = none) drops one specific ork_awards row from the
+     * MAX(rank). UpdateAward()/ReconcileAward() pass the row being written so
+     * that row's own pre-write rank can never justify the very write that is
+     * about to change (or zero out) it -- the held rank must come from every
+     * OTHER grant on this ladder. AddAward() has no existing row, so it never
+     * passes one.
      */
-    private function CurrentLadderRank(int $recipientId, int $kingdomAwardId): int
+    private function CurrentLadderRank(int $recipientId, int $kingdomAwardId, int $excludeAwardsId = 0): int
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -3717,9 +3713,62 @@ class Player extends Ork3
              WHERE mundane_id = ' . $recipientId . '
                AND kingdomaward_id = ' . $kingdomAwardId . '
                AND revoked = 0'
+               . ($excludeAwardsId > 0 ? ' AND awards_id != ' . $excludeAwardsId : '')
         );
 
         return ($rs && $rs->Next()) ? (int) $rs->max_rank : 0;
+    }
+
+    /**
+     * Rule 1: a ladder grant must carry a rank in 1..max, unless the recipient
+     * already holds a rank at or past max on this ladder -- the star path.
+     * Granting (or leaving) a ladder award unranked for someone below max is
+     * the mistake that produced the rankless ladder grants this feature exists
+     * to stop. Order of the Zodiac (award_id 30) is exempt (Award::IsMonthlyLadder()):
+     * it is granted once per calendar month, so a monthless grant must still be
+     * accepted for the 2,024 that already exist.
+     *
+     * Sole spelling of Rule 1 -- AddAward(), UpdateAward() and ReconcileAward()
+     * all call this rather than re-deriving it, so the check and the message
+     * can never drift into separate copies again.
+     *
+     * $excludeAwardsId lets an edit/reconcile caller exclude the very row being
+     * written from the held-rank lookup (see CurrentLadderRank()) -- on those
+     * paths the operative rank is the one the row is being changed TO, and an
+     * edit that removes the rank which reached max must not be able to use
+     * that about-to-be-overwritten value to justify itself.
+     *
+     * @return array{Status:int,Error:string,Detail:mixed}|null flat
+     *         InvalidParameter() array to return verbatim when the grant must
+     *         be refused, null when the write may proceed.
+     */
+    private function RejectUnrankedLadderGrant(
+        int $awardId,
+        int $kingdomAwardId,
+        int $recipientId,
+        int $submittedRank,
+        int $excludeAwardsId = 0
+    ): ?array {
+        if ($submittedRank !== 0 || Award::IsMonthlyLadder($awardId)) {
+            return null;
+        }
+        $ladder = $this->GetLadderContext($kingdomAwardId);
+        if (!$ladder['is_ladder']) {
+            return null;
+        }
+        $maxRank = Award::MaxRankFor($awardId, $ladder['max_level']);
+        $currentRank = $this->CurrentLadderRank($recipientId, $kingdomAwardId, $excludeAwardsId);
+        if (Award::OffersStar($awardId, $ladder['max_level'], $currentRank)) {
+            return null;
+        }
+        $awardName = $ladder['award_name'] !== '' ? $ladder['award_name'] : 'This award';
+
+        return InvalidParameter(sprintf(
+            '%s is a ranked award — choose a rank, or use %s if they have already reached %d.',
+            $awardName,
+            "\u{2731}",
+            $maxRank
+        ));
     }
 
     private function revoke_award(& $awards, $revocation, $revoker_id)
@@ -3873,10 +3922,16 @@ class Player extends Ork3
                 // updating custom_name, alias_award_id, and kingdomaward_id in the same write.
                 $extra_sql = '';
                 $ctid = $this->getCustomTitleAwardId();
+                // Rule 1 (below) must check the award/kingdomaward the row is being
+                // changed TO, not the one it currently holds -- these track that,
+                // defaulting to the existing row and updated if reclassified.
+                $guardAwardId = (int) $awards->award_id;
+                $guardKingdomAwardId = (int) $awards->kingdomaward_id;
                 if (array_key_exists('AwardId', $request) && valid_id($request['AwardId'])) {
                     $req_award_id = (int)$request['AwardId'];
                     if ($req_award_id === 94 || $req_award_id === $ctid) {
                         $extra_sql .= ', award_id=' . $req_award_id;
+                        $guardAwardId = $req_award_id;
                         // Also rewrite kingdomaward_id so AwardsForPlayer's ka->a join yields the
                         // correct base award (is_title flag, peerage, etc). Find the matching
                         // kingdomaward row in the same kingdom as the existing row.
@@ -3894,6 +3949,7 @@ class Player extends Ork3
                             if ($tq && $tq->size() > 0) {
                                 $tq->next();
                                 $extra_sql .= ', kingdomaward_id=' . (int)$tq->kingdomaward_id;
+                                $guardKingdomAwardId = (int)$tq->kingdomaward_id;
                             }
                         }
                     }
@@ -3921,6 +3977,15 @@ class Player extends Ork3
                     } else {
                         $extra_sql .= ', alias_award_id=NULL';
                     }
+                }
+
+                // Rule 1: mirrors AddAward's guard, but the operative rank is the one
+                // the row is being changed TO, and the "held rank" that can justify an
+                // unranked write must exclude this row's own (about-to-be-overwritten)
+                // rank -- see RejectUnrankedLadderGrant()'s docblock.
+                $rejection = $this->RejectUnrankedLadderGrant($guardAwardId, $guardKingdomAwardId, (int) $awards->mundane_id, $set_rank, $set_awards_id);
+                if ($rejection !== null) {
+                    return $rejection;
                 }
 
                 $sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
@@ -4000,6 +4065,16 @@ class Player extends Ork3
                 $set_given_by_id = intval($request['GivenById']);
                 $set_note = $request['Note'];
                 $set_awards_id = intval($request['AwardsId']);
+
+                // Rule 1: mirrors AddAward's guard, but the operative rank is the one
+                // the row is being changed TO (award_id/kingdomaward_id after any
+                // reclassification above), and the "held rank" that can justify an
+                // unranked write must exclude this row's own (about-to-be-overwritten)
+                // rank -- see RejectUnrankedLadderGrant()'s docblock.
+                $rejection = $this->RejectUnrankedLadderGrant((int) $set_award_id, (int) $set_kingdomaward_id, (int) $awards->mundane_id, $set_rank, $set_awards_id);
+                if ($rejection !== null) {
+                    return $rejection;
+                }
 
                 // Snapshot prior state before the write so the audit-log diff renderer
                 // has a real before/after pair for ReconcileAward (shares Player::UpdateAward's

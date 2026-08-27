@@ -134,6 +134,63 @@ final class LadderGrantRuleTest extends TestCase
         );
     }
 
+    /**
+     * Like grantExistingRank(), but returns the awards_id so UpdateAward()/
+     * ReconcileAward() tests have a row to edit. by_whom_id is left at its
+     * default (0) so ReconcileAward's no-op short-circuit (which requires
+     * by_whom_id > 0) never fires for these rows.
+     */
+    private function seedAwardRow(int $kingdomAwardId, int $awardId, int $rank, string $date = '2020-01-01'): int
+    {
+        $this->pdo->exec(
+            "INSERT INTO ork_awards (mundane_id, kingdomaward_id, award_id, `rank`, date)
+             VALUES ({$this->recipientId}, {$kingdomAwardId}, {$awardId}, {$rank}, '{$date}')"
+        );
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function updateAwardRequest(int $awardsId, int $awardId, int $rank, string $date = '2026-01-01', string $note = ''): array
+    {
+        return [
+            'Token' => $this->token,
+            'AwardsId' => $awardsId,
+            'RecipientId' => $this->recipientId,
+            'AwardId' => $awardId,
+            'CustomName' => '',
+            'AliasAwardId' => 0,
+            'Rank' => $rank,
+            'Date' => $date,
+            'GivenById' => 0,
+            'Note' => $note,
+            'ParkId' => 0,
+            'KingdomId' => 0,
+            'EventId' => 0,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function reconcileAwardRequest(int $awardsId, int $kingdomAwardId, int $rank, string $date = '2026-01-01', string $note = ''): array
+    {
+        return [
+            'Token' => $this->token,
+            'AwardsId' => $awardsId,
+            'KingdomAwardId' => $kingdomAwardId,
+            'Rank' => $rank,
+            'Date' => $date,
+            'GivenById' => 0,
+            'Note' => $note,
+            'ParkId' => 0,
+            'KingdomId' => 0,
+            'EventId' => 0,
+        ];
+    }
+
     public function testWithoutAuthorityTheCallIsRefusedNotRuleOneRejected(): void
     {
         // award_id 21 = Order of the Rose (official ladder, ork_award.is_ladder = 1),
@@ -238,5 +295,131 @@ final class LadderGrantRuleTest extends TestCase
         $this->assertNotSame(0, (int) $result['Status']);
         $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
         $this->assertStringContainsString('5', (string) $result['Detail']);
+    }
+
+    // -----------------------------------------------------------------
+    // Task 8A: Rule 1 must also cover UpdateAward() and ReconcileAward().
+    // -----------------------------------------------------------------
+
+    public function testUpdateAwardRejectsSettingRankZeroForBelowMaxPlayer(): void
+    {
+        $kaId = $this->seedKingdomAward(21);
+        $awardsId = $this->seedAwardRow($kaId, 21, 5);
+
+        $result = $this->player->UpdateAward($this->updateAwardRequest($awardsId, 21, 0));
+
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
+        $this->assertStringContainsString("\u{2731}", (string) $result['Detail']);
+    }
+
+    public function testUpdateAwardCannotUseItsOwnAboutToBeOverwrittenRankToJustifyItself(): void
+    {
+        // This row is the ONLY grant establishing rank 10 -- no other row does.
+        // The guard must exclude the row being written from the held-rank
+        // lookup, or editing it down to unranked would see its own stale
+        // pre-write rank=10 and wrongly allow the write. Without the exclusion
+        // (CurrentLadderRank's $excludeAwardsId), this test fails.
+        $kaId = $this->seedKingdomAward(21);
+        $awardsId = $this->seedAwardRow($kaId, 21, 10);
+
+        $result = $this->player->UpdateAward($this->updateAwardRequest($awardsId, 21, 0));
+
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
+    }
+
+    public function testUpdateAwardAcceptsUnrankedWriteWhenAnotherGrantAlreadyHoldsMax(): void
+    {
+        // The star path on edit: a SEPARATE row already carries rank 10, so
+        // editing this row (an existing bonus/unranked record, or one being
+        // converted to one) to stay/become unranked must succeed -- exactly
+        // the reconciliation-flow case the plan calls out.
+        $kaId = $this->seedKingdomAward(21);
+        $this->grantExistingRank($kaId, 21, 10);
+        $awardsId = $this->seedAwardRow($kaId, 21, 3);
+
+        $result = $this->player->UpdateAward($this->updateAwardRequest($awardsId, 21, 0, '2026-01-01', 'bonus edit'));
+
+        $this->assertSame(0, (int) $result['Status']);
+    }
+
+    public function testUpdateAwardZodiacEditStaysExempt(): void
+    {
+        $kaId = $this->seedKingdomAward(30);
+        $awardsId = $this->seedAwardRow($kaId, 30, 0);
+
+        $result = $this->player->UpdateAward($this->updateAwardRequest($awardsId, 30, 0, '2026-02-01'));
+
+        $this->assertSame(0, (int) $result['Status']);
+    }
+
+    public function testUpdateAwardNonLadderEditIsUnaffected(): void
+    {
+        // award_id 1 = Master Rose, a peerage, not a ladder.
+        $kaId = $this->seedKingdomAward(1);
+        $awardsId = $this->seedAwardRow($kaId, 1, 0);
+
+        $result = $this->player->UpdateAward($this->updateAwardRequest($awardsId, 1, 0, '2026-01-01', 'note edit'));
+
+        $this->assertSame(0, (int) $result['Status']);
+    }
+
+    public function testReconcileAwardRejectsSettingRankZeroForBelowMaxPlayer(): void
+    {
+        $kaId = $this->seedKingdomAward(21);
+        $awardsId = $this->seedAwardRow($kaId, 21, 5);
+
+        $result = $this->player->ReconcileAward($this->reconcileAwardRequest($awardsId, $kaId, 0));
+
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
+        $this->assertStringContainsString("\u{2731}", (string) $result['Detail']);
+    }
+
+    public function testReconcileAwardCannotUseItsOwnAboutToBeOverwrittenRankToJustifyItself(): void
+    {
+        $kaId = $this->seedKingdomAward(21);
+        $awardsId = $this->seedAwardRow($kaId, 21, 10);
+
+        $result = $this->player->ReconcileAward($this->reconcileAwardRequest($awardsId, $kaId, 0));
+
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
+    }
+
+    public function testReconcileAwardAcceptsUnrankedWriteWhenAnotherGrantAlreadyHoldsMax(): void
+    {
+        // The reconcile picker's star gate today reads client-side PnConfig
+        // state only -- this proves the server independently reaches the same
+        // answer for the picker's exact endpoint.
+        $kaId = $this->seedKingdomAward(21);
+        $this->grantExistingRank($kaId, 21, 10);
+        $awardsId = $this->seedAwardRow($kaId, 21, 3);
+
+        $result = $this->player->ReconcileAward($this->reconcileAwardRequest($awardsId, $kaId, 0, '2026-01-01', 'reconciled as bonus'));
+
+        $this->assertSame(0, (int) $result['Status']);
+    }
+
+    public function testReconcileAwardZodiacStaysExempt(): void
+    {
+        $kaId = $this->seedKingdomAward(30);
+        $awardsId = $this->seedAwardRow($kaId, 30, 0);
+
+        $result = $this->player->ReconcileAward($this->reconcileAwardRequest($awardsId, $kaId, 0, '2026-02-01'));
+
+        $this->assertSame(0, (int) $result['Status']);
+    }
+
+    public function testReconcileAwardNonLadderIsUnaffected(): void
+    {
+        // award_id 1 = Master Rose, a peerage, not a ladder.
+        $kaId = $this->seedKingdomAward(1);
+        $awardsId = $this->seedAwardRow($kaId, 1, 0);
+
+        $result = $this->player->ReconcileAward($this->reconcileAwardRequest($awardsId, $kaId, 0, '2026-01-01', 'note edit'));
+
+        $this->assertSame(0, (int) $result['Status']);
     }
 }
