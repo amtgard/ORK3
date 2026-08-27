@@ -7017,7 +7017,12 @@ class Report extends Ork3
         // Fold both id sets into the cache key so a kingdom marking/unmarking a
         // custom award as ladder busts the cached grid, same as an official change.
         $awardIds = implode(',', $officialAwardIds) . '|' . implode(',', $kingdomAwardIds);
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+        // 'gv' (grid version) bumped for the Zodiac total-count change: the award id
+        // set the key above is built from is unchanged by that change (award 30 was
+        // already an official ladder column before and after), so without an
+        // explicit version token a pre-deploy cache entry -- built with the old
+        // GREATEST(rank, count) cell value -- would keep serving for up to 1200s.
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'gv' => 2]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
@@ -7036,7 +7041,7 @@ class Report extends Ork3
         if ($officialAwardIds !== []) {
             $officialAwardIdsCsv = implode(',', $officialAwardIds);
             $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
-                               GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+                               MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
                         FROM " . DB_PREFIX . 'mundane m
                         LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                         JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
@@ -7068,7 +7073,14 @@ class Report extends Ork3
                             'Awards' => [],
                         ];
                     }
-                    $val = (int) $dataResult->award_count;
+                    // Order of the Zodiac is granted once per calendar month, not
+                    // ranked -- its legacy `rank` column predates the monthly model
+                    // and is never a meaningful ceiling, so the cell must show the
+                    // total granted, never GREATEST(rank, count) (misleading for the
+                    // 35 players who already hold duplicate months).
+                    $val = Award::IsMonthlyLadder($aid)
+                        ? (int) $dataResult->grant_count
+                        : max((int) $dataResult->max_rank, (int) $dataResult->grant_count);
                     $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
                 }
             }

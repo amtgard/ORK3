@@ -170,6 +170,29 @@ final class LadderGridTest extends TestCase
     }
 
     /**
+     * Order of the Zodiac (award_id 30) is granted once per calendar month, so its
+     * twelve positions are months, not levels. GetLadderAwardGrid's cell value was
+     * GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) -- fine for a ranked ladder, but
+     * for Zodiac the legacy `rank` column predates the monthly model and is never a
+     * meaningful ceiling. Seed three grants carrying legacy ranks well above the
+     * true total (9, 10, 11) so a GREATEST-based cell would misreport 11 where the
+     * correct answer -- the total granted -- is 3.
+     */
+    public function testZodiacColumnShowsTheTotalCountNotTheHighestRank(): void
+    {
+        $player = $this->playerWithThreeZodiacs();
+
+        $cell = $this->gridCellFor($player, 30);
+
+        $this->assertSame(3, (int) $cell['Rank']);
+    }
+
+    public function testWalkerRemainsExcludedFromTheGrid(): void
+    {
+        $this->assertNotContains(31, array_column($this->gridColumnsFor([]), 'AwardId'));
+    }
+
+    /**
      * GetLadderAwardGrid caches GridRows per (type, id, awards) -- proves the
      * kingdom-scoped cache entry is never read back by, or clobbered by, a
      * Park-only ("global") request against a park in the SAME kingdom, and that
@@ -286,6 +309,44 @@ final class LadderGridTest extends TestCase
             'ParkId' => 0,
             'Token' => $editor['token'],
         ];
+    }
+
+    /**
+     * @return array{mundane_id: int, park_id: int, kingdom_id: int, token: string}
+     */
+    private function playerWithThreeZodiacs(): array
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'zodiac-three');
+
+        // Legacy ranks well above the true grant count -- GREATEST(MAX(rank), COUNT())
+        // would misreport 11 where the correct total (what this test protects) is 3.
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 9);
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 10);
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 11);
+
+        return $player;
+    }
+
+    /**
+     * @param array{mundane_id: int, kingdom_id: int} $player
+     * @return array<string, mixed>
+     */
+    private function gridCellFor(array $player, int $awardId): array
+    {
+        $request = $this->kingdomGridRequest((int) $player['kingdom_id']);
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid($request);
+
+        foreach ($assembly['GridRows'] as $row) {
+            if ((int) $row['MundaneId'] === (int) $player['mundane_id']) {
+                return $row['Awards'][$awardId] ?? [];
+            }
+        }
+
+        return [];
     }
 
     /**

@@ -529,7 +529,7 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 	<!-- ── Context ────────────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Ladder award ranks for all active players. <strong>M</strong> = Master. Numbers indicate current rank. Players with no ladder awards are hidden.
+		<span>Ladder award ranks for all active players. <strong>M</strong> = Master. Numbers indicate current rank, except the Zodiac column, which is granted monthly rather than ranked and shows the total granted. Players with no ladder awards are hidden.
 			Columns are grouped by Knighthood path with colour-coded headers
 			(<span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border:1px solid #93c5fd;border-radius:2px;vertical-align:middle;"></span> Battle,
 			<span style="display:inline-block;width:10px;height:10px;background:#e2e8f0;border:1px solid #94a3b8;border-radius:2px;vertical-align:middle;"></span> Sword,
