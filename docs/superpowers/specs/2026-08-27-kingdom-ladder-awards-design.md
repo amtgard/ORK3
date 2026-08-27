@@ -140,12 +140,23 @@ at `revised.css:1337`:
 - Rendered **only** when the player's current rank ≥ max rank. Below that, the picker
   looks exactly as it does today.
 - Sits after the last numbered pill, showing **✱** instead of a number.
-- Selecting it submits `currentRank + 1`. Nothing rejects it.
+- Selecting it submits an **unranked** grant — `rank = 0`. It does **not** submit
+  `max + 1`, and no grant ever carries a rank above the award's max.
 - Selecting it reveals inline: *"The standard cap for this award is {max} — but don't let
   that stop you from recognizing someone!"*
 
 Because it keys on the player's rank against the award's max, it appears on a 12-rank
 kingdom ladder only at 12, and on an official order at 10.
+
+**The star applies to the official 16 as well.** Their max rank is locked at 10, but a
+player who has reached 10 can still be recognised again — as an unranked grant. Locking
+the *shape* of the official ladders does not restrict recognising someone who has
+finished one.
+
+This is what makes max rank a real ceiling for ranked grants while keeping recognition
+open-ended: ranks run 1..max, and anything beyond max is expressed as an unranked grant
+rather than an out-of-range number. Ranks above max that already exist in the data — from
+imports or historical records — still render; nothing rewrites them.
 
 ### 5. Surfaces
 
@@ -165,8 +176,9 @@ All eight move to effective ladder and real max rank instead of a hardcoded 10.
 
 **Server grant paths.** All funnel through `Model_Player::add_player_award`, called from
 `controller.Award.php:107` (Award/kingdom, Award/park), `controller.Player.php:132` and
-`controller.Admin.php:1126`. Rank is advisory so no validation changes, but all four must
-stop dropping rank for kingdom ladders.
+`controller.Admin.php:1126`. All four must stop dropping rank for kingdom ladders, and
+all four inherit Rule 1 (below) because it lives in `add_player_award` rather than in any
+one caller.
 
 **Grant-from-recommendation** — `Kingdomnew_recommendations_panel.tpl`:
 
@@ -198,10 +210,28 @@ kingdom-scoped grid; the global grid stays official-only.
 
 ### 6. Error handling
 
-The design removes most failure modes rather than handling them:
+Two hard rules, and otherwise the design removes failure modes rather than handling them.
 
-- Nothing rejects a rank — advisory by decision.
-- Max Rank ≤ 12 is the only hard validation, enforced client- and server-side.
+**Rule 1 — a ladder grant must carry a rank in 1..max, with one exception.** An
+*unranked* grant of an effective ladder award is allowed **only** when the recipient's
+current rank for that award is already ≥ max. That is the star path. Granting a ladder
+award with no rank to someone below max is rejected — it is the mistake that produces the
+rankless ladder grants this feature exists to stop.
+
+Enforced in `Model_Player::add_player_award` so all four grant callers inherit it, and
+mirrored in the pickers (which simply do not render a star below max).
+
+Rejection message: *"{Award} is a ranked award — choose a rank, or use ✱ if they have
+already reached {max}."*
+
+**Rule 2 — Max Rank ≤ 12**, enforced client-side (`max="12"`) and clamped in
+`Kingdom::EditAward`.
+
+Everything else:
+
+- No grant is rejected for exceeding max, because the UI can no longer produce one — the
+  star yields an unranked grant instead. Pre-existing ranks above max are left alone and
+  still render.
 - An official award cannot be un-laddered: `GREATEST` makes it arithmetically impossible,
   `EditAward` refuses the write, and the disabled checkbox is the third line of defence.
 - An official award's max rank cannot be changed either — `EditAward` rejects a
@@ -225,6 +255,12 @@ Then:
 - Un-ticking a kingdom ladder leaves `ork_awards.rank` untouched, and past grants still
   render their ranks.
 - The star pill appears at rank ≥ max and not below.
+- The star submits `rank = 0`, not `max + 1`.
+- An unranked ladder grant is rejected for a player below max, and accepted for a player
+  at or above max.
+- The star is available on an official ladder at rank 10, even though its max rank is
+  locked.
+- A pre-existing grant with rank above max still renders and is not rewritten.
 - A kingdom-ladder recommendation buckets as "below", not "nonladder".
 - Walker (`award_id = 31`) remains excluded from ladder reports.
 
