@@ -206,7 +206,14 @@ $server->wsdl->addComplexType(
 				'Name'=>array('name'=>'Name','type'=>'xsd:string'),
 				'KingdomAwardName'=>array('name'=>'KingdomAwardName','type'=>'xsd:string'),
 				'CustomAwardName'=>array('name'=>'CustomName','type'=>'xsd:string'),
+				// IsLadder is the effective ladder (kingdom ladders included).
+				// OfficialIsLadder keeps the pre-2026-08 official-only meaning for
+				// consumers that need to compare across kingdoms. MaxRank is the
+				// ladder's real height (Award::MaxRankFor), so a consumer never has
+				// to guess it from the award's name.
 				'IsLadder'=>array('name'=>'IsLadder','type'=>'xsd:int'),
+				'OfficialIsLadder'=>array('name'=>'OfficialIsLadder','type'=>'xsd:int'),
+				'MaxRank'=>array('name'=>'MaxRank','type'=>'xsd:int'),
 				'IsTitle'=>array('name'=>'IsTitle','type'=>'xsd:int'),
 				'TitleClass'=>array('name'=>'TitleClass','type'=>'xsd:int'),
 				'ParkName'=>array('name'=>'ParkName','type'=>'xsd:string'),
