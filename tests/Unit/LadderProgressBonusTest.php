@@ -158,4 +158,134 @@ final class LadderProgressBonusTest extends TestCase
         $this->assertSame(0, $result['BonusCount']);
         $this->assertTrue($result['Approx']);
     }
+
+    // -----------------------------------------------------------------
+    // Task 10A: BonusCount reaches the tiles; reconcile rows resolve
+    // MaxRank and IsBonus in the domain.
+    // -----------------------------------------------------------------
+
+    public function testEveryTileCarriesBonusCountIncludingTheSyntheticMasterTile(): void
+    {
+        $player = new Player();
+
+        $result = $player->GetLadderProgress([
+            'Awards' => [
+                // Order of the Rose (21): reaches max rank 10 in 2020, plus one
+                // bonus grant recorded in 2024 -- exercises the classified-loop
+                // tile-build site.
+                ['AwardId' => 21, 'IsLadder' => 1, 'Rank' => 10, 'Date' => '2020-01-01', 'Name' => 'Order of the Rose'],
+                ['AwardId' => 21, 'IsLadder' => 1, 'Rank' => 0, 'Date' => '2024-01-01', 'Name' => 'Order of the Rose'],
+                // Master Smith (award 2) held with no Order of the Smith (22)
+                // grants at all -- exercises the synthetic-master-tile site.
+                ['AwardId' => 2, 'IsLadder' => 0, 'Rank' => 0, 'Date' => '2021-01-01', 'Name' => 'Master Smith'],
+            ],
+        ]);
+
+        $this->assertSame(0, (int) $result['Status']);
+        $tiles = $result['Detail'];
+        $this->assertNotEmpty($tiles);
+
+        $byAwardId = [];
+        foreach ($tiles as $tile) {
+            $this->assertArrayHasKey('BonusCount', $tile, ($tile['Name'] ?? '?') . ' tile is missing BonusCount');
+            $byAwardId[(int) $tile['AwardId']] = $tile;
+        }
+
+        $this->assertSame(1, $byAwardId[21]['BonusCount'], 'classified-loop tile');
+        $this->assertArrayHasKey(22, $byAwardId, 'Master Smith must synthesize an Order of the Smith tile');
+        $this->assertSame(0, $byAwardId[22]['BonusCount'], 'synthetic master tile must carry BonusCount = 0 explicitly');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function historicalRow(int $awardsId, int $awardId, int $rank, string $date, int $kaMaxLevel = 0): array
+    {
+        return [
+            'AwardsId' => $awardsId,
+            'AwardId' => $awardId,
+            'Rank' => $rank,
+            'IsLadder' => 1,
+            'GivenById' => 0,
+            'EnteredById' => 0,
+            'Date' => $date,
+            'OfficerRole' => 'none',
+            'IsTitle' => 0,
+            'KaMaxLevel' => $kaMaxLevel,
+            'Name' => 'Award ' . $awardId,
+        ];
+    }
+
+    /**
+     * An already-reconciled (attributed) grant: excluded from HistoricalAwards,
+     * but must still be seen by the max-reached-date window -- that is exactly
+     * what "full grant history, not just the unreconciled subset" means.
+     *
+     * @return array<string, mixed>
+     */
+    private function realRow(int $awardsId, int $awardId, int $rank, string $date, int $kaMaxLevel = 0): array
+    {
+        return [
+            'AwardsId' => $awardsId,
+            'AwardId' => $awardId,
+            'Rank' => $rank,
+            'IsLadder' => 1,
+            'GivenById' => 1,
+            'EnteredById' => 1,
+            'Date' => $date,
+            'OfficerRole' => 'none',
+            'IsTitle' => 0,
+            'KaMaxLevel' => $kaMaxLevel,
+            'Name' => 'Award ' . $awardId,
+        ];
+    }
+
+    public function testReconcileRowResolvesMaxRankForOfficialAndKingdomLadders(): void
+    {
+        $player = new Player();
+
+        $dto = $player->GetReconcileSuggestions([
+            // Order of the Rose (21), official ladder, max 10.
+            $this->historicalRow(1, 21, 0, '2020-01-01'),
+            // Order of the Zodiac (30), official ladder, max 12 -- the map
+            // override wins even though a (wrong) ka_max_level of 10 rides along.
+            $this->historicalRow(2, 30, 0, '2020-01-01', 10),
+            // A kingdom-raised ladder (award_id 0) with its own max_level of 5.
+            $this->historicalRow(3, 0, 0, '2020-01-01', 5),
+        ]);
+
+        $byAwardsId = [];
+        foreach ($dto['HistoricalAwards'] as $row) {
+            $byAwardsId[$row['AwardsId']] = $row;
+        }
+
+        $this->assertSame(10, $byAwardsId[1]['MaxRank'], 'Order of the Rose');
+        $this->assertSame(12, $byAwardsId[2]['MaxRank'], 'Order of the Zodiac');
+        $this->assertSame(5, $byAwardsId[3]['MaxRank'], "a kingdom ladder's own max_level");
+    }
+
+    public function testReconcileRowFlagsBonusGrantsAndLeavesPreMaxGrantsAlone(): void
+    {
+        $player = new Player();
+
+        $dto = $player->GetReconcileSuggestions([
+            // Reaches max rank 10 in 2020 via a real (already-attributed) grant --
+            // present only to anchor the window, never itself reconcilable.
+            $this->realRow(100, 21, 10, '2020-01-01'),
+            // Historical unranked grant dated AFTER max was reached -- bonus.
+            $this->historicalRow(1, 21, 0, '2024-01-01'),
+            // Historical unranked grant dated BEFORE max was reached -- not
+            // bonus, still reconcilable.
+            $this->historicalRow(2, 21, 0, '2019-01-01'),
+        ]);
+
+        $byAwardsId = [];
+        foreach ($dto['HistoricalAwards'] as $row) {
+            $byAwardsId[$row['AwardsId']] = $row;
+        }
+
+        $this->assertArrayNotHasKey(100, $byAwardsId, 'the real/attributed row is not itself a reconcile row');
+        $this->assertTrue($byAwardsId[1]['IsBonus'], 'unranked grant dated after max was reached');
+        $this->assertFalse($byAwardsId[2]['IsBonus'], 'unranked grant dated before max was reached');
+    }
 }

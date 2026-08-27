@@ -344,6 +344,33 @@ class Player extends Ork3
             }
         }
 
+        // Full per-award grant history (both already-reconciled rows and the
+        // still-historical ones being partitioned above) so the max-reached-date
+        // window below sees every ranked grant, not just the unreconciled subset --
+        // otherwise "first reached max" cannot be computed. Mirrors the grouping
+        // GetLadderProgress() builds from the same AwardsForPlayer() shape.
+        $grantsByAwardId = [];
+        $kaMaxLevelByAwardId = [];
+        foreach ($awards as $a) {
+            if (!is_array($a) || (int)($a['IsLadder'] ?? 0) !== 1) {
+                continue;
+            }
+            $aid = (int)($a['AwardId'] ?? 0);
+            $grantsByAwardId[$aid][] = [
+                'Rank' => (int)($a['Rank'] ?? 0),
+                'Date' => (string)($a['Date'] ?? ''),
+            ];
+            if (!isset($kaMaxLevelByAwardId[$aid])) {
+                $kaMaxLevelByAwardId[$aid] = (int)($a['KaMaxLevel'] ?? 0);
+            }
+        }
+        $maxRankByAwardId = [];
+        $maxReachedByAwardId = [];
+        foreach ($grantsByAwardId as $aid => $grantsForAward) {
+            $maxRankByAwardId[$aid] = Award::MaxRankFor($aid, $kaMaxLevelByAwardId[$aid] ?? 0);
+            $maxReachedByAwardId[$aid] = $this->LadderMaxReachedDate($maxRankByAwardId[$aid], $grantsForAward);
+        }
+
         // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
         $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
             return (int)($a['IsLadder'] ?? 0) === 1;
@@ -362,14 +389,30 @@ class Player extends Ork3
 
         $rankSuggestions = [];
         $groupState = [];
-        foreach ($historicalAwards as $a) {
+        foreach ($historicalAwards as &$a) {
             $aid = (int)$a['AwardId'];
             $awardsId = (int)$a['AwardsId'];
             $isLadder = (int)($a['IsLadder'] ?? 0);
             if (!$isLadder) {
                 $rankSuggestions[$awardsId] = 0;
+                // Dead in practice today ($historicalAwards is already filtered to
+                // IsLadder===1 above), but set defensively so every row carries
+                // these keys regardless of that filter.
+                $a['MaxRank'] = 0;
+                $a['IsBonus'] = false;
                 continue;
             }
+
+            // Resolved in the domain layer so the template never re-derives a
+            // ladder's max rank (the ($aid === 30) ? 12 : 10 duplicate this
+            // replaces). KaMaxLevel is already on the row -- no new query.
+            $a['MaxRank'] = $maxRankByAwardId[$aid] ?? Award::MaxRankFor($aid, (int)($a['KaMaxLevel'] ?? 0));
+            // A bonus grant (unranked, dated after the player first reached max)
+            // is deliberate recognition, not an unmatched record -- it must not
+            // be offered for reconciliation.
+            $a['IsBonus'] = (int)($a['Rank'] ?? 0) === 0
+                && $this->IsBonusLadderGrantDate($maxReachedByAwardId[$aid] ?? null, (string)($a['Date'] ?? ''));
+
             if (!isset($groupState[$aid])) {
                 $real = [];
                 foreach ($realRanksByAwardId[$aid] ?? [] as $r) {
@@ -395,6 +438,7 @@ class Player extends Ork3
                 $groupState[$aid]['usedRanks'][$c] = true;
             }
         }
+        unset($a);
 
         $awardTypeCount = count(array_unique(array_column($historicalAwards, 'AwardId')));
         $totalCount = count($historicalAwards);
@@ -1578,9 +1622,8 @@ class Player extends Ork3
     ): array {
         $maxRank = Award::MaxRankFor($awardId, $kaMaxLevel);
 
-        $rankSet    = [];
-        $topRank    = 0;
-        $maxReached = null;
+        $rankSet = [];
+        $topRank = 0;
 
         foreach ($grants as $grant) {
             $rank = (int) $grant['Rank'];
@@ -1591,22 +1634,9 @@ class Player extends Ork3
             if ($rank > $topRank) {
                 $topRank = $rank;
             }
-            if ($rank >= $maxRank) {
-                $date = (string) $grant['Date'];
-                // A usable date is REQUIRED to anchor the bonus window. 3,975 ladder
-                // grants carry '0000-00-00' and 28 of those sit at rank >= 10; letting
-                // one anchor $maxReached would make every later unranked grant sort
-                // after it and read as bonus, suppressing ~ and silently hiding the
-                // very broken records reconciliation exists to surface. Same guard the
-                // rest of this file already applies (class.Player.php:1406/1472/1488).
-                if ($date === '' || strpos($date, '0000-00-00') === 0) {
-                    continue;
-                }
-                if ($maxReached === null || $date < $maxReached) {
-                    $maxReached = $date;
-                }
-            }
         }
+
+        $maxReached = $this->LadderMaxReachedDate($maxRank, $grants);
 
         $unrankedCount = 0;
         $bonusCount    = 0;
@@ -1614,15 +1644,7 @@ class Player extends Ork3
             if ((int) $grant['Rank'] > 0) {
                 continue;
             }
-            // Strictly later than the max-rank date; a tie is unreconciled.
-            // An unranked grant with no usable date of its own can never be bonus
-            // either — "later than" is unanswerable, so it stays reconcilable.
-            $grantDate = (string) $grant['Date'];
-            if ($grantDate === '' || strpos($grantDate, '0000-00-00') === 0) {
-                $unrankedCount++;
-                continue;
-            }
-            if ($maxReached !== null && $grantDate > $maxReached) {
+            if ($this->IsBonusLadderGrantDate($maxReached, (string) $grant['Date'])) {
                 $bonusCount++;
             } else {
                 $unrankedCount++;
@@ -1640,6 +1662,53 @@ class Player extends Ork3
             'Approx'     => ($effectiveCount > $topRank) && !$hasMaster,
             'BonusCount' => $bonusCount,
         ];
+    }
+
+    /**
+     * The earliest date on which a ladder's $maxRank was reached, scanning a
+     * list of ['Rank' => int, 'Date' => string] grants. A grant whose date is
+     * '' or the endemic '0000-00-00' sentinel (3,975 ladder grants carry it;
+     * 28 of those sit at rank >= 10) can never anchor the window -- letting
+     * one through would make every later unranked grant read as bonus,
+     * hiding the very broken records reconciliation exists to surface.
+     *
+     * Sole spelling of the bonus-window anchor. ClassifyLadderGrants() and
+     * GetReconcileSuggestions() both call this rather than re-deriving it.
+     */
+    private function LadderMaxReachedDate(int $maxRank, array $grants): ?string
+    {
+        $maxReached = null;
+        foreach ($grants as $grant) {
+            $rank = (int) ($grant['Rank'] ?? 0);
+            if ($rank < $maxRank) {
+                continue;
+            }
+            $date = (string) ($grant['Date'] ?? '');
+            if ($date === '' || strpos($date, '0000-00-00') === 0) {
+                continue;
+            }
+            if ($maxReached === null || $date < $maxReached) {
+                $maxReached = $date;
+            }
+        }
+
+        return $maxReached;
+    }
+
+    /**
+     * Whether an unranked grant dated $grantDate counts as bonus recognition
+     * relative to $maxReachedDate (from LadderMaxReachedDate()) -- strictly
+     * later than the date the player first reached max rank; a tie is still
+     * unreconciled. A grant with no usable date of its own can never be
+     * bonus either -- "later than" is unanswerable for it.
+     */
+    private function IsBonusLadderGrantDate(?string $maxReachedDate, string $grantDate): bool
+    {
+        if ($grantDate === '' || strpos($grantDate, '0000-00-00') === 0) {
+            return false;
+        }
+
+        return $maxReachedDate !== null && $grantDate > $maxReachedDate;
     }
 
     /**
@@ -1762,6 +1831,11 @@ class Player extends Ork3
                 'MaxRank' => $maxRank,
                 'HasMaster' => true,
                 'Approx' => false,
+                // No classified grants back this synthetic tile (held via Master
+                // companion award only), so there is nothing to count as bonus.
+                // Set explicitly rather than relying on the ?? below, so a reader
+                // can see the key is always present on every tile.
+                'BonusCount' => 0,
             ];
         }
 
@@ -1775,6 +1849,7 @@ class Player extends Ork3
                 'MaxRank' => (int)($lp['MaxRank'] ?? Award::MaxRankFor((int) $aid)),
                 'HasMaster' => !empty($lp['HasMaster']),
                 'Approx' => !empty($lp['Approx']),
+                'BonusCount' => (int) ($lp['BonusCount'] ?? 0),
             ];
         }
         usort($tiles, function ($a, $b) {
