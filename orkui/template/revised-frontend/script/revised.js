@@ -112,7 +112,26 @@ function tnRealAwardId(selectEl) {
    with no further JS change.
    ============================================================ */
 function tnRankMonths(wrap, prefix, awardId, verb, onSelect) {
-    if (!wrap || !tnIsMonthly(awardId)) return false;
+    if (!wrap) return false;
+    // Every surface's markup is `<label>Rank <span>…hint…</span></label>`
+    // immediately followed by the pill wrap -- calling that field "Rank"
+    // for a monthly award is the exact conflation this task exists to
+    // remove. The label lives in a template (Playernew_index.tpl /
+    // Kingdomnew_index.tpl / Parknew_index.tpl), not owned here, so this
+    // flips only the DOM text node at runtime rather than editing markup.
+    // Guarded to the literal words "Rank"/"Month" so an unexpected
+    // structure is never silently overwritten.
+    var label = wrap.previousElementSibling;
+    var labelText = (label && label.tagName === 'LABEL') ? label.firstChild : null;
+    var monthly = tnIsMonthly(awardId);
+    if (labelText && labelText.nodeType === 3 && /^(Rank|Month)\s*$/.test(labelText.nodeValue)) {
+        labelText.nodeValue = monthly ? 'Month ' : 'Rank ';
+    }
+    // Twelve pills must fit one row (see revised.css for the sizing note);
+    // that layout is scoped to this modifier class so numbered rank-pill
+    // strips elsewhere are never affected.
+    wrap.classList.toggle(prefix + '-rank-pills-monthly', monthly);
+    if (!monthly) return false;
     var initials = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     var names = ['January', 'February', 'March', 'April', 'May', 'June',
                  'July', 'August', 'September', 'October', 'November', 'December'];

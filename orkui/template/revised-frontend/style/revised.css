@@ -1461,6 +1461,43 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
     font-weight: 600;
     letter-spacing: 0;
 }
+/* All twelve months must fit one row — the numbered-pill footprint (36px +
+   2px border each side = 40px) times 12 plus 11×6px gaps is ~546px, which
+   overflows every modal that hosts this picker. Measured: the narrowest
+   is the Player "Recommend Award" modal at 450px of actual available
+   width (490px modal box − 2×20px body padding); the Kingdom/Park
+   award/recommend modals are narrower still below ~578px viewport width,
+   since their modal box is `width:90vw` (not a fixed px), and keep
+   shrinking as the viewport does. A fixed size tuned to any one of these
+   is the bug deferred, not fixed — so instead of a guessed px value, each
+   pill is a flex item sized to fill an equal share of whatever width is
+   actually available (flex:1 1 0, min-width:0, aspect-ratio keeps it
+   circular), capped so it never grows past a normal rank pill's size on
+   a roomy container. Combined with flex-wrap:nowrap on the strip itself,
+   this holds true at any width the strip can appear at — not just the
+   one it was eyeballed against. Compound class selectors (not source
+   order) guarantee this wins over each surface's own .X-rank-pills-wrap
+   base rule (display:flex; flex-wrap:wrap; gap:6px), which is declared
+   later in this file for kn/pk. Scoped to the monthly modifier class only
+   — numbered rank-pill strips (every other ladder) are untouched. */
+.pn-rank-pills-wrap.pn-rank-pills-monthly,
+.kn-rank-pills-wrap.kn-rank-pills-monthly,
+.pk-rank-pills-wrap.pk-rank-pills-monthly {
+    flex-wrap: nowrap;
+    gap: 4px;
+}
+.pn-rank-pills-monthly .pn-month-pill,
+.kn-rank-pills-monthly .kn-month-pill,
+.pk-rank-pills-monthly .pk-month-pill {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    max-width: 36px;
+    max-height: 36px;
+    font-size: 12px;
+}
 .pn-month-pill.-held, .kn-month-pill.-held, .pk-month-pill.-held {
     border-color: #38a169;
     color: #276749;
