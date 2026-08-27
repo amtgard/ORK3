@@ -77,6 +77,16 @@ class Award extends Ork3
     }
 
     /**
+     * Whether the star pill should be offered: the recipient is already at or past
+     * the top of this ladder, so further recognition is expressed as an unranked
+     * grant rather than an out-of-range rank number.
+     */
+    public static function OffersStar(int $awardId, int $kaMaxLevel, int $currentRank): bool
+    {
+        return $currentRank >= self::MaxRankFor($awardId, $kaMaxLevel);
+    }
+
+    /**
      * Order of the Zodiac is granted once per calendar month, so its twelve positions
      * are months rather than levels. It is the only award of that nature.
      *

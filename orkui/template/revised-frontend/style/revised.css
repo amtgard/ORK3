@@ -1408,6 +1408,25 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-rank-held.pn-rank-selected, .kn-rank-held.kn-rank-selected, .pk-rank-held.pk-rank-selected {
     box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(56,161,105,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
 }
+/* Star pill — recognition past the top of a ladder (rank 0, "recognize again
+   despite the cap"). A rank-0 pill is always <= held once anything is held,
+   so tnRankPaint also applies -held (and -selected once clicked); this rule
+   is placed AFTER those state rules so its own gold styling wins regardless
+   — keep it last in this block if more state rules are ever added above.
+   overflow:visible undoes the pill's own overflow:hidden (set to contain the
+   held/forward watermark) so the data-tip tooltip isn't clipped to the
+   pill's 36px circle. */
+.pn-rank-pill.pn-rank-star, .kn-rank-pill.kn-rank-star, .pk-rank-pill.pk-rank-star {
+    background: linear-gradient(135deg, #ffe58a, #f6c453);
+    border-color: #d69e2e; color: #6b4a08;
+    overflow: visible;
+}
+.pn-rank-star::before, .kn-rank-star::before, .pk-rank-star::before { content: none; }
+.pn-rank-pill.pn-rank-star.pn-rank-selected,
+.kn-rank-pill.kn-rank-star.kn-rank-selected,
+.pk-rank-pill.pk-rank-star.pk-rank-selected {
+    box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(214,158,46,0.5), inset 0 1px 0 rgba(255,255,255,0.55);
+}
 /* Gate hover lift on real pointer devices — on iOS :hover sticks after a tap.
    Exclude the selected pill so its glow ring isn't overwritten on hover. */
 @media (hover: hover) {
@@ -6914,6 +6933,19 @@ html[data-theme="dark"] .pn-rank-held.pn-rank-selected,
 html[data-theme="dark"] .kn-rank-held.kn-rank-selected,
 html[data-theme="dark"] .pk-rank-held.pk-rank-selected {
   box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(72,187,120,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+/* Star pill — dark counterpart (colors only; overflow:visible and content:none
+   from the light-mode rule already apply, they aren't color-bearing). */
+html[data-theme="dark"] .pn-rank-pill.pn-rank-star,
+html[data-theme="dark"] .kn-rank-pill.kn-rank-star,
+html[data-theme="dark"] .pk-rank-pill.pk-rank-star {
+  background: linear-gradient(135deg, #8a6a1f, #5c4413);
+  border-color: #d69e2e; color: #ffe9ad;
+}
+html[data-theme="dark"] .pn-rank-pill.pn-rank-star.pn-rank-selected,
+html[data-theme="dark"] .kn-rank-pill.kn-rank-star.kn-rank-selected,
+html[data-theme="dark"] .pk-rank-pill.pk-rank-star.pk-rank-selected {
+  box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(214,158,46,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 /* Award type toggle (Awards / Officer Titles) */
 html[data-theme="dark"] .pk-award-type-btn,

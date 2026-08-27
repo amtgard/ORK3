@@ -47,7 +47,25 @@ function tnRankMaxFor(optEl) {
     var m = optEl ? parseInt(optEl.dataset.maxRank, 10) : 0;
     return (m > 0 && m <= 12) ? m : 10;
 }
-if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; window.tnRankMaxFor = tnRankMaxFor; }
+/* Recognition past the top of a ladder. Appended only when the player is already
+   at or above max, and it submits rank 0 — never max + 1, so no grant ever
+   carries a rank above the award's max. Safe to call on every rebuild: any
+   existing star is removed first, so switching the selected award back and
+   forth never leaves two behind. */
+function tnRankStar(wrap, prefix, maxRank, currentRank) {
+    if (!wrap) return;
+    var old = wrap.querySelector('.' + prefix + '-rank-star');
+    if (old) old.parentNode.removeChild(old);
+    if (!(currentRank >= maxRank)) return;
+
+    var star = document.createElement('div');
+    star.className = prefix + '-rank-pill ' + prefix + '-rank-star';
+    star.dataset.rank = '0';
+    star.setAttribute('data-tip', 'The standard cap for this award is ' + maxRank + ' — but don\'t let that stop you from recognizing someone!');
+    star.innerHTML = '<span class="' + prefix + '-rank-num">&#10033;</span>';
+    wrap.appendChild(star);
+}
+if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; window.tnRankMaxFor = tnRankMaxFor; window.tnRankStar = tnRankStar; }
 
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
@@ -927,6 +945,7 @@ if (PnConfig.recError) {
         }
         tnRankPaint(wrap, 'pn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pn', maxRank, held); // pn recommend picker (delegated click below handles it)
     }
     var pnRecRankPillsEl = document.getElementById('pn-rec-rank-pills');
     if (pnRecRankPillsEl) pnRecRankPillsEl.addEventListener('click', function(e) {
@@ -2002,6 +2021,7 @@ if (PnConfig.recError) {
             var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
             pills.innerHTML = html;
+            tnRankStar(pills, 'pn', maxRank, held); // pn grant picker (delegated click below handles it)
             selectRankPill(suggested, pills);
         }
         function selectRankPill(rank, container) {
@@ -3240,6 +3260,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'kn', maxRank, held); // kn grant picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.kn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'kn', held, 0);
+        });
     }
 
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
@@ -3702,6 +3728,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'kn', maxRank, held); // kn recommend picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.kn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'kn', held, 0);
+        });
     }
 
     if (gid('kn-rec-award-select')) {
@@ -6980,6 +7012,12 @@ $(document).ready(function() {
         // Auto-select suggested rank
         tnRankPaint(wrap, 'pk', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pk', maxRank, held); // pk grant picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pk-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'pk', held, 0);
+        });
     }
 
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
@@ -7466,6 +7504,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'pk', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pk', maxRank, held); // pk recommend picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pk-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'pk', held, 0);
+        });
     }
 
     if (gid('pk-rec-award-select')) {
@@ -12169,6 +12213,12 @@ function setupPronounPicker(cfg) {
         var _curRank = parseInt(currentRank, 10) || 0;
         tnRankPaint(wrap, 'pn', _curRank, _curRank);
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
+        tnRankStar(wrap, 'pn', maxRank, _curRank); // edit-award modal — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            gid('pn-edit-rank-val').value = 0;
+            tnRankPaint(wrap, 'pn', 0, 0);
+        });
     }
 
     window.pnOpenAwardEditModal = function(awardsId, data) {
@@ -12472,6 +12522,12 @@ function setupPronounPicker(cfg) {
                 rcRankPills.dataset.rankHeld = heldMax;
                 tnRankPaint(rcRankPills, 'pn', heldMax, suggested);
                 if (suggested > 0) { rcRankVal.value = suggested; }
+                tnRankStar(rcRankPills, 'pn', maxRank, heldMax); // reconcile picker — no delegated click here, wire the star directly
+                var rcStar = rcRankPills.querySelector('.pn-rank-star');
+                if (rcStar) rcStar.addEventListener('click', function() {
+                    rcRankVal.value = 0;
+                    tnRankPaint(rcRankPills, 'pn', heldMax, 0);
+                });
             });
         }
 

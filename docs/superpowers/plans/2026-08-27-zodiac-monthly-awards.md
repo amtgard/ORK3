@@ -14,6 +14,13 @@
 
 ## Global Constraints
 
+> **Return-contract note.** `Player::AddAward()` returns a **FLAT** shape —
+> `['Status' => int, 'Error' => ..., 'Detail' => ...]`, where `Status === 0` means
+> success. It is **not** the nested `['Status']['Status']` / `['Status']['Message']`
+> form. Assert `(int) $result['Status']` and read the message from `Error`/`Detail`.
+> Following the nested form would break every existing caller's success branching.
+
+
 Everything in the companion plan's Global Constraints applies here unchanged —
 **including that domain write methods are token-gated**. Every `AddAward`,
 `UpdateAward`, `ReconcileAward` and `AddAwardRecommendation` call in this plan's
@@ -312,7 +319,7 @@ Create `tests/Integration/ZodiacGrantTest.php`:
             'Date' => '2026-01-01',
         ]);
 
-        $this->assertSame(0, (int) $result['Status']['Status']);
+        $this->assertSame(0, (int) $result['Status']);
     }
 
     public function testARepeatMonthIsAcceptedAndBothGrantsSurvive(): void
@@ -331,7 +338,7 @@ Create `tests/Integration/ZodiacGrantTest.php`:
                 'RecipientId' => 1, 'AwardId' => 30, 'ZodiacMonth' => $month,
                 'Date' => '2026-01-01',
             ]);
-            $this->assertNotSame(0, (int) $result['Status']['Status'], "month {$month} must be rejected");
+            $this->assertNotSame(0, (int) $result['Status'], "month {$month} must be rejected");
         }
     }
 
@@ -1015,7 +1022,7 @@ Create `tests/Integration/ZodiacApiCompatTest.php`:
             'ApiClient' => true,
         ]);
 
-        $this->assertSame(0, (int) $result['Status']['Status']);
+        $this->assertSame(0, (int) $result['Status']);
     }
 
     public function testALegacyRankIsStoredAsARankAndNeverAsAMonth(): void

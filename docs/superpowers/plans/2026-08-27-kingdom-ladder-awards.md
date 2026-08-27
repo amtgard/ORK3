@@ -12,6 +12,13 @@
 
 ## Global Constraints
 
+> **Return-contract note.** `Player::AddAward()` returns a **FLAT** shape —
+> `['Status' => int, 'Error' => ..., 'Detail' => ...]`, where `Status === 0` means
+> success. It is **not** the nested `['Status']['Status']` / `['Status']['Message']`
+> form. Assert `(int) $result['Status']` and read the message from `Error`/`Detail`.
+> Following the nested form would break every existing caller's success branching.
+
+
 - **Layer separation is enforced by hooks and pre-commit.** SQL lives only in `system/lib/ork3/class.*.php`. `orkui/model/model.*.php` is the only layer that may say `new Domain()` or `Ork3::$Lib->x`. Controllers and `.tpl` files may not do either. Escape hatch `ORK3_ALLOW_LAYER_VIOLATION=1` is not to be used in this plan.
 - **`.tpl` files are PLAIN PHP, not Smarty.** Use `<?php if (): ?>` / `<?= ?>`. `{$var}` and `{if}` render literally.
 - **Always call `$DB->Clear()` before a raw `Execute()`/`DataSet()`** — stale PDO bindings cause silent save failures. Never nest a `Clear()` + query inside a `while ($rs->Next())` loop.
@@ -1920,9 +1927,9 @@ final class LadderGrantRuleTest extends TestCase
             'RecipientId' => 1, 'AwardId' => 21, 'Rank' => 0, 'Date' => '2026-01-01',
         ]);
 
-        $this->assertNotSame(0, (int) $result['Status']['Status']);
-        $this->assertStringContainsString('is a ranked award', $result['Status']['Message']);
-        $this->assertStringContainsString("\u{2731}", $result['Status']['Message']);
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', ($result['Error'] ?? '') . ($result['Detail'] ?? ''));
+        $this->assertStringContainsString("\u{2731}", ($result['Error'] ?? '') . ($result['Detail'] ?? ''));
     }
 
     public function testTheRejectionMessageNamesTheAwardAndTheMax(): void
@@ -1931,8 +1938,8 @@ final class LadderGrantRuleTest extends TestCase
             'RecipientId' => 1, 'AwardId' => 21, 'Rank' => 0, 'Date' => '2026-01-01',
         ]);
 
-        $this->assertStringContainsString('10', $result['Status']['Message']);
-        $this->assertStringContainsString('choose a rank', $result['Status']['Message']);
+        $this->assertStringContainsString('10', ($result['Error'] ?? '') . ($result['Detail'] ?? ''));
+        $this->assertStringContainsString('choose a rank', ($result['Error'] ?? '') . ($result['Detail'] ?? ''));
     }
 
     public function testRankedLadderGrantIsAccepted(): void
@@ -1941,7 +1948,7 @@ final class LadderGrantRuleTest extends TestCase
             'RecipientId' => 1, 'AwardId' => 21, 'Rank' => 3, 'Date' => '2026-01-01',
         ]);
 
-        $this->assertSame(0, (int) $result['Status']['Status']);
+        $this->assertSame(0, (int) $result['Status']);
     }
 
     public function testNonLadderGrantIsUnaffectedByRuleOne(): void
@@ -1951,7 +1958,7 @@ final class LadderGrantRuleTest extends TestCase
             'RecipientId' => 1, 'AwardId' => 1, 'Rank' => 0, 'Date' => '2026-01-01',
         ]);
 
-        $this->assertSame(0, (int) $result['Status']['Status']);
+        $this->assertSame(0, (int) $result['Status']);
     }
 }
 ```
