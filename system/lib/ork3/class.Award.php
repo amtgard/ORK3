@@ -35,6 +35,60 @@ class Award extends Ork3
     }
 
     /**
+     * Effective-ladder SQL predicate: a kingdom may raise an award to ladder status,
+     * but can never lower an official one. Additive by construction.
+     *
+     * Sole spelling of "is this a ladder?" for SQL. Do not fork it.
+     */
+    public static function LadderSql(string $ka = 'ka', string $a = 'a'): string
+    {
+        return 'GREATEST(IFNULL(' . $ka . '.is_ladder, 0), IFNULL(' . $a . '.is_ladder, 0))';
+    }
+
+    /**
+     * Official-ladder SQL predicate — the 16 Amtgard orders. Cross-kingdom
+     * comparisons (the global Ladder Grid) key on this, never on LadderSql().
+     */
+    public static function OfficialLadderSql(string $a = 'a'): string
+    {
+        return $a . '.is_ladder = 1';
+    }
+
+    /**
+     * Resolve an award's maximum rank.
+     *
+     * Cannot be done in SQL: the official ladders' maxes live in GetLadderMasterMap(),
+     * not in the database, and ka.max_level is 0 on every official row — so a SQL-only
+     * COALESCE(NULLIF(ka.max_level, 0), 10) would silently demote Zodiac from 12 to 10.
+     *
+     * @param int $awardId     ork_award.award_id; 0 for a pure kingdom award
+     * @param int $kaMaxLevel  ork_kingdomaward.max_level; 0 means unspecified
+     */
+    public static function MaxRankFor(int $awardId, int $kaMaxLevel = 0): int
+    {
+        $map = self::GetLadderMasterMap();
+        if (isset($map[$awardId]['MaxRank'])) {
+            return (int) $map[$awardId]['MaxRank'];
+        }
+        if ($kaMaxLevel > 0) {
+            return min(12, $kaMaxLevel);
+        }
+        return 10;
+    }
+
+    /**
+     * Order of the Zodiac is granted once per calendar month, so its twelve positions
+     * are months rather than levels. It is the only award of that nature.
+     *
+     * A name for a fact several call sites need — not a taxonomy over a family that
+     * does not exist. See 2026-08-27-zodiac-monthly-awards-design.md.
+     */
+    public static function IsMonthlyLadder(int $awardId): bool
+    {
+        return $awardId === 30;
+    }
+
+    /**
      * class_id => Paragon award_id (Class Levels / My Amtgard badge display).
      *
      * @return array<int, int>
