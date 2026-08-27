@@ -1142,6 +1142,130 @@ git commit -m "Enhancement: Ladder and Max Rank controls in Manage Awards"
 
 ---
 
+### Task 5A: Three-button discard prompt on the unsaved-changes guard
+
+**Added mid-execution at the user's request.** Closing an admin modal with unsaved
+edits currently offers only Cancel / Confirm. It should offer three actions:
+
+> **Go Back** (gray) &nbsp;|&nbsp; **Discard Changes** (red) &nbsp;|&nbsp; **Save Changes** (green)
+
+**Scope, per the user's ruling:** change **only** the dirty-close guard — the
+`kaConfirm('Discard your changes?', ...)` call inside `kaCloseModal()`
+(`_kingdom_admin_modals.tpl:1277`). Every other `kaConfirm` caller (retire award,
+delete park, and the rest) is asking a different question and keeps its two-button
+shape. In the user's words: *"any admin modal that isn't specifically asking 'do you
+want to discard this?' shouldn't need a change."*
+
+Because the guard lives in the shared `kaCloseModal()`, every modal that can go
+dirty picks this up — which is exactly the intent, since they all reach it by the
+same route.
+
+**Files:**
+- Modify: `orkui/template/revised-frontend/partials/_kingdom_admin_modals.tpl` — the confirm footer markup (~line 1041), `kaConfirm()` (~1376), `kaCloseConfirm()`, the button listeners (~1405), and the guard call in `kaCloseModal()` (~1277)
+- Modify: `orkui/template/revised-frontend/style/admin-console.css` — the third button's colours, both themes
+
+**Interfaces:**
+- Produces: `kaConfirm(message, onConfirm, title, opts)` gains two optional `opts`
+  keys — `altLabel` (string) and `onAlt` (callback). When `altLabel` is absent the
+  confirm renders exactly as it does today, so no existing caller changes behaviour.
+- Produces: `KA_MODAL_SAVE` — a map of modal id → save function, so the guard knows
+  how to save the modal it is guarding.
+
+- [ ] **Step 1: Give `kaConfirm` an optional third action**
+
+Add a third button to the confirm footer, hidden by default:
+
+```html
+<div class="ka-modal-footer" style="justify-content:flex-end;gap:10px">
+    <button class="adm-btn adm-btn-ghost" id="ka-confirm-cancel">Cancel</button>
+    <button class="adm-btn adm-btn-danger" id="ka-confirm-alt" style="display:none"></button>
+    <button class="adm-btn adm-btn-primary" id="ka-confirm-ok">Confirm</button>
+</div>
+```
+
+In `kaConfirm()`, show it only when `opts.altLabel` is given, and wire `opts.onAlt`
+the same way `_kaConfirmCb` is wired — capture the callback, close the confirm, then
+invoke. Reset it to `display:none` on every open so a previous three-button confirm
+cannot leak its extra button into the next two-button one. **That reset is the whole
+risk in this step**: `kaConfirm` reuses one overlay for every caller.
+
+- [ ] **Step 2: Order and colour the three buttons**
+
+Left to right: **Go Back** (gray, `adm-btn-ghost`) | **Discard Changes** (red) |
+**Save Changes** (green). Keyboard focus should still land on **Go Back** — the
+existing `kaFocusFirst(overlay, 'ka-confirm-cancel')` already does this and must be
+preserved, because the destructive option sits in the middle of this row.
+
+Green is a new colour in this confirm. Add it with an `html[data-theme="dark"]`
+counterpart in `admin-console.css`; do not reuse `.ka-confirm-danger`'s red.
+
+- [ ] **Step 3: Register a save action per modal**
+
+`kaCloseModal(id, force)` knows only the modal id, so add a registry beside the
+existing `KA_RESET_ON_OPEN` / `_kaOnOpen` maps:
+
+```js
+/* Modal id -> function that saves that modal's pending edits and calls back with
+   (ok, message). A modal with no entry here simply gets the two-button prompt:
+   offering "Save Changes" for a modal we cannot actually save would be a lie. */
+var KA_MODAL_SAVE = {};
+```
+
+- [ ] **Step 4: Give the awards modal its save action**
+
+The awards modal has no single save — it has ~130 per-row save buttons, each row
+carrying its own dirty state via `rowSnapshot()` and a `.ka-row-dirty` accent.
+
+Register a function that finds every row currently flagged dirty and saves each one,
+reusing the existing per-row save path rather than reimplementing it. Then:
+
+- If every row saves, close the modal.
+- **If any row fails, keep the modal open**, leave the failed rows flagged, and show
+  which ones failed in the modal's existing `.ka-feedback` area.
+
+Closing over a failed save is the one outcome to avoid: the officer clicked *Save
+Changes*, saw the modal close, and would reasonably believe their edits landed.
+
+- [ ] **Step 5: Wire the guard**
+
+```js
+if (!force && el.classList.contains('ka-open') && kaIsDirty(el)) {
+    var saver = KA_MODAL_SAVE[id];
+    kaConfirm('Discard your changes?', function() { kaCloseModal(id, true); }, 'Unsaved Changes', {
+        okLabel: 'Discard Changes',
+        danger: true,
+        altLabel: saver ? 'Save Changes' : null,
+        onAlt: saver ? function() { saver(function(ok) { if (ok) kaCloseModal(id, true); }); } : null
+    });
+    return;
+}
+```
+
+Rename the existing Cancel button's label to **Go Back** for this call only —
+`opts` already carries `okLabel`, so add a `cancelLabel` in the same style rather
+than editing the shared markup's default text.
+
+- [ ] **Step 6: Verify in the browser, both themes**
+
+- Edit an award row, close the modal, confirm all three buttons appear in the right
+  order and colours.
+- **Go Back** returns to the modal with the edit still present and still flagged.
+- **Discard Changes** closes and the edit is gone on reopen.
+- **Save Changes** persists the row — reopen and confirm it stuck.
+- Dirty two rows, click **Save Changes**, confirm both persist.
+- Open a *different* confirm afterwards (retire an award) and confirm it still shows
+  **two** buttons — this is the leak Step 1 guards against.
+- Check a modal with no registered save action still shows two buttons.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add orkui/template/revised-frontend/partials/_kingdom_admin_modals.tpl orkui/template/revised-frontend/style/admin-console.css
+git commit -m "Enhancement: Go Back / Discard Changes / Save Changes on the unsaved-changes prompt"
+```
+
+---
+
 ### Task 6: Bonus grants in `GetLadderProgress`
 
 An unranked ladder grant currently means one thing — *a historical record whose rank was never captured*. The star pill (Task 7) introduces a second, legitimate kind: recognition past the top. This task teaches `GetLadderProgress` to tell them apart, and must land **before** the star pill so no star grant is ever misread as broken data.
