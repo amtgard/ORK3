@@ -490,8 +490,10 @@ those two columns, so the contract has to be made real and reproducible.
 
 **Interfaces:**
 - Produces: `ork_kingdomaward.is_ladder TINYINT(1) NOT NULL DEFAULT 0` and
-  `ork_kingdomaward.max_level INT(11) NOT NULL DEFAULT 0` on every environment,
-  including fresh sandbox builds.
+  `ork_kingdomaward.max_level TINYINT(1) NOT NULL DEFAULT 0` on every environment,
+  including fresh sandbox builds. **Both types are copied from the live dev
+  schema** — the whole point of this migration is parity with prod, so a fresh
+  build must not get a wider type than the database it is mirroring.
 
 - [ ] **Step 1: Write the migration**
 
@@ -510,7 +512,7 @@ Create `db-migrations/2026-08-27-kingdomaward-ladder-columns.sql`:
 
 ALTER TABLE `ork_kingdomaward`
     ADD COLUMN IF NOT EXISTS `is_ladder` TINYINT(1) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS `max_level` INT(11) NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS `max_level` TINYINT(1) NOT NULL DEFAULT 0;
 ```
 
 - [ ] **Step 2: Classify it**
