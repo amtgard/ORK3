@@ -610,6 +610,81 @@ git commit -m "Enhancement: month pills for Order of the Zodiac"
 
 ---
 
+### Task 4A: Plumb `ZodiacMonth` through every grant and edit controller
+
+**Added mid-execution.** Zodiac Task 7 found that `controller.PlayerAjax.php` was
+dropping `ZodiacMonth` — "without it the feature was inert through the browser" —
+and fixed that one. Checking the rest showed the problem is wider.
+
+Every grant/edit controller builds an **explicit named array** for the domain call.
+`Rank` is listed; `ZodiacMonth` is not, so it is silently discarded:
+
+| Controller | Surface | Forwards `ZodiacMonth`? |
+|---|---|---|
+| `controller.PlayerAjax.php` | player ajax | **yes** (fixed by Task 7) |
+| `controller.Player.php` | grant from player profile | **no** |
+| `controller.Award.php` | grant from kingdom / park | **no** |
+| `controller.Admin.php` | admin edit / reconcile | **no** |
+
+Task 4 is wiring month pills into eight pickers. On three of four controllers those
+pills would submit a month that never reaches the database — **the feature would
+appear to work and save nothing**, which is the worst failure mode available: no
+error, no clue, and the officer believes the record is correct.
+
+This is the same gap class Task 5 hit in the companion plan, where
+`controller.Admin.php` omitted `OfficialIsLadder`/`MaxLevel` from its payload and
+the official-award lock silently could not work.
+
+**Files:**
+- Modify: `orkui/controller/controller.Player.php`
+- Modify: `orkui/controller/controller.Award.php`
+- Modify: `orkui/controller/controller.Admin.php`
+
+- [ ] **Step 1: Add the field to each explicit array**
+
+Mirror how `Rank` is already handled in each call, defaulting to 0:
+
+```php
+'ZodiacMonth' => (int) ($this->request-><Scope>->ZodiacMonth ?? 0),
+```
+
+Match each controller's own request-object idiom rather than copying one form
+across all three — they differ. Cover **every** call that reaches `AddAward`,
+`UpdateAward`, `ReconcileAward` or `AddAwardRecommendation`, not just the first one
+you find in each file; several controllers have more than one.
+
+Controllers stay dumb: read, cast, forward. **No validation here** — the domain
+already rejects a month outside 1–12, and duplicating that rule in three
+controllers would recreate exactly the drift this effort has spent itself removing.
+
+- [ ] **Step 2: Prove each path end-to-end**
+
+A unit test cannot catch this, because the defect is a missing key in a controller
+payload. For each of the three controllers, grant or edit a Zodiac through its real
+surface and confirm the month reaches `ork_awards.zodiac_month`:
+
+```bash
+docker compose exec -T ork3db mariadb -uork -psecret ork -N -e   "SELECT awards_id, \`rank\`, zodiac_month FROM ork_awards ORDER BY awards_id DESC LIMIT 3;"
+```
+
+State in the report which surface you drove for each controller and what the row
+showed. "The code looks right" is not evidence here — the entire bug is that the
+code looked right.
+
+- [ ] **Step 3: Confirm `rank` is untouched**
+
+The same query proves it: a Zodiac written through any path must show the month set
+and `rank` unchanged. For a new grant that means `rank = 0`; for an edit of a legacy
+record it means the original rank still present.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "Bugfix: grant and edit controllers forward ZodiacMonth" -- orkui/controller/controller.Player.php orkui/controller/controller.Award.php orkui/controller/controller.Admin.php
+```
+
+---
+
 ### Task 5: Progress — counts, not levels
 
 `GetLadderProgress` computes a set of distinct ranks and clamps to `maxRank`. For Zodiac both are wrong: duplicates are legitimate and a total can exceed 12.
