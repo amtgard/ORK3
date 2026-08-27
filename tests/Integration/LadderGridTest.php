@@ -193,6 +193,136 @@ final class LadderGridTest extends TestCase
     }
 
     /**
+     * Report::PlayerAwards() is the general awards report backing kingdom_awards
+     * and knights_and_masters. Zodiac rows there carried the legacy rank column
+     * with no month; this proves a recorded zodiac_month is surfaced directly.
+     */
+    public function testPlayerAwardsSurfacesTheRecordedZodiacMonth(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'zodiac-recorded-month');
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 0, '2024-06-15', 6);
+
+        $row = $this->playerAwardsRowFor($kid, $player['mundane_id']);
+
+        $this->assertTrue($row['IsMonthlyLadder']);
+        $this->assertSame(6, $row['ZodiacMonth']);
+        $this->assertSame('June', $row['ZodiacMonthName']);
+    }
+
+    /**
+     * 2,024 of 3,798 Zodiac grants carry no month at all. The reconciliation
+     * pre-fill (Award::ZodiacMonthFromDate) is also the report's fallback: a
+     * monthless grant still reads as the month it was recorded in.
+     */
+    public function testPlayerAwardsFallsBackToTheGrantDateWhenNoMonthIsRecorded(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'zodiac-fallback-month');
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 5, '2024-03-28', 0);
+
+        $row = $this->playerAwardsRowFor($kid, $player['mundane_id']);
+
+        $this->assertSame(3, $row['ZodiacMonth']);
+        $this->assertSame('March', $row['ZodiacMonthName']);
+    }
+
+    /**
+     * 3,975 ladder grants carry the '0000-00-00' sentinel date. A monthless
+     * Zodiac grant with no real date must yield NO month, never a spurious
+     * January -- Award::ZodiacMonthFromDate() guards this; this proves
+     * PlayerAwards actually calls it rather than parsing the date itself.
+     */
+    public function testPlayerAwardsTreatsTheZeroDateSentinelAsNoMonth(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'zodiac-zero-date');
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 30, 1, '0000-00-00', 0);
+
+        $row = $this->playerAwardsRowFor($kid, $player['mundane_id']);
+
+        $this->assertSame(0, $row['ZodiacMonth'], 'the zero-date sentinel must never read as January');
+        $this->assertSame('', $row['ZodiacMonthName']);
+    }
+
+    public function testPlayerAwardsLeavesNonZodiacRowsUnaffected(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 21, 'T10RPT Order of the Rose', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'rose-unaffected');
+        $this->fixture->insertLadderAward($player['mundane_id'], $parkId, $kid, $ka, 21, 4);
+
+        $row = $this->playerAwardsRowFor($kid, $player['mundane_id']);
+
+        $this->assertFalse($row['IsMonthlyLadder']);
+        $this->assertSame(0, $row['ZodiacMonth']);
+        $this->assertSame('', $row['ZodiacMonthName']);
+    }
+
+    /**
+     * The regression this fix risks: PlayerAwards is a GENERAL report ordered
+     * by peerage/name/persona for every award, reused by kingdom_awards and
+     * knights_and_masters. Proves that adding Zodiac grants -- inserted out of
+     * chronological order -- (a) sorts only the Zodiac rows among themselves by
+     * grant date, and (b) leaves every other row's relative order exactly as it
+     * was before any Zodiac data existed.
+     */
+    public function testPlayerAwardsSortsOnlyZodiacRowsChronologicallyWithoutDisturbingGeneralOrdering(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $request = ['KingdomId' => $kid, 'IncludeLadder' => 1, 'LadderMinimum' => 0];
+
+        $roseKa = $this->fixture->createKingdomAward($kid, 21, 'T10RPT Order of the Rose', true);
+        $alice = $this->fixture->createPlayer($parkId, 'aaa-order-rose');
+        $bob = $this->fixture->createPlayer($parkId, 'bbb-order-rose');
+        $this->fixture->insertLadderAward($alice['mundane_id'], $parkId, $kid, $roseKa, 21, 3);
+        $this->fixture->insertLadderAward($bob['mundane_id'], $parkId, $kid, $roseKa, 21, 5);
+
+        $report = new Report();
+        $baseline = $report->PlayerAwards($request);
+        $baselineOrder = array_map(
+            static fn ($r) => $r['AwardName'] . '|' . $r['Persona'],
+            $baseline['Awards'] ?? []
+        );
+
+        $zodiacKa = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $carl = $this->fixture->createPlayer($parkId, 'ccc-order-zodiac');
+        // Inserted deliberately out of chronological order.
+        $this->fixture->insertLadderAward($carl['mundane_id'], $parkId, $kid, $zodiacKa, 30, 0, '2024-06-01', 6);
+        $this->fixture->insertLadderAward($carl['mundane_id'], $parkId, $kid, $zodiacKa, 30, 0, '2024-01-01', 1);
+        $this->fixture->insertLadderAward($carl['mundane_id'], $parkId, $kid, $zodiacKa, 30, 0, '2024-03-01', 3);
+
+        $withZodiac = $report->PlayerAwards($request);
+        $rows = $withZodiac['Awards'] ?? [];
+
+        $nonZodiacOrder = array_values(array_map(
+            static fn ($r) => $r['AwardName'] . '|' . $r['Persona'],
+            array_values(array_filter($rows, static fn ($r) => !$r['IsMonthlyLadder']))
+        ));
+        $this->assertSame(
+            $baselineOrder,
+            $nonZodiacOrder,
+            'non-Zodiac rows must keep the exact relative order they had before Zodiac data existed'
+        );
+
+        $zodiacDates = array_values(array_map(
+            static fn ($r) => $r['Date'],
+            array_values(array_filter($rows, static fn ($r) => $r['IsMonthlyLadder']))
+        ));
+        $sortedDates = $zodiacDates;
+        sort($sortedDates);
+        $this->assertSame($sortedDates, $zodiacDates, 'Zodiac rows must be chronologically ordered by grant date');
+    }
+
+    /**
      * GetLadderAwardGrid caches GridRows per (type, id, awards) -- proves the
      * kingdom-scoped cache entry is never read back by, or clobbered by, a
      * Park-only ("global") request against a park in the SAME kingdom, and that
@@ -343,6 +473,27 @@ final class LadderGridTest extends TestCase
         foreach ($assembly['GridRows'] as $row) {
             if ((int) $row['MundaneId'] === (int) $player['mundane_id']) {
                 return $row['Awards'][$awardId] ?? [];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function playerAwardsRowFor(int $kingdomId, int $mundaneId): array
+    {
+        $report = new Report();
+        $response = $report->PlayerAwards([
+            'KingdomId' => $kingdomId,
+            'IncludeLadder' => 1,
+            'LadderMinimum' => 0,
+        ]);
+
+        foreach ($response['Awards'] ?? [] as $row) {
+            if ((int) $row['MundaneId'] === $mundaneId) {
+                return $row;
             }
         }
 

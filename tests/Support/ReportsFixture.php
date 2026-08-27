@@ -272,25 +272,30 @@ final class ReportsFixture
         return $id;
     }
 
-    public function insertLadderAward(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank = 3): int
+    public function insertLadderAward(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank = 3, string $date = '', int $zodiacMonth = 0): int
     {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'awards
              (kingdomaward_id, mundane_id, stripped_from, unit_id, park_id, kingdom_id, team_id, rank, date,
               given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, alias_award_id,
-              award_id, by_whom_id, entered_at, revoked)
-             VALUES (?, ?, 0, 0, ?, ?, 0, ?, CURDATE(), ?, \'\', 0, 0, 0, \'\', 0, ?, ?, NOW(), 0)'
+              award_id, by_whom_id, entered_at, revoked, zodiac_month)
+             VALUES (?, ?, 0, 0, ?, ?, 0, ?, ' . ($date === '' ? 'CURDATE()' : '?') . ', ?, \'\', 0, 0, 0, \'\', 0, ?, ?, NOW(), 0, ?)'
         );
-        $stmt->execute([
+        $params = [
             $kingdomAwardId,
             $mundaneId,
             $parkId,
             $kingdomId,
             $rank,
-            $mundaneId,
-            $awardId,
-            $mundaneId,
-        ]);
+        ];
+        if ($date !== '') {
+            $params[] = $date;
+        }
+        $params[] = $mundaneId;
+        $params[] = $awardId;
+        $params[] = $mundaneId;
+        $params[] = $zodiacMonth;
+        $stmt->execute($params);
         $id = (int) $this->pdo->lastInsertId();
         $this->awardIds[] = $id;
 

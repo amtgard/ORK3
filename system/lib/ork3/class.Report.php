@@ -436,7 +436,8 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
+              COALESCE(alias.award_id, a.award_id) as effective_award_id,
+              m.persona, ma.date, m.mundane_id, ma.rank, ma.zodiac_month, m.suspended,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -457,6 +458,21 @@ class Report extends Ork3
         if ($r !== false && $r->size() > 0) {
             $response['Awards'] = array();
             while ($r->next()) {
+                // Order of the Zodiac is granted once per calendar month, not
+                // ranked -- surface the month so a consumer can render
+                // "Zodiac (March)" instead of the legacy, now-meaningless rank.
+                // Award::ZodiacMonthFromDate() guards the '0000-00-00' sentinel
+                // (sometimes '0000-00-00 00:00:00') so a monthless grant with no
+                // real date yields no month, never a spurious January.
+                $effectiveAwardId = (int) $r->effective_award_id;
+                $isMonthlyLadder = Award::IsMonthlyLadder($effectiveAwardId);
+                $zodiacMonth = 0;
+                if ($isMonthlyLadder) {
+                    $recordedMonth = (int) $r->zodiac_month;
+                    $zodiacMonth = Award::IsValidZodiacMonth($recordedMonth)
+                        ? $recordedMonth
+                        : Award::ZodiacMonthFromDate((string) $r->date);
+                }
                 $response['Awards'][] = array(
                         'MundaneId' => $r->mundane_id,
                         'Persona' => $r->persona,
@@ -471,8 +487,37 @@ class Report extends Ork3
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
                         'EnteredById' => $r->by_whom_id,
-                        'Suspended' => (int)$r->suspended
+                        'Suspended' => (int)$r->suspended,
+                        'IsMonthlyLadder' => $isMonthlyLadder,
+                        'ZodiacMonth' => $zodiacMonth,
+                        'ZodiacMonthName' => $zodiacMonth > 0 ? Award::MonthName($zodiacMonth) : ''
                     );
+            }
+            // Chronological order for Zodiac rows only (spec: "Zodiac lists sort
+            // chronologically by grant date, not by rank"). PlayerAwards is a
+            // general report ordered by peerage/name/persona for every other
+            // award -- reordering the whole result set would silently change
+            // every other consumer of this method. Instead, re-sort ONLY the
+            // rows Award::IsMonthlyLadder() flags, in place, at the exact index
+            // positions they already occupy: every non-Zodiac row keeps its
+            // original position and relative order untouched.
+            $monthlyLadderIndexes = array();
+            foreach ($response['Awards'] as $i => $row) {
+                if ($row['IsMonthlyLadder']) {
+                    $monthlyLadderIndexes[] = $i;
+                }
+            }
+            if (count($monthlyLadderIndexes) > 1) {
+                $monthlyLadderRows = array();
+                foreach ($monthlyLadderIndexes as $i) {
+                    $monthlyLadderRows[] = $response['Awards'][$i];
+                }
+                usort($monthlyLadderRows, function ($a, $b) {
+                    return strcmp((string) $a['Date'], (string) $b['Date']);
+                });
+                foreach ($monthlyLadderIndexes as $pos => $i) {
+                    $response['Awards'][$i] = $monthlyLadderRows[$pos];
+                }
             }
             $response['Status'] = Success();
         } else {
