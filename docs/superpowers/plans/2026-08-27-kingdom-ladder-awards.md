@@ -1269,6 +1269,81 @@ git commit -m "Enhancement: Go Back / Discard Changes / Save Changes on the unsa
 
 ---
 
+### Task 5B: Awards modal must re-render on open
+
+**Added mid-execution at the user's request.** Task 5A gave the unsaved-changes
+guard an explicit red **Discard Changes** button. But the awards modal is never
+re-rendered when reopened, so a discarded row edit is still on screen if the
+officer opens the modal again in the same page session. The button appears not to
+work.
+
+Nothing wrong is ever sent to the server and a page reload shows the truth, so this
+is display-only — and it is **pre-existing**, identical under the old two-button
+prompt. The explicit Discard button is what makes it visible.
+
+**Files:**
+- Modify: `orkui/template/revised-frontend/partials/_kingdom_admin_modals.tpl`
+
+**Interfaces:**
+- Produces: `kaRenderAwards()` — rebuilds the awards table from the source data.
+  Registered via the existing `kaOnOpen('ka-awards-overlay', ...)` hook.
+
+- [ ] **Step 1: Extract the render into a callable function**
+
+The awards render currently runs **once, inline**, at the top level of the awards
+IIFE — the group-building loop sits between `classifyAward()` (~line 2908) and
+`syncExpandBtn()` (~line 3031) with no enclosing function.
+
+Wrap that block in `function kaRenderAwards() { ... }` and call it once where the
+inline code used to run, so first load is unchanged. This is a pure extraction:
+**move the code, do not rewrite it.** Keep the `groups` / `totalRows` state it
+builds, and make sure anything the surrounding closure reads from that state still
+sees it — if `groups` or `totalRows` are declared outside the block, leave them
+outside and only move the loop that fills them.
+
+Reset that state at the top of `kaRenderAwards()` (empty the tbody, clear `groups`,
+zero `totalRows`) so a second call rebuilds rather than appends. **A second call
+that appends instead of replacing would double every row** — check this explicitly.
+
+- [ ] **Step 2: Re-render on open**
+
+```js
+kaOnOpen('ka-awards-overlay', function() { kaRenderAwards(); });
+```
+
+Follow the existing registrations (`ka-heraldry-overlay` ~2063,
+`ka-createplayer-overlay` ~3336) for placement and style.
+
+- [ ] **Step 3: Preserve what the officer expects to survive**
+
+Re-rendering resets more than the discarded edit. Decide deliberately and say what
+you chose in the report:
+
+- **Group collapse state** — groups are collapsed by default and there are ~130 rows
+  across eight groups. If an officer expands a group, saves a row, closes and
+  reopens, having every group snap shut again is a real annoyance. Preserve it.
+- **The search/filter box** — if it still holds text, the re-rendered table must
+  respect it. Call `applyAwardFilter()` after rendering.
+- Per-row dirty flags are *supposed* to reset. That is the point.
+
+- [ ] **Step 4: Verify in the browser, both themes**
+
+- Edit a row, close, click **Discard Changes**, reopen → the edit is **gone**.
+- Edit a row, close, click **Save Changes**, reopen → the edit **persisted**.
+- Reopen twice in a row → the table has the same number of rows each time, not double.
+- Expand a group, close, reopen → still expanded.
+- Type in the filter, close, reopen → filter still applied.
+- Retire an award, reopen → the row still shows its retired state correctly.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add orkui/template/revised-frontend/partials/_kingdom_admin_modals.tpl
+git commit -m "Bugfix: awards modal re-renders on open so Discard Changes visibly discards"
+```
+
+---
+
 ### Task 6: Bonus grants in `GetLadderProgress`
 
 An unranked ladder grant currently means one thing — *a historical record whose rank was never captured*. The star pill (Task 7) introduces a second, legitimate kind: recognition past the top. This task teaches `GetLadderProgress` to tell them apart, and must land **before** the star pill so no star grant is ever misread as broken data.
