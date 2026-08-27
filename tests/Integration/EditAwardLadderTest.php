@@ -32,6 +32,9 @@ final class EditAwardLadderTest extends TestCase
     private string $token;
     private int $officerMundaneId;
 
+    /** @var list<int> kingdomaward ids whose ork_awards grants must be cleaned up */
+    private array $grantIdsToClean = [];
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -49,6 +52,11 @@ final class EditAwardLadderTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->grantIdsToClean as $kingdomAwardId) {
+            $this->pdo->exec('DELETE FROM ork_awards WHERE kingdomaward_id = ' . (int) $kingdomAwardId);
+        }
+        $this->grantIdsToClean = [];
+
         $this->pdo->exec("DELETE FROM ork_kingdomaward WHERE name LIKE '" . self::MARKER . "%'");
         if (isset($this->officerMundaneId)) {
             $this->pdo->exec('DELETE FROM ork_session WHERE mundane_id = ' . $this->officerMundaneId);
@@ -203,7 +211,13 @@ final class EditAwardLadderTest extends TestCase
         $this->kingdom->EditAward([
             'KingdomAwardId' => $id, 'KingdomId' => 1, 'IsLadder' => 1, 'MaxLevel' => 10, 'Token' => $this->token,
         ]);
+        // Tracked before the INSERT so tearDown() still collects this ork_awards
+        // row if the assertion below fails -- ork_awards has no FK back to
+        // ork_kingdomaward, so the parent's marker-based cleanup would not.
+        $this->grantIdsToClean[] = $id;
         $this->pdo->exec(
+            // mundane_id 1 is not a real fixture officer -- ork_awards has no FK
+            // to ork_mundane, so any id works; this just needs to be non-zero.
             "INSERT INTO ork_awards (mundane_id, kingdomaward_id, `rank`, date)
              VALUES (1, {$id}, 4, '2020-01-01')"
         );
@@ -215,7 +229,5 @@ final class EditAwardLadderTest extends TestCase
         $stmt = $this->pdo->prepare('SELECT `rank` FROM ork_awards WHERE kingdomaward_id = :id');
         $stmt->execute([':id' => $id]);
         $this->assertSame(4, (int) $stmt->fetchColumn());
-
-        $this->pdo->exec("DELETE FROM ork_awards WHERE kingdomaward_id = {$id}");
     }
 }

@@ -431,7 +431,7 @@ class Kingdom extends Ork3
         // configuration belongs to Amtgard, not to the kingdom (requirement 1).
         $this->db->Clear();
         $officialRs = $this->db->DataSet(
-            'select IFNULL(a.is_ladder, 0) as official_is_ladder
+            'select IFNULL(' . Award::OfficialLadderSql('a') . ', 0) as official_is_ladder
              from ' . DB_PREFIX . 'kingdomaward ka
              left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
              where ka.kingdomaward_id = ' . (int) $request['KingdomAwardId']
