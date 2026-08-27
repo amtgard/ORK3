@@ -725,10 +725,11 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
             $this->load_model('Player');
-            $mundane_id = (int)($_POST['MundaneId']       ?? 0);
-            $award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
-            $rank       = (int)($_POST['Rank']            ?? 0);
-            $reason     = trim($_POST['Reason']           ?? '');
+            $mundane_id   = (int)($_POST['MundaneId']       ?? 0);
+            $award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
+            $rank         = (int)($_POST['Rank']            ?? 0);
+            $zodiacMonth  = (int)($_POST['ZodiacMonth']     ?? 0);
+            $reason       = trim($_POST['Reason']           ?? '');
             if (!valid_id($mundane_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
                 exit;
@@ -746,6 +747,7 @@ class Controller_KingdomAjax extends Controller
                 'MundaneId'      => $mundane_id,
                 'KingdomAwardId' => $award_id,
                 'Rank'           => $rank > 0 ? $rank : null,
+                'ZodiacMonth'    => $zodiacMonth,
                 'GivenById'      => $this->session->user_id,
                 'Reason'         => $reason,
             ]);
