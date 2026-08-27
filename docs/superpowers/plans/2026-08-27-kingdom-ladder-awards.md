@@ -470,6 +470,100 @@ git commit -m "Enhancement: read kingdom ladders from the column, retire hardcod
 
 ---
 
+### Task 2A: The missing `ork_kingdomaward` ladder columns
+
+**Added mid-execution.** The spec asserts "No schema change. Both columns exist
+and both hold live data." That is true of dev and prod, and **false of a fresh
+build**: `tools/ork-db/rendered/sandbox.sql` defines `ork_kingdomaward` with
+`is_title`, `title_class`, `kingdom_id`, `award_id`, `name`, `reign_limit` and
+`month_limit` — and **no `is_ladder`, no `max_level`**. No migration anywhere in
+the repo adds them. They reached prod by direct database access, which is the
+same route the spec says produced the 24 flagged rows.
+
+`drift-check` does not catch this, so nothing would surface it until a fresh
+environment silently failed. Every remaining task in this plan reads or writes
+those two columns, so the contract has to be made real and reproducible.
+
+**Files:**
+- Create: `db-migrations/2026-08-27-kingdomaward-ladder-columns.sql`
+- Modify: `tools/ork-db/manifests/migration-classification.json5`
+
+**Interfaces:**
+- Produces: `ork_kingdomaward.is_ladder TINYINT(1) NOT NULL DEFAULT 0` and
+  `ork_kingdomaward.max_level INT(11) NOT NULL DEFAULT 0` on every environment,
+  including fresh sandbox builds.
+
+- [ ] **Step 1: Write the migration**
+
+Create `db-migrations/2026-08-27-kingdomaward-ladder-columns.sql`:
+
+```sql
+-- ork_kingdomaward.is_ladder / max_level exist in production but were never
+-- added by a tracked migration -- they arrived through direct database access,
+-- the same route that produced the 24 rows currently flagged is_ladder = 1.
+-- A fresh build from ork-db therefore lacks both columns entirely, and every
+-- kingdom-ladder surface reads or writes them.
+--
+-- Idempotent: safe to re-run on dev and prod, where the columns already exist.
+-- No backfill -- the 24 live rows already carry their values, and a fresh build
+-- correctly starts with none.
+
+ALTER TABLE `ork_kingdomaward`
+    ADD COLUMN IF NOT EXISTS `is_ladder` TINYINT(1) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS `max_level` INT(11) NOT NULL DEFAULT 0;
+```
+
+- [ ] **Step 2: Classify it**
+
+Add to the map in `tools/ork-db/manifests/migration-classification.json5`,
+following the format of the surrounding entries:
+
+```json5
+    "2026-08-27-kingdomaward-ladder-columns.sql": { "class": "S", "render": "full", "notes": "Adds is_ladder/max_level to ork_kingdomaward; both exist in prod via direct DB access but were never migrated, so fresh builds lacked them. Idempotent ADD COLUMN IF NOT EXISTS, no backfill." },
+```
+
+An unclassified file in `db-migrations/` makes `drift-check --strict` fail,
+which fails the whole `bin/run-unit-tests.sh` run.
+
+- [ ] **Step 3: Verify it is genuinely idempotent**
+
+Both databases already have the columns, so a correct migration is a no-op:
+
+```bash
+docker compose exec -T ork3db mariadb -uork -psecret ork < db-migrations/2026-08-27-kingdomaward-ladder-columns.sql
+docker compose exec -T ork3testdb mariadb -uork -psecret ork_test < db-migrations/2026-08-27-kingdomaward-ladder-columns.sql
+```
+
+Both must succeed with no error. Then confirm the columns and, critically, that
+the 24 flagged rows were not disturbed:
+
+```bash
+docker compose exec -T ork3db mariadb -uork -psecret ork -N -e "
+  SELECT COUNT(*) FROM ork_kingdomaward WHERE is_ladder = 1;"
+```
+
+Expected: **24**, unchanged.
+
+- [ ] **Step 4: Confirm migration coverage still passes**
+
+```bash
+php tools/ork-db/cli.php drift-check --strict 2>&1 | grep 'migration coverage'
+```
+
+Expected: `OK    migration coverage (91 files classified)` — one more than the
+90 it reported before this task. The two `FAIL` lines about `class` catalog-hash
+drift and live mirror drift are a known pre-existing local-only condition; they
+are not yours and must not be "fixed".
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add db-migrations/2026-08-27-kingdomaward-ladder-columns.sql tools/ork-db/manifests/migration-classification.json5
+git commit -m "Enhancement: migrate ork_kingdomaward ladder columns into the tracked schema"
+```
+
+---
+
 ### Task 3: Converge every ladder predicate onto the helpers
 
 `Kingdom::GetAwardList` (`class.Kingdom.php:301`) is the headline defect: it **filters** on `ka.is_ladder` but **selects** `a.is_ladder`. One method, two definitions. This task converges all five spellings.
