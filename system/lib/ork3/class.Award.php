@@ -248,12 +248,12 @@ class Award extends Ork3
             $officer_role_clause = " and officer_role != 'none'";
         }
         $sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role, a.peerage
-					from " . DB_PREFIX . "award a 
-					where 1
-						$ladder_clause
-						$title_clause
+    				from " . DB_PREFIX . "award a 
+    				where 1
+    					$ladder_clause
+    					$title_clause
             $officer_role_clause
-					order by is_ladder, a.is_title, a.title_class desc, a.name";
+    				order by is_ladder, a.is_title, a.title_class desc, a.name";
         $r = $this->db->query($sql);
 
         $response = array();
@@ -291,12 +291,12 @@ class Award extends Ork3
     public function fetch_custom_title_alias_options()
     {
         $sql = "SELECT award_id, name, peerage, is_title
-			FROM " . DB_PREFIX . "award
-			WHERE officer_role = 'none'
-			  AND name <> 'Custom Title'
-			  AND name <> 'Custom Award'
-			  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
-			ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
+    		FROM " . DB_PREFIX . "award
+    		WHERE officer_role = 'none'
+    		  AND name <> 'Custom Title'
+    		  AND name <> 'Custom Award'
+    		  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
+    		ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
         $r = $this->db->query($sql);
         $peerage = [];
         $titles = [];
@@ -606,6 +606,9 @@ class Award extends Ork3
         $cacheKey = Ork3::$Lib->ghettocache->key([
             'KingdomId' => (int) $kingdomId,
             'OfficerRole' => $officerRole,
+            // Version 1: data-max-rank attribute added to <option> elements (2026-08-27).
+            // Bump this when emitted <option> markup changes.
+            'v' => 1,
         ]);
         if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, 1200)) !== false) {
             return $cached;
