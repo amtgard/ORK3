@@ -1590,6 +1590,15 @@ class Player extends Ork3
             }
             if ($rank >= $maxRank) {
                 $date = (string) $grant['Date'];
+                // A usable date is REQUIRED to anchor the bonus window. 3,975 ladder
+                // grants carry '0000-00-00' and 28 of those sit at rank >= 10; letting
+                // one anchor $maxReached would make every later unranked grant sort
+                // after it and read as bonus, suppressing ~ and silently hiding the
+                // very broken records reconciliation exists to surface. Same guard the
+                // rest of this file already applies (class.Player.php:1406/1472/1488).
+                if ($date === '' || strpos($date, '0000-00-00') === 0) {
+                    continue;
+                }
                 if ($maxReached === null || $date < $maxReached) {
                     $maxReached = $date;
                 }
@@ -1603,7 +1612,14 @@ class Player extends Ork3
                 continue;
             }
             // Strictly later than the max-rank date; a tie is unreconciled.
-            if ($maxReached !== null && (string) $grant['Date'] > $maxReached) {
+            // An unranked grant with no usable date of its own can never be bonus
+            // either — "later than" is unanswerable, so it stays reconcilable.
+            $grantDate = (string) $grant['Date'];
+            if ($grantDate === '' || strpos($grantDate, '0000-00-00') === 0) {
+                $unrankedCount++;
+                continue;
+            }
+            if ($maxReached !== null && $grantDate > $maxReached) {
                 $bonusCount++;
             } else {
                 $unrankedCount++;

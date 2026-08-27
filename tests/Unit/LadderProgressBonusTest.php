@@ -124,4 +124,38 @@ final class LadderProgressBonusTest extends TestCase
 
         $this->assertSame(10, $result['Rank']);
     }
+
+    public function testAZeroDateAtMaxRankCannotAnchorTheBonusWindow(): void
+    {
+        // 3,975 ladder grants carry '0000-00-00' and 28 sit at rank >= 10. If one
+        // anchored $maxReached, every later unranked grant would read as bonus and
+        // ~ would vanish — hiding exactly the broken records reconciliation exists
+        // to surface. The conservative reading wins: no usable anchor, no bonus.
+        $grants = [];
+        for ($rank = 1; $rank <= 9; $rank++) {
+            $grants[] = ['Rank' => $rank, 'Date' => '2020-0' . $rank . '-01'];
+        }
+        $grants[] = ['Rank' => 10, 'Date' => '0000-00-00'];
+        $grants[] = ['Rank' => 0,  'Date' => '2024-01-01'];
+
+        $result = $this->progressFor($grants);
+
+        $this->assertSame(0, $result['BonusCount'], 'a zero date must not anchor the window');
+        $this->assertTrue($result['Approx'], 'the unranked grant is still unreconciled');
+    }
+
+    public function testAnUnrankedGrantWithNoUsableDateIsNeverBonus(): void
+    {
+        // "Later than" is unanswerable for a dateless grant, so it stays reconcilable.
+        $grants = [];
+        for ($rank = 1; $rank <= 10; $rank++) {
+            $grants[] = ['Rank' => $rank, 'Date' => '2020-0' . min(9, $rank) . '-01'];
+        }
+        $grants[] = ['Rank' => 0, 'Date' => '0000-00-00'];
+
+        $result = $this->progressFor($grants);
+
+        $this->assertSame(0, $result['BonusCount']);
+        $this->assertTrue($result['Approx']);
+    }
 }
