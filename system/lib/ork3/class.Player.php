@@ -1753,7 +1753,7 @@ class Player extends Ork3
                 'Name' => $lp['Name'],
                 'Short' => $lp['Short'],
                 'Rank' => (int)$lp['Rank'],
-                'MaxRank' => (int)($lp['MaxRank'] ?? (($aid === 30) ? 12 : 10)),
+                'MaxRank' => (int)($lp['MaxRank'] ?? Award::MaxRankFor((int) $aid)),
                 'HasMaster' => !empty($lp['HasMaster']),
                 'Approx' => !empty($lp['Approx']),
             ];
