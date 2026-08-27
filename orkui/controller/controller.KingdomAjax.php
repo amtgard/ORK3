@@ -315,12 +315,14 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setaward') {
             $this->load_model('Kingdom');
-            $kawId   = (int)($_POST['KingdomAwardId']  ?? 0);
-            $name    = trim($_POST['KingdomAwardName'] ?? '');
-            $reign   = (int)($_POST['ReignLimit']      ?? 0);
-            $month   = (int)($_POST['MonthLimit']      ?? 0);
-            $isTitle = (int)($_POST['IsTitle']         ?? 0);
-            $tClass  = (int)($_POST['TitleClass']      ?? 0);
+            $kawId    = (int)($_POST['KingdomAwardId']  ?? 0);
+            $name     = trim($_POST['KingdomAwardName'] ?? '');
+            $reign    = (int)($_POST['ReignLimit']      ?? 0);
+            $month    = (int)($_POST['MonthLimit']      ?? 0);
+            $isTitle  = (int)($_POST['IsTitle']         ?? 0);
+            $tClass   = (int)($_POST['TitleClass']      ?? 0);
+            $isLadder = (int)($_POST['IsLadder']        ?? 0);
+            $maxLevel = (int)($_POST['MaxLevel']        ?? 0);
 
             if (!strlen($name)) {
                 echo json_encode(['status' => 1, 'error' => 'Award name is required.']);
@@ -337,6 +339,8 @@ class Controller_KingdomAjax extends Controller
                     'MonthLimit'     => $month,
                     'IsTitle'        => $isTitle,
                     'TitleClass'     => $tClass,
+                    'IsLadder'       => $isLadder,
+                    'MaxLevel'       => $maxLevel,
                 ]);
             } else {
                 $awardId = (int)($_POST['AwardId'] ?? 0);
@@ -349,6 +353,8 @@ class Controller_KingdomAjax extends Controller
                     'MonthLimit' => $month,
                     'IsTitle'    => $isTitle,
                     'TitleClass' => $tClass,
+                    'IsLadder'   => $isLadder,
+                    'MaxLevel'   => $maxLevel,
                 ]);
             }
 

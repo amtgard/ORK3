@@ -334,6 +334,23 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 .ka-award-group-count { font-weight: 400; color: #a0aec0; margin-left: 4px; font-size: 10px; text-transform: none; letter-spacing: 0; }
 .ka-admin-park-retired { opacity: 0.45; }
 
+/* Ladder / Max Rank cells in the awards table. Max Rank reuses
+   .ka-admin-table input[type=number]'s sizing/border/dark-mode rule (it is one);
+   only the width and the disabled-state opacity are specific to it. */
+.ka-award-ladder-cell,
+.ka-award-maxrank-cell {
+    text-align: center;
+    white-space: nowrap;
+}
+.ka-admin-table .ka-award-maxrank {
+    width: 60px;
+}
+.ka-award-maxrank:disabled,
+.ka-award-ladder:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* Toggle switch */
 .ka-toggle { position: relative; display: inline-block; cursor: pointer; }
 .ka-toggle input { opacity: 0; position: absolute; }
@@ -536,6 +553,10 @@ html[data-theme="dark"] .ka-award-group-hdr td { background: var(--ork-bg-tertia
 html[data-theme="dark"] .ka-award-group-hdr td:hover { background: var(--ork-bg); }
 html[data-theme="dark"] .ka-award-group-chev { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ka-award-group-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-award-maxrank:disabled,
+html[data-theme="dark"] .ka-award-ladder:disabled {
+    opacity: 0.4;
+}
 
 /* Toggle */
 html[data-theme="dark"] .ka-toggle-track { background: var(--ork-bg-tertiary); }
@@ -729,13 +750,78 @@ html[data-theme="dark"] .ka-table-toolbar { background: var(--ork-bg-secondary);
        position:sticky/top:0 above: the margin lifts the bar out of flow, sticky
        then clamps it back down to the scrollport edge, and the bar ends up
        overlapping the next element by (20px - margin-bottom) = 12px -- which is
-       what was clipping the awards table's sticky header. */
+       what was clipping the awards table's sticky header. Because that negative
+       top margin is gone, the bar no longer has to be :first-child; an
+       instructions box can sit above it. */
     margin: 0 -20px 8px;
     padding: 12px 20px;
 }
 @media (max-width: 600px) {
     .ka-table-toolbar { gap: 6px; }
     .ka-table-count { flex-basis: 100%; }
+}
+
+/* Collapsible instructions box. Native <details>/<summary>, so it is keyboard
+   operable and announced as expanded/collapsed with no JS and no ARIA of our
+   own. Closed by default: an officer who already knows the screen should not
+   have to scroll past it every time. */
+.ka-help {
+    margin: 0 0 14px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md, 6px);
+    background: var(--ork-bg-secondary);
+    font-size: 13px;
+}
+.ka-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ork-text);
+    list-style: none;
+    border-radius: var(--ork-radius-md, 6px);
+}
+.ka-help > summary::-webkit-details-marker { display: none; }
+.ka-help > summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-right: 1.5px solid var(--ork-text-muted);
+    border-bottom: 1.5px solid var(--ork-text-muted);
+    transform: rotate(45deg) translate(-2px, -2px);
+    transition: transform 0.15s;
+}
+.ka-help[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.ka-help > summary:focus-visible { outline: 2px solid #2b6cb0; outline-offset: -2px; }
+.ka-help > summary .fas { color: var(--ork-text-muted); font-size: 12px; }
+.ka-help-body {
+    padding: 2px 12px 12px;
+    color: var(--ork-text-secondary);
+    line-height: 1.55;
+}
+.ka-help-body p { margin: 0 0 8px; }
+.ka-help-body p:last-child { margin-bottom: 0; }
+.ka-help-body dl { margin: 0; }
+.ka-help-body dt {
+    font-weight: 600;
+    color: var(--ork-text);
+    margin-top: 9px;
+}
+.ka-help-body dt:first-child { margin-top: 0; }
+.ka-help-body dd { margin: 2px 0 0; }
+.ka-help-note {
+    margin-top: 11px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-radius: 0 4px 4px 0;
+    font-size: 12.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .ka-help > summary::after { transition: none; }
 }
 
 /* Aliased award nested under the award it renames. The elbow is drawn with

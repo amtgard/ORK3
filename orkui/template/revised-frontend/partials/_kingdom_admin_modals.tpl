@@ -400,6 +400,22 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 			<button class="ka-modal-close" onclick="kaCloseModal('ka-parktitles-overlay')">&times;</button>
 		</div>
 		<div class="ka-modal-body">
+			<details class="ka-help">
+				<summary><i class="fas fa-circle-info" aria-hidden="true"></i> What these settings do</summary>
+				<div class="ka-help-body">
+					<p>Park titles are the ranks parks in your <?= strtolower($entityLabel) ?> are known by &mdash; Outpost, Shire, Barony and so on.</p>
+					<dl>
+						<dt>Title</dt>
+						<dd>The name of the rank. It appears on each park&rsquo;s profile, in the <?= strtolower($entityLabel) ?>&rsquo;s park list, and in the Title menu under Edit Parks.</dd>
+						<dt>Class</dt>
+						<dd>Rank order &mdash; a higher number outranks a lower one. It sorts the park list so grander parks appear first, and it is the tier the public map reads. The seeded ranks step in tens (10, 20, 30&hellip;) so a new rank can be slotted between two existing ones. Two titles sharing a number have no defined order between them.</dd>
+					</dl>
+					<div class="ka-help-note">
+						<strong>Min&nbsp;Att., Cutoff, Period and Len. are recorded but not yet used.</strong>
+						The ORK does not promote or demote parks automatically &mdash; a park&rsquo;s title is set by hand under Edit&nbsp;Parks. Treat these four as a written record of your <?= strtolower($entityLabel) ?>&rsquo;s corpora requirements; changing them will not change any park&rsquo;s rank or produce any warning.
+					</div>
+				</div>
+			</details>
 			<div class="ka-feedback" id="ka-titles-feedback"></div>
 			<div class="ka-admin-table-wrap">
 				<table class="ka-admin-table" id="ka-titles-table">
@@ -451,9 +467,10 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 			<button class="ka-modal-close" onclick="kaCloseModal('ka-editparks-overlay')">&times;</button>
 		</div>
 		<div class="ka-modal-body">
-			<!-- Non-scrolling toolbar. Must stay the FIRST child of .ka-modal-body:
-			     .ka-table-toolbar-bleed cancels that body's 20px padding with a
-			     negative margin, which would collide with a preceding sibling. -->
+			<!-- Non-scrolling toolbar. Sits directly above the table:
+			     .ka-table-toolbar-bleed cancels the body's 20px SIDE padding so the
+			     bar spans edge to edge. It has no negative top margin, so an
+			     instructions box may precede it. -->
 			<div class="ka-table-toolbar ka-table-toolbar-bleed">
 				<label class="ka-hint" for="ka-parks-search">Filter</label>
 				<input type="text" id="ka-parks-search" class="ka-report-filter" placeholder="Filter by park name or abbreviation&hellip;" autocomplete="off">
@@ -498,9 +515,32 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 			<button class="ka-modal-close" onclick="kaCloseModal('ka-awards-overlay')">&times;</button>
 		</div>
 		<div class="ka-modal-body">
-			<!-- Non-scrolling toolbar. Must stay the FIRST child of .ka-modal-body:
-			     .ka-table-toolbar-bleed cancels that body's 20px padding with a
-			     negative margin, which would collide with a preceding sibling. -->
+			<details class="ka-help">
+			<summary><i class="fas fa-circle-info" aria-hidden="true"></i> What these columns do</summary>
+			<div class="ka-help-body">
+			<p>This is your <?= strtolower($entityLabel) ?>&rsquo;s award catalogue: which awards can be given out, and what each one is called here. Renaming a standard award nests it under the award it renames.</p>
+			<dl>
+			<dt>Award Name</dt>
+			<dd>What this award is called in your <?= strtolower($entityLabel) ?>. It is the name used everywhere the award appears &mdash; when it is given out, on player profiles, in court reports and in award recommendations.</dd>
+			<dt>Title?</dt>
+			<dd>Marks this as a title rather than an award. Titles appear in the Titles section of a player&rsquo;s profile and in the title pickers; awards appear in their award history.</dd>
+			<dt>Ladder</dt>
+			<dd>A ladder award is granted in ranks, and players climb it over time. The standard Amtgard orders are set by Amtgard and locked here. You can turn any of your kingdom&rsquo;s own awards into a ladder and set its Max Rank (up to 12). Un-ticking Ladder only stops <em>new</em> ranks being offered &mdash; ranks already granted keep showing exactly as they are.</dd>
+			<dt>Class</dt>
+			<dd>Rank order among titles &mdash; a higher number outranks a lower one, so it decides the order titles are listed in on a player&rsquo;s profile, and which heading a title is grouped under in this list. Only meaningful when <em>Title?</em> is ticked. Seeded examples: Page&nbsp;5, Master&nbsp;10, Squire&nbsp;15, Knight&nbsp;20, Lord&nbsp;30, rising by tens.</dd>
+			<dt>Retiring an award</dt>
+			<dd>The trash icon retires an award rather than deleting it. A retired award can no longer be given out, but every player who already holds it keeps it and it still shows under its proper name. You can bring it back at any time.</dd>
+			</dl>
+			<div class="ka-help-note">
+			<strong>Reign and Month are recorded but not yet used.</strong>
+			They read as limits on how often an award may be given, but nothing in the ORK enforces them &mdash; no check is made when an award is granted. Setting them will not stop anyone giving the award out.
+			</div>
+			</div>
+			</details>
+			<!-- Non-scrolling toolbar. Sits directly above the table:
+			     .ka-table-toolbar-bleed cancels the body's 20px SIDE padding so the
+			     bar spans edge to edge. It has no negative top margin, so an
+			     instructions box may precede it. -->
 			<div class="ka-table-toolbar ka-table-toolbar-bleed">
 				<label class="ka-hint" for="ka-awards-search">Search</label>
 				<input type="text" id="ka-awards-search" class="ka-report-filter" placeholder="Search awards by name&hellip;" autocomplete="off">
@@ -519,6 +559,8 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 							<th>Reign</th>
 							<th>Month</th>
 							<th>Title?</th>
+							<th>Ladder</th>
+							<th>Max Rank</th>
 							<th>Class</th>
 							<th></th>
 						</tr>
@@ -572,6 +614,14 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 						<label>Title Class</label>
 						<input type="number" id="ka-new-tclass" min="0" value="0" style="width:64px" disabled>
 					</div>
+					<div class="ka-field ka-field-center">
+						<label>Ladder?</label>
+						<input type="checkbox" id="ka-new-ladder">
+					</div>
+					<div class="ka-field">
+						<label>Max Rank</label>
+						<input type="number" id="ka-new-maxrank" min="1" max="12" value="10" style="width:64px" disabled>
+					</div>
 				</div>
 				<div style="display:flex;gap:8px;margin-top:10px">
 					<button class="ka-save-btn" id="ka-new-award-save"><i class="fas fa-plus"></i> Add Award Alias</button>
@@ -602,6 +652,14 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 					<div class="ka-field">
 						<label>Title Class</label>
 						<input type="number" id="ka-custom-tclass" min="0" value="0" style="width:64px" disabled>
+					</div>
+					<div class="ka-field ka-field-center">
+						<label>Ladder?</label>
+						<input type="checkbox" id="ka-custom-ladder">
+					</div>
+					<div class="ka-field">
+						<label>Max Rank</label>
+						<input type="number" id="ka-custom-maxrank" min="1" max="12" value="10" style="width:64px" disabled>
 					</div>
 				</div>
 				<div style="display:flex;gap:8px;margin-top:10px">
@@ -2570,6 +2628,42 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 			titleCb.setAttribute('aria-label', 'Is ' + awName + ' a title?');
 			titleTd.appendChild(titleCb);
 
+			// Official Amtgard ladders (the 16 standard orders) are keyed on
+			// OfficialIsLadder, never the effective IsLadder -- IsLadder is 1 for a
+			// kingdom's OWN ladder-ified awards too, and locking those would be wrong.
+			var isOfficialLadder = (aw.OfficialIsLadder === 1);
+			var officialLockTip = 'Standard Amtgard ladder award — this can\'t be changed.';
+
+			var ladderTd = document.createElement('td');
+			ladderTd.className = 'ka-award-ladder-cell';
+			var ladderCb = document.createElement('input');
+			ladderCb.type = 'checkbox';
+			ladderCb.className = 'ka-award-ladder';
+			ladderCb.checked = (aw.IsLadder === 1);
+			ladderCb.dataset.field = 'IsLadder';
+			ladderCb.setAttribute('aria-label', 'Is ' + awName + ' a ladder award?');
+			if (isOfficialLadder) {
+				ladderCb.disabled = true;
+				ladderCb.setAttribute('data-tip', officialLockTip);
+			}
+			ladderTd.appendChild(ladderCb);
+
+			var maxRankTd = document.createElement('td');
+			maxRankTd.className = 'ka-award-maxrank-cell';
+			var maxRankInp = document.createElement('input');
+			maxRankInp.type = 'number';
+			maxRankInp.className = 'ka-award-maxrank';
+			maxRankInp.min = '1';
+			maxRankInp.max = '12';
+			maxRankInp.step = '1';
+			maxRankInp.value = (aw.MaxLevel && aw.MaxLevel > 0) ? aw.MaxLevel : 10;
+			maxRankInp.dataset.field = 'MaxLevel';
+			maxRankInp.setAttribute('aria-label', 'Max rank for ' + awName);
+			if (isOfficialLadder) {
+				maxRankInp.setAttribute('data-tip', officialLockTip);
+			}
+			maxRankTd.appendChild(maxRankInp);
+
 			var actionsTd = document.createElement('td');
 			actionsTd.style.whiteSpace = 'nowrap';
 
@@ -2594,6 +2688,8 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 			tr.appendChild(reignCell.td);
 			tr.appendChild(monthCell.td);
 			tr.appendChild(titleTd);
+			tr.appendChild(ladderTd);
+			tr.appendChild(maxRankTd);
 			tr.appendChild(classCell.td);
 			tr.appendChild(actionsTd);
 
@@ -2614,18 +2710,48 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 				if (aw.Disabled) return;
 				classCell.inp.disabled = !titleCb.checked;
 			}
+			// Max Rank is only meaningful while Ladder is ticked. An official ladder
+			// stays locked here regardless of the checkbox's own .checked state --
+			// this re-asserts the lock every time the row's disabled state is
+			// recomputed (e.g. after a retire/re-enable round trip), the same way
+			// syncTitleClass() re-asserts Title Class above.
+			function syncLadderState() {
+				if (aw.Disabled) return;
+				if (isOfficialLadder) {
+					ladderCb.disabled = true;
+					maxRankInp.disabled = true;
+					return;
+				}
+				maxRankInp.disabled = !ladderCb.checked;
+			}
 			function applyDisabledState() {
 				var off = !!aw.Disabled;
 				tr.querySelectorAll('[data-field]').forEach(function(f) { f.disabled = off; });
 				syncTitleClass();
+				syncLadderState();
 				disChip.style.display    = off ? ''     : 'none';
 				saveBtn.style.display    = off ? 'none' : '';
 				delBtn.style.display     = off ? 'none' : '';
 				restoreBtn.style.display = off ? ''     : 'none';
 			}
 
-			titleCb.addEventListener('change', syncTitleClass);
-			[nameCell.inp, reignCell.inp, monthCell.inp, classCell.inp, titleCb].forEach(function(f) {
+			titleCb.addEventListener('change', function() {
+				syncTitleClass();
+				// Ladder and Title? are mutually exclusive. A disabled (official-locked)
+				// Ladder checkbox must never be programmatically flipped.
+				if (titleCb.checked && !ladderCb.disabled && ladderCb.checked) {
+					ladderCb.checked = false;
+					syncLadderState();
+				}
+			});
+			ladderCb.addEventListener('change', function() {
+				syncLadderState();
+				if (ladderCb.checked && titleCb.checked) {
+					titleCb.checked = false;
+					syncTitleClass();
+				}
+			});
+			[nameCell.inp, reignCell.inp, monthCell.inp, classCell.inp, titleCb, ladderCb, maxRankInp].forEach(function(f) {
 				f.addEventListener('input',  refreshDirty);
 				f.addEventListener('change', refreshDirty);
 			});
@@ -2639,9 +2765,14 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 					ReignLimit: reignCell.inp.value,
 					MonthLimit: monthCell.inp.value,
 					IsTitle: titleCb.checked ? 1 : 0,
-					TitleClass: classCell.inp.value
+					TitleClass: classCell.inp.value,
+					IsLadder: ladderCb.checked ? 1 : 0,
+					MaxLevel: parseInt(maxRankInp.value, 10) || 10
 				}, saveBtn, 'ka-awards-feedback', function() {
 					aw.KingdomAwardName = newName;
+					aw.IsLadder = ladderCb.checked ? 1 : 0;
+					aw.MaxLevel = parseInt(maxRankInp.value, 10) || 10;
+					aw.IsTitle = titleCb.checked ? 1 : 0;
 					ctx.haystack = (newName + ' ' + sysName + ' ' + classCell.inp.value).toLowerCase();
 					markClean();
 					kaFeedback('ka-awards-feedback', 'Saved "' + kaEsc(newName) + '".', true);
@@ -2764,7 +2895,7 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 			var hdr = document.createElement('tr');
 			hdr.className = 'ka-award-group-hdr ka-collapsed';
 			var hdrTd = document.createElement('td');
-			hdrTd.colSpan = 6;
+			hdrTd.colSpan = 8;
 			var hdrBtn = document.createElement('button');
 			hdrBtn.type = 'button';
 			hdrBtn.id = 'ka-awgrp-' + gi;
@@ -2919,6 +3050,46 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 		var customIsTitleCb = gid('ka-custom-istitle'), customTClassInp = gid('ka-custom-tclass');
 		if (customIsTitleCb && customTClassInp) customIsTitleCb.addEventListener('change', function() { customTClassInp.disabled = !this.checked; });
 
+		// Ladder checkbox toggles. Max Rank is only meaningful while Ladder is
+		// ticked, and Ladder/Title? are mutually exclusive -- same rules as the
+		// per-row table below, applied to the two "add award" forms.
+		var newLadderCb = gid('ka-new-ladder'), newMaxRankInp = gid('ka-new-maxrank');
+		if (newLadderCb && newMaxRankInp) {
+			newLadderCb.addEventListener('change', function() {
+				newMaxRankInp.disabled = !this.checked;
+				if (this.checked && newIsTitleCb && newIsTitleCb.checked) {
+					newIsTitleCb.checked = false;
+					if (newTClassInp) newTClassInp.disabled = true;
+				}
+			});
+		}
+		if (newIsTitleCb && newLadderCb) {
+			newIsTitleCb.addEventListener('change', function() {
+				if (this.checked && newLadderCb.checked) {
+					newLadderCb.checked = false;
+					if (newMaxRankInp) newMaxRankInp.disabled = true;
+				}
+			});
+		}
+		var customLadderCb = gid('ka-custom-ladder'), customMaxRankInp = gid('ka-custom-maxrank');
+		if (customLadderCb && customMaxRankInp) {
+			customLadderCb.addEventListener('change', function() {
+				customMaxRankInp.disabled = !this.checked;
+				if (this.checked && customIsTitleCb && customIsTitleCb.checked) {
+					customIsTitleCb.checked = false;
+					if (customTClassInp) customTClassInp.disabled = true;
+				}
+			});
+		}
+		if (customIsTitleCb && customLadderCb) {
+			customIsTitleCb.addEventListener('change', function() {
+				if (this.checked && customLadderCb.checked) {
+					customLadderCb.checked = false;
+					if (customMaxRankInp) customMaxRankInp.disabled = true;
+				}
+			});
+		}
+
 		// System award alias dropdown
 		var trigger = gid('ka-alias-trigger'), dropdown = gid('ka-alias-dropdown'), searchInp2 = gid('ka-alias-search');
 		var listEl = gid('ka-alias-list'), hiddenInp = gid('ka-new-award-id'), nameInp = gid('ka-new-award-name');
@@ -2966,7 +3137,9 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 				kaPost(BASE_URL + 'setaward', {
 					KingdomAwardId: 0, AwardId: awardId, KingdomAwardName: name,
 					ReignLimit: gid('ka-new-reign').value, MonthLimit: gid('ka-new-month').value,
-					IsTitle: gid('ka-new-istitle').checked ? 1 : 0, TitleClass: gid('ka-new-tclass').value
+					IsTitle: gid('ka-new-istitle').checked ? 1 : 0, TitleClass: gid('ka-new-tclass').value,
+					IsLadder: (newLadderCb && newLadderCb.checked) ? 1 : 0,
+					MaxLevel: (newMaxRankInp && parseInt(newMaxRankInp.value, 10)) || 10
 				}, null, 'ka-awards-feedback', function() {
 					saveNewBtn.disabled = false;
 					kaFeedback('ka-awards-feedback', 'Award alias created!', true);
@@ -2986,7 +3159,9 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 				kaPost(BASE_URL + 'setaward', {
 					KingdomAwardId: 0, AwardId: 0, KingdomAwardName: name,
 					ReignLimit: gid('ka-custom-reign').value, MonthLimit: gid('ka-custom-month').value,
-					IsTitle: gid('ka-custom-istitle').checked ? 1 : 0, TitleClass: gid('ka-custom-tclass').value
+					IsTitle: gid('ka-custom-istitle').checked ? 1 : 0, TitleClass: gid('ka-custom-tclass').value,
+					IsLadder: (customLadderCb && customLadderCb.checked) ? 1 : 0,
+					MaxLevel: (customMaxRankInp && parseInt(customMaxRankInp.value, 10)) || 10
 				}, null, 'ka-awards-feedback', function() {
 					saveCustomBtn.disabled = false;
 					kaFeedback('ka-awards-feedback', 'Kingdom-specific award created!', true);

@@ -2018,6 +2018,14 @@ class Controller_Admin extends Controller
                     'AwardId'          => (int)($aw['AwardId']     ?? 0),
                     'AwardName'        => $aw['AwardName']         ?? '',
                     'IsLadder'         => (int)($aw['IsLadder']    ?? 0),
+                    // OfficialIsLadder is deliberately distinct from IsLadder above:
+                    // IsLadder is the EFFECTIVE flag (1 for a kingdom's own
+                    // ladder-ified awards too), while this is 1 only for the 16
+                    // standard Amtgard orders. The Manage Awards modal locks the
+                    // Ladder/Max Rank controls on this flag, never on IsLadder --
+                    // locking a kingdom's own ladder would be wrong.
+                    'OfficialIsLadder' => (int)($aw['OfficialIsLadder'] ?? 0),
+                    'MaxLevel'         => (int)($aw['MaxLevel']    ?? 0),
                     'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
                     'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
                     'IsTitle'          => (int)($aw['IsTitle']     ?? 0),

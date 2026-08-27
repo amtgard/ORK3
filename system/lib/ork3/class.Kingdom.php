@@ -386,6 +386,39 @@ class Kingdom extends Ork3
             $this->kingdomaward->is_title = $request['IsTitle'];
             $this->kingdomaward->title_class = $request['TitleClass'];
             $this->kingdomaward->disabled = 0;
+
+            // Same guard as EditAward (requirement 1): an "Add Award Alias" can point
+            // at one of the 16 official Amtgard ladders, and that award's ladder
+            // configuration belongs to Amtgard, not the kingdom. Skip the write and let
+            // the column default (0) stand -- never let a kingdom seed a custom
+            // is_ladder/max_level onto an alias of an official ladder.
+            $awardId = (int) ($request['AwardId'] ?? 0);
+            $officialLadder = false;
+            if ($awardId > 0) {
+                $this->db->Clear();
+                $officialRs = $this->db->DataSet(
+                    'select IFNULL(is_ladder, 0) as official_is_ladder from ' . DB_PREFIX . 'award where award_id = ' . $awardId
+                );
+                if ($officialRs && $officialRs->Next()) {
+                    $officialLadder = (int) $officialRs->official_is_ladder === 1;
+                }
+            }
+
+            if (!$officialLadder) {
+                $isLadder = isset($request['IsLadder']) && (int) $request['IsLadder'] === 1 ? 1 : 0;
+                $this->kingdomaward->is_ladder = $isLadder;
+                if ($isLadder === 1) {
+                    // Ladder and Title? are mutually exclusive.
+                    $this->kingdomaward->is_title = 0;
+                }
+
+                $maxLevel = (int) ($request['MaxLevel'] ?? 0);
+                if ($maxLevel < 0) {
+                    $maxLevel = 0;
+                }
+                $this->kingdomaward->max_level = min(12, $maxLevel); // Rule 2
+            }
+
             $this->kingdomaward->save();
 
             // This used to fall off the end and return null, so every caller that
