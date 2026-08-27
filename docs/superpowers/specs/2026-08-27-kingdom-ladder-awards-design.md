@@ -81,12 +81,30 @@ Every existing predicate spelling becomes a call to one of these.
 `pseudoLadderKingdomAwardIds()` is **deleted** — the column replaces it with no
 behaviour change on day one, because the two sets are identical.
 
-**Max rank** resolves with a floor, preserving current behaviour for the official 16
-(which store `0`, already rendered as 10 at `Playernew_index.tpl:2126`):
+**Max rank cannot be resolved in SQL**, because the official ladders' maxes live in PHP,
+not in the database. `Award::GetLadderMasterMap()` (`class.Award.php:17`) is the real
+authority for them — and **Order of the Zodiac (30) is 12, not 10**. `ka.max_level` is
+`0` for every official row, so a SQL-only `COALESCE(NULLIF(ka.max_level,0), 10)` would
+silently demote Zodiac to 10.
 
-```sql
-COALESCE(NULLIF(ka.max_level, 0), 10)
+A PHP helper resolves it instead:
+
+```php
+Award::MaxRankFor(int $awardId, int $kaMaxLevel = 0): int
+// official (in GetLadderMasterMap)  -> that entry's MaxRank
+// kingdom ladder                    -> ka.max_level
+// anything else                     -> 10
 ```
+
+This also retires a special case currently written out **three times**:
+`GetLadderMasterMap()` has Zodiac at 12, `GetLadderProgress` falls back to
+`($lpAid === 30) ? 12 : 10` (`class.Player.php:1636`), and
+`Playernew_reconcile.tpl:185` repeats `($aid === 30) ? 12 : 10` again. All three become
+calls to the helper.
+
+Note `GetLadderMasterMap()` holds 14 entries, not 16: Walker (31) is deliberately absent,
+and Order of the Flame (34) is missing — it falls through to 10, which is its correct
+value, but by accident rather than by declaration. The helper makes that explicit.
 
 ### 2. Rank display vs. rank offering
 
@@ -158,7 +176,53 @@ open-ended: ranks run 1..max, and anything beyond max is expressed as an unranke
 rather than an out-of-range number. Ranks above max that already exist in the data — from
 imports or historical records — still render; nothing rewrites them.
 
-### 5. Surfaces
+### 5. Bonus grants: the `~` marker and reconciliation
+
+An unranked grant of a ladder award currently means one thing to the ORK — *a historical
+record whose rank was never captured*. The star introduces a second, legitimate kind of
+unranked grant: recognition beyond the top of the ladder. These must not be confused.
+
+**Definition.** For a given ladder award and player, a **bonus grant** is an unranked
+grant whose date is later than the date the player first reached max rank. If the player
+has never reached max rank, there are no bonus grants and every unranked grant stays
+unreconciled — which is the correct reading of the old data.
+
+Ties on the same date count as unreconciled, not bonus. That is the conservative side of
+the line: a false "needs reconciling" is a dismissible prompt, whereas a false "bonus"
+silently hides a genuinely broken record.
+
+**No new query.** `AwardsForPlayer` already returns `Rank` and `Date` on the same row
+(`class.Player.php:1173-1174`), so the classification is a pass over data
+`GetLadderProgress` already has. It has no date awareness today.
+
+**`GetLadderProgress` changes** (`class.Player.php:1610-1640`). Today:
+
+```php
+$effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
+$lp['Approx']   = ($effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
+$lp['Rank']     = min($maxRank, max($lp['Rank'], $effectiveCount));
+```
+
+Every unranked grant inflates the displayed rank and trips `~`. After the change, bonus
+grants are counted separately and excluded from both:
+
+- `UnrankedCount` counts only non-bonus unranked grants — these still drive `~`.
+- `BonusCount` is tracked alongside and never affects `Rank` or `Approx`.
+
+So a player at 10/10 who is recognised twice more shows **10 / 10** with no `~`, instead
+of today's `~10 / 10` implying broken data. The existing `HasMaster` suppression is
+unchanged.
+
+**Tile display.** The tile gains a quiet `✱2` beside the rank when `BonusCount > 0` —
+recognition earned past the top of the ladder is worth showing, and it explains why the
+player has more grants than ranks without implying an error.
+
+**Reconciliation** (`Playernew_reconcile.tpl`). Bonus grants are excluded from the list
+entirely. The page tells the player these are records "not matched to your official award
+history yet" (`:124`) — which would be actively wrong about a deliberate star grant, and
+would invite them to assign it a rank it should never have.
+
+### 6. Surfaces
 
 **Rank pickers — eight.** All built by `revised.js` off the shared pill selector, so the
 star pill and effective-ladder check are implemented once:
@@ -208,7 +272,7 @@ one caller.
 rows. Kingdom columns are therefore keyed on `kingdomaward_id` and appear **only** in the
 kingdom-scoped grid; the global grid stays official-only.
 
-### 6. Error handling
+### 7. Error handling
 
 Two hard rules, and otherwise the design removes failure modes rather than handling them.
 
@@ -261,6 +325,15 @@ Then:
 - The star is available on an official ladder at rank 10, even though its max rank is
   locked.
 - A pre-existing grant with rank above max still renders and is not rewritten.
+- `Award::MaxRankFor()` returns 12 for Order of the Zodiac (30) and 10 for the other
+  official ladders — the Zodiac case that is currently duplicated in three places.
+- An unranked grant dated after the player reached max rank is classified bonus: it does
+  not set `~`, does not inflate the displayed rank, and is absent from the reconciliation
+  list.
+- An unranked grant dated before that point is still unreconciled and still sets `~`.
+- An unranked grant on the same date as the max-rank grant counts as unreconciled.
+- A player who never reached max has no bonus grants; every unranked grant stays
+  reconcilable, matching today's behaviour exactly.
 - A kingdom-ladder recommendation buckets as "below", not "nonladder".
 - Walker (`award_id = 31`) remains excluded from ladder reports.
 
