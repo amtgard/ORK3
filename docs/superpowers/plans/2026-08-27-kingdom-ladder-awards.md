@@ -2131,6 +2131,76 @@ git commit -m "Enhancement: bucket kingdom-ladder recommendations as ladder awar
 
 ---
 
+### Task 8A: Rule 1 must cover the edit and reconcile write paths
+
+**Added mid-execution.** The Task 8 / 7B review traced the seam between the two
+and found the star pill's guarantee is not closed end-to-end.
+
+Task 7B wired the star into **eight** builders. Six submit through
+`Player::AddAward()`, where Rule 1 lives — those agree exactly: both sides test
+`currentRank >= Award::MaxRankFor(...)`.
+
+The other two do not:
+
+| Builder | Endpoint | Domain method | Rule 1? |
+|---|---|---|---|
+| `buildEditRankPills` (`revised.js:~12186`, star at `:12216`) | `Admin/player/{id}/updateaward/{id}` | `Player::UpdateAward()` | **none** |
+| reconcile picker (`revised.js:~12488`, star at `:12525`) | `Admin/player/{id}/reconcileaward/{id}` | `Player::ReconcileAward()` | **none** |
+
+Neither method contains any ladder check — nothing stops `Rank = 0` being written
+for a below-max ladder award. The reconcile picker is the weaker of the two: its
+star gate reads `PnConfig.awardRanks[awardId]`, so the invariant rests **entirely
+on client state**.
+
+Neither task's brief scoped Rule 1 to these methods; both agents implemented their
+briefs correctly. This closes the gap between them.
+
+**Files:**
+- Modify: `system/lib/ork3/class.Player.php`
+- Modify: `tests/Integration/LadderGrantRuleTest.php`
+
+**Interfaces:**
+- Produces: a shared private guard on `Player` — e.g. `RejectUnrankedLadderGrant(int $awardId, int $kingdomAwardId, int $recipientId): ?array` returning a flat error array when the grant must be refused and `null` when it may proceed — called by `AddAward`, `UpdateAward` and `ReconcileAward`.
+
+- [ ] **Step 1: Factor the existing check into one guard**
+
+`AddAward` already has the logic, using `GetLadderContext()`, `CurrentLadderRank()`
+and `Award::OffersStar()`. Extract it rather than copying it: this plan exists
+because one predicate drifted into five hand-written spellings, and three copies of
+Rule 1 would repeat that mistake.
+
+Keep the Zodiac exemption (`Award::IsMonthlyLadder()`) and the verbatim message:
+
+> {Award} is a ranked award — choose a rank, or use ✱ if they have already reached {max}.
+
+- [ ] **Step 2: Call it from `UpdateAward` and `ReconcileAward`**
+
+Mind the difference in meaning: on **edit** and **reconcile** the operative rank is
+the one the row is being changed *to*. Rejecting an unranked edit of a record that
+is *already* unranked and legitimately bonus would break the reconciliation flow —
+so the guard must consider the player's held rank, not merely the submitted value.
+
+- [ ] **Step 3: Tests**
+
+Extend `tests/Integration/LadderGrantRuleTest.php`:
+
+- `UpdateAward` rejects setting rank 0 on a ladder award for a below-max player
+- `ReconcileAward` likewise
+- both still **accept** an unranked write for a player at or above max (the star path)
+- a Zodiac edit stays exempt
+- a non-ladder edit is unaffected
+
+**Prove non-vacuousness**: disable the guard, watch these fail, restore, watch them
+pass — the same discipline Task 8 used.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "Enhancement: Rule 1 covers the edit and reconcile write paths" -- system/lib/ork3/class.Player.php tests/Integration/LadderGrantRuleTest.php
+```
+
+---
+
 ### Task 10A: Plumb `BonusCount` and reconcile max rank out of the domain
 
 **Added mid-execution.** Task 10 stopped without editing and reported
