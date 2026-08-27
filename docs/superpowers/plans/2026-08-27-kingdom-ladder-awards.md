@@ -553,8 +553,16 @@ Create `db-migrations/2026-08-27-kingdomaward-ladder-columns.sql`:
 
 ALTER TABLE `ork_kingdomaward`
     ADD COLUMN IF NOT EXISTS `is_ladder` TINYINT(1) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS `max_level` TINYINT(1) NOT NULL DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS `max_level` TINYINT(1) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS `disabled`  TINYINT(1) NOT NULL DEFAULT 0;
 ```
+
+`disabled` has the same problem and is **more urgent**: award soft-delete, added
+by commit `95944b80` earlier on this branch, already writes it
+(`class.Kingdom.php:384,509,544`). It is absent from the canonical schema and
+from every migration, so this PR currently ships code that writes a column a
+fresh deploy would not have. It is the same table and the same class of gap, so
+it belongs in the same migration rather than a second one.
 
 - [ ] **Step 2: Classify it**
 
