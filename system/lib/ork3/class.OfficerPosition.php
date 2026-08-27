@@ -1079,23 +1079,48 @@ class OfficerPosition extends Ork3
     }
 
     /**
-     * Vacate the occupant of a position+scope: closes the term and revokes the
-     * synced ork_user_role via Common::set_officer(mundane_id=0). Crown leaves a
-     * vacant placeholder row (mundane_id=0); supporting deletes the row.
+     * Vacate a holder of a position+scope. Vacating ENDS THE TERM -- the officer's
+     * ork_officer_history record is stamped with today's end_date so the kingdom's
+     * officer history keeps who served and when; history is never deleted. The
+     * synced ork_user_role is revoked for whoever is vacated.
+     *
+     * $mundane_id targets a SINGLE holder (the only sane behaviour for a supporting
+     * position with several deputies). Omitting it -- or passing 0 -- is the
+     * explicit "Vacate All" case and affects every holder of the position in this
+     * scope. Callers that mean one person MUST pass the id.
+     *
+     * Occupancy representation stays consistent with the crown convention that the
+     * rest of the system reads: an office with nobody in it keeps exactly one
+     * ork_officer row with mundane_id = 0. Crown reaches that via
+     * Common::set_officer(0). Supporting is multi-occupant, so a surplus holder's
+     * row is removed, but the LAST holder's row is blanked to mundane_id = 0 rather
+     * than deleted -- that keeps the office visible as vacant (hide_when_vacant
+     * still applies) and, more importantly, keeps officer_id/authorization_id
+     * instead of re-creating the row with authorization_id = 0.
+     *
+     * ork_officer is MyISAM -- no transactions -- so writes are ordered
+     * history-close -> officer row -> RBAC revoke. A failure part-way can leave a
+     * closed term with a role still granted (visible and re-runnable), never a
+     * revoked role with an open term claiming the person is still serving.
      *
      * @param int $kingdom_id
      * @param int $park_id
      * @param int $position_id
      * @param int $changed_by
+     * @param int $mundane_id  Optional single holder to vacate; 0/omitted = all holders.
      * @return array
      */
-    public function VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $changed_by)
+    public function VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $changed_by, $mundane_id = 0)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
         $park_id = (int) $park_id;
         $position_id = (int) $position_id;
         $changed_by = (int) $changed_by;
+        $mundane_id = (int) $mundane_id;
+        if ($mundane_id < 0) {
+            $mundane_id = 0;
+        }
 
         $position = $this->GetPosition($position_id, $kingdom_id);
         if ($position === false) {
@@ -1107,48 +1132,124 @@ class OfficerPosition extends Ork3
         }
         $canonical_key = $position['CanonicalKey'];
         $classification = $position['Classification'];
+        $display_label = isset($position['DisplayTitle']) ? (string) $position['DisplayTitle'] : '';
 
         if ($classification === 'supporting') {
-            // Supporting positions can have multiple occupants; close history +
-            // revoke each occupant's role, then delete the rows (no placeholder).
+            // Supporting positions can have multiple occupants. Read every occupied
+            // row for the scope up front (never re-query this handle inside a
+            // ->Next() walk) so we know both who is targeted and how many holders
+            // remain -- the last one is blanked rather than deleted.
             $DB->Clear();
             $DB->vs_kid = $kingdom_id;
             $DB->vs_pid = $park_id;
             $DB->vs_pos = $position_id;
-            $occ = $DB->DataSet(
-                "SELECT mundane_id FROM " . DB_PREFIX . "officer
-				 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos AND mundane_id > 0"
+            $rows = $DB->DataSet(
+                "SELECT officer_id, mundane_id, modified FROM " . DB_PREFIX . "officer
+				 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos
+				   AND mundane_id > 0
+				 ORDER BY officer_id"
             );
-            $occupants = [];
-            if ($occ !== false && $occ->size() > 0) {
-                while ($occ->Next()) {
-                    $occupants[] = (int) $occ->mundane_id;
+            $occupied = [];
+            if ($rows !== false && $rows->size() > 0) {
+                while ($rows->Next()) {
+                    $occupied[] = [
+                        'officer_id' => (int) $rows->officer_id,
+                        'mundane_id' => (int) $rows->mundane_id,
+                        'modified'   => (string) $rows->modified,
+                    ];
                 }
             }
-            foreach ($occupants as $mid) {
-                if (isset(Ork3::$Lib->rbacservice)) {
+            $targets = [];
+            foreach ($occupied as $row) {
+                if ($mundane_id === 0 || $row['mundane_id'] === $mundane_id) {
+                    $targets[] = $row;
+                }
+            }
+            if (count($targets) === 0) {
+                if ($mundane_id > 0) {
+                    return InvalidParameter(null, 'That member does not currently hold this position.');
+                }
+                return Success(); // Vacate All on an already-empty office: no-op.
+            }
+
+            $remaining = count($occupied);
+            $handled = [];
+            foreach ($targets as $row) {
+                $mid = $row['mundane_id'];
+
+                // 1. End the term FIRST so a later failure can never leave a revoked
+                //    role sitting behind an open (still-serving) history record.
+                //    Guarded per person: a duplicate occupancy row must not backfill
+                //    a second closed history record.
+                if (!isset($handled[$mid])) {
+                    $this->CloseOfficerHistoryTerm(
+                        $kingdom_id,
+                        $park_id,
+                        $position_id,
+                        $canonical_key,
+                        $mid,
+                        $changed_by,
+                        $display_label,
+                        $row['modified']
+                    );
+                }
+
+                // 2. Free the occupancy row. Targeting officer_id is what keeps a
+                //    six-deputy office from being emptied by one click. The final
+                //    holder's row is blanked to mundane_id = 0 (the crown "vacant"
+                //    convention) instead of deleted, preserving officer_id and any
+                //    authorization_id binding.
+                $DB->Clear();
+                $DB->vd_oid = $row['officer_id'];
+                if ($remaining > 1) {
+                    $DB->Execute(
+                        "DELETE FROM " . DB_PREFIX . "officer WHERE officer_id = :vd_oid"
+                    );
+                } else {
+                    $DB->Execute(
+                        "UPDATE " . DB_PREFIX . "officer
+						 SET mundane_id = 0, modified = NOW()
+						 WHERE officer_id = :vd_oid"
+                    );
+                }
+                $remaining--;
+
+                // 3. Revoke the synced RBAC role for this holder.
+                if (!isset($handled[$mid]) && isset(Ork3::$Lib->rbacservice)) {
                     try {
                         Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId($mid, 0, $position_id, $kingdom_id, $park_id, $changed_by);
                     } catch (Exception $e) {
                         logtrace('RBAC vacate supporting failed', $e->getMessage());
                     }
                 }
+                $handled[$mid] = true;
             }
-            $DB->Clear();
-            $DB->vd_kid = $kingdom_id;
-            $DB->vd_pid = $park_id;
-            $DB->vd_pos = $position_id;
-            $DB->Execute(
-                "DELETE FROM " . DB_PREFIX . "officer
-				 WHERE kingdom_id = :vd_kid AND park_id = :vd_pid AND position_id = :vd_pos"
-            );
             return Success();
         }
 
+        // Crown is single-slot: reject a single-holder request aimed at somebody who
+        // is not the sitting officer rather than silently vacating whoever is.
+        if ($mundane_id > 0) {
+            $DB->Clear();
+            $DB->vc_kid = $kingdom_id;
+            $DB->vc_pid = $park_id;
+            $DB->vc_pos = $position_id;
+            $DB->vc_mid = $mundane_id;
+            $cur = $DB->DataSet(
+                "SELECT officer_id FROM " . DB_PREFIX . "officer
+				 WHERE kingdom_id = :vc_kid AND park_id = :vc_pid
+				   AND position_id = :vc_pos AND mundane_id = :vc_mid LIMIT 1"
+            );
+            if ($cur === false || $cur->size() == 0) {
+                return InvalidParameter(null, 'That member does not currently hold this position.');
+            }
+        }
+
         // Crown: close the term + revoke role (mundane_id = 0 means vacate),
-        // leaving a vacant placeholder row.
+        // leaving a vacant placeholder row. set_officer() closes the open history
+        // term via record_officer_history before the RBAC sync runs.
         $c = new Common();
-        $c->set_officer($kingdom_id, $park_id, 0, $canonical_key, 0, $changed_by, $position_id);
+        $c->set_officer($kingdom_id, $park_id, 0, $canonical_key, 0, $changed_by, $position_id, $display_label);
         return Success();
     }
 
@@ -1184,6 +1285,100 @@ class OfficerPosition extends Ork3
             "INSERT INTO " . DB_PREFIX . "officer
 			 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
 			 VALUES (:ic_kid, :ic_pid, 0, :ic_role, 0, 0, :ic_pos, NOW())"
+        );
+    }
+
+    /**
+     * End one holder's ork_officer_history term for a position+scope.
+     *
+     * Common::record_officer_history() closes EVERY open term for the role/position
+     * regardless of who holds it, which is wrong for a multi-occupant supporting
+     * position, so the close is done here with a mundane_id filter.
+     *
+     * When the holder has no open term -- appointed before officer history existed,
+     * or by a legacy path that never opened one -- a completed record is written
+     * instead, so vacating always leaves history showing that the person served and
+     * when the service ended rather than erasing them.
+     *
+     * @param int    $kingdom_id
+     * @param int    $park_id
+     * @param int    $position_id
+     * @param string $canonical_key
+     * @param int    $mundane_id
+     * @param int    $changed_by
+     * @param string $display_label Snapshot title for a backfilled record.
+     * @param string $held_since    ork_officer.modified, the best available start
+     *                              date when a record has to be backfilled.
+     * @return void
+     */
+    private function CloseOfficerHistoryTerm($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $display_label = '', $held_since = '')
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+        $position_id = (int) $position_id;
+        $mundane_id = (int) $mundane_id;
+        $changed_by = (int) $changed_by;
+        if ($mundane_id <= 0) {
+            return;
+        }
+        $today = date('Y-m-d');
+
+        // Legacy rows written before position_id existed carry position_id = 0 and
+        // identify the office by canonical key alone; match those too.
+        $match = "kingdom_id = :ch_kid AND park_id = :ch_pid AND mundane_id = :ch_mid
+			   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
+			   AND end_date IS NULL";
+
+        $DB->Clear();
+        $DB->ch_kid = $kingdom_id;
+        $DB->ch_pid = $park_id;
+        $DB->ch_mid = $mundane_id;
+        $DB->ch_pos = $position_id;
+        $DB->ch_role = $canonical_key;
+        $open = $DB->DataSet(
+            "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history
+			 WHERE " . $match . " LIMIT 1"
+        );
+
+        if ($open !== false && $open->size() > 0) {
+            // Execute() reports no row count, so the SELECT above is what tells us an
+            // open term exists; close it with today's date.
+            $DB->Clear();
+            $DB->ch_end = $today;
+            $DB->ch_kid = $kingdom_id;
+            $DB->ch_pid = $park_id;
+            $DB->ch_mid = $mundane_id;
+            $DB->ch_pos = $position_id;
+            $DB->ch_role = $canonical_key;
+            $DB->Execute(
+                "UPDATE " . DB_PREFIX . "officer_history
+				 SET end_date = :ch_end
+				 WHERE " . $match
+            );
+            return;
+        }
+
+        // No open term: backfill a completed one so the service is still recorded.
+        $start = substr(trim((string) $held_since), 0, 10);
+        if ($start === '' || $start === '0000-00-00' || $start > $today) {
+            $start = $today;
+        }
+        $label = (trim((string) $display_label) !== '') ? (string) $display_label : $canonical_key;
+        $DB->Clear();
+        $DB->cb_kid = $kingdom_id;
+        $DB->cb_pid = $park_id;
+        $DB->cb_mid = $mundane_id;
+        $DB->cb_role = $canonical_key;
+        $DB->cb_pos = $position_id;
+        $DB->cb_label = $label;
+        $DB->cb_start = $start;
+        $DB->cb_end = $today;
+        $DB->cb_cb = ($changed_by > 0 ? $changed_by : null);
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer_history
+			 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+			 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label, :cb_start, :cb_end, :cb_cb, NOW())"
         );
     }
 

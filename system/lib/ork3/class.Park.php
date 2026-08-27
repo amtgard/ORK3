@@ -2,6 +2,23 @@
 
 class Park extends Ork3
 {
+    /**
+     * Fallback park title.
+     *
+     * Every park must carry a park title -- ork_park.parktitle_id is NOT NULL with a
+     * schema DEFAULT of 1 -- so an operation that touches the title and cannot honour
+     * what it was given has to land on something. That something is this constant, on
+     * purpose, and never "whatever title happens to sort first", which is how parks
+     * used to be silently reassigned to an unrelated title.
+     */
+    public const DEFAULT_PARKTITLE_ID = 1;
+
+    /**
+     * Park active states. ork_park.active is enum('Active','Retired').
+     */
+    public const ACTIVE_ACTIVE = 'Active';
+    public const ACTIVE_RETIRED = 'Retired';
+
     public function __construct()
     {
         parent::__construct();
@@ -863,9 +880,12 @@ class Park extends Ork3
             $this->park->kingdom_id     = $request[ 'KingdomId' ];
             $this->park->name           = $request[ 'Name' ];
             $this->park->abbreviation   = strtoupper($request[ 'Abbreviation' ]);
-            $this->park->active         = 'Active';
+            $this->park->active         = self::ACTIVE_ACTIVE;
             $this->park->modified       = date("Y-m-d H:i:s", time());
-            $this->park->parktitle_id   = $request[ 'ParkTitleId' ];
+            // Same defaulting rule as SetParkDetails: a title that is missing, blank,
+            // nonexistent, or owned by another kingdom lands on DEFAULT_PARKTITLE_ID
+            // instead of being written through unchecked.
+            $this->park->parktitle_id   = $this->ResolveParkTitleId($request[ 'ParkTitleId' ] ?? 0, $kingdom_id);
             $this->park->url            = '';
             $this->park->address        = '';
             $this->park->city           = '';
@@ -894,7 +914,7 @@ class Park extends Ork3
                 'kingdom_id'   => (int)$request['KingdomId'],
                 'name'         => $request['Name'],
                 'abbreviation' => strtoupper($request['Abbreviation']),
-                'parktitle_id' => (int)$request['ParkTitleId'],
+                'parktitle_id' => (int)$this->park->parktitle_id,
             ]);
             Ork3::$Lib->report->bustKingdomParkAverageCaches((int) $request['KingdomId']);
             $response = Success($new_park_id);
@@ -902,6 +922,43 @@ class Park extends Ork3
             $response = NoAuthorization();
         }
         return $response;
+    }
+
+    /**
+     * Resolve a requested park title id against the kingdom that owns the park.
+     *
+     * Park titles are per-kingdom rows in ork_parktitle, keyed on parktitle.kingdom_id.
+     * Callers used to check only that the id EXISTED, which let a park be handed a title
+     * defined by some other kingdom -- the park then rendered a title its own kingdom had
+     * never created, and nothing in the UI explained where it came from.
+     *
+     * The rule, implemented once here so every write site in this class inherits it:
+     *   - id exists AND belongs to $kingdom_id  -> use it
+     *   - id is 0 / blank / non-numeric         -> self::DEFAULT_PARKTITLE_ID
+     *   - id does not exist                     -> self::DEFAULT_PARKTITLE_ID
+     *   - id belongs to a different kingdom     -> self::DEFAULT_PARKTITLE_ID
+     *
+     * @param  mixed $requested_id Raw ParkTitleId off a request; may be null, '' or 0.
+     * @param  mixed $kingdom_id   The kingdom the park belongs to AFTER this operation.
+     * @return int                 A parktitle_id safe to write to ork_park.
+     */
+    public function ResolveParkTitleId($requested_id, $kingdom_id)
+    {
+        $requested_id = (int)$requested_id;
+        $kingdom_id   = (int)$kingdom_id;
+        if (!valid_id($requested_id) || !valid_id($kingdom_id)) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
+        $parktitle->clear();
+        $parktitle->parktitle_id = $requested_id;
+        if (!$parktitle->find()) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        if ((int)$parktitle->kingdom_id !== $kingdom_id) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        return $requested_id;
     }
 
     public function SetParkDetails($request)
@@ -944,15 +1001,26 @@ class Park extends Ork3
                 if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.details.edit', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)) {
                     $this->park->name = trimlen($request[ 'Name' ]) == 0 ? $this->park->name : $request[ 'Name' ];
                     $this->park->abbreviation = trimlen($request[ 'Abbreviation' ]) == 0 ? strtoupper($this->park->abbreviation) : strtoupper($request[ 'Abbreviation' ]);
-                    $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
-                    $parktitle->clear();
-                    if (isset($request[ 'ParkTitleId' ]) && $request[ 'ParkTitleId' ] != $this->park->parktitle_id) {
-                        $parktitle->parktitle_id = $request[ 'ParkTitleId' ];
-                        if ($parktitle->find()) {
-                            $this->park->parktitle_id = $request[ 'ParkTitleId' ];
-                        }
+                    // Park title. Only touched when the request actually carries the key:
+                    // several callers (the heraldry-only POST from ParkAjax, the address
+                    // form in Admin) legitimately edit a park without ever showing a title
+                    // picker, and resetting those to the default would be exactly the
+                    // silent reassignment this guard exists to stop.
+                    //
+                    // When the key IS present, ResolveParkTitleId owns the outcome: a title
+                    // that does not exist, or belongs to another kingdom, or was submitted
+                    // as 0/blank, lands on DEFAULT_PARKTITLE_ID rather than being written
+                    // through or silently left as-is.
+                    if (array_key_exists('ParkTitleId', $request)) {
+                        $this->park->parktitle_id = $this->ResolveParkTitleId($request[ 'ParkTitleId' ], $this->park->kingdom_id);
                     }
-                    $this->park->active = trimlen($request[ 'Active' ]) == 0 ? $this->park->active : $request[ 'Active' ];
+                    // NOTE: 'Active' is deliberately NOT read here. Retiring or restoring a
+                    // park is a first-class operation with its own permission
+                    // ('kingdom.park.retire', which 'park.details.edit' does not imply) and
+                    // its own danger-audit row. Honouring an Active field on a details edit
+                    // let any park-details editor retire a park through a plain LOG_EDIT,
+                    // bypassing both. Use RetirePark()/RestorePark() instead; any Active
+                    // value in this request is ignored.
                 }
 
                 $address_change = false;
@@ -988,6 +1056,13 @@ class Park extends Ork3
                         // AKA Blackspire Code, AKA Golden Plains Exception
                         if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $request[ 'KingdomId' ], AUTH_ADMIN)) {
                             $this->park->kingdom_id = $request[ 'KingdomId' ];
+                            // The park's title was defined by the kingdom it just left.
+                            // Re-resolve against the destination so the park cannot go on
+                            // displaying a title its new kingdom never created.
+                            $this->park->parktitle_id = $this->ResolveParkTitleId(
+                                $request[ 'ParkTitleId' ] ?? $this->park->parktitle_id,
+                                $this->park->kingdom_id
+                            );
                         } else {
                             $response = Warning('You do not have permissions to move this Park [' . $this->park->park_id . ', ' . $this->park->kingdom_id . '] to another Kingdom [' . $request[ 'KingdomId' ] . '].');
                         }
@@ -1312,41 +1387,115 @@ class Park extends Ork3
         return $response;
     }
 
+    /**
+     * Retire one park. FIRST-CLASS ENTRY POINT -- this is the only supported way to
+     * take a park out of service.
+     *
+     * Contract (shared with RestorePark, see WafflePark for the implementation):
+     *   Request  : [ 'Token' => session token, 'ParkId' => int ]
+     *   Permission: 'kingdom.park.retire' on the park's OWN kingdom (read off the park
+     *               row, never off the request), AUTH_EDIT. Note that
+     *               'park.details.edit' does NOT imply this -- retiring a park is not a
+     *               details edit, which is why SetParkDetails no longer honours Active.
+     *   Writes    : ork_park.active = 'Retired', a LOG_RETIRE entry, and a danger-audit
+     *               row recorded under 'Park::RetirePark'.
+     *   Returns   : Success($detail) where $detail is a sentence naming the park, so a
+     *               caller running this per-park across a selection can surface a
+     *               readable per-park result. Errors are NoAuthorization() or
+     *               InvalidParameter() with a naming detail where one is known.
+     *   Idempotent: retiring an already-retired park succeeds and writes nothing.
+     *
+     * @param  array $request
+     * @return array Status array (Status / Error / Detail).
+     */
     public function RetirePark($request)
     {
-        return $this->WafflePark($request, 'Retired');
+        return $this->WafflePark($request, self::ACTIVE_RETIRED);
     }
 
+    /**
+     * Restore one retired park to active service. FIRST-CLASS ENTRY POINT, and the exact
+     * mirror of RetirePark -- same request shape, same 'kingdom.park.retire' permission,
+     * same danger audit (recorded under 'Park::RestorePark'), a LOG_RESTORE entry, and a
+     * Success() detail naming the park. Restoring an already-active park succeeds and
+     * writes nothing.
+     *
+     * @param  array $request [ 'Token' => session token, 'ParkId' => int ]
+     * @return array Status array (Status / Error / Detail).
+     */
     public function RestorePark($request)
     {
-        return $this->WafflePark($request, 'Active');
+        return $this->WafflePark($request, self::ACTIVE_ACTIVE);
     }
 
+    /**
+     * Shared implementation behind RetirePark() and RestorePark().
+     *
+     * Prefer calling RetirePark()/RestorePark(): they name the direction, they are what
+     * the SOAP surface exposes, and they cannot be handed a bogus state. This stays
+     * public only because it is the historic name; it is not the intended entry point.
+     *
+     * @param  array  $request [ 'Token', 'ParkId' ]
+     * @param  string $waffle  self::ACTIVE_ACTIVE or self::ACTIVE_RETIRED.
+     * @return array  Status array (Status / Error / Detail).
+     */
     public function WafflePark($request, $waffle)
     {
-        $response = [ ];
-        $this->park->clear();
-        $this->park->park_id = $request[ 'ParkId' ];
-        if ($this->park->find()) {
-            if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)
-            ) {
-                $_prior_active = $this->park->active;
-                $this->log->Write('Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
-                $this->park->active = $waffle;
-                $this->park->save();
-                $_audit_req = $request;
-                unset($_audit_req[ 'Token' ]);
-                // Synthetic method name so the audit log distinguishes Retire from Restore.
-                $_call = ('Active' == $waffle) ? (__CLASS__ . '::RestorePark') : (__CLASS__ . '::RetirePark');
-                Ork3::$Lib->dangeraudit->audit($_call, $_audit_req, 'Park', (int)$request[ 'ParkId' ], [ 'active' => $_prior_active ], [ 'active' => $waffle ]);
-                $response = Success();
-            } else {
-                $response = NoAuthorization();
-            }
-        } else {
-            $response = InvalidParameter(null, 'Problem processing request.');
+        // ork_park.active is an enum; anything else would be coerced to '' by MySQL.
+        if (self::ACTIVE_ACTIVE !== $waffle && self::ACTIVE_RETIRED !== $waffle) {
+            return InvalidParameter(null, 'Unknown park state requested.');
         }
-        return $response;
+
+        $park_id = (int)($request[ 'ParkId' ] ?? 0);
+        if (!valid_id($park_id)) {
+            return InvalidParameter(null, 'A ParkId is required.');
+        }
+
+        $this->park->clear();
+        $this->park->park_id = $park_id;
+        if (!$this->park->find()) {
+            return InvalidParameter(null, 'Park #' . $park_id . ' could not be found.');
+        }
+
+        // Name the park for the caller's per-park result. Read before any write so the
+        // label is right even when nothing changes.
+        $park_label = trim((string)$this->park->name);
+        if (strlen((string)$this->park->abbreviation)) {
+            $park_label .= ' (' . strtoupper((string)$this->park->abbreviation) . ')';
+        }
+        if (0 === strlen(trim($park_label))) {
+            $park_label = 'Park #' . $park_id;
+        }
+
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ]);
+        // Authorize against the kingdom that actually owns the park, taken off the row,
+        // not off anything the caller supplied.
+        if ($mundane_id <= 0
+            || !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)
+        ) {
+            return NoAuthorization('You do not have permission to change the status of ' . $park_label . '.');
+        }
+
+        $_prior_active = $this->park->active;
+        $verb = (self::ACTIVE_ACTIVE === $waffle) ? 'restored' : 'retired';
+
+        // Idempotent no-op. Bulk callers hand this whole selections, most of which are
+        // already in the requested state; writing a LOG entry and a danger-audit row for
+        // each of those buries the real changes in noise.
+        if ($_prior_active === $waffle) {
+            return Success($park_label . ' was already ' . $verb . '.');
+        }
+
+        $this->log->Write('Park', $mundane_id, self::ACTIVE_ACTIVE === $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
+        $this->park->active = $waffle;
+        $this->park->save();
+
+        $_audit_req = $request;
+        unset($_audit_req[ 'Token' ]);
+        // Synthetic method name so the audit log distinguishes Retire from Restore.
+        $_call = (self::ACTIVE_ACTIVE === $waffle) ? (__CLASS__ . '::RestorePark') : (__CLASS__ . '::RetirePark');
+        Ork3::$Lib->dangeraudit->audit($_call, $_audit_req, 'Park', $park_id, [ 'active' => $_prior_active ], [ 'active' => $waffle ]);
+
+        return Success($park_label . ' has been ' . $verb . '.');
     }
 }

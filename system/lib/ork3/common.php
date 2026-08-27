@@ -407,6 +407,41 @@ class Common
     public static $rate_limit;
     public static $init;
 
+    /**
+     * Maximum accepted base64 length for an uploaded image payload.
+     *
+     * 465000 base64 characters is roughly 348836 raw bytes, which is exactly
+     * the byte budget resizeImageToLimit() in
+     * orkui/template/default/script/orkui.js targets at every one of its call
+     * sites. Downscaling happens in the browser; this constant is only the
+     * server-side backstop for a client with JS disabled, a direct API post, or
+     * a resize that failed. If one number moves the other must move with it.
+     */
+    public const MAX_IMAGE_BASE64_LENGTH = 465000;
+
+    public const IMAGE_TOO_LARGE_MESSAGE = 'That image is too large - it should have been resized before upload. Please pick a smaller image (roughly 340 KB or less) and try again.';
+    public const IMAGE_BAD_TYPE_MESSAGE = 'That file type is not supported. Please upload a PNG, JPG, or GIF image.';
+    public const IMAGE_UNREADABLE_MESSAGE = 'That file could not be read as an image. It may be corrupt, or it may not be an image at all - please try a different file.';
+
+    /**
+     * Validate a base64 image payload before it is handed to GD.
+     *
+     * Returns null when the payload is acceptable, otherwise a message that is
+     * safe to put in front of a person. Callers must treat a non-null return as
+     * a hard failure: previously an oversize or unsupported payload was
+     * silently dropped and the caller still reported success.
+     */
+    public static function image_payload_error($base64, $mime)
+    {
+        if (strlen((string)$base64) >= self::MAX_IMAGE_BASE64_LENGTH) {
+            return self::IMAGE_TOO_LARGE_MESSAGE;
+        }
+        if (!self::supported_mime_types($mime)) {
+            return self::IMAGE_BAD_TYPE_MESSAGE;
+        }
+        return null;
+    }
+
     public function __construct()
     {
         global $DB;
@@ -674,7 +709,9 @@ class Common
 
     public static function supported_mime_types($type)
     {
-        switch (strtoupper($type)) {
+        // (string) cast: a direct API post can omit the mime entirely, and
+        // strtoupper(null) is deprecated in PHP 8.1+.
+        switch (strtoupper((string)$type)) {
             case 'IMAGE/JPEG':
             case 'IMAGE/GIF':
             case 'IMAGE/PNG':

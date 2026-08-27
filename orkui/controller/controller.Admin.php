@@ -1987,13 +1987,26 @@ class Controller_Admin extends Controller
                 'ParentKingdomName' => $parentKingdomName,
                 'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
             ];
-            $adminConfig = [];
-            foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
-                if (!empty($cfg['UserSetting'])) {
-                    $adminConfig[] = $cfg;
-                }
-            }
-            $this->data['AdminConfig']     = $adminConfig;
+            // The Configuration modal used to receive ork_configuration rows straight from
+            // the database, filtered only on the user_setting flag. That flag is data, not
+            // contract: it renders whatever key any part of the app has ever written for
+            // this kingdom -- stale keys no code reads any more, and, because
+            // Treasury::create_accounts() stores the kingdom's ledger account ids the same
+            // way, pointer-style rows one flipped flag away from being an editable text box.
+            //
+            // ConfigRegistry is the allow-list AND the presentation contract: a key it does
+            // not know is not emitted at all, and every key it does know arrives with a
+            // label, help text, a control type, the values that control may produce, and a
+            // group. That is what lets the template render a typed control instead of
+            // guessing from the value's PHP type, and it is why no label map belongs in the
+            // template.
+            //
+            // Emitted as a list rather than a key => row map because the modal iterates it
+            // with forEach(); FilterKnown() returns the keys in registry group order and
+            // array_values() preserves that order.
+            $this->data['AdminConfig']     = array_values(
+                ConfigRegistry::FilterKnown($kd['KingdomConfiguration'] ?? [])
+            );
             $this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
 
             $rawAwards   = $kd['Awards']['Awards'] ?? [];
@@ -2009,6 +2022,17 @@ class Controller_Admin extends Controller
                     'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
                     'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
                     'TitleClass'       => (int)($aw['TitleClass']  ?? 0),
+                    // classifyAward() in _kingdom_admin_modals.tpl buckets every row by
+                    // Peerage first. Omitting it here made that test read undefined on
+                    // every award, so Knighthoods and Associate Titles fell through to
+                    // "Offices & Other" and each Paragon was filed -- and labelled to a
+                    // Monarch -- as a Masterhood. Kingdom::GetAwardList() has always
+                    // returned it; it just was not being carried across.
+                    'Peerage'          => (string)($aw['Peerage']  ?? ''),
+                    // Soft delete: kingdomaward.disabled. A retired award still exists and
+                    // still has grants hanging off it, so the modal has to be able to show
+                    // it struck through rather than pretend it was never there.
+                    'Disabled'         => (int)($aw['Disabled']    ?? 0),
                 ];
             }
             $this->data['AdminAwards'] = $adminAwards;
@@ -2083,7 +2107,7 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
     }
 
     public function new_player_attendance()
@@ -2325,7 +2349,7 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2781,9 +2805,38 @@ class Controller_Admin extends Controller
         $this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
     }
 
-    private function admin_can_reset_waivers(int $uid): bool
+    /**
+     * Mirror of the authorization check inside Player::ResetWaivers (class.Player.php).
+     *
+     * The domain accepts three callers: a global ORK admin, a park officer holding EDIT
+     * on the target park, or a kingdom officer holding EDIT on the target kingdom.
+     * Gating the button on AUTH_ADMIN alone hid it from every officer in the second and
+     * third group -- the capability was theirs, but no UI ever offered it to them.
+     *
+     * $scope must be the scope the reset will actually be submitted under.
+     * Admin::resetwaivers() sends KingdomId for one and ParkId for the other, and the
+     * domain only tests the one it was handed: a park-scoped reset is authorized against
+     * the park, never against its kingdom. Passing the wrong scope here would show a
+     * button the domain then refuses.
+     */
+    private function admin_can_reset_waivers(int $uid, string $scope, int $scopeId): bool
     {
-        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        if ($uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (!valid_id($scopeId)) {
+            return false;
+        }
+        if ($scope === 'kingdom') {
+            return $this->Authorization->has_authority($uid, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
+        }
+        if ($scope === 'park') {
+            return $this->Authorization->has_authority($uid, AUTH_PARK, $scopeId, AUTH_EDIT);
+        }
+        return false;
     }
 
     private function admin_can_edit_kingdom_reports(int $uid, int $kingdomId): bool
@@ -2793,7 +2846,7 @@ class Controller_Admin extends Controller
 
     private function set_admin_kingdom_auth_flags(int $uid, int $kingdomId): void
     {
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid, 'kingdom', $kingdomId);
         $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
     }
 

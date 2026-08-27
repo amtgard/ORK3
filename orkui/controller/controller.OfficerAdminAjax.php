@@ -13,12 +13,38 @@
  *
  * ParkId comes from POST 'ParkId' (default 0 = kingdom scope for the prototype).
  *
+ * Vacating comes in three explicitly-named flavours so "remove this person" and
+ * "clear the whole office" can never be confused at the wire level:
+ *   vacateholder — POST MundaneId required; removes that one holder.
+ *   vacateall    — removes every holder of the position in this scope.
+ *   vacate       — legacy entry point: MundaneId present => single holder,
+ *                  absent => all holders (kept for existing callers).
+ *
  * Response envelope: success => {status:0, ...}; failure => {status:N, error:'...'}.
  * Not logged in => {status:5}; invalid kingdom => {status:1}; unauthorized => {status:5}.
  ***/
 
 class Controller_OfficerAdminAjax extends Controller
 {
+    /**
+     * Officer-facing group headings for the internal permission-category slugs.
+     * The registry's category column is an internal enum ('config', 'auth', ...);
+     * showing it raw put headings reading CONFIG / AUTH in front of a kingdom
+     * officer. Keys mirror PermissionRegistry::GetByCategory()'s documented list;
+     * anything not listed falls back to a title-cased slug rather than vanishing.
+     * The order of this map is also the order the catalogue groups are emitted in.
+     */
+    private static $permissionCategoryLabels = [
+        'config'    => 'Kingdom Settings',
+        'officer'   => 'Officers & Terms',
+        'player'    => 'Players & Records',
+        'award'     => 'Awards',
+        'event'     => 'Events',
+        'heraldry'  => 'Heraldry',
+        'financial' => 'Dues & Finances',
+        'auth'      => 'Access & Permissions',
+    ];
+
     public function officer($p = null)
     {
         header('Content-Type: application/json');
@@ -45,6 +71,8 @@ class Controller_OfficerAdminAjax extends Controller
             'list'           => 'kingdom.officer.set',
             'setoccupant'    => 'kingdom.officer.set',
             'vacate'         => 'kingdom.officer.set',
+            'vacateholder'   => 'kingdom.officer.set',
+            'vacateall'      => 'kingdom.officer.set',
             'createposition' => 'kingdom.officer.position.manage',
             'editposition'   => 'kingdom.officer.position.manage',
             'reclassify'     => 'kingdom.officer.position.manage',
@@ -72,7 +100,11 @@ class Controller_OfficerAdminAjax extends Controller
                 break;
             case 'setoccupant':  $this->actionSetOccupant($kingdom_id, $park_id, $uid);
                 break;
-            case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid);
+            case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid, null);
+                break;
+            case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid, 'holder');
+                break;
+            case 'vacateall':    $this->actionVacate($kingdom_id, $park_id, $uid, 'all');
                 break;
             case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);
                 break;
@@ -171,6 +203,20 @@ class Controller_OfficerAdminAjax extends Controller
         return date('M j, Y', $ts);
     }
 
+    /** Y-m-d for a date input, or '' — the machine-readable twin of humanDate(). */
+    private function isoDate($value)
+    {
+        $value = trim((string)$value);
+        if ($value === '' || strpos($value, '0000-00-00') === 0) {
+            return '';
+        }
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return '';
+        }
+        return date('Y-m-d', $ts);
+    }
+
     /** Compose a persona/name display string from a GetOfficersForDisplay row. */
     private function personaLabel($row)
     {
@@ -198,6 +244,11 @@ class Controller_OfficerAdminAjax extends Controller
         // vacant/retired registry rows, so they stay distinct.
         $display = $this->OfficerPosition->GetOfficersForDisplay($kingdom_id, $park_id, false);
         $positions = $this->OfficerPosition->GetPositions($kingdom_id, true, null);
+
+        // Term dates and the position's bound permission set are both fetched ONCE
+        // for the whole list, never per row — see the two helpers below.
+        $terms   = $this->termIndex($kingdom_id, $park_id);
+        $roleMap = $this->customRoleIndex($kingdom_id);
 
         // Index the registry rows so we can attach full POS metadata to each entry.
         $regByPos = [];
@@ -232,7 +283,7 @@ class Controller_OfficerAdminAjax extends Controller
 
         foreach ($positions as $pos) {
             $pid = (int)$pos['PositionId'];
-            $base = $this->posBase($pos);
+            $base = $this->posBase($pos, $roleMap);
 
             if ($pos['RetiredAt'] !== null && $pos['RetiredAt'] !== '') {
                 $retired[] = $base;
@@ -242,13 +293,13 @@ class Controller_OfficerAdminAjax extends Controller
             if ($pos['Classification'] === 'supporting') {
                 $occ = [];
                 foreach (($supportingOcc[$pid] ?? []) as $row) {
-                    $occ[] = $this->occupant($row);
+                    $occ[] = $this->occupant($row, $terms);
                 }
                 $base['Occupants'] = $occ;
                 $supporting[] = $base;
             } else {
                 $row = $crownOcc[$pid] ?? null;
-                $base['Occupant'] = ($row && (int)$row['MundaneId'] > 0) ? $this->occupant($row) : null;
+                $base['Occupant'] = ($row && (int)$row['MundaneId'] > 0) ? $this->occupant($row, $terms) : null;
                 $crown[] = $base;
             }
         }
@@ -260,9 +311,35 @@ class Controller_OfficerAdminAjax extends Controller
         ]]);
     }
 
-    /** Contracted POS object (camelCase keys) from a registry row. */
-    private function posBase($pos)
+    /**
+     * Contracted POS object (camelCase keys) from a registry row.
+     *
+     * $roleMap is customRoleIndex()'s role_id => [Name, PermissionKeys] map. It is
+     * what makes the edit form round-trip: without the position's own permission
+     * keys the client cannot preselect the "custom" RBAC mode, and re-saving a
+     * custom office overwrote its permission set with whatever was left in the grid.
+     */
+    private function posBase($pos, $roleMap = [])
     {
+        $role_id = (int)$pos['RbacRoleId'];
+        $canonical_key = (string)$pos['CanonicalKey'];
+
+        // RbacMode mirrors the three modes the create/edit form posts back:
+        //   none     — no role bound; the holder gains no extra access.
+        //   custom   — bound to the kingdom-owned role this position auto-created
+        //              (CreatePosition names it 'officer:' . canonical_key).
+        //   existing — bound to a shared system role or a reused kingdom role.
+        $rbac_mode = 'existing';
+        $permission_keys = [];
+        if ($role_id <= 0) {
+            $rbac_mode = 'none';
+        } elseif (isset($roleMap[$role_id])) {
+            $permission_keys = $roleMap[$role_id]['PermissionKeys'];
+            if ($roleMap[$role_id]['Name'] === 'officer:' . $canonical_key) {
+                $rbac_mode = 'custom';
+            }
+        }
+
         return [
             'PositionId'    => (int)$pos['PositionId'],
             'CanonicalKey'  => $pos['CanonicalKey'],
@@ -272,7 +349,9 @@ class Controller_OfficerAdminAjax extends Controller
             'Classification' => $pos['Classification'],
             'IsPinned'      => (int)$pos['IsPinned'],
             'IsSystem'      => (int)$pos['IsSystem'],
-            'RbacRoleId'    => (int)$pos['RbacRoleId'],
+            'RbacRoleId'    => $role_id,
+            'RbacMode'      => $rbac_mode,
+            'PermissionKeys' => $permission_keys,
             'SortOrder'     => (int)$pos['SortOrder'],
             'ParentPositionId' => isset($pos['ParentPositionId']) && $pos['ParentPositionId'] !== null ? (int)$pos['ParentPositionId'] : null,
             'HideWhenVacant'   => (int)($pos['HideWhenVacant'] ?? 0),
@@ -280,15 +359,126 @@ class Controller_OfficerAdminAjax extends Controller
         ];
     }
 
-    /** Contracted occupant object from a GetOfficersForDisplay row. */
-    private function occupant($row)
+    /**
+     * Contracted occupant object from a GetOfficersForDisplay row.
+     *
+     * Term dates come from $terms (termIndex()). The create form makes term start
+     * required, so an officer card that printed an empty term was showing a blank
+     * for a value the user had just been forced to supply. Both a display string
+     * (TermStart/TermEnd, human-formatted, never raw ISO) and the underlying
+     * Y-m-d value (TermStartRaw/TermEndRaw, for date inputs) are returned; an open
+     * term has an empty TermEnd, which the card renders as "(current)".
+     */
+    private function occupant($row, $terms = [])
     {
+        $mundane_id = (int)$row['MundaneId'];
+        $key = $mundane_id . '|' . (string)($row['CanonicalKey'] ?? '');
+        $term = $terms[$key] ?? ['StartDate' => '', 'EndDate' => ''];
+
         return [
-            'MundaneId' => (int)$row['MundaneId'],
-            'Persona'   => $this->personaLabel($row),
-            'TermStart' => '', // term metadata not yet surfaced by the display layer
-            'TermEnd'   => '',
+            'MundaneId'    => $mundane_id,
+            'Persona'      => $this->personaLabel($row),
+            'TermStart'    => $this->humanDate($term['StartDate']),
+            'TermEnd'      => $this->humanDate($term['EndDate']),
+            'TermStartRaw' => $this->isoDate($term['StartDate']),
+            'TermEndRaw'   => $this->isoDate($term['EndDate']),
         ];
+    }
+
+    /**
+     * mundane_id|canonical_key => ['StartDate'=>..,'EndDate'=>..] for the scope.
+     *
+     * GetOfficersForDisplay returns occupancy only; the term itself lives in
+     * ork_officer_history, so it is read through the existing Kingdom/Park officer
+     * history model call — ONE query for the whole list rather than one per card,
+     * and no SQL in the controller.
+     *
+     * ork_officer_history stores one row per term, so a person who has held the
+     * same office more than once has several. The current term is the open one
+     * (no end date) with the latest start; if every term is closed, the latest
+     * start wins. History rows are keyed by canonical role key, so an occupant
+     * whose history predates the position registry simply has no term and renders
+     * exactly as it does today rather than borrowing another office's dates.
+     */
+    private function termIndex($kingdom_id, $park_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+
+        if ($park_id > 0) {
+            $this->load_model('Park');
+            $res = $this->Park->get_officer_history($park_id);
+        } else {
+            $this->load_model('Kingdom');
+            $res = $this->Kingdom->get_officer_history($kingdom_id);
+        }
+
+        $rows = (is_array($res) && isset($res['History']) && is_array($res['History'])) ? $res['History'] : [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            $mundane_id = (int)($row['MundaneId'] ?? 0);
+            $role       = trim((string)($row['Role'] ?? ''));
+            if ($mundane_id <= 0 || $role === '') {
+                continue;
+            }
+            $key   = $mundane_id . '|' . $role;
+            $start = $this->isoDate($row['StartDate'] ?? '');
+            $end   = $this->isoDate($row['EndDate'] ?? '');
+
+            if (!isset($out[$key])) {
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                continue;
+            }
+
+            $cur = $out[$key];
+            $cur_open = ($cur['EndDate'] === '');
+            $new_open = ($end === '');
+            if ($new_open !== $cur_open) {
+                // An open term always beats a closed one, whatever the start dates.
+                if ($new_open) {
+                    $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                }
+                continue;
+            }
+            if (strcmp($start, $cur['StartDate']) > 0) {
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * role_id => ['Name'=>..,'PermissionKeys'=>[..]] for this kingdom's custom roles.
+     *
+     * GetCustomRolesWithCounts already returns every kingdom-owned role WITH its
+     * permission records in a fixed number of queries, so the whole list costs the
+     * same whether the kingdom has three custom offices or thirty. Shared system
+     * roles are deliberately absent: a position bound to one is 'existing' mode, the
+     * client picks it from the role <select>, and its permission set is not editable
+     * from this screen (EditPosition rejects RBAC edits on pinned/system rows).
+     */
+    private function customRoleIndex($kingdom_id)
+    {
+        $map  = [];
+        $rows = $this->RBACService->GetCustomRolesWithCounts((int)$kingdom_id);
+        if (!is_array($rows)) {
+            return $map;
+        }
+        foreach ($rows as $role) {
+            $keys = [];
+            foreach (($role['Permissions'] ?? []) as $perm) {
+                $k = trim((string)($perm['Key'] ?? ''));
+                if ($k !== '') {
+                    $keys[] = $k;
+                }
+            }
+            $map[(int)$role['RoleId']] = [
+                'Name'           => (string)($role['Name'] ?? ''),
+                'PermissionKeys' => array_values(array_unique($keys)),
+            ];
+        }
+        return $map;
     }
 
     private function actionSetOccupant($kingdom_id, $park_id, $uid)
@@ -321,7 +511,21 @@ class Controller_OfficerAdminAjax extends Controller
         $this->emitServiceResult($r);
     }
 
-    private function actionVacate($kingdom_id, $park_id, $uid)
+    /**
+     * Vacate an office.
+     *
+     * $scope decides who is removed and is set by the route, not by the payload,
+     * so a stray/missing MundaneId can never silently widen a one-person removal
+     * into "clear the entire office":
+     *   'holder' — MundaneId is required; only that person is vacated.
+     *   'all'    — every holder in this scope is vacated; MundaneId is ignored.
+     *   null     — legacy 'vacate': MundaneId present => that holder, absent => all.
+     *
+     * The service (VacateOfficerByPosition, 5th arg $mundane_id) rejects a member
+     * who does not currently hold the position with its own message, which reaches
+     * the client through the normal emitServiceResult path.
+     */
+    private function actionVacate($kingdom_id, $park_id, $uid, $scope = null)
     {
         $position_id = (int)($_POST['PositionId'] ?? 0);
         if (!valid_id($position_id)) {
@@ -329,12 +533,23 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        // NOTE: the P2 service's VacateOfficerByPosition vacates a position+scope as
-        // a whole (for supporting positions it removes ALL occupants of that
-        // position in this scope). It does not target a single supporting holder by
-        // MundaneId, so the optional MundaneId POST param is accepted but not used.
-        $r = $this->OfficerPosition->VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $uid);
-        $this->emitServiceResult($r);
+        $mundane_id = (int)($_POST['MundaneId'] ?? 0);
+
+        if ($scope === 'all') {
+            $mundane_id = 0;
+        } elseif ($scope === 'holder' && !valid_id($mundane_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid member is required to remove a single officer.']);
+            return;
+        } elseif ($mundane_id < 0) {
+            $mundane_id = 0;
+        }
+
+        $r = $this->OfficerPosition->VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $uid, $mundane_id);
+        $this->emitServiceResult($r, ['data' => [
+            'PositionId' => $position_id,
+            'MundaneId'  => $mundane_id,
+            'Scope'      => $mundane_id > 0 ? 'holder' : 'all',
+        ]]);
     }
 
     private function actionCreatePosition($kingdom_id, $uid)
@@ -495,15 +710,60 @@ class Controller_OfficerAdminAjax extends Controller
     private function actionPermissions()
     {
         // Kingdom-scope-applicable permissions for the custom-permission-set builder.
-        $out = [];
+        // Each entry carries the registry's own human description (the previous
+        // payload dropped it, leaving the grid as a wall of bare checkbox labels)
+        // and an officer-facing group heading instead of the raw category slug.
         $all = $this->RBACService->GetPermissionsByScope('kingdom'); // key => [display_name, description, scope_type, category]
+
+        // Bucket by slug first so the groups can be emitted in a deliberate order
+        // (settings/officers/players first, access control last) rather than in
+        // whatever order the registry happens to declare its keys.
+        $buckets = [];
         foreach ($all as $key => $def) {
-            $out[] = [
-                'Key'         => $key,
-                'DisplayName' => $def[0] ?? $key,
-                'Category'    => $def[3] ?? '',
+            $slug = (string)($def[3] ?? '');
+            $buckets[$slug][] = [
+                'Key'           => $key,
+                'DisplayName'   => (string)($def[0] ?? $key),
+                'Description'   => (string)($def[1] ?? ''),
+                'CategoryKey'   => $slug,
+                'Category'      => $this->permissionCategoryLabel($slug),
             ];
         }
+
+        $ordered = array_keys(self::$permissionCategoryLabels);
+        foreach (array_keys($buckets) as $slug) {
+            if (!in_array($slug, $ordered, true)) {
+                $ordered[] = $slug;
+            }
+        }
+
+        $out = [];
+        foreach ($ordered as $slug) {
+            if (!isset($buckets[$slug])) {
+                continue;
+            }
+            $group = $buckets[$slug];
+            usort($group, function ($a, $b) {
+                return strcasecmp($a['DisplayName'], $b['DisplayName']);
+            });
+            foreach ($group as $row) {
+                $out[] = $row;
+            }
+        }
+
         echo json_encode(['status' => 0, 'data' => $out]);
+    }
+
+    /** Officer-facing heading for an internal permission-category slug. */
+    private function permissionCategoryLabel($slug)
+    {
+        $slug = trim((string)$slug);
+        if ($slug === '') {
+            return 'Other';
+        }
+        if (isset(self::$permissionCategoryLabels[$slug])) {
+            return self::$permissionCategoryLabels[$slug];
+        }
+        return ucwords(str_replace(['_', '.', '-'], ' ', $slug));
     }
 }

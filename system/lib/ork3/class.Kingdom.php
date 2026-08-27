@@ -53,6 +53,10 @@ class Kingdom extends Ork3
      * is the project's rule, not a defect -- do not "reconcile" them by folding
      * principality parks into a park list.
      *
+     * One Queue member is not a work queue at all: 'WaiveredMembers' is the blast
+     * radius for the Reset Waivers action, so the confirm modal can say how many
+     * players are about to be cleared. It is scoped exactly like that UPDATE.
+     *
      * Officer roles are matched on both stored forms (display name and canonical
      * key) because ork_officer.role migrated from one to the other and the column
      * collation hides the difference in SQL but not in PHP.
@@ -71,7 +75,7 @@ class Kingdom extends Ork3
         $coreOffices   = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
         $out = [
             'Standing' => ['Parks' => 0, 'ActivePlayers' => 0, 'AttendanceYtd' => 0],
-            'Queue'    => ['OpenRecommendations' => 0, 'UnwaiveredActive' => 0, 'QuietParks' => 0, 'VacantCrownOffices' => 0],
+            'Queue'    => ['OpenRecommendations' => 0, 'UnwaiveredActive' => 0, 'QuietParks' => 0, 'VacantCrownOffices' => 0, 'WaiveredMembers' => 0],
             'Windows'  => [
                 'QuietParkDays'     => $quietParkDays,
                 'CrownOffices'      => $coreOffices,
@@ -120,11 +124,19 @@ class Kingdom extends Ork3
                     AND COALESCE(rc.passed_to_local, 0) = 0) AS open_recs,
                 (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
                   WHERE m.kingdom_id = " . $kingdom_id . "
-                    AND m.waivered = 0 AND m.active = 1) AS unwaivered_active"
+                    AND m.waivered = 0 AND m.active = 1) AS unwaivered_active,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.kingdom_id = " . $kingdom_id . "
+                    AND m.waivered = 1) AS waivered_members"
         );
         if ($r !== false && $r->Next()) {
             $out['Queue']['OpenRecommendations'] = (int) $r->open_recs;
             $out['Queue']['UnwaiveredActive']    = (int) $r->unwaivered_active;
+            // Blast radius for Reset Waivers. Player::ResetWaivers scopes its
+            // UPDATE to kingdom_id + waivered = 1 with NO active filter, so this
+            // count deliberately omits `active` too -- adding one here would
+            // under-report what the reset is about to clear.
+            $out['Queue']['WaiveredMembers']     = (int) $r->waivered_members;
         }
 
         // Parks with nothing recorded in the quiet window. Grouped rather than NOT EXISTS so
@@ -272,8 +284,24 @@ class Kingdom extends Ork3
         return preg_match('/^' . $prefix . '\s+' . $suffix . '\b/i', trim($name)) === 1;
     }
 
+    /**
+     * Kingdom award catalog.
+     *
+     * Disabled (soft-deleted) awards are EXCLUDED by default. This list is what
+     * every "give an award" picker is ultimately built from -- directly, and via
+     * Award::GetAwardOptionGroups() -- so the safe default is to omit anything a
+     * kingdom has retired. Pass IncludeDisabled => true only from a management
+     * surface that needs to show retired awards so they can be re-enabled; each
+     * row carries a 'Disabled' flag so such a surface can mark them.
+     *
+     * Already-granted awards do NOT read their name through here -- they resolve
+     * it by joining kingdomaward on the grant row (see Player/Report), which is
+     * unfiltered -- so retiring an award never blanks a name on a player record.
+     */
     public function GetAwardList($request)
     {
+        $ladder_clause = '';
+        $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
             $ladder_clause = " and ka.is_ladder = 1";
         } elseif ($request['IsLadder'] == 'NonLadder') {
@@ -284,16 +312,18 @@ class Kingdom extends Ork3
         } elseif ($request['IsTitle'] == 'NonTitle') {
             $ladder_clause = " and is_title = 0";
         }
-        $sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
+        $disabled_clause = empty($request['IncludeDisabled']) ? " and ka.disabled = 0" : "";
+        $kingdom_id = (int) $request['KingdomId'];
+        $sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name,
 						a.award_id, a.is_ladder, ka.is_title as is_title, ka.title_class as title_class,
-            a.officer_role, a.peerage
+            ka.disabled as disabled, a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
-						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = " . $kingdom_id . "
 					where 1
 						$ladder_clause
 						$title_clause
-            
-						and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+						$disabled_clause
+						and ka.kingdom_id = " . $kingdom_id . "
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
         $r = $this->db->query($sql);
 
@@ -326,6 +356,7 @@ class Kingdom extends Ork3
                     'IsLadder' => $r->is_ladder,
                     'IsTitle' => $r->is_title,
                     'TitleClass' => $r->title_class,
+                    'Disabled' => (int) $r->disabled,
                     'OfficerRole' => $r->officer_role,
                     'Peerage' => $r->peerage
                 );
@@ -350,8 +381,12 @@ class Kingdom extends Ork3
             $this->kingdomaward->month_limit = $request['MonthLimit'];
             $this->kingdomaward->is_title = $request['IsTitle'];
             $this->kingdomaward->title_class = $request['TitleClass'];
+            $this->kingdomaward->disabled = 0;
             $this->kingdomaward->save();
 
+            // This used to fall off the end and return null, so every caller that
+            // tested the result saw "no error" whether or not the insert landed.
+            return Success();
         } else {
             return NoAuthorization();
         }
@@ -391,6 +426,46 @@ class Kingdom extends Ork3
         return Success();
     }
 
+    /**
+     * How many granted awards point at a kingdom award definition.
+     *
+     * This is the blast radius of retiring one: every ork_awards row joins back
+     * to ork_kingdomaward for its display name, so a hard DELETE here orphans all
+     * of them at once (on this database, one mid-sized order took 3,772 grants
+     * with it). Callers surface the number so the confirm can say what is at
+     * stake.
+     *
+     * @param int $kingdomaward_id
+     * @return int
+     */
+    public function CountAwardGrants($kingdomaward_id)
+    {
+        $kingdomaward_id = (int) $kingdomaward_id;
+        if ($kingdomaward_id <= 0) {
+            return 0;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            "SELECT COUNT(*) AS grant_count FROM " . DB_PREFIX . "awards
+              WHERE kingdomaward_id = " . $kingdomaward_id
+        );
+        if ($rs !== false && $rs->Next()) {
+            return (int) $rs->grant_count;
+        }
+        return 0;
+    }
+
+    /**
+     * Retire a kingdom award. SOFT delete, on purpose.
+     *
+     * The row stays so every already-granted award keeps resolving its name;
+     * `disabled = 1` takes it out of GetAwardList, which is what every granting
+     * picker is built from, so it can no longer be handed out. RestoreAward() is
+     * the inverse.
+     *
+     * The response carries 'AwardingCount' -- how many grants reference the award
+     * -- so the UI can warn before and report after.
+     */
     public function RemoveAward($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) <= 0) {
@@ -414,6 +489,8 @@ class Kingdom extends Ork3
         // prior_state is captured off the found row, so the audit records the
         // kingdom the award really belonged to rather than one supplied by the
         // caller.
+        // Read every field off the found row BEFORE the count query -- that query
+        // runs on the same handle this yapo record is bound to.
         $prior_state = [
             'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
             'kingdom_id'      => $owning_kingdom_id,
@@ -422,10 +499,54 @@ class Kingdom extends Ork3
             'is_title'        => (int)$this->kingdomaward->is_title,
             'reign_limit'     => (int)$this->kingdomaward->reign_limit,
             'month_limit'     => (int)$this->kingdomaward->month_limit,
+            'disabled'        => (int)$this->kingdomaward->disabled,
         ];
-        $this->kingdomaward->delete();
+        $awarding_count = $this->CountAwardGrants($prior_state['kingdomaward_id']);
+        $prior_state['awarding_count'] = $awarding_count;
+
+        // Soft delete. The previous hard delete() orphaned every grant pointing at
+        // this definition -- their name resolves through this row.
+        $this->kingdomaward->disabled = 1;
+        $this->kingdomaward->save();
+
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', $owning_kingdom_id, $prior_state);
-        return Success();
+        $response = Success();
+        $response['AwardingCount'] = $awarding_count;
+        return $response;
+    }
+
+    /**
+     * Un-retire a kingdom award soft-deleted by RemoveAward(). A soft delete that
+     * cannot be undone is just a delete with extra steps.
+     */
+    public function RestoreAward($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) <= 0) {
+            return NoAuthorization();
+        }
+
+        // Same ownership rule as EditAward/RemoveAward: authorize against the
+        // award's own kingdom, read from the row.
+        $this->kingdomaward->clear();
+        $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+        if (!$this->kingdomaward->find()) {
+            return InvalidParameter();
+        }
+        $owning_kingdom_id = (int)$this->kingdomaward->kingdom_id;
+
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.award.edit', 'kingdom', $owning_kingdom_id, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        $kingdomaward_id = (int)$this->kingdomaward->kingdomaward_id;
+
+        $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
+        $this->kingdomaward->disabled = 0;
+        $this->kingdomaward->save();
+
+        $response = Success();
+        $response['AwardingCount'] = $this->CountAwardGrants($kingdomaward_id);
+        return $response;
     }
 
     public function create_kingdom_awards($kingdom_id)

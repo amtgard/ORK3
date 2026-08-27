@@ -1836,7 +1836,17 @@ class Player extends Ork3
                 $design->mundane_id = $new_mundane_id;
                 $design->save();
 
-                Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
+                // Only create a credential when the officer actually supplied a password.
+                // Login hashes salt + USERNAME + password with this same expression, so an
+                // empty password would store the hash of salt + USERNAME and the account
+                // would authenticate with a blank password box. Self-registration refuses
+                // anything under 8 characters; officer-created accounts hold that same line
+                // by storing no credential at all. An account with no key row is intentional
+                // and simply cannot log in — the officer is expected to send the player a
+                // self-registration link so the player sets their own password.
+                if (strlen(trim((string)($request['Password'] ?? '')))) {
+                    Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
+                }
 
                 if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                     $waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
@@ -1862,7 +1872,7 @@ class Player extends Ork3
                         }
                         $this->mundane->waivered = 1;
                     } else {
-                        $this->mundane->saivered = 0;
+                        $this->mundane->waivered = 0;
                     }
                 } elseif ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                     $waiver = @base64_decode($request['Waiver']);
@@ -2521,7 +2531,18 @@ class Player extends Ork3
             $this->mundane->park_id = $request['ParkId'];
             $this->mundane->kingdom_id = $park->kingdom_id;
             $this->mundane->park_member_since = date('Y-m-d');
-            $this->mundane->waivered = $request['Waivered'] ? 1 : 0;
+
+            // Waivers are signed per-kingdom and held by that kingdom, so a player
+            // arriving from another kingdom has no waiver on file at the destination
+            // and must be re-waivered there. A move between two parks inside the SAME
+            // kingdom does not invalidate anything, so the existing waiver state is
+            // left untouched. This is decided from the actual kingdom change rather
+            // than a request flag: no caller passed one, so every move (park-to-park
+            // included) was silently clearing the waiver.
+            if ($_oldKid !== (int)$park->kingdom_id) {
+                $this->mundane->waivered = 0;
+            }
+
             $this->mundane->save();
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);

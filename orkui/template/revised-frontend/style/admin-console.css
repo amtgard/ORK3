@@ -240,6 +240,20 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
     max-height: 80vh; height: auto; display: flex; flex-direction: column;
     box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden;
 }
+/* Width modifiers. These replace the `style="width:NNNpx"` scattered across the
+   modal markup, and let partials/_manage_officers.tpl drop its private
+   .mo-modal-box copy (its three sub-modals are 560 / 520 / 460). Same (0,1,0)
+   weight as the base rule, so they must stay AFTER it -- source order is what
+   makes them win. The mobile block below still overrides all of them. */
+.ka-modal-box-sm  { width: 460px; }
+.ka-modal-box-md  { width: 520px; }
+.ka-modal-box-lg  { width: 560px; }
+.ka-modal-box-xl  { width: 700px; }
+.ka-modal-box-xxl { width: 760px; }
+/* Overlay stacking modifiers, so a sub-modal that must sit above an already-open
+   modal can use .ka-overlay instead of an inline position/z-index blob. */
+.ka-overlay-top     { z-index: var(--z-modal-top); }
+.ka-overlay-topmost { z-index: var(--z-help-overlay); }
 .ka-modal-header {
     padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
     display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
@@ -251,6 +265,15 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 .ka-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
 .ka-modal-close:hover { color: #2d3748; }
 .ka-modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+/* orkui.css sets a global `p { text-align: justify }` (0,0,1). In a 460-520px
+   modal column that opens word-space rivers through every explanatory paragraph.
+   (0,1,1) here, so it wins on specificity regardless of stylesheet order. All
+   three modal bodies are listed: .ka-modal-body (the thirteen kingdom modals),
+   .ka-mo-body (the Manage Officers host modal) and .mo-modal-body (its
+   sub-modals, whose markup lives in partials/_manage_officers.tpl). */
+.ka-modal-body p,
+.ka-mo-body p,
+.mo-modal-body p { text-align: left; }
 .ka-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
 
 /* Mobile: full-screen modals */
@@ -350,9 +373,12 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
     background: #fff; font-size: 12px; font-weight: 600; color: #4a5568;
     cursor: pointer; white-space: nowrap; transition: border-color 0.15s, background 0.15s;
 }
-.ka-ops-btn:hover { border-color: #cbd5e0; background: #f7fafc; }
+/* Hover gated on :not(:disabled), matching .ka-save-btn above. Without the gate a
+   disabled button still lights up under the cursor, which is exactly the wrong
+   signal for the wait-to-arm destructive buttons at the bottom of this file. */
+.ka-ops-btn:hover:not(:disabled) { border-color: #cbd5e0; background: #f7fafc; }
 .ka-ops-btn-danger { border-color: #fed7d7; color: #c53030; }
-.ka-ops-btn-danger:hover { background: #fff5f5; border-color: #feb2b2; }
+.ka-ops-btn-danger:hover:not(:disabled) { background: #fff5f5; border-color: #feb2b2; }
 @media (max-width: 480px) {
     .ka-ops-row { flex-direction: column; align-items: stretch; }
     .ka-ops-btn { justify-content: center; }
@@ -419,11 +445,15 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 /* orkui.css paints every h1-h6 as a filled pill and repeats it under
    html[data-theme="dark"] at a specificity the plain-class resets below cannot
    beat, so each of these -- all real heading elements -- renders inside a grey
-   slab in dark mode unless the background is cleared here as well. */
+   slab in dark mode unless the background is cleared here as well.
+   .mo-group-title is the <h4> in partials/_manage_officers.tpl ("Crown Offices",
+   "Supporting Offices", "Retired Positions"); it lives in that partial's own
+   <style> block but the reset belongs with its siblings, here. */
 html[data-theme="dark"] .ka-hero-title,
 html[data-theme="dark"] .ka-report-section-lbl,
 html[data-theme="dark"] .ka-modal-title,
-html[data-theme="dark"] .ka-mo-title {
+html[data-theme="dark"] .ka-mo-title,
+html[data-theme="dark"] .mo-group-title {
     background-color: transparent;
     border-color: transparent;
 }
@@ -516,9 +546,9 @@ html[data-theme="dark"] .ka-ops-row { border-bottom-color: var(--ork-border-dark
 html[data-theme="dark"] .ka-ops-info strong { color: var(--ork-text); }
 html[data-theme="dark"] .ka-ops-info p { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .ka-ops-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .ka-ops-btn:hover { background: var(--ork-bg); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-btn:hover:not(:disabled) { background: var(--ork-bg); border-color: var(--ork-border-dark); }
 html[data-theme="dark"] .ka-ops-btn-danger { background: var(--ork-badge-red-bg); border-color: var(--ork-alert-error-border); color: #feb2b2; }
-html[data-theme="dark"] .ka-ops-btn-danger:hover { background: #742a2a; border-color: #feb2b2; }
+html[data-theme="dark"] .ka-ops-btn-danger:hover:not(:disabled) { background: #742a2a; border-color: #feb2b2; }
 
 /* Warning box */
 html[data-theme="dark"] .ka-warning { background: var(--ork-alert-warning-bg); border-color: var(--ork-alert-warning-border); color: var(--ork-alert-warning-text); }
@@ -578,3 +608,308 @@ html[data-theme="dark"] .ka-mo-header { border-bottom-color: var(--ork-border); 
 html[data-theme="dark"] .ka-mo-title { color: var(--ork-text); }
 html[data-theme="dark"] .ka-mo-close { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
+
+/* =============================================
+   TOKENISED TEXT COLOURS  (.ka-req / .ka-danger-note / .ka-muted / .ka-notice-warn)
+   =============================================
+   These replace `style="color:#xxxxxx"` in the modal markup. An inline style is
+   (1,0,0,0) and beats every dark-mode rule in this file, so a hardcoded colour is
+   not merely untidy -- it is a guaranteed dark-mode bug. Apply the class, delete
+   the inline style.
+
+   .ka-muted / .ka-muted-strong deliberately have NO html[data-theme="dark"]
+   counterpart: --ork-text-muted and --ork-text-secondary are already redefined
+   per-theme in orkui.css, so a single token reference is correct in both themes
+   and cannot drift out of sync. The light value is still defined outside any
+   [data-theme] block (in :root), which is what the no-dark-only-colour rule is
+   protecting against. The other three DO get explicit dark rules, because their
+   light hexes fail contrast on the dark modal surface and must not simply flip. */
+
+/* Required-field marker. Was inline #e53e3e. */
+.ka-req { color: #e53e3e; font-weight: 700; }
+/* #e53e3e on the dark modal surface (--ork-bg-secondary, #2d3748) measures ~2.9:1
+   -- too thin for a 1-glyph asterisk. --ork-badge-red-text is #feb2b2 there: ~7:1. */
+html[data-theme="dark"] .ka-req { color: var(--ork-badge-red-text); }
+
+/* Danger / severity note -- the "permanently deleted" line in Merge Players and
+   friends. Was inline #c53030, which measures ~2:1 on #2d3748: the least legible
+   text in the most destructive modal. */
+.ka-danger-note {
+    color: #c53030; font-weight: 600; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+html[data-theme="dark"] .ka-danger-note { color: var(--ork-badge-red-text); }
+
+/* Danger / warning tinted icons (the <i> in a modal title). Same problem, and
+   an icon glyph is thinner than text, so it needs the same lift. */
+.ka-icon-danger { color: #c53030; }
+.ka-icon-warn   { color: #c05621; }
+html[data-theme="dark"] .ka-icon-danger { color: var(--ork-badge-red-text); }
+html[data-theme="dark"] .ka-icon-warn   { color: var(--ork-badge-orange-text); }
+
+/* Muted body copy inside a modal. Was inline #718096 / #4a5568. Token-driven,
+   so both themes are handled by the one declaration -- see the note above. */
+.ka-muted        { color: var(--ork-text-muted); }
+.ka-muted-strong { color: var(--ork-text-secondary); }
+
+/* Inline warning / notice message (the abbreviation-collision warning, the
+   Convert-to-Kingdom caution). Was inline #c05621 -- ~2.6:1 on the dark surface. */
+.ka-notice-warn {
+    color: #c05621; font-size: 12px; font-weight: 600; margin-top: 4px;
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;
+}
+.ka-notice-warn i { flex-shrink: 0; margin-top: 2px; }
+html[data-theme="dark"] .ka-notice-warn { color: var(--ork-badge-orange-text); }
+
+/* =============================================
+   TABLE MODAL CHROME (sticky header / toolbar / dirty row / empty state)
+   ============================================= */
+
+/* Scroll container that makes a sticky thead possible. .ka-admin-table-wrap on
+   its own only scrolls horizontally, and position:sticky needs a scrollport with
+   a bounded height to stick against. Add this class ALONGSIDE .ka-admin-table-wrap.
+   The height is capped in vh so a 300-row park list does not push the modal
+   footer off-screen; the modal box's own max-height:80vh is the outer bound. */
+.ka-admin-table-wrap-scroll {
+    max-height: 52vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Sticky header. Goes on the <table>, which must have a real <thead>. th has no
+   background of its own in the base rules, so it MUST get one here or the body
+   rows scroll visibly through the header text. */
+.ka-admin-table-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    /* border-bottom does not paint reliably on a sticky th in every engine
+       (the border scrolls with the cell box in some), so the rule is drawn as a
+       box-shadow, which always tracks the sticky position. */
+    box-shadow: inset 0 -1.5px 0 0 #e2e8f0;
+}
+html[data-theme="dark"] .ka-admin-table-sticky thead th {
+    background: var(--ork-bg-secondary);
+    box-shadow: inset 0 -1.5px 0 0 var(--ork-border);
+}
+/* A sticky header inside .ka-add-award-wrap sits on that panel's tint, not on the
+   modal surface; match it so the header does not read as a floating white strip. */
+.ka-add-award-wrap .ka-admin-table-sticky thead th { background: #f7fafc; }
+html[data-theme="dark"] .ka-add-award-wrap .ka-admin-table-sticky thead th { background: var(--ork-bg-tertiary); }
+
+/* Filter / search row above a table. position:sticky pins it to whichever
+   ancestor scrolls -- .ka-modal-body or .ka-admin-table-wrap-scroll -- so it stays
+   put while rows move underneath. z-index sits above the sticky thead's 2.
+   The INPUT inside this row should carry class="ka-report-filter"; that input
+   style already exists (with its dark counterpart) and is not duplicated here. */
+.ka-table-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+    margin-bottom: 8px;
+    background: #fff;
+    border-bottom: 1px solid #edf2f7;
+}
+.ka-table-toolbar .ka-report-filter { flex: 1 1 180px; min-width: 0; width: auto; }
+.ka-table-toolbar-spacer { flex: 1 1 auto; }
+.ka-table-count { font-size: 11px; color: var(--ork-text-muted); white-space: nowrap; }
+html[data-theme="dark"] .ka-table-toolbar { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border-dark); }
+/* Full-bleed variant for a toolbar that is the FIRST child of .ka-modal-body:
+   cancels that body's 20px padding so the bar spans edge to edge and content
+   cannot be seen sliding through the side gutters. Only use it as :first-child --
+   the negative top margin would collide with a preceding sibling. */
+.ka-table-toolbar-bleed {
+    /* Full-bleed SIDES only. A negative TOP margin cannot be combined with
+       position:sticky/top:0 above: the margin lifts the bar out of flow, sticky
+       then clamps it back down to the scrollport edge, and the bar ends up
+       overlapping the next element by (20px - margin-bottom) = 12px -- which is
+       what was clipping the awards table's sticky header. */
+    margin: 0 -20px 8px;
+    padding: 12px 20px;
+}
+@media (max-width: 600px) {
+    .ka-table-toolbar { gap: 6px; }
+    .ka-table-count { flex-basis: 100%; }
+}
+
+/* Aliased award nested under the award it renames. The elbow is drawn with
+   borders on a pseudo-element, not a box-drawing character: no font dependency,
+   no DOM node for a screen reader to read out, and it cannot wrap above the
+   full-width name input the way an inline span does. */
+.ka-admin-table tr.ka-award-alias-row > td:first-child {
+    position: relative;
+    padding-left: 24px;
+}
+.ka-admin-table tr.ka-award-alias-row > td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 50%;
+    width: 8px;
+    border-left: 1px solid #cbd5e0;
+    border-bottom: 1px solid #cbd5e0;
+    border-bottom-left-radius: 3px;
+    pointer-events: none;
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-award-alias-row > td:first-child::before {
+    /* --ork-border-dark is too close to the row fill to read; the muted text
+       token is the same weight the other secondary marks in this table use. */
+    border-left-color: var(--ork-text-muted);
+    border-bottom-color: var(--ork-text-muted);
+}
+
+/* Dirty (unsaved) row. The cue is a left accent BAR -- a geometric change, not a
+   colour swap -- so it survives greyscale, low-vision and colour-blind viewing.
+   Drawn as an inset box-shadow on the first cell rather than a border-left, so it
+   does not shift the cell's content by 3px when the class toggles. The background
+   tint is a secondary, redundant cue only. */
+.ka-admin-table tr.ka-row-dirty > td:first-child {
+    box-shadow: inset 3px 0 0 0 #dd6b20;
+}
+.ka-admin-table tr.ka-row-dirty > td {
+    background: #fffaf0;
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-row-dirty > td:first-child {
+    box-shadow: inset 3px 0 0 0 var(--ork-badge-orange-text);
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-row-dirty > td {
+    background: var(--ork-badge-orange-bg);
+}
+/* Optional text badge for the same row, for a cue that is neither colour nor
+   position-dependent. Drop it in any cell of a dirty row. */
+.ka-row-dirty-flag {
+    display: none;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #9c4221; background: #feebc8; border-radius: 3px; padding: 1px 5px;
+    margin-left: 6px; white-space: nowrap; vertical-align: middle;
+}
+.ka-row-dirty .ka-row-dirty-flag { display: inline-block; }
+html[data-theme="dark"] .ka-row-dirty-flag { color: var(--ork-badge-orange-text); background: var(--ork-badge-orange-bg); }
+
+/* Table empty state ("no matches"). Sits in place of the table, or in a full-width
+   <td> spanning the row. */
+.ka-table-empty {
+    padding: 26px 18px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--ork-text-muted);
+    background: #f7fafc;
+    border: 1px dashed #e2e8f0;
+    border-radius: 8px;
+}
+.ka-table-empty i { display: block; font-size: 20px; margin-bottom: 8px; opacity: 0.5; }
+.ka-table-empty strong { display: block; color: var(--ork-text-secondary); font-size: 13px; margin-bottom: 3px; }
+.ka-table-empty-hint { font-size: 11px; margin-top: 4px; }
+html[data-theme="dark"] .ka-table-empty { background: var(--ork-bg); border-color: var(--ork-border); }
+/* When the empty state is a <td colspan>, the cell's own border/padding fights it. */
+td > .ka-table-empty { border: none; background: transparent; }
+html[data-theme="dark"] td > .ka-table-empty { background: transparent; }
+
+/* =============================================
+   WAIT-TO-ARM DESTRUCTIVE BUTTON (.ka-arm-btn)
+   =============================================
+   A state layer, not a button skin -- compose it onto an existing button:
+       <button class="ka-ops-btn ka-ops-btn-danger ka-arm-btn ka-arm-waiting" disabled>
+           <i class="fas fa-trash"></i> Delete Kingdom
+           <span class="ka-arm-count">5</span>
+       </button>
+   JS contract:
+     - open with .ka-arm-waiting + the disabled attribute, and set the countdown
+       length via `style="--ka-arm-delay:5s"` (default 5s).
+     - update .ka-arm-count's text each second (this is what carries the progress
+       for reduced-motion and screen-reader users).
+     - on expiry: remove .ka-arm-waiting, add .ka-arm-ready, drop `disabled`.
+   Pair it with aria-disabled and an aria-live region on .ka-arm-count. */
+.ka-arm-btn {
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Disabled / counting down. Visibly inert: dimmed, desaturated, not-allowed. */
+.ka-arm-btn:disabled,
+.ka-arm-btn.ka-arm-waiting {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.55);
+    box-shadow: none;
+}
+/* No hover-suppression rule is needed here: .ka-save-btn, .ka-ops-btn and
+   .ka-ops-btn-danger all gate their :hover on :not(:disabled), so a button
+   carrying the disabled attribute simply never picks up a hover appearance.
+   That is why `disabled` (not the .ka-arm-waiting class alone) is the load-bearing
+   half of the JS contract below -- the class dims and adds the progress bar, the
+   attribute is what actually makes the button inert and hover-dead. */
+.ka-arm-count {
+    display: inline-block;
+    min-width: 1.6em;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 10px;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px; font-weight: 700; line-height: 1.6;
+    background: rgba(0,0,0,0.10);
+    color: inherit;
+}
+html[data-theme="dark"] .ka-arm-count { background: rgba(255,255,255,0.16); }
+/* The count is only meaningful while counting. */
+.ka-arm-btn.ka-arm-ready .ka-arm-count { display: none; }
+
+/* Progress affordance: a fill that sweeps the button's bottom edge over the
+   countdown. Pseudo-element, so it needs no extra markup. */
+.ka-arm-btn.ka-arm-waiting::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 3px;
+    width: 0;
+    background: #c53030;
+    animation: ka-arm-fill var(--ka-arm-delay, 5s) linear forwards;
+}
+html[data-theme="dark"] .ka-arm-btn.ka-arm-waiting::after { background: var(--ork-badge-red-text); }
+@keyframes ka-arm-fill { from { width: 0; } to { width: 100%; } }
+
+/* Armed. Reads as a different button, not just an un-dimmed one: solid danger
+   fill plus a focus-style ring, so the change of state is unmissable. */
+.ka-arm-btn.ka-arm-ready {
+    opacity: 1;
+    filter: none;
+    cursor: pointer;
+    background: #c53030;
+    border-color: #c53030;
+    color: #fff;
+    box-shadow: 0 0 0 3px rgba(197,48,48,0.22);
+}
+.ka-arm-btn.ka-arm-ready:hover { background: #9b2c2c; border-color: #9b2c2c; color: #fff; }
+html[data-theme="dark"] .ka-arm-btn.ka-arm-ready {
+    background: var(--ork-badge-red-bg);
+    border-color: var(--ork-badge-red-text);
+    color: var(--ork-badge-red-text);
+    box-shadow: 0 0 0 3px rgba(254,178,178,0.22);
+}
+html[data-theme="dark"] .ka-arm-btn.ka-arm-ready:hover {
+    background: #8f3333; border-color: var(--ork-badge-red-text); color: #fff;
+}
+
+/* Reduced motion: no sweep. The bar becomes a static, obviously-unfilled track so
+   the affordance is still visibly present, and .ka-arm-count carries the actual
+   progress. Deliberately NOT a full-width fill, which would read as "finished". */
+@media (prefers-reduced-motion: reduce) {
+    .ka-arm-btn,
+    .ka-arm-btn.ka-arm-waiting::after { transition: none; animation: none; }
+    .ka-arm-btn.ka-arm-waiting::after {
+        width: 100%;
+        height: 2px;
+        background: repeating-linear-gradient(90deg, #c53030 0 4px, transparent 4px 8px);
+    }
+    html[data-theme="dark"] .ka-arm-btn.ka-arm-waiting::after {
+        background: repeating-linear-gradient(90deg, var(--ork-badge-red-text) 0 4px, transparent 4px 8px);
+    }
+}

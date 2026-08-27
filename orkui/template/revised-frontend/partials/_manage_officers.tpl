@@ -28,8 +28,23 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 	<div id="mo-loading" style="text-align:center;padding:24px;color:var(--ork-text-secondary,#a0aec0)">
 		<i class="fas fa-spinner fa-spin"></i> Loading positions...
 	</div>
+	<!-- Load FAILURE. Deliberately separate from #mo-empty below: "we could not read
+	     the positions" and "no positions exist yet" need different words and
+	     different next steps. -->
 	<div id="mo-error" class="mo-loaderr" style="display:none"></div>
 	<div id="mo-cards" style="display:none">
+		<!-- Nothing configured at all (no crown AND no supporting offices). -->
+		<div class="mo-empty" id="mo-empty" style="display:none">
+			<div class="mo-empty-icon"><i class="fas fa-user-shield"></i></div>
+			<div class="mo-empty-title">This kingdom&rsquo;s officer positions aren&rsquo;t set up yet</div>
+			<div class="mo-empty-text">
+				Officers listed elsewhere on this page aren&rsquo;t linked to a position until one exists here &mdash;
+				create the offices your kingdom actually uses, then attach the people who hold them.
+			</div>
+			<button type="button" class="kn-btn kn-btn-primary" onclick="moOpenCreate()">
+				<i class="fas fa-plus" style="margin-right:6px"></i> Create your first position
+			</button>
+		</div>
 		<div class="mo-group" id="mo-group-crown">
 			<h4 class="mo-group-title"><i class="fas fa-crown" style="color:#d69e2e"></i> Crown Offices</h4>
 			<div class="mo-cards-grid" id="mo-cards-crown"></div>
@@ -45,78 +60,90 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 	</div>
 </div>
 
-<!-- ============ Manage Officers — Sub-modals (--z-modal-top / --z-help-overlay, above the host modal) ============ -->
+<!-- ============ Manage Officers — Sub-modals ============
+     Chrome = the SHARED .ka-overlay / .ka-modal-* classes from admin-console.css
+     (the same set the host Manage Officers modal and every other kingdom-admin
+     dialog use). It already carries the <=600px full-screen rule and the dark
+     palette, which the private copy that used to live here did not. Stacking
+     (--z-modal-top / --z-help-overlay, above the host modal) and box width are
+     the only local overrides; see the <style> block below. -->
 
 <!-- Create/Edit Position Modal -->
-<div id="mo-pos-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal-top);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
-	<div class="mo-modal-box" style="width:560px;max-width:calc(100vw - 40px)">
-		<div class="mo-modal-header">
-			<h3 class="mo-modal-title"><i class="fas fa-user-shield" style="margin-right:8px;color:#2b6cb0"></i><span id="mo-pos-title">Create Position</span></h3>
-			<button class="mo-modal-close-btn" onclick="moClosePos()">&times;</button>
+<div id="mo-pos-overlay" class="ka-overlay ka-overlay-top" role="dialog" aria-modal="true" aria-labelledby="mo-pos-title">
+	<div class="ka-modal-box ka-modal-box-lg">
+		<div class="ka-modal-header">
+			<h3 class="ka-modal-title"><i class="fas fa-user-shield" style="margin-right:8px;color:var(--ork-badge-blue-text)"></i><span id="mo-pos-title">Create Position</span></h3>
+			<button type="button" class="ka-modal-close" onclick="moClosePos()" aria-label="Close">&times;</button>
 		</div>
-		<div class="mo-modal-body" style="overflow:visible">
-			<div class="mo-form-error" id="mo-pos-error" style="display:none"></div>
-			<input type="hidden" id="mo-pos-id" value="" />
+		<div class="ka-modal-body">
+			<!-- Enter submits: the footer Save button is type=submit bound back here
+			     with form="mo-pos-form", so the form can live inside the scrolling
+			     body without becoming a flex child of the shared box chrome. -->
+			<form id="mo-pos-form" autocomplete="off">
+				<div class="ka-feedback ka-feedback-err" id="mo-pos-error"></div>
+				<input type="hidden" id="mo-pos-id" value="" />
 
-			<div class="mo-field">
-				<label>Title <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="mo-pos-title-input" placeholder="e.g. Knight Marshal" autocomplete="off" />
-			</div>
-
-			<div class="mo-field">
-				<label>Display Alias <span class="mo-muted">(optional &mdash; what members see instead of the official title)</span></label>
-				<input type="text" id="mo-pos-alias" placeholder="Leave blank to use the official title" autocomplete="off" />
-			</div>
-
-			<div class="mo-field">
-				<label>Classification</label>
-				<div class="mo-seg" id="mo-pos-class-seg">
-					<button type="button" class="mo-seg-btn mo-seg-active" data-class="crown" onclick="moSetClass('crown')">Crown</button>
-					<button type="button" class="mo-seg-btn" data-class="supporting" onclick="moSetClass('supporting')">Supporting</button>
+				<div class="ka-field">
+					<label for="mo-pos-title-input">Title <span class="ka-req" aria-hidden="true">*</span></label>
+					<input type="text" id="mo-pos-title-input" placeholder="e.g. Knight Marshal" autocomplete="off" required aria-required="true" />
 				</div>
-				<div class="mo-pinned-note" id="mo-pos-class-lock" style="display:none">
-					<i class="fas fa-lock"></i> Core office &mdash; classification is locked to Crown.
+
+				<div class="ka-field">
+					<label for="mo-pos-alias">Display Alias <span class="ka-hint">(optional &mdash; what members see instead of the official title)</span></label>
+					<input type="text" id="mo-pos-alias" placeholder="Leave blank to use the official title" autocomplete="off" />
 				</div>
-			</div>
 
-			<div class="mo-field" id="mo-pos-hidevac-wrap">
-				<label class="mo-check-label"><input type="checkbox" id="mo-pos-hidevac" /> Hide this office when vacant <span class="mo-muted">(non-Crown only &mdash; empty office is hidden from public displays)</span></label>
-			</div>
-
-			<div class="mo-field">
-				<label>Reports To <span class="mo-muted">(optional &mdash; this office reports to / is a deputy of)</span></label>
-				<select id="mo-pos-parent"><option value="">&mdash; None (top-level) &mdash;</option></select>
-			</div>
-
-			<div class="mo-field">
-				<label>Permissions</label>
-				<div class="mo-seg" id="mo-pos-rbac-seg">
-					<button type="button" class="mo-seg-btn mo-seg-active" data-rbac="existing" onclick="moSetRbacMode('existing')">Use existing role</button>
-					<button type="button" class="mo-seg-btn" data-rbac="custom" onclick="moSetRbacMode('custom')">Build custom set</button>
-					<button type="button" class="mo-seg-btn" data-rbac="none" onclick="moSetRbacMode('none')">None &mdash; no extra access</button>
+				<div class="ka-field">
+					<label id="mo-pos-class-label">Classification</label>
+					<div class="mo-seg" id="mo-pos-class-seg" role="group" aria-labelledby="mo-pos-class-label">
+						<button type="button" class="mo-seg-btn mo-seg-active" data-class="crown" onclick="moSetClass('crown')">Crown</button>
+						<button type="button" class="mo-seg-btn" data-class="supporting" onclick="moSetClass('supporting')">Supporting</button>
+					</div>
+					<div class="mo-pinned-note" id="mo-pos-class-lock" style="display:none">
+						<i class="fas fa-lock"></i> Core office &mdash; classification is locked to Crown.
+					</div>
 				</div>
-			</div>
 
-			<div class="mo-field" id="mo-pos-none-wrap" style="display:none">
-				<div class="mo-muted" style="padding:4px 0">This office gets no special permissions &mdash; it is recorded and displayed only.</div>
-			</div>
-
-			<div class="mo-field" id="mo-pos-role-wrap">
-				<label>Role</label>
-				<select id="mo-pos-role"><option value="">Loading roles...</option></select>
-				<div class="mo-role-desc" id="mo-pos-role-desc"></div>
-			</div>
-
-			<div class="mo-field" id="mo-pos-perm-wrap" style="display:none">
-				<label>Permissions in custom set</label>
-				<div class="mo-perm-grid" id="mo-pos-perm-grid">
-					<div class="mo-muted" style="padding:8px">Loading permissions...</div>
+				<div class="ka-field" id="mo-pos-hidevac-wrap">
+					<label class="mo-check-label" for="mo-pos-hidevac"><input type="checkbox" id="mo-pos-hidevac" /> <span>Hide this office when vacant <span class="ka-hint">(non-Crown only &mdash; empty office is hidden from public displays)</span></span></label>
 				</div>
-			</div>
+
+				<div class="ka-field">
+					<label for="mo-pos-parent">Reports To <span class="ka-hint">(optional &mdash; this office reports to / is a deputy of)</span></label>
+					<select id="mo-pos-parent"><option value="">&mdash; None (top-level) &mdash;</option></select>
+				</div>
+
+				<div class="ka-field">
+					<label id="mo-pos-rbac-label">Permissions</label>
+					<div class="mo-seg" id="mo-pos-rbac-seg" role="group" aria-labelledby="mo-pos-rbac-label">
+						<button type="button" class="mo-seg-btn mo-seg-active" data-rbac="existing" onclick="moSetRbacMode('existing')">Use existing role</button>
+						<button type="button" class="mo-seg-btn" data-rbac="custom" onclick="moSetRbacMode('custom')">Build custom set</button>
+						<button type="button" class="mo-seg-btn" data-rbac="none" onclick="moSetRbacMode('none')">None &mdash; no extra access</button>
+					</div>
+				</div>
+
+				<div class="ka-field" id="mo-pos-none-wrap" style="display:none">
+					<div class="mo-pinned-note">This office gets no special permissions &mdash; it is recorded and displayed only.</div>
+				</div>
+
+				<div class="ka-field" id="mo-pos-role-wrap">
+					<label for="mo-pos-role">Role</label>
+					<select id="mo-pos-role"><option value="">Loading roles...</option></select>
+					<div class="mo-role-desc" id="mo-pos-role-desc"></div>
+				</div>
+
+				<div class="ka-field" id="mo-pos-perm-wrap" style="display:none">
+					<label id="mo-pos-perm-label">Permissions in custom set</label>
+					<div class="mo-perm-grid" id="mo-pos-perm-grid" role="group" aria-labelledby="mo-pos-perm-label">
+						<div class="mo-muted" style="padding:8px">Loading permissions...</div>
+					</div>
+					<div class="mo-perm-hint" id="mo-pos-perm-hint"></div>
+				</div>
+			</form>
 		</div>
-		<div class="mo-modal-footer">
-			<button class="kn-btn kn-btn-secondary" onclick="moClosePos()">Cancel</button>
-			<button class="kn-btn kn-btn-primary" id="mo-pos-save-btn" onclick="moSavePos()">
+		<div class="ka-modal-footer">
+			<button type="button" class="kn-btn kn-btn-secondary" onclick="moClosePos()">Cancel</button>
+			<button type="submit" form="mo-pos-form" class="kn-btn kn-btn-primary" id="mo-pos-save-btn">
 				<i class="fas fa-save" style="margin-right:4px"></i> Save Position
 			</button>
 		</div>
@@ -124,42 +151,48 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 </div>
 
 <!-- Set Occupant Modal -->
-<div id="mo-occ-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal-top);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
-	<div class="mo-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
-		<div class="mo-modal-header">
-			<h3 class="mo-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Set Occupant &mdash; <span id="mo-occ-title"></span></h3>
-			<button class="mo-modal-close-btn" onclick="moCloseOcc()">&times;</button>
+<div id="mo-occ-overlay" class="ka-overlay ka-overlay-top" role="dialog" aria-modal="true" aria-labelledby="mo-occ-heading">
+	<div class="ka-modal-box ka-modal-box-md">
+		<div class="ka-modal-header">
+			<h3 class="ka-modal-title" id="mo-occ-heading"><i class="fas fa-user-plus" style="margin-right:8px;color:var(--ork-badge-green-text)"></i>Set Occupant &mdash; <span id="mo-occ-title"></span></h3>
+			<button type="button" class="ka-modal-close" onclick="moCloseOcc()" aria-label="Close">&times;</button>
 		</div>
-		<div class="mo-modal-body" style="overflow:visible">
-			<div class="mo-form-error" id="mo-occ-error" style="display:none"></div>
-			<input type="hidden" id="mo-occ-pos-id" value="" />
+		<div class="ka-modal-body">
+			<form id="mo-occ-form" autocomplete="off">
+				<div class="ka-feedback ka-feedback-err" id="mo-occ-error"></div>
+				<input type="hidden" id="mo-occ-pos-id" value="" />
 
-			<div class="mo-field" style="position:relative">
-				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="mo-occ-player-text" placeholder="Search by persona..." autocomplete="off" />
-				<input type="hidden" id="mo-occ-player-id" value="" />
-				<div class="kn-ac-results" id="mo-occ-player-results" style="position:fixed"></div>
-			</div>
-
-			<div style="display:flex;gap:12px">
-				<div class="mo-field" style="flex:1">
-					<label>Term Start <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="mo-occ-start" autocomplete="off" />
+				<div class="ka-field ka-field-ac">
+					<label for="mo-occ-player-text">Player <span class="ka-req" aria-hidden="true">*</span></label>
+					<input type="text" id="mo-occ-player-text" placeholder="Search by persona..." autocomplete="off" required aria-required="true" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mo-occ-player-results" />
+					<input type="hidden" id="mo-occ-player-id" value="" />
+					<div class="kn-ac-results" id="mo-occ-player-results" style="position:fixed"></div>
 				</div>
-				<div class="mo-field" style="flex:1">
-					<label>Term End <span class="mo-muted">(optional)</span></label>
-					<input type="text" id="mo-occ-end" autocomplete="off" />
-				</div>
-			</div>
 
-			<div class="mo-field">
-				<label>Note <span class="mo-muted">(optional)</span></label>
-				<textarea id="mo-occ-note" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
-			</div>
+				<div class="ka-field-row">
+					<div class="ka-field">
+						<!-- NO `required` on the date inputs: flatpickr's altInput turns the
+						     real input into type=hidden, and a required hidden control aborts
+						     submission with an unfocusable-invalid-control error. Term start
+						     is validated in moSaveOcc() instead. -->
+						<label for="mo-occ-start">Term Start <span class="ka-req" aria-hidden="true">*</span></label>
+						<input type="text" id="mo-occ-start" autocomplete="off" aria-required="true" />
+					</div>
+					<div class="ka-field">
+						<label for="mo-occ-end">Term End <span class="ka-hint">(optional)</span></label>
+						<input type="text" id="mo-occ-end" autocomplete="off" />
+					</div>
+				</div>
+
+				<div class="ka-field">
+					<label for="mo-occ-note">Note <span class="ka-hint">(optional)</span></label>
+					<textarea id="mo-occ-note" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+				</div>
+			</form>
 		</div>
-		<div class="mo-modal-footer">
-			<button class="kn-btn kn-btn-secondary" onclick="moCloseOcc()">Cancel</button>
-			<button class="kn-btn kn-btn-primary" id="mo-occ-save-btn" onclick="moSaveOcc()">
+		<div class="ka-modal-footer">
+			<button type="button" class="kn-btn kn-btn-secondary" onclick="moCloseOcc()">Cancel</button>
+			<button type="submit" form="mo-occ-form" class="kn-btn kn-btn-primary" id="mo-occ-save-btn">
 				<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant
 			</button>
 		</div>
@@ -167,18 +200,18 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 </div>
 
 <!-- Confirm (Retire / Vacate) Modal -->
-<div id="mo-confirm-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-help-overlay);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
-	<div class="mo-modal-box" style="width:460px;max-width:calc(100vw - 40px)">
-		<div class="mo-modal-header">
-			<h3 class="mo-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#dd6b20"></i><span id="mo-confirm-title">Confirm</span></h3>
-			<button class="mo-modal-close-btn" onclick="moCloseConfirm()">&times;</button>
+<div id="mo-confirm-overlay" class="ka-overlay ka-overlay-topmost" role="dialog" aria-modal="true" aria-labelledby="mo-confirm-title">
+	<div class="ka-modal-box ka-modal-box-sm">
+		<div class="ka-modal-header">
+			<h3 class="ka-modal-title"><i class="fas fa-exclamation-triangle ka-icon-warn" style="margin-right:8px"></i><span id="mo-confirm-title">Confirm</span></h3>
+			<button type="button" class="ka-modal-close" onclick="moCloseConfirm()" aria-label="Close">&times;</button>
 		</div>
-		<div class="mo-modal-body">
+		<div class="ka-modal-body">
 			<div class="mo-warn-box" id="mo-confirm-body"></div>
 		</div>
-		<div class="mo-modal-footer">
-			<button class="kn-btn kn-btn-secondary" onclick="moCloseConfirm()">Cancel</button>
-			<button class="kn-btn kn-btn-danger" id="mo-confirm-ok" onclick="moConfirmGo()">Confirm</button>
+		<div class="ka-modal-footer">
+			<button type="button" class="kn-btn kn-btn-secondary" id="mo-confirm-cancel" onclick="moCloseConfirm()">Cancel</button>
+			<button type="button" class="kn-btn kn-btn-danger" id="mo-confirm-ok" onclick="moConfirmGo()">Confirm</button>
 		</div>
 	</div>
 </div>
@@ -318,89 +351,75 @@ html[data-theme="dark"] .mo-role-desc { color:var(--ork-text-secondary); }
 html[data-theme="dark"] .mo-perm-grid { border-color:var(--ork-border); background:var(--ork-bg-tertiary); }
 .mo-perm-cat { margin-bottom:12px; }
 .mo-perm-cat:last-child { margin-bottom:0; }
-.mo-perm-cat-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+/* Headings are the controller's officer-facing group labels ("Kingdom Settings",
+   not the raw "config" slug), so they are NOT uppercased here. */
+.mo-perm-cat-title { font-size:12px; font-weight:700; color:#4a5568; margin-bottom:6px; }
 html[data-theme="dark"] .mo-perm-cat-title { color:var(--ork-text-secondary); }
-.mo-perm-item { display:flex; align-items:center; gap:7px; font-size:13px; color:#2d3748; margin-bottom:4px; cursor:pointer; }
-html[data-theme="dark"] .mo-perm-item { color:var(--ork-text); }
-.mo-perm-item input { margin:0; }
+.mo-perm-item { margin-bottom:9px; }
+.mo-perm-item:last-child { margin-bottom:0; }
+.mo-perm-label { display:flex; align-items:flex-start; gap:7px; font-size:13px; color:#2d3748; cursor:pointer; }
+html[data-theme="dark"] .mo-perm-label { color:var(--ork-text); }
+.mo-perm-label input { margin:2px 0 0 0; flex-shrink:0; }
+.mo-perm-name { font-weight:600; }
+.mo-perm-desc { font-size:11.5px; color:#718096; line-height:1.45; margin:2px 0 0 22px; }
+html[data-theme="dark"] .mo-perm-desc { color:var(--ork-text-muted); }
+.mo-perm-hint { font-size:11.5px; color:#718096; margin-top:6px; }
+html[data-theme="dark"] .mo-perm-hint { color:var(--ork-text-muted); }
 
 /* Warning box (confirm modal) */
 .mo-warn-box { font-size:14px; color:#2d3748; line-height:1.5; }
 html[data-theme="dark"] .mo-warn-box { color:var(--ork-text); }
 
-/* Officer-modal scoped containers */
-#mo-pos-overlay .mo-modal-box, #mo-occ-overlay .mo-modal-box, #mo-confirm-overlay .mo-modal-box {
-	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
-	max-height:90vh; display:flex; flex-direction:column;
+/* ---- Sub-modal chrome ----------------------------------------------------
+   The three sub-modals above carry NO private chrome. They use the shared
+   admin-console.css set end to end: .ka-overlay (+ .ka-overlay-top /
+   .ka-overlay-topmost for stacking above the host modal), .ka-modal-box
+   (+ -sm/-md/-lg for width), .ka-modal-header/-title/-close/-body/-footer,
+   .ka-field/.ka-field-row/.ka-hint/.ka-req and .ka-feedback. That set already
+   carries the <=600px full-screen rule and the dark palette, neither of which
+   the private .mo-modal-* copy that used to live here had. Do NOT re-add
+   header/body/footer/field/width/z-index rules below. */
+
+/* Empty state: NO positions configured at all. Deliberately distinct from
+   #mo-error, which keeps its own copy for a load failure — "nothing is set up"
+   and "we could not read what is set up" are different problems. Token-driven,
+   so one declaration each covers light AND dark and there is no
+   html[data-theme="dark"] block to keep in sync. */
+.mo-empty {
+	display:flex; flex-direction:column; align-items:center; text-align:center;
+	gap:10px; padding:38px 20px; border-radius:10px;
+	border:1px dashed var(--ork-border-dark); background:var(--ork-bg-secondary);
 }
-html[data-theme="dark"] #mo-pos-overlay .mo-modal-box,
-html[data-theme="dark"] #mo-occ-overlay .mo-modal-box,
-html[data-theme="dark"] #mo-confirm-overlay .mo-modal-box { background:var(--ork-card-bg); }
-#mo-pos-overlay .mo-modal-header, #mo-occ-overlay .mo-modal-header, #mo-confirm-overlay .mo-modal-header {
-	display:flex; align-items:center; justify-content:space-between;
-	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+.mo-empty-icon {
+	width:56px; height:56px; border-radius:50%; font-size:22px;
+	background:var(--ork-badge-blue-bg); color:var(--ork-badge-blue-text);
+	display:flex; align-items:center; justify-content:center;
 }
-html[data-theme="dark"] #mo-pos-overlay .mo-modal-header,
-html[data-theme="dark"] #mo-occ-overlay .mo-modal-header,
-html[data-theme="dark"] #mo-confirm-overlay .mo-modal-header { border-bottom-color:var(--ork-border); }
-#mo-pos-overlay .mo-modal-title, #mo-occ-overlay .mo-modal-title, #mo-confirm-overlay .mo-modal-title {
-	font-size:16px; font-weight:700; color:#2d3748; margin:0;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+.mo-empty-title { font-size:16px; font-weight:700; color:var(--ork-text); }
+.mo-empty-text { font-size:13px; color:var(--ork-text-muted); line-height:1.55; max-width:52ch; }
+.mo-empty .kn-btn { margin-top:4px; }
+
+/* Occupant row: name + per-holder remove control (supporting offices only) */
+.mo-occ-row { display:flex; align-items:center; gap:6px; }
+.mo-occ-row .mo-occ-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.mo-occ-remove {
+	flex-shrink:0; background:none; border:1px solid transparent; border-radius:5px;
+	color:var(--ork-text-lighter); cursor:pointer; font-size:11px; line-height:1; padding:4px 6px;
 }
-html[data-theme="dark"] #mo-pos-overlay .mo-modal-title,
-html[data-theme="dark"] #mo-occ-overlay .mo-modal-title,
-html[data-theme="dark"] #mo-confirm-overlay .mo-modal-title { color:var(--ork-text); }
-#mo-pos-overlay .mo-modal-close-btn, #mo-occ-overlay .mo-modal-close-btn, #mo-confirm-overlay .mo-modal-close-btn {
-	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+.mo-occ-remove:hover, .mo-occ-remove:focus-visible {
+	background:var(--ork-badge-red-bg); border-color:var(--ork-badge-red-bg); color:var(--ork-badge-red-text);
 }
-#mo-pos-overlay .mo-modal-close-btn:hover, #mo-occ-overlay .mo-modal-close-btn:hover, #mo-confirm-overlay .mo-modal-close-btn:hover { color:#4a5568; }
-html[data-theme="dark"] #mo-pos-overlay .mo-modal-close-btn,
-html[data-theme="dark"] #mo-occ-overlay .mo-modal-close-btn,
-html[data-theme="dark"] #mo-confirm-overlay .mo-modal-close-btn { color:var(--ork-text-muted); }
-#mo-pos-overlay .mo-modal-body, #mo-occ-overlay .mo-modal-body, #mo-confirm-overlay .mo-modal-body {
-	padding:20px; overflow-y:auto; flex:1;
-}
-#mo-pos-overlay .mo-modal-footer, #mo-occ-overlay .mo-modal-footer, #mo-confirm-overlay .mo-modal-footer {
-	padding:14px 20px; border-top:1px solid #e2e8f0;
-	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
-}
-html[data-theme="dark"] #mo-pos-overlay .mo-modal-footer,
-html[data-theme="dark"] #mo-occ-overlay .mo-modal-footer,
-html[data-theme="dark"] #mo-confirm-overlay .mo-modal-footer { border-top-color:var(--ork-border); }
-#mo-pos-overlay .mo-field, #mo-occ-overlay .mo-field { position:relative; margin-bottom:14px; }
-#mo-pos-overlay .mo-field label, #mo-occ-overlay .mo-field label {
-	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
-}
-html[data-theme="dark"] #mo-pos-overlay .mo-field label,
-html[data-theme="dark"] #mo-occ-overlay .mo-field label { color:var(--ork-text-secondary); }
-#mo-pos-overlay .mo-field input[type=text],
-#mo-pos-overlay .mo-field select,
-#mo-pos-overlay .mo-field textarea,
-#mo-occ-overlay .mo-field input[type=text],
-#mo-occ-overlay .mo-field textarea {
-	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
-	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
-}
-html[data-theme="dark"] #mo-pos-overlay .mo-field input[type=text],
-html[data-theme="dark"] #mo-pos-overlay .mo-field select,
-html[data-theme="dark"] #mo-pos-overlay .mo-field textarea,
-html[data-theme="dark"] #mo-occ-overlay .mo-field input[type=text],
-html[data-theme="dark"] #mo-occ-overlay .mo-field textarea {
-	background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text);
-}
-#mo-pos-overlay .mo-field input:focus,
-#mo-pos-overlay .mo-field select:focus,
-#mo-pos-overlay .mo-field textarea:focus,
-#mo-occ-overlay .mo-field input:focus,
-#mo-occ-overlay .mo-field textarea:focus {
-	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
-}
-#mo-pos-overlay .mo-form-error, #mo-occ-overlay .mo-form-error {
-	background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
-	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
-}
-html[data-theme="dark"] #mo-pos-overlay .mo-form-error,
-html[data-theme="dark"] #mo-occ-overlay .mo-form-error { background:rgba(252,129,129,0.12); border-color:#fc8181; color:#fc8181; }
+.mo-occ-remove:focus-visible { outline:2px solid #3182ce; outline-offset:1px; }
+
+/* The remove control sits at the card's right edge, and the host modal box clips
+   horizontal overflow — so right-anchor its tip instead of centering it. !important
+   because the generic [data-tip]:not(...)x5 rule in revised.css outspecifies this. */
+.mo-occ-remove[data-tip]:hover::after { left:auto !important; right:0 !important; transform:none !important; }
+
+/* Confirm-dialog persona list (Vacate All / Retire name every affected persona) */
+.mo-confirm-list { margin:8px 0 0; padding-left:20px; }
+.mo-confirm-list li { margin:2px 0; font-weight:600; }
+
 </style>
 
 <!-- ============ Manage Officers — JS module ============ -->
@@ -451,17 +470,63 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	var moStartFp = null, moEndFp = null;
 	var moConfirmFn = null;
 	var moRetiredOpen = false;
+	var moPosKeys = [];         // permission keys the position being edited already has
+	var moPosIsCustom = false;  // that position owns its own permission set (RbacMode custom)
+	var moPermDirty = false;    // the user has ticked/unticked in THIS modal session
 
 	function esc(s) {
 		if (s === null || s === undefined) return '';
 		var d = document.createElement('div'); d.appendChild(document.createTextNode(String(s))); return d.innerHTML;
 	}
-	function fmtDate(s) {
-		if (!s) return '';
-		var d = new Date(s + 'T00:00:00');
-		if (isNaN(d.getTime())) return esc(s);
-		var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-		return m[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+	// esc() escapes &<> only (textContent round-trip). Attribute values also need the
+	// quotes escaped or a persona containing one breaks out of the attribute.
+	function escAttr(s) {
+		return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+	}
+	// Term dates arrive from the controller ALREADY human-formatted ("Aug 26, 2026"),
+	// so there is nothing to reformat here. A genuinely absent date yields '' and the
+	// caller omits the whole line rather than printing a placeholder.
+	function termLine(o) {
+		var start = o.TermStart ? esc(o.TermStart) : '';
+		var end   = o.TermEnd   ? esc(o.TermEnd)   : '';
+		if (!start && !end) return '';
+		if (start && end)   return 'Term: ' + start + ' \u2013 ' + end;
+		if (start)          return 'Term: ' + start + ' \u2013 present';
+		return 'Term ended ' + end;
+	}
+	// Every current holder of a position, crown or supporting, as one flat list.
+	function occupantsOf(pos) {
+		if (!pos) return [];
+		if (pos.Classification === 'crown') {
+			return (pos.Occupant && pos.Occupant.MundaneId) ? [pos.Occupant] : [];
+		}
+		return (pos.Occupants || []).filter(function(o) { return o && o.MundaneId; });
+	}
+	// Autocomplete dismissal lives at module scope so the Escape handler and the
+	// dropdown's own handlers close it exactly the same way.
+	function moAcClose() {
+		var input   = document.getElementById('mo-occ-player-text');
+		var results = document.getElementById('mo-occ-player-results');
+		if (results) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); }
+		if (input) input.setAttribute('aria-expanded', 'false');
+	}
+	function personaList(occs) {
+		return '<ul class="mo-confirm-list">' + occs.map(function(o) {
+			return '<li>' + esc(o.Persona || 'Unknown') + '</li>';
+		}).join('') + '</ul>';
+	}
+
+	// .ka-feedback is display:none in the stylesheet, so showing it needs an explicit
+	// 'block' — style.display = '' would fall back to the stylesheet's none.
+	function moFormError(id, message) {
+		var el = document.getElementById(id);
+		if (!el) return;
+		el.textContent = message;
+		el.style.display = 'block';
+	}
+	function moClearFormError(id) {
+		var el = document.getElementById(id);
+		if (el) el.style.display = 'none';
 	}
 
 	// ---------- Load + render ----------
@@ -493,19 +558,28 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	window.moRefresh = moLoad;
 
 	function occupantLine(pos) {
-		var occs = [];
-		if (pos.Classification === 'crown') {
-			if (pos.Occupant && pos.Occupant.MundaneId) occs = [pos.Occupant];
-		} else {
-			occs = pos.Occupants || [];
-		}
+		var occs = occupantsOf(pos);
 		if (!occs.length) return '<div class="mo-occupant"><span class="mo-vacant">(Vacant)</span></div>';
+		var pid = parseInt(pos.PositionId, 10);
+		// Supporting offices can hold several people at once, so each one gets its own
+		// remove control (MundaneId-scoped vacate). A crown office has exactly one
+		// holder — the card-level Vacate button already does that job.
+		var perHolder = pos.Classification !== 'crown';
 		var html = '';
 		for (var i = 0; i < occs.length; i++) {
 			var o = occs[i];
-			var term = 'Term: ' + (o.TermStart ? fmtDate(o.TermStart) : '?') + ' → ' + (o.TermEnd ? fmtDate(o.TermEnd) : '(current)');
-			html += '<div class="mo-occupant"><a href="' + UIR + 'Player/profile/' + o.MundaneId + '">' + esc(o.Persona || 'Unknown') + '</a></div>' +
-			        '<div class="mo-term">' + esc(term) + '</div>';
+			var mid = parseInt(o.MundaneId, 10) || 0;
+			var name = o.Persona || 'Unknown';
+			var tip = 'Remove ' + name + ' from ' + (pos.DisplayTitle || pos.Title || 'this office');
+			var row = '<a href="' + UIR + 'Player/profile/' + mid + '" class="mo-occ-name">' + esc(name) + '</a>';
+			if (perHolder && mid) {
+				row += '<button type="button" class="mo-occ-remove" data-tip="' + escAttr(tip) + '"' +
+				       ' aria-label="' + escAttr(tip) + '"' +
+				       ' onclick="moVacateHolder(' + pid + ',' + mid + ')"><i class="fas fa-user-minus"></i></button>';
+			}
+			html += '<div class="mo-occupant"><div class="mo-occ-row">' + row + '</div></div>';
+			var term = termLine(o);
+			if (term) html += '<div class="mo-term">' + term + '</div>';
 		}
 		return html;
 	}
@@ -514,7 +588,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var isCrown  = pos.Classification === 'crown';
 		var isPinned = parseInt(pos.IsPinned, 10) === 1;
 		var pid = parseInt(pos.PositionId, 10);
-		var filled = isCrown ? !!(pos.Occupant && pos.Occupant.MundaneId) : !!((pos.Occupants || []).length);
+		// occupantsOf() drops MundaneId=0 rows. Vacating the LAST holder of a supporting
+		// office blanks the occupancy row rather than deleting it, so a raw
+		// Occupants.length would still count that office as filled.
+		var holders = occupantsOf(pos);
+		var filled = holders.length > 0;
 
 		var titleHtml = '';
 		if (isCrown) titleHtml += '<i class="fas fa-crown mo-crown-glyph"></i>';
@@ -529,7 +607,14 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var acts = '';
 		acts += '<button class="mo-act-btn" onclick="moOpenOcc(' + pid + ')"><i class="fas fa-user-plus"></i> Set Occupant</button>';
 		if (filled) {
-			acts += '<button class="mo-act-btn" onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> Vacate</button>';
+			// One holder = "Vacate"; several = "Vacate All", because that is exactly what
+			// the button does. Both route to the vacateall endpoint and both name every
+			// affected persona in the confirm.
+			var vacLabel = holders.length > 1 ? 'Vacate All' : 'Vacate';
+			var vacTip = holders.length > 1
+				? 'End the term for all ' + holders.length + ' current holders of this office'
+				: 'End the current term and remove this office\'s permissions';
+			acts += '<button class="mo-act-btn" data-tip="' + escAttr(vacTip) + '" onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> ' + vacLabel + '</button>';
 		}
 		acts += '<button class="mo-act-btn" onclick="moOpenEdit(' + pid + ')"><i class="fas fa-pencil-alt"></i> Edit</button>';
 
@@ -582,7 +667,9 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var titleHtml = (pos.Classification === 'crown' ? '<i class="fas fa-crown mo-crown-glyph"></i>' : '') + esc(pos.DisplayTitle || pos.Title);
 		return '<div class="mo-card mo-retired">' +
 			'<div class="mo-card-head"><div class="mo-title">' + titleHtml + '</div></div>' +
-			'<div class="mo-term">Retired' + (pos.RetiredAt ? ' ' + esc(fmtDate(String(pos.RetiredAt).substr(0,10))) : '') + '</div>' +
+			// RetiredAt already arrives human-formatted from the controller; re-parsing it
+			// as ISO produced a truncated string ("Aug 26, 20").
+			'<div class="mo-term">Retired' + (pos.RetiredAt ? ' ' + esc(pos.RetiredAt) : '') + '</div>' +
 			'<div class="mo-actions"><button class="mo-act-btn" onclick="moReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>' +
 			'</div>';
 	}
@@ -627,6 +714,20 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 
 	function moRender() {
 		var crown = moData.crown || [], supporting = moData.supporting || [], retired = moData.retired || [];
+		var emptyEl = document.getElementById('mo-empty');
+		var crownGroup = document.getElementById('mo-group-crown');
+		var suppGroup  = document.getElementById('mo-group-supporting');
+
+		// NOTHING configured: one real empty state instead of two muted "No X offices."
+		// sentences, which read as a load result and contradicted the work-queue card
+		// sitting beside this modal ("All 5 crown offices filled"). A kingdom that has
+		// SOME offices keeps the per-group muted line — there the sentence is accurate
+		// and the other group's cards give it context.
+		var nothingConfigured = !crown.length && !supporting.length;
+		emptyEl.style.display    = nothingConfigured ? '' : 'none';
+		crownGroup.style.display = nothingConfigured ? 'none' : '';
+		suppGroup.style.display  = nothingConfigured ? 'none' : '';
+
 		document.getElementById('mo-cards-crown').innerHTML       = crown.length ? renderGroupTree(crown) : '<div class="mo-muted" style="padding:8px">No crown offices.</div>';
 		document.getElementById('mo-cards-supporting').innerHTML  = supporting.length ? renderGroupTree(supporting) : '<div class="mo-muted" style="padding:8px">No supporting offices.</div>';
 
@@ -681,9 +782,46 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		moPost('reclassify', { PositionId: pid, Classification: cls }, function() { moRefresh(); });
 	};
 
+	// Vacate ALL holders of an office. The old copy said "the occupant's" (singular)
+	// while clearing everyone; it now names the office and lists every affected
+	// persona, the same way moRetire does.
 	window.moVacate = function(pid) {
-		moShowConfirm('Vacate Position', 'This will end the current term and remove the occupant\'s officer permissions for this office. Continue?', 'Vacate', function() {
-			moPost('vacate', { PositionId: pid }, function() { moCloseConfirm(); moRefresh(); });
+		var pos  = findPos(pid);
+		var dt   = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
+		var occs = occupantsOf(pos);
+
+		if (!occs.length) {
+			moShowNotice('Nothing to Vacate', '<strong>' + esc(dt) + '</strong> has no current holder.');
+			return;
+		}
+
+		var many = occs.length > 1;
+		var msg = (many
+				? 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for all ' + occs.length + ' holders:'
+				: 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for:') +
+			personaList(occs) +
+			'<p style="margin:10px 0 0">Their officer permissions for this office are removed. Continue?</p>';
+
+		moShowConfirm(many ? 'Vacate All Officers' : 'Vacate Position', msg, many ? 'Vacate All' : 'Vacate', function() {
+			moPost('vacateall', { PositionId: pid }, function() { moCloseConfirm(); moRefresh(); });
+		});
+	};
+
+	// Vacate ONE holder (supporting offices, which can have several at once).
+	window.moVacateHolder = function(pid, mid) {
+		var pos = findPos(pid);
+		var dt  = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
+		var occs = occupantsOf(pos);
+		var match = occs.filter(function(o) { return parseInt(o.MundaneId, 10) === parseInt(mid, 10); })[0];
+		var who = match ? (match.Persona || 'Unknown') : 'this member';
+		var others = occs.length - (match ? 1 : 0);
+
+		var msg = 'Remove <strong>' + esc(who) + '</strong> from <strong>' + esc(dt) + '</strong>? ' +
+			'This ends their term and removes their officer permissions for this office.' +
+			(others > 0 ? ' The other ' + others + ' holder' + (others > 1 ? 's are' : ' is') + ' not affected.' : '');
+
+		moShowConfirm('Remove Officer', msg, 'Remove', function() {
+			moPost('vacateholder', { PositionId: pid, MundaneId: mid }, function() { moCloseConfirm(); moRefresh(); });
 		});
 	};
 
@@ -713,19 +851,122 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		return null;
 	}
 
+	// ---------- Sub-modal overlay plumbing (shared .ka-overlay chrome) ----------
+	// Topmost FIRST. Escape, backdrop-click and the focus trap all work off this order
+	// so a nested overlay never takes the whole stack down with it.
+	var MO_STACK = ['mo-confirm-overlay', 'mo-occ-overlay', 'mo-pos-overlay'];
+	var MO_CLOSERS = {
+		'mo-confirm-overlay': function() { window.moCloseConfirm(); },
+		'mo-occ-overlay':     function() { window.moCloseOcc(); },
+		'mo-pos-overlay':     function() { window.moClosePos(); }
+	};
+	var moLastFocus = {};
+
+	function moIsOpen(id) {
+		var el = document.getElementById(id);
+		return !!(el && el.classList.contains('ka-open'));
+	}
+	function moTopOverlay() {
+		for (var i = 0; i < MO_STACK.length; i++) { if (moIsOpen(MO_STACK[i])) return MO_STACK[i]; }
+		return null;
+	}
+	var MO_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), ' +
+	                   'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+	function moFocusables(root) {
+		// offsetParent filters out everything display:none inside the modal (the role
+		// select in custom mode, the perm grid in existing mode, flatpickr's hidden
+		// original inputs) so Tab never lands on an invisible control.
+		return Array.prototype.filter.call(root.querySelectorAll(MO_FOCUSABLE), function(el) {
+			return el.offsetParent !== null;
+		});
+	}
+	function moOpenOverlay(id, focusId) {
+		var el = document.getElementById(id);
+		if (!el) return;
+		moLastFocus[id] = document.activeElement;
+		el.classList.add('ka-open');
+		var f = focusId ? document.getElementById(focusId) : null;
+		if (!f || f.offsetParent === null) f = moFocusables(el)[0];
+		if (f) {
+			try { f.focus(); if (typeof f.select === 'function') f.select(); } catch (e) {}
+		}
+	}
+	function moCloseOverlay(id) {
+		var el = document.getElementById(id);
+		if (!el) return;
+		el.classList.remove('ka-open');
+		var prev = moLastFocus[id];
+		moLastFocus[id] = null;
+		if (prev && typeof prev.focus === 'function' && document.contains(prev)) {
+			try { prev.focus(); } catch (e) {}
+		}
+	}
+
+	MO_STACK.forEach(function(id) {
+		var el = document.getElementById(id);
+		if (!el) return;
+
+		// Backdrop click. The mousedown guard stops a text selection that happens to
+		// END on the backdrop from throwing the form away.
+		el.addEventListener('mousedown', function(e) { el._moBackdrop = (e.target === el); });
+		el.addEventListener('click', function(e) {
+			var fromBackdrop = el._moBackdrop;
+			el._moBackdrop = false;
+			if (e.target === el && fromBackdrop) MO_CLOSERS[id]();
+		});
+
+		// Focus trap.
+		el.addEventListener('keydown', function(e) {
+			if (e.key !== 'Tab') return;
+			var items = moFocusables(el);
+			if (!items.length) return;
+			var first = items[0], last = items[items.length - 1];
+			if (e.shiftKey) {
+				if (document.activeElement === first || !el.contains(document.activeElement)) { e.preventDefault(); last.focus(); }
+			} else if (document.activeElement === last || !el.contains(document.activeElement)) {
+				e.preventDefault(); first.focus();
+			}
+		});
+	});
+
+	// Escape closes ONLY the topmost open layer. Capture phase so it runs before the
+	// host Manage Officers modal's own document-level Escape handler, which used to
+	// tear down the whole stack — dismissing an autocomplete destroyed the form AND
+	// the console modal behind it. When none of our overlays are open we do nothing
+	// and the host handler runs as usual.
+	document.addEventListener('keydown', function(e) {
+		if (e.key !== 'Escape' && e.key !== 'Esc') return;
+		var top = moTopOverlay();
+		if (!top) return;
+
+		// An open autocomplete is its own topmost layer above the occupant form.
+		var acr = document.getElementById('mo-occ-player-results');
+		var acOpen = !!(acr && acr.classList.contains('kn-ac-open'));
+		if (top === 'mo-occ-overlay' && acOpen) {
+			moAcClose();
+		} else {
+			MO_CLOSERS[top]();
+		}
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+	}, true);
+
 	// ---------- Confirm modal ----------
 	function moShowConfirm(title, bodyHtml, okLabel, fn) {
 		document.getElementById('mo-confirm-title').textContent = title;
 		document.getElementById('mo-confirm-body').innerHTML = bodyHtml;
 		document.getElementById('mo-confirm-ok').textContent = okLabel;
 		moConfirmFn = fn;
-		document.getElementById('mo-confirm-overlay').style.display = 'flex';
+		// Focus Cancel, never the destructive button — Escape and Enter should both be
+		// safe on a dialog whose primary action removes an officer.
+		moOpenOverlay('mo-confirm-overlay', 'mo-confirm-cancel');
 	}
 	// Notice = the same modal with a single dismiss action (native alert() is banned).
 	function moShowNotice(title, bodyHtml) {
 		moShowConfirm(title, bodyHtml, 'OK', function() { moCloseConfirm(); });
 	}
-	window.moCloseConfirm = function() { document.getElementById('mo-confirm-overlay').style.display = 'none'; moConfirmFn = null; };
+	window.moCloseConfirm = function() { moCloseOverlay('mo-confirm-overlay'); moConfirmFn = null; };
 	window.moConfirmGo = function() { if (moConfirmFn) moConfirmFn(); };
 
 	// ---------- Create/Edit Position modal ----------
@@ -733,11 +974,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	// leave the cache null so the next open retries instead of showing a bogus "none".
 	function moLoadFailed(what, detail) {
 		try { console.error('[ManageOfficers] Failed to load ' + what + ':', detail); } catch (e) {}
-		var el = document.getElementById('mo-pos-error');
-		if (el) {
-			el.textContent = 'Could not load ' + what + '. Please try again or reload the page.';
-			el.style.display = '';
-		}
+		moFormError('mo-pos-error', 'Could not load ' + what + '. Please try again or reload the page.');
 	}
 	function ensureRoles(cb) {
 		if (moRoles) { cb(); return; }
@@ -777,6 +1014,9 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var id = parseInt(document.getElementById('mo-pos-role').value || 0, 10);
 		var r = (moRoles || []).filter(function(x){ return parseInt(x.RoleId,10) === id; })[0];
 		document.getElementById('mo-pos-role-desc').textContent = (r && r.Description) ? r.Description : '';
+		// Picking a different role re-seeds the custom grid, unless the user has already
+		// adjusted it by hand (moPermDirty) — their edits are never silently discarded.
+		if (moRbacMode === 'custom' && !moPermDirty) refreshPermGrid(true);
 	};
 
 	// Populate "Reports To" from the currently-loaded positions (crown + supporting),
@@ -822,22 +1062,103 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		sel.innerHTML = opts;
 	}
 
+	// role_id -> permission keys, learned from the positions already bound to that role.
+	// posBase() ships PermissionKeys for every kingdom-owned role, so any role an office
+	// in this kingdom already uses can seed the custom grid. Shared system roles do not
+	// carry their keys in the /roles payload, so they seed nothing (see moPermHint).
+	function roleKeyIndex() {
+		var map = {};
+		var all = (moData.crown || []).concat(moData.supporting || []).concat(moData.retired || []);
+		all.forEach(function(p) {
+			var rid = parseInt(p.RbacRoleId || 0, 10);
+			if (rid > 0 && !map[rid] && p.PermissionKeys && p.PermissionKeys.length) {
+				map[rid] = p.PermissionKeys.slice();
+			}
+		});
+		return map;
+	}
+	function currentRoleId() {
+		var sel = document.getElementById('mo-pos-role');
+		return sel ? (parseInt(sel.value || 0, 10) || 0) : 0;
+	}
+	function currentGridKeys() {
+		var keys = [];
+		document.querySelectorAll('#mo-pos-perm-grid .mo-perm-cb:checked').forEach(function(cb) { keys.push(cb.value); });
+		return keys;
+	}
+	// What the grid should show right now:
+	//   1. the user's own ticks, once they have touched the grid in THIS modal session
+	//   2. the permission set the position being edited already has (custom round-trip)
+	//   3. the currently selected role's set, so "custom" starts as "a role, adjusted"
+	function desiredPermKeys() {
+		if (moPermDirty) return currentGridKeys();
+		if (moPosKeys && moPosKeys.length) return moPosKeys.slice();
+		return roleKeyIndex()[currentRoleId()] || [];
+	}
+	function moPermHint(prefilled) {
+		var el = document.getElementById('mo-pos-perm-hint');
+		if (!el) return;
+		if (moPermDirty) { el.textContent = ''; return; }
+		if (prefilled && moPosIsCustom) {
+			el.textContent = 'This office\'s current permission set — tick or untick to change it.';
+		} else if (prefilled) {
+			el.textContent = 'Pre-filled from the selected role — tick or untick to adjust it for this office.';
+		} else {
+			el.textContent = 'Choose the permissions this office grants. Anyone appointed to it receives exactly this set.';
+		}
+	}
 	function renderPermGrid(checkedKeys) {
 		checkedKeys = checkedKeys || [];
 		var grid = document.getElementById('mo-pos-perm-grid');
+		if (!grid) return;
 		if (!moPerms || !moPerms.length) { grid.innerHTML = '<div class="mo-muted" style="padding:8px">No permissions available.</div>'; return; }
-		var cats = {};
-		moPerms.forEach(function(p) { var c = p.Category || 'Other'; (cats[c] = cats[c] || []).push(p); });
+		// Category headings are the controller's officer-facing labels ("Kingdom
+		// Settings"), not the raw slug, and the server emits them in a deliberate
+		// order — so bucket in first-seen order rather than Object.keys() order.
+		var order = [], cats = {};
+		moPerms.forEach(function(p) {
+			var c = p.Category || 'Other';
+			if (!cats[c]) { cats[c] = []; order.push(c); }
+			cats[c].push(p);
+		});
 		var html = '';
-		Object.keys(cats).forEach(function(cat) {
+		order.forEach(function(cat) {
 			html += '<div class="mo-perm-cat"><div class="mo-perm-cat-title">' + esc(cat) + '</div>';
 			cats[cat].forEach(function(p) {
 				var ck = checkedKeys.indexOf(p.Key) !== -1 ? ' checked' : '';
-				html += '<label class="mo-perm-item"><input type="checkbox" class="mo-perm-cb" value="' + esc(p.Key) + '"' + ck + '> ' + esc(p.DisplayName || p.Key) + '</label>';
+				var cbId = 'mo-perm-' + String(p.Key).replace(/[^A-Za-z0-9]+/g, '-');
+				html += '<div class="mo-perm-item">' +
+					'<label class="mo-perm-label" for="' + escAttr(cbId) + '">' +
+					'<input type="checkbox" class="mo-perm-cb" id="' + escAttr(cbId) + '" value="' + escAttr(p.Key) + '"' + ck + '>' +
+					'<span class="mo-perm-name">' + esc(p.DisplayName || p.Key) + '</span></label>' +
+					(p.Description ? '<div class="mo-perm-desc">' + esc(p.Description) + '</div>' : '') +
+					'</div>';
 			});
 			html += '</div>';
 		});
 		grid.innerHTML = html;
+	}
+	// Re-render the grid from scratch. Called on EVERY mode switch and EVERY modal
+	// open — it used to render once on first load, so opening a second position
+	// inherited the first one's ticks.
+	// allowFetch=false is the "modal just opened" case: re-render from what is already
+	// cached so a hidden grid can never carry the previous position's ticks into the
+	// next save, but do NOT spend a request on a catalogue the user may never open.
+	function refreshPermGrid(allowFetch) {
+		var grid = document.getElementById('mo-pos-perm-grid');
+		if (!grid) return;
+		var apply = function() {
+			var keys = desiredPermKeys();
+			renderPermGrid(keys);
+			moPermHint(!moPermDirty && keys.length > 0);
+		};
+		if (moPerms === null) {
+			if (allowFetch) { ensurePerms(apply); return; }
+			grid.innerHTML = '<div class="mo-muted" style="padding:8px">Loading permissions...</div>';
+			moPermHint(false);
+			return;
+		}
+		apply();
 	}
 
 	window.moSetClass = function(cls) {
@@ -863,18 +1184,24 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		document.getElementById('mo-pos-perm-wrap').style.display = mode === 'custom' ? '' : 'none';
 		var noneWrap = document.getElementById('mo-pos-none-wrap');
 		if (noneWrap) noneWrap.style.display = mode === 'none' ? '' : 'none';
-		if (mode === 'custom' && moPerms === null) ensurePerms(function(){ renderPermGrid([]); });
+		if (mode === 'custom') refreshPermGrid(true);
 	};
 
 	function openPosModal() {
-		document.getElementById('mo-pos-error').style.display = 'none';
-		document.getElementById('mo-pos-overlay').style.display = 'flex';
+		moClearFormError('mo-pos-error');
 		document.getElementById('mo-pos-role').onchange = window.moUpdateRoleDesc;
+		// Re-render the grid on EVERY open, whatever the mode: a hidden grid still
+		// holds the previous position's ticks, and moSavePos() reads the DOM.
+		refreshPermGrid(false);
+		moOpenOverlay('mo-pos-overlay', 'mo-pos-title-input');
 	}
 
 	window.moOpenCreate = function() {
 		moEditId = 0;
 		moPinnedClass = false;
+		moPosKeys = [];
+		moPosIsCustom = false;
+		moPermDirty = false;
 		document.getElementById('mo-pos-title').textContent = 'Create Position';
 		document.getElementById('mo-pos-id').value = '';
 		document.getElementById('mo-pos-title-input').value = '';
@@ -894,6 +1221,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		if (!pos) return;
 		moEditId = pid;
 		moPinnedClass = parseInt(pos.IsPinned, 10) === 1;
+		// The position's own permission set, so a custom office round-trips instead of
+		// being re-saved with whatever was left in the grid from the last one opened.
+		moPosKeys = (pos.PermissionKeys || []).slice();
+		moPosIsCustom = (pos.RbacMode === 'custom');
+		moPermDirty = false;
 		document.getElementById('mo-pos-title').textContent = 'Edit Position';
 		document.getElementById('mo-pos-id').value = pid;
 		document.getElementById('mo-pos-title-input').value = pos.Title || '';
@@ -918,26 +1250,27 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var hvCb = document.getElementById('mo-pos-hidevac');
 		if (hvCb) hvCb.checked = (pos.Classification !== 'crown' && parseInt(pos.HideWhenVacant || 0, 10) === 1);
 
-		// Pre-select None when the position has no role binding (rbac_role_id=0),
-		// except for pinned/system positions (they keep their locked system role).
+		// RbacMode comes from the server now: 'none' (no role bound), 'custom' (bound to
+		// the kingdom-owned role this office created for itself) or 'existing'. Pinned /
+		// system positions always show 'existing' — they keep their locked system role.
 		var posRid = parseInt(pos.RbacRoleId || 0, 10);
-		if (!moPinnedClass && posRid === 0) {
-			moSetRbacMode('none');
-		} else {
-			moSetRbacMode('existing');
+		var mode = pos.RbacMode;
+		if (mode !== 'none' && mode !== 'custom' && mode !== 'existing') {
+			mode = posRid === 0 ? 'none' : 'existing';   // older payload without RbacMode
 		}
+		if (moPinnedClass) mode = 'existing';
+		moSetRbacMode(mode);
 		ensureRoles(function() { renderRoleSelect(posRid); });
 		openPosModal();
 	};
 
-	window.moClosePos = function() { document.getElementById('mo-pos-overlay').style.display = 'none'; };
+	window.moClosePos = function() { moCloseOverlay('mo-pos-overlay'); };
 
 	window.moSavePos = function() {
-		var errEl = document.getElementById('mo-pos-error');
 		var title = document.getElementById('mo-pos-title-input').value.trim();
 		var alias = document.getElementById('mo-pos-alias').value.trim();
-		if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = ''; return; }
-		errEl.style.display = 'none';
+		if (!title) { moFormError('mo-pos-error', 'Title is required.'); return; }
+		moClearFormError('mo-pos-error');
 
 		var parentId = parseInt((document.getElementById('mo-pos-parent') || {}).value || 0, 10) || 0;
 		var hideVac  = (moClass === 'crown') ? 0 : (document.getElementById('mo-pos-hidevac').checked ? 1 : 0);
@@ -952,14 +1285,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		};
 		if (moRbacMode === 'existing') {
 			var rid = parseInt(document.getElementById('mo-pos-role').value || 0, 10);
-			if (!rid) { errEl.textContent = 'Please select a role.'; errEl.style.display = ''; return; }
+			if (!rid) { moFormError('mo-pos-error', 'Please select a role.'); return; }
 			data.RoleId = rid;
 		} else if (moRbacMode === 'none') {
 			// None: no RoleId / PermissionKeys; server stores rbac_role_id=0.
 		} else {
-			var keys = [];
-			document.querySelectorAll('.mo-perm-cb:checked').forEach(function(cb){ keys.push(cb.value); });
-			if (!keys.length) { errEl.textContent = 'Select at least one permission.'; errEl.style.display = ''; return; }
+			var keys = currentGridKeys();
+			if (!keys.length) { moFormError('mo-pos-error', 'Select at least one permission.'); return; }
 			data['PermissionKeys'] = keys; // array -> PHP $_POST['PermissionKeys']
 		}
 
@@ -971,10 +1303,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		$.post(base() + action, data, function(resp) {
 			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Position';
 			if (resp && resp.status === 0) { moClosePos(); moRefresh(); }
-			else { errEl.textContent = (resp && resp.error) ? resp.error : 'Failed to save position.'; errEl.style.display = ''; }
+			else { moFormError('mo-pos-error', (resp && resp.error) ? resp.error : 'Failed to save position.'); }
 		}, 'json').fail(function() {
 			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Position';
-			errEl.textContent = 'Network error.'; errEl.style.display = '';
+			moFormError('mo-pos-error', 'Network error.');
 		});
 	};
 
@@ -988,47 +1320,70 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 
 	window.moOpenOcc = function(pid) {
 		var pos = findPos(pid);
-		document.getElementById('mo-occ-error').style.display = 'none';
+		moClearFormError('mo-occ-error');
 		document.getElementById('mo-occ-pos-id').value = pid;
 		document.getElementById('mo-occ-title').textContent = pos ? (pos.DisplayTitle || pos.Title) : '';
 		document.getElementById('mo-occ-player-text').value = '';
 		document.getElementById('mo-occ-player-id').value = '';
 		document.getElementById('mo-occ-note').value = '';
-		document.getElementById('mo-occ-overlay').style.display = 'flex';
+		moAcClose();
 		initOccFp();
 		if (moStartFp) moStartFp.setDate(new Date(), true);
 		if (moEndFp)   moEndFp.clear();
 		else { document.getElementById('mo-occ-start').value = ''; document.getElementById('mo-occ-end').value = ''; }
+		// Open AFTER flatpickr has run: altInput replaces the visible date field, and
+		// moFocusables() has to see the final controls to trap focus correctly.
+		moOpenOverlay('mo-occ-overlay', 'mo-occ-player-text');
 	};
 
 	window.moCloseOcc = function() {
-		document.getElementById('mo-occ-overlay').style.display = 'none';
-		var r = document.getElementById('mo-occ-player-results');
-		r.innerHTML = ''; r.classList.remove('kn-ac-open');
+		moCloseOverlay('mo-occ-overlay');
+		moAcClose();
 	};
 
 	window.moSaveOcc = function() {
-		var errEl = document.getElementById('mo-occ-error');
 		var pid = document.getElementById('mo-occ-pos-id').value;
 		var mid = document.getElementById('mo-occ-player-id').value;
 		var start = document.getElementById('mo-occ-start').value;
 		var end   = document.getElementById('mo-occ-end').value;
 		var note  = document.getElementById('mo-occ-note').value;
-		if (!mid)   { errEl.textContent = 'Please select a player.'; errEl.style.display = ''; return; }
-		if (!start) { errEl.textContent = 'Term start is required.'; errEl.style.display = ''; return; }
-		errEl.style.display = 'none';
+		if (!mid)   { moFormError('mo-occ-error', 'Please pick a player from the search results.'); return; }
+		if (!start) { moFormError('mo-occ-error', 'Term start is required.'); return; }
+		moClearFormError('mo-occ-error');
 
 		var btn = document.getElementById('mo-occ-save-btn');
 		btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 		$.post(base() + 'setoccupant', { PositionId: pid, MundaneId: mid, TermStart: start, TermEnd: end, Note: note }, function(resp) {
 			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
 			if (resp && resp.status === 0) { moCloseOcc(); moRefresh(); }
-			else { errEl.textContent = (resp && resp.error) ? resp.error : 'Failed to set occupant.'; errEl.style.display = ''; }
+			else { moFormError('mo-occ-error', (resp && resp.error) ? resp.error : 'Failed to set occupant.'); }
 		}, 'json').fail(function() {
 			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
-			errEl.textContent = 'Network error.'; errEl.style.display = '';
+			moFormError('mo-occ-error', 'Network error.');
 		});
 	};
+
+	// ---------- Form submit (Enter) + custom-permission dirty tracking ----------
+	(function() {
+		var posForm = document.getElementById('mo-pos-form');
+		if (posForm) {
+			posForm.addEventListener('submit', function(e) { e.preventDefault(); window.moSavePos(); });
+		}
+		var occForm = document.getElementById('mo-occ-form');
+		if (occForm) {
+			occForm.addEventListener('submit', function(e) { e.preventDefault(); window.moSaveOcc(); });
+		}
+		// Delegated: the grid's contents are replaced on every render.
+		var grid = document.getElementById('mo-pos-perm-grid');
+		if (grid) {
+			grid.addEventListener('change', function(e) {
+				if (e.target && e.target.classList && e.target.classList.contains('mo-perm-cb')) {
+					moPermDirty = true;
+					moPermHint(false);
+				}
+			});
+		}
+	})();
 
 	// ---------- Occupant player autocomplete (kingdom-scoped, kn-ac-results) ----------
 	(function() {
@@ -1041,21 +1396,24 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			if (!el) return;
 			input.value  = el.getAttribute('data-persona') || '';
 			hidden.value = el.getAttribute('data-id') || '';
-			results.innerHTML = '';
-			results.classList.remove('kn-ac-open');
+			moAcClose();
+		}
+		function moAcOpen() {
+			if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+			results.classList.add('kn-ac-open');
+			input.setAttribute('aria-expanded', 'true');
 		}
 		input.addEventListener('input', function() {
 			clearTimeout(debounce);
 			hidden.value = '';
 			var q = input.value.trim();
-			if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+			if (q.length < 2) { moAcClose(); return; }
 			debounce = setTimeout(function() {
 				$.getJSON(searchUrl(q), function(data) {
 					results.innerHTML = '';
 					if (!data || data.length === 0) {
 						results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
-						if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
-						results.classList.add('kn-ac-open');
+						moAcOpen();
 						return;
 					}
 					for (var i = 0; i < data.length; i++) {
@@ -1070,14 +1428,19 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 						})(el));
 						results.appendChild(el);
 					}
-					if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
-					results.classList.add('kn-ac-open');
+					moAcOpen();
 				});
 			}, 250);
 		});
 		input.addEventListener('keydown', function(e) {
+			// Enter inside an open dropdown must never reach the <form>: it picks the
+			// highlighted result (or does nothing), it does not submit the modal.
+			var acOpen = results.classList.contains('kn-ac-open');
 			var items = results.querySelectorAll('.kn-ac-item[data-id]');
-			if (!items.length) return;
+			if (!items.length) {
+				if (e.key === 'Enter' && acOpen) e.preventDefault();
+				return;
+			}
 			var focused = results.querySelector('.kn-ac-focused');
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
@@ -1089,19 +1452,17 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 				var prev = focused ? (focused.previousElementSibling || items[items.length - 1]) : items[items.length - 1];
 				if (focused) focused.classList.remove('kn-ac-focused');
 				if (prev && prev.getAttribute('data-id')) prev.classList.add('kn-ac-focused');
-			} else if (e.key === 'Enter' && focused) {
+			} else if (e.key === 'Enter' && acOpen) {
 				e.preventDefault();
-				moAcSelect(focused);
+				if (focused) moAcSelect(focused);
 			} else if (e.key === 'Escape') {
-				results.innerHTML = '';
-				results.classList.remove('kn-ac-open');
+				// Normally unreachable — the document-capture Escape handler above closes
+				// the dropdown first — but kept so the field still behaves on its own.
+				moAcClose();
 			}
 		});
 		document.addEventListener('click', function(e) {
-			if (!results.contains(e.target) && e.target !== input) {
-				results.innerHTML = '';
-				results.classList.remove('kn-ac-open');
-			}
+			if (!results.contains(e.target) && e.target !== input) moAcClose();
 		});
 	})();
 

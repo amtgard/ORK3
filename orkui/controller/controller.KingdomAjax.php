@@ -60,10 +60,21 @@ class Controller_KingdomAjax extends Controller
             }
 
             $r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
-            if (!isset($r['Status']) || $r['Status'] == 0) {
+            // Kingdom::VacateOfficer is the one entry point here that still returns a
+            // bare array() on its success path -- it only ever fills $response on the
+            // two denial branches. So an EMPTY array is its documented success, but a
+            // NON-empty array with no Status is a malformed response and must not be
+            // reported as a save. Sibling actions no longer tolerate a missing Status
+            // at all; this one cannot until the domain returns Success() like the rest.
+            if (is_array($r) && count($r) === 0) {
+                echo json_encode(['status' => 0]);
+            } elseif (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                echo json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The office could not be vacated.'),
+                ]);
             }
 
         } elseif ($action === 'setstatus') {
@@ -117,6 +128,23 @@ class Controller_KingdomAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setconfig') {
+            // THE single write path for kingdom configuration.
+            //
+            // The Configuration modal used to save twice from one button: setconfig,
+            // then setrecsvisibility. Both wrote AwardRecsPublic and the second always
+            // won, so the value the officer picked in the select was silently replaced
+            // by whatever the separate visibility control held. Everything now goes
+            // through here; setrecsvisibility survives only for its other caller.
+            //
+            // Permission: 'kingdom.config.edit'. Changing dues, attendance minimums or
+            // a feature flag is not the same act as renaming the kingdom, and this
+            // endpoint used to inherit whatever SetKingdomDetails happened to enforce.
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_permission_or_authority($uid, 'kingdom.config.edit', 'kingdom', $kingdom_id, AUTH_EDIT)) {
+                echo json_encode(['status' => 5, 'error' => 'You do not have permission to change this kingdom\'s configuration.']);
+                exit;
+            }
+
             $this->load_model('Kingdom');
             $configs = $_POST['Config'] ?? [];
 
@@ -125,24 +153,106 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
+            // Stored rows for this kingdom, keyed by config key. Two jobs: it supplies
+            // the ConfigurationId every edit needs (Common::update_config finds the row
+            // by primary key), and it lets an older caller that posts Config[<id>] be
+            // resolved back to a key so it can still be validated by name.
+            $storedConfigs = [];
+            $kingdomDetails = $this->Kingdom->get_kingdom_details($kingdom_id);
+            if (is_array($kingdomDetails['KingdomConfiguration'] ?? null)) {
+                $storedConfigs = $kingdomDetails['KingdomConfiguration'];
+            }
+            $configKeyById = [];
+            foreach ($storedConfigs as $storedKey => $storedRow) {
+                $storedId = (int)($storedRow['ConfigurationId'] ?? 0);
+                if ($storedId > 0) {
+                    $configKeyById[$storedId] = $storedKey;
+                }
+            }
+
+            // Validate EVERYTHING before writing ANYTHING. A key that is not in the
+            // registry is refused outright rather than skipped, and one bad value
+            // aborts the whole save -- a half-applied configuration is worse than a
+            // rejected one, because nothing on screen tells the officer which half won.
             $configList = [];
-            foreach ($configs as $configId => $value) {
-                $configList[] = [
-                    'Action'          => CFG_EDIT,
-                    'ConfigurationId' => (int)$configId,
-                    'Key'             => null,
-                    'Value'           => (is_string($value) && trim($value) === '') ? null : $value,
-                ];
+            $configErrors = [];
+            foreach ($configs as $submittedKey => $value) {
+                $key = (string)$submittedKey;
+                if (ctype_digit($key)) {
+                    $key = $configKeyById[(int)$key] ?? '';
+                }
+
+                if ($key === '' || !ConfigRegistry::Exists($key)) {
+                    $configErrors[] = 'One of the submitted settings is not one this kingdom can change.';
+                    continue;
+                }
+
+                $check = ConfigRegistry::Validate($key, $value);
+                if (empty($check['valid'])) {
+                    $configErrors[] = $this->ka_plain_text($check['error'] ?? (ConfigRegistry::Label($key) . ' is not a valid value.'));
+                    continue;
+                }
+
+                $definition = ConfigRegistry::Get($key);
+                $existingId = (int)($storedConfigs[$key]['ConfigurationId'] ?? 0);
+
+                if ($existingId > 0) {
+                    $configList[] = [
+                        'Action'          => CFG_EDIT,
+                        'ConfigurationId' => $existingId,
+                        'Key'             => $key,
+                        // Store the normalized value, never the raw submission. The
+                        // registry returns '' rather than null for a cleared optional
+                        // value on purpose: yapo drops nulls from an UPDATE, so a null
+                        // would leave the previous value in place.
+                        'Value'           => $check['value'],
+                    ];
+                } else {
+                    // A registry key with no row yet (backfilled keys on an older
+                    // kingdom). Without this the edit finds nothing and saves nothing,
+                    // silently. var_type mirrors what Kingdom::CreateKingdom seeds.
+                    $varType = 'fixed';
+                    if (($definition['control'] ?? '') === ConfigRegistry::CONTROL_NUMBER) {
+                        $varType = 'number';
+                    } elseif (($definition['control'] ?? '') === ConfigRegistry::CONTROL_COLOR) {
+                        $varType = 'color';
+                    }
+                    $configList[] = [
+                        'Action'        => CFG_ADD,
+                        'Key'           => $key,
+                        'Type'          => $varType,
+                        'Value'         => $check['value'],
+                        'UserSetting'   => 1,
+                        'AllowedValues' => null,
+                    ];
+                }
+            }
+
+            if ($configErrors) {
+                echo json_encode(['status' => 1, 'error' => implode(' ', array_unique($configErrors))]);
+                exit;
+            }
+
+            if (empty($configList)) {
+                echo json_encode(['status' => 1, 'error' => 'No configuration data provided.']);
+                exit;
             }
 
             $r = $this->Kingdom->set_kingdom_details([
                 'Token'                => $this->session->token,
                 'KingdomId'            => $kingdom_id,
+                // Empty rather than absent: SetKingdomDetails reads both unconditionally
+                // and treats a zero-length value as "leave the stored one alone".
+                'Name'                 => '',
+                'Abbreviation'         => '',
                 'KingdomConfiguration' => $configList,
             ]);
-            echo $r['Status'] == 0
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+            echo (isset($r['Status']) && $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'saved' => count($configList)])
+                : json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The configuration could not be saved.'),
+                ]);
 
         } elseif ($action === 'setparktitles') {
             $this->load_model('Kingdom');
@@ -242,12 +352,30 @@ class Controller_KingdomAjax extends Controller
                 ]);
             }
 
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass. CreateAward used to
+            // fall off the end and return null; the old `!isset($r['Status'])` clause
+            // read that as success, so a create that never ran still reported "Award
+            // saved." and the modal drew a row for an award that does not exist.
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                : json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The award could not be saved.'),
+                ]);
 
         } elseif ($action === 'updateparks') {
+            // Two different operations arrive in one POST from the Edit Parks grid:
+            //
+            //   name / abbreviation / title  -> SetParkDetails  ('park.details.edit')
+            //   the Active toggle            -> RetirePark / RestorePark
+            //                                   ('kingdom.park.retire', danger-audited)
+            //
+            // They are split here because they are not the same permission. Sending
+            // Active through SetParkDetails let anyone who could rename a park also
+            // retire one, through a plain LOG_EDIT and with no danger-audit row; the
+            // domain now ignores Active on a details edit for exactly that reason.
             $this->load_model('Kingdom');
+            $this->load_model('Park');
             $parks = json_decode($_POST['ParksJson'] ?? '[]', true);
 
             if (!is_array($parks) || empty($parks)) {
@@ -255,56 +383,182 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $request = [];
+            // Stored state, read once. Whether the Active toggle changed is decided
+            // against the database, never against anything the browser posted, so an
+            // officer who may rename a park but not retire one is not denied for a
+            // checkbox they never touched.
+            $storedParks = [];
+            $rawParks = $this->Kingdom->get_parks($kingdom_id);
+            foreach (($rawParks['Parks'] ?? []) as $storedPark) {
+                $storedParks[(int)$storedPark['ParkId']] = [
+                    'Name'   => $this->ka_plain_text($storedPark['Name'] ?? ''),
+                    'Active' => (($storedPark['Active'] ?? '') === 'Active') ? 'Active' : 'Retired',
+                ];
+            }
+
+            $request      = [];   // rows for SetParkDetails, index-aligned with $order
+            $order        = [];   // park id for each $request row
+            $wantedActive = [];   // park id => requested Active state, only when submitted
+            $parkResults  = [];   // park id => per-park outcome
+            // Stays true only while every single failure is a NoAuthorization and
+            // nothing at all succeeded -- the shape an expired token makes.
+            $noAuthOnly   = true;
+
             foreach ($parks as $park) {
                 $park_id = (int)($park['ParkId'] ?? 0);
                 if (!valid_id($park_id)) {
                     continue;
                 }
+
+                $submittedName = $this->ka_plain_text($park['ParkName'] ?? '');
+
+                // This endpoint is scoped to one kingdom, and the grid is drawn from
+                // that kingdom's parks. A park id from anywhere else is refused by
+                // name here instead of being handed to a per-park permission check.
+                if (!isset($storedParks[$park_id])) {
+                    $noAuthOnly = false;
+                    $parkResults[$park_id] = [
+                        'parkId'   => $park_id,
+                        'name'     => $submittedName !== '' ? $submittedName : ('Park #' . $park_id),
+                        'ok'       => false,
+                        'messages' => ['That park is not one of this kingdom\'s parks.'],
+                    ];
+                    continue;
+                }
+
+                $order[]   = $park_id;
                 $request[] = [
-                    'ParkId'      => $park_id,
-                    'ParkName'    => trim($park['ParkName']    ?? ''),
-                    'ParkTitleId' => (int)($park['ParkTitle']  ?? 0),
+                    'ParkId'       => $park_id,
+                    'ParkName'     => trim($park['ParkName'] ?? ''),
+                    'ParkTitleId'  => (int)($park['ParkTitle'] ?? 0),
                     'Abbreviation' => strtoupper(trim($park['Abbreviation'] ?? '')),
-                    'Active'      => !empty($park['Active']) ? 'Active' : 'Retired',
+                    // Deliberately the STORED value, not the submitted one.
+                    // SetParkDetails ignores Active, and passing what is already on
+                    // the row keeps this request a no-op for that column whichever
+                    // build of the domain answers it. The real change is below.
+                    'Active'       => $storedParks[$park_id]['Active'],
+                ];
+
+                // Only treat Active as a requested change when the caller actually
+                // sent the field. An absent key must never read as "retire this park".
+                if (array_key_exists('Active', $park)) {
+                    $wantedActive[$park_id] = !empty($park['Active']) ? 'Active' : 'Retired';
+                }
+
+                $parkResults[$park_id] = [
+                    'parkId'   => $park_id,
+                    'name'     => $submittedName !== '' ? $submittedName : $storedParks[$park_id]['Name'],
+                    'ok'       => true,
+                    'messages' => [],
+                    'active'   => $storedParks[$park_id]['Active'],
                 ];
             }
 
-            if (empty($request)) {
+            if (empty($request) && empty($parkResults)) {
                 echo json_encode(['status' => 1, 'error' => 'No valid parks to update.']);
                 exit;
             }
 
-            $results = $this->Kingdom->update_parks($this->session->token, $request);
-            $errors  = [];
-            foreach ((array)$results as $r) {
-                if (isset($r['Status']) && $r['Status'] == 5) {
-                    echo json_encode(['status' => 5, 'error' => 'Session expired.']);
-                    exit;
-                }
-                if (isset($r['Status']) && $r['Status'] != 0) {
-                    $errors[] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
+            // ---- name / abbreviation / title -----------------------------------
+            if ($request) {
+                $saveResults = (array)$this->Kingdom->update_parks($this->session->token, $request);
+                foreach ($order as $i => $park_id) {
+                    $r = $saveResults[$i] ?? null;
+                    if (isset($r['Status']) && $r['Status'] == 0) {
+                        $noAuthOnly = false;
+                        continue;
+                    }
+                    if ((int)($r['Status'] ?? 1) !== 5) {
+                        $noAuthOnly = false;
+                    }
+                    $parkResults[$park_id]['ok'] = false;
+                    $parkResults[$park_id]['messages'][] = $this->ka_status_message($r, 'This park could not be saved.');
                 }
             }
 
-            if ($errors) {
-                echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
+            // ---- the Active toggle ---------------------------------------------
+            foreach ($wantedActive as $park_id => $active) {
+                if ($active === $storedParks[$park_id]['Active']) {
+                    continue;
+                }
+                $sr = ($active === 'Active')
+                    ? $this->Park->RestorePark(['Token' => $this->session->token, 'ParkId' => $park_id])
+                    : $this->Park->RetirePark(['Token' => $this->session->token, 'ParkId' => $park_id]);
+
+                if (isset($sr['Status']) && $sr['Status'] == 0) {
+                    $noAuthOnly = false;
+                    $parkResults[$park_id]['active'] = $active;
+                    // RetirePark/RestorePark name the park in Detail, so this reads
+                    // as "Dragonspine (DSP) has been retired." on the row itself.
+                    $parkResults[$park_id]['messages'][] = $this->ka_status_message($sr, 'Status updated.');
+                    continue;
+                }
+                if ((int)($sr['Status'] ?? 1) !== 5) {
+                    $noAuthOnly = false;
+                }
+                $parkResults[$park_id]['ok'] = false;
+                $parkResults[$park_id]['messages'][] = $this->ka_status_message($sr, 'The status of this park could not be changed.');
+            }
+
+            // ---- per-park result -------------------------------------------------
+            // The whole batch used to collapse into one implode('; ') string with no
+            // park named in it, so an officer saving twelve parks was told "Error"
+            // and could not tell which row failed while the other eleven saved.
+            $results = [];
+            $failed  = [];
+            foreach ($parkResults as $row) {
+                $row['message'] = $row['messages']
+                    ? implode(' ', $row['messages'])
+                    : ($row['ok'] ? 'Saved.' : 'This park could not be saved.');
+                unset($row['messages']);
+                $results[] = $row;
+                if (!$row['ok']) {
+                    $failed[] = $row['name'] . ': ' . $row['message'];
+                }
+            }
+
+            if (!$failed) {
+                echo json_encode(['status' => 0, 'results' => $results]);
+            } elseif ($noAuthOnly) {
+                // Every attempt came back NoAuthorization and nothing landed -- that
+                // is the shape an expired session makes, so keep the old signal the
+                // modal uses to send the officer back to a login.
+                echo json_encode(['status' => 5, 'error' => 'Your session has expired, or you are not authorized to edit these parks.', 'results' => $results]);
             } else {
-                echo json_encode(['status' => 0]);
+                echo json_encode(['status' => 1, 'error' => implode(' ', $failed), 'results' => $results]);
             }
 
         } elseif ($action === 'resetwaivers') {
+            $this->load_model('Kingdom');
             $this->load_model('Player');
+
+            // How many players are about to be cleared, read BEFORE the reset runs --
+            // afterwards the answer is always zero. 'WaiveredMembers' is scoped to
+            // exactly what the UPDATE touches (kingdom_id + waivered = 1, no active
+            // filter), so it is the true count and not an approximation.
+            $dash = $this->Kingdom->get_admin_dashboard($kingdom_id);
+            $waiverCount = (int)($dash['Queue']['WaiveredMembers'] ?? 0);
+
             $r = $this->Player->reset_waivers([
                 'Token'     => $this->session->token,
                 'KingdomId' => $kingdom_id,
             ]);
-            if ($r['Status'] == 5) {
-                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+            if (!isset($r['Status'])) {
+                echo json_encode(['status' => 1, 'error' => $this->ka_status_message($r, 'Waivers could not be reset.')]);
+            } elseif ($r['Status'] == 5) {
+                echo json_encode(['status' => 5, 'error' => 'You do not have permission to reset waivers for this kingdom.']);
             } elseif ($r['Status'] != 0) {
-                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                echo json_encode(['status' => (int)$r['Status'], 'error' => $this->ka_status_message($r, 'Waivers could not be reset.')]);
             } else {
-                echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+                // Prefer a count the domain reports, if it ever starts reporting one.
+                $cleared = isset($r['Count']) ? (int)$r['Count'] : $waiverCount;
+                echo json_encode([
+                    'status'  => 0,
+                    'count'   => $cleared,
+                    'message' => $cleared === 1
+                        ? 'Waiver reset for 1 player.'
+                        : 'Waivers reset for ' . number_format($cleared) . ' players.',
+                ]);
             }
 
         } elseif ($action === 'deleteaward') {
@@ -326,9 +580,41 @@ class Controller_KingdomAjax extends Controller
                 'KingdomId'      => $kingdom_id,
                 'KingdomAwardId' => $kawId,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+            // Same truthiness rule as setaward: no Status means the call failed.
+            // RemoveAward is a soft delete and reports 'AwardingCount' -- how many
+            // grants still reference the definition -- so the modal can say what the
+            // retire actually affected instead of just vanishing the row.
+            echo (isset($r['Status']) && $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'awardingCount' => (int)($r['AwardingCount'] ?? 0)])
+                : json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The award could not be retired.'),
+                ]);
+
+        } elseif ($action === 'restoreaward') {
+            // Counterpart to deleteaward. RemoveAward is a soft delete (it sets
+            // ork_kingdomaward.disabled), so the retire has to be reversible from
+            // the same modal -- otherwise the soft delete is just a delete with
+            // extra steps. Same shape, same ownership rule, same truthiness test.
+            $this->load_model('Kingdom');
+            $kawId = (int)($_POST['KingdomAwardId'] ?? 0);
+
+            if (!valid_id($kawId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
+                exit;
+            }
+
+            $r = $this->Kingdom->RestoreAward([
+                'Token'          => $this->session->token,
+                'KingdomId'      => $kingdom_id,
+                'KingdomAwardId' => $kawId,
+            ]);
+            echo (isset($r['Status']) && $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'awardingCount' => (int)($r['AwardingCount'] ?? 0)])
+                : json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The award could not be re-enabled.'),
+                ]);
 
         } elseif ($action === 'setheraldry') {
             $this->load_model('Kingdom');
@@ -540,9 +826,16 @@ class Controller_KingdomAjax extends Controller
                 'ParkId'                => $pid,
                 'EventCalendarDetailId' => $ecd_id,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // Tournament::CreateTournament returns a status array on every path, and the
+            // new tournament id rides in Detail. Treating a missing Status as success
+            // handed the JS `tournamentId: 0` and it redirected to a tournament that
+            // was never created.
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                : json_encode([
+                    'status' => (int)($r['Status'] ?? 1),
+                    'error'  => $this->ka_status_message($r, 'The tournament could not be created.'),
+                ]);
 
         } elseif ($action === 'deletetournament') {
             $this->load_model('Tournament');
@@ -1121,6 +1414,57 @@ class Controller_KingdomAjax extends Controller
             $_POST,
             $_FILES,
         );
+    }
+
+    /**
+     * Turn a service status array into a message an officer can act on.
+     *
+     * Two hazards this exists for:
+     *
+     *  - Several domain paths call NoAuthorization(null, $mundane_id), which puts a
+     *    bare database id in 'Error'. Shown to a user that is noise at best and a
+     *    leaked internal identifier at worst, so any purely numeric part is dropped.
+     *  - A response can carry neither Error nor Detail (or no response at all), and
+     *    the caller still has to say something truthful. That is what $fallback is.
+     *
+     * @param  mixed  $r         Status array from a domain call, or anything else.
+     * @param  string $fallback  Used when nothing printable survives.
+     * @return string
+     */
+    private function ka_status_message($r, $fallback = 'The change could not be saved.')
+    {
+        $parts = [];
+        if (is_array($r)) {
+            foreach (['Error', 'Detail'] as $field) {
+                if (!isset($r[$field]) || !is_scalar($r[$field])) {
+                    continue;
+                }
+                $piece = $this->ka_plain_text($r[$field]);
+                // A numeric-only Error/Detail is an id, not a message.
+                if ($piece === '' || preg_match('/^[0-9]+$/', $piece)) {
+                    continue;
+                }
+                $parts[] = $piece;
+            }
+        }
+        return $parts ? implode(': ', $parts) : $fallback;
+    }
+
+    /**
+     * Flatten officer-entered text (park names, award names, domain details) that is
+     * about to be returned as JSON.
+     *
+     * The kingdom admin modal renders these through innerHTML, and park names are
+     * free text an officer typed. Angle brackets are removed rather than escaped:
+     * this text is never markup, and stripping keeps it readable whether the
+     * consumer uses innerHTML or textContent, where entities would show verbatim.
+     *
+     * @param  mixed $value
+     * @return string
+     */
+    private function ka_plain_text($value)
+    {
+        return trim(str_replace(['<', '>'], '', strip_tags((string)$value)));
     }
 
 }
