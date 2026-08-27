@@ -1556,6 +1556,74 @@ class Player extends Ork3
     }
 
     /**
+     * Classify one award's grants for a player into rank, bonus grants and the ~ marker.
+     *
+     * A bonus grant is an unranked grant dated later than the date the player first
+     * reached max rank — deliberate recognition past the top of the ladder, not a
+     * record whose rank was never captured. Ties on that date count as unreconciled:
+     * a false "needs reconciling" is a dismissible prompt, whereas a false "bonus"
+     * silently hides a genuinely broken record.
+     *
+     * @param list<array{Rank: int|string, Date: string}> $grants
+     * @return array{Rank: int, MaxRank: int, Approx: bool, BonusCount: int}
+     */
+    public function ClassifyLadderGrants(
+        int $awardId,
+        int $kaMaxLevel,
+        array $grants,
+        bool $hasMaster
+    ): array {
+        $maxRank = Award::MaxRankFor($awardId, $kaMaxLevel);
+
+        $rankSet    = [];
+        $topRank    = 0;
+        $maxReached = null;
+
+        foreach ($grants as $grant) {
+            $rank = (int) $grant['Rank'];
+            if ($rank <= 0) {
+                continue;
+            }
+            $rankSet[$rank] = true;
+            if ($rank > $topRank) {
+                $topRank = $rank;
+            }
+            if ($rank >= $maxRank) {
+                $date = (string) $grant['Date'];
+                if ($maxReached === null || $date < $maxReached) {
+                    $maxReached = $date;
+                }
+            }
+        }
+
+        $unrankedCount = 0;
+        $bonusCount    = 0;
+        foreach ($grants as $grant) {
+            if ((int) $grant['Rank'] > 0) {
+                continue;
+            }
+            // Strictly later than the max-rank date; a tie is unreconciled.
+            if ($maxReached !== null && (string) $grant['Date'] > $maxReached) {
+                $bonusCount++;
+            } else {
+                $unrankedCount++;
+            }
+        }
+
+        $effectiveCount = count($rankSet) + $unrankedCount;
+
+        return [
+            // Identical to the clamp this replaces (was class.Player.php:1623).
+            // Bonus grants are simply absent from $unrankedCount, so they no longer
+            // inflate $effectiveCount. Nothing else about the arithmetic changes.
+            'Rank'       => min($maxRank, max($topRank, $effectiveCount)),
+            'MaxRank'    => $maxRank,
+            'Approx'     => ($effectiveCount > $topRank) && !$hasMaster,
+            'BonusCount' => $bonusCount,
+        ];
+    }
+
+    /**
      * Ladder progress tiles for the Awards tab (P3-R2). Uses Award::GetLadderMasterMap only.
      * Skips Walker of the Middle (31). Approx when effective count > Rank and no Master.
      *
@@ -1621,35 +1689,33 @@ class Player extends Ork3
                 }
             }
 
-            $rankKey = $rank;
             if (!isset($progress[$aid])) {
                 $progress[$aid] = [
                     'Name' => $displayName,
                     'Short' => $shortName,
-                    'Rank' => $rank,
-                    'RankSet' => $rank > 0 ? [$rankKey => true] : [],
-                    'UnrankedCount' => $rank === 0 ? 1 : 0,
                     'HasMaster' => $hasMaster,
+                    'KaMaxLevel' => (int)($a['KaMaxLevel'] ?? 0),
+                    'Grants' => [],
                 ];
-            } else {
-                if ($rank > $progress[$aid]['Rank']) {
-                    $progress[$aid]['Rank'] = $rank;
-                }
-                if ($rank > 0) {
-                    $progress[$aid]['RankSet'][$rankKey] = true;
-                } else {
-                    $progress[$aid]['UnrankedCount']++;
-                }
             }
+            $progress[$aid]['Grants'][] = [
+                'Rank' => $rank,
+                'Date' => (string)($a['Date'] ?? ''),
+            ];
         }
 
         foreach ($progress as $lpAid => &$lp) {
-            $maxRank = (int)($ladderMap[$lpAid]['MaxRank'] ?? (($lpAid === 30) ? 12 : 10));
-            $effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-            $lp['Approx'] = ($effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
-            $lp['Rank'] = min($maxRank, max($lp['Rank'], $effectiveCount));
-            $lp['MaxRank'] = $maxRank;
-            unset($lp['RankSet'], $lp['UnrankedCount']);
+            $classified = $this->ClassifyLadderGrants(
+                $lpAid,
+                $lp['KaMaxLevel'],
+                $lp['Grants'],
+                (bool)$lp['HasMaster']
+            );
+            $lp['Rank'] = $classified['Rank'];
+            $lp['MaxRank'] = $classified['MaxRank'];
+            $lp['Approx'] = $classified['Approx'];
+            $lp['BonusCount'] = $classified['BonusCount'];
+            unset($lp['Grants'], $lp['KaMaxLevel']);
         }
         unset($lp);
 
