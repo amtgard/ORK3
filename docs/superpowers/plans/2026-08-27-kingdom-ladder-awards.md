@@ -2131,6 +2131,83 @@ git commit -m "Enhancement: bucket kingdom-ladder recommendations as ladder awar
 
 ---
 
+### Task 10A: Plumb `BonusCount` and reconcile max rank out of the domain
+
+**Added mid-execution.** Task 10 stopped without editing and reported
+NEEDS_CONTEXT, correctly: the data its brief said it would consume does not reach
+either consumer.
+
+Verified:
+
+- **`BonusCount` reaches nothing.** `GetLadderProgress()` computes it onto
+  `$lp['BonusCount']`, but the final `$tiles[]` literal carries only
+  `AwardId, Name, Short, Rank, MaxRank, HasMaster, Approx` — the value is dropped
+  before it ever reaches `Playernew_index.tpl`. There are **two** tile-build sites
+  (the classified loop and the synthetic-master-tile block); both need it.
+- **The reconcile page never resolves a max rank.** `GetReconcileSuggestions()` and
+  `GetReconcilePageData()` call neither `ClassifyLadderGrants()` nor
+  `Award::MaxRankFor()` — which is exactly why `Playernew_reconcile.tpl` still
+  hardcodes `($aid === 30) ? 12 : 10`, the last of the three literals the spec set
+  out to retire.
+
+Task 10 could not fix this itself: the work lives in `class.Player.php`, and
+routing it through the controller would have both violated the enforced layer rule
+and re-forked the bonus-window logic outside its home. Stopping was right.
+
+**Files:**
+- Modify: `system/lib/ork3/class.Player.php`
+
+**Interfaces:**
+- Produces: each entry of `GetLadderProgress()`'s returned `$tiles[]` gains
+  `'BonusCount' => int`.
+- Produces: each reconcile row gains `'MaxRank' => int` and `'IsBonus' => bool`,
+  resolved in the domain layer.
+
+- [ ] **Step 1: Carry `BonusCount` onto the tiles**
+
+Add `'BonusCount' => (int) ($lp['BonusCount'] ?? 0),` to **both** tile-build sites.
+The synthetic-master-tile block has no classified grants, so 0 is correct there —
+add it explicitly rather than relying on the `??`, so a reader can see the key is
+always present.
+
+- [ ] **Step 2: Resolve max rank for reconcile rows**
+
+In `GetReconcileSuggestions()`, resolve each row's max with
+`Award::MaxRankFor((int) $row['AwardId'], (int) ($row['KaMaxLevel'] ?? 0))`.
+`KaMaxLevel` is already on each row, so **no new query is needed** — confirm that
+before adding one.
+
+- [ ] **Step 3: Classify bonus grants for reconcile**
+
+A **bonus grant** is an unranked grant dated later than the date the player first
+reached max rank. Reconciliation must exclude them: the page tells the player these
+are records *"not matched to your official award history yet"*, which is actively
+wrong about a deliberate star grant and invites assigning a rank it should never
+have.
+
+**Reuse `ClassifyLadderGrants()`** — do not re-derive the window. Note it must be
+fed the player's **full grant history** for that award, not just the unreconciled
+subset, or "first reached max" cannot be computed.
+
+Carry the `'0000-00-00'` guard with it: 3,975 ladder grants hold that sentinel and
+28 sit at rank ≥ 10. A zero date must never anchor the bonus window.
+
+- [ ] **Step 4: Tests**
+
+Extend `tests/Unit/LadderProgressBonusTest.php`:
+
+- a tile entry always carries `BonusCount`, including the synthetic-master tile
+- a reconcile row for a ladder award carries a resolved `MaxRank` — 12 for Zodiac, 10 for Order of the Rose, and a kingdom ladder's own `max_level`
+- a bonus grant is flagged `IsBonus`, and a pre-max unranked grant is not
+
+- [ ] **Step 5: Commit**
+
+```bash
+git commit -m "Enhancement: expose BonusCount and reconcile max rank from the domain" -- system/lib/ork3/class.Player.php tests/Unit/LadderProgressBonusTest.php
+```
+
+---
+
 ### Task 10: Reconciliation and the awards-tab tile
 
 **Files:**
