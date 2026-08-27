@@ -98,6 +98,51 @@ class Award extends Ork3
         return $awardId === 30;
     }
 
+    /** @var list<string> 1-indexed in the accessors below. */
+    private const MONTH_NAMES = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+
+    /**
+     * Single-letter month label for a Zodiac pill: J F M A M J J A S O N D.
+     * Ambiguous on its own by design — the full name rides along in data-tip.
+     */
+    public static function MonthInitial(int $month): string
+    {
+        $name = self::MonthName($month);
+
+        return $name === '' ? '' : substr($name, 0, 1);
+    }
+
+    public static function MonthName(int $month): string
+    {
+        return self::IsValidZodiacMonth($month) ? self::MONTH_NAMES[$month - 1] : '';
+    }
+
+    public static function IsValidZodiacMonth(int $month): bool
+    {
+        return $month >= 1 && $month <= 12;
+    }
+
+    /**
+     * The month a grant date falls in — the reconciliation pre-fill. A suggestion the
+     * officer confirms, never an automatic write: a monthly award is usually granted
+     * at or just after the end of the month it honours.
+     */
+    public static function ZodiacMonthFromDate(string $date): int
+    {
+        if ($date === '' || strpos($date, '0000-00-00') === 0) {
+            return 0;
+        }
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return 0;
+        }
+
+        return (int) date('n', $timestamp);
+    }
+
     /**
      * class_id => Paragon award_id (Class Levels / My Amtgard badge display).
      *
