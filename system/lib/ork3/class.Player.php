@@ -1250,9 +1250,13 @@ class Player extends Ork3
                         'AwardId' => $r->award_id,
                         'KingdomAwardId' => $r->kingdomaward_id,
                         'MundaneId' => $r->mundane_id,
+                        // Additive. Rank above is the raw column and keeps its exact
+                        // meaning: a legacy Zodiac level, or 0. It is never the month.
+                        // Consumers that want the month read ZodiacMonth/ZodiacMonthName.
                         'Rank' => $r->rank,
                         'Date' => $r->date,
                         'ZodiacMonth' => (int) $r->zodiac_month,
+                        'ZodiacMonthName' => Award::MonthName((int) $r->zodiac_month),
                         'GivenById' => $r->given_by_id,
                         'Note' => $r->note,
                         // "Where given" comes from at_park_id / at_kingdom_id / at_event_id.
@@ -3723,8 +3727,9 @@ class Player extends Ork3
             }
 
             // Zodiac positions are months, not levels: write the month, never the
-            // rank. AddAward is a create, so there is no legacy rank to preserve --
-            // rank is unconditionally zeroed for this award.
+            // rank. AddAward is a create, so there is no legacy rank to preserve for
+            // every UI path -- rank is zeroed for this award unless the caller is
+            // the SOAP/JSON API (see the ApiClient carve-out below).
             if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
                 $zodiacMonth = (int) ($request['ZodiacMonth'] ?? 0);
                 if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
@@ -3732,7 +3737,15 @@ class Player extends Ork3
                 }
                 // yapo drops null from writes; 0 is the "no month recorded" value.
                 $awards->zodiac_month = $zodiacMonth;
-                $awards->rank = 0;
+
+                // UI paths never write a Zodiac rank. The SOAP/JSON API keeps accepting
+                // one for backwards compatibility: an integration written before this
+                // change must not start failing. Such a grant is monthless and shows up
+                // in reconciliation, exactly like the 2,024 monthless Zodiacs already in
+                // the corpus. An inbound Rank is stored as a rank and is NEVER
+                // reinterpreted as a month -- a client sending Rank=5 meaning "fifth
+                // Zodiac" must not silently receive May.
+                $awards->rank = empty($request['ApiClient']) ? 0 : (int) ($request['Rank'] ?? 0);
             }
 
             // Rule 1: an unranked grant of an effective ladder award is allowed only
