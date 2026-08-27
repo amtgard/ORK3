@@ -82,9 +82,9 @@ Add an entry for `2026-08-27-zodiac-month.sql` to `migration-classification.json
 - [ ] **Step 3: Apply and verify**
 
 ```bash
-docker compose exec -T db mariadb -uork -psecret ork < db-migrations/2026-08-27-zodiac-month.sql
-docker compose exec -T db mariadb -uork -psecret ork_test < db-migrations/2026-08-27-zodiac-month.sql
-docker compose exec db mariadb -uork -psecret ork -e "
+docker compose exec -T ork3db mariadb -uork -psecret ork < db-migrations/2026-08-27-zodiac-month.sql
+docker compose exec -T ork3testdb mariadb -uork -psecret ork_test < db-migrations/2026-08-27-zodiac-month.sql
+docker compose exec ork3db mariadb -uork -psecret ork -e "
   SHOW COLUMNS FROM ork_awards LIKE 'zodiac_month';
   SHOW COLUMNS FROM ork_recommendations LIKE 'zodiac_month';"
 ```
@@ -94,7 +94,7 @@ Expected: both columns present, `tinyint(2)`, `NO` null, default `0`.
 - [ ] **Step 4: Confirm no existing rank moved**
 
 ```bash
-docker compose exec db mariadb -uork -psecret ork -N -e "
+docker compose exec ork3db mariadb -uork -psecret ork -N -e "
   SELECT \`rank\`, COUNT(*) FROM ork_awards a
   JOIN ork_kingdomaward ka ON ka.kingdomaward_id = a.kingdomaward_id
   WHERE ka.award_id = 30 GROUP BY \`rank\` ORDER BY \`rank\`;"
@@ -104,7 +104,7 @@ Expected, unchanged from the table above: `0→2024, 1→1193, 2→339, 3→131,
 
 - [ ] **Step 5: Run the suite**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit`
 Expected: baseline. If `drift-check` fails, Step 2 was skipped.
 
 - [ ] **Step 6: Commit**
@@ -198,7 +198,7 @@ final class ZodiacMonthTest extends TestCase
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter ZodiacMonthTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter ZodiacMonthTest`
 Expected: FAIL — `Error: Call to undefined method Award::MonthInitial()`
 
 - [ ] **Step 3: Implement**
@@ -254,7 +254,7 @@ In `system/lib/ork3/class.Award.php`, after `IsMonthlyLadder()`:
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter ZodiacMonthTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter ZodiacMonthTest`
 Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Commit**
@@ -351,7 +351,7 @@ Write the `grant`, `grantRaw`, `recommend`, `columnOf`, `recColumnOf` and `count
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacGrantTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacGrantTest`
 Expected: FAIL — `zodiac_month` is never written.
 
 - [ ] **Step 3: Implement in `AddAward`**
@@ -377,7 +377,7 @@ Mirror it in `AddAwardRecommendation` against `ork_recommendations`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacGrantTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacGrantTest`
 Expected: PASS, 7 tests.
 
 - [ ] **Step 5: Commit**
@@ -613,7 +613,7 @@ Create `tests/Unit/ZodiacProgressTest.php`:
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter ZodiacProgressTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter ZodiacProgressTest`
 Expected: FAIL — `Undefined array key "Count"`
 
 - [ ] **Step 3: Branch `ClassifyLadderGrants` for monthly ladders**
@@ -667,10 +667,10 @@ Add `awards.zodiac_month` to the `AwardsForPlayer` select (`class.Player.php:113
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter ZodiacProgressTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter ZodiacProgressTest`
 Expected: PASS, 7 tests.
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
 Expected: still PASS — the ranked path is untouched.
 
 - [ ] **Step 6: Commit**
@@ -843,7 +843,7 @@ git commit -m "Enhancement: Zodiac month strip on the awards tab"
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacReconcileTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacReconcileTest`
 Expected: FAIL — the list is still rank-based.
 
 - [ ] **Step 3: Rebuild the Zodiac section of the page**
@@ -872,7 +872,7 @@ The page currently says these are records "not matched to your official award hi
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacReconcileTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacReconcileTest`
 Expected: PASS, 5 tests.
 
 - [ ] **Step 7: Commit**
@@ -913,7 +913,7 @@ git commit -m "Enhancement: reconcile Zodiacs to a month instead of a rank"
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
 Expected: FAIL — the cell holds the highest rank.
 
 - [ ] **Step 3: Implement**
@@ -925,7 +925,7 @@ Expected: FAIL — the cell holds the highest rank.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -1037,7 +1037,7 @@ Create `tests/Integration/ZodiacApiCompatTest.php`:
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacApiCompatTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacApiCompatTest`
 Expected: FAIL — `ZodiacMonth` is absent from the response.
 
 - [ ] **Step 3: Add the read fields**
@@ -1087,7 +1087,7 @@ The four UI callers (`controller.Award.php:107`, `controller.Player.php:132`, `c
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter ZodiacApiCompatTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter ZodiacApiCompatTest`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 7: Verify both transports serve it**
@@ -1115,7 +1115,7 @@ git commit -m "Enhancement: Zodiac month over the API, Rank kept backwards compa
 
 ## Done criteria
 
-- [ ] Full suite green against baseline: `docker compose exec php ./vendor/bin/phpunit`
+- [ ] Full suite green against baseline: `ENVIRONMENT=TEST ./vendor/bin/phpunit`
 - [ ] Rank distribution query from Task 1 Step 4 returns **exactly** the pre-change numbers — no legacy rank moved.
 - [ ] `grep -rn '=== 30\|== 30' orkui/ system/lib/` → no award-id literals; every Zodiac branch goes through `Award::IsMonthlyLadder()`.
 - [ ] `bin/check-layering.sh` passes; `php-cs-fixer --dry-run` clean on every touched file.

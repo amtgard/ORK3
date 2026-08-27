@@ -29,7 +29,14 @@
 - **Official-lock tooltip, verbatim:** *"Standard Amtgard ladder award — this can't be changed."*
 - **Walker (`award_id = 31`) stays excluded from ladder reports.** Unchanged by this plan.
 - **Test baseline before any change: 184 tests, 427 assertions, 4 errors, 17 failures.** These pre-existing errors/failures are not yours. Any *new* error or failure is. Re-run and compare against this baseline, never against zero.
-- Run tests with: `docker compose exec php ./vendor/bin/phpunit --testsuite unit` (add `--filter <TestName>` to scope).
+- **Tests run on the HOST, not in Docker.** Host is PHP 8.5 / PHPUnit 11.5.56; the
+  `ork3app` container is PHP 8.1 and has no `vendor/bin/phpunit` at all. Run:
+  `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit` (add `--filter <TestName>` to scope).
+  The DB containers are `ork3db` (schema `ork`, port 19306) and `ork3testdb`
+  (schema `ork_test`, port 19307) — PHPUnit uses the test one.
+  `bin/run-unit-tests.sh` is the unfiltered sign-off command; it runs
+  `ork-db drift-check --strict` first, which fails the whole run if a new
+  `db-migrations/` file is unclassified.
 
 ---
 
@@ -158,7 +165,7 @@ final class LadderPredicateTest extends TestCase
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter LadderPredicateTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter LadderPredicateTest`
 Expected: FAIL — `Error: Call to undefined method Award::LadderSql()`
 
 - [ ] **Step 3: Write the implementation**
@@ -223,12 +230,12 @@ In `system/lib/ork3/class.Award.php`, immediately after the closing `}` of `GetL
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter LadderPredicateTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter LadderPredicateTest`
 Expected: PASS, 12 tests.
 
 Then run the whole suite and confirm it is still exactly at baseline (184 tests / 427 assertions / 4 errors / 17 failures):
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit`
 
 - [ ] **Step 5: Commit**
 
@@ -259,7 +266,7 @@ git commit -m "Enhancement: ladder predicate helpers on Award"
 This is a read-only query against the dev database. It is not a test; it is the evidence that deleting the array is behaviour-preserving.
 
 ```bash
-docker compose exec db mariadb -uork -psecret ork -N -e "
+docker compose exec ork3db mariadb -uork -psecret ork -N -e "
   SELECT GROUP_CONCAT(kingdomaward_id ORDER BY kingdomaward_id) 
   FROM ork_kingdomaward WHERE is_ladder = 1;"
 ```
@@ -392,7 +399,7 @@ final class LadderPredicateSqlTest extends TestCase
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
 Expected: PASS already, because Task 1 shipped `LadderSql()`. That is fine — this test is the safety net that must be **green before and after** the deletion in Step 4. Confirm it is green now, then proceed.
 
 - [ ] **Step 4: Delete the hardcoded list and rewrite the grouping**
@@ -449,9 +456,9 @@ Expected: no matches. If any remain, convert each to the effective-ladder flag b
 
 - [ ] **Step 7: Run the tests**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter AwardOptionGroupsTest`
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter AwardOptionGroupsTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit`
 Expected: the first two PASS; the full suite is at baseline with no new failures.
 
 - [ ] **Step 8: Commit**
@@ -524,7 +531,7 @@ Append to `tests/Integration/LadderPredicateSqlTest.php`:
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter testGetAwardListSelectsAndFiltersOnTheSameDefinition`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter testGetAwardListSelectsAndFiltersOnTheSameDefinition`
 Expected: FAIL — "GetAwardList must resolve ladders through the shared helper"
 
 - [ ] **Step 4: Convert `Kingdom::GetAwardList`**
@@ -568,10 +575,10 @@ For each `is_ladder` occurrence in `system/lib/ork3/class.Report.php`, apply the
 
 - [ ] **Step 7: Run the tests**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderPredicateSqlTest`
 Expected: PASS.
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit`
 Expected: baseline, no new failures.
 
 - [ ] **Step 8: Verify the queries actually run**
@@ -757,7 +764,7 @@ final class EditAwardLadderTest extends TestCase
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter EditAwardLadderTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter EditAwardLadderTest`
 Expected: FAIL — `is_ladder` stays 0 because nothing writes it.
 
 - [ ] **Step 3: Implement the writer**
@@ -797,7 +804,7 @@ Ladder and Title? are mutually exclusive — if `IsLadder` is being set to 1, cl
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter EditAwardLadderTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter EditAwardLadderTest`
 Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Commit**
@@ -1115,7 +1122,7 @@ final class LadderProgressBonusTest extends TestCase
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
 Expected: FAIL — `Error: Call to undefined method Player::ClassifyLadderGrants()`
 
 - [ ] **Step 3: Extract the classification into a testable method**
@@ -1202,10 +1209,10 @@ Pass `ka_max_level` through from the query (added in Task 3) as the `$kaMaxLevel
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter LadderProgressBonusTest`
 Expected: PASS, 7 tests.
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit`
 Expected: baseline, no new failures.
 
 - [ ] **Step 6: Commit**
@@ -1283,7 +1290,7 @@ final class StarPillTest extends TestCase
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
 Expected: FAIL — `Error: Call to undefined method Award::OffersStar()`
 
 - [ ] **Step 3: Add the predicate**
@@ -1402,7 +1409,7 @@ The second grep must return nothing.
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
 Expected: PASS, 5 tests.
 
 - [ ] **Step 7: Verify in the browser**
@@ -1507,7 +1514,7 @@ Seed and tear down the recipient's award history in `setUp`/`tearDown` the way `
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGrantRuleTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGrantRuleTest`
 Expected: FAIL — the unranked grant is accepted.
 
 - [ ] **Step 3: Implement Rule 1**
@@ -1543,7 +1550,7 @@ Zodiac is exempt from Rule 1 — a monthless Zodiac is accepted, because 2,024 a
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGrantRuleTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGrantRuleTest`
 Expected: PASS.
 
 - [ ] **Step 5: Verify all four callers inherit it**
@@ -1600,7 +1607,7 @@ Create `tests/Integration/RecommendationBucketTest.php` asserting that a recomme
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter RecommendationBucketTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter RecommendationBucketTest`
 Expected: FAIL — the kingdom-ladder row buckets as `nonladder`.
 
 - [ ] **Step 3: Move the bucketing onto the effective-ladder flag**
@@ -1634,7 +1641,7 @@ In `Report::recommended_awards` and `recommended_awards_count`, add the effectiv
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter RecommendationBucketTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter RecommendationBucketTest`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -1786,7 +1793,7 @@ Extend `tests/Integration/LadderGridTest.php`:
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
 Expected: FAIL — no kingdom columns.
 
 - [ ] **Step 3: Implement**
@@ -1801,7 +1808,7 @@ In the grid template, render the kingdom columns after the official ones under t
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter LadderGridTest`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -1864,7 +1871,7 @@ Create `tests/Integration/AwardApiCompatTest.php`:
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter AwardApiCompatTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter AwardApiCompatTest`
 Expected: FAIL — `IsOfficialLadder` is absent.
 
 - [ ] **Step 3: Add the fields**
@@ -1885,7 +1892,7 @@ Note the response map already emits keys that are absent from the WSDL struct (`
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `docker compose exec php ./vendor/bin/phpunit --testsuite integration --filter AwardApiCompatTest`
+Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite integration --filter AwardApiCompatTest`
 Expected: PASS.
 
 - [ ] **Step 5: Verify both transports actually serve it**
@@ -1908,7 +1915,7 @@ git commit -m "Enhancement: expose IsOfficialLadder and MaxRank for API consumer
 
 ## Done criteria
 
-- [ ] Full suite at baseline: `docker compose exec php ./vendor/bin/phpunit` → no new errors or failures beyond 4 errors / 17 failures.
+- [ ] Full suite at baseline: `ENVIRONMENT=TEST ./vendor/bin/phpunit` → no new errors or failures beyond 4 errors / 17 failures.
 - [ ] `grep -rn 'pseudoLadderKingdomAwardIds' .` → no matches.
 - [ ] `grep -rn '12 : 10' orkui/ system/` → no matches (all three Zodiac duplicates retired).
 - [ ] `bin/check-layering.sh` passes.
