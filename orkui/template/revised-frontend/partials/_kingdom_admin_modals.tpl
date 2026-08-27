@@ -2845,6 +2845,9 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 					MaxLevel: parseInt(maxRankInp.value, 10) || 10
 				}, saveBtn, 'ka-awards-feedback', function() {
 					aw.KingdomAwardName = newName;
+					aw.ReignLimit = reignCell.inp.value;
+					aw.MonthLimit = monthCell.inp.value;
+					aw.TitleClass = classCell.inp.value;
 					aw.IsLadder = ladderCb.checked ? 1 : 0;
 					aw.MaxLevel = parseInt(maxRankInp.value, 10) || 10;
 					aw.IsTitle = titleCb.checked ? 1 : 0;
@@ -2919,6 +2922,22 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 			if ((aw.IsTitle && aw.TitleClass >= 30) || sysName === 'Esquire') return 'Noble Titles';
 			return 'Offices & Other';
 		}
+
+		/* Runs once on first load and again every time the modal reopens (see the
+		   kaOnOpen registration below), so a discarded row edit (Task 5A's red
+		   Discard Changes button) is actually gone from the screen, not just left
+		   there looking unsaved. Resets groups/totalRows and rebuilds the tbody
+		   from scratch -- a second call that appended instead of replacing would
+		   double every row. */
+		function kaRenderAwards() {
+			// Preserve which groups the officer had expanded across the rebuild.
+			// Per-row dirty state is deliberately NOT preserved -- that reset is
+			// the entire point of re-rendering.
+			var collapseByLabel = {};
+			groups.forEach(function(g) { collapseByLabel[g.label] = g.collapsed; });
+			tbody.innerHTML = '';
+			groups = [];
+			totalRows = 0;
 
 		var groupOrder = ['Ladder Awards','Kingdom-Specific','Knighthoods','Masterhoods','Paragons','Noble Titles','Associate Titles','Offices & Other'];
 		var bucket = {};
@@ -3010,9 +3029,11 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 				btn: hdrBtn,
 				countEl: hdrBtn.querySelector('.ka-award-group-count'),
 				rows: [],
-				// Collapsed by default. 130 rows across eight expanded groups is
-				// roughly eight screens of scroll before the first useful action.
-				collapsed: true
+				// Collapsed by default -- unless this is a re-render restoring a
+				// group the officer had already expanded. (130 rows across eight
+				// expanded groups is roughly eight screens of scroll before the
+				// first useful action, hence the default.)
+				collapsed: collapseByLabel.hasOwnProperty(groupName) ? collapseByLabel[groupName] : true
 			};
 			items.forEach(function(aw) {
 				var ctx = makeAwardRow(aw);
@@ -3027,6 +3048,8 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 			});
 			groups.push(g);
 		});
+		}
+		kaRenderAwards();
 
 		function syncExpandBtn() {
 			if (!expandBtn) return;
@@ -3088,6 +3111,19 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 		}
 		syncExpandBtn();
 		applyAwardFilter();
+
+		/* Re-render every time the modal opens, not just on first load. Without this
+		   the table the officer sees is whatever was last built in this page session
+		   -- so clicking "Discard Changes" (Task 5A) looked broken, since the edited
+		   row was still sitting there on screen even though nothing bad had actually
+		   reached the server. kaRenderAwards() resets its own group/collapse state
+		   before rebuilding, and these two calls re-sync the header classes, row
+		   visibility and search filter to match. */
+		kaOnOpen('ka-awards-overlay', function() {
+			kaRenderAwards();
+			syncExpandBtn();
+			applyAwardFilter();
+		});
 
 		/* Bulk save for the unsaved-changes guard's "Save Changes" button (Task 5A).
 		   This modal has no single save action -- it has one per row -- so this walks
