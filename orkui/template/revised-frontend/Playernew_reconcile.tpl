@@ -11,11 +11,19 @@
 	}
 
 	// Partition + smart-rank from domain (Controller_Player::reconcile via get_reconcile_page_data)
+	// A bonus grant (IsBonus, resolved server-side by GetReconcileSuggestions()) is a
+	// deliberate unranked recognition past the top of the ladder, not an unmatched
+	// record -- it must never be offered here for reconciliation (it would invite
+	// assigning it a rank it should never have). Counts below are recomputed against
+	// the filtered list so the header/banner never overstate what is actually shown.
 	$historicalAwards   = is_array($HistoricalAwards ?? null) ? $HistoricalAwards : [];
+	$historicalAwards   = array_values(array_filter($historicalAwards, function ($a) {
+		return empty($a['IsBonus']);
+	}));
 	$rankSuggestions    = is_array($RankSuggestions ?? null) ? $RankSuggestions : [];
 	$realRanksByAwardId = is_array($RealRanksByAwardId ?? null) ? $RealRanksByAwardId : [];
-	$awardTypeCount     = (int)($AwardTypeCount ?? 0);
-	$totalCount         = (int)($TotalCount ?? 0);
+	$awardTypeCount     = count(array_unique(array_column($historicalAwards, 'AwardId')));
+	$totalCount         = count($historicalAwards);
 	$playerId       = (int)($Player['MundaneId'] ?? 0);
 	$persona        = htmlspecialchars($Player['Persona'] ?? 'Player');
 	$heraldryUrl    = ($Player['HasHeraldry'] ?? 0) > 0
@@ -121,7 +129,7 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 		<!-- Read-only info banner for players viewing their own profile -->
 		<div style="background:#ebf8ff;border:1px solid #90cdf4;border-radius:8px;padding:16px 20px;margin:20px 20px 0">
 			<div style="font-weight:600;color:#2b6cb0;margin-bottom:6px"><i class="fas fa-info-circle" style="margin-right:6px"></i>About Your Historical Awards</div>
-			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">These are awards that were imported from historical records before the current award system was in place. They haven't been matched to your official award history yet, which means they may not be reflected in your class levels or progress bars. If you see a progress bar with a ~ before the number, likely it is because of historical records not having a correct rank.</p>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">These are awards that were imported from historical records before the current award system was in place. They haven't been matched to your official award history yet, which means they may not be reflected in your class levels or progress bars. If you see a progress bar with a ~ before the number, likely it is because of historical records not having a correct rank. A &#10033;N next to a progress bar isn't unmatched — it's further recognition already granted past the top of that ladder, so it isn't listed below.</p>
 			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">To have these reconciled, contact your park or kingdom leadership and ask them to use the <strong>Reconcile Historical Awards</strong> tool on your profile.</p>
 			<?php if (!empty($PreloadOfficers)): ?>
 			<div style="font-size:13px;color:#2d3748">
@@ -182,7 +190,9 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 					$awardsId = (int)$a['AwardsId'];
 					$isLadder = (int)($a['IsLadder'] ?? 0);
 					$sugRank  = $rankSuggestions[$awardsId] ?? 0;
-					$maxRank  = ($aid === 30) ? 12 : 10;
+					// Resolved server-side by GetReconcileSuggestions() via Award::MaxRankFor()
+					// -- a template is presentation and must not recompute a ladder's height.
+					$maxRank  = (int)($a['MaxRank'] ?? 10);
 
 					$legacyTs   = strtotime($a['Date'] ?? '');
 					$legacyDate = ($legacyTs > 0) ? date('Y-m-d', $legacyTs) : '';

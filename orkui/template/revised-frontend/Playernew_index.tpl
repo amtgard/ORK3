@@ -2118,26 +2118,55 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					if (!isset($LadderProgress) || !is_array($LadderProgress)) {
 						$LadderProgress = [];
 					}
+					// Official Amtgard ladders vs. the kingdom's own -- requirement 4 says these
+					// must be visibly distinguishable everywhere, including here (the pickers
+					// already group this way via Award::GetAwardOptionGroups()). An official
+					// ladder's AwardId is one of the 14 keys in GetLadderMasterMap(); anything
+					// else reaching this tile list is a kingdom-raised ladder.
+					$_ladderMasterMap = is_array($LadderMasterMap ?? null) ? $LadderMasterMap : [];
+					$_ladderTileGroups = ['official' => [], 'kingdom' => []];
+					foreach ($LadderProgress as $_lp) {
+						$_ladderTileGroups[isset($_ladderMasterMap[(int)($_lp['AwardId'] ?? 0)]) ? 'official' : 'kingdom'][] = $_lp;
+					}
+					$_kingdomLadderName = trim((string)($this->__session->kingdom_name ?? ''));
+					$_ladderGroupLabels = [
+						'official' => 'Ladder Awards',
+						'kingdom' => ($_kingdomLadderName !== '' ? $_kingdomLadderName . ' ' : '') . 'Ladder Awards',
+					];
 				?>
 				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
-						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
-							<?php foreach ($LadderProgress as $lp): ?>
-								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
-								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
-									<div class="pn-ladder-header">
-										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
-										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-											<?php if ($lp['HasMaster']): ?>
-												<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
-											<?php endif; ?>
-											<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
-										</span>
-									</div>
-									<div class="pn-ladder-bar-track">
-										<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
-										     style="width:<?= $pct ?>%"></div>
+						<div style="flex:1;min-width:0">
+							<?php foreach ($_ladderGroupLabels as $_groupKey => $_groupLabel): ?>
+								<?php if (empty($_ladderTileGroups[$_groupKey])) continue; ?>
+								<div class="pn-ladder-group">
+									<div class="pn-ladder-group-label"><?= htmlspecialchars($_groupLabel) ?></div>
+									<div class="pn-ladder-grid" style="margin-bottom:0">
+										<?php foreach ($_ladderTileGroups[$_groupKey] as $lp): ?>
+											<?php
+												$maxRank = (int)($lp['MaxRank'] ?? 10);
+												$pct = min(100, round($lp['Rank'] / $maxRank * 100));
+												$bonusCount = (int)($lp['BonusCount'] ?? 0);
+											?>
+											<div class="pn-ladder-item" data-tip="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+												<div class="pn-ladder-header">
+													<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
+													<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+														<?php if ($lp['HasMaster']): ?>
+															<span class="pn-ladder-master" data-tip="Master title earned"><i class="fas fa-star"></i> M</span>
+														<?php endif; ?>
+														<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+														<?php if ($bonusCount > 0): ?>
+															<span class="pn-ladder-bonus" data-tip="<?= $bonusCount ?> further recognition<?= $bonusCount === 1 ? '' : 's' ?> past the top of this ladder">&#10033;<?= $bonusCount ?></span>
+														<?php endif; ?>
+													</span>
+												</div>
+												<div class="pn-ladder-bar-track">
+													<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
+													     style="width:<?= $pct ?>%"></div>
+												</div>
+											</div>
+										<?php endforeach; ?>
 									</div>
 								</div>
 							<?php endforeach; ?>

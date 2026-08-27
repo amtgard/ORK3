@@ -702,6 +702,30 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
     transition: width 0.4s ease;
 }
 .pn-ladder-bar-fill.pn-ladder-max { background: linear-gradient(90deg, #f6ad55, #c05621); }
+/* Official-vs-kingdom ladder tile grouping (spec requirement 4: the two must
+   be visibly distinguishable everywhere, matching Award::GetAwardOptionGroups()
+   in the award pickers). */
+.pn-ladder-group { margin-bottom: 10px; }
+.pn-ladder-group:last-child { margin-bottom: 0; }
+.pn-ladder-group .pn-ladder-grid:last-child { margin-bottom: 0; }
+.pn-ladder-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ork-text-hint);
+    margin-bottom: 4px;
+}
+html[data-theme="dark"] .pn-ladder-group-label { color: var(--ork-text-muted); }
+/* Bonus-grant marker (task 10): a further recognition past the top of the
+   ladder, deliberately granted and never offered for reconciliation. */
+.pn-ladder-bonus {
+    margin-left: 4px;
+    font-size: 11px;
+    color: #b7791f;
+    white-space: nowrap;
+}
+html[data-theme="dark"] .pn-ladder-bonus { color: #d69e2e; }
 .pn-hist-tip-btn {
     display: inline-flex;
     align-items: center;
