@@ -109,6 +109,7 @@ class Controller_Award extends Controller
             'RecipientId' => $this->request->Award_addawards->MundaneId,
             'KingdomAwardId' => $this->request->Award_addawards->AwardId,
             'Rank' => $isOfficer ? null : $this->request->Award_addawards->Rank,
+            'ZodiacMonth' => (int) ($this->request->Award_addawards->ZodiacMonth ?? 0),
             'Date' => $this->request->Award_addawards->Date,
             'GivenById' => $this->request->Award_addawards->GivenById,
             'Note' => $this->request->Award_addawards->Note,

@@ -136,6 +136,7 @@ class Controller_Player extends Controller
                                 'CustomName' => $this->request->Player_index->CustomName ?? '',
                                 'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
                                 'Rank' => $this->request->Player_index->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Player_index->ZodiacMonth ?? 0),
                                 'Date' => $this->request->Player_index->Date,
                                 'GivenById' => $this->request->Player_index->MundaneId,
                                 'Note' => $this->request->Player_index->Note,
@@ -160,6 +161,7 @@ class Controller_Player extends Controller
                                 'CustomName' => $this->request->Player_index->CustomName ?? '',
                                 'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
                                 'Rank' => $this->request->Player_index->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Player_index->ZodiacMonth ?? 0),
                                 'Date' => $this->request->Player_index->Date,
                                 'GivenById' => $this->request->Player_index->MundaneId,
                                 'Note' => $this->request->Player_index->Note,
@@ -174,6 +176,7 @@ class Controller_Player extends Controller
                                 'MundaneId' => $id,
                                 'KingdomAwardId' => $this->request->Player_index->KingdomAwardId,
                                 'Rank' => $this->request->Player_index->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Player_index->ZodiacMonth ?? 0),
                                 'GivenById' => $this->request->Player_index->MundaneId,
                                 'Reason' => $this->request->Player_index->Reason
                             ));
@@ -369,6 +372,7 @@ class Controller_Player extends Controller
                             'MundaneId'      => $id,
                             'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
                             'Rank'           => $this->request->Player_profile->Rank,
+                            'ZodiacMonth'    => (int) ($this->request->Player_profile->ZodiacMonth ?? 0),
                             'Reason'         => $this->request->Player_profile->Reason,
                         ]);
                         $this->request->clear('Player_profile');
