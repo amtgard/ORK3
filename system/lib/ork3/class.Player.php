@@ -4240,10 +4240,22 @@ class Player extends Ork3
         // their real name is free-text entered at grant time and is never stored
         // on the recommendation row, so the dedup check (which keys on the shared
         // kingdomaward_id) would wrongly block genuinely different customs.
+        //
+        // is_ladder here must be the EFFECTIVE flag (Award::LadderSql()), not the
+        // bare official a.is_ladder column: a kingdom can raise a shared catalog
+        // award (e.g. "Custom Award") to ladder status via ka.is_ladder=1 without
+        // ever touching the official row, and that kingdom ladder must not be
+        // misdetected as a custom award — doing so would exempt it from the
+        // duplicate-recommendation guard every official ladder gets.
         $isCustomAward = false;
         $isCustomTitle = false;
         $this->db->clear();
-        $awardMeta = $this->db->query("SELECT name, is_ladder, is_title FROM " . DB_PREFIX . "award WHERE award_id = " . (int)$request['AwardId'] . " LIMIT 1");
+        $awardMeta = $this->db->query(
+            "SELECT a.name, " . Award::LadderSql('ka', 'a') . " AS is_ladder, a.is_title
+			 FROM " . DB_PREFIX . "award a
+			 LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = " . (int)$request['KingdomAwardId'] . "
+			 WHERE a.award_id = " . (int)$request['AwardId'] . " LIMIT 1"
+        );
         if ($awardMeta && $awardMeta->next()) {
             $isCustomAward = ((int)$awardMeta->is_ladder === 0 && (int)$awardMeta->is_title === 0);
             $isCustomTitle = ((int)$awardMeta->is_title === 1 && $awardMeta->name === 'Custom Title');

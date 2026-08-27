@@ -612,6 +612,7 @@ class Report extends Ork3
 			recs.deleted_by,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id,
+			ifnull(ka.max_level, 0) as ka_max_level,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
 			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
 			COALESCE(
@@ -661,6 +662,7 @@ class Report extends Ork3
                     'mask_giver'         => (int)$r->mask_giver,
                     'ka_kaward_id'       => (int)$r->ka_kaward_id,
                     'ka_award_id'        => (int)$r->ka_award_id,
+                    'ka_max_level'       => (int)$r->ka_max_level,
                     'recs_award_id'      => (int)$r->award_id,
                     'park_id'            => $r->park_id,
                     'kingdom_id'         => $r->kingdom_id,
@@ -745,6 +747,11 @@ class Report extends Ork3
                     'CoveredByMaster' => $coveredByMaster,
                     'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
                     'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
+                    // IsLadder is the effective (ka OR official) flag -- a kingdom
+                    // ladder must bucket the same as an official one on the panel.
+                    'IsLadder' => $row->a_is_ladder,
+                    'MaxRank' => Award::MaxRankFor($recAwardId, $row->ka_max_level),
+                    'KaMaxLevel' => $row->ka_max_level,
                     'Seconds' => array(),
                     'SecondsCount' => 0,
                     'ViewerCanSecond' => false,

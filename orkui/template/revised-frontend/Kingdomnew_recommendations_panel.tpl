@@ -72,7 +72,7 @@
 					<?php foreach ($AwardRecommendations as $rec): ?>
 					<tr class="pk-rec-row"
 						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
-						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['IsLadder'] === 1 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
@@ -109,7 +109,9 @@
 							<?php endif; ?>
 							<?php if ($CanManageKingdom ?? false): ?>
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
+								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>"
+								data-max-rank="<?= (int) $rec['MaxRank'] ?>"
+								data-ka-max-level="<?= (int) $rec['KaMaxLevel'] ?>">
 								<i class="fas fa-medal"></i> Grant
 							</button>
 							<button class="pk-rec-dismiss-btn"
