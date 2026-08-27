@@ -6,6 +6,13 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * ork_kingdomaward.is_ladder gains its first writer, and the official 16 are locked.
+ *
+ * Covers both write paths that can seed is_ladder/max_level on a kingdomaward row:
+ * Kingdom::EditAward (an existing row) and Kingdom::CreateAward (a brand-new row,
+ * including an "Add Award Alias" pointed at one of the 16 official orders). Kept in
+ * one file/class rather than split, since both share createAuthorizedOfficer(),
+ * seed(), and readBack() and both exist to enforce the same requirement (the 16
+ * official ladders can never be un-toggled or resized by a kingdom).
  */
 final class EditAwardLadderTest extends TestCase
 {
@@ -229,5 +236,66 @@ final class EditAwardLadderTest extends TestCase
         $stmt = $this->pdo->prepare('SELECT `rank` FROM ork_awards WHERE kingdomaward_id = :id');
         $stmt->execute([':id' => $id]);
         $this->assertSame(4, (int) $stmt->fetchColumn());
+    }
+
+    /**
+     * CreateAward() never hands the caller the new kingdomaward_id back (it returns
+     * Success(), not the row), so look it up by (kingdom_id, name) -- unique per the
+     * schema's UNIQUE KEY (kingdom_id, award_id, name), and every name here is
+     * marker-prefixed and uniqid()-suffixed, so tearDown()'s existing
+     * "name LIKE 'EDITLAD%'" delete already reaps these rows even if an assertion
+     * fails partway through -- no separate id-tracking array needed for this group.
+     */
+    private function findByName(string $name): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT kingdomaward_id FROM ork_kingdomaward WHERE kingdom_id = :kingdom_id AND name = :name'
+        );
+        $stmt->execute([':kingdom_id' => self::KINGDOM_ID, ':name' => $name]);
+        $id = $stmt->fetchColumn();
+        $this->assertNotFalse($id, 'CreateAward() did not persist a row named ' . $name);
+
+        return (int) $id;
+    }
+
+    public function testCreateAwardCanLadderifyANewKingdomSpecificAward(): void
+    {
+        $name = self::MARKER . '-create-' . uniqid();
+        $this->kingdom->CreateAward([
+            'KingdomId' => self::KINGDOM_ID, 'AwardId' => 0, 'Name' => $name,
+            'ReignLimit' => 0, 'MonthLimit' => 0, 'IsTitle' => 0, 'TitleClass' => '',
+            'IsLadder' => 1, 'MaxLevel' => 7, 'Token' => $this->token,
+        ]);
+
+        $this->assertSame(['is_ladder' => 1, 'max_level' => 7], $this->readBack($this->findByName($name)));
+    }
+
+    public function testCreateAwardRefusesLadderConfigOnAnAliasOfAnOfficialLadder(): void
+    {
+        // Requirement 1, fourth line of defence (the hole this task's brief closed):
+        // an "Add Award Alias" pointed at award_id 21 (Order of the Rose,
+        // ork_award.is_ladder = 1) must not seed is_ladder/max_level onto the new
+        // kingdomaward row -- both columns must stay at their 0 default.
+        $name = self::MARKER . '-alias-' . uniqid();
+        $this->kingdom->CreateAward([
+            'KingdomId' => self::KINGDOM_ID, 'AwardId' => 21, 'Name' => $name,
+            'ReignLimit' => 0, 'MonthLimit' => 0, 'IsTitle' => 0, 'TitleClass' => '',
+            'IsLadder' => 1, 'MaxLevel' => 12, 'Token' => $this->token,
+        ]);
+
+        $this->assertSame(['is_ladder' => 0, 'max_level' => 0], $this->readBack($this->findByName($name)));
+    }
+
+    public function testCreateAwardMaxLevelAboveTwelveIsClampedOnTheCreatePath(): void
+    {
+        // Rule 2 applies on create, not only on edit.
+        $name = self::MARKER . '-clamp-' . uniqid();
+        $this->kingdom->CreateAward([
+            'KingdomId' => self::KINGDOM_ID, 'AwardId' => 0, 'Name' => $name,
+            'ReignLimit' => 0, 'MonthLimit' => 0, 'IsTitle' => 0, 'TitleClass' => '',
+            'IsLadder' => 1, 'MaxLevel' => 40, 'Token' => $this->token,
+        ]);
+
+        $this->assertSame(12, $this->readBack($this->findByName($name))['max_level']);
     }
 }

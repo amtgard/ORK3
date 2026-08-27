@@ -2024,7 +2024,10 @@ class Controller_Admin extends Controller
                     // standard Amtgard orders. The Manage Awards modal locks the
                     // Ladder/Max Rank controls on this flag, never on IsLadder --
                     // locking a kingdom's own ladder would be wrong.
-                    'OfficialIsLadder' => (int)($aw['OfficialIsLadder'] ?? 0),
+                    // Fails CLOSED (locked), not open: an absent key here (never
+                    // observed against real GetAwardList output, which always
+                    // supplies this key) must never be misread as "not official."
+                    'OfficialIsLadder' => (int)($aw['OfficialIsLadder'] ?? 1),
                     'MaxLevel'         => (int)($aw['MaxLevel']    ?? 0),
                     'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
                     'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),

@@ -397,7 +397,9 @@ class Kingdom extends Ork3
             if ($awardId > 0) {
                 $this->db->Clear();
                 $officialRs = $this->db->DataSet(
-                    'select IFNULL(is_ladder, 0) as official_is_ladder from ' . DB_PREFIX . 'award where award_id = ' . $awardId
+                    'select IFNULL(' . Award::OfficialLadderSql('a') . ', 0) as official_is_ladder
+                     from ' . DB_PREFIX . 'award a
+                     where a.award_id = ' . $awardId
                 );
                 if ($officialRs && $officialRs->Next()) {
                     $officialLadder = (int) $officialRs->official_is_ladder === 1;
