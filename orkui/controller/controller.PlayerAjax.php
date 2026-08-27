@@ -315,6 +315,11 @@ class Controller_PlayerAjax extends Controller
             $awards_id        = (int)($_POST['AwardsId']        ?? 0);
             $kingdom_award_id = (int)($_POST['KingdomAwardId'] ?? 0);
             $rank             = (int)($_POST['Rank']           ?? 0);
+            // Order of the Zodiac (Award::IsMonthlyLadder()) reconciles to a month
+            // instead of a rank -- Playernew_reconcile.tpl's month picker submits
+            // ZodiacMonth, never Rank, for those rows. Player::ReconcileAward()
+            // ignores this for every other award.
+            $zodiac_month     = (int)($_POST['ZodiacMonth']    ?? 0);
             $date             = trim($_POST['Date']            ?? '');
             $given_by_id      = (int)($_POST['GivenById']      ?? 0);
             $note             = trim($_POST['Note']            ?? '');
@@ -334,6 +339,7 @@ class Controller_PlayerAjax extends Controller
                 'AwardsId'       => $awards_id,
                 'KingdomAwardId' => $kingdom_award_id,
                 'Rank'           => $rank,
+                'ZodiacMonth'    => $zodiac_month,
                 'Date'           => $date,
                 'GivenById'      => $given_by_id,
                 'Note'           => $note,

@@ -24,6 +24,17 @@
 	$realRanksByAwardId = is_array($RealRanksByAwardId ?? null) ? $RealRanksByAwardId : [];
 	$awardTypeCount     = count(array_unique(array_column($historicalAwards, 'AwardId')));
 	$totalCount         = count($historicalAwards);
+	// Order of the Zodiac (Award::IsMonthlyLadder()) is granted once per calendar
+	// month, so its historical grants need a month picker here, not the rank
+	// input -- and the explanatory copy below needs different wording for it.
+	$hasZodiacHistorical = false;
+	foreach ($historicalAwards as $_ha) {
+		if (Award::IsMonthlyLadder((int)($_ha['AwardId'] ?? 0))) {
+			$hasZodiacHistorical = true;
+			break;
+		}
+	}
+	unset($_ha);
 	$playerId       = (int)($Player['MundaneId'] ?? 0);
 	$persona        = htmlspecialchars($Player['Persona'] ?? 'Player');
 	$heraldryUrl    = ($Player['HasHeraldry'] ?? 0) > 0
@@ -130,6 +141,9 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 		<div style="background:#ebf8ff;border:1px solid #90cdf4;border-radius:8px;padding:16px 20px;margin:20px 20px 0">
 			<div style="font-weight:600;color:#2b6cb0;margin-bottom:6px"><i class="fas fa-info-circle" style="margin-right:6px"></i>About Your Historical Awards</div>
 			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">These are awards that were imported from historical records before the current award system was in place. They haven't been matched to your official award history yet, which means they may not be reflected in your class levels or progress bars. If you see a progress bar with a ~ before the number, likely it is because of historical records not having a correct rank. A &#10033;N next to a progress bar isn't unmatched — it's further recognition already granted past the top of that ladder, so it isn't listed below.</p>
+			<?php if ($hasZodiacHistorical): ?>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">Your Order of the Zodiac record below is different: it's already matched to your award history, but the calendar month it honors was never recorded — not that the record itself is unmatched.</p>
+			<?php endif; ?>
 			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">To have these reconciled, contact your park or kingdom leadership and ask them to use the <strong>Reconcile Historical Awards</strong> tool on your profile.</p>
 			<?php if (!empty($PreloadOfficers)): ?>
 			<div style="font-size:13px;color:#2d3748">
@@ -193,6 +207,15 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 					// Resolved server-side by GetReconcileSuggestions() via Award::MaxRankFor()
 					// -- a template is presentation and must not recompute a ladder's height.
 					$maxRank  = (int)($a['MaxRank'] ?? 10);
+					// Order of the Zodiac reconciles to a month, not a rank. SuggestedMonth
+					// (GetReconcileSuggestions() via Award::ZodiacMonthFromDate()) is a
+					// pre-fill suggestion only -- the officer confirms or changes it, it is
+					// never written automatically. legacyRank is shown read-only as context
+					// ("recorded as level N") so the officer can see what the old system
+					// captured without being invited to treat it as a month.
+					$isMonthly      = Award::IsMonthlyLadder($aid);
+					$suggestedMonth = $isMonthly ? (int)($a['SuggestedMonth'] ?? 0) : 0;
+					$legacyRank     = (int)($a['Rank'] ?? 0);
 
 					$legacyTs   = strtotime($a['Date'] ?? '');
 					$legacyDate = ($legacyTs > 0) ? date('Y-m-d', $legacyTs) : '';
@@ -225,7 +248,7 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 				</tr>
 			<?php endif; ?>
 
-				<tr class="rc-award-row" data-awards-id="<?= $awardsId ?>" data-is-ladder="<?= $isLadder ?>">
+				<tr class="rc-award-row" data-awards-id="<?= $awardsId ?>" data-is-ladder="<?= $isLadder ?>" data-is-monthly="<?= $isMonthly ? 1 : 0 ?>">
 					<td class="adm-td-center">
 						<span class="rc-row-status" title="Pending">
 							<i class="fas fa-clock" style="color:#e2e8f0"></i>
@@ -250,7 +273,17 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 					</td>
 
 					<td style="width:64px">
-						<?php if ($isLadder): ?>
+						<?php if ($isMonthly): ?>
+							<select class="rc-field-month">
+								<option value="">Select month…</option>
+								<?php for ($_m = 1; $_m <= 12; $_m++): ?>
+								<option value="<?= $_m ?>"<?= $suggestedMonth === $_m ? ' selected' : '' ?>><?= Award::MonthName($_m) ?></option>
+								<?php endfor; ?>
+							</select>
+							<?php if ($legacyRank > 0): ?>
+							<div style="font-size:11px;color:var(--ork-text-hint);margin-top:3px;white-space:nowrap">recorded as level <?= $legacyRank ?></div>
+							<?php endif; ?>
+						<?php elseif ($isLadder): ?>
 							<input type="number" class="rc-field-rank" min="1" max="<?= $maxRank ?>"
 							       value="<?= $sugRank > 0 ? $sugRank : '' ?>" title="Rank (max <?= $maxRank ?>)">
 						<?php else: ?>
@@ -300,7 +333,7 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 					<?php else: /* read-only view for own profile */ ?>
 
 					<td><?= htmlspecialchars($a['Name'] ?? '') ?></td>
-					<td style="width:64px"><?= $isLadder && (int)$a['Rank'] > 0 ? (int)$a['Rank'] : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td style="width:64px"><?php if ($isMonthly): ?><?= $legacyRank > 0 ? 'recorded as level ' . $legacyRank : '<span style="color:#a0aec0">—</span>' ?><?php else: ?><?= $isLadder && (int)$a['Rank'] > 0 ? (int)$a['Rank'] : '<span style="color:#a0aec0">—</span>' ?><?php endif; ?></td>
 					<td style="width:130px"><?= $legacyDate ? htmlspecialchars(date('M j, Y', strtotime($legacyDate))) : '<span style="color:#a0aec0">—</span>' ?></td>
 					<td><?= $givenByName ? $givenByName : '<span style="color:#a0aec0">—</span>' ?></td>
 					<td><?= $existLocName ? htmlspecialchars($existLocName) : '<span style="color:#a0aec0">—</span>' ?></td>
@@ -423,6 +456,10 @@ var RcConfig = {
 	function doReconcile(row) {
 		var kid = parseInt(row.querySelector('.rc-field-award').value || '0', 10);
 		if (!kid) { flashError(row, 'Please select a target award.'); return; }
+		if (row.dataset.isMonthly === '1') {
+			var monthEl = row.querySelector('.rc-field-month');
+			if (!monthEl || !monthEl.value) { flashError(row, 'Please select a month.'); return; }
+		}
 		var gid = parseInt(row.querySelector('.rc-field-givenby-id').value || '0', 10);
 
 		var btn = row.querySelector('.rc-do-reconcile');
@@ -453,7 +490,16 @@ var RcConfig = {
 		var fd = new FormData();
 		fd.append('AwardsId',       row.dataset.awardsId);
 		fd.append('KingdomAwardId', kid || parseInt(row.querySelector('.rc-field-award').value||'0',10));
-		fd.append('Rank',           parseInt(row.querySelector('.rc-field-rank').value||'0',10));
+		if (row.dataset.isMonthly === '1') {
+			// Order of the Zodiac reconciles to a month, not a rank -- submit
+			// ZodiacMonth instead of Rank so Player::ReconcileAward() writes
+			// zodiac_month and leaves the legacy rank untouched.
+			var monthEl = row.querySelector('.rc-field-month');
+			fd.append('ZodiacMonth', parseInt((monthEl && monthEl.value) || '0', 10));
+			fd.append('Rank', '0');
+		} else {
+			fd.append('Rank', parseInt(row.querySelector('.rc-field-rank').value||'0',10));
+		}
 		fd.append('Date',           row.querySelector('.rc-field-date').value);
 		fd.append('GivenById',      gid || parseInt(row.querySelector('.rc-field-givenby-id').value||'0',10));
 		fd.append('Note',           row.querySelector('.rc-field-note').value);

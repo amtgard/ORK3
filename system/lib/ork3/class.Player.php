@@ -371,9 +371,19 @@ class Player extends Ork3
             $maxReachedByAwardId[$aid] = $this->LadderMaxReachedDate($maxRankByAwardId[$aid], $grantsForAward);
         }
 
-        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
+        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable.
+        // Order of the Zodiac (award_id 30, Award::IsMonthlyLadder()) is granted once
+        // per calendar month, so its reconcilability is decided by ZodiacMonth, not by
+        // rank: a grant that already carries a month is not reconcilable, whatever
+        // legacy rank it carries; a monthless one is, whatever its legacy rank.
         $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
-            return (int)($a['IsLadder'] ?? 0) === 1;
+            if ((int)($a['IsLadder'] ?? 0) !== 1) {
+                return false;
+            }
+            if (Award::IsMonthlyLadder((int)($a['AwardId'] ?? 0))) {
+                return (int)($a['ZodiacMonth'] ?? 0) === 0;
+            }
+            return true;
         }));
 
         // Sort: AwardId ASC, date ASC (missing last)
@@ -407,6 +417,23 @@ class Player extends Ork3
             // ladder's max rank (the ($aid === 30) ? 12 : 10 duplicate this
             // replaces). KaMaxLevel is already on the row -- no new query.
             $a['MaxRank'] = $maxRankByAwardId[$aid] ?? Award::MaxRankFor($aid, (int)($a['KaMaxLevel'] ?? 0));
+
+            if (Award::IsMonthlyLadder($aid)) {
+                // There is no "past max" for a monthly award, so the bonus exclusion
+                // below does not apply to Zodiac -- every monthless grant is reconcilable
+                // regardless of its date.
+                $a['IsBonus'] = false;
+                // Pre-fill suggestion from the grant date -- grant dates are a near-uniform
+                // 254-364 per month (the fingerprint of a genuinely monthly award), while
+                // the legacy rank distribution (1193/339/131/...) is a ladder-decay curve
+                // and worthless as a month signal. Award::ZodiacMonthFromDate() guards the
+                // '0000-00-00' sentinel, returning 0 (no suggestion) rather than a
+                // spurious January. This is a suggestion only -- never written here.
+                $a['SuggestedMonth'] = Award::ZodiacMonthFromDate((string)($a['Date'] ?? ''));
+                $rankSuggestions[$awardsId] = 0;
+                continue;
+            }
+
             // A bonus grant (unranked, dated after the player first reached max)
             // is deliberate recognition, not an unmatched record -- it must not
             // be offered for reconciliation.
@@ -4164,13 +4191,35 @@ class Player extends Ork3
                     return $rejection;
                 }
 
+                // Order of the Zodiac (Award::IsMonthlyLadder()) reconciles to a month,
+                // not a rank. The legacy rank -- whatever level the old system captured
+                // -- must survive this write untouched, so `rank` is left out of the SQL
+                // below entirely. Mirrors UpdateAward's own Zodiac branch: only write
+                // zodiac_month when the caller actually supplied one, so a reconcile
+                // that doesn't touch the month (or a caller that predates ZodiacMonth,
+                // e.g. LadderGrantRuleTest's Rule-1-exemption coverage) can't be forced
+                // to supply one just to stay a no-op on rank.
+                $rank_sql = 'rank=' . intval($set_rank) . ', ';
+                $zodiac_sql = '';
+                if (Award::IsMonthlyLadder((int) $set_award_id)) {
+                    $rank_sql = '';
+                    if (array_key_exists('ZodiacMonth', $request)) {
+                        $set_zodiac_month = (int) $request['ZodiacMonth'];
+                        if ($set_zodiac_month !== 0 && !Award::IsValidZodiacMonth($set_zodiac_month)) {
+                            return InvalidParameter('Choose a month between January and December.');
+                        }
+                        // yapo drops null from writes; 0 is the "no month recorded" value.
+                        $zodiac_sql = 'zodiac_month=' . $set_zodiac_month . ', ';
+                    }
+                }
+
                 // Snapshot prior state before the write so the audit-log diff renderer
                 // has a real before/after pair for ReconcileAward (shares Player::UpdateAward's
                 // diff case in Admin_auditlog.tpl).
                 $_audit_prior   = $this->get_award($awards);
                 $_audit_mundane = $awards->mundane_id;
 
-                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
+                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', ' . $rank_sql . $zodiac_sql . 'date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
                 $this->db->query($sql);
 
                 // Re-fetch post-state for the audit diff.
