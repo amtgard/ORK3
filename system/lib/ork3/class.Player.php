@@ -4402,8 +4402,12 @@ class Player extends Ork3
             }
         }
 
-        // Case B: recommending a ladder where the player has topped out or holds the Master peerage
-        if (isset($ladderMap[$recAwardId])) {
+        // Case B: recommending a ladder where the player has topped out or holds the Master peerage.
+        // Zodiac is exempt: its twelve positions are months, not ranks, so there is no
+        // "top" to reach — a month can be granted or recommended again, indicated, never
+        // blocked. (Case A above still applies to Zodiac: a direct recommendation for
+        // Master Zodiac when the player already holds it is still a genuine duplicate.)
+        if (isset($ladderMap[$recAwardId]) && !Award::IsMonthlyLadder($recAwardId)) {
             $info = $ladderMap[$recAwardId];
 
             $masterIdsCsv = implode(',', array_map('intval', $info['MasterAwardIds']));

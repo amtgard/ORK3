@@ -42,6 +42,7 @@ final class ZodiacGrantTest extends TestCase
     private const PARK_ID = 999103;
     private const ZODIAC_AWARD_ID = 30;
     private const ROSE_AWARD_ID = 21; // Order of the Rose -- an official ladder, not monthly.
+    private const MASTER_ZODIAC_AWARD_ID = 8; // Zodiac's Master-peerage companion award.
 
     private PDO $pdo;
     private Player $player;
@@ -321,5 +322,68 @@ final class ZodiacGrantTest extends TestCase
 
         $this->assertSame(9, $this->recColumnOf($recId, 'zodiac_month'));
         $this->assertSame(0, $this->recColumnOf($recId, 'rank'));
+    }
+
+    /**
+     * Task 3A: Zodiac has no top, so the "topped out" recommendation guard
+     * (Player::AddAwardRecommendation() Case B) must not apply to it. These
+     * four tests cover the carve-out's two success cases, prove it does not
+     * leak to a real ranked ladder, and prove Case A (direct recommendation
+     * for a Master peerage already held) is untouched.
+     */
+    public function testALegacyRankTwelveZodiacCanBeRecommendedForAnother(): void
+    {
+        // Pre-monthly-model legacy grant at the old max rank (12). Under the
+        // monthly model there is no top to have reached -- must not block.
+        $this->grantRaw(['award_id' => self::ZODIAC_AWARD_ID, 'rank' => 12, 'zodiac_month' => 0]);
+
+        $recId = $this->recommend(['AwardId' => self::ZODIAC_AWARD_ID, 'ZodiacMonth' => 5]);
+
+        $this->assertGreaterThan(0, $recId);
+    }
+
+    public function testAPlayerHoldingMasterZodiacCanBeRecommendedForAZodiac(): void
+    {
+        // Holding the Master-peerage companion award must not block a Zodiac
+        // recommendation either -- same "no top" reasoning as the rank case.
+        $this->grant(['AwardId' => self::MASTER_ZODIAC_AWARD_ID]);
+
+        $recId = $this->recommend(['AwardId' => self::ZODIAC_AWARD_ID, 'ZodiacMonth' => 6]);
+
+        $this->assertGreaterThan(0, $recId);
+    }
+
+    public function testAToppedOutNonZodiacLadderIsStillBlocked(): void
+    {
+        // The carve-out must not leak: Order of the Rose is a real ranked
+        // ladder (MaxRank 10) and topping out must still block recommending it.
+        $this->grantRaw(['award_id' => self::ROSE_AWARD_ID, 'rank' => 10]);
+        $kaId = $this->seedKingdomAward(self::ROSE_AWARD_ID);
+
+        $result = $this->player->AddAwardRecommendation([
+            'Token' => $this->token,
+            'MundaneId' => $this->recipientId,
+            'KingdomAwardId' => $kaId,
+            'Reason' => self::MARKER,
+        ]);
+
+        $this->assertNotSame(0, (int) $result['Status'], 'a topped-out non-Zodiac ladder must still be blocked: ' . json_encode($result));
+    }
+
+    public function testRecommendingMasterZodiacToAHolderIsStillBlocked(): void
+    {
+        // Case A is untouched by the carve-out: a direct recommendation for a
+        // Master peerage the player already holds is still a genuine duplicate.
+        $this->grant(['AwardId' => self::MASTER_ZODIAC_AWARD_ID]);
+        $kaId = $this->seedKingdomAward(self::MASTER_ZODIAC_AWARD_ID);
+
+        $result = $this->player->AddAwardRecommendation([
+            'Token' => $this->token,
+            'MundaneId' => $this->recipientId,
+            'KingdomAwardId' => $kaId,
+            'Reason' => self::MARKER,
+        ]);
+
+        $this->assertNotSame(0, (int) $result['Status'], 'recommending Master Zodiac to a holder must still be blocked (Case A): ' . json_encode($result));
     }
 }
