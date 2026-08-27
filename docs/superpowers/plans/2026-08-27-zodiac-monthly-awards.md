@@ -38,7 +38,14 @@ can pass or fail for reasons that have nothing to do with months. In addition:
 - **Month pill labels: `J F M A M J J A S O N D`.** `data-tip` carries the full month name.
 - **Repeat-month tip copy, verbatim:** *"Player already has a Zodiac for {Month}. {Award|Recommend} another?"* — "Award" on grant surfaces, "Recommend" on recommendation surfaces.
 - **Both migrations must be classified in `ork-db`'s `migration-classification.json5`**, or `drift-check --strict` blocks the whole unit-test run.
-- **Test baseline: 184 tests, 427 assertions, 4 errors, 17 failures** (plus whatever the companion plan added, all green). Compare against that, never against zero.
+- **Test baselines (updated 2026-08-27, after the sandbox DB was reseeded):**
+  **unit = 211 tests / 579 assertions / 0 errors / 0 failures — FULLY GREEN.**
+  **integration = 267 tests / 1 failure** (`KingdomProfileTest::testKingdomDomainReadsUsedByProfile`,
+  a pre-existing officer-role capitalisation drift, unrelated to this work).
+  The earlier "4 errors / 17 failures" and "~85 errors / ~84 failures" baselines are
+  **obsolete**: they measured a sandbox database that was empty of kingdom/park/mundane
+  fixture data, not real test debt. Task 11 repaired it with the project's own `ork-db`
+  tooling. **Any new error or failure is now yours** — do not excuse one as pre-existing.
 
 ### The data these decisions rest on
 

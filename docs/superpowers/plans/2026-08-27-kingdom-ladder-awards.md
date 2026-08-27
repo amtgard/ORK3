@@ -35,7 +35,14 @@
 - **Rule 1 rejection message, verbatim:** *"{Award} is a ranked award — choose a rank, or use ✱ if they have already reached {max}."*
 - **Official-lock tooltip, verbatim:** *"Standard Amtgard ladder award — this can't be changed."*
 - **Walker (`award_id = 31`) stays excluded from ladder reports.** Unchanged by this plan.
-- **Test baseline before any change: 184 tests, 427 assertions, 4 errors, 17 failures.** These pre-existing errors/failures are not yours. Any *new* error or failure is. Re-run and compare against this baseline, never against zero.
+- **Test baselines (updated 2026-08-27, after the sandbox DB was reseeded):**
+  **unit = 211 tests / 579 assertions / 0 errors / 0 failures — FULLY GREEN.**
+  **integration = 267 tests / 1 failure** (`KingdomProfileTest::testKingdomDomainReadsUsedByProfile`,
+  a pre-existing officer-role capitalisation drift, unrelated to this work).
+  The earlier "4 errors / 17 failures" and "~85 errors / ~84 failures" baselines are
+  **obsolete**: they measured a sandbox database that was empty of kingdom/park/mundane
+  fixture data, not real test debt. Task 11 repaired it with the project's own `ork-db`
+  tooling. **Any new error or failure is now yours** — do not excuse one as pre-existing.
 - **Domain write methods are TOKEN-GATED.** `Player::AddAward`, `Player::UpdateAward`,
   `Player::ReconcileAward`, `Player::AddAwardRecommendation` and `Kingdom::EditAward`
   all refuse any write without a valid `Token` in the request, and there is no bypass
