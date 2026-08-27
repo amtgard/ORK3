@@ -1196,6 +1196,9 @@ class Player extends Ork3
                         'KaIsLadder' => (int) $r->ka_is_ladder,
                         'OfficialIsLadder' => (int) $r->official_is_ladder,
                         'KaMaxLevel' => (int) $r->ka_max_level,
+                        // Real ladder height for the Edit Award modal's rank pills -- never
+                        // let the client re-derive this by matching the award's NAME.
+                        'MaxRank' => Award::MaxRankFor((int) $r->award_id, (int) $r->ka_max_level),
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,

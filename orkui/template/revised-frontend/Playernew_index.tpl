@@ -2188,6 +2188,9 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 										'displayName'   => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
 										'Name'          => $detail['Name'],
 										'IsLadder'      => (int)$detail['IsLadder'],
+										// Real ladder height, resolved server-side (Award::MaxRankFor) -- the
+										// edit modal must never guess it from the award's name.
+										'MaxRank'       => (int)($detail['MaxRank'] ?? 10),
 										'IsHistorical'  => (int)($detail['IsHistorical'] ?? 0),
 										'KingdomAwardId'=> (int)$detail['KingdomAwardId'],
 										'Rank'          => (int)$detail['Rank'],
@@ -2338,6 +2341,9 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 											'Name'           => $detail['Name'],
 											'IsLadder'       => (int)$detail['IsLadder'],
 											'IsTitle'        => 1,
+											// Real ladder height, resolved server-side (Award::MaxRankFor) -- the
+											// edit modal must never guess it from the award's name.
+											'MaxRank'        => (int)($detail['MaxRank'] ?? 10),
 											'IsHistorical'   => (int)($detail['IsHistorical'] ?? 0),
 											'KingdomAwardId' => (int)$detail['KingdomAwardId'],
 											'Rank'           => (int)$detail['Rank'],

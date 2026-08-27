@@ -583,6 +583,10 @@ class Award extends Ork3
                 } elseif ($label === 'Masterhoods') {
                     $extra = " data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "' data-peerage='Master'";
                 }
+                // The client must never guess a ladder's height from the award NAME
+                // (see Award::MaxRankFor) -- every option carries the real answer.
+                $maxRank = self::MaxRankFor((int) ($award['AwardId'] ?? 0), (int) ($award['MaxLevel'] ?? 0));
+                $extra .= " data-max-rank='" . $maxRank . "'";
                 $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'{$extra}>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
             }
             $options .= "</optgroup>";
@@ -597,6 +601,7 @@ class Award extends Ork3
             } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
                 $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
             }
+            $dataAttrs .= " data-max-rank='" . self::MaxRankFor((int) ($award['AwardId'] ?? 0), (int) ($award['MaxLevel'] ?? 0)) . "'";
             $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
         }
 

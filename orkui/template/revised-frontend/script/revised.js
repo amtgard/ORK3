@@ -39,7 +39,15 @@ function tnRankPaint(wrap, prefix, held, selected) {
 function tnRankPillInner(prefix, r) {
     return '<span class="' + prefix + '-rank-num">' + r + '</span>';
 }
-if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
+/* An award's ladder height, from the server. Never guess it from the award's
+   NAME: 82 kingdom awards contain the word "zodiac" (case-insensitively), and
+   a kingdom's own 5-rank ladder whose name happens to contain it is not a
+   twelve-month order. */
+function tnRankMaxFor(optEl) {
+    var m = optEl ? parseInt(optEl.dataset.maxRank, 10) : 0;
+    return (m > 0 && m <= 12) ? m : 10;
+}
+if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; window.tnRankMaxFor = tnRankMaxFor; }
 
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
@@ -906,7 +914,7 @@ if (PnConfig.recError) {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var maxRank   = tnRankMaxFor(opt);
         var held      = pnAwardRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
@@ -976,7 +984,7 @@ if (PnConfig.recError) {
         var info = map[baseAwardId];
         if (!info) return;
 
-        var maxRank  = parseInt(info.MaxRank) || (/zodiac/i.test(opt.textContent) ? 12 : 10);
+        var maxRank  = tnRankMaxFor(opt);
         var rankHeld = (PnConfig.awardRanks || {})[baseAwardId] || 0;
 
         // Branch 1 — player already holds the Master peerage
@@ -1967,7 +1975,7 @@ if (PnConfig.recError) {
 
             if (isLadder && this.value) {
                 gid('pn-award-rank-row').style.display = '';
-                buildRankPills(awardId);
+                buildRankPills(awardId, opt);
             } else {
                 gid('pn-award-rank-row').style.display = 'none';
                 gid('pn-award-rank-val').value = '';
@@ -1976,9 +1984,13 @@ if (PnConfig.recError) {
         });
 
         // ---- Rank Pills ----
-        function buildRankPills(awardId) {
-            var opt      = document.querySelector('#pn-award-select option[data-award-id="' + awardId + '"]');
-            var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
+        // `opt` is the already-selected <option> from the change handler. Do NOT
+        // re-look it up by data-award-id: every Kingdom Ladder Award shares
+        // data-award-id="0" (no official award backs the rung), so a re-query
+        // would silently resolve to the FIRST kingdom ladder in the list rather
+        // than the one actually chosen.
+        function buildRankPills(awardId, opt) {
+            var maxRank  = tnRankMaxFor(opt);
             var held      = playerRanks[awardId] || 0;
             var suggested = Math.min(held + 1, maxRank);
             var hint = gid('pn-rank-hint');
@@ -3208,7 +3220,7 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var maxRank   = tnRankMaxFor(opt);
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
@@ -3670,7 +3682,7 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var maxRank   = tnRankMaxFor(opt);
         var held      = knRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
@@ -6947,7 +6959,7 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var maxRank   = tnRankMaxFor(opt);
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
@@ -7434,7 +7446,7 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var maxRank  = tnRankMaxFor(opt);
         var held     = pkRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
@@ -12123,7 +12135,11 @@ function setupPronounPicker(cfg) {
     var currentAwardsId = 0;
     var currentAwardIsHistorical = false;
 
-    function buildEditRankPills(isLadder, currentRank, awardName) {
+    // maxRankIn is server-supplied (Award::MaxRankFor, threaded through the row's
+    // data-award JSON as MaxRank) -- this modal has no <option> element to read
+    // data-max-rank from, so the caller passes the resolved number directly.
+    // Never guess it from the award's NAME.
+    function buildEditRankPills(isLadder, currentRank, maxRankIn) {
         var wrap    = gid('pn-edit-rank-pills');
         var rankRow = gid('pn-edit-rank-row');
         if (!wrap) return;
@@ -12133,7 +12149,8 @@ function setupPronounPicker(cfg) {
             gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = '');
             return;
         }
-        var maxRank = /zodiac/i.test(awardName || '') ? 12 : 10;
+        var maxRank = parseInt(maxRankIn, 10);
+        if (!(maxRank > 0 && maxRank <= 12)) maxRank = 10;
         if (rankRow) rankRow.style.display = '';
         for (var i = 1; i <= maxRank; i++) {
             var pill = document.createElement('button');
@@ -12193,7 +12210,7 @@ function setupPronounPicker(cfg) {
 
         var nameEl = gid('pn-edit-award-name');
         if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
-        buildEditRankPills(data.IsLadder == 1, data.Rank, data.displayName || data.Name || '');
+        buildEditRankPills(data.IsLadder == 1, data.Rank, data.MaxRank);
         var dateEl = gid('pn-edit-award-date');
         if (dateEl) dateEl.value = data.Date || '';
         var gbText = gid('pn-edit-givenby-text');
@@ -12427,7 +12444,6 @@ function setupPronounPicker(cfg) {
                 var opt = this.options[this.selectedIndex];
                 var isLadder = opt && opt.getAttribute('data-is-ladder') === '1';
                 var awardId  = opt ? (parseInt(opt.getAttribute('data-award-id')) || 0) : 0;
-                var awardName = opt ? (opt.textContent || '') : '';
                 rcRankRow.style.display = isLadder ? '' : 'none';
                 rcRankPills.innerHTML   = '';
                 rcRankVal.value         = '';
@@ -12436,7 +12452,7 @@ function setupPronounPicker(cfg) {
                 /* suggest next rank = max held rank + 1, capped at maxRank */
                 var heldMax    = (PnConfig.awardRanks && awardId) ? (PnConfig.awardRanks[awardId] || 0) : 0;
                 var suggested  = heldMax + 1;
-                var maxRank    = /zodiac/i.test(awardName) ? 12 : 10;
+                var maxRank    = tnRankMaxFor(opt);
                 if (suggested > maxRank) suggested = 0;
 
                 for (var i = 1; i <= maxRank; i++) {
