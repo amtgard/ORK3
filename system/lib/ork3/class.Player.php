@@ -1140,7 +1140,13 @@ class Player extends Ork3
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
 						COALESCE(alias.peerage, a.peerage) as peerage,
 						COALESCE(alias.officer_role, a.officer_role) as officer_role,
-						COALESCE(alias.is_ladder, a.is_ladder) as is_ladder,
+						GREATEST(
+							IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0),
+							IFNULL(ka.is_ladder, 0)
+						) as is_ladder,
+						IFNULL(ka.is_ladder, 0) as ka_is_ladder,
+						IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0) as official_is_ladder,
+						IFNULL(ka.max_level, 0) as ka_max_level,
 						alias.award_id as alias_award_id_resolved,
 						alias.name as alias_award_name,
 						alias.peerage as alias_peerage,
@@ -1156,7 +1162,10 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
-						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
+						GREATEST(
+							IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0),
+							IFNULL(ka.is_ladder, 0)
+						), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
         $r = $this->db->query($sql);
         $response = array();
@@ -1184,6 +1193,9 @@ class Player extends Ork3
                         'KingdomAwardName' => $r->kingdom_awardname,
                         'CustomAwardName' => $r->custom_name,
                         'IsLadder' => $r->is_ladder,
+                        'KaIsLadder' => (int) $r->ka_is_ladder,
+                        'OfficialIsLadder' => (int) $r->official_is_ladder,
+                        'KaMaxLevel' => (int) $r->ka_max_level,
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,

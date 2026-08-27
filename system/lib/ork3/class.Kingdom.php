@@ -303,9 +303,9 @@ class Kingdom extends Ork3
         $ladder_clause = '';
         $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
-            $ladder_clause = " and ka.is_ladder = 1";
+            $ladder_clause = " and " . Award::LadderSql() . " = 1";
         } elseif ($request['IsLadder'] == 'NonLadder') {
-            $ladder_clause = " and ka.is_ladder = 0";
+            $ladder_clause = " and " . Award::LadderSql() . " = 0";
         }
         if ($request['IsTitle'] == 'Title') {
             $ladder_clause = " and is_title = 1";
@@ -315,7 +315,8 @@ class Kingdom extends Ork3
         $disabled_clause = empty($request['IncludeDisabled']) ? " and ka.disabled = 0" : "";
         $kingdom_id = (int) $request['KingdomId'];
         $sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name,
-						a.award_id, a.is_ladder, ka.is_title as is_title, ka.title_class as title_class,
+						a.award_id, " . Award::LadderSql() . " as is_ladder, IFNULL(ka.is_ladder, 0) as ka_is_ladder, IFNULL(" . Award::OfficialLadderSql() . ", 0) as official_is_ladder, IFNULL(ka.max_level, 0) as max_level,
+                    ka.is_title as is_title, ka.title_class as title_class,
             ka.disabled as disabled, a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
 						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = " . $kingdom_id . "
@@ -354,6 +355,9 @@ class Kingdom extends Ork3
                     'AwardName' => $r->award_name,
                     'AwardId' => $r->award_id,
                     'IsLadder' => $r->is_ladder,
+                    'KaIsLadder' => (int) $r->ka_is_ladder,
+                    'OfficialIsLadder' => (int) $r->official_is_ladder,
+                    'MaxLevel' => (int) $r->max_level,
                     'IsTitle' => $r->is_title,
                     'TitleClass' => $r->title_class,
                     'Disabled' => (int) $r->disabled,

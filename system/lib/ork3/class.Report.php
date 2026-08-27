@@ -423,7 +423,7 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (COALESCE(alias.is_ladder, a.is_ladder) = 1 and ma.rank >= $request[LadderMinimum])";
+            $ladder_clause = " or (GREATEST(IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0), IFNULL(ka.is_ladder, 0)) = 1 and ma.rank >= $request[LadderMinimum])";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
@@ -519,7 +519,7 @@ class Report extends Ork3
 			where ma.custom_name is not null
 				and ma.custom_name != ''
 				and (ma.revoked = 0 or ma.revoked is null)
-				and (a.is_ladder = 0 or a.is_ladder is null)
+				and " . Award::LadderSql() . " = 0
 				and m.active = 1
 				$location_clause
 				and exists (
@@ -588,9 +588,12 @@ class Report extends Ork3
             $location_clause = " AND recs.mundane_id = $request[PlayerId]";
         }
 
+        // a_is_ladder below is the effective (ka OR official) ladder flag, not the
+        // bare a.is_ladder column -- a kingdom-raised ladder must count as "already
+        // has" tracking too, same as an official one.
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
-			a.is_ladder as a_is_ladder,
+			" . Award::LadderSql() . " as a_is_ladder,
 			a.is_title  as a_is_title,
 			m.persona,
 			recs.date_recommended,
@@ -702,8 +705,10 @@ class Report extends Ork3
             }
 
             // Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
-            // Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately be held many
-            // times, so they must never be filtered out as "already has".
+            // Custom awards (effective is_ladder=0 AND is_title=0 -- neither an official nor a
+            // kingdom-raised ladder) can legitimately be held many times, so they must never be
+            // filtered out as "already has". A kingdom that raises a plain award to ladder status
+            // now correctly falls out of this bucket and gets AlreadyHas tracking.
             $response['AwardRecommendations'] = array();
             foreach ($rawRows as $row) {
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
@@ -6904,17 +6909,20 @@ class Report extends Ork3
             }
         }
 
+        // The global Ladder Grid compares players across kingdoms, and kingdom ladders
+        // are not comparable across kingdoms (two kingdoms' "Order of the Hunter" are
+        // different rows) -- so this surface, alone, stays official-only.
         if ($kingdomId > 0) {
             $kSql = 'SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
                      FROM ' . DB_PREFIX . 'kingdomaward ka
                      JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                     WHERE ka.kingdom_id = ' . $kingdomId . "
-                       AND a.is_ladder = 1 AND a.award_id != 31
+                     WHERE ka.kingdom_id = ' . $kingdomId . '
+                       AND ' . Award::OfficialLadderSql() . " AND a.award_id != 31
                      ORDER BY IFNULL(ka.name, a.name)";
         } else {
             $kSql = 'SELECT DISTINCT a.award_id, a.name AS award_name, a.title_class
-                     FROM ' . DB_PREFIX . "award a
-                     WHERE a.is_ladder = 1 AND a.award_id != 31
+                     FROM ' . DB_PREFIX . 'award a
+                     WHERE ' . Award::OfficialLadderSql() . " AND a.award_id != 31
                      ORDER BY a.name";
         }
 
@@ -6963,7 +6971,7 @@ class Report extends Ork3
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
                     JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
                     JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND a.is_ladder = 1
+                    WHERE m.active = 1 AND ' . Award::OfficialLadderSql() . '
                       AND a.award_id IN (' . $awardIds . ")
                       AND (ma.revoked = 0 OR ma.revoked IS NULL)
                       {$locationClause}

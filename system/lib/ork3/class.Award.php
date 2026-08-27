@@ -477,19 +477,18 @@ class Award extends Ork3
             return strcmp($a['KingdomAwardName'] ?? '', $b['KingdomAwardName'] ?? '');
         });
 
-        // Effective-ladder kingdomaward ids (Task 1's Award::LadderSql()), replacing the
-        // retired static id list. Only meaningful when a kingdom's own ka.is_ladder flag
-        // could be in play; the system-award list (kingdomId == 0) has no kingdom row to ask.
-        $effectiveLadderIds = $kingdomId > 0 ? $this->fetchEffectiveLadderKingdomAwardIds() : [];
         $custom = $officialLadder = $kingdomLadder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
 
         foreach ($items as $award) {
             $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            // a.is_ladder = 1: one of the 16 official Amtgard orders. Requirement 1 --
-            // a kingdom can never lower an official ladder, so this check wins ties.
-            $isOfficialLadder = !empty($award['IsLadder']);
-            $isKingdomLadder = !$isOfficialLadder
-                && in_array((int) ($award['KingdomAwardId'] ?? 0), $effectiveLadderIds, true);
+            // OfficialIsLadder (a.is_ladder = 1: one of the 16 official Amtgard orders) wins
+            // ties -- requirement 1, a kingdom can never lower an official ladder. Kingdom::
+            // GetAwardList() (kingdomId > 0) carries OfficialIsLadder/KaIsLadder per row. The
+            // system-award list (kingdomId == 0, Award::GetAwardList()) has no kingdom row at
+            // all, so its IsLadder (== a.is_ladder there) doubles as official, and there is no
+            // KaIsLadder key to fall back on -- absence must never silently read as "official".
+            $isOfficialLadder = !empty($award['OfficialIsLadder'] ?? $award['IsLadder'] ?? 0);
+            $isKingdomLadder = !$isOfficialLadder && !empty($award['KaIsLadder'] ?? 0);
             if ($isOfficialLadder) {
                 $officialLadder[] = $award;
             } elseif ($isKingdomLadder) {
@@ -602,29 +601,5 @@ class Award extends Ork3
         }
 
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, $options);
-    }
-
-    /**
-     * Kingdomaward ids the effective-ladder predicate (Award::LadderSql(), Task 1)
-     * currently flags. Live replacement for the retired static id list -- see
-     * GetAwardOptionGroups(), the only caller.
-     *
-     * @return list<int>
-     */
-    private function fetchEffectiveLadderKingdomAwardIds(): array
-    {
-        $ids = [];
-        $sql = 'select ka.kingdomaward_id
-                from ' . DB_PREFIX . 'kingdomaward ka
-                left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
-                where ' . self::LadderSql() . ' = 1';
-        $r = $this->db->query($sql);
-        if ($r !== false) {
-            while ($r->next()) {
-                $ids[] = (int) $r->kingdomaward_id;
-            }
-        }
-
-        return $ids;
     }
 }

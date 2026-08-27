@@ -198,4 +198,32 @@ final class LadderPredicateSqlTest extends TestCase
             'a kingdom-only award must not appear as an official Amtgard order'
         );
     }
+
+    public function testGetAwardListSelectsAndFiltersOnTheSameDefinition(): void
+    {
+        // The headline defect: GetAwardList filtered on ka.is_ladder but selected
+        // a.is_ladder, so one method answered "is this a ladder?" two ways.
+        $source = file_get_contents(__DIR__ . '/../../system/lib/ork3/class.Kingdom.php');
+        $start  = strpos($source, 'public function GetAwardList');
+        $this->assertNotFalse($start, 'GetAwardList not found');
+
+        $end  = strpos($source, "\n    public function", $start + 10);
+        $body = substr($source, $start, $end - $start);
+
+        $this->assertStringContainsString(
+            'Award::LadderSql(',
+            $body,
+            'GetAwardList must resolve ladders through the shared helper'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\ba\.is_ladder\b/',
+            $body,
+            'GetAwardList must not spell the predicate by hand'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\bka\.is_ladder\b(?!.*IFNULL)/',
+            $body,
+            'GetAwardList must not filter on the bare kingdom column'
+        );
+    }
 }
