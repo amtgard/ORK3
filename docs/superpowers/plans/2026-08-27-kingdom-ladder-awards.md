@@ -1644,34 +1644,120 @@ git commit -m "Enhancement: distinguish bonus ladder grants from unreconciled on
 
 ---
 
-### Task 7: The star pill
+### Task 7A: Retire the name-based Zodiac guess; supply real max rank
+
+**Rewritten mid-execution.** The original Task 7 asserted that all eight rank
+pickers "are built by `revised.js` off the shared pill selector, so the star pill
+and effective-ladder check are implemented once." **That is false**, and the task
+was not implementable as written.
+
+What is actually there:
+
+- **Eight independent builders**, one per surface — `buildRecRankPills` (`:895`),
+  `buildRankPills` (`:1979`), `buildRankPills` (`:3197`), `buildRecRankPills`
+  (`:3659`), `buildRankPills` (`:6936`), `buildRecRankPills` (`:7423`),
+  `buildEditRankPills` (`:12126`), and the reconcile builder (`:12445`). Each
+  constructs its own pills and sets its own `pill.className`.
+- **Nine hardcoded max-rank guesses**, each of the form:
+
+  ```js
+  var maxRank = /zodiac/i.test(opt.textContent) ? 12 : 10;
+  ```
+
+  at lines 909, 979, 1981, 3211, 3673, 6950, 7437, 12136, 12439. These decide a
+  ladder's height by **regex on the award's display name**.
+
+The spec says the Zodiac special case is written out in three places. Counting
+these, it is written out in **twelve**.
+
+**This is a live bug, not just duplication.** `ork_kingdomaward` holds **82 awards
+whose name matches `/zodiac/i`**. Every one of them currently renders a 12-pill
+picker regardless of its actual configured max rank — and once kingdoms can set
+their own max rank, a kingdom's 5-rank "Zodiac Guard" would still offer twelve.
+
+There is already shared pill machinery to build on: `tnRankPaint(wrap, prefix,
+held, selected)` and `tnRankPillInner(prefix, r)` (`revised.js:26-42`), both
+exported on `window`. Line 979 also already prefers a server-supplied
+`parseInt(info.MaxRank)` before falling back to the regex — that is the pattern to
+generalise.
 
 **Files:**
-- Modify: `orkui/template/revised-frontend/style/revised.css:1337` (add `-star` to the existing grouped pill selector)
-- Modify: `orkui/template/revised-frontend/script/revised.js` (the shared pill builder behind all eight pickers)
-- Test: `tests/Unit/StarPillTest.php` (create — covers the server-side decision; the DOM is verified in the browser)
+- Modify: `orkui/template/revised-frontend/script/revised.js` — all nine sites
+- Modify: whichever server-side surface populates the award `<option>` elements, so each carries its real max rank as a data attribute
 
 **Interfaces:**
-- Consumes: `Award::MaxRankFor()` from Task 1; `BonusCount` from Task 6.
-- Produces: the pill builder reads `data-max-rank` and `data-current-rank` off the pills wrap and renders a trailing `✱` pill with `data-rank="0"` when `currentRank >= maxRank`.
+- Produces: every award `<option>` carries `data-max-rank` (int), resolved server-side by `Award::MaxRankFor()`.
+- Produces: `tnRankMaxFor(optEl)` in `revised.js` beside `tnRankPaint` — reads `data-max-rank`, falls back to 10. **No name matching.**
+
+- [ ] **Step 1: Supply the real max rank from the server**
+
+Each picker reads its award from an `<option>`. Add `data-max-rank` to those
+options, resolved with `Award::MaxRankFor($awardId, $kaMaxLevel)` — the same helper
+Tasks 1 and 6 use. Find every place award options are rendered; there is more than
+one.
+
+- [ ] **Step 2: Add the shared accessor**
+
+In `revised.js`, beside `tnRankPaint` / `tnRankPillInner`:
+
+```js
+/* An award's ladder height, from the server. Never guess it from the award's
+   NAME: 82 kingdom awards match /zodiac/i, and a kingdom's own 5-rank ladder
+   whose name happens to contain "zodiac" is not a twelve-month order. */
+function tnRankMaxFor(optEl) {
+    var m = optEl ? parseInt(optEl.dataset.maxRank, 10) : 0;
+    return (m > 0 && m <= 12) ? m : 10;
+}
+```
+
+Export it on `window` alongside the other two.
+
+- [ ] **Step 3: Replace all nine guesses**
+
+Every one of the nine sites becomes `tnRankMaxFor(opt)`. Two take the award name
+rather than an option element (`:12136`, `:12439`) — those need the option, or the
+max threaded in from their caller. Do not leave a name regex behind as a fallback.
+
+- [ ] **Step 4: Prove they are gone**
+
+```bash
+grep -c 'zodiac/i' orkui/template/revised-frontend/script/revised.js
+```
+
+Expected: **0**.
+
+- [ ] **Step 5: Verify in the browser**
+
+- Order of the Zodiac still offers **12** pills.
+- Order of the Rose offers **10**.
+- A kingdom ladder with `max_level = 5` offers **5** — the case that is broken today.
+- A kingdom award merely *named* "…Zodiac…" with `max_level = 0` offers **10**, not 12.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add orkui/template/revised-frontend/script/revised.js
+git commit -m "Bugfix: rank pickers read max rank from the server, not the award's name"
+```
+
+---
+
+### Task 7B: The star pill
+
+**Files:**
+- Modify: `orkui/template/revised-frontend/script/revised.js` — the shared helper plus all eight builders
+- Modify: `orkui/template/revised-frontend/style/revised.css` (the grouped pill rules live around `:1388-1398`)
+- Test: `tests/Unit/StarPillTest.php` (create)
+
+**Interfaces:**
+- Consumes: `tnRankMaxFor()` from Task 7A; `Award::MaxRankFor()`.
+- Produces: `Award::OffersStar(int $awardId, int $kaMaxLevel, int $currentRank): bool`; and `tnRankStar(wrap, prefix, maxRank, currentRank)` in `revised.js`, which appends the star pill when it applies and is a no-op otherwise.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/Unit/StarPillTest.php`:
+Create `tests/Unit/StarPillTest.php` exactly as specified — `Award::OffersStar()` is a pure predicate needing no fixtures:
 
 ```php
-<?php
-
-declare(strict_types=1);
-
-use PHPUnit\Framework\TestCase;
-
-/**
- * The star expresses recognition past the top of a ladder. It submits an unranked
- * grant — never max + 1 — so no grant ever carries a rank above the award's max.
- */
-final class StarPillTest extends TestCase
-{
     public function testStarIsOfferedAtMaxRank(): void
     {
         $this->assertTrue(Award::OffersStar(21, 0, 10));
@@ -1691,8 +1777,6 @@ final class StarPillTest extends TestCase
 
     public function testStarIsAvailableOnOfficialLaddersDespiteTheirLockedMax(): void
     {
-        // Locking the shape of an official ladder does not restrict recognising
-        // someone who has finished one.
         $this->assertTrue(Award::OffersStar(21, 0, 10));
         $this->assertTrue(Award::OffersStar(30, 0, 12));
         $this->assertFalse(Award::OffersStar(30, 0, 10), 'Zodiac max is 12, not 10');
@@ -1702,16 +1786,13 @@ final class StarPillTest extends TestCase
     {
         $this->assertTrue(Award::OffersStar(0, 5, 5));
         $this->assertFalse(Award::OffersStar(0, 5, 4));
-        $this->assertTrue(Award::OffersStar(0, 12, 12));
-        $this->assertFalse(Award::OffersStar(0, 12, 11));
     }
-}
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run it and watch it fail**
 
-Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
-Expected: FAIL — `Error: Call to undefined method Award::OffersStar()`
+`ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
+Expected: `Error: Call to undefined method Award::OffersStar()`
 
 - [ ] **Step 3: Add the predicate**
 
@@ -1729,117 +1810,60 @@ In `system/lib/ork3/class.Award.php`, after `MaxRankFor()`:
     }
 ```
 
-- [ ] **Step 4: Render the pill**
+- [ ] **Step 4: Add ONE shared star renderer**
 
-In `revised.css`, add `-star` to the existing grouped pill selector at line 1337 (`.pn-rank-pill, .kn-rank-pill, .pk-rank-pill`) so it inherits the 36px circle, then add the modifier and its dark counterpart:
-
-```css
-.pn-rank-star,
-.kn-rank-star,
-.pk-rank-star {
-    border-color: #b7791f;
-    color: #b7791f;
-    font-size: 16px;
-    line-height: 1;
-}
-.pn-rank-star.-selected,
-.kn-rank-star.-selected,
-.pk-rank-star.-selected {
-    background: #b7791f;
-    color: #fff;
-}
-.pn-rank-star-note,
-.kn-rank-star-note,
-.pk-rank-star-note {
-    margin-top: 6px;
-    font-size: 12px;
-    color: #4a5568;
-}
-
-html[data-theme="dark"] .pn-rank-star,
-html[data-theme="dark"] .kn-rank-star,
-html[data-theme="dark"] .pk-rank-star {
-    border-color: #d69e2e;
-    color: #d69e2e;
-}
-html[data-theme="dark"] .pn-rank-star.-selected,
-html[data-theme="dark"] .kn-rank-star.-selected,
-html[data-theme="dark"] .pk-rank-star.-selected {
-    background: #d69e2e;
-    color: #1a202c;
-}
-html[data-theme="dark"] .pn-rank-star-note,
-html[data-theme="dark"] .kn-rank-star-note,
-html[data-theme="dark"] .pk-rank-star-note {
-    color: #a0aec0;
-}
-```
-
-In `revised.js`, in the shared pill builder, after the numbered pills loop:
+Beside `tnRankPaint`. The star logic lives here once; each builder gains a single
+call. Do **not** copy the star into eight builders — this plan exists because a
+predicate drifted into five spellings, and eight would be worse.
 
 ```js
-var maxRank     = parseInt(wrap.getAttribute('data-max-rank'), 10) || 10;
-var currentRank = parseInt(wrap.getAttribute('data-current-rank'), 10) || 0;
+/* Recognition past the top of a ladder. Appended only when the player is already
+   at or above max, and it submits rank 0 — never max + 1, so no grant ever
+   carries a rank above the award's max. */
+function tnRankStar(wrap, prefix, maxRank, currentRank) {
+    if (!wrap) return;
+    var old = wrap.querySelector('.' + prefix + '-rank-star');
+    if (old) old.parentNode.removeChild(old);
+    if (!(currentRank >= maxRank)) return;
 
-// Numbered pills run 1..maxRank, not a hardcoded 10.
-for (var r = 1; r <= maxRank; r++) { /* existing pill construction */ }
-
-if (currentRank >= maxRank) {
-    var star = document.createElement('button');
-    star.type = 'button';
+    var star = document.createElement('div');
     star.className = prefix + '-rank-pill ' + prefix + '-rank-star';
-    star.setAttribute('data-rank', '0');       // unranked, never maxRank + 1
+    star.dataset.rank = '0';
     star.setAttribute('data-tip', 'Recognise them again, past the top of the ladder');
-    star.textContent = '✱';
-    star.addEventListener('click', function () {
-        var note = wrap.parentNode.querySelector('.' + prefix + '-rank-star-note');
-        if (note) {
-            note.textContent = 'The standard cap for this award is ' + maxRank +
-                ' — but don’t let that stop you from recognizing someone!';
-            note.hidden = false;
-        }
-    });
+    star.innerHTML = '<span class="' + prefix + '-rank-num">&#10033;</span>';
     wrap.appendChild(star);
 }
 ```
 
-- [ ] **Step 5: Feed the two data attributes on all eight pickers**
+Export on `window` with the others. Removing any existing star first makes it safe
+to call on every rebuild.
 
-Each wrap gets `data-max-rank` and `data-current-rank`. The eight wraps are:
+- [ ] **Step 5: Call it from all eight builders**
 
-| Wrap class | Surface |
-|---|---|
-| `pn-rank-pills` | Grant award — player profile |
-| `pn-rec-rank-pills` | Recommend award — player profile |
-| `pn-edit-rank-pills` | Edit an existing award |
-| `pn-edit-reconcile-rank-pills` | Reconcile a historical award |
-| `kn-rank-pills` | Grant — kingdom profile |
-| `kn-rec-rank-pills` | Recommend — kingdom profile |
-| `pk-rank-pills` | Grant — park profile |
-| `pk-rec-rank-pills` | Recommend — park profile |
+One line each, after the numbered-pill loop, passing the wrap, prefix, the max from
+`tnRankMaxFor()`, and the player's held rank. Confirm each of the eight is wired —
+a missed builder is a surface where the star silently never appears.
 
-All eight are built by the same `revised.js` builder, so the star and the real max rank are implemented once. Confirm none of them still hardcodes 10:
+- [ ] **Step 6: The star's copy and CSS**
 
-```bash
-grep -rn 'rank-pills' orkui/template/revised-frontend/ | grep -v '\.css:'
-grep -rn 'r <= 10\|i <= 10' orkui/template/revised-frontend/script/revised.js
-```
+Selecting the star submits `rank = 0` and reveals, verbatim:
 
-The second grep must return nothing.
+> The standard cap for this award is {max} — but don't let that stop you from recognizing someone!
 
-- [ ] **Step 6: Run the test to verify it passes**
-
-Run: `ENVIRONMENT=TEST ./vendor/bin/phpunit --testsuite unit --filter StarPillTest`
-Expected: PASS, 5 tests.
+Style `.pn-rank-star` / `.kn-` / `.pk-` beside the existing grouped rules near
+`revised.css:1388`, with `html[data-theme="dark"]` counterparts.
 
 - [ ] **Step 7: Verify in the browser**
 
-On a player at 9/10 of an official order: no star. At 10/10: star present, and selecting it shows the cap note and submits `rank=0`. On a 12-rank kingdom ladder: twelve numbered pills, star only at 12. Check both themes.
+At 9/10 no star; at 10/10 a star; on a 12-rank ladder only at 12; on a 5-rank
+kingdom ladder only at 5. Selecting it submits rank 0 and shows the cap note.
+Check both themes and at least two different surfaces (a grant picker and a
+recommendation picker).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add system/lib/ork3/class.Award.php orkui/template/revised-frontend/style/revised.css orkui/template/revised-frontend/script/revised.js tests/Unit/StarPillTest.php
+git add system/lib/ork3/class.Award.php orkui/template/revised-frontend/script/revised.js orkui/template/revised-frontend/style/revised.css tests/Unit/StarPillTest.php
 git commit -m "Enhancement: star pill for recognition past the top of a ladder"
 ```
 
