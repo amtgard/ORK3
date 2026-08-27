@@ -456,6 +456,21 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 .ka-confirm-overlay.ka-open { display: flex; }
 .ka-confirm-box { width: 400px; }
 
+/* Three-button variant (Task 5A): the unsaved-changes guard adds a "Save Changes"
+   option alongside "Discard Changes" / "Go Back". #ka-confirm-alt (Discard Changes,
+   the middle/destructive button) is red via the plain .adm-btn-danger class already
+   on its markup in _kingdom_admin_modals.tpl -- no toggle needed here. #ka-confirm-ok
+   becomes "Save Changes" only in this variant, and needs a colour of its own: green,
+   never .ka-confirm-danger's red (that class styles the two-button "Discard Changes"
+   case instead, and the two are never applied to the overlay at the same time -- see
+   kaCloseModal's guard -- so there is no specificity fight between them). */
+.ka-confirm-triple #ka-confirm-ok { background: #2f855a; color: #fff; }
+.ka-confirm-triple #ka-confirm-ok:hover:not(:disabled) { background: #276749; }
+html[data-theme="dark"] .ka-confirm-triple #ka-confirm-ok {
+    background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text);
+    box-shadow: inset 0 0 0 1.5px var(--ork-badge-green-text);
+}
+
 /* =============================================
    DARK MODE OVERRIDES (ka-*)
    ============================================= */

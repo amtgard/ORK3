@@ -1039,6 +1039,7 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 		</div>
 		<div class="ka-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="adm-btn adm-btn-ghost" id="ka-confirm-cancel">Cancel</button>
+			<button class="adm-btn adm-btn-danger" id="ka-confirm-alt" style="display:none"></button>
 			<button class="adm-btn adm-btn-primary" id="ka-confirm-ok">Confirm</button>
 		</div>
 	</div>
@@ -1169,6 +1170,13 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 	var _kaOnOpen = {};
 	function kaOnOpen(id, fn) { (_kaOnOpen[id] = _kaOnOpen[id] || []).push(fn); }
 
+	/* Modal id -> function(done) that saves that modal's pending edits and calls
+	   done(ok) when finished. A modal with no entry here simply gets the
+	   two-button discard prompt: offering "Save Changes" for a modal we cannot
+	   actually save would be a lie. Populated by each modal's own IIFE below,
+	   once it has built whatever it needs to find its own dirty state. */
+	var KA_MODAL_SAVE = {};
+
 	/* Transient UI filters — typing in them is not "work", so they stay out of the
 	   dirty check (the alias picker clears its own search box every time it opens). */
 	var KA_NODIRTY_IDS = ['ka-alias-search', 'ka-awards-search', 'ka-parks-search'];
@@ -1274,7 +1282,30 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 		var el = gid(id);
 		if (!el) return;
 		if (!force && el.classList.contains('ka-open') && kaIsDirty(el)) {
-			kaConfirm('Discard your changes?', function() { kaCloseModal(id, true); }, 'Unsaved Changes');
+			var saver = KA_MODAL_SAVE[id];
+			if (saver) {
+				// Three buttons. Discard Changes is the destructive middle action
+				// (the alt slot, always red); Save Changes is the safe default on
+				// OK (green) and reuses this modal's own save path -- if it fails,
+				// the modal stays open (see the saver itself) so the officer never
+				// sees "closed" when their edits did not actually land.
+				kaConfirm('Discard your changes?', function() {
+					saver(function(ok) { if (ok) kaCloseModal(id, true); });
+				}, 'Unsaved Changes', {
+					cancelLabel: 'Go Back',
+					okLabel: 'Save Changes',
+					altLabel: 'Discard Changes',
+					onAlt: function() { kaCloseModal(id, true); }
+				});
+			} else {
+				// No registered save action for this modal -- two buttons, same as
+				// every other confirm in this file.
+				kaConfirm('Discard your changes?', function() { kaCloseModal(id, true); }, 'Unsaved Changes', {
+					cancelLabel: 'Go Back',
+					okLabel: 'Discard Changes',
+					danger: true
+				});
+			}
 			return;
 		}
 		el.classList.remove('ka-open');
@@ -1361,18 +1392,28 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 	}
 
 	/* ── Confirm dialog ───────────────────────────── */
-	var _kaConfirmCb = null;
+	var _kaConfirmCb    = null;
+	var _kaConfirmAltCb = null;
 	/* kaConfirm(message, onConfirm, title, opts)
-	     opts.danger  — .ka-confirm-danger on the overlay: red rule + red OK button.
-	                    The default OK is the same navy primary as "Save Details",
-	                    which is the wrong signal in front of a permanent delete.
-	     opts.html    — treat `message` as markup. Only ever pass strings BUILT IN
-	                    THIS FILE; never a server or user string.
-	     opts.okLabel — replaces "Confirm" on the OK button (escaped).
-	     opts.okIcon  — FontAwesome classes for an icon before that label.
-	   Title, label and danger state are reset on EVERY call: they are shared
+	     opts.danger      — .ka-confirm-danger on the overlay: red rule + red OK button.
+	                        The default OK is the same navy primary as "Save Details",
+	                        which is the wrong signal in front of a permanent delete.
+	     opts.html        — treat `message` as markup. Only ever pass strings BUILT IN
+	                        THIS FILE; never a server or user string.
+	     opts.okLabel     — replaces "Confirm" on the OK button (escaped).
+	     opts.okIcon      — FontAwesome classes for an icon before that label.
+	     opts.cancelLabel — replaces "Cancel" on the Cancel button (escaped).
+	     opts.altLabel    — shows a THIRD button (#ka-confirm-alt) with this label
+	                        (escaped), between Cancel and OK. Absent = two buttons,
+	                        exactly today's behaviour.
+	     opts.onAlt       — callback fired when the alt button is clicked, the same
+	                        way onConfirm fires for OK.
+	   Title, labels and danger/alt state are reset on EVERY call: they are shared
 	   controls, and a previous caller's values used to survive into the next,
-	   unrelated confirm. */
+	   unrelated confirm. The alt button reset is the important one — kaConfirm
+	   reuses this one overlay for every caller in this file, so a three-button
+	   prompt (Save Changes) must never leak its extra button into the next
+	   ordinary two-button confirm (e.g. Retire Award). */
 	function kaConfirm(message, onConfirm, title, opts) {
 		var overlay = gid('ka-confirm-overlay');
 		if (!overlay) return;
@@ -1380,29 +1421,50 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 		var body = gid('ka-confirm-message');
 		if (opts.html) { body.innerHTML = message; } else { body.textContent = message; }
 		gid('ka-confirm-title').childNodes[1].textContent = ' ' + (title || 'Confirm');
+		var cancelBtn = gid('ka-confirm-cancel');
+		if (cancelBtn) cancelBtn.textContent = opts.cancelLabel || 'Cancel';
 		var okBtn = gid('ka-confirm-ok');
 		if (okBtn) {
 			okBtn.innerHTML = (opts.okIcon ? '<i class="' + kaEsc(opts.okIcon) + '" aria-hidden="true"></i> ' : '')
 				+ kaEsc(opts.okLabel || 'Confirm');
 		}
+		// Reset the third button to hidden UNCONDITIONALLY, before deciding whether
+		// this call wants it. That order is the whole fix for the leak above.
+		var altBtn = gid('ka-confirm-alt');
+		_kaConfirmAltCb = null;
+		if (altBtn) {
+			altBtn.innerHTML = '';
+			altBtn.style.display = 'none';
+			if (opts.altLabel) {
+				altBtn.innerHTML = kaEsc(opts.altLabel);
+				altBtn.style.display = '';
+				_kaConfirmAltCb = opts.onAlt || null;
+			}
+		}
 		overlay.classList.toggle('ka-confirm-danger', !!opts.danger);
+		overlay.classList.toggle('ka-confirm-triple', !!opts.altLabel);
 		_kaConfirmCb = onConfirm;
 		_kaOpener['ka-confirm-overlay'] = kaOpenerNow();
 		overlay.classList.add('ka-open');
 		document.body.style.overflow = 'hidden';
 		kaPush('ka-confirm-overlay');
-		// Land on Cancel: the confirm usually guards something destructive.
+		// Land on Cancel/Go Back: the confirm usually guards something destructive,
+		// and when a third button is present the destructive action (Discard
+		// Changes) sits in the MIDDLE of the row, not on OK -- a stray Enter must
+		// still land on the safe choice.
 		kaFocusFirst(overlay, 'ka-confirm-cancel');
 	}
 	function kaCloseConfirm() {
 		var overlay = gid('ka-confirm-overlay');
 		if (overlay) overlay.classList.remove('ka-open');
-		_kaConfirmCb = null;
+		_kaConfirmCb    = null;
+		_kaConfirmAltCb = null;
 		kaPop('ka-confirm-overlay');
 		document.body.style.overflow = _kaStack.length ? 'hidden' : '';
 		kaRestoreFocus('ka-confirm-overlay');
 	}
 	gid('ka-confirm-ok') && gid('ka-confirm-ok').addEventListener('click', function() { var cb = _kaConfirmCb; kaCloseConfirm(); if (cb) cb(); });
+	gid('ka-confirm-alt') && gid('ka-confirm-alt').addEventListener('click', function() { var cb = _kaConfirmAltCb; kaCloseConfirm(); if (cb) cb(); });
 	gid('ka-confirm-cancel') && gid('ka-confirm-cancel').addEventListener('click', kaCloseConfirm);
 	gid('ka-confirm-close') && gid('ka-confirm-close').addEventListener('click', kaCloseConfirm);
 	gid('ka-confirm-overlay') && gid('ka-confirm-overlay').addEventListener('click', function(e) { if (e.target === this) kaCloseConfirm(); });
@@ -2756,8 +2818,21 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 				f.addEventListener('change', refreshDirty);
 			});
 
-			saveBtn.addEventListener('click', function() {
-				kaClearFeedback('ka-awards-feedback');
+			/* Shared by the row's own Save button AND the bulk "Save Changes" action on
+			   the unsaved-changes prompt (KA_MODAL_SAVE below) -- one save request per
+			   row, built on the same kaPost() every other save in this file uses, never
+			   reimplemented. cb(ok, message) fires exactly once.
+			   kaPost has no "did this fail" callback of its own -- on failure it writes
+			   straight to ka-awards-feedback itself and calls neither of the callbacks
+			   below, so a genuine error already lands on screen for the solo-row case
+			   without any help here. What is missing is a signal the BULK saver can
+			   count, which is what onFinally supplies: it runs on both outcomes, but
+			   before onSuccess would have run, so markClean() has not happened yet even
+			   on a success. Deferring one tick lets that synchronous onSuccess call (it
+			   runs immediately after onFinally returns, same tick, before this timeout
+			   fires) land first, so ka-row-dirty is the row's TRUE post-save state by
+			   the time cb() is decided. */
+			ctx.save = function(cb) {
 				var newName = nameCell.inp.value.trim();
 				kaPost(BASE_URL + 'setaward', {
 					KingdomAwardId: aw.KingdomAwardId,
@@ -2775,8 +2850,19 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 					aw.IsTitle = titleCb.checked ? 1 : 0;
 					ctx.haystack = (newName + ' ' + sysName + ' ' + classCell.inp.value).toLowerCase();
 					markClean();
-					kaFeedback('ka-awards-feedback', 'Saved "' + kaEsc(newName) + '".', true);
+				}, function() {
+					setTimeout(function() {
+						var ok = !tr.classList.contains('ka-row-dirty');
+						cb(ok, ok ? ('Saved "' + kaEsc(newName) + '".') : null);
+					}, 0);
 				});
+			};
+			saveBtn.addEventListener('click', function() {
+				kaClearFeedback('ka-awards-feedback');
+				// On failure kaPost already wrote the real server error to
+				// ka-awards-feedback above -- only the success message needs writing
+				// here, or the generic failure text would stomp the specific one.
+				ctx.save(function(ok, msg) { if (ok) kaFeedback('ka-awards-feedback', msg, true); });
 			});
 
 			delBtn.addEventListener('click', function() {
@@ -3002,6 +3088,42 @@ if (typeof window.tnFixedAcPosition !== 'function') {
 		}
 		syncExpandBtn();
 		applyAwardFilter();
+
+		/* Bulk save for the unsaved-changes guard's "Save Changes" button (Task 5A).
+		   This modal has no single save action -- it has one per row -- so this walks
+		   every group looking for rows still flagged ka-row-dirty and saves each one
+		   through ctx.save(), the exact same request the row's own Save button fires.
+		   All rows save concurrently; done(ok) fires once every request has settled.
+		   A row that fails STAYS dirty (ctx.save only clears it on success) and the
+		   aggregate message below says which ones -- the modal is never closed over a
+		   save that did not actually land. */
+		KA_MODAL_SAVE['ka-awards-overlay'] = function(done) {
+			var dirty = [];
+			groups.forEach(function(g) {
+				g.rows.forEach(function(ctx) { if (ctx.tr.classList.contains('ka-row-dirty')) dirty.push(ctx); });
+			});
+			if (!dirty.length) { done(true); return; }
+			kaClearFeedback('ka-awards-feedback');
+			var remaining = dirty.length, failedNames = [];
+			dirty.forEach(function(ctx) {
+				ctx.save(function(ok) {
+					if (!ok) failedNames.push(ctx.aw.KingdomAwardName || 'award');
+					remaining--;
+					if (remaining > 0) return;
+					if (failedNames.length) {
+						kaFeedback('ka-awards-feedback',
+							'Could not save: ' + failedNames.map(kaEsc).join(', ')
+							+ '. Everything else was saved -- fix and try again.',
+							false);
+						done(false);
+					} else {
+						kaFeedback('ka-awards-feedback',
+							dirty.length === 1 ? '1 award saved.' : dirty.length + ' awards saved.', true);
+						done(true);
+					}
+				});
+			});
+		};
 
 		// Award alias / custom add forms. Both "Add" buttons now live in the modal
 		// footer, so there is no button row inside the body to hide any more —
