@@ -420,6 +420,29 @@ git commit -m "Enhancement: grant and recommend a Zodiac by calendar month"
 - Consumes: `Award::IsMonthlyLadder()`, `Award::MonthInitial()`, `Award::MonthName()`; the pill builder and `data-max-rank` / `data-current-rank` attributes from the companion plan's Task 7.
 - Produces: for a monthly ladder the builder renders twelve month pills submitting `zodiac_month`, and renders **no** star pill.
 
+**Structural correction (added mid-execution).** This task's original text spoke of
+"the existing pill components" as though one component rendered every picker. It does
+not. Tasks 7A and 7B established that there are **eight independent builders** in
+`revised.js`, and that shared pill behaviour lives in four `window`-exported helpers
+at the top of the file:
+
+```js
+tnRankPaint(wrap, prefix, held, selected)   // :25
+tnRankPillInner(prefix, r)                  // :39
+tnRankMaxFor(optEl)                         // :46
+tnRankStar(wrap, prefix, maxRank, currentRank)  // :55
+```
+
+**Follow that pattern: add ONE shared month renderer beside them** — something like
+`tnRankMonths(wrap, prefix, heldMonths, verb)` — and give each builder a single call.
+Do **not** put month logic inside eight builders. This plan exists because one
+predicate drifted into five hand-written spellings; eight would be worse, and Task 7B
+already proved the one-renderer approach works across all eight surfaces.
+
+Note `tnRankStar` must **not** fire for Zodiac (§3: a monthly award has no top), so the
+month path needs to suppress it — check how `tnRankStar` is currently invoked per
+builder before deciding where that guard belongs.
+
 - [ ] **Step 1: Render month pills instead of rank pills**
 
 In the pill builder, branch before the numbered-pills loop:
