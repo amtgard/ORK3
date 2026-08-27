@@ -28,17 +28,26 @@ $_trim = function ($points) {
 $_visitors = array();
 $_requests = array();
 $_blocked  = array();
+$_requests_global = array();
+$_blocked_global  = array();
 foreach ($_ts as $_row) {
 	$_ms = strtotime($_row['WeekStart']);
 	if ($_ms === false) continue;
 	$_ms *= 1000;
-	$_visitors[] = array($_ms, $_row['Visitors']);
-	$_requests[] = array($_ms, $_row['Requests']);
-	$_blocked[]  = array($_ms, $_row['Blocked']);
+	$_visitors[]        = array($_ms, $_row['Visitors']);
+	$_requests[]        = array($_ms, $_row['Requests']);
+	$_blocked[]         = array($_ms, $_row['Blocked']);
+	$_requests_global[] = array($_ms, $_row['RequestsGlobal'] ?? null);
+	$_blocked_global[]  = array($_ms, $_row['BlockedGlobal']  ?? null);
 }
 $_visitors = $_trim($_visitors);
 $_requests = $_trim($_requests);
 $_blocked  = $_trim($_blocked);
+// RequestsGlobal/BlockedGlobal only exist on weeks computed since 2026-08-27 —
+// trimming leading nulls means this chart naturally starts there instead of
+// padding out a year of empty axis.
+$_requests_global = $_trim($_requests_global);
+$_blocked_global  = $_trim($_blocked_global);
 
 $_players = array();
 foreach ($_ps as $_row) {
@@ -189,16 +198,35 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 	</section>
 
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> Traffic and the bot wall</h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK traffic and the bot wall (US + Canada)</h2>
 		<p class="recap-digest recap-muted">
-			Weekly requests Cloudflare delivered for the ORK (US + Canada), and the requests it
-			blocked or challenged as malicious before they reached the site.
+			Weekly requests Cloudflare delivered to ork.amtgard.com from US and Canadian
+			clients, and the requests it blocked or challenged as malicious before they
+			reached the site. Same scope on both lines.
 		</p>
 		<div id="trends-requests" class="trends-chart"></div>
 		<details><summary>Data table</summary>
 			<table class="trends-table"><tr><th>Week</th><th>Delivered</th><th>Blocked</th></tr>
 <?php foreach (array_reverse($_ts) as $_row) : if ($_row['Requests'] === null) continue; ?>
 				<tr><td><?=htmlspecialchars($_row['WeekStart'])?></td><td><?=$_fmt($_row['Requests'])?></td><td><?=$_fmt($_row['Blocked'])?></td></tr>
+<?php endforeach; ?>
+			</table>
+		</details>
+	</section>
+
+	<section class="recap-section">
+		<h2><span class="recap-section-icon"><i class="fas fa-globe"></i></span> All of amtgard.com, worldwide</h2>
+		<p class="recap-digest recap-muted">
+			The same measurement across every site sharing our Cloudflare zone — ORK, wiki,
+			and everything else — with no country restriction. A different, larger scope
+			than the chart above; shown on its own axis since the two aren't the same size.
+			Starts 2026-08-27, when this breakdown was introduced.
+		</p>
+		<div id="trends-requests-global" class="trends-chart"></div>
+		<details><summary>Data table</summary>
+			<table class="trends-table"><tr><th>Week</th><th>Delivered</th><th>Blocked</th></tr>
+<?php foreach (array_reverse($_ts) as $_row) : if (($_row['RequestsGlobal'] ?? null) === null) continue; ?>
+				<tr><td><?=htmlspecialchars($_row['WeekStart'])?></td><td><?=$_fmt($_row['RequestsGlobal'])?></td><td><?=$_fmt($_row['BlockedGlobal'])?></td></tr>
 <?php endforeach; ?>
 			</table>
 		</details>
@@ -217,6 +245,8 @@ jQuery(document).ready(function() {
 	var PLAYERS  = <?=json_encode($_players)?>;
 	var REQUESTS = <?=json_encode($_requests)?>;
 	var BLOCKED  = <?=json_encode($_blocked)?>;
+	var REQUESTS_GLOBAL = <?=json_encode($_requests_global)?>;
+	var BLOCKED_GLOBAL  = <?=json_encode($_blocked_global)?>;
 	var SI_BROWSERS = <?=json_encode($_si_browsers)?>;
 	var SI_INAPP    = <?=json_encode($_si_inapp)?>;
 	var SI_APPS     = <?=json_encode($_si_apps)?>;
@@ -294,6 +324,15 @@ jQuery(document).ready(function() {
 			{ name: 'Blocked or challenged', data: BLOCKED, color: p.orange }
 		];
 		charts.push(new Highcharts.Chart(o3));
+
+		var o4 = baseOptions('trends-requests-global', p);
+		o4.legend = { enabled: true, itemStyle: { color: p.text, fontWeight: 'normal' },
+			itemHoverStyle: { color: p.text } };
+		o4.series = [
+			{ name: 'Delivered', data: REQUESTS_GLOBAL, color: p.blue },
+			{ name: 'Blocked or challenged', data: BLOCKED_GLOBAL, color: p.orange }
+		];
+		charts.push(new Highcharts.Chart(o4));
 	}
 
 	build();

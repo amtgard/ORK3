@@ -567,7 +567,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		}
 ?>
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic this week. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic to the ORK specifically this week; the worldwide figure below covers every site sharing our Cloudflare zone (ORK, wiki, and the rest), everywhere, for scale. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
 <?php   if ($hu !== null) : ?>
 		<p class="recap-digest">
 			<strong><?=$format_count($hu)?></strong> people visited the ORK this week.
@@ -593,6 +593,31 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		<p class="recap-digest">
 			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
 		</p>
+<?php   endif; ?>
+<?php   if (!empty($ps['RequestsGlobal'])) :
+			$req_global_str   = $format_count($ps['RequestsGlobal']);
+			$bytes_global_str = $format_bytes($ps['BytesGlobal'] ?? 0);
+			$global_delta_line = '';
+			$prev_ps_global = $prev_recap['PlatformStats'] ?? null;
+			if (is_array($prev_ps_global) && !empty($prev_ps_global['RequestsGlobal'])) {
+				$cur_g  = $ps['RequestsGlobal'];
+				$prev_g = $prev_ps_global['RequestsGlobal'];
+				$pct_g  = round(100 * ($cur_g - $prev_g) / $prev_g);
+				$arrow_g = $pct_g > 0 ? '↑' : ($pct_g < 0 ? '↓' : '·');
+				$global_delta_line = sprintf('%s %s%% from the previous week (%s → %s).',
+					$arrow_g, $pct_g >= 0 ? '+' . $pct_g : $pct_g,
+					$format_count($prev_g), $format_count($cur_g));
+			}
+		?>
+		<p class="recap-digest recap-muted">
+			Worldwide, across every site sharing our Cloudflare zone (not just the ORK),
+			Cloudflare delivered <strong><?=$req_global_str?></strong> requests
+			(<strong><?=$bytes_global_str?></strong>)<?php if (!empty($ps['BlockedGlobal'])) : ?>
+			and blocked or challenged <strong><?=$format_count($ps['BlockedGlobal'])?></strong> malicious requests<?php endif; ?> this week.
+		</p>
+<?php     if ($global_delta_line) : ?>
+		<p class="recap-trend"><em>Worldwide requests <?=$global_delta_line?></em></p>
+<?php     endif; ?>
 <?php   endif; ?>
 <?php   endif; // is_array($ps) ?>
 	</section>
