@@ -1451,6 +1451,20 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pk-rank-pill.pk-rank-star.pk-rank-selected {
     box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(214,158,46,0.5), inset 0 1px 0 rgba(255,255,255,0.55);
 }
+/* Month pills — Order of the Zodiac only (tnRankMonths). Base circle,
+   hover, and .X-rank-selected pop are inherited from .X-rank-pill above;
+   this only adjusts the letter's weight/spacing and adds the held state.
+   A held month stays selectable (a repeat grant is legitimate) so this is
+   the SAME green used for a held numbered rank above — indicated, not
+   gated, and never a second color language. */
+.pn-month-pill, .kn-month-pill, .pk-month-pill {
+    font-weight: 600;
+    letter-spacing: 0;
+}
+.pn-month-pill.-held, .kn-month-pill.-held, .pk-month-pill.-held {
+    border-color: #38a169;
+    color: #276749;
+}
 /* Gate hover lift on real pointer devices — on iOS :hover sticks after a tap.
    Exclude the selected pill so its glow ring isn't overwritten on hover. */
 @media (hover: hover) {
@@ -6970,6 +6984,15 @@ html[data-theme="dark"] .pn-rank-pill.pn-rank-star.pn-rank-selected,
 html[data-theme="dark"] .kn-rank-pill.kn-rank-star.kn-rank-selected,
 html[data-theme="dark"] .pk-rank-pill.pk-rank-star.pk-rank-selected {
   box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(214,158,46,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+/* Month pills — dark counterpart of the held state above (colors only; the
+   base circle already gets its dark background/border from the plain
+   .X-rank-pill dark rule higher in this block). */
+html[data-theme="dark"] .pn-month-pill.-held,
+html[data-theme="dark"] .kn-month-pill.-held,
+html[data-theme="dark"] .pk-month-pill.-held {
+  border-color: #68d391;
+  color: #9ae6b4;
 }
 /* Award type toggle (Awards / Officer Titles) */
 html[data-theme="dark"] .pk-award-type-btn,

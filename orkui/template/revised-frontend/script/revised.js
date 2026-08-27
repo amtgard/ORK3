@@ -65,7 +65,108 @@ function tnRankStar(wrap, prefix, maxRank, currentRank) {
     star.innerHTML = '<span class="' + prefix + '-rank-num">&#10033;</span>';
     wrap.appendChild(star);
 }
-if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; window.tnRankMaxFor = tnRankMaxFor; window.tnRankStar = tnRankStar; }
+/* Order of the Zodiac (award_id 30) is the one monthly-ladder award --
+   Award::IsMonthlyLadder() server-side defines it as this exact id, never a
+   name guess (a name guess is exactly the bug tnRankMaxFor's own comment
+   above retired for max rank: 82 kingdom awards contain the word "zodiac").
+   Ideally the server would stamp every <option> with data-monthly="1" the
+   way it already stamps data-max-rank, so this id never has to be repeated
+   client-side; until that plumbing exists, this is the ONE place it's
+   checked, so a future patch only has to change this one line. */
+var ZODIAC_AWARD_ID = 30;
+function tnIsMonthly(awardId) {
+    return parseInt(awardId, 10) === ZODIAC_AWARD_ID;
+}
+/* The real system award id of a <select>'s currently chosen <option> --
+   reads .selectedIndex directly rather than re-querying by value/award-id,
+   so it is never subject to the data-award-id="0" trap every Kingdom
+   Ladder Award option shares (see tnRankMaxFor's callers). */
+function tnRealAwardId(selectEl) {
+    var opt = selectEl ? selectEl.options[selectEl.selectedIndex] : null;
+    return opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+}
+/* ============================================================
+   Month pills -- the shared renderer for a monthly ladder (Zodiac only,
+   see tnIsMonthly above). Order of the Zodiac is granted once per calendar
+   month, so its twelve positions are months, not ranks: this builds
+   J F M A M J J A S O N D into `wrap` (full month name in data-tip) and
+   wires each pill's click to `onSelect(month)`, then returns true.
+   Returns false -- and leaves `wrap` untouched -- for any other award, so
+   every builder uses this as a one-line guard in front of its normal
+   numbered-pill loop:
+       if (tnRankMonths(wrap, prefix, awardId, verb, onSelect)) return;
+       ...existing numbered-pill loop + tnRankStar call...
+   That early return is what suppresses the star pill for Zodiac: a
+   monthly award has no top, so "recognition past the top" is meaningless
+   and the caller's own tnRankStar call is simply never reached.
+
+   A held month stays selectable -- a second December is a legitimate
+   grant (35 players already hold duplicates), so this only ever
+   INDICATES a held month (green pill, repeat-confirmation tip), never
+   disables it. Which months are held is read from `wrap`'s own
+   data-held-months attribute ("3,12,12" -> months 3 and 12, 12 twice);
+   no surface threads this yet (server-side plumbing is still needed --
+   see the task report), so every pill renders unheld today. Reading the
+   attribute rather than hardcoding "none held" means the day that
+   plumbing lands, every one of the eight call sites lights up for free
+   with no further JS change.
+   ============================================================ */
+function tnRankMonths(wrap, prefix, awardId, verb, onSelect) {
+    if (!wrap || !tnIsMonthly(awardId)) return false;
+    var initials = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    var names = ['January', 'February', 'March', 'April', 'May', 'June',
+                 'July', 'August', 'September', 'October', 'November', 'December'];
+    var heldMonths = {};
+    (wrap.getAttribute('data-held-months') || '').split(',').forEach(function(s) {
+        var n = parseInt(s, 10);
+        if (n >= 1 && n <= 12) heldMonths[n] = (heldMonths[n] || 0) + 1;
+    });
+    verb = verb || wrap.getAttribute('data-verb') || 'Award';
+
+    wrap.innerHTML = '';
+    for (var m = 1; m <= 12; m++) {
+        (function(month) {
+            var pill = document.createElement('div');
+            pill.className = prefix + '-rank-pill ' + prefix + '-month-pill';
+            pill.dataset.zodiacMonth = String(month);
+            pill.textContent = initials[month - 1];
+            if (heldMonths[month]) {
+                pill.classList.add('-held');
+                pill.setAttribute('data-tip',
+                    'Player already has a Zodiac for ' + names[month - 1] + '. ' + verb + ' another?');
+            } else {
+                pill.setAttribute('data-tip', names[month - 1]);
+            }
+            if (typeof onSelect === 'function') {
+                pill.addEventListener('click', function(e) {
+                    // Two builders (pn grant/recommend) also have a delegated
+                    // click listener on an ancestor of `wrap` that reads
+                    // dataset.rank and repaints via tnRankPaint; a month pill
+                    // has no dataset.rank, but tnRankPaint would still strip
+                    // the -rank-selected class just set below on bubble.
+                    // Stop it here so month selection owns its own state.
+                    if (e && e.stopPropagation) e.stopPropagation();
+                    wrap.querySelectorAll('.' + prefix + '-month-pill').forEach(function(p) {
+                        p.classList.remove(prefix + '-rank-selected');
+                    });
+                    pill.classList.add(prefix + '-rank-selected');
+                    onSelect(month);
+                });
+            }
+            wrap.appendChild(pill);
+        })(m);
+    }
+    return true;
+}
+if (typeof window !== 'undefined') {
+    window.tnRankPaint = tnRankPaint;
+    window.tnRankPillInner = tnRankPillInner;
+    window.tnRankMaxFor = tnRankMaxFor;
+    window.tnRankStar = tnRankStar;
+    window.tnIsMonthly = tnIsMonthly;
+    window.tnRealAwardId = tnRealAwardId;
+    window.tnRankMonths = tnRankMonths;
+}
 
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
@@ -860,7 +961,14 @@ if (PnConfig.recError) {
     function pnRecRefreshWarn() {
         var opt = pnRecSelectedOpt();
         var cat = pnRecAwardCategory(opt);
-        if (cat === 'ladder') {
+        var baseAwardId = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        // Zodiac has no top -- the "already at or above this rank" guard below
+        // compares against a rank, which a calendar month is not, and a held
+        // month is legitimate to recommend again (see tnRankMonths). Its own
+        // pill already indicates a repeat; this banner would be noise.
+        if (cat === 'ladder' && tnIsMonthly(baseAwardId)) {
+            pnRecHideWarn();
+        } else if (cat === 'ladder') {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
@@ -891,9 +999,14 @@ if (PnConfig.recError) {
         }
         $('#pn-rec-error').hide();
 
-        // Block ladder submissions where rank is at or below current rank held.
         var opt = pnRecSelectedOpt();
-        if (pnRecAwardCategory(opt) === 'ladder') {
+        var baseAwardId = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        var monthly = tnIsMonthly(baseAwardId);
+
+        // Block ladder submissions where rank is at or below current rank held.
+        // Does not apply to Zodiac: it has no top, and a repeat month is a
+        // legitimate recommendation, not a mistake to block.
+        if (pnRecAwardCategory(opt) === 'ladder' && !monthly) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
@@ -902,6 +1015,28 @@ if (PnConfig.recError) {
             }
         }
         // Title duplicates: warning is informational, submission proceeds.
+
+        // pn-recommend-form is a real <form> (native submit, not FormData) --
+        // its Rank field is name="Rank" in the markup, so a Zodiac month must
+        // travel through a separate ZodiacMonth field instead, created once
+        // here and toggled by award type on every submit.
+        var form = document.getElementById('pn-recommend-form');
+        var rankInput = document.getElementById('pn-rec-rank-val');
+        var monthInput = document.getElementById('pn-rec-zodiac-month-val');
+        if (!monthInput && form) {
+            monthInput = document.createElement('input');
+            monthInput.type = 'hidden';
+            monthInput.name = 'ZodiacMonth';
+            monthInput.id = 'pn-rec-zodiac-month-val';
+            form.appendChild(monthInput);
+        }
+        if (monthly) {
+            if (monthInput) monthInput.value = rankInput.value || '';
+            rankInput.removeAttribute('name'); // submit ZodiacMonth, not Rank
+        } else {
+            if (monthInput) monthInput.value = '';
+            rankInput.setAttribute('name', 'Rank'); // restore for a later non-monthly submit
+        }
 
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
         $('#pn-recommend-form').submit();
@@ -931,6 +1066,10 @@ if (PnConfig.recError) {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
+        if (tnRankMonths(wrap, 'pn', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = tnRankMaxFor(opt);
         var held      = pnAwardRanks[baseAwardId] || 0;
@@ -2009,16 +2148,20 @@ if (PnConfig.recError) {
         // would silently resolve to the FIRST kingdom ladder in the list rather
         // than the one actually chosen.
         function buildRankPills(awardId, opt) {
+            var pills = gid('pn-rank-pills');
+            var hint = gid('pn-rank-hint');
+            if (tnRankMonths(pills, 'pn', awardId, 'Award', function(month) { gid('pn-award-rank-val').value = month; })) {
+                if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+                return;
+            }
             var maxRank  = tnRankMaxFor(opt);
             var held      = playerRanks[awardId] || 0;
             var suggested = Math.min(held + 1, maxRank);
-            var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
                 html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
             }
-            var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
             pills.innerHTML = html;
             tnRankStar(pills, 'pn', maxRank, held); // pn grant picker (delegated click below handles it)
@@ -2291,7 +2434,10 @@ if (PnConfig.recError) {
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
             var rank = gid('pn-award-rank-val').value;
-            if (rank) fd.append('Rank', rank);
+            if (rank) {
+                if (tnIsMonthly(tnRealAwardId(gid('pn-award-select')))) fd.append('ZodiacMonth', rank);
+                else fd.append('Rank', rank);
+            }
             var customName = gid('pn-award-custom-name').value.trim();
             if (customName) fd.append('AwardName', customName);
             var aliasSel = gid('pn-award-alias');
@@ -3239,6 +3385,10 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
+        if (tnRankMonths(wrap, 'kn', baseAwardId, 'Award', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = tnRankMaxFor(opt);
         var held      = knPlayerRanks[baseAwardId] || 0;
@@ -3624,7 +3774,10 @@ $(document).ready(function() {
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
         var rank = gid('kn-award-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('kn-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
         var aliasSel = gid('kn-award-alias');
@@ -3707,6 +3860,10 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
+        if (tnRankMonths(wrap, 'kn', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = tnRankMaxFor(opt);
         var held      = knRecRanks[baseAwardId] || 0;
@@ -3830,7 +3987,10 @@ $(document).ready(function() {
         fd.append('KingdomAwardId', gid('kn-rec-award-select').value);
         fd.append('Reason',         gid('kn-rec-reason').value.trim());
         var rank = gid('kn-rec-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('kn-rec-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -6990,6 +7150,10 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
+        if (tnRankMonths(wrap, 'pk', baseAwardId, 'Award', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = tnRankMaxFor(opt);
         var held      = pkPlayerRanks[baseAwardId] || 0;
@@ -7380,7 +7544,10 @@ $(document).ready(function() {
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
         var rank = gid('pk-award-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('pk-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
         var aliasSel = gid('pk-award-alias');
@@ -7483,6 +7650,10 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
+        if (tnRankMonths(wrap, 'pk', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = tnRankMaxFor(opt);
         var held     = pkRecRanks[baseAwardId] || 0;
@@ -7607,7 +7778,10 @@ $(document).ready(function() {
         fd.append('KingdomAwardId', gid('pk-rec-award-select').value);
         fd.append('Reason',         gid('pk-rec-reason').value.trim());
         var rank = gid('pk-rec-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('pk-rec-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'ParkAjax/park/' + PARK_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -12178,12 +12352,17 @@ function setupPronounPicker(cfg) {
 
     var currentAwardsId = 0;
     var currentAwardIsHistorical = false;
+    // The system award id of the record currently open in the modal -- set
+    // in pnOpenAwardEditModal from data.AwardId (already present on every
+    // row) and read by the save handler to decide Rank vs ZodiacMonth,
+    // since this modal has no live <option> to re-derive it from at save time.
+    var currentEditAwardId = 0;
 
     // maxRankIn is server-supplied (Award::MaxRankFor, threaded through the row's
     // data-award JSON as MaxRank) -- this modal has no <option> element to read
     // data-max-rank from, so the caller passes the resolved number directly.
     // Never guess it from the award's NAME.
-    function buildEditRankPills(isLadder, currentRank, maxRankIn) {
+    function buildEditRankPills(isLadder, currentRank, maxRankIn, awardId) {
         var wrap    = gid('pn-edit-rank-pills');
         var rankRow = gid('pn-edit-rank-row');
         if (!wrap) return;
@@ -12193,9 +12372,10 @@ function setupPronounPicker(cfg) {
             gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = '');
             return;
         }
+        if (rankRow) rankRow.style.display = '';
+        if (tnRankMonths(wrap, 'pn', awardId, 'Award', function(month) { gid('pn-edit-rank-val').value = month; })) return;
         var maxRank = parseInt(maxRankIn, 10);
         if (!(maxRank > 0 && maxRank <= 12)) maxRank = 10;
-        if (rankRow) rankRow.style.display = '';
         for (var i = 1; i <= maxRank; i++) {
             var pill = document.createElement('button');
             pill.type        = 'button';
@@ -12260,7 +12440,8 @@ function setupPronounPicker(cfg) {
 
         var nameEl = gid('pn-edit-award-name');
         if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
-        buildEditRankPills(data.IsLadder == 1, data.Rank, data.MaxRank);
+        currentEditAwardId = parseInt(data.AwardId || 0, 10);
+        buildEditRankPills(data.IsLadder == 1, data.Rank, data.MaxRank, currentEditAwardId);
         var dateEl = gid('pn-edit-award-date');
         if (dateEl) dateEl.value = data.Date || '';
         var gbText = gid('pn-edit-givenby-text');
@@ -12498,6 +12679,7 @@ function setupPronounPicker(cfg) {
                 rcRankPills.innerHTML   = '';
                 rcRankVal.value         = '';
                 if (!isLadder) return;
+                if (tnRankMonths(rcRankPills, 'pn', awardId, 'Award', function(month) { rcRankVal.value = month; })) return;
 
                 /* suggest next rank = max held rank + 1, capped at maxRank */
                 var heldMax    = (PnConfig.awardRanks && awardId) ? (PnConfig.awardRanks[awardId] || 0) : 0;
@@ -12591,10 +12773,14 @@ function setupPronounPicker(cfg) {
                 var endpoint;
                 if (doReconcile) {
                     fd.append('KingdomAwardId', kingdomAwardId);
-                    fd.append('Rank', gid('pn-edit-reconcile-rank-val') ? (gid('pn-edit-reconcile-rank-val').value || 0) : 0);
+                    var rcRankVal = gid('pn-edit-reconcile-rank-val') ? (gid('pn-edit-reconcile-rank-val').value || 0) : 0;
+                    if (tnIsMonthly(tnRealAwardId(gid('pn-edit-reconcile-award')))) fd.append('ZodiacMonth', rcRankVal);
+                    else fd.append('Rank', rcRankVal);
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
                 } else {
-                    fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+                    var editRankVal = gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '';
+                    if (tnIsMonthly(currentEditAwardId)) fd.append('ZodiacMonth', editRankVal);
+                    else fd.append('Rank', editRankVal);
                     // Custom Award/Title reclassification payload
                     var editRadioA = gid('pn-edit-type-award');
                     var editRadioT = gid('pn-edit-type-title');
