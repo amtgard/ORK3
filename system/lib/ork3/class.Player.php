@@ -3639,6 +3639,19 @@ class Player extends Ork3
                 }
             }
 
+            // Zodiac positions are months, not levels: write the month, never the
+            // rank. AddAward is a create, so there is no legacy rank to preserve --
+            // rank is unconditionally zeroed for this award.
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                $zodiacMonth = (int) ($request['ZodiacMonth'] ?? 0);
+                if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                    return InvalidParameter('Choose a month between January and December.');
+                }
+                // yapo drops null from writes; 0 is the "no month recorded" value.
+                $awards->zodiac_month = $zodiacMonth;
+                $awards->rank = 0;
+            }
+
             // Rule 1: an unranked grant of an effective ladder award is allowed only
             // when the recipient is already at or past max -- the star path. See
             // RejectUnrankedLadderGrant()'s docblock. This is a create, so there is
@@ -3988,7 +4001,26 @@ class Player extends Ork3
                     return $rejection;
                 }
 
-                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
+                // Zodiac positions are months, not levels. Unlike AddAward, an edit
+                // must NEVER write rank here -- a legacy rank (the level it was
+                // before this feature existed) must survive an edit that only adds
+                // or changes a month. Only write zodiac_month when the caller
+                // actually supplied one, so an edit that doesn't touch the month
+                // (e.g. a note-only edit) can't silently clear it.
+                $rank_sql = 'rank=' . $set_rank . ', ';
+                if (Award::IsMonthlyLadder($guardAwardId)) {
+                    $rank_sql = '';
+                    if (array_key_exists('ZodiacMonth', $request)) {
+                        $zodiacMonth = (int) $request['ZodiacMonth'];
+                        if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                            return InvalidParameter('Choose a month between January and December.');
+                        }
+                        // yapo drops null from writes; 0 is the "no month recorded" value.
+                        $extra_sql .= ', zodiac_month=' . $zodiacMonth;
+                    }
+                }
+
+                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET ' . $rank_sql . 'date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
                 $this->db->query($sql);
 
                 // Re-fetch post-state and audit prior + post so the audit-log diff renderer
@@ -4332,6 +4364,16 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
+        // Zodiac positions are months, not levels. Validate before any of the
+        // rank/dedup checks below, which all assume a nonzero rank means a level.
+        $zodiacMonth = 0;
+        if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+            $zodiacMonth = (int) ($request['ZodiacMonth'] ?? 0);
+            if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                return InvalidParameter('Choose a month between January and December.');
+            }
+        }
+
         // Block recommendations for a ladder the player has already topped out on
         // (either via the Master-peerage companion award or by holding the ladder's max rank).
         // Also block direct recommendations for a Master peerage the player already holds.
@@ -4457,7 +4499,14 @@ class Player extends Ork3
             $awardRec->kingdomaward_id = $request['KingdomAwardId'];
             $awardRec->award_id = $request['AwardId'];
             $awardRec->mundane_id = $request['MundaneId'];
-            $awardRec->rank = $check_rank;
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                // Zodiac positions are months, not levels. Write the month; never
+                // the rank -- mirrors AddAward's create-path write.
+                $awardRec->rank = 0;
+                $awardRec->zodiac_month = $zodiacMonth;
+            } else {
+                $awardRec->rank = $check_rank;
+            }
             $awardRec->date_recommended = date('Y-m-d');
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
