@@ -631,16 +631,83 @@ class Award extends Ork3
         ];
     }
 
+    /**
+     * GhettoCache "call" name for the rendered <option> list.
+     *
+     * Named once so the writer (GetAwardOptionListHtml) and the invalidator
+     * (BustAwardOptionListCache) can never drift apart -- a bust that misses by
+     * one character is indistinguishable from no bust at all.
+     */
+    public const OPTION_LIST_CACHE_CALL = 'Award.GetAwardOptionListHtml';
+
+    /**
+     * Version 1: data-max-rank attribute added to <option> elements (2026-08-27).
+     * Bump this when the emitted <option> markup changes.
+     *
+     * A version bump only invalidates at DEPLOY. It does nothing for a monarch
+     * who toggles a ladder flag at runtime -- that is what the bust below is for.
+     */
+    private const OPTION_LIST_CACHE_VERSION = 1;
+
+    /**
+     * Every OfficerRole this list is ever cached under.
+     *
+     * Kept exhaustive on purpose: bust() can only delete keys it can name, so a
+     * new fetch_award_option_list() call site with a third role would silently
+     * keep serving a stale list. The two live values come from every caller of
+     * Model_Award::fetch_award_option_list(); null covers the method's own
+     * default should anything call it bare.
+     *
+     * @var list<string|null>
+     */
+    private const OPTION_LIST_OFFICER_ROLES = ['Awards', 'Officers', null];
+
+    /**
+     * @param string|null $officerRole
+     */
+    private static function OptionListCacheKey(int $kingdomId, $officerRole): string
+    {
+        return Ork3::$Lib->ghettocache->key([
+            'KingdomId' => $kingdomId,
+            'OfficerRole' => $officerRole,
+            'v' => self::OPTION_LIST_CACHE_VERSION,
+        ]);
+    }
+
+    /**
+     * Drop one kingdom's cached award <option> markup.
+     *
+     * WHY THIS EXISTS: the rendered markup carries data-is-ladder / data-max-rank,
+     * and the Add Award pill builder returns early when data-is-ladder is absent —
+     * it renders no rank control at all. Before ladders, a stale option list was
+     * cosmetic (an old award name for up to 20 minutes). Now that
+     * Player::RejectUnrankedLadderGrant() refuses a rankless ladder grant, a stale
+     * entry is a DEAD END: the officer is told to "choose a rank" by a page that
+     * never drew the rank control, and the award stays ungrantable until the TTL
+     * expires. So the moment a kingdom's ladder configuration changes, the markup
+     * describing it has to go.
+     *
+     * @param int $kingdomId
+     * @return void
+     */
+    public static function BustAwardOptionListCache($kingdomId)
+    {
+        $kingdomId = (int) $kingdomId;
+        if ($kingdomId <= 0) {
+            return;
+        }
+        foreach (self::OPTION_LIST_OFFICER_ROLES as $role) {
+            Ork3::$Lib->ghettocache->bust(
+                self::OPTION_LIST_CACHE_CALL,
+                self::OptionListCacheKey($kingdomId, $role)
+            );
+        }
+    }
+
     public function GetAwardOptionListHtml(int $kingdomId = 0, $officerRole = null)
     {
-        $cacheKey = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int) $kingdomId,
-            'OfficerRole' => $officerRole,
-            // Version 1: data-max-rank attribute added to <option> elements (2026-08-27).
-            // Bump this when emitted <option> markup changes.
-            'v' => 1,
-        ]);
-        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, 1200)) !== false) {
+        $cacheKey = self::OptionListCacheKey((int) $kingdomId, $officerRole);
+        if (($cached = Ork3::$Lib->ghettocache->get(self::OPTION_LIST_CACHE_CALL, $cacheKey, 1200)) !== false) {
             return $cached;
         }
 
@@ -693,6 +760,6 @@ class Award extends Ork3
             $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
         }
 
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, $options);
+        return Ork3::$Lib->ghettocache->cache(self::OPTION_LIST_CACHE_CALL, $cacheKey, $options);
     }
 }

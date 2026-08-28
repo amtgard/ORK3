@@ -429,6 +429,13 @@ class Kingdom extends Ork3
 
             $this->kingdomaward->save();
 
+            // The rendered <option> markup for this kingdom is memcached for 1200s
+            // and carries data-is-ladder / data-max-rank. A brand-new ladder award
+            // that is not in the cached list cannot be granted at all until the TTL
+            // expires, so the list has to go the moment the row lands. See
+            // Award::BustAwardOptionListCache() for the full failure mode.
+            Award::BustAwardOptionListCache((int) $request['KingdomId']);
+
             // This used to fall off the end and return null, so every caller that
             // tested the result saw "no error" whether or not the insert landed.
             return Success();
@@ -514,6 +521,12 @@ class Kingdom extends Ork3
         }
 
         $this->kingdomaward->save();
+
+        // Bust against the OWNING kingdom, not $request['KingdomId'] -- an edit
+        // deliberately never re-parents the row (see above), and the caller-supplied
+        // id is not trusted anywhere else in this method either.
+        Award::BustAwardOptionListCache($owning_kingdom_id);
+
         return Success();
     }
 
@@ -600,6 +613,11 @@ class Kingdom extends Ork3
         $this->kingdomaward->disabled = 1;
         $this->kingdomaward->save();
 
+        // Retiring an award changes which <option>s the list contains, and the
+        // list is memcached for 1200s -- without this the retired award stays
+        // grantable for up to 20 minutes after the monarch retires it.
+        Award::BustAwardOptionListCache($owning_kingdom_id);
+
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', $owning_kingdom_id, $prior_state);
         $response = Success();
         $response['AwardingCount'] = $awarding_count;
@@ -634,6 +652,10 @@ class Kingdom extends Ork3
         $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
         $this->kingdomaward->disabled = 0;
         $this->kingdomaward->save();
+
+        // Mirror of RemoveAward: an un-retired award is invisible in the Add Award
+        // dropdown until the cached list is dropped.
+        Award::BustAwardOptionListCache($owning_kingdom_id);
 
         $response = Success();
         $response['AwardingCount'] = $this->CountAwardGrants($kingdomaward_id);
