@@ -527,7 +527,31 @@ class Player extends Ork3
     }
 
     /**
-     * @return array<int, int> award_id => max_rank
+     * The highest rank this player holds on each ladder, for the rank pickers'
+     * "already awarded" pills and their at-or-above guard.
+     *
+     * Two key spaces in one map, exactly the shape Report::GetLadderAwardGrid
+     * already uses for its columns:
+     *
+     *   int  award_id       -- OFFICIAL ladders. Aggregated across every
+     *                          kingdomaward sharing that award_id, so a player
+     *                          who transferred kingdoms still reads as holding
+     *                          the rank they earned. Only emitted for award_id > 0.
+     *   'k' . kingdomaward_id -- ONE specific kingdomaward, emitted for every row.
+     *                          This is the only usable key for a KINGDOM ladder:
+     *                          17 of 26 kingdom-ladder rows carry award_id = 0 and
+     *                          9 more share the generic 94 "Custom Award"
+     *                          placeholder, so grouping them by award_id put every
+     *                          kingdom ladder a player holds into one bucket. A
+     *                          player at Owl rank 4 opening the Fox picker saw
+     *                          ranks 1-4 green and was hard-blocked with "already
+     *                          has this award at or above the rank selected" for an
+     *                          award they had never held.
+     *
+     * A revoked grant is not a held rank, and never was -- the missing filter is
+     * fixed here rather than left as a second, separate bug.
+     *
+     * @return array<int|string, int> award_id|'k'.kingdomaward_id => max_rank
      */
     public function GetAwardMaxRanks($mundaneId)
     {
@@ -536,15 +560,26 @@ class Player extends Ork3
         }
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ka.award_id, MAX(aw.rank) AS max_rank
+            'SELECT ka.kingdomaward_id, ka.award_id, MAX(aw.rank) AS max_rank
              FROM ' . DB_PREFIX . 'awards aw
              INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0
-             GROUP BY ka.award_id'
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0 AND aw.revoked = 0
+             GROUP BY ka.kingdomaward_id'
         );
         $ranks = [];
         while ($rs && $rs->Next()) {
-            $ranks[(int) $rs->award_id] = (int) $rs->max_rank;
+            $kingdomAwardId = (int) $rs->kingdomaward_id;
+            $awardId = (int) $rs->award_id;
+            $maxRank = (int) $rs->max_rank;
+            if ($awardId > 0) {
+                // MAX() across kingdomawards, reproducing the GROUP BY ka.award_id
+                // this replaces -- but only for a real award_id. award_id = 0 no
+                // longer produces a bogus shared bucket.
+                $ranks[$awardId] = max($ranks[$awardId] ?? 0, $maxRank);
+            }
+            if ($kingdomAwardId > 0) {
+                $ranks['k' . $kingdomAwardId] = $maxRank;
+            }
         }
 
         return $ranks;
@@ -1820,6 +1855,18 @@ class Player extends Ork3
      * Ladder progress tiles for the Awards tab (P3-R2). Uses Award::GetLadderMasterMap only.
      * Skips Walker of the Middle (31). Approx when effective count > Rank and no Master.
      *
+     * Tiles are bucketed by SCOPE, not by award_id: official ladders on their
+     * award_id (so a transfer between kingdoms still reads as one ladder), kingdom
+     * ladders on 'k' . kingdomaward_id -- the same two key spaces
+     * Report::GetLadderAwardGrid uses for its columns. Bucketing kingdom ladders on
+     * award_id dropped the 17 that carry award_id = 0 (no tile at all) and MERGED
+     * the 9 that share the generic 94 placeholder: Nine Blades' Hardcore and
+     * Sharpshooter rendered as one tile, Sharpshooter vanishing and its grants
+     * inflating Hardcore's count.
+     *
+     * Every tile carries AwardId, KingdomAwardId and Scope ('official'|'kingdom')
+     * so the template can tell two same-award_id ladders apart.
+     *
      * @param array{MundaneId?: int, Awards?: ?list} $request
      * @return array{Status: int, Error?: string, Detail: list<array<string, mixed>>}
      */
@@ -1856,9 +1903,29 @@ class Player extends Ork3
                 continue;
             }
             $aid = (int)($a['AwardId'] ?? 0);
+            $kingdomAwardId = (int)($a['KingdomAwardId'] ?? 0);
             $rank = (int)($a['Rank'] ?? 0);
-            if ($aid <= 0 || $aid === 31) {
-                continue; // 31 = Walker of the Middle
+
+            // OfficialIsLadder is the official ork_award.is_ladder column, which
+            // AwardsForPlayer() always emits. A caller that hand-builds the Awards
+            // list and omits the key predates kingdom ladders entirely -- for it,
+            // award_id was the only scope there was, so treat a real award_id as
+            // official rather than silently dropping the row into a kingdom bucket
+            // it has no kingdomaward_id to fill.
+            $isOfficial = array_key_exists('OfficialIsLadder', $a)
+                ? ((int) $a['OfficialIsLadder'] === 1)
+                : ($aid > 0);
+
+            if ($isOfficial) {
+                if ($aid <= 0 || $aid === 31) {
+                    continue; // 31 = Walker of the Middle
+                }
+                $key = $aid;
+            } else {
+                if ($kingdomAwardId <= 0) {
+                    continue;
+                }
+                $key = 'k' . $kingdomAwardId;
             }
 
             $custom = (string)($a['CustomAwardName'] ?? '');
@@ -1872,8 +1939,11 @@ class Player extends Ork3
             }
             $shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
 
+            // The Master-companion map is keyed on official award ids only; a
+            // kingdom ladder has no companion peerage, so the lookup is skipped
+            // rather than allowed to match on a shared placeholder award_id.
             $hasMaster = false;
-            if (isset($ladderMap[$aid])) {
+            if ($isOfficial && isset($ladderMap[$aid])) {
                 foreach ((array)$ladderMap[$aid]['MasterAwardIds'] as $masterId) {
                     if (isset($heldAwardIds[(int)$masterId])) {
                         $hasMaster = true;
@@ -1882,8 +1952,11 @@ class Player extends Ork3
                 }
             }
 
-            if (!isset($progress[$aid])) {
-                $progress[$aid] = [
+            if (!isset($progress[$key])) {
+                $progress[$key] = [
+                    'AwardId' => $aid,
+                    'KingdomAwardId' => $isOfficial ? 0 : $kingdomAwardId,
+                    'Scope' => $isOfficial ? 'official' : 'kingdom',
                     'Name' => $displayName,
                     'Short' => $shortName,
                     'HasMaster' => $hasMaster,
@@ -1891,16 +1964,18 @@ class Player extends Ork3
                     'Grants' => [],
                 ];
             }
-            $progress[$aid]['Grants'][] = [
+            $progress[$key]['Grants'][] = [
                 'Rank' => $rank,
                 'Date' => (string)($a['Date'] ?? ''),
                 'ZodiacMonth' => (int)($a['ZodiacMonth'] ?? 0),
             ];
         }
 
-        foreach ($progress as $lpAid => &$lp) {
+        foreach ($progress as &$lp) {
             $classified = $this->ClassifyLadderGrants(
-                $lpAid,
+                // 0 for a kingdom ladder, so Award::MaxRankFor() falls through to
+                // ka.max_level instead of reading a placeholder award_id's height.
+                $lp['Scope'] === 'official' ? (int) $lp['AwardId'] : 0,
                 $lp['KaMaxLevel'],
                 $lp['Grants'],
                 (bool)$lp['HasMaster']
@@ -1933,6 +2008,11 @@ class Player extends Ork3
             $name = (string)($info['LadderName'] ?? 'Unknown Order');
             $short = preg_replace('/^Order of (the )?/i', '', $name);
             $progress[$orderId] = [
+                // Synthetic tiles are official by construction -- $ladderMap is
+                // keyed on official award ids.
+                'AwardId' => (int) $orderId,
+                'KingdomAwardId' => 0,
+                'Scope' => 'official',
                 'Name' => $name,
                 'Short' => $short,
                 'Rank' => $maxRank,
@@ -1948,13 +2028,18 @@ class Player extends Ork3
         }
 
         $tiles = [];
-        foreach ($progress as $aid => $lp) {
+        foreach ($progress as $lp) {
+            $tileAwardId = (int)($lp['AwardId'] ?? 0);
             $tile = [
-                'AwardId' => (int)$aid,
+                'AwardId' => $tileAwardId,
+                // Scope + KingdomAwardId are what let the client tell two kingdom
+                // ladders sharing an award_id (or both carrying 0) apart.
+                'KingdomAwardId' => (int)($lp['KingdomAwardId'] ?? 0),
+                'Scope' => (string)($lp['Scope'] ?? 'official'),
                 'Name' => $lp['Name'],
                 'Short' => $lp['Short'],
                 'Rank' => (int)$lp['Rank'],
-                'MaxRank' => (int)($lp['MaxRank'] ?? Award::MaxRankFor((int) $aid)),
+                'MaxRank' => (int)($lp['MaxRank'] ?? Award::MaxRankFor($tileAwardId)),
                 'HasMaster' => !empty($lp['HasMaster']),
                 'Approx' => !empty($lp['Approx']),
                 'BonusCount' => (int) ($lp['BonusCount'] ?? 0),

@@ -375,6 +375,10 @@ class Controller_PlayerAjax extends Controller
             // Additive: existing consumers read this as a flat award_id => max_rank
             // map. ZodiacMonths rides along under its own key rather than reshaping
             // the response, so every current caller keeps working unchanged.
+            // GetAwardMaxRanks() now also emits a 'k' . kingdomaward_id entry for
+            // every row alongside the numeric award_id ones -- the only usable key
+            // for a kingdom ladder, since 17 of them carry award_id 0 and 9 share
+            // the 94 placeholder. Numeric keys keep their exact old meaning.
             $ranks = $this->Player->get_award_max_ranks((int)$player_id);
             $ranks['ZodiacMonths'] = $this->Player->get_zodiac_held_months((int)$player_id);
             echo json_encode($ranks);
