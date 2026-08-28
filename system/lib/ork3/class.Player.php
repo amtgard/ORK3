@@ -1276,12 +1276,9 @@ class Player extends Ork3
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
 						COALESCE(alias.peerage, a.peerage) as peerage,
 						COALESCE(alias.officer_role, a.officer_role) as officer_role,
-						GREATEST(
-							IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0),
-							IFNULL(ka.is_ladder, 0)
-						) as is_ladder,
+						" . Award::LadderSql('ka', 'a', 'alias') . " as is_ladder,
 						IFNULL(ka.is_ladder, 0) as ka_is_ladder,
-						IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0) as official_is_ladder,
+						" . Award::OfficialLadderSql('a', 'alias') . " as official_is_ladder,
 						IFNULL(ka.max_level, 0) as ka_max_level,
 						alias.award_id as alias_award_id_resolved,
 						alias.name as alias_award_name,
@@ -1298,10 +1295,7 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
-						GREATEST(
-							IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0),
-							IFNULL(ka.is_ladder, 0)
-						), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
+						" . Award::LadderSql('ka', 'a', 'alias') . ", GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
         $r = $this->db->query($sql);
         $response = array();

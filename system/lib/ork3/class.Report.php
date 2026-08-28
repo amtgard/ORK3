@@ -423,7 +423,7 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (GREATEST(IFNULL(COALESCE(alias.is_ladder, a.is_ladder), 0), IFNULL(ka.is_ladder, 0)) = 1 and ma.rank >= $request[LadderMinimum])";
+            $ladder_clause = " or (" . Award::LadderSql('ka', 'a', 'alias') . " = 1 and ma.rank >= $request[LadderMinimum])";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
@@ -7027,10 +7027,12 @@ class Report extends Ork3
             // `a.award_id != 31` is NULL (not TRUE) for a missing row, and NULL fails
             // the WHERE clause just as surely as the dropped join did.
             //
-            // Award::OfficialLadderSql() is deliberately NOT used here: it emits a
-            // bare `a.is_ladder = 1`, which under NOT (...) evaluates NULL-not-FALSE
-            // for a missing `a` and would re-drop exactly the rows this fix restores.
-            // Award::LadderSql() already IFNULLs both sides, so it is used as-is.
+            // Both ladder helpers are NULL-proofed (Award::OfficialLadderSql() emits
+            // `IFNULL(a.is_ladder, 0) = 1`, never a bare `a.is_ladder = 1`), so the
+            // NOT (...) below is FALSE -- not NULL -- for a missing `a` and keeps
+            // exactly the rows this fix restores. This site used to inline that safe
+            // form by hand because the helper's own spelling was unsafe; the helper
+            // now emits it, so the sixth hand-written spelling is gone.
             $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name,
                             IFNULL(a.title_class, 0) AS title_class
                      FROM ' . DB_PREFIX . 'kingdomaward ka
@@ -7038,7 +7040,7 @@ class Report extends Ork3
                      WHERE ka.kingdom_id = ' . $kingdomId . '
                        AND ka.disabled = 0
                        AND ' . Award::LadderSql() . ' = 1
-                       AND NOT (IFNULL(a.is_ladder, 0) = 1) AND IFNULL(a.award_id, 0) != 31
+                       AND NOT (' . Award::OfficialLadderSql() . ') AND IFNULL(a.award_id, 0) != 31
                      ORDER BY IFNULL(ka.name, a.name)';
 
             $this->db->Clear();

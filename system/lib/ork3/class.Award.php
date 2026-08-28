@@ -35,23 +35,53 @@ class Award extends Ork3
     }
 
     /**
+     * The official-ladder 0/1 VALUE (not a predicate) for one row, NULL-proofed.
+     *
+     * $alias is the optional Custom-Title alias leg: a custom title aliased to a
+     * peerage award (e.g. "Knight of the Sword") must read its ladder/peerage/title
+     * flags off the alias TARGET, so those queries join a second ork_award row as
+     * `alias` and COALESCE it in front of `a`. When the alias leg is absent the
+     * COALESCE would degenerate to `a` anyway, so the two-alias form deliberately
+     * omits it and emits exactly the SQL it always has.
+     *
+     * Private on purpose: callers want either LadderSql() (effective) or
+     * OfficialLadderSql() (a predicate). Nothing else should spell this out.
+     */
+    private static function OfficialLadderValueSql(string $a, ?string $alias): string
+    {
+        return $alias === null
+            ? 'IFNULL(' . $a . '.is_ladder, 0)'
+            : 'IFNULL(COALESCE(' . $alias . '.is_ladder, ' . $a . '.is_ladder), 0)';
+    }
+
+    /**
      * Effective-ladder SQL predicate: a kingdom may raise an award to ladder status,
      * but can never lower an official one. Additive by construction.
      *
-     * Sole spelling of "is this a ladder?" for SQL. Do not fork it.
+     * Sole spelling of "is this a ladder?" for SQL. Do not fork it. Pass $alias to
+     * fold in a Custom-Title alias leg rather than hand-rolling a COALESCE (three
+     * sites did exactly that and would have silently fallen behind this helper).
      */
-    public static function LadderSql(string $ka = 'ka', string $a = 'a'): string
+    public static function LadderSql(string $ka = 'ka', string $a = 'a', ?string $alias = null): string
     {
-        return 'GREATEST(IFNULL(' . $ka . '.is_ladder, 0), IFNULL(' . $a . '.is_ladder, 0))';
+        return 'GREATEST(IFNULL(' . $ka . '.is_ladder, 0), ' . self::OfficialLadderValueSql($a, $alias) . ')';
     }
 
     /**
      * Official-ladder SQL predicate — the 16 Amtgard orders. Cross-kingdom
      * comparisons (the global Ladder Grid) key on this, never on LadderSql().
+     *
+     * NULL-PROOFED ON PURPOSE. A bare `a.is_ladder = 1` is NULL — not FALSE — for a
+     * LEFT JOIN that matched no ork_award row, and NULL under `NOT (...)` stays NULL,
+     * so the row is dropped exactly as an INNER join would have dropped it. The Ladder
+     * Grid's kingdom-column query hits that case for every pure kingdom award
+     * (ka.award_id = 0 links to no ork_award row) and had to inline the safe form by
+     * hand. `IFNULL(a.is_ladder, 0) = 1` is identical for every non-NULL row and
+     * correctly FALSE for a missing one, so it is strictly safer at every call site.
      */
-    public static function OfficialLadderSql(string $a = 'a'): string
+    public static function OfficialLadderSql(string $a = 'a', ?string $alias = null): string
     {
-        return $a . '.is_ladder = 1';
+        return self::OfficialLadderValueSql($a, $alias) . ' = 1';
     }
 
     /**

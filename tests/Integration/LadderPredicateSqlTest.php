@@ -133,6 +133,52 @@ final class LadderPredicateSqlTest extends TestCase
         $this->assertSame(1, $this->effectiveLadderFor($this->kingdomAwardIds['officialUnflagged']));
     }
 
+    /**
+     * Award::OfficialLadderSql() under NOT (...) over a LEFT JOIN that matched no
+     * ork_award row. This is the exact shape Report::GetLadderAwardGrid's
+     * kingdom-column query uses, and every pure kingdom ladder hits it: 17 of the
+     * 26 live ka.is_ladder = 1 rows carry ka.award_id = 0, which joins to nothing.
+     *
+     * A bare `a.is_ladder = 1` is NULL there, `NOT (NULL)` is NULL, and NULL fails
+     * the WHERE -- so the unsafe spelling silently drops the row it was supposed to
+     * keep. This asserts against the live database, not against the string.
+     */
+    public function testOfficialLadderSqlIsFalseNotNullForAnUnmatchedLeftJoin(): void
+    {
+        $kingdomLadderId = $this->kingdomAwardIds['kingdomLadder']; // award_id = 0, joins to nothing
+
+        $sql = 'SELECT ka.kingdomaward_id,
+                       a.award_id AS joined_award_id,
+                       ' . Award::OfficialLadderSql() . ' AS official,
+                       NOT (' . Award::OfficialLadderSql() . ') AS not_official
+                FROM ork_kingdomaward ka
+                LEFT JOIN ork_award a ON a.award_id = ka.award_id
+                WHERE ka.kingdomaward_id = :id';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':id' => $kingdomLadderId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertIsArray($row, 'the seeded kingdom ladder row must come back');
+        $this->assertNull(
+            $row['joined_award_id'],
+            'this row must genuinely have no matching ork_award, or the test proves nothing'
+        );
+        $this->assertNotNull($row['official'], 'the predicate itself must never evaluate to NULL');
+        $this->assertSame(0, (int) $row['official']);
+        $this->assertNotNull($row['not_official'], 'NOT (predicate) must be FALSE, never NULL');
+        $this->assertSame(1, (int) $row['not_official']);
+
+        // And the row therefore survives a WHERE built from it -- the behaviour the
+        // Ladder Grid's kingdom columns depend on.
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_kingdomaward ka
+             LEFT JOIN ork_award a ON a.award_id = ka.award_id
+             WHERE ka.kingdomaward_id = :id AND NOT (' . Award::OfficialLadderSql() . ')'
+        );
+        $stmt->execute([':id' => $kingdomLadderId]);
+        $this->assertSame(1, (int) $stmt->fetchColumn(), 'the kingdom ladder must survive the NOT filter');
+    }
+
     public function testLadderSqlFindsEveryRowTheHardcodedListNamed(): void
     {
         // The 24 ids the deleted array held. On a production-shaped database these
