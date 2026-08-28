@@ -39,6 +39,29 @@ class JsonServer
     public const OBJ = 'object';
     public const DATE = 'date';
 
+    /***************************************************************************
+     *
+     * Zero-call parameter lists are derived by static analysis of the domain
+     * method's $request[...] reads (get_default_definition()), and every derived
+     * key is mandatory by default. These two constants are the escape hatches.
+     *
+     * ADDITIVE_OPTIONAL_PARAMETERS: parameters introduced after clients were
+     * already written. Existing integrations -- reports, spreadsheets, third-party
+     * scripts -- cannot know about them, so their absence must not reject the call.
+     * Only register a key here when the domain method genuinely tolerates its
+     * absence (a `?? ` default, an isset()/array_key_exists() guard, or empty()).
+     *
+     * API_CLIENT_FLAG: the transport's own marker, stamped onto the request by
+     * call_endpoint(). It is never client-supplied and must never appear in a
+     * derived parameter list.
+     *
+     **************************************************************************/
+
+    /** @var list<string> */
+    public const ADDITIVE_OPTIONAL_PARAMETERS = ['ZodiacMonth', 'IsLadder', 'MaxLevel', 'IncludeDisabled'];
+
+    public const API_CLIENT_FLAG = 'ApiClient';
+
     // ERRORS
     public const BAD_ARGUMENTS = 0;
     public const RESTRICTED_CLASS = 1;
@@ -250,7 +273,7 @@ class JsonServer
             // through controllers or set it anywhere else -- it must stay narrowly
             // scoped to this transport boundary.
             if (is_array($args) && isset($args[0]) && is_array($args[0])) {
-                $args[0]['ApiClient'] = true;
+                $args[0][JsonServer::API_CLIENT_FLAG] = true;
             }
             $output = $this->run_call($class, $method_c, $args);
             $trace = ob_get_contents();
@@ -508,10 +531,40 @@ class JsonServer
     {
         $definition = array();
         if (substr($method, -1) == '0') {
+            /*
+             * STANDING TRAP -- READ BEFORE ADDING A $request[...] READ TO ANY ork3
+             * DOMAIN METHOD REACHABLE AS A ZERO CALL.
+             *
+             * A zero call ("Foo/Bar0") has no declared signature, so its public
+             * parameter list is DERIVED by tokenizing the domain method's source
+             * for $request['X'] reads (see translate_static_analysis()). Every key
+             * found here is stamped mandatory by default, and wrangle_parameters()
+             * rejects the whole call with BAD_ARGUMENTS when one is missing.
+             *
+             * The consequence: adding a single new $request['X'] read to an existing
+             * domain method silently turns X into a REQUIRED public API parameter and
+             * breaks every client written before it existed -- reads included. If the
+             * new key is additive (old callers legitimately omit it, and the method
+             * handles its absence), register it in ADDITIVE_OPTIONAL_PARAMETERS below
+             * so the call still reaches the method.
+             *
+             * Redesigning the derivation itself (an explicit per-call definition, or
+             * inferring optionality from `?? `/isset() guards in the source) is a
+             * worthwhile follow-up; until then this list is the seam.
+             */
             $parameters = $this->translate_static_analysis($class, substr($method, 0, -1));
             foreach ($parameters as $k => $parameter) {
+                /*
+                 * ApiClient is transport-internal: it is stamped onto $args[0] by
+                 * call_endpoint() after wrangling (see the comment there) and is never
+                 * supplied by a client. Deriving it as a parameter would make every
+                 * affected call impossible to satisfy from the outside.
+                 */
+                if ($parameter === JsonServer::API_CLIENT_FLAG) {
+                    continue;
+                }
                 $definition[$parameter] = array(
-                        'Optional' => false,
+                        'Optional' => in_array($parameter, JsonServer::ADDITIVE_OPTIONAL_PARAMETERS, true),
                         'DefaultValue' => null,
                         'Order' => $k,
                         'Type' => 'var',
