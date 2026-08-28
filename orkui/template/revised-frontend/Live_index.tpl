@@ -300,7 +300,7 @@
 	}
 	function applyMapTheme() {
 		if (!map) return;
-		const style = isDarkTheme() ? 'dark-matter' : 'positron';
+		const style = isDarkTheme() ? 'dark_all' : 'light_all';
 		const url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_KEY);
 		if (tileLayer) map.removeLayer(tileLayer);
 		tileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);

@@ -774,7 +774,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 	function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 	function wxApplyMapTheme() {
 		if (!wxMap) return;
-		var style = isDarkTheme() ? 'dark-matter' : 'positron';
+		var style = isDarkTheme() ? 'dark_all' : 'light_all';
 		var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(WX_CARTO_KEY);
 		if (wxTileLayer) wxMap.removeLayer(wxTileLayer);
 		wxTileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(wxMap);
