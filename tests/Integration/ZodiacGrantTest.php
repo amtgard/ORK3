@@ -351,6 +351,30 @@ final class ZodiacGrantTest extends TestCase
         $this->assertSame(5, $this->columnOf($id, 'rank'), 'legacy rank stays legible as the level it was');
     }
 
+    /**
+     * Not Zodiac-specific, but this file owns the UpdateAward() call sites.
+     *
+     * UpdateAward's refusal branch called InvalidParamter() -- a function that
+     * does not exist anywhere in system/ or orkservice/, so reaching it was a
+     * fatal error rather than a clean rejection. Pre-existing, but newly
+     * REACHABLE: the JSON API used to refuse Player/UpdateAward0 at the derived
+     * parameter gate before it ever got here, and that gate has just been fixed.
+     * An untokened call takes exactly this branch (valid_id($mundane_id) is false
+     * for the 0 that IsAuthorized() returns).
+     */
+    public function testAnUnauthorizedUpdateAwardIsRefusedCleanlyRatherThanFatalling(): void
+    {
+        $id = $this->grantRaw(['award_id' => self::ZODIAC_AWARD_ID, 'rank' => 5, 'zodiac_month' => 0]);
+
+        $result = $this->player->UpdateAward(['AwardsId' => $id, 'Token' => '']);
+
+        $this->assertIsArray($result);
+        $this->assertNotSame(0, (int) $result['Status'], 'an untokened edit must be refused');
+        // The row must be untouched by the refusal.
+        $this->assertSame(5, $this->columnOf($id, 'rank'));
+        $this->assertSame(0, $this->columnOf($id, 'zodiac_month'));
+    }
+
     public function testRecommendingAZodiacCarriesTheMonth(): void
     {
         $recId = $this->recommend(['AwardId' => self::ZODIAC_AWARD_ID, 'ZodiacMonth' => 9]);

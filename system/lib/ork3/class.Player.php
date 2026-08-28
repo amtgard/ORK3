@@ -4248,7 +4248,13 @@ class Player extends Ork3
 
                 return Success($set_awards_id);
             } else {
-                return InvalidParamter();
+                // Typo'd InvalidParamter() until now -- no such function exists, so
+                // reaching this branch was a fatal, not a rejection. Long dormant
+                // because the JSON API refused Player/UpdateAward0 at the derived
+                // parameter gate before it could get here; that gate is now fixed,
+                // which makes this reachable. Bare, matching this method's other
+                // rejections.
+                return InvalidParameter();
             }
         } else {
             return NoAuthorization();
