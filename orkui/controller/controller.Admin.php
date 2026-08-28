@@ -906,6 +906,28 @@ class Controller_Admin extends Controller
         $this->template = '../revised-frontend/Admin_permissions_grid.tpl';
     }
 
+    /**
+     * Is this player-action request an AJAX call that wants a JSON verdict?
+     *
+     * Two conditions, both required, both impossible for a browser navigation:
+     * a POST, and an explicit Ajax=1 field in the POST BODY (not $_REQUEST --
+     * $_GET must never be able to turn a page load into a JSON response, and
+     * $_REQUEST merges the two). Request::restore(), the only code path that
+     * could ever refill $_POST from a previous request, has no callers.
+     *
+     * Deliberately not X-Requested-With: jQuery sets that header automatically on
+     * every $.ajax()/$.post(), so keying on it would silently convert callers
+     * that still expect HTML.
+     *
+     * @return bool
+     */
+    private function is_ajax_player_action()
+    {
+        return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+            && isset($_POST['Ajax'])
+            && (string) $_POST['Ajax'] === '1';
+    }
+
     public function player($id)
     {
         logtrace("player call", $_REQUEST);
@@ -940,6 +962,14 @@ class Controller_Admin extends Controller
         // it; curl gets everything.
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         if ($_uid <= 0) {
+            // An AJAX save must be told WHY. fetch() follows the 302 below to a 200
+            // HTML login page, which is indistinguishable from a successful save to
+            // anything reading resp.ok.
+            if ($this->is_ajax_player_action()) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 5, 'error' => 'Your session has expired. Log in again and retry.']);
+                exit;
+            }
             header('Location: ' . UIR . "Login/login/Admin/player/$id");
             exit;
         }
@@ -958,6 +988,14 @@ class Controller_Admin extends Controller
         if (!$_is_self_media_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
+            // Same reason as the logged-out gate: without this an unauthorised
+            // officer's Add Award fetch() follows this redirect to the player
+            // profile, gets a 200, and the modal reports "Award added!".
+            if ($this->is_ajax_player_action()) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 5, 'error' => 'You do not have permission to change this player\'s record.']);
+                exit;
+            }
             header('Location: ' . UIR . 'Player/profile/' . $id);
             exit;
         }
@@ -1238,6 +1276,63 @@ class Controller_Admin extends Controller
                     } else {
                         $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                     }
+                }
+
+                // AJAX callers get the verdict, not a 200-with-an-HTML-page.
+                //
+                // Everything above reports failure by setting $this->data['Error']
+                // and falling through to render the full admin page -- with HTTP
+                // 200. no_authorization() does the same for a logged-in caller
+                // without rights. Four fetch()es in revised.js (the Kingdom, Player
+                // and Park Add Award modals and the Player edit-award modal) used to
+                // branch on resp.ok alone, so an unauthorised officer, a Rule-1
+                // ladder rejection and an invalid-month rejection all rendered
+                // "Award added!" with nothing written to the database.
+                //
+                // DETECTION IS DELIBERATELY NARROW. This method also serves real page
+                // loads and half a dozen plain <form method=post> submits from
+                // Admin_player.tpl, and a controller that stops rendering its page is
+                // far worse than a modal that over-reports success. So the branch
+                // requires an explicit Ajax=1 field in $_POST, which only those four
+                // fetch bodies send. A browser navigation (GET, no body) can never
+                // satisfy it, nor can any existing form or link on the page. It is
+                // NOT keyed on X-Requested-With: jQuery sets that header on every
+                // $.ajax call, which would flip other callers to JSON without their
+                // knowing.
+                //
+                // Shape matches the *Ajax controllers ({status, error}, status 0 =
+                // success, 5 = no authorization) so the two conventions in this
+                // codebase converge instead of diverging further.
+                if ($this->is_ajax_player_action()) {
+                    header('Content-Type: application/json');
+                    // data['Error'] is the single source of truth for "did this fail",
+                    // because the validation arms above set it and break without ever
+                    // touching $r.
+                    if (trim((string) ($this->data['Error'] ?? '')) !== '') {
+                        $ajax_status = (int) ($r['Status'] ?? 1);
+                        $ajax_detail = trim((string) ($r['Detail'] ?? ''));
+                        // Prefer Detail: that is the specific sentence a domain
+                        // rejection wrote ("... is a ranked award — choose a rank").
+                        // data['Error'] glues the generic Error onto it with ':<p>'
+                        // for the page render, which flattens into a run-on line in a
+                        // modal. Only trust Detail when $r actually reported a
+                        // failure -- a validation arm leaves $r at Status 0 and any
+                        // Detail there belongs to an unrelated earlier call.
+                        $ajax_error = ($ajax_status !== 0 && $ajax_detail !== '')
+                            ? $ajax_detail
+                            : trim(strip_tags((string) $this->data['Error']));
+                        // Never report an error under a success status.
+                        echo json_encode([
+                            'status' => $ajax_status === 0 ? 1 : $ajax_status,
+                            'error' => $ajax_error,
+                        ]);
+                    } else {
+                        echo json_encode([
+                            'status' => 0,
+                            'message' => trim(strip_tags((string) ($this->data['Message'] ?? ''))),
+                        ]);
+                    }
+                    exit;
                 }
             }
         } else {

@@ -201,7 +201,58 @@ function tnRankMonths(wrap, prefix, awardId, verb, onSelect) {
     }
     return true;
 }
+/* ------------------------------------------------------------------
+   Award-save response reader.
+
+   Admin/player/{id}/{addaward,updateaward,reconcileaward} renders the full
+   admin HTML page with HTTP 200 on FAILURE -- an unauthorised officer, a Rule-1
+   rankless-ladder rejection and an invalid-month rejection all came back 200,
+   so every caller that branched on resp.ok alone reported "Award added!" with
+   nothing written to the database.
+
+   Those handlers now send Ajax=1 (see tnAwardSavePayload) and the controller
+   answers with the same {status, error} envelope the *Ajax controllers use --
+   status 0 means the row landed. This reads that envelope defensively: a
+   response that is somehow still HTML (an upstream redirect to the login page,
+   a fatal, a stale cached script) is treated as a FAILURE, never as success.
+
+   Resolves to { ok: bool, error: string }; never rejects.
+------------------------------------------------------------------ */
+function tnAwardSavePayload(fd) {
+    /* The controller's AJAX branch fires on this field and nothing else -- a
+       browser navigation cannot send it. Kept in one function so all four
+       modals stay in step with the server-side check. */
+    fd.append('Ajax', '1');
+    return fd;
+}
+function tnReadAwardSaveResponse(resp) {
+    return resp.text().then(function(body) {
+        var d = null;
+        try { d = JSON.parse(body); } catch (e) { d = null; }
+        if (!d || typeof d !== 'object') {
+            return {
+                ok: false,
+                error: resp.ok
+                    ? 'The server did not confirm the save. Reload the page and check before trying again.'
+                    : ('Server returned ' + resp.status + '.')
+            };
+        }
+        if (parseInt(d.status, 10) === 0) {
+            return { ok: true, error: '' };
+        }
+        return {
+            ok: false,
+            error: (typeof d.error === 'string' && d.error.trim() !== '')
+                ? d.error.trim()
+                : 'The award could not be saved.'
+        };
+    }).catch(function() {
+        return { ok: false, error: 'The server response could not be read.' };
+    });
+}
 if (typeof window !== 'undefined') {
+    window.tnAwardSavePayload = tnAwardSavePayload;
+    window.tnReadAwardSaveResponse = tnReadAwardSaveResponse;
     window.tnRankPaint = tnRankPaint;
     window.tnRankPillInner = tnRankPillInner;
     window.tnRankMaxFor = tnRankMaxFor;
@@ -2498,9 +2549,14 @@ if (PnConfig.recError) {
             btnSame.disabled = true;
             btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-            fetch(AWARD_URL, { method: 'POST', body: fd })
-                .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+            fetch(AWARD_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
+                .then(tnReadAwardSaveResponse)
+                .then(function(res) {
+                    if (!res.ok) {
+                        errEl.textContent = res.error;
+                        errEl.style.display = 'block';
+                        return;
+                    }
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -3847,9 +3903,14 @@ $(document).ready(function() {
         btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
-        fetch(saveUrl, { method: 'POST', body: fd })
-            .then(function(resp) {
-                if (!resp.ok) throw new Error('Server returned ' + resp.status);
+        fetch(saveUrl, { method: 'POST', body: tnAwardSavePayload(fd) })
+            .then(tnReadAwardSaveResponse)
+            .then(function(res) {
+                if (!res.ok) {
+                    errEl.textContent = res.error;
+                    errEl.style.display = 'block';
+                    return;
+                }
                 onSuccess();
             })
             .catch(function(err) {
@@ -7631,9 +7692,14 @@ $(document).ready(function() {
         btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
-        fetch(saveUrl, { method: 'POST', body: fd })
-            .then(function(resp) {
-                if (!resp.ok) throw new Error('Server returned ' + resp.status);
+        fetch(saveUrl, { method: 'POST', body: tnAwardSavePayload(fd) })
+            .then(tnReadAwardSaveResponse)
+            .then(function(res) {
+                if (!res.ok) {
+                    errEl.textContent = res.error;
+                    errEl.style.display = 'block';
+                    return;
+                }
                 onSuccess();
             })
             .catch(function(err) {
@@ -12901,22 +12967,21 @@ function setupPronounPicker(cfg) {
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
                 }
 
-                console.log('[EditAward] POST to endpoint:', endpoint);
                 fetch(endpoint, {
-                    method: 'POST', body: fd
-                }).then(function(r) {
-                    console.log('[EditAward] Response — status:', r.status, 'ok:', r.ok, 'url:', r.url);
-                    return r.clone().text().then(function(body) {
-                        console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
-                        saveBtn.disabled = false;
-                        if (r.ok) {
-                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
-                            showFb(msg, 'pn-award-edit-success');
-                            setTimeout(function() { location.reload(); }, 1500);
-                        } else {
-                            showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
-                        }
-                    });
+                    method: 'POST', body: tnAwardSavePayload(fd)
+                }).then(tnReadAwardSaveResponse).then(function(res) {
+                    saveBtn.disabled = false;
+                    if (!res.ok) {
+                        // A rejected edit used to report "Award updated!" and reload
+                        // the page, so the officer saw their change vanish with no
+                        // explanation. Say what the server actually said, and do not
+                        // reload -- the form still holds what they typed.
+                        showFb(res.error, 'pn-form-error');
+                        return;
+                    }
+                    var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                    showFb(msg, 'pn-award-edit-success');
+                    setTimeout(function() { location.reload(); }, 1500);
                 }).catch(function() {
                     saveBtn.disabled = false;
                     showFb('Request failed.', 'pn-form-error');
