@@ -4646,7 +4646,20 @@ class Player extends Ork3
             $dupeRec->kingdomaward_id = $request['KingdomAwardId'];
             $dupeRec->mundane_id = $request['MundaneId'];
             $dupeRec->recommended_by_id = $mundane_id;
-            if (trimlen($request['Rank']) > 0) {
+            // For a monthly ladder the MONTH is the identity, not the rank. The
+            // write below stores rank = 0 for every Zodiac recommendation, so
+            // keying this guard on rank alone collapses all twelve months onto a
+            // single key -- recommend January, then March, and March is refused
+            // with "You already recommended that award and level." Keying on the
+            // month restores the per-month distinction the pre-branch rank
+            // carried. Legacy rows (rank 1..12, zodiac_month 0) cannot false-match
+            // this (rank 0, zodiac_month 1..12) pair, so nothing new is blocked;
+            // and repeating the SAME month is still refused, which is correct --
+            // the dedupe is per-recommender, and repeat GRANTS remain legal.
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                $dupeRec->rank = 0;
+                $dupeRec->zodiac_month = $zodiacMonth;
+            } elseif (trimlen($request['Rank']) > 0) {
                 $dupeRec->rank = $request['Rank'];
             } else {
                 $dupeRec->rank = 0;

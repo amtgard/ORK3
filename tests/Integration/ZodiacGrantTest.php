@@ -230,6 +230,41 @@ final class ZodiacGrantTest extends TestCase
         return (int) $id;
     }
 
+    /**
+     * Recommends against an EXISTING kingdomaward instead of seeding a fresh one.
+     *
+     * recommend() above seeds its own kingdomaward per call, so two of its
+     * recommendations can never share a dedupe key -- which is precisely why the
+     * suite could not see defect X8. These tests need both recommendations on
+     * the same kingdomaward, exactly as the ORK's own picker sends them.
+     *
+     * @return array<string, mixed> the raw flat Player:: response
+     */
+    private function recommendOn(int $kaId, array $overrides): array
+    {
+        return $this->player->AddAwardRecommendation(array_merge([
+            'Token' => $this->token,
+            'MundaneId' => $this->recipientId,
+            'KingdomAwardId' => $kaId,
+            'Reason' => self::MARKER,
+        ], $overrides));
+    }
+
+    /**
+     * @return list<int> the zodiac_month of every recommendation on $kaId, ascending
+     */
+    private function recommendedMonthsOn(int $kaId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT zodiac_month FROM ork_recommendations
+             WHERE mundane_id = :mid AND kingdomaward_id = :kaid AND deleted_at IS NULL
+             ORDER BY zodiac_month'
+        );
+        $stmt->execute([':mid' => $this->recipientId, ':kaid' => $kaId]);
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     private function columnOf(int $awardsId, string $column): int
     {
         $stmt = $this->pdo->prepare("SELECT `{$column}` FROM ork_awards WHERE awards_id = :id");
@@ -322,6 +357,66 @@ final class ZodiacGrantTest extends TestCase
 
         $this->assertSame(9, $this->recColumnOf($recId, 'zodiac_month'));
         $this->assertSame(0, $this->recColumnOf($recId, 'rank'));
+    }
+
+    public function testTwoDifferentZodiacMonthsCanBeRecommendedForOnePlayer(): void
+    {
+        // Defect X8. The month IS the Zodiac's identity, so January and March on
+        // the same kingdomaward are two different recommendations. Before the
+        // fix the duplicate guard keyed on rank -- which this branch collapsed
+        // to 0 for Zodiac -- so all twelve months shared one key and the second
+        // month was refused with "You already recommended that award and level."
+        $kaId = $this->seedKingdomAward(self::ZODIAC_AWARD_ID);
+
+        $january = $this->recommendOn($kaId, ['ZodiacMonth' => 1]);
+        $this->assertSame(0, (int) $january['Status'], 'first month must be accepted: ' . json_encode($january));
+
+        $march = $this->recommendOn($kaId, ['ZodiacMonth' => 3]);
+        $this->assertSame(0, (int) $march['Status'], 'a DIFFERENT month is a different recommendation: ' . json_encode($march));
+
+        $this->assertSame([1, 3], $this->recommendedMonthsOn($kaId), 'both months must survive as distinct rows');
+    }
+
+    public function testTheSameZodiacMonthTwiceIsStillRefused(): void
+    {
+        // The dedupe is per-recommender and must not be weakened: recommending
+        // the same month twice is still a duplicate. (Repeat GRANTS stay legal --
+        // testARepeatMonthIsAcceptedAndBothGrantsSurvive covers that.)
+        $kaId = $this->seedKingdomAward(self::ZODIAC_AWARD_ID);
+
+        $first = $this->recommendOn($kaId, ['ZodiacMonth' => 7]);
+        $this->assertSame(0, (int) $first['Status'], 'first recommendation must succeed: ' . json_encode($first));
+
+        $second = $this->recommendOn($kaId, ['ZodiacMonth' => 7]);
+        $this->assertNotSame(0, (int) $second['Status'], 'the same month twice is still a duplicate: ' . json_encode($second));
+        $this->assertStringContainsString('already recommended', (string) ($second['Detail'] ?? ''));
+        $this->assertSame([7], $this->recommendedMonthsOn($kaId));
+    }
+
+    public function testALegacyRankedZodiacRecommendationDoesNotBlockAMonth(): void
+    {
+        // A pre-branch recommendation row carries rank 1..12 and zodiac_month 0.
+        // The new guard looks for (rank 0, zodiac_month = the month), so such a
+        // row can never false-match and block a month the player has not been
+        // recommended for.
+        $kaId = $this->seedKingdomAward(self::ZODIAC_AWARD_ID);
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_recommendations
+                (mundane_id, kingdomaward_id, award_id, `rank`, zodiac_month, date_recommended, recommended_by_id, reason)
+             VALUES (:mid, :kaid, :award_id, 5, 0, :date, :by, :reason)'
+        );
+        $stmt->execute([
+            ':mid' => $this->recipientId,
+            ':kaid' => $kaId,
+            ':award_id' => self::ZODIAC_AWARD_ID,
+            ':date' => '2020-01-01',
+            ':by' => $this->officer->officerMundaneId(),
+            ':reason' => self::MARKER,
+        ]);
+
+        $result = $this->recommendOn($kaId, ['ZodiacMonth' => 5]);
+
+        $this->assertSame(0, (int) $result['Status'], 'a legacy rank-5 row must not read as "May already recommended": ' . json_encode($result));
     }
 
     /**
