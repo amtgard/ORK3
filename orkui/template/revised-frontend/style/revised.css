@@ -726,6 +726,66 @@ html[data-theme="dark"] .pn-ladder-group-label { color: var(--ork-text-muted); }
     white-space: nowrap;
 }
 html[data-theme="dark"] .pn-ladder-bonus { color: #d69e2e; }
+/* Order of the Zodiac month strip (Task 6) -- granted once per calendar
+   month, so it has no 0-to-maxRank bar. Given a full row of its own
+   (grid-column: 1 / -1) rather than squeezed into a 160px auto-fill tile
+   like every ranked ladder: twelve circles plus a count label need more
+   room than that to stay legible and still fit one row on a narrow phone.
+   Sizing follows the same fluid-flex approach the month-pill pickers use
+   (see .pn-rank-pills-monthly .pn-month-pill above) for the same reason --
+   a fixed px width tuned to one viewport is the bug that approach was
+   built to avoid, so this reuses it instead of inventing a second one. */
+.pn-ladder-item-zodiac { grid-column: 1 / -1; }
+.pn-zodiac-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+}
+.pn-zodiac-month {
+    flex: 1 1 0;
+    min-width: 0;
+    aspect-ratio: 1 / 1;
+    max-width: 22px;
+    max-height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #a0aec0);
+    background: var(--ork-bg-tertiary, #f7fafc);
+    border: 1px solid #e2e8f0;
+}
+.pn-zodiac-month.-held {
+    background: var(--pn-accent, #2c5282);
+    border-color: var(--pn-accent, #2c5282);
+    color: #fff;
+}
+.pn-zodiac-count {
+    margin-left: 6px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--ork-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+html[data-theme="dark"] .pn-zodiac-month {
+    color: var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-color: var(--ork-border);
+}
+html[data-theme="dark"] .pn-zodiac-month.-held {
+    background: var(--pn-accent, #63b3ed);
+    border-color: var(--pn-accent, #63b3ed);
+    color: #1a202c;
+}
+html[data-theme="dark"] .pn-zodiac-count { color: var(--ork-text-muted); }
+@media (max-width: 500px) {
+    .pn-zodiac-month { max-width: 18px; max-height: 18px; font-size: 9px; }
+    .pn-zodiac-count { font-size: 10px; margin-left: 4px; }
+}
 .pn-hist-tip-btn {
     display: inline-flex;
     align-items: center;

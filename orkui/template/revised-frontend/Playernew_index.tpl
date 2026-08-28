@@ -2133,6 +2133,22 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						'official' => 'Ladder Awards',
 						'kingdom' => ($_kingdomLadderName !== '' ? $_kingdomLadderName . ' ' : '') . 'Ladder Awards',
 					];
+					// Zodiac held months, for the pn-* month-pill wraps further down this
+					// page (grant, edit, edit-reconcile, recommend). tnRankMonths() in
+					// revised.js already reads a data-held-months attribute off each wrap
+					// to paint the green -held state and repeat-grant tip -- it has been
+					// implemented since Task 4 but no template ever supplied the
+					// attribute, so it has been inert. MonthsHeld only exists on the
+					// monthly-ladder tile (Zodiac, award_id 30), so this loop also finds
+					// "does this player have a Zodiac tile" for free.
+					$_zodiacHeldMonths = [];
+					foreach ($LadderProgress as $_lpZodiac) {
+						if (array_key_exists('MonthsHeld', $_lpZodiac)) {
+							$_zodiacHeldMonths = $_lpZodiac['MonthsHeld'];
+							break;
+						}
+					}
+					$_zodiacHeldMonthsAttr = htmlspecialchars(implode(',', array_map('intval', $_zodiacHeldMonths)), ENT_QUOTES);
 				?>
 				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
@@ -2145,26 +2161,63 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 										<?php foreach ($_ladderTileGroups[$_groupKey] as $lp): ?>
 											<?php
 												$maxRank = (int)($lp['MaxRank'] ?? 10);
-												$pct = min(100, round($lp['Rank'] / $maxRank * 100));
 												$bonusCount = (int)($lp['BonusCount'] ?? 0);
+												// Order of the Zodiac is granted once per calendar month -- its twelve
+												// positions are months, not levels, so it has no 0-to-maxRank
+												// progression to bar. array_key_exists (not IsMonthlyLadder) is the
+												// discriminator here because it's the exact same test GetLadderProgress
+												// used to decide whether to attach these keys in the first place.
+												$isMonthly = array_key_exists('MonthsHeld', $lp);
+												$pct = $isMonthly ? 0 : min(100, round($lp['Rank'] / $maxRank * 100));
+												// ~ keeps its shape but changes its words for a monthly ladder: it means
+												// "month not recorded" for one or more grants, never "level approximated".
+												$approxTip = $isMonthly
+													? ' (month not recorded for one or more grants)'
+													: ' (level approximated from historical data)';
 											?>
-											<div class="pn-ladder-item" data-tip="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+											<div class="pn-ladder-item<?= $isMonthly ? ' pn-ladder-item-zodiac' : '' ?>" data-tip="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? $approxTip : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 												<div class="pn-ladder-header">
 													<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 													<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
 														<?php if ($lp['HasMaster']): ?>
 															<span class="pn-ladder-master" data-tip="Master title earned"><i class="fas fa-star"></i> M</span>
 														<?php endif; ?>
-														<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
-														<?php if ($bonusCount > 0): ?>
-															<span class="pn-ladder-bonus" data-tip="<?= $bonusCount ?> further recognition<?= $bonusCount === 1 ? '' : 's' ?> past the top of this ladder">&#10033;<?= $bonusCount ?></span>
+														<?php if ($isMonthly): ?>
+															<?php if ($lp['Approx']): ?><span style="color:#b7791f" class="pn-ladder-rank">~</span><?php endif; ?>
+														<?php else: ?>
+															<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+															<?php if ($bonusCount > 0): ?>
+																<span class="pn-ladder-bonus" data-tip="<?= $bonusCount ?> further recognition<?= $bonusCount === 1 ? '' : 's' ?> past the top of this ladder">&#10033;<?= $bonusCount ?></span>
+															<?php endif; ?>
 														<?php endif; ?>
 													</span>
 												</div>
-												<div class="pn-ladder-bar-track">
-													<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
-													     style="width:<?= $pct ?>%"></div>
-												</div>
+												<?php if ($isMonthly): ?>
+													<?php $_zodiacCount = (int)($lp['Count'] ?? 0); ?>
+													<div class="pn-zodiac-strip">
+														<?php foreach (range(1, 12) as $_month): ?>
+															<?php
+																$_held = in_array($_month, $lp['MonthsHeld'], true);
+																$_tip  = Award::MonthName($_month);
+																if ($_held && !empty($lp['MonthDates'][$_month])) {
+																	$_dates = array_map(function ($d) {
+																		$ts = strtotime((string)$d);
+																		return $ts ? date('M j, Y', $ts) : (string)$d;
+																	}, $lp['MonthDates'][$_month]);
+																	$_tip .= ' — ' . implode(', ', $_dates);
+																}
+															?>
+															<span class="pn-zodiac-month<?= $_held ? ' -held' : '' ?>"
+															      data-tip="<?= htmlspecialchars($_tip, ENT_QUOTES) ?>"><?= Award::MonthInitial($_month) ?></span>
+														<?php endforeach; ?>
+														<span class="pn-zodiac-count"><?= $_zodiacCount ?> Zodiac<?= $_zodiacCount === 1 ? '' : 's' ?></span>
+													</div>
+												<?php else: ?>
+													<div class="pn-ladder-bar-track">
+														<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
+														     style="width:<?= $pct ?>%"></div>
+													</div>
+												<?php endif; ?>
 											</div>
 										<?php endforeach; ?>
 									</div>
@@ -3006,7 +3059,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 			<!-- Rank Picker (only for ladder awards) -->
 			<div class="pn-acct-field" id="pn-award-rank-row" style="display:none">
 				<label>Rank <span id="pn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-				<div class="pn-rank-pills-wrap" id="pn-rank-pills"></div>
+				<div class="pn-rank-pills-wrap" id="pn-rank-pills" data-held-months="<?= $_zodiacHeldMonthsAttr ?>"></div>
 				<input type="hidden" name="Rank" id="pn-award-rank-val" value="" />
 			</div>
 
@@ -3098,7 +3151,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 					</div>
 					<div class="pn-acct-field" id="pn-edit-reconcile-rank-row" style="display:none;">
 						<label>Rank <span style="font-weight:400;color:#a0aec0;font-size:11px">— click to select</span></label>
-						<div class="pn-rank-pills-wrap" id="pn-edit-reconcile-rank-pills"></div>
+						<div class="pn-rank-pills-wrap" id="pn-edit-reconcile-rank-pills" data-held-months="<?= $_zodiacHeldMonthsAttr ?>"></div>
 						<input type="hidden" id="pn-edit-reconcile-rank-val" value="">
 					</div>
 					<div style="font-size:11px;color:#975a16;margin-top:4px;">
@@ -3152,7 +3205,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 
 			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
 				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
-				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills"></div>
+				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills" data-held-months="<?= $_zodiacHeldMonthsAttr ?>"></div>
 				<input type="hidden" id="pn-edit-rank-val" value="" />
 			</div>
 
@@ -3802,7 +3855,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 				</div>
 				<div class="pn-rec-field" id="pn-rec-rank-row" style="display:none">
 					<label>Rank <span id="pn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills"></div>
+					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills" data-held-months="<?= $_zodiacHeldMonthsAttr ?>"></div>
 					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
 				<div class="pn-form-error" id="pn-rec-warn" style="margin-top:4px"></div>
