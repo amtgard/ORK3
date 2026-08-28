@@ -11,6 +11,9 @@ final class LadderGridTest extends TestCase
 {
     private ReportsFixture $fixture;
 
+    /** @var array<string, mixed> */
+    private array $lastAssembly = [];
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -422,6 +425,147 @@ final class LadderGridTest extends TestCase
                 'kingdom ladder columns are kingdom-wide, but rows must stay scoped to the requested park'
             );
         }
+    }
+
+    /**
+     * The kingdom-column query joined ork_award to resolve a fallback name and
+     * title_class. It used an INNER join -- but a kingdom award that was raised
+     * purely by the kingdom carries ka.award_id = 0, and there is no ork_award
+     * row with award_id = 0, so the join dropped it. On the live database that
+     * was 17 of 26 ka.is_ladder = 1 rows, hiding 2,247 grants and leaving ten of
+     * eighteen kingdoms with an entirely empty kingdom group. The join is now a
+     * LEFT join with every a.-referencing predicate NULL-proofed.
+     */
+    public function testKingdomLadderWithNoLinkedAwardRowStillGetsAColumn(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        // award_id = 0: a pure kingdom award, linked to no ork_award row at all.
+        $kaid = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Order of the Unlinked', true);
+
+        $holder = $this->fixture->createPlayer($parkId, 'unlinked-ladder');
+        $this->fixture->insertLadderAward($holder['mundane_id'], $parkId, $kid, $kaid, 0, 4);
+
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
+        $columns = $assembly['LadderAwards'];
+
+        $this->assertArrayHasKey(
+            'k' . $kaid,
+            $columns,
+            'a kingdom ladder with award_id = 0 must still produce a column'
+        );
+        $this->assertSame('kingdom', $columns['k' . $kaid]['Scope']);
+        $this->assertSame('T10RPT Order of the Unlinked', $columns['k' . $kaid]['Name']);
+        $this->assertSame($kaid, $columns['k' . $kaid]['KingdomAwardId']);
+        $this->assertSame(0, $columns['k' . $kaid]['AwardId']);
+
+        // And the grants hanging off it must actually reach the grid.
+        $cell = null;
+        foreach ($assembly['GridRows'] as $row) {
+            if ((int) $row['MundaneId'] === (int) $holder['mundane_id']) {
+                $cell = $row['Awards']['k' . $kaid] ?? null;
+            }
+        }
+        $this->assertNotNull($cell, 'grants on an award_id = 0 kingdom ladder must reach the grid');
+        $this->assertSame(4, (int) $cell['Rank']);
+    }
+
+    /**
+     * The worst case of the same defect: a kingdom whose ladders are ALL
+     * award_id = 0 produced an empty kingdom group, so the report showed that
+     * kingdom nothing whatsoever of its own. (Live: kingdoms 18 and 22, four
+     * and two ladders respectively, both rendering zero kingdom columns.)
+     */
+    public function testKingdomWhoseLaddersAreAllUnlinkedGetsANonEmptyKingdomGroup(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+
+        $before = array_filter(
+            $this->kingdomColumnsFor($kid),
+            static fn ($c) => ($c['Scope'] ?? '') === 'kingdom'
+        );
+        $this->assertSame([], $before, 'precondition: this kingdom starts with no kingdom ladders');
+
+        // Every ladder this kingdom owns is award_id = 0 -- nothing links to ork_award.
+        $first = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Order of the Mantis', true);
+        $second = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Order of the Quill', true);
+
+        $kingdomColumns = array_filter(
+            $this->kingdomColumnsFor($kid),
+            static fn ($c) => ($c['Scope'] ?? '') === 'kingdom'
+        );
+
+        $this->assertNotEmpty(
+            $kingdomColumns,
+            'a kingdom whose ladders are all award_id = 0 must still get a kingdom group'
+        );
+        $ids = array_column($kingdomColumns, 'KingdomAwardId');
+        $this->assertContains($first, $ids);
+        $this->assertContains($second, $ids);
+    }
+
+    /**
+     * The Walker exclusion rode on `a.award_id != 31`, which is NULL -- not TRUE --
+     * once `a` may be absent, so the NULL-proofing had to be IFNULL(a.award_id, 0).
+     * Proves the exclusion survived that rewrite while unlinked ladders are present.
+     */
+    public function testWalkerStaysExcludedAlongsideUnlinkedKingdomLadders(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $unlinked = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Order of the Unlinked Walker Case', true);
+        $walkerKa = $this->fixture->createKingdomAward($kid, 31, 'T10RPT Walker In The Middle', true);
+
+        $columns = $this->kingdomColumnsFor($kid);
+        $keys = array_keys($this->lastAssembly['LadderAwards']);
+
+        $this->assertContains($unlinked, array_column($columns, 'KingdomAwardId'));
+        $this->assertNotContains(31, array_column($columns, 'AwardId'), 'Walker stays excluded from the kingdom grid');
+        $this->assertNotContains('k' . $walkerKa, $keys, 'a kingdomaward pointing at Walker must not become a column');
+        $this->assertNotContains(31, array_column($this->gridColumnsFor([]), 'AwardId'));
+    }
+
+    /**
+     * The LEFT join widened what the KINGDOM query returns; it must not widen the
+     * global (unscoped) grid, which stays official-only because two kingdoms'
+     * same-named ladders are different rows and are not comparable.
+     */
+    public function testGlobalGridStaysOfficialOnlyWithUnlinkedKingdomLadders(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $this->fixture->createKingdomAward($kid, 0, 'T10RPT Global Leak Check One', true);
+        $this->fixture->createKingdomAward($kid, 0, 'T10RPT Global Leak Check Two', true);
+
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $editor = $this->fixture->createPlayer($parkId, 'unlinked-global');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid([
+            'KingdomId' => 0,
+            'ParkId' => $parkId,
+            'Token' => $editor['token'],
+        ]);
+
+        foreach ($assembly['LadderAwards'] as $key => $column) {
+            $this->assertNotSame('kingdom', $column['Scope'] ?? 'official');
+            $this->assertIsInt($key, 'global columns are keyed on award_id, never on k<kingdomaward_id>');
+        }
+    }
+
+    /**
+     * Kingdom-scoped LadderAwards for $kid, also stashed on $this->lastAssembly so
+     * a caller can inspect the column KEYS (which array_values would discard).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function kingdomColumnsFor(int $kid): array
+    {
+        $report = new Report();
+        $this->lastAssembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
+
+        return array_values($this->lastAssembly['LadderAwards'] ?? []);
     }
 
     /**

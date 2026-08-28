@@ -7018,13 +7018,27 @@ class Report extends Ork3
         // requested park.
         $kingdomCols = [];
         if ($kingdomId > 0) {
-            $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
+            // LEFT JOIN, never INNER: 17 of the 26 live ka.is_ladder = 1 rows carry
+            // ka.award_id = 0 (a pure kingdom award, linked to no ork_award row --
+            // there is no award_id = 0), and an INNER join silently dropped every one
+            // of them, hiding 2,247 grants and leaving ten of eighteen kingdoms with
+            // an empty kingdom group. Because `a` may now be entirely NULL, every
+            // predicate below that touches it must be NULL-proofed: in SQL a bare
+            // `a.award_id != 31` is NULL (not TRUE) for a missing row, and NULL fails
+            // the WHERE clause just as surely as the dropped join did.
+            //
+            // Award::OfficialLadderSql() is deliberately NOT used here: it emits a
+            // bare `a.is_ladder = 1`, which under NOT (...) evaluates NULL-not-FALSE
+            // for a missing `a` and would re-drop exactly the rows this fix restores.
+            // Award::LadderSql() already IFNULLs both sides, so it is used as-is.
+            $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name,
+                            IFNULL(a.title_class, 0) AS title_class
                      FROM ' . DB_PREFIX . 'kingdomaward ka
-                     JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                     LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
                      WHERE ka.kingdom_id = ' . $kingdomId . '
                        AND ka.disabled = 0
                        AND ' . Award::LadderSql() . ' = 1
-                       AND NOT (' . Award::OfficialLadderSql() . ') AND a.award_id != 31
+                       AND NOT (IFNULL(a.is_ladder, 0) = 1) AND IFNULL(a.award_id, 0) != 31
                      ORDER BY IFNULL(ka.name, a.name)';
 
             $this->db->Clear();
@@ -7035,7 +7049,10 @@ class Report extends Ork3
                     if (!$kaid) {
                         continue;
                     }
-                    $name = $kaResult->award_name;
+                    // ka.name is NOT NULL in schema, so IFNULL(ka.name, a.name) is the
+                    // kingdom's own name for every row the LEFT JOIN now restores --
+                    // but coalesce anyway so a blank never reaches preg_replace().
+                    $name = (string) ($kaResult->award_name ?? '');
                     $kingdomCols['k' . $kaid] = [
                         'AwardId' => (int) $kaResult->award_id,
                         'KingdomAwardId' => $kaid,
@@ -7067,7 +7084,15 @@ class Report extends Ork3
         // already an official ladder column before and after), so without an
         // explicit version token a pre-deploy cache entry -- built with the old
         // GREATEST(rank, count) cell value -- would keep serving for up to 1200s.
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'gv' => 2]);
+        // gv 2 -> 3 for the kingdom-column LEFT JOIN fix: the award_id=0 kingdom
+        // ladders it restores add kingdomaward_ids to $awardIds for MOST kingdoms
+        // (which busts the key on its own), but for a kingdom whose ladders are ALL
+        // award_id=0 the pre-fix run produced an EMPTY kingdom set and returned
+        // early at `$awardCols === []` -- and for the rest the GridRows payload
+        // itself now carries extra 'k<id>' cells under a key that could otherwise
+        // still collide. Bumping gv guarantees no stale, column-incomplete grid is
+        // served for up to 1200s after deploy.
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'gv' => 3]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
