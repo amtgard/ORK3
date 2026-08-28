@@ -4198,9 +4198,24 @@ class Player extends Ork3
                 $new_at_event_id = valid_id($request['EventId']) ? $request['EventId'] : 0;
                 $new_custom_name = isset($request['CustomName']) ? $request['CustomName'] : (valid_id($request['KingdomAwardId']) ? '' : $awards->custom_name);
 
-                // Skip save and audit if nothing actually changed
+                // Skip save and audit if nothing actually changed.
+                //
+                // ZodiacMonth has to be part of this conjunction. Order of the
+                // Zodiac's reconcilability is decided by zodiac_month = 0 (see the
+                // filter in GetReconcileSuggestions()), NOT by the award mapping --
+                // so a reconcilable Zodiac is already sitting on the right
+                // kingdomaward_id, at rank 0, with the same note and location. Every
+                // other term matched, and the short-circuit returned Success(false)
+                // before the zodiac_month write below ever ran: the UI read
+                // status === 0, painted the row "Reconciled", and the month was never
+                // stored. Safe for every non-Zodiac award: controllers always send
+                // ZodiacMonth = 0 and the stored column is 0, and a caller that omits
+                // the key entirely (the API, or a rank-only reconcile) is exempted by
+                // the array_key_exists() guard, matching the write below.
                 $no_op = ($new_kingdomaward_id == $awards->kingdomaward_id
                     && intval($request['Rank']) == intval($awards->rank)
+                    && (!array_key_exists('ZodiacMonth', $request)
+                        || (int) $request['ZodiacMonth'] === (int) $awards->zodiac_month)
                     && $request['GivenById'] == $awards->given_by_id
                     && $request['Note'] == $awards->note
                     && $new_custom_name == $awards->custom_name

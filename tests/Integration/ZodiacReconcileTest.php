@@ -162,6 +162,47 @@ final class ZodiacReconcileTest extends TestCase
     }
 
     /**
+     * Grants a monthless Zodiac the way the ORK itself does -- through
+     * Player::AddAward(), so `by_whom_id` is the granting officer rather than
+     * the 0 that grantRaw() writes. That difference is load-bearing: every
+     * other term of ReconcileAward()'s no-op short-circuit already matches for
+     * a monthless Zodiac (it is created on the right kingdomaward_id, at rank
+     * 0, with the same note/location), so `by_whom_id > 0` is the last term
+     * standing between the short-circuit and a real write. grantRaw()'s
+     * `by_whom_id = 0` keeps that short-circuit permanently disarmed, which is
+     * exactly why the tests above never saw defect X7.
+     *
+     * Returns the created awards_id (AddAward's Success('') never returns one).
+     */
+    private function grantViaAddAward(int $zodiacMonth = 0): int
+    {
+        $result = $this->player->AddAward([
+            'Token' => $this->token,
+            'RecipientId' => $this->recipientId,
+            'KingdomAwardId' => $this->kingdomAwardId,
+            'Rank' => 0,
+            'ZodiacMonth' => $zodiacMonth,
+            'Date' => '2026-01-01',
+            'GivenById' => 0,
+            'Note' => '',
+            'ParkId' => 0,
+            'KingdomId' => 0,
+            'EventId' => 0,
+        ]);
+        $this->assertSame(0, (int) $result['Status'], 'grantViaAddAward() setup call failed: ' . json_encode($result));
+
+        $stmt = $this->pdo->prepare(
+            'SELECT awards_id FROM ork_awards WHERE mundane_id = :mid AND kingdomaward_id = :kaid ORDER BY awards_id DESC LIMIT 1'
+        );
+        $stmt->execute([':mid' => $this->recipientId, ':kaid' => $this->kingdomAwardId]);
+        $id = $stmt->fetchColumn();
+        $this->assertNotFalse($id, 'grantViaAddAward() could not find the created ork_awards row');
+        $this->awardsIdsToClean[] = (int) $id;
+
+        return (int) $id;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function reconcilableFor(int $mundaneId): array
@@ -270,6 +311,41 @@ final class ZodiacReconcileTest extends TestCase
         $id = $this->grantRaw(['zodiac_month' => 0, 'date' => '2030-01-01']);
 
         $this->assertContains($id, array_column($this->reconcilableFor($this->recipientId), 'AwardsId'));
+    }
+
+    public function testReconcilingAZodiacTheOrkItselfCreatedWritesTheMonth(): void
+    {
+        // Defect X7. Every other test here seeds through grantRaw() (by_whom_id
+        // = 0), which disarms ReconcileAward()'s no-op short-circuit. A Zodiac
+        // granted through AddAward carries the officer's by_whom_id, and a
+        // monthless Zodiac is already on the right kingdomaward at rank 0, so
+        // before the fix the short-circuit fired: Status 0 returned, the UI
+        // painted "Reconciled", and zodiac_month stayed 0 forever.
+        $id = $this->grantViaAddAward();
+        $this->assertGreaterThan(0, $this->columnOf($id, 'by_whom_id'), 'AddAward must stamp by_whom_id -- otherwise this test cannot see X7');
+        $this->assertSame(0, $this->columnOf($id, 'zodiac_month'));
+
+        $result = $this->player->ReconcileAward($this->reconcileZodiacRequest($id, 8));
+
+        $this->assertSame(0, (int) $result['Status'], 'ReconcileAward call failed: ' . json_encode($result));
+        // The assertion that matters: the ROW, not the status. A short-circuit
+        // returns Status 0 while writing nothing.
+        $this->assertSame(8, $this->columnOf($id, 'zodiac_month'), 'the confirmed month must reach the row, not just a success status');
+    }
+
+    public function testReconcilingAnUnchangedOrkCreatedRowIsStillANoOp(): void
+    {
+        // The other half of X7's fix: adding ZodiacMonth to the short-circuit
+        // must not make every reconcile a write. A row that already carries the
+        // submitted month, with nothing else changed, still short-circuits.
+        $id = $this->grantViaAddAward(8);
+        $this->assertSame(8, $this->columnOf($id, 'zodiac_month'));
+
+        $result = $this->player->ReconcileAward($this->reconcileZodiacRequest($id, 8));
+
+        $this->assertSame(0, (int) $result['Status']);
+        $this->assertSame(8, $this->columnOf($id, 'zodiac_month'));
+        $this->assertSame(0, $this->columnOf($id, 'rank'), 'rank is never written for Zodiac');
     }
 
     public function testReconcilingRejectsAnOutOfRangeMonth(): void
