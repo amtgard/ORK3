@@ -107,14 +107,14 @@ final class LadderGrantRuleTest extends TestCase
     /**
      * @param int $awardId 0 for a pure kingdom award (no official base row)
      */
-    private function seedKingdomAward(int $awardId, int $isLadder = 0, int $maxLevel = 0): int
+    private function seedKingdomAward(int $awardId, int $isLadder = 0, int $maxLevel = 0, ?int $kingdomId = null): int
     {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ork_kingdomaward (kingdom_id, award_id, name, is_ladder, max_level)
              VALUES (:kingdom_id, :award_id, :name, :is_ladder, :max_level)'
         );
         $stmt->execute([
-            ':kingdom_id' => self::KINGDOM_ID,
+            ':kingdom_id' => $kingdomId ?? self::KINGDOM_ID,
             ':award_id' => $awardId,
             ':name' => self::MARKER . '-' . uniqid(),
             ':is_ladder' => $isLadder,
@@ -266,6 +266,106 @@ final class LadderGrantRuleTest extends TestCase
         ]);
 
         $this->assertSame(0, (int) $result['Status']);
+    }
+
+    // -----------------------------------------------------------------
+    // The star, after a kingdom transfer.
+    //
+    // Player::GetAwardMaxRanks() -- which is what decides whether the client
+    // OFFERS the star -- MAX()es an official ladder across every kingdomaward
+    // sharing its award_id, so a transferred player still reads as holding the
+    // rank they earned. The server-side guard used to answer a narrower question
+    // (WHERE kingdomaward_id = N, resolved from the recipient's CURRENT kingdom),
+    // so the star rendered, the officer clicked it, and the grant was refused with
+    // "...or use the star if they have already reached 10" -- which they had, and
+    // which nothing on the page could contradict. 248 (mundane, official-ladder)
+    // pairs on the live corpus sit at rank 10+ overall but below 10 under their
+    // current kingdom's row.
+    // -----------------------------------------------------------------
+
+    private const OTHER_KINGDOM_ID = 777301;
+
+    public function testStarIsAcceptedWhenTheTopRankWasEarnedUnderAnotherKingdomsRow(): void
+    {
+        // award_id 21 = Order of the Rose, official ladder, max 10. Rank 10 sits
+        // under kingdom A's kingdomaward row; the recipient now lives in
+        // self::KINGDOM_ID and the grant is being written against ITS row, which
+        // carries no grants at all.
+        $otherKingdomKaId = $this->seedKingdomAward(21, 0, 0, self::OTHER_KINGDOM_ID);
+        $this->grantExistingRank($otherKingdomKaId, 21, 10);
+        $homeKaId = $this->seedKingdomAward(21);
+
+        $result = $this->player->AddAward([
+            'Token' => $this->token, 'RecipientId' => $this->recipientId,
+            'KingdomAwardId' => $homeKaId, 'Rank' => 0, 'Date' => '2026-01-01',
+        ]);
+
+        $this->assertSame(
+            0,
+            (int) $result['Status'],
+            'a player at rank 10 under another kingdom row must be able to take the star: ' . (string) $result['Detail']
+        );
+    }
+
+    public function testAPlayerGenuinelyBelowMaxAnywhereStillCannotTakeTheStar(): void
+    {
+        // Same shape, one rung short: rank 9 under kingdom A, nothing at home. The
+        // widened scope must not have turned the guard into a rubber stamp.
+        $otherKingdomKaId = $this->seedKingdomAward(21, 0, 0, self::OTHER_KINGDOM_ID);
+        $this->grantExistingRank($otherKingdomKaId, 21, 9);
+        $homeKaId = $this->seedKingdomAward(21);
+
+        $result = $this->player->AddAward([
+            'Token' => $this->token, 'RecipientId' => $this->recipientId,
+            'KingdomAwardId' => $homeKaId, 'Rank' => 0, 'Date' => '2026-01-01',
+        ]);
+
+        $this->assertNotSame(0, (int) $result['Status']);
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
+    }
+
+    public function testARevokedTopRankInAnotherKingdomDoesNotUnlockTheStar(): void
+    {
+        $otherKingdomKaId = $this->seedKingdomAward(21, 0, 0, self::OTHER_KINGDOM_ID);
+        $this->grantExistingRank($otherKingdomKaId, 21, 10);
+        $this->pdo->exec('UPDATE ork_awards SET revoked = 1 WHERE kingdomaward_id = ' . $otherKingdomKaId);
+        $homeKaId = $this->seedKingdomAward(21);
+
+        $result = $this->player->AddAward([
+            'Token' => $this->token, 'RecipientId' => $this->recipientId,
+            'KingdomAwardId' => $homeKaId, 'Rank' => 0, 'Date' => '2026-01-01',
+        ]);
+
+        $this->assertNotSame(0, (int) $result['Status'], 'a revoked grant is not a held rank');
+    }
+
+    /**
+     * The scope widens on OFFICIAL-ness, never on "ka.award_id > 0". All nine
+     * kingdom-raised ladders on the live corpus carry ka.award_id = 94, the shared
+     * "Custom Award" placeholder that 130 unrelated kingdomawards also use, so an
+     * award_id-keyed widening would let a rank earned on one kingdom's Order of
+     * the Fox unlock the star on a completely different kingdom's Order of the
+     * Hunter. A kingdom ladder has no cross-kingdom identity and must stay scoped
+     * to its own row -- which is also exactly the key space the client reads for
+     * it (every Kingdom Ladder <option> carries data-award-id='0').
+     */
+    public function testAKingdomLadderDoesNotWidenAcrossTheSharedCustomAwardPlaceholder(): void
+    {
+        $otherKingdomKaId = $this->seedKingdomAward(94, 1, 10, self::OTHER_KINGDOM_ID);
+        $this->grantExistingRank($otherKingdomKaId, 94, 10);
+        $homeKaId = $this->seedKingdomAward(94, 1, 10);
+
+        $result = $this->player->AddAward([
+            'Token' => $this->token, 'RecipientId' => $this->recipientId,
+            'KingdomAwardId' => $homeKaId, 'Rank' => 0, 'Date' => '2026-01-01',
+        ]);
+
+        $this->assertNotSame(
+            0,
+            (int) $result['Status'],
+            'two unrelated kingdom ladders sharing award_id 94 must not pool their ranks'
+        );
+        $this->assertStringContainsString('is a ranked award', (string) $result['Detail']);
     }
 
     public function testMonthlessZodiacGrantIsAccepted(): void

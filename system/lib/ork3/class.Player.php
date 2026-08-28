@@ -3889,26 +3889,43 @@ class Player extends Ork3
      * Award::MaxRankFor()), and a display name for the Rule 1 rejection message
      * (the kingdom's own name for the award, falling back to the base award's name).
      *
-     * @return array{is_ladder: bool, max_level: int, award_name: string}
+     * `official_award_id` is the award_id to compare ACROSS kingdoms on, or 0 when
+     * this ladder has no cross-kingdom identity. It is ka.award_id -- the
+     * authoritative join, never the caller-supplied AwardId -- and only when the
+     * row is an OFFICIAL ladder (Award::OfficialLadderSql()). "award_id > 0" is
+     * deliberately NOT the test: all nine kingdom-raised ladders on the live
+     * corpus carry ka.award_id = 94, the shared "Custom Award" placeholder that
+     * 130 unrelated kingdomawards also use, so keying them on award_id would pool
+     * every one of those into a single bucket -- the exact defect a048b895 fixed
+     * on the read side. Award::GetAwardOptionGroups() splits its two ladder
+     * optgroups on official-ness for the same reason, and the client picks its
+     * key space from that split (a Kingdom Ladder option carries
+     * data-award-id='0' whatever ka.award_id says), so this must match it.
+     *
+     * @return array{is_ladder: bool, max_level: int, award_name: string, official_award_id: int}
      */
     private function GetLadderContext(int $kingdomAwardId): array
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ' . Award::LadderSql('ka', 'a') . ' AS is_ladder, ka.max_level,
+            'SELECT ' . Award::LadderSql('ka', 'a') . ' AS is_ladder, ka.max_level, ka.award_id,
+                    ' . Award::OfficialLadderSql('a') . ' AS official_is_ladder,
                     COALESCE(NULLIF(ka.name, \'\'), a.name, \'\') AS award_name
              FROM ' . DB_PREFIX . 'kingdomaward ka
              LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
              WHERE ka.kingdomaward_id = ' . $kingdomAwardId
         );
         if (!$rs || !$rs->Next()) {
-            return ['is_ladder' => false, 'max_level' => 0, 'award_name' => ''];
+            return ['is_ladder' => false, 'max_level' => 0, 'award_name' => '', 'official_award_id' => 0];
         }
+
+        $officialAwardId = (int) $rs->official_is_ladder === 1 ? (int) $rs->award_id : 0;
 
         return [
             'is_ladder' => (int) $rs->is_ladder === 1,
             'max_level' => (int) $rs->max_level,
             'award_name' => (string) $rs->award_name,
+            'official_award_id' => $officialAwardId,
         ];
     }
 
@@ -3916,22 +3933,56 @@ class Player extends Ork3
      * The recipient's highest currently-held (non-revoked) rank on this ladder
      * award -- the star test compares this against Award::MaxRankFor().
      *
+     * SCOPED THE SAME WAY THE CLIENT SCOPES IT. Player::GetAwardMaxRanks() is what
+     * decides whether the "star" pill is offered at all, and it answers in two key
+     * spaces: an OFFICIAL ladder (ka.award_id > 0) is MAX()ed across every
+     * kingdomaward sharing that award_id, while a kingdom ladder (award_id = 0, or
+     * the shared 94 "Custom Award" placeholder) is answered per kingdomaward_id.
+     * This lookup must use the same scope or the two disagree, and they did: a
+     * WHERE kingdomaward_id = N reads only the recipient's CURRENT kingdom's row,
+     * so a player who reached Order of the Rose rank 10 in kingdom A and then
+     * transferred to kingdom B saw the star render (held 10 >= max 10, from the
+     * cross-kingdom map), clicked it, and was refused with "...or use the star if
+     * they have already reached 10" -- which they had. On the live corpus 248
+     * (mundane, official-ladder) pairs are at rank 10+ overall but below 10 under
+     * their current kingdom's row; every one of them was a false rejection the
+     * officer could not argue with, because the UI showed the opposite.
+     *
+     * $officialAwardId comes from GetLadderContext() and is non-zero ONLY for an
+     * official ladder -- see that method for why "ka.award_id > 0" is the wrong
+     * test (nine kingdom-raised ladders share the award_id 94 placeholder with 130
+     * unrelated kingdomawards).
+     *
      * $excludeAwardsId (0 = none) drops one specific ork_awards row from the
      * MAX(rank). UpdateAward()/ReconcileAward() pass the row being written so
      * that row's own pre-write rank can never justify the very write that is
      * about to change (or zero out) it -- the held rank must come from every
      * OTHER grant on this ladder. AddAward() has no existing row, so it never
-     * passes one.
+     * passes one. Widening the scope does not weaken it: the excluded row is
+     * excluded by awards_id, which is unique across every kingdom.
      */
-    private function CurrentLadderRank(int $recipientId, int $kingdomAwardId, int $excludeAwardsId = 0): int
-    {
+    private function CurrentLadderRank(
+        int $recipientId,
+        int $kingdomAwardId,
+        int $officialAwardId = 0,
+        int $excludeAwardsId = 0
+    ): int {
+        // Official ladder -> one Amtgard-wide identity, compared across kingdoms.
+        // Kingdom ladder -> no cross-kingdom identity at all, so its own row is the
+        // only honest scope.
+        $scope = $officialAwardId > 0
+            ? 'ka.award_id = ' . $officialAwardId
+            : 'aw.kingdomaward_id = ' . $kingdomAwardId;
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT MAX(`rank`) AS max_rank FROM ' . DB_PREFIX . 'awards
-             WHERE mundane_id = ' . $recipientId . '
-               AND kingdomaward_id = ' . $kingdomAwardId . '
-               AND revoked = 0'
-               . ($excludeAwardsId > 0 ? ' AND awards_id != ' . $excludeAwardsId : '')
+            'SELECT MAX(aw.`rank`) AS max_rank
+             FROM ' . DB_PREFIX . 'awards aw
+             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+             WHERE aw.mundane_id = ' . $recipientId . '
+               AND aw.revoked = 0
+               AND ' . $scope
+               . ($excludeAwardsId > 0 ? ' AND aw.awards_id != ' . $excludeAwardsId : '')
         );
 
         return ($rs && $rs->Next()) ? (int) $rs->max_rank : 0;
@@ -3975,7 +4026,12 @@ class Player extends Ork3
             return null;
         }
         $maxRank = Award::MaxRankFor($awardId, $ladder['max_level']);
-        $currentRank = $this->CurrentLadderRank($recipientId, $kingdomAwardId, $excludeAwardsId);
+        $currentRank = $this->CurrentLadderRank(
+            $recipientId,
+            $kingdomAwardId,
+            $ladder['official_award_id'],
+            $excludeAwardsId
+        );
         if (Award::OffersStar($awardId, $ladder['max_level'], $currentRank)) {
             return null;
         }
