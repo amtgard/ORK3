@@ -290,16 +290,18 @@
 
 	// Tile layer picks the right Carto style based on the current data-theme
 	// attribute. The default.theme bootstrap script sets data-theme="dark" or
-	// "light" before our script runs (handling system pref as well).
+	// "light" before our script runs (handling system pref as well). CARTO's
+	// free tiles now require a key -- mirrored in Weather_index.tpl, update
+	// both if this ever changes.
+	const CARTO_KEY = <?= json_encode(CARTO_API_KEY) ?>;
 	let tileLayer = null;
 	function isDarkTheme() {
 		return document.documentElement.getAttribute('data-theme') === 'dark';
 	}
 	function applyMapTheme() {
 		if (!map) return;
-		const url = isDarkTheme()
-			? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-			: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+		const style = isDarkTheme() ? 'dark-matter' : 'positron';
+		const url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_KEY);
 		if (tileLayer) map.removeLayer(tileLayer);
 		tileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
 	}

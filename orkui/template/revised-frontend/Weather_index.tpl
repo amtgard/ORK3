@@ -768,12 +768,14 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 		}
 		setZoomedIn(false);
 	}
+	// CARTO's free tiles now require a key -- mirrored in Live_index.tpl,
+	// update both if this ever changes.
+	var WX_CARTO_KEY = <?= json_encode(CARTO_API_KEY) ?>;
 	function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 	function wxApplyMapTheme() {
 		if (!wxMap) return;
-		var url = isDarkTheme()
-			? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-			: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+		var style = isDarkTheme() ? 'dark-matter' : 'positron';
+		var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(WX_CARTO_KEY);
 		if (wxTileLayer) wxMap.removeLayer(wxTileLayer);
 		wxTileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(wxMap);
 	}

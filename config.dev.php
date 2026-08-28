@@ -137,6 +137,11 @@ define('BEHOLD_KEY', '');
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
 
+// CARTO basemap tile key (Live Attendance + Weather maps) — keep empty in
+// committed config.dev.php; set the real value in an untracked local
+// override if you need working maps locally.
+define('CARTO_API_KEY', '');
+
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');
 require_once(DIR_LIB . 'Yapo2/class.Yapo.php');

@@ -107,6 +107,11 @@ define('BEHOLD_KEY', '');
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
 
+// CARTO basemap tile key (Live Attendance + Weather maps). CARTO's free
+// basemaps.cartocdn.com tiles now require a key -- leave empty in dev/dist;
+// fill in the real value in prod config.php.
+define('CARTO_API_KEY', '');
+
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');
 define('IDP_BASE_URL', 'https://idp.amtgard.com');
