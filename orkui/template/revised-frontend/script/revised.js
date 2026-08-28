@@ -3338,6 +3338,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
+    var knPlayerMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -3404,6 +3405,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
+        wrap.setAttribute('data-held-months', knPlayerMonths.join(','));
         if (tnRankMonths(wrap, 'kn', baseAwardId, 'Award', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
             return;
@@ -3491,11 +3493,13 @@ $(document).ready(function() {
         this.classList.remove('kn-ac-open');
         checkRequired();
         knPlayerRanks = {};
+        knPlayerMonths = [];
         var pid = item.dataset.id;
         fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 knPlayerRanks = ranks || {};
+                knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                 var curAward = gid('kn-award-select').value;
                 if (curAward) buildRankPills(curAward);
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -3599,6 +3603,7 @@ $(document).ready(function() {
     window.knOpenAwardModal = function() {
         var today = new Date();
         knPlayerRanks = {};
+        knPlayerMonths = [];
         gid('kn-award-error').style.display      = 'none';
         gid('kn-award-error').textContent        = '';
         gid('kn-award-success').style.display    = 'none';
@@ -3653,6 +3658,7 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(ranks) {
                     knPlayerRanks = ranks || {};
+                    knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                     var curAward = gid('kn-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -3837,10 +3843,12 @@ $(document).ready(function() {
             var pid = gid('kn-award-player-id').value;
             if (pid) {
                 knPlayerRanks = {};
+                knPlayerMonths = [];
                 fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
                     .then(function(r) { return r.json(); })
                     .then(function(ranks) {
                         knPlayerRanks = ranks || {};
+                        knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                         var curAward = gid('kn-award-select').value;
                         if (curAward) buildRankPills(curAward);
                     }).catch(function() {});
@@ -3856,6 +3864,7 @@ $(document).ready(function() {
     var KINGDOM_ID = KnConfig.kingdomId;
     var playerTimer;
     var knRecRanks = {};
+    var knRecMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -3879,6 +3888,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
+        wrap.setAttribute('data-held-months', knRecMonths.join(','));
         if (tnRankMonths(wrap, 'kn', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
             return;
@@ -3953,10 +3963,12 @@ $(document).ready(function() {
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
         knRecRanks = {};
+        knRecMonths = [];
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 knRecRanks = ranks || {};
+                knRecMonths = (ranks && ranks.ZodiacMonths) || [];
                 var cur = gid('kn-rec-award-select').value;
                 if (cur) buildRecRankPills(cur);
             }).catch(function() {});
@@ -3983,6 +3995,7 @@ $(document).ready(function() {
         gid('kn-rec-reason').value          = '';
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         knRecRanks = {};
+        knRecMonths = [];
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
@@ -4026,6 +4039,7 @@ $(document).ready(function() {
                     gid('kn-rec-reason').value = '';
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     knRecRanks = {};
+                    knRecMonths = [];
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
@@ -7099,6 +7113,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
+    var pkPlayerMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7169,6 +7184,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
+        wrap.setAttribute('data-held-months', pkPlayerMonths.join(','));
         if (tnRankMonths(wrap, 'pk', baseAwardId, 'Award', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
             return;
@@ -7259,11 +7275,13 @@ $(document).ready(function() {
         checkRequired();
         // Fetch this player's held ladder award ranks, then rebuild pills if an award is selected
         pkPlayerRanks = {};
+        pkPlayerMonths = [];
         var pid = item.dataset.id;
         fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 pkPlayerRanks = ranks || {};
+                pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                 var curAward = gid('pk-award-select').value;
                 if (curAward) buildRankPills(curAward);
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -7369,6 +7387,7 @@ $(document).ready(function() {
     window.pkOpenAwardModal = function() {
         var today = new Date();
         pkPlayerRanks = {};
+        pkPlayerMonths = [];
         gid('pk-award-error').style.display      = 'none';
         gid('pk-award-error').textContent        = '';
         gid('pk-award-success').style.display    = 'none';
@@ -7423,6 +7442,7 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(ranks) {
                     pkPlayerRanks = ranks || {};
+                    pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                     var curAward = gid('pk-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -7607,10 +7627,12 @@ $(document).ready(function() {
             var pid = gid('pk-award-player-id').value;
             if (pid) {
                 pkPlayerRanks = {};
+                pkPlayerMonths = [];
                 fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
                     .then(function(r) { return r.json(); })
                     .then(function(ranks) {
                         pkPlayerRanks = ranks || {};
+                        pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                         var curAward = gid('pk-award-select').value;
                         if (curAward) buildRankPills(curAward);
                     }).catch(function() {});
@@ -7646,6 +7668,7 @@ $(document).ready(function() {
     var SEARCH_URL  = PkConfig.httpService + 'Search/SearchService.php';
     var playerTimer;
     var pkRecRanks  = {};
+    var pkRecMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7669,6 +7692,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
+        wrap.setAttribute('data-held-months', pkRecMonths.join(','));
         if (tnRankMonths(wrap, 'pk', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
             return;
@@ -7744,10 +7768,12 @@ $(document).ready(function() {
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
         pkRecRanks = {};
+        pkRecMonths = [];
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 pkRecRanks = ranks || {};
+                pkRecMonths = (ranks && ranks.ZodiacMonths) || [];
                 var cur = gid('pk-rec-award-select').value;
                 if (cur) buildRecRankPills(cur);
             }).catch(function() {});
@@ -7774,6 +7800,7 @@ $(document).ready(function() {
         gid('pk-rec-reason').value          = '';
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         pkRecRanks = {};
+        pkRecMonths = [];
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
         document.body.style.overflow = 'hidden';
@@ -7817,6 +7844,7 @@ $(document).ready(function() {
                     gid('pk-rec-reason').value = '';
                     gid('pk-rec-char-count').textContent = '400 characters remaining';
                     pkRecRanks = {};
+                    pkRecMonths = [];
                     setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';

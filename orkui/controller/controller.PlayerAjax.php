@@ -372,7 +372,11 @@ class Controller_PlayerAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'awardranks') {
+            // Additive: existing consumers read this as a flat award_id => max_rank
+            // map. ZodiacMonths rides along under its own key rather than reshaping
+            // the response, so every current caller keeps working unchanged.
             $ranks = $this->Player->get_award_max_ranks((int)$player_id);
+            $ranks['ZodiacMonths'] = $this->Player->get_zodiac_held_months((int)$player_id);
             echo json_encode($ranks);
 
         } elseif ($action === 'info') {

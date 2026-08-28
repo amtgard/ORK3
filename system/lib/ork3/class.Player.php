@@ -550,6 +550,36 @@ class Player extends Ork3
         return $ranks;
     }
 
+    /**
+     * The distinct calendar months (1-12) this player already holds an Order of
+     * the Zodiac (award_id 30, Award::IsMonthlyLadder()) grant for. Reads
+     * ork_awards.zodiac_month only -- `rank` is never consulted, because 1,193
+     * legacy Zodiac grants carry rank 1 and none of them means January. A
+     * grant with zodiac_month = 0 is unmonthed and contributes nothing.
+     *
+     * @return list<int> distinct months held, ascending
+     */
+    public function GetZodiacHeldMonths($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT aw.zodiac_month
+             FROM ' . DB_PREFIX . 'awards aw
+             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND ka.award_id = 30 AND aw.zodiac_month > 0'
+        );
+        $months = [];
+        while ($rs && $rs->Next()) {
+            $months[] = (int) $rs->zodiac_month;
+        }
+        sort($months);
+
+        return $months;
+    }
+
     public function SaveOwnEmail($request)
     {
         $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
