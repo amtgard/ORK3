@@ -2276,6 +2276,11 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 										'IsHistorical'  => (int)($detail['IsHistorical'] ?? 0),
 										'KingdomAwardId'=> (int)$detail['KingdomAwardId'],
 										'Rank'          => (int)$detail['Rank'],
+										// The recorded calendar month for a monthly ladder (Order of the
+										// Zodiac). Without it the edit modal can neither pre-select the
+										// record's own month nor clear a stale rank, so saving an
+										// untouched Zodiac silently rewrote or wiped its month.
+										'ZodiacMonth'   => (int)($detail['ZodiacMonth'] ?? 0),
 										'Date'       => $detail['Date'],
 										'GivenBy'    => $detail['GivenBy'],
 										'GivenById'  => (int)$detail['GivenById'],
@@ -2429,6 +2434,8 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 											'IsHistorical'   => (int)($detail['IsHistorical'] ?? 0),
 											'KingdomAwardId' => (int)$detail['KingdomAwardId'],
 											'Rank'           => (int)$detail['Rank'],
+											// See the awards table's ZodiacMonth note above.
+											'ZodiacMonth'    => (int)($detail['ZodiacMonth'] ?? 0),
 											'Date'           => $detail['Date'],
 											'GivenBy'        => $detail['GivenBy'],
 											'GivenById'      => (int)$detail['GivenById'],
@@ -3887,8 +3894,17 @@ window.OrkRsCfg = {
 <?php endif; ?>
 
 <?php
-// Build AwardId => max rank held by this player (for ladder award pre-fill),
-// and the set of held base AwardIds and KingdomAwardIds (for duplicate / Master-peerage detection)
+// Build the held-rank map for ladder award pre-fill, plus the set of held base
+// AwardIds and KingdomAwardIds (for duplicate / Master-peerage detection).
+//
+// The map carries the SAME two key spaces Player::GetAwardMaxRanks() returns to
+// PlayerAjax/.../awardranks, so tnRankHeldFor() reads one shape on every surface:
+//   int award_id          -- only when award_id > 0, MAX()ed across kingdomawards
+//   'k' . kingdomaward_id -- for every row
+// The kingdomaward keys are the ONLY usable ones for a kingdom ladder: 17 of the
+// 26 carry ka.award_id = 0 and 9 more share the generic 94 "Custom Award"
+// placeholder, so an award_id-only map either missed them entirely (award_id 0)
+// or collapsed nine unrelated ladders into one bucket (award_id 94).
 $playerAwardRanks          = array();
 $playerHeldAwardIds        = array();
 $playerHeldKingdomAwardIds = array();
@@ -3896,15 +3912,19 @@ if (is_array($Details['Awards'])) {
 	foreach ($Details['Awards'] as $a) {
 		$aid  = (int)$a['AwardId'];
 		$rank = (int)$a['Rank'];
+		$kaid = (int)($a['KingdomAwardId'] ?? 0);
 		if ($aid > 0) {
 			$playerHeldAwardIds[$aid] = true;
 			if ($rank > 0 && (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid])) {
 				$playerAwardRanks[$aid] = $rank;
 			}
 		}
-		$kaid = (int)($a['KingdomAwardId'] ?? 0);
 		if ($kaid > 0) {
 			$playerHeldKingdomAwardIds[$kaid] = true;
+			$kKey = 'k' . $kaid;
+			if ($rank > 0 && (!isset($playerAwardRanks[$kKey]) || $rank > $playerAwardRanks[$kKey])) {
+				$playerAwardRanks[$kKey] = $rank;
+			}
 		}
 	}
 }
