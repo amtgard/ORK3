@@ -395,6 +395,10 @@ class Kingdom extends Ork3
             $awardId = (int) ($request['AwardId'] ?? 0);
             $officialLadder = false;
             if ($awardId > 0) {
+                // Fail CLOSED: a lookup that does not come back is treated as
+                // "this is an official ladder", so a database hiccup can never be
+                // the reason a kingdom gets to seed ladder config onto an alias.
+                $officialLadder = true;
                 $this->db->Clear();
                 $officialRs = $this->db->DataSet(
                     'select IFNULL(' . Award::OfficialLadderSql('a') . ', 0) as official_is_ladder
@@ -406,19 +410,21 @@ class Kingdom extends Ork3
                 }
             }
 
-            if (!$officialLadder) {
-                $isLadder = isset($request['IsLadder']) && (int) $request['IsLadder'] === 1 ? 1 : 0;
+            // ABSENCE MEANS "LEAVE ALONE", NOT "CLEAR". Three separate editors POST
+            // into the award-edit path and only the Manage Awards modal sends these
+            // two fields; the other two would otherwise demote a kingdom ladder to a
+            // flat award as a side effect of a rename. Same array_key_exists()
+            // discipline Player::UpdateAward/ReconcileAward use for ZodiacMonth.
+            if (!$officialLadder && array_key_exists('IsLadder', $request)) {
+                $isLadder = (int) $request['IsLadder'] === 1 ? 1 : 0;
                 $this->kingdomaward->is_ladder = $isLadder;
                 if ($isLadder === 1) {
                     // Ladder and Title? are mutually exclusive.
                     $this->kingdomaward->is_title = 0;
                 }
-
-                $maxLevel = (int) ($request['MaxLevel'] ?? 0);
-                if ($maxLevel < 0) {
-                    $maxLevel = 0;
-                }
-                $this->kingdomaward->max_level = min(12, $maxLevel); // Rule 2
+            }
+            if (!$officialLadder && array_key_exists('MaxLevel', $request)) {
+                $this->kingdomaward->max_level = min(12, max(0, (int) $request['MaxLevel'])); // Rule 2
             }
 
             $this->kingdomaward->save();
@@ -471,25 +477,40 @@ class Kingdom extends Ork3
              left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
              where ka.kingdomaward_id = ' . (int) $request['KingdomAwardId']
         );
-        $officialLadder = false;
+        // Fail CLOSED. find() above already proved the row exists, so a falsy
+        // DataSet()/Next() here means the lookup itself failed, not that the award
+        // is unofficial -- and with the array_key_exists() guards below this is the
+        // last remaining way an official ladder's configuration could be clobbered.
+        $officialLadder = true;
         if ($officialRs && $officialRs->Next()) {
             $officialLadder = (int) $officialRs->official_is_ladder === 1;
         }
 
-        if (!$officialLadder) {
+        // ABSENCE MEANS "LEAVE ALONE", NOT "CLEAR".
+        //
+        // Three live editors POST into this method and only one of them (the Manage
+        // Awards modal) sends IsLadder/MaxLevel: Admin/editkingdom's awards tab and
+        // the Kingdom profile Admin > Awards panel both omit them. Reading an absent
+        // field as 0 made a rename or a reign-limit nudge on either of those screens
+        // silently demote a kingdom ladder (is_ladder 1 -> 0, max_level 10 -> 0) with
+        // no warning and no audit trail. Same array_key_exists() discipline
+        // Player::UpdateAward/ReconcileAward already use for ZodiacMonth.
+        if (!$officialLadder && array_key_exists('IsLadder', $request)) {
             // yapo drops null, so write 0 rather than null to clear the flag.
-            $isLadder = isset($request['IsLadder']) && (int) $request['IsLadder'] === 1 ? 1 : 0;
+            $isLadder = (int) $request['IsLadder'] === 1 ? 1 : 0;
             $this->kingdomaward->is_ladder = $isLadder;
             if ($isLadder === 1) {
                 // Ladder and Title? are mutually exclusive.
                 $this->kingdomaward->is_title = 0;
             }
-
-            $maxLevel = (int) ($request['MaxLevel'] ?? 0);
-            if ($maxLevel < 0) {
-                $maxLevel = 0;
-            }
-            $this->kingdomaward->max_level = min(12, $maxLevel); // Rule 2
+        } elseif (!$officialLadder && (int) $this->kingdomaward->is_ladder === 1) {
+            // The row is a ladder and this editor did not offer the flag, so it also
+            // cannot be offering a coherent Title? value: keep the two mutually
+            // exclusive rather than letting an unrelated save set both to 1.
+            $this->kingdomaward->is_title = 0;
+        }
+        if (!$officialLadder && array_key_exists('MaxLevel', $request)) {
+            $this->kingdomaward->max_level = min(12, max(0, (int) $request['MaxLevel'])); // Rule 2
         }
 
         $this->kingdomaward->save();

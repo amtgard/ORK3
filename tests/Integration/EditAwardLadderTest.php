@@ -126,6 +126,133 @@ final class EditAwardLadderTest extends TestCase
         $this->assertSame(0, $this->readBack($id)['is_ladder']);
     }
 
+    /**
+     * Seed a kingdom-specific award that is ALREADY a ladder, the way the 24
+     * hand-configured rows on production look.
+     */
+    private function seedLadder(int $maxLevel = 5): int
+    {
+        $id = $this->seed(0);
+        $this->pdo->exec(
+            "UPDATE ork_kingdomaward SET is_ladder = 1, max_level = {$maxLevel} WHERE kingdomaward_id = {$id}"
+        );
+
+        return $id;
+    }
+
+    /** The five scalar fields every editor DOES send, so nothing else is at stake. */
+    private function unrelatedEdit(int $id, string $name): array
+    {
+        return [
+            'KingdomAwardId' => $id,
+            'KingdomId' => self::KINGDOM_ID,
+            'Name' => $name,
+            'ReignLimit' => 3,
+            'MonthLimit' => 0,
+            'IsTitle' => 0,
+            'TitleClass' => '',
+            'Token' => $this->token,
+        ];
+    }
+
+    private function nameOf(int $id): string
+    {
+        $stmt = $this->pdo->prepare('SELECT name FROM ork_kingdomaward WHERE kingdomaward_id = :id');
+        $stmt->execute([':id' => $id]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
+    /**
+     * THE DATA-LOSS DEFECT. Two of the three live editors that POST into EditAward
+     * -- Admin/editkingdom's awards tab and the Kingdom profile Admin > Awards panel
+     * -- never send IsLadder at all. Reading an absent field as "set it to 0" meant a
+     * rename silently demoted the kingdom's ladder, with no warning and no audit
+     * trail. Absence must mean "leave unchanged".
+     */
+    public function testEditAwardWithoutIsLadderLeavesAnExistingLadderIntact(): void
+    {
+        $id = $this->seedLadder(5);
+        $newName = self::MARKER . '-renamed-' . uniqid();
+
+        $this->kingdom->EditAward($this->unrelatedEdit($id, $newName));
+
+        // The rename landed...
+        $this->assertSame($newName, $this->nameOf($id));
+        // ...and did not take the ladder with it.
+        $this->assertSame(1, $this->readBack($id)['is_ladder']);
+    }
+
+    /** The guard must not make the flag un-clearable: an explicit 0 still clears. */
+    public function testEditAwardWithIsLadderZeroStillClearsTheFlag(): void
+    {
+        $id = $this->seedLadder(5);
+
+        $this->kingdom->EditAward(
+            ['IsLadder' => 0] + $this->unrelatedEdit($id, self::MARKER . '-untick-' . uniqid())
+        );
+
+        $this->assertSame(0, $this->readBack($id)['is_ladder']);
+    }
+
+    /** Same pair for max_level: an omitted MaxLevel must not reset 5 -> 0. */
+    public function testEditAwardWithoutMaxLevelLeavesAnExistingMaxLevelIntact(): void
+    {
+        $id = $this->seedLadder(5);
+
+        $this->kingdom->EditAward($this->unrelatedEdit($id, self::MARKER . '-keepmax-' . uniqid()));
+
+        $this->assertSame(5, $this->readBack($id)['max_level']);
+    }
+
+    public function testEditAwardWithMaxLevelZeroStillClearsIt(): void
+    {
+        $id = $this->seedLadder(5);
+
+        $this->kingdom->EditAward(
+            ['IsLadder' => 0, 'MaxLevel' => 0] + $this->unrelatedEdit($id, self::MARKER . '-zeromax-' . uniqid())
+        );
+
+        $this->assertSame(['is_ladder' => 0, 'max_level' => 0], $this->readBack($id));
+    }
+
+    /**
+     * FAIL CLOSED. The official-ladder lookup used to leave $officialLadder = false
+     * when DataSet() came back falsy, so a database hiccup let the write through --
+     * the last remaining way to clobber an official ladder's configuration. A lookup
+     * that does not answer must be read as "official", i.e. no ladder write at all.
+     *
+     * The stub replaces only Kingdom::$db (the raw-SQL handle). The yapo objects
+     * built in the constructor still hold the real $DB, so find()/save() work
+     * normally and the test proves the OTHER fields were saved while the ladder
+     * columns were left alone -- not merely that the whole call aborted.
+     */
+    public function testAFailedOfficialLookupDoesNotPermitALadderWrite(): void
+    {
+        $id = $this->seedLadder(5);
+        $newName = self::MARKER . '-failclosed-' . uniqid();
+
+        $kingdom = new Kingdom();
+        $kingdom->db = new class () {
+            public function Clear(): void
+            {
+            }
+
+            /** @return false */
+            public function DataSet(string $sql)
+            {
+                return false; // simulate the lookup failing
+            }
+        };
+
+        $kingdom->EditAward(
+            ['IsLadder' => 0, 'MaxLevel' => 0] + $this->unrelatedEdit($id, $newName)
+        );
+
+        $this->assertSame($newName, $this->nameOf($id), 'the rest of the edit should still have saved');
+        $this->assertSame(['is_ladder' => 1, 'max_level' => 5], $this->readBack($id));
+    }
+
     public function testEditAwardRefusesToClearTheLadderFlagOnAnOfficialAward(): void
     {
         // Requirement 1, second line of defence. award_id 21 = Order of the Rose.

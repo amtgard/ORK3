@@ -321,8 +321,21 @@ class Controller_KingdomAjax extends Controller
             $month    = (int)($_POST['MonthLimit']      ?? 0);
             $isTitle  = (int)($_POST['IsTitle']         ?? 0);
             $tClass   = (int)($_POST['TitleClass']      ?? 0);
-            $isLadder = (int)($_POST['IsLadder']        ?? 0);
-            $maxLevel = (int)($_POST['MaxLevel']        ?? 0);
+
+            // Ladder config is forwarded ONLY when the poster actually sent it.
+            // Two editors POST to this endpoint: the Manage Awards modal (sends both
+            // fields) and the older Kingdom profile > Admin > Awards panel (sends
+            // neither). Defaulting to 0 and forwarding unconditionally manufactured a
+            // "set is_ladder to 0" out of an omission, so a rename from the older
+            // panel demoted the kingdom's ladder. Kingdom::EditAward/CreateAward treat
+            // an absent key as "leave unchanged".
+            $ladderParams = [];
+            if (array_key_exists('IsLadder', $_POST)) {
+                $ladderParams['IsLadder'] = (int) $_POST['IsLadder'];
+            }
+            if (array_key_exists('MaxLevel', $_POST)) {
+                $ladderParams['MaxLevel'] = (int) $_POST['MaxLevel'];
+            }
 
             if (!strlen($name)) {
                 echo json_encode(['status' => 1, 'error' => 'Award name is required.']);
@@ -330,7 +343,7 @@ class Controller_KingdomAjax extends Controller
             }
 
             if ($kawId > 0) {
-                $r = $this->Kingdom->EditAward([
+                $r = $this->Kingdom->EditAward($ladderParams + [
                     'Token'          => $this->session->token,
                     'KingdomId'      => $kingdom_id,
                     'KingdomAwardId' => $kawId,
@@ -339,12 +352,10 @@ class Controller_KingdomAjax extends Controller
                     'MonthLimit'     => $month,
                     'IsTitle'        => $isTitle,
                     'TitleClass'     => $tClass,
-                    'IsLadder'       => $isLadder,
-                    'MaxLevel'       => $maxLevel,
                 ]);
             } else {
                 $awardId = (int)($_POST['AwardId'] ?? 0);
-                $r = $this->Kingdom->CreateAward([
+                $r = $this->Kingdom->CreateAward($ladderParams + [
                     'Token'      => $this->session->token,
                     'KingdomId'  => $kingdom_id,
                     'AwardId'    => $awardId,
@@ -353,8 +364,6 @@ class Controller_KingdomAjax extends Controller
                     'MonthLimit' => $month,
                     'IsTitle'    => $isTitle,
                     'TitleClass' => $tClass,
-                    'IsLadder'   => $isLadder,
-                    'MaxLevel'   => $maxLevel,
                 ]);
             }
 
