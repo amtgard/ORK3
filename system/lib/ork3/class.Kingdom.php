@@ -1207,6 +1207,12 @@ class Kingdom extends Ork3
      * kingdom-match expression and (b) the WHERE clause scoping rows to a
      * kingdom or a park.
      *
+     * The ORDER BY resolves through OfficerPosition::SortOrderSql(), not raw
+     * op.sort_order: the Core Five are SHARED rows (kingdom_id = 0) and a kingdom's
+     * ordering of them lives in its own alias row. $aliasKingdomExpr already scopes
+     * that join per kingdom (Park::GetOfficers passes o.kingdom_id, so a park list
+     * inherits its kingdom's order, which is what a park officer expects to see).
+     *
      * @param object $db               DB handle ($this->db).
      * @param string $aliasKingdomExpr SQL expr for al.kingdom_id match
      *                                 (e.g. "'5'" for a kingdom, "o.kingdom_id" for a park).
@@ -1231,7 +1237,7 @@ class Kingdom extends Ork3
 				where " . $whereClause . "
 				  and (op.retired_at IS NULL or op.position_id IS NULL)
 				  and NOT (op.hide_when_vacant = 1 and op.classification != 'crown' and (o.mundane_id IS NULL or o.mundane_id = 0))
-				order by op.classification, op.sort_order, o.role
+				order by op.classification, " . OfficerPosition::SortOrderSql('op', 'al') . ", o.role
 			";
         $r = $db->query($sql);
         $response = array();

@@ -75,6 +75,7 @@ class Controller_OfficerAdminAjax extends Controller
             'vacateall'      => 'kingdom.officer.set',
             'createposition' => 'kingdom.officer.position.manage',
             'editposition'   => 'kingdom.officer.position.manage',
+            'reorderpositions' => 'kingdom.officer.position.manage',
             'reclassify'     => 'kingdom.officer.position.manage',
             'retire'         => 'kingdom.officer.position.manage',
             'reinstate'      => 'kingdom.officer.position.manage',
@@ -109,6 +110,8 @@ class Controller_OfficerAdminAjax extends Controller
             case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);
                 break;
             case 'editposition': $this->actionEditPosition($kingdom_id, $uid);
+                break;
+            case 'reorderpositions': $this->actionReorderPositions($kingdom_id, $uid);
                 break;
             case 'reclassify':   $this->actionReclassify($kingdom_id, $uid);
                 break;
@@ -636,6 +639,51 @@ class Controller_OfficerAdminAjax extends Controller
 
         $r = $this->OfficerPosition->EditPosition($position_id, $fields, $kingdom_id);
         $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
+    }
+
+    /**
+     * Batch reorder one sibling group in a single atomic call.
+     *
+     * The drag-and-drop list used to save as one editposition call per row, each
+     * writing a single SortOrder. A failure partway through left the list scrambled
+     * with no way for the client to know how far it got, so the whole group is now
+     * renumbered server-side in one transaction.
+     *
+     * POST:
+     *   ParentPositionId  int   0 (or absent/'') = the top-level group.
+     *   Order             ids   comma-separated string, or an array; first = topmost.
+     * Response: {status:0, data:{ParentPositionId:N, Order:[ids in applied order]}}
+     *           or the shared {status:N, error:'...'} envelope.
+     */
+    private function actionReorderPositions($kingdom_id, $uid)
+    {
+        $parent_raw = $_POST['ParentPositionId'] ?? '';
+        $parent_position_id = (is_array($parent_raw) || trim((string)$parent_raw) === '')
+            ? 0 : (int)$parent_raw;
+
+        $raw_order = $_POST['Order'] ?? '';
+        $order = is_array($raw_order) ? $raw_order : explode(',', (string)$raw_order);
+        $position_ids = [];
+        foreach ($order as $value) {
+            if (is_array($value)) {
+                continue;
+            }
+            $value = trim((string)$value);
+            if ($value === '' || (int)$value <= 0) {
+                continue;
+            }
+            $position_ids[] = (int)$value;
+        }
+        if (count($position_ids) === 0) {
+            echo json_encode(['status' => 1, 'error' => 'At least one position is required to reorder.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->ReorderSiblings($kingdom_id, $parent_position_id, $position_ids, $uid);
+        $this->emitServiceResult($r, ['data' => [
+            'ParentPositionId' => $parent_position_id,
+            'Order'            => $position_ids,
+        ]]);
     }
 
     private function actionReclassify($kingdom_id, $uid)

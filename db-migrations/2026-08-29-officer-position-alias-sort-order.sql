@@ -1,0 +1,33 @@
+-- Migration: Per-kingdom officer position sort override
+--
+-- Run via:
+--   docker exec -i ork3-php8-db      mariadb -u root -proot ork      < db-migrations/2026-08-29-officer-position-alias-sort-order.sql
+--   docker exec -i ork3-php8-test-db mariadb -u root -proot ork_test < db-migrations/2026-08-29-officer-position-alias-sort-order.sql
+--
+-- WHY
+-- ---
+-- The Core Five officer positions are SHARED rows (ork_officer_position.kingdom_id = 0)
+-- that every kingdom reads. Measured on the dev mirror: 37 kingdoms, and exactly one
+-- (kingdom 17) owns any non-system position at all. So for 36 of 37 kingdoms, "reorder
+-- my crown officers" touches nothing but shared rows -- writing ork_officer_position
+-- .sort_order there would silently reorder the officer list for the entire game, and
+-- refusing to write it would mean the feature does nothing for almost everybody.
+--
+-- ork_officer_position_alias already exists to give one kingdom its own view of a
+-- shared row (that is where a kingdom's custom TITLE for the Monarch lives), and it
+-- already carries UNIQUE KEY uq_kingdom_canonical (kingdom_id, canonical_key). The
+-- per-kingdom sort override belongs on that same row.
+--
+-- NULL, not 0
+-- -----------
+-- NULL means "this kingdom has no opinion; use the shared row's sort_order". A NOT NULL
+-- DEFAULT 0 would instead assert that every kingdom had explicitly ordered every shared
+-- position at 0, collapsing the seeded 10/20/30/40/50 order for every kingdom at once.
+-- The resolver is OfficerPosition::SortOrderSql():
+--   IF(p.kingdom_id = 0, IFNULL(a.sort_order, p.sort_order), p.sort_order)
+--
+-- Idempotent: ADD COLUMN IF NOT EXISTS (MariaDB). Safe to re-run. No backfill -- every
+-- existing alias row correctly starts with "no override".
+
+ALTER TABLE `ork_officer_position_alias`
+  ADD COLUMN IF NOT EXISTS `sort_order` INT NULL DEFAULT NULL;

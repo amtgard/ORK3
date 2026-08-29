@@ -45,17 +45,22 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 				<i class="fas fa-plus" style="margin-right:6px"></i> Create your first position
 			</button>
 		</div>
-		<div class="mo-group" id="mo-group-crown">
-			<h4 class="mo-group-title"><i class="fas fa-crown" style="color:#d69e2e"></i> Crown Offices</h4>
-			<div class="mo-cards-grid" id="mo-cards-crown"></div>
+		<!-- Re-ordering is drag-only and drag is a pointer gesture, so below the house
+		     768px breakpoint the grips are hidden and this replaces them. Display is
+		     driven ENTIRELY by the stylesheet (none -> flex at <=768px); moRender only
+		     ever sets it to 'none' (nothing configured) or '' (back to the stylesheet). -->
+		<div class="mo-reorder-note" id="mo-reorder-note" role="note">
+			<i class="fas fa-desktop" aria-hidden="true"></i>
+			<span>Visit this page on desktop to re-order your officer hierarchy.</span>
 		</div>
-		<div class="mo-group" id="mo-group-supporting">
-			<h4 class="mo-group-title"><i class="fas fa-users"></i> Supporting Offices</h4>
-			<div class="mo-cards-grid" id="mo-cards-supporting"></div>
-		</div>
+		<!-- ONE list: crown and supporting offices render together, ordered by sort
+		     order, nesting shown by indentation. Classification is still carried in the
+		     data (and edited on the position) — it is only the visual split that is gone,
+		     marked inline by the gold crown glyph on the title. -->
+		<div class="mo-list" id="mo-cards-list"></div>
 		<div class="mo-retired-panel" id="mo-retired-panel" style="display:none">
 			<h4 class="mo-group-title"><i class="fas fa-archive"></i> Retired Positions</h4>
-			<div class="mo-cards-grid" id="mo-cards-retired"></div>
+			<div class="mo-list" id="mo-cards-retired"></div>
 		</div>
 	</div>
 </div>
@@ -226,6 +231,7 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 }
 .mo-retired-toggle:hover { background:#f7fafc; }
 .mo-retired-caret { transition:transform .15s ease; font-size:11px; }
+@media (prefers-reduced-motion:reduce) { .mo-retired-caret { transition:none; } }
 .mo-retired-toggle.mo-open .mo-retired-caret { transform:rotate(180deg); }
 html[data-theme="dark"] .mo-retired-toggle { border-color:var(--ork-border); color:var(--ork-text-secondary); }
 html[data-theme="dark"] .mo-retired-toggle:hover { background:var(--ork-bg-tertiary); color:var(--ork-text); }
@@ -233,25 +239,26 @@ html[data-theme="dark"] .mo-retired-toggle:hover { background:var(--ork-bg-terti
 .mo-loaderr { background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:10px 14px; color:#c53030; font-size:13px; }
 html[data-theme="dark"] .mo-loaderr { background:rgba(252,129,129,0.12); border-color:#fc8181; color:#fc8181; }
 
-.mo-group { margin-bottom:24px; }
 .mo-group-title {
 	font-size:14px; font-weight:700; color:#2d3748; margin:0 0 12px 0;
 	display:flex; align-items:center; gap:8px;
 	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
 }
 html[data-theme="dark"] .mo-group-title { color:var(--ork-text); }
-.mo-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
 
-.mo-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px;
-	display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06);
+/* ---- Rows (one flat, indented list; no crown/supporting split) ---- */
+.mo-list { display:flex; flex-direction:column; gap:8px; }
+
+.mo-row {
+	display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap;
+	background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:9px 12px;
 }
-html[data-theme="dark"] .mo-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
-.mo-card.mo-card-crown { border-top:3px solid #d69e2e; }
-.mo-card.mo-retired { opacity:0.72; }
-
-.mo-card-head { display:flex; align-items:flex-start; gap:8px; }
-.mo-title { font-size:15px; font-weight:700; color:#2d3748; line-height:1.25; flex:1; }
+html[data-theme="dark"] .mo-row { background:var(--ork-card-bg); border-color:var(--ork-border); }
+.mo-row.mo-retired { opacity:0.72; }
+/* Crown rows are marked by the gold crown glyph on the title, not by a group heading. */
+.mo-row-main { flex:1 1 240px; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.mo-row-head { display:flex; align-items:flex-start; gap:8px; }
+.mo-title { font-size:14px; font-weight:700; color:#2d3748; line-height:1.3; flex:1; min-width:0; overflow-wrap:anywhere; }
 html[data-theme="dark"] .mo-title { color:var(--ork-text); }
 .mo-title .mo-crown-glyph { color:#d69e2e; margin-right:5px; }
 .mo-title .mo-official { font-size:12px; font-weight:400; color:#718096; }
@@ -269,12 +276,23 @@ html[data-theme="dark"] .mo-vacant { color:var(--ork-text-muted); }
 .mo-term { font-size:12px; color:#718096; }
 html[data-theme="dark"] .mo-term { color:var(--ork-text-secondary); }
 
+/* Actions sit at the END of the row, right-aligned. They wrap under the row body
+   before they ever push it sideways — nothing here may make the modal scroll
+   horizontally. */
 .mo-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.mo-row-actions { flex:0 1 auto; margin-left:auto; margin-top:0; justify-content:flex-end; align-items:flex-start; }
+/* These tips sit at the row's right edge and the host modal box clips horizontal
+   overflow, so right-anchor them instead of centring (same reason, and the same
+   !important, as .mo-occ-remove below). */
+.mo-row-actions [data-tip]:hover::after, .mo-row-actions [data-tip]:focus-visible::after {
+	left:auto !important; right:0 !important; transform:none !important;
+}
 .mo-act-btn {
 	background:#edf2f7; border:1px solid #e2e8f0; border-radius:5px; padding:5px 9px;
 	font-size:12px; font-weight:600; color:#4a5568; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
 }
 .mo-act-btn:hover:not(:disabled) { background:#e2e8f0; }
+.mo-act-btn:focus-visible { outline:2px solid #3182ce; outline-offset:1px; }
 .mo-act-btn:disabled { opacity:0.45; cursor:not-allowed; }
 html[data-theme="dark"] .mo-act-btn { background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text-secondary); }
 html[data-theme="dark"] .mo-act-btn:hover:not(:disabled) { background:var(--ork-bg-secondary); color:var(--ork-text); }
@@ -283,8 +301,10 @@ html[data-theme="dark"] .mo-act-danger { color:#fc8181; }
 
 /* Reclassify dropdown */
 .mo-reclass { position:relative; display:inline-block; }
+/* right-anchored: the trigger now lives at the row's right edge, and a left-anchored
+   menu ran off the modal box. */
 .mo-reclass-menu {
-	display:none; position:absolute; top:100%; left:0; z-index:50; margin-top:4px;
+	display:none; position:absolute; top:100%; left:auto; right:0; z-index:50; margin-top:4px;
 	background:#fff; border:1px solid #e2e8f0; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12);
 	min-width:170px; overflow:hidden;
 }
@@ -309,10 +329,57 @@ html[data-theme="dark"] .mo-muted { color:var(--ork-text-muted); }
 .mo-check-label input[type=checkbox] { margin:2px 0 0 0; flex-shrink:0; }
 html[data-theme="dark"] .mo-check-label { color:var(--ork-text-secondary); }
 
-/* Nested / indented officer cards */
-.mo-node { display:flex; flex-direction:column; gap:14px; }
-.mo-children { display:flex; flex-direction:column; gap:14px; margin-left:22px; padding-left:14px; border-left:2px solid #e2e8f0; margin-top:14px; }
+/* Nesting is shown by indenting the .mo-children container inside the one list. */
+.mo-node { display:flex; flex-direction:column; gap:8px; }
+.mo-children { display:flex; flex-direction:column; gap:8px; margin-left:18px; padding-left:14px; border-left:2px solid #e2e8f0; margin-top:8px; }
 html[data-theme="dark"] .mo-children { border-left-color:var(--ork-border); }
+
+/* ---- Drag handle + drag state (desktop only; see the <=768px block below) ----
+   Native HTML5 drag/drop. The HANDLE is draggable, not the row, so selecting text
+   or hitting a button never starts a drag. */
+.mo-grip {
+	flex:0 0 auto; margin-top:1px; background:none; border:1px solid transparent; border-radius:5px;
+	color:#a0aec0; cursor:grab; font-size:13px; line-height:1; padding:5px 4px;
+}
+.mo-grip:hover { background:#edf2f7; color:#4a5568; }
+/* --ork-blue-link, not a literal: #3182ce measures 2.98:1 on the dark card surface
+   (--ork-card-bg #2d3748), under the 3:1 minimum for a non-text focus indicator.
+   The token is #3182ce in light and #63b3ed in dark (5.25:1). */
+.mo-grip:focus-visible { outline:2px solid var(--ork-blue-link); outline-offset:1px; color:#4a5568; }
+.mo-grip:active { cursor:grabbing; }
+/* Inert placeholder: keeps the row aligned, explains itself, drags nowhere. */
+.mo-grip-off { cursor:default; opacity:0.35; }
+.mo-grip-off:hover { background:none; color:#a0aec0; }
+html[data-theme="dark"] .mo-grip-off:hover { background:none; color:var(--ork-text-muted); }
+html[data-theme="dark"] .mo-grip { color:var(--ork-text-muted); }
+html[data-theme="dark"] .mo-grip:hover { background:var(--ork-bg-tertiary); color:var(--ork-text); }
+html[data-theme="dark"] .mo-grip:focus-visible { color:var(--ork-text); }
+.mo-grip[data-tip]:hover::after { left:0 !important; right:auto !important; transform:none !important; }
+
+.mo-node.mo-dragging > .mo-row { opacity:0.45; }
+/* Insertion marker. box-shadow, not a border, so nothing reflows mid-drag. */
+.mo-node.mo-drop-before > .mo-row { box-shadow:0 -3px 0 0 #3182ce; }
+.mo-node.mo-drop-after  > .mo-row { box-shadow:0  3px 0 0 #3182ce; }
+html[data-theme="dark"] .mo-node.mo-drop-before > .mo-row { box-shadow:0 -3px 0 0 #63b3ed; }
+html[data-theme="dark"] .mo-node.mo-drop-after  > .mo-row { box-shadow:0  3px 0 0 #63b3ed; }
+
+/* Mobile: no drag handles, one infobox instead. Everything else stays usable. */
+.mo-reorder-note {
+	display:none; align-items:flex-start; gap:8px; margin-bottom:12px;
+	padding:10px 12px; border-radius:8px; font-size:12.5px; line-height:1.45;
+	background:var(--ork-badge-blue-bg); color:var(--ork-badge-blue-text);
+	border:1px solid var(--ork-badge-blue-bg);
+}
+.mo-reorder-note i { margin-top:2px; flex-shrink:0; }
+@media (max-width:768px) {
+	.mo-grip { display:none; }
+	.mo-reorder-note { display:flex; }
+	.mo-row-actions { margin-left:0; width:100%; justify-content:flex-start; }
+	.mo-row-actions [data-tip]:hover::after, .mo-row-actions [data-tip]:focus-visible::after {
+		left:0 !important; right:auto !important;
+	}
+	.mo-children { margin-left:8px; padding-left:10px; }
+}
 .mo-reports-to { font-size:11px; color:#718096; display:flex; align-items:center; gap:5px; margin-top:-2px; }
 .mo-reports-to i { font-size:10px; color:#a0aec0; }
 html[data-theme="dark"] .mo-reports-to { color:var(--ork-text-secondary); }
@@ -606,7 +673,30 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		return html;
 	}
 
-	function cardHtml(pos) {
+	// Drag handle. A <span role=button tabindex=0> rather than a <button>: form
+	// controls have browser-specific drag quirks, and this way the same element is
+	// both the pointer handle and the keyboard re-order control (arrow keys).
+	// effParentId is the parent this row is DRAWN under. It differs from the row's real
+	// ParentPositionId only when that parent is not in the visible set — a child of a
+	// RETIRED office, which RetirePosition deliberately does not reparent. The server's
+	// ReorderSiblings refuses a group its parent_position_id does not match, so such a
+	// row gets an inert placeholder instead of a handle that could only ever error.
+	function gripHtml(pos, effParentId) {
+		var pid      = parseInt(pos.PositionId, 10);
+		var realPar  = parseInt(pos.ParentPositionId || 0, 10) || 0;
+		if (realPar !== (parseInt(effParentId || 0, 10) || 0)) {
+			return '<span class="mo-grip mo-grip-off" aria-hidden="true"' +
+				' data-tip="This office reports to a retired position, so it has no sibling group to re-order within. Change its “Reports To” to re-order it.">' +
+				'<i class="fas fa-grip-vertical"></i></span>';
+		}
+		var label = 'Re-order ' + (pos.DisplayTitle || pos.Title || 'this office') +
+		            ' among the offices at its level: drag, or press the up and down arrow keys';
+		return '<span class="mo-grip" role="button" tabindex="0" draggable="true" data-pid="' + pid + '"' +
+			' data-tip="Drag to re-order among this office\'s siblings — or focus and press the up/down arrow keys"' +
+			' aria-label="' + escAttr(label) + '"><i class="fas fa-grip-vertical" aria-hidden="true"></i></span>';
+	}
+
+	function rowHtml(pos, effParentId) {
 		var isCrown  = pos.Classification === 'crown';
 		var isPinned = parseInt(pos.IsPinned, 10) === 1;
 		var pid = parseInt(pos.PositionId, 10);
@@ -659,13 +749,24 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			acts += '<button class="mo-act-btn mo-act-danger" onclick="moRetire(' + pid + ')"><i class="fas fa-archive"></i> Retire</button>';
 		}
 
-		// Reports-to caption (when this card has a parent that exists somewhere)
+		// Reports-to caption (when this card has a parent that exists somewhere).
+		// When the row is NOT rendered beneath that parent -- its parent is retired, so
+		// RetirePosition left the child pointing at a position that is no longer in the
+		// active tree -- the row sits at top level while still claiming to report to
+		// someone. Say why, inline: the grip's tooltip explains it too, but a tooltip is
+		// hover-only and this contradiction is visible at rest.
 		var reportsTo = '';
 		var parentId = parseInt(pos.ParentPositionId || 0, 10);
 		if (parentId) {
 			var parent = findPos(parentId);
 			if (parent) {
-				reportsTo = '<div class="mo-reports-to"><i class="fas fa-level-up-alt fa-rotate-90"></i> Reports to ' + esc(parent.DisplayTitle || parent.Title) + '</div>';
+				var nestedUnderParent = parentId === (parseInt(effParentId || 0, 10) || 0);
+				var parentGone = !nestedUnderParent && (moData.retired || []).some(function (r) {
+					return parseInt(r.PositionId, 10) === parentId;
+				});
+				reportsTo = '<div class="mo-reports-to"><i class="fas fa-level-up-alt fa-rotate-90"></i> Reports to '
+					+ esc(parent.DisplayTitle || parent.Title)
+					+ (parentGone ? ' (retired)' : '') + '</div>';
 			}
 		}
 
@@ -675,32 +776,48 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			hiddenChip = '<span class="mo-chip-hidden" data-tip="This office is hidden from public displays while vacant"><i class="fas fa-eye-slash"></i> Hidden when vacant</span>';
 		}
 
-		return '<div class="mo-card' + (isCrown ? ' mo-card-crown' : '') + '">' +
-			'<div class="mo-card-head"><div class="mo-title">' + titleHtml + '</div>' + lock + '</div>' +
-			reportsTo +
-			occupantLine(pos) +
-			hiddenChip +
-			'<div class="mo-actions">' + acts + '</div>' +
+		// Row order: handle, body, then the actions at the END, right-aligned.
+		return '<div class="mo-row">' +
+			gripHtml(pos, effParentId) +
+			'<div class="mo-row-main">' +
+				'<div class="mo-row-head"><div class="mo-title">' + titleHtml + '</div>' + lock + '</div>' +
+				reportsTo +
+				occupantLine(pos) +
+				hiddenChip +
+			'</div>' +
+			'<div class="mo-actions mo-row-actions">' + acts + '</div>' +
 			'</div>';
 	}
 
-	function retiredCardHtml(pos) {
+	function retiredRowHtml(pos) {
 		var pid = parseInt(pos.PositionId, 10);
 		var titleHtml = (pos.Classification === 'crown' ? '<i class="fas fa-crown mo-crown-glyph"></i>' : '') + esc(pos.DisplayTitle || pos.Title);
-		return '<div class="mo-card mo-retired">' +
-			'<div class="mo-card-head"><div class="mo-title">' + titleHtml + '</div></div>' +
-			// RetiredAt already arrives human-formatted from the controller; re-parsing it
-			// as ISO produced a truncated string ("Aug 26, 20").
-			'<div class="mo-term">Retired' + (pos.RetiredAt ? ' ' + esc(pos.RetiredAt) : '') + '</div>' +
-			'<div class="mo-actions"><button class="mo-act-btn" onclick="moReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>' +
+		// No drag handle: retired positions are not part of the live hierarchy.
+		return '<div class="mo-row mo-retired">' +
+			'<div class="mo-row-main">' +
+				'<div class="mo-row-head"><div class="mo-title">' + titleHtml + '</div></div>' +
+				// RetiredAt already arrives human-formatted from the controller; re-parsing it
+				// as ISO produced a truncated string ("Aug 26, 20").
+				'<div class="mo-term">Retired' + (pos.RetiredAt ? ' ' + esc(pos.RetiredAt) : '') + '</div>' +
+			'</div>' +
+			'<div class="mo-actions mo-row-actions"><button class="mo-act-btn" onclick="moReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>' +
 			'</div>';
 	}
 
-	// Build a parent->children tree WITHIN a single group, then render nested.
-	// A position whose ParentPositionId is null/0, or whose parent is NOT in this
-	// same group's visible set, renders as top-level (never dropped). Recursive.
+	// Build a parent->children tree over the WHOLE active set (crown + supporting in
+	// one list), then render nested. A position whose ParentPositionId is null/0, or
+	// whose parent is not in the visible set (retired, deleted), renders as top-level
+	// (never dropped). Recursive.
+	// Ties on sort_order fall back to crown-first then title so the initial order is
+	// deterministic — the server orders by (classification, sort_order) per group, so
+	// merged rows can collide on sort_order until they are dragged into place.
 	function sortBySort(a, b) {
-		return (parseInt(a.SortOrder || 0, 10)) - (parseInt(b.SortOrder || 0, 10));
+		var d = (parseInt(a.SortOrder || 0, 10)) - (parseInt(b.SortOrder || 0, 10));
+		if (d) return d;
+		var ac = (a.Classification === 'crown') ? 0 : 1;
+		var bc = (b.Classification === 'crown') ? 0 : 1;
+		if (ac !== bc) return ac - bc;
+		return String(a.DisplayTitle || a.Title || '').localeCompare(String(b.DisplayTitle || b.Title || ''));
 	}
 	function renderGroupTree(list) {
 		if (!list || !list.length) return '';
@@ -715,48 +832,55 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		});
 		roots.sort(sortBySort);
 		var seen = {};
-		function nodeHtml(pos, depth) {
+		// data-parent is the EFFECTIVE parent this row is drawn under (0 for a root),
+		// which is what the reorder POST has to send. It differs from the raw
+		// ParentPositionId only when the real parent is not in the visible set.
+		function nodeHtml(pos, depth, effParentId) {
 			var pid = parseInt(pos.PositionId, 10);
 			if (seen[pid]) return '';   // cycle guard
 			seen[pid] = true;
-			var html = '<div class="mo-node">' + cardHtml(pos);
+			var html = '<div class="mo-node" data-pid="' + pid + '" data-parent="' + effParentId + '">' + rowHtml(pos, effParentId);
 			var kids = (childrenOf[pid] || []).slice().sort(sortBySort);
 			if (kids.length && depth < 12) {
-				html += '<div class="mo-children">';
-				kids.forEach(function(k) { html += nodeHtml(k, depth + 1); });
+				html += '<div class="mo-children" data-parent="' + pid + '">';
+				kids.forEach(function(k) { html += nodeHtml(k, depth + 1, pid); });
 				html += '</div>';
 			}
 			html += '</div>';
 			return html;
 		}
 		var out = '';
-		roots.forEach(function(r) { out += nodeHtml(r, 0); });
+		roots.forEach(function(r) { out += nodeHtml(r, 0, 0); });
 		return out;
 	}
 
 	function moRender() {
 		var crown = moData.crown || [], supporting = moData.supporting || [], retired = moData.retired || [];
+		// ONE list. Classification still rides along in the data (and is still edited and
+		// reclassified per position) — it just no longer splits the display; a crown
+		// office is marked inline by the gold crown glyph.
+		var active  = crown.concat(supporting);
 		var emptyEl = document.getElementById('mo-empty');
-		var crownGroup = document.getElementById('mo-group-crown');
-		var suppGroup  = document.getElementById('mo-group-supporting');
+		var listEl  = document.getElementById('mo-cards-list');
+		var noteEl  = document.getElementById('mo-reorder-note');
 
-		// NOTHING configured: one real empty state instead of two muted "No X offices."
-		// sentences, which read as a load result and contradicted the work-queue card
-		// sitting beside this modal ("All 5 crown offices filled"). A kingdom that has
-		// SOME offices keeps the per-group muted line — there the sentence is accurate
-		// and the other group's cards give it context.
-		var nothingConfigured = !crown.length && !supporting.length;
-		emptyEl.style.display    = nothingConfigured ? '' : 'none';
-		crownGroup.style.display = nothingConfigured ? 'none' : '';
-		suppGroup.style.display  = nothingConfigured ? 'none' : '';
+		// NOTHING configured: one real empty state instead of a muted "No X offices."
+		// sentence, which read as a load result and contradicted the work-queue card
+		// sitting beside this modal ("All 5 crown offices filled").
+		var nothingConfigured = !active.length;
+		emptyEl.style.display = nothingConfigured ? '' : 'none';
+		listEl.style.display  = nothingConfigured ? 'none' : '';
+		// '' (not 'block'/'flex') so the stylesheet keeps deciding: hidden on desktop,
+		// shown below 768px.
+		if (noteEl) noteEl.style.display = nothingConfigured ? 'none' : '';
 
-		document.getElementById('mo-cards-crown').innerHTML       = crown.length ? renderGroupTree(crown) : '<div class="mo-muted" style="padding:8px">No crown offices.</div>';
-		document.getElementById('mo-cards-supporting').innerHTML  = supporting.length ? renderGroupTree(supporting) : '<div class="mo-muted" style="padding:8px">No supporting offices.</div>';
+		listEl.innerHTML = nothingConfigured ? '' : renderGroupTree(active);
+		moRestoreGripFocus();
 
 		var toggle = document.getElementById('mo-retired-toggle');
 		if (retired.length) {
 			document.getElementById('mo-retired-count').textContent = retired.length;
-			document.getElementById('mo-cards-retired').innerHTML = retired.map(retiredCardHtml).join('');
+			document.getElementById('mo-cards-retired').innerHTML = retired.map(retiredRowHtml).join('');
 			toggle.style.display = '';
 		} else {
 			toggle.style.display = 'none';
@@ -786,16 +910,21 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	});
 
 	// ---------- Mutations ----------
-	function moPost(action, data, onOk) {
+	// onErr is optional: callers that changed the DOM optimistically (drag re-order)
+	// use it to release their in-flight lock and re-sync from the server.
+	function moPost(action, data, onOk, onErr) {
+		function fail() { if (typeof onErr === 'function') { try { onErr(); } catch (e) {} } }
 		$.post(base() + action, data, function(resp) {
 			if (resp && resp.status === 0) { onOk(resp); }
 			else {
 				try { console.error('[ManageOfficers] ' + action + ' failed:', resp); } catch (e) {}
 				moShowNotice('Action Failed', esc((resp && resp.error) ? resp.error : 'Action failed.'));
+				fail();
 			}
 		}, 'json').fail(function(xhr, st, err) {
 			try { console.error('[ManageOfficers] ' + action + ' network error:', (xhr && xhr.status), err || st); } catch (e) {}
 			moShowNotice('Network Error', 'The request could not be completed. Please check your connection and try again.');
+			fail();
 		});
 	}
 
@@ -872,6 +1001,146 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		for (var i = 0; i < all.length; i++) { if (parseInt(all[i].PositionId,10) === parseInt(pid,10)) return all[i]; }
 		return null;
 	}
+
+	// ---------- Re-order (drag handle, sibling-scoped) ----------
+	// Native HTML5 drag and drop, plus an arrow-key equivalent on the same handle so
+	// the feature is not pointer-only. SCOPE RULE: a row may only move AMONG ITS OWN
+	// SIBLINGS. A drag never changes nesting — re-parenting stays the job of the
+	// "Reports To" picker in the edit modal.
+	var moReorderBusy  = false;
+	var moFocusGripPid = 0;
+
+	function moList()       { return document.getElementById('mo-cards-list'); }
+	function moNodeOf(el)   { return (el && el.closest) ? el.closest('.mo-node') : null; }
+	function moSiblings(node) {
+		return Array.prototype.filter.call(node.parentNode.children, function(c) {
+			return c.classList && c.classList.contains('mo-node');
+		});
+	}
+	function moClearDropMarks() {
+		var list = moList();
+		if (!list) return;
+		list.querySelectorAll('.mo-drop-before, .mo-drop-after').forEach(function(n) {
+			n.classList.remove('mo-drop-before');
+			n.classList.remove('mo-drop-after');
+		});
+	}
+	// Same DOM parent === same parent position: top-level rows all sit directly in
+	// #mo-cards-list, and every other row sits in exactly one .mo-children container
+	// belonging to its parent office. Anything else — another branch, a different
+	// depth, the dragged row's own subtree — is not a legal target.
+	function moCanDrop(dragged, over) {
+		return !!(dragged && over && over !== dragged &&
+			!dragged.contains(over) && over.parentNode === dragged.parentNode);
+	}
+	function moDropBefore(over, clientY) {
+		var row = over.querySelector('.mo-row');
+		var r = (row || over).getBoundingClientRect();
+		return clientY < (r.top + r.height / 2);
+	}
+	// POST the new sibling order for ONE parent, then re-sync from the server.
+	function moPersistOrder(node) {
+		if (moReorderBusy) return;
+		var parentId = parseInt(node.getAttribute('data-parent') || 0, 10) || 0;   // 0 = top level
+		var order = moSiblings(node)
+			.map(function(n) { return parseInt(n.getAttribute('data-pid'), 10) || 0; })
+			.filter(function(id) { return id > 0; })
+			.join(',');
+		if (!order) return;
+		moReorderBusy  = true;
+		moFocusGripPid = parseInt(node.getAttribute('data-pid'), 10) || 0;
+		moPost('reorderpositions', { ParentPositionId: parentId, Order: order }, function() {
+			moReorderBusy = false;
+			moRefresh();
+		}, function() {
+			// The row was moved optimistically — re-read the server's truth rather than
+			// leaving the list showing an order that was never saved.
+			moReorderBusy  = false;
+			moFocusGripPid = 0;
+			moRefresh();
+		});
+	}
+	// moRender() rebuilds every row, so a keyboard user would lose their place.
+	function moRestoreGripFocus() {
+		if (!moFocusGripPid) return;
+		var pid = moFocusGripPid;
+		moFocusGripPid = 0;
+		var list = moList();
+		var grip = list ? list.querySelector('.mo-node[data-pid="' + pid + '"] > .mo-row > .mo-grip') : null;
+		if (grip && grip.offsetParent !== null) { try { grip.focus(); } catch (e) {} }
+	}
+	function moMoveByKey(node, dir) {
+		var sibs = moSiblings(node);
+		var i = sibs.indexOf(node);
+		var j = i + dir;
+		if (i < 0 || j < 0 || j >= sibs.length) return;   // already at the end of its group
+		if (dir < 0) { node.parentNode.insertBefore(node, sibs[j]); }
+		else         { node.parentNode.insertBefore(node, sibs[j].nextSibling); }
+		moPersistOrder(node);
+	}
+
+	(function moBindReorder() {
+		// Bound ONCE to the container, which outlives every re-render (moRender only
+		// replaces its innerHTML).
+		var list = moList();
+		if (!list) return;
+
+		list.addEventListener('dragstart', function(e) {
+			var grip = (e.target && e.target.closest) ? e.target.closest('.mo-grip') : null;
+			var node = grip ? moNodeOf(grip) : null;
+			// Only the handle starts a drag. Cancelling here also stops the browser's
+			// native drag of the occupant link / selected text inside a row.
+			if (!node || moReorderBusy) { e.preventDefault(); return; }
+			node.classList.add('mo-dragging');
+			try {
+				e.dataTransfer.effectAllowed = 'move';
+				e.dataTransfer.setData('text/plain', node.getAttribute('data-pid') || '');
+				var row = node.querySelector('.mo-row');
+				if (row && e.dataTransfer.setDragImage) { e.dataTransfer.setDragImage(row, 14, 14); }
+			} catch (err) {}
+		});
+
+		list.addEventListener('dragover', function(e) {
+			var dragged = list.querySelector('.mo-node.mo-dragging');
+			if (!dragged) return;
+			var over = moNodeOf(e.target);
+			moClearDropMarks();
+			// NOT calling preventDefault() is exactly what rejects an out-of-group drop:
+			// the browser shows the no-drop cursor and never fires a 'drop' event.
+			if (!moCanDrop(dragged, over)) return;
+			e.preventDefault();
+			try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
+			over.classList.add(moDropBefore(over, e.clientY) ? 'mo-drop-before' : 'mo-drop-after');
+		});
+
+		list.addEventListener('drop', function(e) {
+			var dragged = list.querySelector('.mo-node.mo-dragging');
+			var over    = moNodeOf(e.target);
+			e.preventDefault();
+			moClearDropMarks();
+			if (moReorderBusy || !moCanDrop(dragged, over)) return;   // nothing moves
+			var before = moDropBefore(over, e.clientY);
+			over.parentNode.insertBefore(dragged, before ? over : over.nextSibling);
+			moPersistOrder(dragged);
+		});
+
+		list.addEventListener('dragend', function() {
+			var dragged = list.querySelector('.mo-node.mo-dragging');
+			if (dragged) dragged.classList.remove('mo-dragging');
+			moClearDropMarks();
+		});
+
+		// Keyboard equivalent, same sibling scope: focus a handle, Up/Down to move.
+		list.addEventListener('keydown', function(e) {
+			var grip = (e.target && e.target.closest) ? e.target.closest('.mo-grip') : null;
+			if (!grip) return;
+			if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+			var node = moNodeOf(grip);
+			if (!node || moReorderBusy) return;
+			e.preventDefault();
+			moMoveByKey(node, e.key === 'ArrowUp' ? -1 : 1);
+		});
+	})();
 
 	// ---------- Sub-modal overlay plumbing (shared .ka-overlay chrome) ----------
 	// Topmost FIRST. Escape, backdrop-click and the focus trap all work off this order

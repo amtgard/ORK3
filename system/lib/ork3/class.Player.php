@@ -113,7 +113,7 @@ class Player extends Ork3
               AND k.active = 'Active'
               AND (o.park_id = 0 OR p.active = 'Active')
               AND (op.retired_at IS NULL OR op.position_id IS NULL)
-            ORDER BY o.park_id DESC, op.classification, op.sort_order";
+            ORDER BY o.park_id DESC, op.classification, " . OfficerPosition::SortOrderSql('op', 'al') . "";
         $officerResult = $this->db->DataSet($officerSql);
         $officerRoles = [];
         if ($officerResult && $officerResult->Size() > 0) {

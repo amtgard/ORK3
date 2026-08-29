@@ -45,6 +45,36 @@ class OfficerPosition extends Ork3
             . ' IF(' . $pos . ".title_alias != '', " . $pos . '.title_alias, ' . $pos . '.title))';
     }
 
+    /**
+     * The effective sort_order resolution rule, as a SQL expression.
+     *
+     * Sibling to DisplayTitleSql() and written for the same reason. The Core Five
+     * are SHARED rows (kingdom_id = 0) that every kingdom reads: on the dev mirror,
+     * 37 kingdoms and exactly one of them owns a non-system position at all. So a
+     * kingdom reordering "its" crown officers is, for 36 of 37 kingdoms, reordering
+     * rows the whole game shares. Writing officer_position.sort_order there would be
+     * globally destructive; refusing to write it would make the feature a no-op for
+     * almost everyone.
+     *
+     * A kingdom's own row always uses its own value. A shared row prefers this
+     * kingdom's override in officer_position_alias, falling back to the shared value
+     * when the kingdom has expressed no opinion (sort_order IS NULL).
+     *
+     * IFNULL, not IF(... != ''), is correct here where DisplayTitleSql needs the
+     * opposite: sort_order is a nullable INT whose NULL genuinely means "unset",
+     * while title_alias is NOT NULL DEFAULT '' where '' means "unset".
+     *
+     * @param string $pos    Table alias for officer_position
+     * @param string $alias  Table alias for officer_position_alias
+     * @return string  SQL expression; caller supplies its own `AS <name>`
+     */
+    public static function SortOrderSql($pos = 'p', $alias = 'a')
+    {
+        return 'IF(' . $pos . '.kingdom_id = 0,'
+            . ' IFNULL(' . $alias . '.sort_order, ' . $pos . '.sort_order),'
+            . ' ' . $pos . '.sort_order)';
+    }
+
     // ================================================================
     // REGISTRY READS
     // ================================================================
@@ -66,7 +96,8 @@ class OfficerPosition extends Ork3
         $kingdom_id = (int) $kingdom_id;
 
         $sql = "SELECT p.*,
-				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle
+				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+				" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 			  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
@@ -77,7 +108,7 @@ class OfficerPosition extends Ork3
         if ($classification !== null) {
             $sql .= " AND p.classification = :classification";
         }
-        $sql .= " ORDER BY p.classification, p.sort_order";
+        $sql .= " ORDER BY p.classification, " . self::SortOrderSql('p', 'a');
 
         $DB->Clear();
         $DB->kingdom_id = $kingdom_id;
@@ -116,7 +147,8 @@ class OfficerPosition extends Ork3
         $DB->gp_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT p.*,
-				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle
+				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+				" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 			  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
@@ -173,7 +205,10 @@ class OfficerPosition extends Ork3
             'IsSystem'      => (int) $r->is_system,
             'RbacRoleId'    => (int) $r->rbac_role_id,
             'HasAuthRole'   => (int) $r->has_auth_role,
-            'SortOrder'     => (int) $r->sort_order,
+            // EFFECTIVE order: the acting kingdom's override for a shared row, else the
+            // row's own value. Both queries feeding RowToArray select it; the fallback
+            // covers a future caller that forgets the column rather than emitting null.
+            'SortOrder'     => isset($r->EffectiveSortOrder) ? (int) $r->EffectiveSortOrder : (int) $r->sort_order,
             'ParentPositionId'   => ($r->parent_position_id === null || $r->parent_position_id === '') ? null : (int) $r->parent_position_id,
             'HideWhenVacant'     => (int) $r->hide_when_vacant,
             'RetiredAt'     => $r->retired_at,
@@ -364,13 +399,19 @@ class OfficerPosition extends Ork3
             }
         }
 
-        // sort_order = max in group + 10.
+        // sort_order = max in group + 10, measured against the EFFECTIVE order this
+        // kingdom sees. Against the raw column, a kingdom that had dragged the shared
+        // rows down would get its new position wedged into the middle of its own list.
         $DB->Clear();
         $DB->so_kid = $kingdom_id;
+        $DB->so_kid2 = $kingdom_id;
         $DB->so_cls = $classification;
         $mx = $DB->DataSet(
-            "SELECT MAX(sort_order) AS mx FROM " . DB_PREFIX . "officer_position
-			 WHERE (kingdom_id = 0 OR kingdom_id = :so_kid) AND classification = :so_cls"
+            "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
+			 FROM " . DB_PREFIX . "officer_position p
+			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+			   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
+			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND p.classification = :so_cls"
         );
         $sort_order = 100;
         if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
@@ -494,14 +535,50 @@ class OfficerPosition extends Ork3
 					 ON DUPLICATE KEY UPDATE title_alias = VALUES(title_alias)"
                 );
             } else {
+                // uq_kingdom_canonical means the title alias and the per-kingdom sort
+                // override share ONE row. The old unconditional DELETE here would have
+                // silently reset a kingdom's officer order every time it cleared a
+                // custom title. Blank the title, then drop the row only if it now
+                // carries nothing at all.
                 $DB->Clear();
                 $DB->ad_kid = $acting_kingdom_id;
                 $DB->ad_key = $canonical_key;
                 $DB->Execute(
-                    "DELETE FROM " . DB_PREFIX . "officer_position_alias
+                    "UPDATE " . DB_PREFIX . "officer_position_alias
+					 SET title_alias = ''
 					 WHERE kingdom_id = :ad_kid AND canonical_key = :ad_key"
                 );
+                $DB->Clear();
+                $DB->adx_kid = $acting_kingdom_id;
+                $DB->adx_key = $canonical_key;
+                $DB->Execute(
+                    "DELETE FROM " . DB_PREFIX . "officer_position_alias
+					 WHERE kingdom_id = :adx_kid AND canonical_key = :adx_key
+					   AND title_alias = '' AND sort_order IS NULL"
+                );
             }
+        }
+
+        // sort_order routing mirrors title_alias routing above, and for the same
+        // reason: a SHARED system row (kingdom_id = 0) is read by every kingdom, so
+        // one kingdom's ordering opinion belongs in ITS alias row, never on the shared
+        // row. A kingdom-owned row keeps its order on the row itself. Done HERE, before
+        // the UPDATE bindings are set, because this Execute runs its own $DB->Clear().
+        $apply_sort_on_row = array_key_exists('sort_order', $fields);
+        if ($apply_sort_on_row && $pos_kingdom_id === 0) {
+            if ($acting_kingdom_id <= 0) {
+                return InvalidParameter(null, 'A valid kingdom is required to reorder a system position.');
+            }
+            $DB->Clear();
+            $DB->eps_kid = $acting_kingdom_id;
+            $DB->eps_key = $canonical_key;
+            $DB->eps_val = (int) $fields['sort_order'];
+            $DB->Execute(
+                "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+				 VALUES (:eps_kid, :eps_key, :eps_val)
+				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+            );
+            $apply_sort_on_row = false;
         }
 
         // Resolve + validate parent BEFORE binding UPDATE params: ValidateParent
@@ -566,7 +643,7 @@ class OfficerPosition extends Ork3
             $DB->ep_alias = (string) $fields['title_alias'];
             $sets[] = "title_alias = :ep_alias";
         }
-        if (array_key_exists('sort_order', $fields)) {
+        if ($apply_sort_on_row) {
             $DB->ep_so = (int) $fields['sort_order'];
             $sets[] = "sort_order = :ep_so";
         }
@@ -632,6 +709,194 @@ class OfficerPosition extends Ork3
         }
 
         return Success($position_id);
+    }
+
+    /** Hard cap on one reorder batch; a sibling group this large is a malformed request. */
+    public const REORDER_MAX_BATCH = 500;
+
+    /**
+     * Renumber one sibling group's sort_order in a single atomic call.
+     *
+     * Reordering used to mean one EditPosition() per row, each writing a single
+     * sort_order. N sequential writes can fail halfway, and there is no way to tell
+     * from the outside how far the list got -- the group is simply left scrambled.
+     * This renumbers the whole group 10, 20, 30, ... in one statement inside one
+     * transaction.
+     *
+     * Renumbering (rather than swapping two values) is deliberate: rows created
+     * before the sort_order convention existed, or seeded by a migration, routinely
+     * share an identical sort_order, and a swap of two equal values is a no-op that
+     * looks like a successful reorder.
+     *
+     * WHERE THE NEW ORDER IS STORED depends on who owns the row. A kingdom-owned row
+     * keeps its order in officer_position.sort_order. A SHARED system row
+     * (kingdom_id = 0) is read by all 37 kingdoms, so the acting kingdom's order goes
+     * into its own officer_position_alias row instead -- the same table that already
+     * holds its custom TITLE for that shared position. Reads resolve the two through
+     * SortOrderSql(), so a group mixing both kinds renumbers coherently.
+     *
+     * VALIDATION RUNS TO COMPLETION BEFORE ANY WRITE. The group is identified by
+     * ($kingdom_id, $parent_position_id), so an id that is not really in that group
+     * must be refused: otherwise a caller could reparent a position, or write to
+     * another kingdom's row, just by listing it under the wrong group. Visibility
+     * matches GetPositions() -- shared system rows (kingdom_id = 0) plus the
+     * kingdom's own rows -- so this endpoint is neither looser nor tighter than the
+     * per-row EditPosition() path it replaces.
+     *
+     * Ids that belong to the group but are NOT listed keep their existing
+     * sort_order; only the listed rows are renumbered. Retired rows are eligible
+     * (they still occupy a slot in the tree the UI draws).
+     *
+     * @param int      $kingdom_id           Acting kingdom; required (> 0).
+     * @param int|null $parent_position_id   0/''/null = the top-level group (parent IS NULL).
+     * @param array    $ordered_position_ids Position ids, first = topmost.
+     * @param int      $acting_uid           Actor, for future auditing; not written today.
+     * @return array  Success(list of ids in applied order) | InvalidParameter | NoAuthorization | ProcessingError
+     */
+    public function ReorderSiblings($kingdom_id, $parent_position_id, array $ordered_position_ids, $acting_uid = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+
+        if ($kingdom_id <= 0) {
+            return InvalidParameter(null, 'A valid kingdom is required to reorder positions.');
+        }
+
+        // 0 / '' / null all mean "the top-level group" (parent_position_id IS NULL).
+        $parent_position_id = ($parent_position_id === null || $parent_position_id === ''
+            || (int) $parent_position_id === 0) ? null : (int) $parent_position_id;
+
+        // mysql_real_escape_string() is a no-op shim in this codebase, so every id
+        // that reaches SQL below is (int)-cast here and never re-read from input.
+        $ids = [];
+        foreach ($ordered_position_ids as $raw) {
+            $pid = (int) $raw;
+            if ($pid <= 0) {
+                continue;
+            }
+            if (in_array($pid, $ids, true)) {
+                // A repeated id would give one row two positions in the order; the
+                // CASE below would silently pick one. Refuse instead.
+                return InvalidParameter(null, 'The same position was listed more than once.');
+            }
+            $ids[] = $pid;
+        }
+        if (count($ids) === 0) {
+            return InvalidParameter(null, 'No positions were supplied to reorder.');
+        }
+        if (count($ids) > self::REORDER_MAX_BATCH) {
+            return InvalidParameter(null, 'Too many positions were supplied to reorder at once.');
+        }
+
+        $DB->BeginTrans();
+
+        // Load every listed row once, inside the transaction, so validation reads the
+        // same snapshot the UPDATE writes.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT position_id, kingdom_id, parent_position_id, canonical_key
+			 FROM " . DB_PREFIX . "officer_position
+			 WHERE position_id IN (" . implode(', ', $ids) . ")"
+        );
+        $found = [];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->Next()) {
+                $next = $r->parent_position_id;
+                $found[ (int) $r->position_id ] = [
+                    'kingdom_id'    => (int) $r->kingdom_id,
+                    'canonical_key' => (string) $r->canonical_key,
+                    'parent'        => ($next === null || $next === '') ? null : (int) $next,
+                ];
+            }
+        }
+
+        $failure = null;
+        foreach ($ids as $pid) {
+            if (!isset($found[ $pid ])) {
+                $failure = InvalidParameter(null, 'One of the positions to reorder no longer exists.');
+                break;
+            }
+            // Visibility, mirroring GetPositions(): shared system rows (kingdom_id 0)
+            // plus this kingdom's own rows. Anything else is another kingdom's row.
+            if ($found[ $pid ]['kingdom_id'] !== 0 && $found[ $pid ]['kingdom_id'] !== $kingdom_id) {
+                $failure = NoAuthorization('One of the positions does not belong to this kingdom.');
+                break;
+            }
+            // Group membership. Without this the endpoint is a reparent primitive:
+            // listing a top-level position under a parent id would move it there.
+            if ($found[ $pid ]['parent'] !== $parent_position_id) {
+                $failure = InvalidParameter(null, 'One of the positions is not in the group being reordered.');
+                break;
+            }
+        }
+        if ($failure !== null) {
+            $DB->RollbackTrans();
+            return $failure;
+        }
+
+        // The write splits by ownership. A kingdom-owned row's order lives on the row.
+        // A SHARED row (kingdom_id = 0) is read by every kingdom, so this kingdom's
+        // order goes into ITS officer_position_alias row instead -- otherwise one
+        // kingdom's drag would reorder the officer list for the entire game. A group
+        // can legitimately hold both kinds, so the two writes are siblings inside the
+        // one transaction and the renumbering runs across the whole group first.
+        $owned_cases = [];
+        $owned_ids   = [];
+        $shared      = [];
+        $sort_order  = 0;
+        foreach ($ids as $pid) {
+            $sort_order += 10;
+            if ($found[ $pid ]['kingdom_id'] === 0) {
+                $shared[] = ['key' => $found[ $pid ]['canonical_key'], 'so' => $sort_order];
+            } else {
+                $owned_ids[]   = (int) $pid;
+                $owned_cases[] = "WHEN " . (int) $pid . " THEN " . (int) $sort_order;
+            }
+        }
+
+        // Kingdom-owned rows: one CASE statement, all-integer literals.
+        if (count($owned_ids) > 0) {
+            $DB->Clear();
+            if (!$DB->ExecuteChecked(
+                "UPDATE " . DB_PREFIX . "officer_position
+				 SET sort_order = CASE position_id " . implode(' ', $owned_cases) . " ELSE sort_order END
+				 WHERE position_id IN (" . implode(', ', $owned_ids) . ")"
+            )) {
+                $DB->RollbackTrans();
+                return ProcessingError('The positions could not be reordered. Please try again.');
+            }
+        }
+
+        // Shared rows: one multi-row upsert against uq_kingdom_canonical. Only
+        // sort_order is in the UPDATE clause, so a kingdom's custom title_alias on the
+        // same row survives a drag untouched (and a brand-new row takes the column's
+        // NOT NULL DEFAULT ''). canonical_key is bound, never interpolated --
+        // mysql_real_escape_string() is a no-op shim in this codebase.
+        if (count($shared) > 0) {
+            $DB->Clear();
+            $tuples = [];
+            $n = 0;
+            foreach ($shared as $row) {
+                $param = 'rs_key' . $n;
+                $DB->$param = $row['key'];
+                $tuples[] = "(" . $kingdom_id . ", :" . $param . ", " . (int) $row['so'] . ")";
+                $n++;
+            }
+            if (!$DB->ExecuteChecked(
+                "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+				 VALUES " . implode(', ', $tuples) . "
+				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+            )) {
+                $DB->RollbackTrans();
+                return ProcessingError('The positions could not be reordered. Please try again.');
+            }
+        }
+
+        if (!$DB->CommitTrans()) {
+            return ProcessingError('The positions could not be reordered. Please try again.');
+        }
+
+        return Success($ids);
     }
 
     /**
@@ -934,7 +1199,7 @@ class OfficerPosition extends Ork3
         if (!$include_retired) {
             $sql .= " AND p.retired_at IS NULL";
         }
-        $sql .= " ORDER BY p.classification, p.sort_order";
+        $sql .= " ORDER BY p.classification, " . self::SortOrderSql('p', 'a');
 
         $DB->Clear();
         $DB->kid = $kingdom_id;

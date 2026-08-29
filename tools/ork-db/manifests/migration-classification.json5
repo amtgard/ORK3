@@ -106,6 +106,7 @@
     "2026-08-25-05-officer-position-nesting.sql": { "class": "S", "render": "full", "notes": "Adds parent_position_id/hide_when_vacant. Superseded on fresh builds by 04's CREATE TABLE; kept for databases predating it. Made idempotent 2026-08-29 -- it previously aborted with a duplicate-column error, which is why this sequence never completed on dev." },
     "2026-08-25-06-officer-rbac-innodb.sql": { "class": "S", "render": "full", "notes": "Converts the officer/RBAC tables from MyISAM to InnoDB and adds idx_rbac_role. ENGINE=InnoDB on InnoDB is a no-op rebuild." },
     "2026-08-25-07-rbac-migrate-officers.sql": { "class": "PB", "render": "skip", "notes": "Derives ork_user_role rows from real officer records (2,506 on the prod mirror). Skipped in the render like every other backfill; a rendered sandbox gets the role CATALOG from 02 but no per-player assignments. Flagged deliberately -- if sandbox RBAC coverage is wanted later this becomes an override template." },
-    "2026-08-25-08-qualtest-permissions.sql": { "class": "RC", "render": "full", "notes": "Adds the qualification-test permission and its role mappings. All INSERT IGNORE." }
+    "2026-08-25-08-qualtest-permissions.sql": { "class": "RC", "render": "full", "notes": "Adds the qualification-test permission and its role mappings. All INSERT IGNORE." },
+    "2026-08-29-officer-position-alias-sort-order.sql": { "class": "S", "render": "full", "notes": "Adds sort_order INT NULL to ork_officer_position_alias -- the per-kingdom override for a SHARED (kingdom_id=0) position's order. Without it, reordering the Core Five writes rows all 37 kingdoms read. NULL means no override; resolved by OfficerPosition::SortOrderSql(). Idempotent ADD COLUMN IF NOT EXISTS, no backfill." }
   }
 }
