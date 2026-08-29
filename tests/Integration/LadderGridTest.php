@@ -213,6 +213,8 @@ final class LadderGridTest extends TestCase
         $this->assertTrue($row['IsMonthlyLadder']);
         $this->assertSame(6, $row['ZodiacMonth']);
         $this->assertSame('June', $row['ZodiacMonthName']);
+        // The month came out of zodiac_month, so it is a RECORD, not a guess.
+        $this->assertFalse($row['ZodiacMonthInferred']);
     }
 
     /**
@@ -232,6 +234,10 @@ final class LadderGridTest extends TestCase
 
         $this->assertSame(3, $row['ZodiacMonth']);
         $this->assertSame('March', $row['ZodiacMonthName']);
+        // ...but it was DERIVED from the grant date, and the player's own profile
+        // still lists this row as awaiting reconciliation. The report must not
+        // claim otherwise: flagged inferred so the consumer renders "March?".
+        $this->assertTrue($row['ZodiacMonthInferred']);
     }
 
     /**
@@ -252,6 +258,44 @@ final class LadderGridTest extends TestCase
 
         $this->assertSame(0, $row['ZodiacMonth'], 'the zero-date sentinel must never read as January');
         $this->assertSame('', $row['ZodiacMonthName']);
+        // No month at all is not an inferred month -- nothing to qualify.
+        $this->assertFalse($row['ZodiacMonthInferred']);
+    }
+
+    /**
+     * The contradiction this flag exists to prevent, in one report response.
+     *
+     * 3,796 of 3,800 Zodiac grants carry zodiac_month = 0, so without the flag
+     * this report states a confident month for essentially every Zodiac row --
+     * while the player's own profile lists those exact rows as "month not
+     * recorded" and offers them for reconciliation. Two rows granted in the SAME
+     * calendar month, one recorded and one not, must be distinguishable here even
+     * though ZodiacMonth/ZodiacMonthName are identical for both.
+     */
+    public function testPlayerAwardsDistinguishesARecordedMonthFromAnInferredOne(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $ka = $this->fixture->createKingdomAward($kid, 30, 'T10RPT Order of the Zodiac', true);
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+
+        $recorded = $this->fixture->createPlayer($parkId, 'zodiac-inferred-vs-recorded-a');
+        $this->fixture->insertLadderAward($recorded['mundane_id'], $parkId, $kid, $ka, 30, 1, '2024-09-10', 9);
+
+        $guessed = $this->fixture->createPlayer($parkId, 'zodiac-inferred-vs-recorded-b');
+        $this->fixture->insertLadderAward($guessed['mundane_id'], $parkId, $kid, $ka, 30, 1, '2024-09-10', 0);
+
+        $recordedRow = $this->playerAwardsRowFor($kid, (int) $recorded['mundane_id']);
+        $guessedRow = $this->playerAwardsRowFor($kid, (int) $guessed['mundane_id']);
+
+        // Identical on the two pre-existing keys -- API consumers see no change.
+        $this->assertSame(9, $recordedRow['ZodiacMonth']);
+        $this->assertSame(9, $guessedRow['ZodiacMonth']);
+        $this->assertSame('September', $recordedRow['ZodiacMonthName']);
+        $this->assertSame('September', $guessedRow['ZodiacMonthName']);
+
+        // ...and separable on the new one, which is the entire point.
+        $this->assertFalse($recordedRow['ZodiacMonthInferred']);
+        $this->assertTrue($guessedRow['ZodiacMonthInferred']);
     }
 
     public function testPlayerAwardsLeavesNonZodiacRowsUnaffected(): void
@@ -267,6 +311,7 @@ final class LadderGridTest extends TestCase
         $this->assertFalse($row['IsMonthlyLadder']);
         $this->assertSame(0, $row['ZodiacMonth']);
         $this->assertSame('', $row['ZodiacMonthName']);
+        $this->assertFalse($row['ZodiacMonthInferred']);
     }
 
     /**

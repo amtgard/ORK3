@@ -464,15 +464,29 @@ class Report extends Ork3
                 // Award::ZodiacMonthFromDate() guards the '0000-00-00' sentinel
                 // (sometimes '0000-00-00 00:00:00') so a monthless grant with no
                 // real date yields no month, never a spurious January.
+                //
+                // The date fallback is a SUGGESTION, not a record. 3,796 of 3,800
+                // Zodiac grants carry zodiac_month = 0, so without a flag this report
+                // would state a confident month for essentially every one of them
+                // while the player's own profile lists those exact rows as "month not
+                // recorded" and offers them for reconciliation -- two surfaces
+                // asserting opposite things about one row. ZodiacMonthInferred marks
+                // the derived ones so a consumer can render them as a question ("March?")
+                // rather than as fact. Additive: ZodiacMonth/ZodiacMonthName keep their
+                // existing values and meaning for API consumers already reading them.
                 $effectiveAwardId = (int) $r->effective_award_id;
                 $isMonthlyLadder = Award::IsMonthlyLadder($effectiveAwardId);
                 $zodiacMonth = 0;
+                $recordedMonth = 0;
                 if ($isMonthlyLadder) {
                     $recordedMonth = (int) $r->zodiac_month;
                     $zodiacMonth = Award::IsValidZodiacMonth($recordedMonth)
                         ? $recordedMonth
                         : Award::ZodiacMonthFromDate((string) $r->date);
                 }
+                $zodiacMonthInferred = $isMonthlyLadder
+                    && !Award::IsValidZodiacMonth($recordedMonth)
+                    && $zodiacMonth > 0;
                 $response['Awards'][] = array(
                         'MundaneId' => $r->mundane_id,
                         'Persona' => $r->persona,
@@ -490,7 +504,8 @@ class Report extends Ork3
                         'Suspended' => (int)$r->suspended,
                         'IsMonthlyLadder' => $isMonthlyLadder,
                         'ZodiacMonth' => $zodiacMonth,
-                        'ZodiacMonthName' => $zodiacMonth > 0 ? Award::MonthName($zodiacMonth) : ''
+                        'ZodiacMonthName' => $zodiacMonth > 0 ? Award::MonthName($zodiacMonth) : '',
+                        'ZodiacMonthInferred' => $zodiacMonthInferred
                     );
             }
             // Chronological order for Zodiac rows only (spec: "Zodiac lists sort

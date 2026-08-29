@@ -133,7 +133,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Rank</span>
-						<span class="rp-col-guide-desc">Ladder rank, if applicable.</span>
+						<span class="rp-col-guide-desc">Ladder rank, if applicable. Order of the Zodiac is granted once per calendar month rather than ranked, so it shows a month. A month followed by <strong>?</strong> was inferred from the grant date and is not yet recorded &mdash; an officer confirms it from the player's profile.</span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Date</span>
@@ -182,7 +182,26 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php 		endif; ?>
 					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
 					<td><?=htmlspecialchars($award['AwardName'])?></td>
-					<td><?=valid_id($award['Rank'])?htmlspecialchars($award['Rank']):''?></td>
+					<td><?php
+						/* Order of the Zodiac is granted once per calendar MONTH, not ranked -- its
+						   stored rank is a legacy artefact and never means a month. Show the month
+						   instead, and never present an inferred month as a recorded one: a month
+						   the report derived from the grant date reads "March?", so it cannot
+						   contradict the player's own profile, which lists the same row as awaiting
+						   reconciliation. See Report::PlayerAwards()'s ZodiacMonthInferred. */
+						if (!empty($award['IsMonthlyLadder'])) {
+							$zm = (string)($award['ZodiacMonthName'] ?? '');
+							if ('' === $zm) {
+								echo '<span class="rp-zodiac-unrecorded">Month not recorded</span>';
+							} elseif (!empty($award['ZodiacMonthInferred'])) {
+								echo '<span class="rp-zodiac-inferred">' . htmlspecialchars($zm) . '?</span>';
+							} else {
+								echo htmlspecialchars($zm);
+							}
+						} else {
+							echo valid_id($award['Rank']) ? htmlspecialchars($award['Rank']) : '';
+						}
+					?></td>
 					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
 					<td><a href="<?=UIR.'Player/profile/'.$award['EnteredById']?>"><?=htmlspecialchars($award['EnteredBy'])?></a></td>
 				</tr>

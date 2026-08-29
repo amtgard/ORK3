@@ -706,6 +706,23 @@
     }
 }
 
+/* ── Order of the Zodiac: a month, and whether it is RECORDED ──
+   The Zodiac is granted once per calendar month rather than ranked, so its
+   cell shows a month. A month the server derived from the grant date instead
+   of reading from zodiac_month is rendered "March?" and de-emphasised here, so
+   the report never asserts a month the record does not actually carry (see
+   Report::PlayerAwards() -> ZodiacMonthInferred). Both rules use --rp-text-muted,
+   which .rp-root already re-points for dark mode, so no dark counterpart is
+   needed. */
+.rp-zodiac-inferred,
+.rp-zodiac-unrecorded {
+    color      : var(--rp-text-muted);
+    font-style : italic;
+}
+.rp-zodiac-inferred {
+    border-bottom : 1px dotted var(--rp-border-strong);
+}
+
 /* =====================================================
    DARK MODE — Reports & Attendance (rp-* / att-* classes)
    ===================================================== */
