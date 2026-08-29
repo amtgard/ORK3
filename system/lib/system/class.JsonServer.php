@@ -53,7 +53,9 @@ class JsonServer
      *
      * API_CLIENT_FLAG: the transport's own marker, stamped onto the request by
      * call_endpoint(). It is never client-supplied and must never appear in a
-     * derived parameter list.
+     * derived parameter list. It covers the JSON API and nothing else -- the SOAP
+     * surface under orkservice/ is deliberately not armed; see the SCOPE LIMIT note
+     * at the stamping site in call_endpoint() for the verified reasons.
      *
      **************************************************************************/
 
@@ -272,6 +274,29 @@ class JsonServer
             // from being silently zeroed for legacy integrations. Do not thread this
             // through controllers or set it anywhere else -- it must stay narrowly
             // scoped to this transport boundary.
+            //
+            // SCOPE LIMIT: what this flag guarantees is the JSON API only. The SOAP
+            // surface under orkservice/ is NOT covered, and does not need to be.
+            // Verified 2026-08-28: nusoap was deleted from the tree and SOAP
+            // deprecated (dd69ae29, ea00f8f4). orkservice/svcutil.php still has its
+            // `require_once(DIR_LIB."nusoap/nusoap.php")` commented out, so the ~20
+            // orkservice/*/*Service.php files construct `new soap_server()` against a
+            // class that no longer exists. A request to
+            // /orkservice/Player/PlayerService.php returns HTTP 500 with an empty
+            // body (svcutil.php sets error_reporting(~E_ALL) and display_errors=0);
+            // run under CLI the real fault is `Error: Class "soap_server" not found`.
+            // ext-soap is irrelevant here -- it provides SoapServer, not nusoap's
+            // soap_server -- and is absent from every Dockerfile regardless. No SOAP
+            // request can reach Player::AddAward(), so there is no live Rank
+            // behaviour on that transport to preserve or to regress.
+            //
+            // To cover SOAP if it is ever revived: restore nusoap and the
+            // require_once in orkservice/svcutil.php, then stamp API_CLIENT_FLAG onto
+            // the deserialised request at dispatch. svcutil.php is the single file
+            // every service already includes, but each *Service.php instantiates its
+            // own soap_server, so a dispatch override has to be wired into those call
+            // sites too. Wrapping individual service methods was considered and
+            // rejected: one choke point or none.
             if (is_array($args) && isset($args[0]) && is_array($args[0])) {
                 $args[0][JsonServer::API_CLIENT_FLAG] = true;
             }
