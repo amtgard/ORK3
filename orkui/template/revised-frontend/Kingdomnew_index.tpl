@@ -301,7 +301,25 @@
 		?>
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<span class="kn-officers-bar-actions">
 					<?php if ($CanManageKingdom ?? false): ?>
@@ -313,7 +331,7 @@
 					         element and nowrap, and this sits at the card's right edge, so a
 					         long tip clips at the viewport edge on a phone. */ ?>
 					<a class="kn-officers-more" href="#" data-tip="All officers"
-						onclick="if (window.ofOpenOfficerModal) { window.ofOpenOfficerModal(); } return false;">All <?= count($officerList) ?> &rarr;</a>
+						onclick="if (window.ofOpenOfficerModal) { window.ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
 				</span>
 			</h4>
 			<ul class="kn-officer-list">

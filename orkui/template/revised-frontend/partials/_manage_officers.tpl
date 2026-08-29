@@ -642,6 +642,9 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			moRender();
 			contentEl.style.display = '';
 		}).fail(function() {
+			// moRender() is not reached on this path, so release the re-order lock here or a
+			// single failed refresh wedges every subsequent drag until the page is reloaded.
+			moReorderBusy = false;
 			loadingEl.style.display = 'none';
 			errorEl.textContent = 'Network error loading positions.';
 			errorEl.style.display = '';
@@ -836,7 +839,19 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			if (par && byId[par]) { (childrenOf[par] = childrenOf[par] || []).push(p); }
 			else { roots.push(p); }    // top-level, or parent in another group / missing
 		});
-		roots.sort(sortBySort);
+		// Orphans -- a row whose real parent is retired, so it is drawn at top level but
+		// cannot be re-ordered -- sort to the END of the roots. They are excluded from the
+		// reorder payload (they would make the server reject the whole batch), so the ids
+		// that ARE sent get renumbered 10/20/30 while an orphan keeps its old value. Left
+		// interleaved, a row dropped "above" an orphan would reappear below it after the
+		// refresh. Parked at the end, the draggable rows form one contiguous run and what
+		// was dropped is what is saved.
+		roots.sort(function (a, b) {
+			var ao = (parseInt(a.ParentPositionId || 0, 10) && !byId[parseInt(a.ParentPositionId, 10)]) ? 1 : 0;
+			var bo = (parseInt(b.ParentPositionId || 0, 10) && !byId[parseInt(b.ParentPositionId, 10)]) ? 1 : 0;
+			if (ao !== bo) { return ao - bo; }
+			return sortBySort(a, b);
+		});
 		var seen = {};
 		// data-parent is the EFFECTIVE parent this row is drawn under (0 for a root),
 		// which is what the reorder POST has to send. It differs from the raw
@@ -861,6 +876,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	}
 
 	function moRender() {
+		// The re-order lock is released HERE, not when the POST returns. moPersistOrder holds
+		// it across the whole save-then-refresh cycle so a second keypress cannot post while
+		// the first refresh is still in flight (the older response would rebuild the list
+		// without the second move, and the row would visibly jump back). moRender is the end
+		// of every load path -- success and failure both route through moRefresh -> moLoad --
+		// so this is the one place guaranteed to run afterwards.
+		moReorderBusy = false;
 		var crown = moData.crown || [], supporting = moData.supporting || [], retired = moData.retired || [];
 		// ONE list. Classification still rides along in the data (and is still edited and
 		// reclassified per position) — it just no longer splits the display; a crown

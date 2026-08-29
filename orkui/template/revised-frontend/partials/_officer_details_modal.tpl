@@ -117,12 +117,14 @@ if (!function_exists('of_officer_display_name')) {
 		if ($persona !== '') {
 			return $persona;
 		}
-		$username = trim((string)($row['UserName'] ?? ''));
-		if ($username !== '') {
-			return $username;
-		}
+		// NO UserName fallback. buildOfficerRows emits GivenName/Surname gated behind
+		// $is_authorized but UserName UNGATED, so falling back to it would print an
+		// officer's ORK login name to signed-out visitors on a public profile whenever
+		// their persona is blank. The sidebar this modal extends only ever rendered
+		// Persona. GivenName/Surname are safe to keep in the chain precisely because
+		// the domain already blanks them for an unauthorised viewer.
 		$real = trim(trim((string)($row['GivenName'] ?? '')) . ' ' . trim((string)($row['Surname'] ?? '')));
-		return $real !== '' ? $real : 'Unknown';
+		return $real !== '' ? $real : 'Name not published';
 	}
 }
 
@@ -496,6 +498,14 @@ $ofJsConfig = json_encode([
 	outline: 2px solid var(--ork-blue-link);
 	outline-offset: 1px;
 	color: var(--ork-text);
+}
+/* .of-modal-body scrolls, and data-tip renders ABOVE its element by default, so a tip on
+   the first row (the Add button, the first table row's edit/delete) paints outside the
+   scroll container and is clipped. Anchor tips inside the body below their element -- the
+   same remedy revised.css already applies elsewhere for this. */
+#of-officers-overlay .of-modal-body [data-tip]::after {
+	bottom: auto;
+	top: calc(100% + 6px);
 }
 #of-officers-overlay .of-modal-body {
 	padding: 18px 20px 20px;
@@ -891,6 +901,8 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	if (!overlay) { return; }
 
 	var lastFocus  = null;
+
+	var prevBodyOverflow = '';
 	var historyLoaded = false;
 
 	// ---------------------------------------------------------------------
@@ -898,7 +910,12 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	// ---------------------------------------------------------------------
 	function openModal() {
 		lastFocus = document.activeElement;
+		// Reset to Current Officers. The docblock promises it, and the arrow that opens
+		// this modal points at the officer tree -- without the reset, a viewer who last
+		// looked at History reopens onto a stale history table instead.
+		switchPanel('current');
 		overlay.classList.add('of-open');
+		prevBodyOverflow = document.body.style.overflow;
 		document.body.style.overflow = 'hidden';
 		var closeBtn = gid('of-modal-close-btn');
 		if (closeBtn) { closeBtn.focus(); }
@@ -906,7 +923,11 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 
 	function closeModal() {
 		overlay.classList.remove('of-open');
-		document.body.style.overflow = '';
+		// Restore the PREVIOUS value, not ''. A nested dialog opened from inside this
+		// modal (the history delete confirm) blanks body.overflow on its own close, so
+		// hard-coding '' here compounds that; keeping the prior value means this modal
+		// only ever undoes its own lock.
+		document.body.style.overflow = prevBodyOverflow || '';
 		// Focus is returned, not trapped: the user can always tab away.
 		if (lastFocus && typeof lastFocus.focus === 'function' && document.contains(lastFocus)) {
 			lastFocus.focus();

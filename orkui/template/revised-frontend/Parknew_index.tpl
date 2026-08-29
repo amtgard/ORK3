@@ -528,7 +528,25 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<span class="pk-officers-bar-actions">
 					<?php if (!empty($CanAdminPark)): ?>
@@ -537,8 +555,8 @@
 					</button>
 					<?php endif; ?>
 					<!-- Available to EVERY viewer, not just park admins. -->
-					<a href="#" class="pk-officers-more" data-tip="See every office, including supporting offices, plus officer history"
-					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= count($officerList) > 0 ? 'All ' . (int)count($officerList) : 'Details' ?> &rarr;</a>
+					<a href="#" class="pk-officers-more" data-tip="All officers"
+					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
 				</span>
 			</h4>
 			<ul class="pk-officer-list">

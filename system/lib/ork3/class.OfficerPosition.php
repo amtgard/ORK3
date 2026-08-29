@@ -405,13 +405,24 @@ class OfficerPosition extends Ork3
         $DB->Clear();
         $DB->so_kid = $kingdom_id;
         $DB->so_kid2 = $kingdom_id;
-        $DB->so_cls = $classification;
+        // Scoped to the new position's SIBLING GROUP, not to its classification.
+        // sort_order orders siblings, and Manage Officers now renders crown and
+        // supporting as ONE list, so a classification-scoped MAX draws from the wrong
+        // sequence: a kingdom whose only supporting offices are nested children
+        // (10/20/30 within their parent) would hand its first TOP-LEVEL supporting
+        // office 40 -- colliding with a crown office already at 40, the tie then
+        // broken arbitrarily by role name.
+        // parent_position_id is interpolated, not bound: it is NULL-or-int and yapo
+        // drops nulls from bindings. The non-null branch is (int)-cast.
+        $parentScope = ($parent_position_id === null || $parent_position_id === '')
+            ? 'p.parent_position_id IS NULL'
+            : 'p.parent_position_id = ' . (int) $parent_position_id;
         $mx = $DB->DataSet(
             "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
 			 FROM " . DB_PREFIX . "officer_position p
 			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 			   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
-			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND p.classification = :so_cls"
+			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope
         );
         $sort_order = 100;
         if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
