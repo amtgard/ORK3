@@ -726,6 +726,10 @@ html[data-theme="dark"] .pn-ladder-group-label { color: var(--ork-text-muted); }
     white-space: nowrap;
 }
 html[data-theme="dark"] .pn-ladder-bonus { color: #d69e2e; }
+/* Approximation marker: same amber family as the bonus marker so the two
+   read as one system when they sit side by side in the header row. */
+.pn-ladder-approx { color: #b7791f; }
+html[data-theme="dark"] .pn-ladder-approx { color: #d69e2e; }
 /* Order of the Zodiac month strip (Task 6) -- granted once per calendar
    month, so it has no 0-to-maxRank bar. Given a full row of its own
    (grid-column: 1 / -1) rather than squeezed into a 160px auto-fill tile
@@ -758,10 +762,19 @@ html[data-theme="dark"] .pn-ladder-bonus { color: #d69e2e; }
     background: var(--ork-bg-tertiary, #f7fafc);
     border: 1px solid #e2e8f0;
 }
+/* Held month. The fill is --pn-accent, which is the PLAYER'S OWN chosen colour
+   (Playernew_index.tpl:196, any valid #rrggbb) and is NOT theme-aware -- it is
+   emitted once on bare :root, so the same fill appears in both themes and the
+   text colour must be chosen for that fill, not for the theme.
+   Measured against the 1,186 players who have set an accent: near-black clears
+   4.5:1 on 94% of them, white on only 4% -- real accents skew light (lavender,
+   mint, grey, salmon, yellow). Hence dark text here AND in the dark rule below.
+   The ~6% who pick a genuinely dark accent still fall short; fixing them needs a
+   scrim over the fill, which would wash every other accent out to pastel. */
 .pn-zodiac-month.-held {
     background: var(--pn-accent, #2c5282);
     border-color: var(--pn-accent, #2c5282);
-    color: #fff;
+    color: #1a202c;
 }
 .pn-zodiac-count {
     margin-left: 6px;
@@ -776,6 +789,8 @@ html[data-theme="dark"] .pn-zodiac-month {
     background: var(--ork-bg-tertiary);
     border-color: var(--ork-border);
 }
+/* Same fill as the light rule (--pn-accent is theme-invariant), so the same
+   text colour. See the contrast note on .pn-zodiac-month.-held above. */
 html[data-theme="dark"] .pn-zodiac-month.-held {
     background: var(--pn-accent, #63b3ed);
     border-color: var(--pn-accent, #63b3ed);

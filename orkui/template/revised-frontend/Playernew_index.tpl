@@ -2194,9 +2194,9 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 															<span class="pn-ladder-master" data-tip="Master title earned"><i class="fas fa-star"></i> M</span>
 														<?php endif; ?>
 														<?php if ($isMonthly): ?>
-															<?php if ($lp['Approx']): ?><span style="color:#b7791f" class="pn-ladder-rank">~</span><?php endif; ?>
+															<?php if ($lp['Approx']): ?><span class="pn-ladder-rank pn-ladder-approx">~</span><?php endif; ?>
 														<?php else: ?>
-															<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+															<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span class="pn-ladder-approx">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
 															<?php if ($bonusCount > 0): ?>
 																<span class="pn-ladder-bonus" data-tip="<?= $bonusCount ?> further recognition<?= $bonusCount === 1 ? '' : 's' ?> past the top of this ladder">&#10033;<?= $bonusCount ?></span>
 															<?php endif; ?>

@@ -815,7 +815,7 @@ html[data-theme="dark"] .ka-table-toolbar { background: var(--ork-bg-secondary);
     transition: transform 0.15s;
 }
 .ka-help[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
-.ka-help > summary:focus-visible { outline: 2px solid #2b6cb0; outline-offset: -2px; }
+.ka-help > summary:focus-visible { outline: 2px solid var(--ork-blue-link); outline-offset: -2px; }
 .ka-help > summary .fas { color: var(--ork-text-muted); font-size: 12px; }
 .ka-help-body {
     padding: 2px 12px 12px;

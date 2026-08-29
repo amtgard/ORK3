@@ -81,6 +81,7 @@
 .rc-table input[type="number"] { width: 62px; }
 .rc-table input[type="date"]   { width: 148px; }
 .rc-table select               { min-width: 160px; }
+.rc-table select.rc-field-month { min-width: 0; width: 100%; }
 
 /* Autocomplete */
 .rc-search-wrap   { position: relative; min-width: 130px; }
@@ -292,7 +293,7 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 								<?php endfor; ?>
 							</select>
 							<?php if ($legacyRank > 0): ?>
-							<div style="font-size:11px;color:var(--ork-text-hint);margin-top:3px;white-space:nowrap">recorded as level <?= $legacyRank ?></div>
+							<div style="font-size:11px;color:var(--ork-text-muted);margin-top:3px">recorded as level <?= $legacyRank ?></div>
 							<?php endif; ?>
 						<?php elseif ($isLadder): ?>
 							<!-- data-tip, never a native title= (project tooltip convention); an
