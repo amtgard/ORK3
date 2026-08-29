@@ -262,15 +262,21 @@ class Award extends Ork3
 
     public function GetAwardList($request)
     {
+        // This query reads ork_award alone -- there is no kingdomaward (ka) join here --
+        // so "ladder" means the OFFICIAL ladder definition. Spelling it ka.is_ladder made
+        // every IsLadder=Ladder/NonLadder call a SQL error. Ladder and title are separate
+        // variables so passing both filters no longer clobbers one with the other.
+        $ladder_clause = '';
+        $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
-            $ladder_clause = " and ka.is_ladder = 1";
+            $ladder_clause = " and " . self::OfficialLadderSql('a');
         } elseif ($request['IsLadder'] == 'NonLadder') {
-            $ladder_clause = " and ka.is_ladder = 0";
+            $ladder_clause = " and not (" . self::OfficialLadderSql('a') . ")";
         }
         if ($request['IsTitle'] == 'Title') {
-            $ladder_clause = " and is_title = 1";
+            $title_clause = " and a.is_title = 1";
         } elseif ($request['IsTitle'] == 'NonTitle') {
-            $ladder_clause = " and is_title = 0";
+            $title_clause = " and a.is_title = 0";
         }
         if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards') {
             $officer_role_clause = " and officer_role = 'none'";
@@ -354,7 +360,14 @@ class Award extends Ork3
             $this->log->Write('Award', $mundane_id, LOG_ADD, $request);
             $this->award->clear();
             $this->award->name = $request['Name'];
-            $this->award->is_ladder = $request['IsLadder'];
+            // IsLadder is registered in JsonServer::ADDITIVE_OPTIONAL_PARAMETERS, so
+            // wrangle_parameters() no longer rejects a call that omits it. Absence
+            // means "leave alone" here too -- reading the key unconditionally warns
+            // and hands yapo a null, which it silently drops. Same array_key_exists()
+            // discipline Kingdom::CreateAward/EditAward use.
+            if (array_key_exists('IsLadder', $request)) {
+                $this->award->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
+            }
             $this->award->is_title = $request['IsTitle'];
             $this->award->title_class = $request['TitleClass'];
             $this->award->peerage = $request['Peerage'];
@@ -374,7 +387,10 @@ class Award extends Ork3
             $this->award->award_id = $request['AwardId'];
             if ($this->kingdomaward->find()) {
                 $this->award->name = $request['Name'];
-                $this->award->is_ladder = $request['IsLadder'];
+                // Absence means "leave alone" -- see CreateAward's note.
+                if (array_key_exists('IsLadder', $request)) {
+                    $this->award->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
+                }
                 $this->award->is_title = $request['IsTitle'];
                 $this->award->title_class = $request['TitleClass'];
                 $this->award->peerage = $request['Peerage'];

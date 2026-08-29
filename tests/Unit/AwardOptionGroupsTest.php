@@ -6,12 +6,21 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Characterization tests for award dropdown categorization (T-AWD-01).
+ *
+ * Every assertion here runs production code -- Award::GetAwardOptionGroups() for
+ * the grouping rules, Model_Award::fetch_award_option_list() for the rendered
+ * <option> markup. An earlier revision mirrored the classifier's bucketing loop
+ * into this file; that copy could not fail when production drifted, so it is gone.
  */
 final class AwardOptionGroupsTest extends TestCase
 {
-    private const SAMPLE_OFFICIAL_KAID = 21;
-    private const SAMPLE_KINGDOM_KAID = 9001;
-    private const SAMPLE_BOTH_FLAGGED_KAID = 9002;
+    // System-award list (KingdomId 0): Award::GetAwardList() keys each row by
+    // award_id, so these ARE the KingdomAwardId values in the response.
+    // Order of the Rose -- ork_award.is_ladder = 1, one of the 16 official orders.
+    private const OFFICIAL_LADDER_AWARD_ID = 21;
+    private const KNIGHT_AWARD_ID = 17;      // Knight of the Flame, peerage = Knight
+    private const MASTER_AWARD_ID = 1;       // Master Rose, peerage = Master
+    private const SQUIRE_AWARD_ID = 16;      // Squire, peerage = Squire
 
     private Model_Award $awardModel;
 
@@ -24,65 +33,42 @@ final class AwardOptionGroupsTest extends TestCase
         $this->awardModel = new Model_Award();
     }
 
-    public function testLadderAwardsSplitIntoOfficialAndKingdomGroups(): void
+    public function testOfficialLadderAwardsGroupAsOfficialNotKingdom(): void
     {
-        // Assert MEMBERSHIP, not just that the two groups differ. A test that only
-        // checks the keys exist and the arrays are not identical still passes when
-        // the classification is swapped -- which is the exact rule this is guarding.
-        $groups = $this->mirrorCategorizeSampleAwards();
-
-        $officialIds = array_column($groups['Official Ladder Awards'] ?? [], 'KingdomAwardId');
-        $kingdomIds  = array_column($groups['Kingdom Ladder Awards'] ?? [], 'KingdomAwardId');
+        // Calls the production classifier. Requirement 1: an award whose ork_award
+        // row carries is_ladder = 1 is an official Amtgard order and must be
+        // presented as one -- never as a kingdom's own ladder.
+        $groups = $this->productionGroups();
 
         $this->assertContains(
-            self::SAMPLE_OFFICIAL_KAID,
-            $officialIds,
-            'an award backed by a.is_ladder=1 belongs in the official group'
+            self::OFFICIAL_LADDER_AWARD_ID,
+            $this->groupIds($groups, 'Official Ladder Awards'),
+            'an award backed by a.is_ladder = 1 belongs in the official group'
         );
-        $this->assertNotContains(
-            self::SAMPLE_OFFICIAL_KAID,
-            $kingdomIds,
-            'requirement 1: an official ladder must never fall into the kingdom bucket'
-        );
-
-        $this->assertContains(
-            self::SAMPLE_KINGDOM_KAID,
-            $kingdomIds,
-            'an award raised only by ka.is_ladder=1 belongs in the kingdom group'
-        );
-        $this->assertNotContains(
-            self::SAMPLE_KINGDOM_KAID,
-            $officialIds,
-            'a kingdom ladder must not be presented as an Amtgard order'
-        );
-    }
-
-    public function testAnAwardThatIsBothOfficialAndKingdomFlaggedGroupsAsOfficial(): void
-    {
-        // The tie-break. GREATEST() makes both flags 1 for an official award, so the
-        // classifier must resolve the overlap in official's favour (requirement 1).
-        $groups = $this->mirrorCategorizeSampleAwards();
-
-        $this->assertContains(
-            self::SAMPLE_BOTH_FLAGGED_KAID,
-            array_column($groups['Official Ladder Awards'] ?? [], 'KingdomAwardId')
-        );
-        $this->assertNotContains(
-            self::SAMPLE_BOTH_FLAGGED_KAID,
-            array_column($groups['Kingdom Ladder Awards'] ?? [], 'KingdomAwardId')
+        // Deliberately NOT assertNotContains(..., groupIds($groups, 'Kingdom Ladder
+        // Awards')): this path (KingdomId 0) produces no 'Kingdom Ladder Awards'
+        // group at all, so groupIds() would return [] and that assertion could
+        // never fail. Assert instead on the labels the award actually lands in --
+        // exactly one, and it must be the official bucket. The official-vs-kingdom
+        // tie-break itself needs seeded ork_kingdomaward rows and is covered by
+        // LadderPredicateSqlTest::testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup().
+        $this->assertSame(
+            ['Official Ladder Awards'],
+            $this->labelsContaining($groups, self::OFFICIAL_LADDER_AWARD_ID),
+            'requirement 1: an official ladder must appear in exactly one group, the official one'
         );
     }
 
     public function testPeerageBuckets(): void
     {
-        $groups = $this->mirrorCategorizeSampleAwards();
-        $this->assertNotEmpty($groups['Knighthoods']);
-        $this->assertNotEmpty($groups['Masterhoods']);
-        $this->assertArrayHasKey('Paragons', $groups);
-        $this->assertArrayHasKey('Associate Titles', $groups);
+        $groups = $this->productionGroups();
 
-        foreach ($groups['Knighthoods'] as $award) {
-            $this->assertSame('Knight', $award['Peerage'] ?? '');
+        $this->assertContains(self::KNIGHT_AWARD_ID, $this->groupIds($groups, 'Knighthoods'));
+        $this->assertContains(self::MASTER_AWARD_ID, $this->groupIds($groups, 'Masterhoods'));
+        $this->assertContains(self::SQUIRE_AWARD_ID, $this->groupIds($groups, 'Associate Titles'));
+
+        foreach ($this->groupItems($groups, 'Knighthoods') as $award) {
+            $this->assertSame('Knight', $award['Peerage'] ?? '', 'the Knighthoods bucket must hold only Knight-peerage awards');
         }
     }
 
@@ -143,72 +129,76 @@ final class AwardOptionGroupsTest extends TestCase
     }
 
     /**
-     * Mirrors Award::GetAwardOptionGroups()'s categorization loop over sample rows
-     * shaped like its per-award array. 'IsLadder' mirrors a.is_ladder (official);
-     * membership in the sample kingdom-ladder id set mirrors a kingdom's own
-     * ka.is_ladder = 1 flag (Award::LadderSql(), Task 1) for a row that carries no
-     * official award_id.
+     * Calls the REAL Award::GetAwardOptionGroups() over the system award list
+     * (KingdomId 0) and returns its Groups. Nothing in this file re-implements the
+     * classifier -- a drift in production's tie-break order or peerage buckets
+     * fails the tests above.
      *
-     * This REIMPLEMENTS the classification loop rather than calling the production
-     * method -- it never runs Award::GetAwardOptionGroups() itself, so do not read
-     * these tests as end-to-end coverage; LadderPredicateSqlTest's
-     * testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup() carries the
-     * test against the real method.
+     * The official-vs-kingdom SPLIT needs kingdomaward rows, which only exist for a
+     * real kingdom; LadderPredicateSqlTest::
+     * testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup() seeds a kingdom
+     * and covers that half against the same production method.
      *
-     * @return array<string, list<array<string, mixed>>>
+     * @return list<array{Label: string, Items: list<array<string, mixed>>}>
      */
-    private function mirrorCategorizeSampleAwards(): array
+    private function productionGroups(): array
     {
-        // Both SAMPLE_KINGDOM_KAID and SAMPLE_BOTH_FLAGGED_KAID carry the kingdom flag
-        // (id membership); only SAMPLE_BOTH_FLAGGED_KAID also carries IsLadder => 1,
-        // which is what exercises the `!$isOfficialLadder &&` tie-break guard.
-        $kingdomLadderIds = [self::SAMPLE_KINGDOM_KAID, self::SAMPLE_BOTH_FLAGGED_KAID];
-        $rows = [
-            // Official ladder: is_ladder => 1 (a.is_ladder), no kingdom flag needed.
-            ['KingdomAwardId' => self::SAMPLE_OFFICIAL_KAID, 'AwardName' => 'Order of the Rose', 'IsLadder' => 1, 'Peerage' => '', 'IsTitle' => 0, 'TitleClass' => 0],
-            // Kingdom ladder: is_ladder => 0, but ka_is_ladder => 1 (flagged via id membership).
-            ['KingdomAwardId' => self::SAMPLE_KINGDOM_KAID, 'AwardName' => 'Order of the Comet', 'KingdomAwardName' => 'Order of the Comet', 'IsLadder' => 0, 'Peerage' => '', 'IsTitle' => 0, 'TitleClass' => 0],
-            // Both flagged: is_ladder => 1 (official) AND id is in the kingdom-ladder
-            // set. The classifier must still bucket this as official (requirement 1).
-            ['KingdomAwardId' => self::SAMPLE_BOTH_FLAGGED_KAID, 'AwardName' => 'Order of the Basilisk', 'KingdomAwardName' => 'Order of the Basilisk', 'IsLadder' => 1, 'Peerage' => '', 'IsTitle' => 0, 'TitleClass' => 0],
-            ['KingdomAwardId' => 101, 'AwardName' => 'Sir Something', 'IsLadder' => 0, 'Peerage' => 'Knight', 'IsTitle' => 0, 'TitleClass' => 0],
-            ['KingdomAwardId' => 102, 'AwardName' => 'Master Something', 'IsLadder' => 0, 'Peerage' => 'Master', 'IsTitle' => 0, 'TitleClass' => 0],
-            ['KingdomAwardId' => 103, 'AwardName' => 'Paragon Something', 'IsLadder' => 0, 'Peerage' => 'Paragon', 'IsTitle' => 0, 'TitleClass' => 0],
-            ['KingdomAwardId' => 104, 'AwardName' => 'Squire Something', 'IsLadder' => 0, 'Peerage' => 'Squire', 'IsTitle' => 0, 'TitleClass' => 0],
-        ];
+        $result = (new Award())->GetAwardOptionGroups(['KingdomId' => 0]);
+        $this->assertSame(
+            0,
+            (int) ($result['Status']['Status'] ?? -1),
+            'GetAwardOptionGroups() must succeed against the system award list'
+        );
 
-        $officialLadder = $kingdomLadder = $knighthoods = $masterhoods = $paragons = $associates = [];
+        return $result['Groups'] ?? [];
+    }
 
-        foreach ($rows as $row) {
-            $sysName = $row['AwardName'] ?? $row['KingdomAwardName'] ?? '';
-            $isOfficialLadder = !empty($row['IsLadder']);
-            $isKingdomLadder = !$isOfficialLadder
-                && in_array((int) ($row['KingdomAwardId'] ?? 0), $kingdomLadderIds, true);
-
-            if ($isOfficialLadder) {
-                $officialLadder[] = $row;
-            } elseif ($isKingdomLadder) {
-                $kingdomLadder[] = $row;
-            } elseif (($row['Peerage'] ?? '') === 'Knight') {
-                $knighthoods[] = $row;
-            } elseif (($row['Peerage'] ?? '') === 'Paragon') {
-                $paragons[] = $row;
-            } elseif (($row['Peerage'] ?? '') === 'Master'
-                || (!empty($row['IsTitle']) && ($row['TitleClass'] ?? 0) == 10)) {
-                $masterhoods[] = $row;
-            } elseif (in_array($row['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Page', 'Lords-Page'], true)
-                || $sysName === 'Apprentice') {
-                $associates[] = $row;
+    /**
+     * @param list<array{Label: string, Items: list<array<string, mixed>>}> $groups
+     * @return list<array<string, mixed>>
+     */
+    private function groupItems(array $groups, string $label): array
+    {
+        foreach ($groups as $group) {
+            if (($group['Label'] ?? null) === $label) {
+                return $group['Items'] ?? [];
             }
         }
 
-        return [
-            'Official Ladder Awards' => $officialLadder,
-            'Kingdom Ladder Awards' => $kingdomLadder,
-            'Knighthoods' => $knighthoods,
-            'Masterhoods' => $masterhoods,
-            'Paragons' => $paragons,
-            'Associate Titles' => $associates,
-        ];
+        $this->fail("group '{$label}' is missing from GetAwardOptionGroups()");
+    }
+
+    /**
+     * Every group label whose Items carry $kingdomAwardId, in group order.
+     *
+     * @param list<array{Label: string, Items: list<array<string, mixed>>}> $groups
+     * @return list<string>
+     */
+    private function labelsContaining(array $groups, int $kingdomAwardId): array
+    {
+        $labels = [];
+        foreach ($groups as $group) {
+            $ids = array_map('intval', array_column($group['Items'] ?? [], 'KingdomAwardId'));
+            if (in_array($kingdomAwardId, $ids, true)) {
+                $labels[] = (string) ($group['Label'] ?? '');
+            }
+        }
+
+        return $labels;
+    }
+
+    /**
+     * @param list<array{Label: string, Items: list<array<string, mixed>>}> $groups
+     * @return list<int>
+     */
+    private function groupIds(array $groups, string $label): array
+    {
+        foreach ($groups as $group) {
+            if (($group['Label'] ?? null) === $label) {
+                return array_map('intval', array_column($group['Items'] ?? [], 'KingdomAwardId'));
+            }
+        }
+
+        return [];
     }
 }

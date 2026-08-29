@@ -7,8 +7,32 @@ if (typeof window.tnFixedAcPosition !== 'function') {
     dropdown.style.top = (r.bottom + 2) + 'px';
     dropdown.style.left = r.left + 'px';
     dropdown.style.width = r.width + 'px';
-    dropdown.style.zIndex = '10001';
+    /* Read the stacking value off the token scale rather than hardcoding a raw
+       number: because this sets position:fixed, the dropdown's inline z-index is
+       what competes with --z-modal (10100) / --z-modal-top (10200), and a literal
+       10001 falls BEHIND any modal raised on that scale (the known tournament
+       modal failure mode). One above --z-modal-top, still below
+       --z-help-overlay (10300). The literal is only a fallback for a page that
+       has not loaded tokens.css. */
+    dropdown.style.zIndex = String(window.tnAcZIndex ? window.tnAcZIndex() : 10201);
   };
+}
+/* The z-index an autocomplete dropdown must carry to clear the modal scale.
+   Computed once: --z-modal-top + 1, falling back to 10201. */
+if (typeof window.tnAcZIndex !== 'function') {
+  window.tnAcZIndex = (function () {
+    var cached = null;
+    return function () {
+      if (cached !== null) return cached;
+      var top = 0;
+      try {
+        top = parseInt(getComputedStyle(document.documentElement)
+          .getPropertyValue('--z-modal-top'), 10);
+      } catch (e) { top = 0; }
+      cached = (top > 0) ? (top + 1) : 10201;
+      return cached;
+    };
+  })();
 }
 
 /* ============================================================
@@ -69,13 +93,36 @@ function tnRankStar(wrap, prefix, maxRank, currentRank) {
    Award::IsMonthlyLadder() server-side defines it as this exact id, never a
    name guess (a name guess is exactly the bug tnRankMaxFor's own comment
    above retired for max rank: 82 kingdom awards contain the word "zodiac").
-   Ideally the server would stamp every <option> with data-monthly="1" the
-   way it already stamps data-max-rank, so this id never has to be repeated
-   client-side; until that plumbing exists, this is the ONE place it's
-   checked, so a future patch only has to change this one line. */
+   Accepts EITHER an <option>/element or a bare award id. Given an element it
+   prefers a server-stamped data-monthly attribute -- the same channel
+   data-max-rank already rides, so the client stops guessing the rule -- and
+   only falls back to the id when the server has not stamped one (the templates
+   do not emit data-monthly yet; see the task report). Given a number it is the
+   id comparison it has always been. Either way this is the ONE place the rule
+   is spelled client-side. */
 var ZODIAC_AWARD_ID = 30;
-function tnIsMonthly(awardId) {
-    return parseInt(awardId, 10) === ZODIAC_AWARD_ID;
+function tnIsMonthly(awardIdOrEl) {
+    if (awardIdOrEl && typeof awardIdOrEl === 'object' && typeof awardIdOrEl.getAttribute === 'function') {
+        var stamped = awardIdOrEl.getAttribute('data-monthly');
+        if (stamped !== null && stamped !== '') return stamped === '1';
+        return parseInt(awardIdOrEl.getAttribute('data-award-id'), 10) === ZODIAC_AWARD_ID;
+    }
+    return parseInt(awardIdOrEl, 10) === ZODIAC_AWARD_ID;
+}
+/* Whether a ladder <option> should show the "Ladder Award" badge.
+   Keyed off award IDENTITY, never the display string: the old
+   name-substring test ('mask', 'zodiac', 'walker', ...) matched any
+   kingdom-raised ladder whose NAME merely contains one of those words and
+   silently stripped its badge -- the same name-guessing anti-pattern
+   tnRankMaxFor's comment above retired for max rank. A server-stamped
+   data-no-badge="1" wins if it is ever emitted. */
+var TN_NO_BADGE_AWARD_IDS = [28, 29, 30, 31, 32, 33]; // Jovius, Mask, Zodiac, Walker, Hydra, Griffin
+function tnShowLadderBadge(optEl) {
+    if (!optEl) return false;
+    if (optEl.getAttribute('data-is-ladder') !== '1') return false;
+    if (optEl.getAttribute('data-no-badge') === '1') return false;
+    var awardId = parseInt(optEl.getAttribute('data-award-id'), 10) || 0;
+    return TN_NO_BADGE_AWARD_IDS.indexOf(awardId) === -1;
 }
 /* The real system award id of a <select>'s currently chosen <option> --
    reads .selectedIndex directly rather than re-querying by value/award-id,
@@ -118,7 +165,7 @@ function tnRankHeldFor(optEl, ranksMap) {
    Returns false -- and leaves `wrap` untouched -- for any other award, so
    every builder uses this as a one-line guard in front of its normal
    numbered-pill loop:
-       if (tnRankMonths(wrap, prefix, awardId, verb, onSelect)) return;
+       if (tnRankMonths(wrap, prefix, awardIdOrOpt, verb, onSelect)) return;
        ...existing numbered-pill loop + tnRankStar call...
    That early return is what suppresses the star pill for Zodiac: a
    monthly award has no top, so "recognition past the top" is meaningless
@@ -128,14 +175,29 @@ function tnRankHeldFor(optEl, ranksMap) {
    grant (35 players already hold duplicates), so this only ever
    INDICATES a held month (green pill, repeat-confirmation tip), never
    disables it. Which months are held is read from `wrap`'s own
-   data-held-months attribute ("3,12,12" -> months 3 and 12, 12 twice);
-   no surface threads this yet (server-side plumbing is still needed --
-   see the task report), so every pill renders unheld today. Reading the
-   attribute rather than hardcoding "none held" means the day that
-   plumbing lands, every one of the eight call sites lights up for free
-   with no further JS change.
+   data-held-months attribute ("3,12,12" -> months 3 and 12, 12 twice).
+   The four Player-profile wraps (grant / recommend / edit / reconcile)
+   are server-stamped with that attribute in Playernew_index.tpl, so they
+   need nothing at runtime. The four Kingdom and Park pickers choose their
+   player at runtime and so fetch the months, then write them through the
+   shared tnRankSetHeldMonths() rather than hand-writing setAttribute.
    ============================================================ */
-function tnRankMonths(wrap, prefix, awardId, verb, onSelect) {
+/* Stamp a player's held Zodiac months onto a pill wrap. The ONE place the
+   attribute tnRankMonths reads is written at runtime.
+   null/undefined means the caller has nothing to say, so a server-stamped
+   value (the Playernew_index.tpl wraps) is left alone. An empty ARRAY is a
+   real answer -- the chosen player holds no months -- and MUST be written,
+   because the Kingdom and Park wraps are reused singletons: skipping the
+   write there would leave the previously chosen player's months on screen. */
+function tnRankSetHeldMonths(wrap, months) {
+    if (!wrap) return;
+    if (!Array.isArray(months)) return;
+    wrap.setAttribute('data-held-months', months.join(','));
+}
+/* `awardIdOrOpt` is the selected <option> where the surface has one (so a
+   server-stamped data-monthly wins) or the bare award id where it does not --
+   tnIsMonthly accepts either. */
+function tnRankMonths(wrap, prefix, awardIdOrOpt, verb, onSelect) {
     if (!wrap) return false;
     // Every surface's markup is `<label>Rank <span>…hint…</span></label>`
     // immediately followed by the pill wrap -- calling that field "Rank"
@@ -147,7 +209,7 @@ function tnRankMonths(wrap, prefix, awardId, verb, onSelect) {
     // structure is never silently overwritten.
     var label = wrap.previousElementSibling;
     var labelText = (label && label.tagName === 'LABEL') ? label.firstChild : null;
-    var monthly = tnIsMonthly(awardId);
+    var monthly = tnIsMonthly(awardIdOrOpt);
     if (labelText && labelText.nodeType === 3 && /^(Rank|Month)\s*$/.test(labelText.nodeValue)) {
         labelText.nodeValue = monthly ? 'Month ' : 'Rank ';
     }
@@ -261,6 +323,8 @@ if (typeof window !== 'undefined') {
     window.tnIsMonthly = tnIsMonthly;
     window.tnRealAwardId = tnRealAwardId;
     window.tnRankMonths = tnRankMonths;
+    window.tnRankSetHeldMonths = tnRankSetHeldMonths;
+    window.tnShowLadderBadge = tnShowLadderBadge;
 }
 
 /* ============================================================
@@ -1158,9 +1222,8 @@ if (PnConfig.recError) {
         var opt = document.querySelector('#pn-rec-award option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
-        if (tnRankMonths(wrap, 'pn', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+        if (tnRankMonths(wrap, 'pn', opt, 'Recommend', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
             return;
         }
@@ -2199,7 +2262,6 @@ if (PnConfig.recError) {
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
 
         // ---- Award Select Change ----
-        var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
         gid('pn-award-select').addEventListener('change', function() {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
@@ -2207,8 +2269,8 @@ if (PnConfig.recError) {
             var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
             var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
             var needsCustomName = isCustomAward || isCustomTitle;
-            var optName  = opt.text.toLowerCase();
-            var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
+            // Identity, not the display string -- see tnShowLadderBadge.
+            var showBadge = tnShowLadderBadge(opt);
 
             gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
             var labelEl = gid('pn-award-custom-label');
@@ -2251,7 +2313,7 @@ if (PnConfig.recError) {
             // a January nobody chose. The kn and pk builders already clear first;
             // this matches them.
             gid('pn-award-rank-val').value = '';
-            if (tnRankMonths(pills, 'pn', awardId, 'Award', function(month) { gid('pn-award-rank-val').value = month; })) {
+            if (tnRankMonths(pills, 'pn', opt, 'Award', function(month) { gid('pn-award-rank-val').value = month; })) {
                 if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
                 return;
             }
@@ -3490,10 +3552,9 @@ $(document).ready(function() {
         var opt = gid('kn-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
-        wrap.setAttribute('data-held-months', knPlayerMonths.join(','));
-        if (tnRankMonths(wrap, 'kn', baseAwardId, 'Award', function(month) { input.value = month; })) {
+        tnRankSetHeldMonths(wrap, knPlayerMonths);
+        if (tnRankMonths(wrap, 'kn', opt, 'Award', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
             return;
         }
@@ -3978,10 +4039,9 @@ $(document).ready(function() {
         var opt = gid('kn-rec-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
-        wrap.setAttribute('data-held-months', knRecMonths.join(','));
-        if (tnRankMonths(wrap, 'kn', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+        tnRankSetHeldMonths(wrap, knRecMonths);
+        if (tnRankMonths(wrap, 'kn', opt, 'Recommend', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
             return;
         }
@@ -7274,10 +7334,9 @@ $(document).ready(function() {
         var opt = gid('pk-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
-        wrap.setAttribute('data-held-months', pkPlayerMonths.join(','));
-        if (tnRankMonths(wrap, 'pk', baseAwardId, 'Award', function(month) { input.value = month; })) {
+        tnRankSetHeldMonths(wrap, pkPlayerMonths);
+        if (tnRankMonths(wrap, 'pk', opt, 'Award', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
             return;
         }
@@ -7787,10 +7846,9 @@ $(document).ready(function() {
         var opt = gid('pk-rec-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
-        wrap.setAttribute('data-held-months', pkRecMonths.join(','));
-        if (tnRankMonths(wrap, 'pk', baseAwardId, 'Recommend', function(month) { input.value = month; })) {
+        tnRankSetHeldMonths(wrap, pkRecMonths);
+        if (tnRankMonths(wrap, 'pk', opt, 'Recommend', function(month) { input.value = month; })) {
             if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
             return;
         }
@@ -12835,17 +12893,16 @@ function setupPronounPicker(cfg) {
                 if (!rcRankRow || !rcRankPills || !rcRankVal) return;
                 var opt = this.options[this.selectedIndex];
                 var isLadder = opt && opt.getAttribute('data-is-ladder') === '1';
-                var awardId  = opt ? (parseInt(opt.getAttribute('data-award-id')) || 0) : 0;
                 rcRankRow.style.display = isLadder ? '' : 'none';
                 rcRankPills.innerHTML   = '';
                 rcRankVal.value         = '';
                 if (!isLadder) return;
-                if (tnRankMonths(rcRankPills, 'pn', awardId, 'Award', function(month) { rcRankVal.value = month; })) return;
+                if (tnRankMonths(rcRankPills, 'pn', opt, 'Award', function(month) { rcRankVal.value = month; })) return;
 
                 /* suggest next rank = max held rank + 1, capped at maxRank */
                 /* The fifth picker. PnConfig.awardRanks has no numeric key 0 any more,
                    and every kingdom ladder <option> carries data-award-id="0" -- so
-                   awardRanks[awardId] read 0 for all of them: no green held pills, a
+                   a bare data-award-id lookup read 0 for all of them: no green held pills, a
                    "suggest next rank" that always proposed 1, and no star even for a
                    player already at the top of that ladder. tnRankHeldFor() takes the
                    ALREADY-SELECTED option and falls back to its 'k' + kingdomaward_id

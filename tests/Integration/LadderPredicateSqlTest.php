@@ -10,10 +10,9 @@ use PHPUnit\Framework\TestCase;
  * and an official ladder can never be lowered by its kingdom row.
  *
  * testProductionGroupingPutsAnOfficialLadderInTheOfficialGroup() additionally
- * calls the real Award::GetAwardOptionGroups() -- AwardOptionGroupsTest's
- * "mirror" tests reimplement the classification loop over sample rows and
- * never call production code, so this is the only test that exercises
- * requirement 1 against code that actually runs.
+ * calls the real Award::GetAwardOptionGroups() for the case AwardOptionGroupsTest
+ * cannot reach without a seeded kingdom: the official-vs-kingdom ladder split,
+ * where requirement 1's tie-break lives.
  */
 final class LadderPredicateSqlTest extends TestCase
 {
@@ -209,12 +208,18 @@ final class LadderPredicateSqlTest extends TestCase
     {
         $this->kingdomIdForGrouping = $this->seedKingdom();
 
-        // Tie-break case: award-backed (a.is_ladder = 1) but the kingdom row
+        // Precedence case: award-backed (a.is_ladder = 1) but the kingdom row
         // itself says no. LadderSql()'s GREATEST() makes this effectively 1
         // regardless -- production must classify it as official, not kingdom.
         $officialBackedId = $this->seedKingdomAward(21, 0, $this->kingdomIdForGrouping);
         // Kingdom-only: no Amtgard parent, raised purely by the kingdom's own flag.
         $kingdomOnlyId = $this->seedKingdomAward(0, 1, $this->kingdomIdForGrouping);
+        // The actual TIE-BREAK: BOTH flags set (official a.is_ladder = 1 AND
+        // ka.is_ladder = 1). This is the only shape that reaches the
+        // `!$isOfficialLadder &&` guard in Award::GetAwardOptionGroups(); without
+        // it, dropping that guard demotes an official Amtgard order into the
+        // kingdom's own bucket with every test still green.
+        $bothFlaggedId = $this->seedKingdomAward(21, 1, $this->kingdomIdForGrouping);
 
         $result = (new Award())->GetAwardOptionGroups(['KingdomId' => $this->kingdomIdForGrouping]);
         $this->assertSame(0, $result['Status']['Status'] ?? null, 'GetAwardOptionGroups() must succeed against the seeded kingdom');
@@ -234,6 +239,17 @@ final class LadderPredicateSqlTest extends TestCase
         );
 
         $this->assertContains(
+            $bothFlaggedId,
+            $officialIds,
+            'requirement 1 tie-break: with BOTH a.is_ladder=1 and ka.is_ladder=1 the official flag must win'
+        );
+        $this->assertNotContains(
+            $bothFlaggedId,
+            $kingdomIds,
+            'requirement 1 tie-break: a kingdom raising its own flag on an official order must not move it into the kingdom bucket'
+        );
+
+        $this->assertContains(
             $kingdomOnlyId,
             $kingdomIds,
             'a kingdom-only ka.is_ladder=1 row must classify as a kingdom ladder'
@@ -248,28 +264,66 @@ final class LadderPredicateSqlTest extends TestCase
     public function testGetAwardListSelectsAndFiltersOnTheSameDefinition(): void
     {
         // The headline defect: GetAwardList filtered on ka.is_ladder but selected
-        // a.is_ladder, so one method answered "is this a ladder?" two ways.
-        $source = file_get_contents(__DIR__ . '/../../system/lib/ork3/class.Kingdom.php');
-        $start  = strpos($source, 'public function GetAwardList');
-        $this->assertNotFalse($start, 'GetAwardList not found');
+        // a.is_ladder, so one method answered "is this a ladder?" two ways. Asserted
+        // against what the method RETURNS for seeded rows -- not against its source
+        // text, which a rename or a reformat would break without any behaviour change.
+        $this->kingdomIdForGrouping = $this->seedKingdom();
+        $kingdom = new Kingdom();
 
-        $end  = strpos($source, "\n    public function", $start + 10);
-        $body = substr($source, $start, $end - $start);
+        // Official ladder whose kingdom row says otherwise (ka.is_ladder = 0) --
+        // the row a ka-only filter drops from the Ladder list while still
+        // selecting IsLadder = 1 for it.
+        $officialBackedId = $this->seedKingdomAward(21, 0, $this->kingdomIdForGrouping);
+        // Pure kingdom ladder: no ork_award parent, raised by ka.is_ladder alone --
+        // the row an a-only filter drops.
+        $kingdomOnlyId = $this->seedKingdomAward(0, 1, $this->kingdomIdForGrouping);
+        $plainId = $this->seedKingdomAward(0, 0, $this->kingdomIdForGrouping);
 
-        $this->assertStringContainsString(
-            'Award::LadderSql(',
-            $body,
-            'GetAwardList must resolve ladders through the shared helper'
+        $ladder = $this->awardListRows($kingdom, 'Ladder');
+        $nonLadder = $this->awardListRows($kingdom, 'NonLadder');
+
+        $this->assertArrayHasKey($officialBackedId, $ladder, 'an award-backed ladder (a.is_ladder = 1) must survive the Ladder filter even with ka.is_ladder = 0');
+        $this->assertArrayHasKey($kingdomOnlyId, $ladder, 'a kingdom-only ladder (ka.is_ladder = 1, no ork_award parent) must survive the Ladder filter');
+        $this->assertArrayNotHasKey($plainId, $ladder, 'an ordinary award must not pass the Ladder filter');
+
+        $this->assertArrayHasKey($plainId, $nonLadder, 'an ordinary award must pass the NonLadder filter');
+        $this->assertArrayNotHasKey($officialBackedId, $nonLadder, 'an official ladder must never be filtered out as a non-ladder because its kingdom row says ka.is_ladder = 0');
+        $this->assertArrayNotHasKey($kingdomOnlyId, $nonLadder);
+
+        // Select and filter must agree: every row the filter admitted must carry
+        // the IsLadder value that filter asked for.
+        foreach ($ladder as $kingdomAwardId => $row) {
+            $this->assertSame(1, (int) $row['IsLadder'], "kingdomaward_id {$kingdomAwardId} passed the Ladder filter but was selected as IsLadder = 0");
+        }
+        foreach ($nonLadder as $kingdomAwardId => $row) {
+            $this->assertSame(0, (int) $row['IsLadder'], "kingdomaward_id {$kingdomAwardId} passed the NonLadder filter but was selected as IsLadder = 1");
+        }
+    }
+
+    /**
+     * Kingdom::GetAwardList()'s rows for this test's kingdom under one IsLadder
+     * filter, keyed by kingdomaward_id.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function awardListRows(Kingdom $kingdom, ?string $isLadder): array
+    {
+        $response = $kingdom->GetAwardList([
+            'IsLadder' => $isLadder,
+            'IsTitle' => null,
+            'KingdomId' => $this->kingdomIdForGrouping,
+        ]);
+        $this->assertSame(
+            0,
+            (int) ($response['Status']['Status'] ?? -1),
+            'GetAwardList(' . var_export($isLadder, true) . ') failed: ' . json_encode($response['Status'] ?? null)
         );
-        $this->assertDoesNotMatchRegularExpression(
-            '/\ba\.is_ladder\b/',
-            $body,
-            'GetAwardList must not spell the predicate by hand'
-        );
-        $this->assertDoesNotMatchRegularExpression(
-            '/\bka\.is_ladder\b(?!.*IFNULL)/',
-            $body,
-            'GetAwardList must not filter on the bare kingdom column'
-        );
+
+        $rows = [];
+        foreach ($response['Awards'] ?? [] as $row) {
+            $rows[(int) $row['KingdomAwardId']] = $row;
+        }
+
+        return $rows;
     }
 }

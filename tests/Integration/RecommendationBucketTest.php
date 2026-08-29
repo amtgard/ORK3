@@ -15,9 +15,10 @@ use PHPUnit\Framework\TestCase;
  *    whether the award actually is a ladder. A kingdom-ladder recommendation
  *    has no rank yet, so it filed under "Non-Ladder Awards & Titles" and the
  *    officer was told to Grant-or-Delete a ranked award as though it were
- *    flat. bucketFor() below mirrors the template's (fixed) three-branch
- *    expression, the way AwardOptionGroupsTest::mirrorCategorizeSampleAwards()
- *    mirrors its subject -- it does not exercise the .tpl file itself.
+ *    flat. bucketFor() below RENDERS the real .tpl (plain PHP, not Smarty) and
+ *    reads back the data-filter attribute the template itself emitted, so a
+ *    drift in the template's ternary fails these tests. It does not
+ *    re-implement the expression.
  *
  * 2. Player::AddAwardRecommendation's custom-award detection ("Custom awards
  *    (is_ladder = 0 AND is_title = 0)") queried ork_award.is_ladder alone --
@@ -58,7 +59,7 @@ final class RecommendationBucketTest extends TestCase
         $this->player = new Player();
         $this->officer = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
         $this->token = $this->officer->createAuthorizedOfficer();
-        $this->recipientId = $this->seedRecipient();
+        $this->recipientId = $this->officer->seedRecipient();
 
         $stmt = $this->pdo->query("SELECT award_id FROM ork_award WHERE name = 'Custom Award' LIMIT 1");
         $customAwardId = $stmt->fetchColumn();
@@ -70,45 +71,11 @@ final class RecommendationBucketTest extends TestCase
 
     protected function tearDown(): void
     {
-        if (isset($this->recipientId)) {
-            $this->pdo->exec('DELETE FROM ork_recommendations WHERE mundane_id = ' . $this->recipientId);
-            $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id = ' . $this->recipientId);
-        }
         foreach ($this->kingdomAwardIdsToClean as $kaId) {
             $this->pdo->exec('DELETE FROM ork_kingdomaward WHERE kingdomaward_id = ' . $kaId);
         }
         $this->kingdomAwardIdsToClean = [];
         $this->officer->cleanup();
-    }
-
-    private function seedRecipient(): int
-    {
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO ork_mundane
-                (given_name, surname, other_name, username, persona, email, park_id, kingdom_id,
-                 token, waiver_ext, password_expires, password_salt, xtoken, reeve_qualified_until)
-             VALUES
-                (:given_name, :surname, :other_name, :username, :persona, :email, 0, :kingdom_id,
-                 :token, :waiver_ext, :password_expires, :password_salt, :xtoken, :reeve_qualified_until)'
-        );
-        $username = strtolower(self::MARKER . '_recipient_' . bin2hex(random_bytes(4)));
-        $stmt->execute([
-            ':given_name' => self::MARKER,
-            ':surname' => 'Recipient',
-            ':other_name' => '',
-            ':username' => $username,
-            ':persona' => self::MARKER . ' Recipient',
-            ':email' => $username . '@example.test',
-            ':kingdom_id' => self::KINGDOM_ID,
-            ':token' => md5($username),
-            ':waiver_ext' => '',
-            ':password_expires' => '2099-01-01 00:00:00',
-            ':password_salt' => '',
-            ':xtoken' => '',
-            ':reeve_qualified_until' => '2000-01-01',
-        ]);
-
-        return (int) $this->pdo->lastInsertId();
     }
 
     /**
@@ -202,20 +169,19 @@ final class RecommendationBucketTest extends TestCase
 
     public function testKingdomLadderRecommendationBucketsAsBelow(): void
     {
-        $rec = ['Rank' => 0, 'IsLadder' => 1];
-        $this->assertSame('below', $this->bucketFor($rec));
+        // An unranked kingdom ladder -- the exact row the old `Rank > 0` test
+        // mis-filed under "Non-Ladder Awards & Titles".
+        $this->assertSame('below', $this->bucketFor(['Rank' => 0, 'IsLadder' => 1]));
     }
 
     public function testGenuineNonLadderRecommendationStillBucketsAsNonladder(): void
     {
-        $rec = ['Rank' => 0, 'IsLadder' => 0];
-        $this->assertSame('nonladder', $this->bucketFor($rec));
+        $this->assertSame('nonladder', $this->bucketFor(['Rank' => 0, 'IsLadder' => 0]));
     }
 
     public function testRankedLadderRecommendationStillBucketsAsBelow(): void
     {
-        $rec = ['Rank' => 4, 'IsLadder' => 1];
-        $this->assertSame('below', $this->bucketFor($rec));
+        $this->assertSame('below', $this->bucketFor(['Rank' => 4, 'IsLadder' => 1]));
     }
 
     public function testAlreadyHasTakesPriorityOverLadderStatus(): void
@@ -223,23 +189,117 @@ final class RecommendationBucketTest extends TestCase
         // The `already` branch must survive: a recommendation for an award the
         // player already holds must bucket as 'already' regardless of IsLadder,
         // not be swallowed by a collapse to a two-branch expression.
-        $rec = ['Rank' => 3, 'IsLadder' => 1, 'AlreadyHas' => 1];
-        $this->assertSame('already', $this->bucketFor($rec));
+        $this->assertSame('already', $this->bucketFor(['Rank' => 3, 'IsLadder' => 1, 'AlreadyHas' => 1]));
+        $this->assertSame('already', $this->bucketFor(['Rank' => 0, 'IsLadder' => 0, 'AlreadyHas' => 1]));
+    }
 
-        $recFlat = ['Rank' => 0, 'IsLadder' => 0, 'AlreadyHas' => 1];
-        $this->assertSame('already', $this->bucketFor($recFlat));
+    public function testEveryBucketIsReachableFromOneRender(): void
+    {
+        // All three branches out of a single render of the real template, in
+        // order -- so a template edit that collapses the ternary (every row the
+        // same bucket) cannot pass by accident.
+        $buckets = $this->renderBuckets([
+            ['Rank' => 0, 'IsLadder' => 1],
+            ['Rank' => 0, 'IsLadder' => 0],
+            ['Rank' => 2, 'IsLadder' => 1, 'AlreadyHas' => 1],
+        ]);
+
+        $this->assertSame(['below', 'nonladder', 'already'], $buckets);
     }
 
     /**
-     * Mirrors Kingdomnew_recommendations_panel.tpl's data-filter expression:
-     *   !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['IsLadder'] === 1 ? 'below' : 'nonladder')
+     * Bucket the REAL template assigns one recommendation row.
      */
     private function bucketFor(array $rec): string
     {
-        if (!empty($rec['AlreadyHas'])) {
-            return 'already';
+        return $this->renderBuckets([$rec])[0];
+    }
+
+    /**
+     * Renders orkui/template/revised-frontend/Kingdomnew_recommendations_panel.tpl
+     * (plain PHP, not Smarty) with the given recommendation rows and returns the
+     * data-filter attribute the template emitted for each, in row order.
+     *
+     * This executes the shipped template, so the assertions above fail if its
+     * data-filter expression drifts -- nothing here restates that expression.
+     *
+     * @param list<array<string, mixed>> $recs
+     * @return list<string>
+     */
+    private function renderBuckets(array $recs): array
+    {
+        $rows = [];
+        foreach ($recs as $i => $rec) {
+            $rows[] = $rec + [
+                'RecommendationsId' => $i + 1,
+                'AwardId' => 0,
+                'KingdomAwardId' => 0,
+                'MundaneId' => $this->recipientId,
+                'Persona' => self::MARKER . ' Recipient',
+                'ParkId' => 0,
+                'ParkName' => '',
+                'AwardName' => self::MARKER . ' Award',
+                'Rank' => 0,
+                'IsLadder' => 0,
+                'CurrentRank' => 0,
+                'CurrentRankDate' => '2020-01-01',
+                'RecommendedById' => 0,
+                'RecommendedByName' => '',
+                'DateRecommended' => '2020-01-01',
+                'Reason' => '',
+                'MaxRank' => 10,
+                'KaMaxLevel' => 0,
+                'SecondsCount' => 0,
+                'Seconds' => [],
+            ];
         }
 
-        return (int) $rec['IsLadder'] === 1 ? 'below' : 'nonladder';
+        $html = $this->renderPanel([
+            'AwardRecommendations' => $rows,
+            'IsLoggedIn' => true,
+            'CanManageKingdom' => true,
+            'ViewerHasCircle' => false,
+            'kingdom_name' => self::MARKER . ' Kingdom',
+            'kingdom_id' => self::KINGDOM_ID,
+        ]);
+
+        $doc = new DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $doc->loadHTML('<!doctype html><html><body>' . $html . '</body></html>');
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $buckets = [];
+        foreach ((new DOMXPath($doc))->query("//tr[contains(@class, 'pk-rec-row')]") as $tr) {
+            $buckets[] = $tr->getAttribute('data-filter');
+        }
+
+        $this->assertCount(
+            count($recs),
+            $buckets,
+            'the template must render one .pk-rec-row per recommendation'
+        );
+
+        return $buckets;
+    }
+
+    /**
+     * @param array<string, mixed> $vars template variables, by name
+     */
+    private function renderPanel(array $vars): string
+    {
+        $render = static function (array $vars): string {
+            extract($vars, EXTR_SKIP);
+            ob_start();
+            try {
+                include ORK3_ROOT . '/orkui/template/revised-frontend/Kingdomnew_recommendations_panel.tpl';
+
+                return (string) ob_get_contents();
+            } finally {
+                ob_end_clean();
+            }
+        };
+
+        return $render($vars);
     }
 }

@@ -896,9 +896,16 @@ class Controller_Admin extends Controller
             exit;
         }
 
-        $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK];
-        $authType = $authTypeMap[$type];
-        if (!$this->Authorization->has_authority($uid, $authType, $id, AUTH_EDIT)) {
+        // Mirror Admin::roles(), the sibling page that MANAGES exactly this data: RBAC
+        // permission key first, legacy authority row as the fallback, global admin spelled
+        // out. Gating on has_authority() alone shut an officer who holds *.auth.manage
+        // through an RBAC role -- and can therefore grant these permissions -- out of the
+        // read-only grid that shows what those grants do.
+        $permKey = $type === 'Kingdom' ? 'kingdom.auth.manage' : 'park.auth.manage';
+        if (
+            !$this->Authorization->has_permission_or_authority($uid, $permKey, strtolower($type), $id, AUTH_EDIT)
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -1021,7 +1028,11 @@ class Controller_Admin extends Controller
                         }
                         break;
                     case 'update':
-                        if ($this->request->RemoveDues == 'Revoke Dues') {
+                        // RemoveDues is officer-only. The self-service carve-out above lets a
+                        // player POST their own photo/heraldry with no officer authority; this
+                        // branch is not scoped to Update='Update Details', so without the
+                        // guard the same request could also revoke the player's own dues.
+                        if (!$_is_self_media_post && $this->request->RemoveDues == 'Revoke Dues') {
                             $this->load_model('Treasury');
                             $this->Treasury->RemoveLastDuesPaid(array(
                                     'MundaneId' => $id,
@@ -2037,7 +2048,10 @@ class Controller_Admin extends Controller
         $uid = $_uid;
         $this->data['CanEditKingdom']   = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT);
         $this->data['CanManageKingdom'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$id, AUTH_CREATE);
-        $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, (int)$id, AUTH_CREATE);
+        // Park creation is global-admin only. Passing a kingdom id as the AUTH_ADMIN scope
+        // is meaningless (HasAuthority() has no scoped-admin case and falls to `return
+        // false`), so spell it the way the server gate in ParkAjax::park() does.
+        $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
 
@@ -2102,8 +2116,9 @@ class Controller_Admin extends Controller
             // Emitted as a list rather than a key => row map because the modal iterates it
             // with forEach(); FilterKnown() returns the keys in registry group order and
             // array_values() preserves that order.
+            $this->load_model('ConfigRegistry');
             $this->data['AdminConfig']     = array_values(
-                ConfigRegistry::FilterKnown($kd['KingdomConfiguration'] ?? [])
+                $this->ConfigRegistry->filter_known($kd['KingdomConfiguration'] ?? [])
             );
             $this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
 
@@ -2216,6 +2231,21 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+        // Front door for Admin_park.tpl, the same one Admin::kingdom() and
+        // Admin::resetwaivers() apply to the kingdom console: without it the whole park
+        // admin page was served to ANY logged-in player for ANY park id. Park standing is
+        // accepted alongside kingdom standing because this console is the park officers'
+        // own page, not just the kingdom's view of it.
+        $_standingKingdomId = (int)($this->data['ParkInfo']['KingdomId'] ?? 0);
+        if (
+            !$this->Authorization->has_permission_or_authority($_uid, 'park.details.edit', 'park', (int)$id, AUTH_EDIT)
+            && !$this->admin_has_kingdom_standing($_uid, $_standingKingdomId)
+        ) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
     }
 

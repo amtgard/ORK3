@@ -17,6 +17,9 @@ final class AuthorizedOfficerFixture
     private ?int $officerMundaneId = null;
     private ?string $token = null;
 
+    /** @var list<int> plain (non-officer) ork_mundane rows seeded by seedRecipient() */
+    private array $recipientMundaneIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $marker,
@@ -109,6 +112,48 @@ final class AuthorizedOfficerFixture
         ]);
     }
 
+    /**
+     * Seeds one plain ork_mundane row (no session, no authorization) to receive
+     * awards/recommendations, and returns its mundane_id.
+     *
+     * Same INSERT as createAuthorizedOfficer() above -- six test classes had
+     * copy-pasted this ~30-line statement, so a new NOT NULL column on
+     * ork_mundane meant editing six files in lockstep. cleanup() removes every
+     * row seeded here.
+     */
+    public function seedRecipient(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_mundane
+                (given_name, surname, other_name, username, persona, email, park_id, kingdom_id,
+                 token, waiver_ext, password_expires, password_salt, xtoken, reeve_qualified_until)
+             VALUES
+                (:given_name, :surname, :other_name, :username, :persona, :email, 0, :kingdom_id,
+                 :token, :waiver_ext, :password_expires, :password_salt, :xtoken, :reeve_qualified_until)'
+        );
+        $username = strtolower($this->marker . '_recipient_' . bin2hex(random_bytes(4)));
+        $stmt->execute([
+            ':given_name' => $this->marker,
+            ':surname' => 'Recipient',
+            ':other_name' => '',
+            ':username' => $username,
+            ':persona' => $this->marker . ' Recipient',
+            ':email' => $username . '@example.test',
+            ':kingdom_id' => $this->kingdomId,
+            ':token' => md5($username),
+            ':waiver_ext' => '',
+            ':password_expires' => '2099-01-01 00:00:00',
+            ':password_salt' => '',
+            ':xtoken' => '',
+            ':reeve_qualified_until' => '2000-01-01',
+        ]);
+
+        $recipientId = (int) $this->pdo->lastInsertId();
+        $this->recipientMundaneIds[] = $recipientId;
+
+        return $recipientId;
+    }
+
     public function officerMundaneId(): int
     {
         $this->createAuthorizedOfficer();
@@ -118,6 +163,13 @@ final class AuthorizedOfficerFixture
 
     public function cleanup(): void
     {
+        foreach ($this->recipientMundaneIds as $recipientId) {
+            $this->pdo->exec('DELETE FROM ork_recommendations WHERE mundane_id = ' . $recipientId);
+            $this->pdo->exec('DELETE FROM ork_awards WHERE mundane_id = ' . $recipientId);
+            $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id = ' . $recipientId);
+        }
+        $this->recipientMundaneIds = [];
+
         if ($this->officerMundaneId === null) {
             return;
         }

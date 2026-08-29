@@ -174,6 +174,9 @@ class Controller_KingdomAjax extends Controller
             // registry is refused outright rather than skipped, and one bad value
             // aborts the whole save -- a half-applied configuration is worse than a
             // rejected one, because nothing on screen tells the officer which half won.
+            // The registry is reached through its model wrapper: orkui/model is the only
+            // membrane allowed to name a system/lib/ork3 domain class.
+            $this->load_model('ConfigRegistry');
             $configList = [];
             $configErrors = [];
             foreach ($configs as $submittedKey => $value) {
@@ -182,18 +185,18 @@ class Controller_KingdomAjax extends Controller
                     $key = $configKeyById[(int)$key] ?? '';
                 }
 
-                if ($key === '' || !ConfigRegistry::Exists($key)) {
+                if ($key === '' || !$this->ConfigRegistry->exists($key)) {
                     $configErrors[] = 'One of the submitted settings is not one this kingdom can change.';
                     continue;
                 }
 
-                $check = ConfigRegistry::Validate($key, $value);
+                $check = $this->ConfigRegistry->validate($key, $value);
                 if (empty($check['valid'])) {
-                    $configErrors[] = $this->ka_plain_text($check['error'] ?? (ConfigRegistry::Label($key) . ' is not a valid value.'));
+                    $configErrors[] = $this->ka_plain_text($check['error'] ?? ($this->ConfigRegistry->label($key) . ' is not a valid value.'));
                     continue;
                 }
 
-                $definition = ConfigRegistry::Get($key);
+                $definition = $this->ConfigRegistry->get($key);
                 $existingId = (int)($storedConfigs[$key]['ConfigurationId'] ?? 0);
 
                 if ($existingId > 0) {
@@ -212,9 +215,9 @@ class Controller_KingdomAjax extends Controller
                     // kingdom). Without this the edit finds nothing and saves nothing,
                     // silently. var_type mirrors what Kingdom::CreateKingdom seeds.
                     $varType = 'fixed';
-                    if (($definition['control'] ?? '') === ConfigRegistry::CONTROL_NUMBER) {
+                    if (($definition['control'] ?? '') === Model_ConfigRegistry::CONTROL_NUMBER) {
                         $varType = 'number';
-                    } elseif (($definition['control'] ?? '') === ConfigRegistry::CONTROL_COLOR) {
+                    } elseif (($definition['control'] ?? '') === Model_ConfigRegistry::CONTROL_COLOR) {
                         $varType = 'color';
                     }
                     $configList[] = [
@@ -1027,9 +1030,10 @@ class Controller_KingdomAjax extends Controller
                 'EndDate'   => $end,
                 'Notes'     => $notes,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'editofficerhistory') {
             $this->load_model('Kingdom');
@@ -1061,9 +1065,10 @@ class Controller_KingdomAjax extends Controller
                 'EndDate'          => $end,
                 'Notes'            => $notes,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'deleteofficerhistory') {
             $this->load_model('Kingdom');
@@ -1079,9 +1084,10 @@ class Controller_KingdomAjax extends Controller
                 'KingdomId'        => $kingdom_id,
                 'OfficerHistoryId' => $ohid,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);

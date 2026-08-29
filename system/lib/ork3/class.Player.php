@@ -587,10 +587,15 @@ class Player extends Ork3
 
     /**
      * The distinct calendar months (1-12) this player already holds an Order of
-     * the Zodiac (award_id 30, Award::IsMonthlyLadder()) grant for. Reads
-     * ork_awards.zodiac_month only -- `rank` is never consulted, because 1,193
-     * legacy Zodiac grants carry rank 1 and none of them means January. A
-     * grant with zodiac_month = 0 is unmonthed and contributes nothing.
+     * the Zodiac grant for. Reads ork_awards.zodiac_month only -- `rank` is never
+     * consulted, because 1,193 legacy Zodiac grants carry rank 1 and none of them
+     * means January. A grant with zodiac_month = 0 is unmonthed and contributes
+     * nothing.
+     *
+     * The monthly-ladder discriminator is Award::IsMonthlyLadder(), the sole
+     * spelling of that rule, rather than a second copy of the award id here.
+     * A revoked grant is not a held month, and never was -- matching the same
+     * filter GetAwardMaxRanks() applies.
      *
      * @return list<int> distinct months held, ascending
      */
@@ -601,14 +606,20 @@ class Player extends Ork3
         }
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT DISTINCT aw.zodiac_month
+            'SELECT DISTINCT ka.award_id, aw.zodiac_month
              FROM ' . DB_PREFIX . 'awards aw
              INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND ka.award_id = 30 AND aw.zodiac_month > 0'
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.revoked = 0 AND aw.zodiac_month > 0'
         );
         $months = [];
         while ($rs && $rs->Next()) {
-            $months[] = (int) $rs->zodiac_month;
+            if (!Award::IsMonthlyLadder((int) $rs->award_id)) {
+                continue;
+            }
+            $month = (int) $rs->zodiac_month;
+            if (!in_array($month, $months, true)) {
+                $months[] = $month;
+            }
         }
         sort($months);
 
@@ -1269,7 +1280,10 @@ class Player extends Ork3
     public function AwardsForPlayer($request)
     {
         if (valid_id($request['AwardsId'])) {
-            $player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
+            // mysql_real_escape_string() is a no-op shim in this codebase, so ids are
+            // (int)-cast before interpolation -- the house rule, and the only thing
+            // standing between this query and a caller that skips numeric typing.
+            $player_award = 'or awards.awards_id = ' . (int) $request['AwardsId'];
         }
         $sql = "select distinct awards.*, a.*,
 						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
@@ -1293,7 +1307,7 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
-					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
+					where awards.mundane_id = " . (int) $request['MundaneId'] . " $player_award
 					order by
 						" . Award::LadderSql('ka', 'a', 'alias') . ", GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
@@ -2653,18 +2667,19 @@ class Player extends Ork3
         $kid = (int)$kingdom_id;
         $pid = (int)$park_id;
         $mid = (int)$mundane_id;
-        $keys = [['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid]];
+        // Keys MUST be composed by Report::RecommendationsCacheKey() — the same
+        // builder the read/write side uses. GhettoCache keys are positional value
+        // joins, so a locally rebuilt array silently drifts and every bust here
+        // becomes a no-op.
+        $keys = [Report::RecommendationsCacheKey(0, 0, $mid)];
         if ($kid > 0) {
-            $keys[] = ['KingdomId' => $kid, 'ParkId' => 0,    'PlayerId' => 0];
+            $keys[] = Report::RecommendationsCacheKey($kid, 0, 0);
         }
         if ($pid > 0) {
-            $keys[] = ['KingdomId' => 0,    'ParkId' => $pid, 'PlayerId' => 0];
+            $keys[] = Report::RecommendationsCacheKey(0, $pid, 0);
         }
-        foreach ($keys as $kd) {
-            Ork3::$Lib->ghettocache->bust(
-                'Report.PlayerAwardRecommendations',
-                Ork3::$Lib->ghettocache->key($kd)
-            );
+        foreach ($keys as $ck) {
+            Ork3::$Lib->ghettocache->bust('Report.PlayerAwardRecommendations', $ck);
         }
         $this->bustPlayerProfileCaches($mid);
     }

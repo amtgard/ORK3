@@ -109,7 +109,10 @@ class Controller_Award extends Controller
             'RecipientId' => $this->request->Award_addawards->MundaneId,
             'KingdomAwardId' => $this->request->Award_addawards->AwardId,
             'Rank' => $isOfficer ? null : $this->request->Award_addawards->Rank,
-            'ZodiacMonth' => (int) ($this->request->Award_addawards->ZodiacMonth ?? 0),
+            // No ZodiacMonth is forwarded from this page: Award_addawards.tpl has no month
+            // picker and none of the shared month helpers, so the key could only ever be 0.
+            // Player::AddAward already defaults an absent ZodiacMonth to 0, so sending it
+            // explicitly only advertised support this form does not have.
             'Date' => $this->request->Award_addawards->Date,
             'GivenById' => $this->request->Award_addawards->GivenById,
             'Note' => $this->request->Award_addawards->Note,
@@ -149,7 +152,10 @@ class Controller_Award extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                // Match the canonical key, never the display name. ork_officer.role holds
+                // canonical keys after the officer position migration, so a display-name
+                // literal here matches nothing and empties the preload list.
+                if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
                 }
             }
@@ -158,7 +164,7 @@ class Controller_Award extends Controller
             $parkOfficers = $this->Park->get_officers($this->session->park_id, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
                     }
                 }

@@ -425,6 +425,28 @@ html[data-theme="dark"] .mo-warn-box { color:var(--ork-text); }
 <!-- ============ Manage Officers — JS module ============ -->
 <script>
 window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir: '<?= UIR ?>' };
+	/* The z-index an autocomplete dropdown must carry to clear the modal scale.
+	   Derived from the token scale (--z-modal-top + 1) rather than hardcoded: this
+	   value is an INLINE style, so a literal 10001 beats -- and defeats -- the
+	   stylesheet rule admin-console.css sets for .ka-field-ac .kn-ac-results, and
+	   lands BELOW the .ka-overlay / .ka-overlay-top modals (10100 / 10200), which
+	   is the dropdown-behind-the-modal bug. Same derivation as revised.js.
+	   Computed once; the literal is only a fallback if tokens.css is absent. */
+	if (typeof window.tnAcZIndex !== 'function') {
+		window.tnAcZIndex = (function () {
+			var cached = null;
+			return function () {
+				if (cached !== null) return cached;
+				var top = 0;
+				try {
+					top = parseInt(getComputedStyle(document.documentElement)
+						.getPropertyValue('--z-modal-top'), 10);
+				} catch (e) { top = 0; }
+				cached = (top > 0) ? (top + 1) : 10201;
+				return cached;
+			};
+		})();
+	}
 	if (typeof window.tnFixedAcPosition !== 'function') {
 	  window.tnFixedAcPosition = function (input, dropdown) {
 	    if (!input || !dropdown) return;
@@ -433,7 +455,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	    dropdown.style.top = (r.bottom + 2) + 'px';
 	    dropdown.style.left = r.left + 'px';
 	    dropdown.style.width = r.width + 'px';
-	    dropdown.style.zIndex = '10001';
+	    dropdown.style.zIndex = String(window.tnAcZIndex());
 	  };
 	}
 

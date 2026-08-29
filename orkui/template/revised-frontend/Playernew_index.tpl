@@ -2128,10 +2128,14 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					foreach ($LadderProgress as $_lp) {
 						$_ladderTileGroups[isset($_ladderMasterMap[(int)($_lp['AwardId'] ?? 0)]) ? 'official' : 'kingdom'][] = $_lp;
 					}
-					$_kingdomLadderName = trim((string)($this->__session->kingdom_name ?? ''));
+					// The label is deliberately generic rather than naming a kingdom: the only
+					// kingdom name reachable here is $this->__session->kingdom_name, which
+					// Controller_Player only refreshes for a player who has a park, so for a
+					// parkless player it still carries whatever kingdom the VIEWER last
+					// touched. A template renders the page's own data, so it names none.
 					$_ladderGroupLabels = [
 						'official' => 'Ladder Awards',
-						'kingdom' => ($_kingdomLadderName !== '' ? $_kingdomLadderName . ' ' : '') . 'Ladder Awards',
+						'kingdom' => 'Kingdom Ladder Awards',
 					];
 					// Zodiac held months, for the pn-* month-pill wraps further down this
 					// page (grant, edit, edit-reconcile, recommend). tnRankMonths() in
@@ -2149,6 +2153,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						}
 					}
 					$_zodiacHeldMonthsAttr = htmlspecialchars(implode(',', array_map('intval', $_zodiacHeldMonths)), ENT_QUOTES);
+					// Calendar month labels for the Zodiac strip. Resolved here from PHP's own
+					// calendar rather than from the ork3 domain layer -- a month name is
+					// presentation, and a template may not reach into a domain class.
+					$_monthNames = [];
+					for ($_mi = 1; $_mi <= 12; $_mi++) {
+						$_monthNames[$_mi] = date('F', mktime(0, 0, 0, $_mi, 1, 2001));
+					}
 				?>
 				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
@@ -2198,7 +2209,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 														<?php foreach (range(1, 12) as $_month): ?>
 															<?php
 																$_held = in_array($_month, $lp['MonthsHeld'], true);
-																$_tip  = Award::MonthName($_month);
+																$_tip  = $_monthNames[$_month] ?? '';
 																if ($_held && !empty($lp['MonthDates'][$_month])) {
 																	$_dates = array_map(function ($d) {
 																		$ts = strtotime((string)$d);
@@ -2208,7 +2219,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 																}
 															?>
 															<span class="pn-zodiac-month<?= $_held ? ' -held' : '' ?>"
-															      data-tip="<?= htmlspecialchars($_tip, ENT_QUOTES) ?>"><?= Award::MonthInitial($_month) ?></span>
+															      data-tip="<?= htmlspecialchars($_tip, ENT_QUOTES) ?>"><?= htmlspecialchars(substr($_monthNames[$_month] ?? '', 0, 1)) ?></span>
 														<?php endforeach; ?>
 														<span class="pn-zodiac-count"><?= $_zodiacCount ?> Zodiac<?= $_zodiacCount === 1 ? '' : 's' ?></span>
 													</div>

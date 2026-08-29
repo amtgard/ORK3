@@ -399,7 +399,14 @@ class Report extends Ork3
     public function PlayerAwards($request)
     {
 
-        $key = Ork3::$Lib->ghettocache->key($request);
+        // 'v' (row-shape version) is bumped whenever the shape of a row in
+        // $response['Awards'] changes. The key is otherwise built purely from
+        // $request, so a request cached moments before a deploy would keep
+        // serving the OLD row shape for the full TTL after the new code is live,
+        // and consumers reading the new keys would see nulls for that window.
+        // Version 1: the IsMonthlyLadder / ZodiacMonth / ZodiacMonthName /
+        // ZodiacMonthInferred keys added for the Zodiac monthly-award change.
+        $key = Ork3::$Lib->ghettocache->key($request + ['v' => 1]);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
             return $cache;
         }
@@ -423,7 +430,25 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (" . Award::LadderSql('ka', 'a', 'alias') . " = 1 and ma.rank >= $request[LadderMinimum])";
+            // A monthly ladder (Order of the Zodiac) stores a calendar month, not a
+            // rank, and Player::AddAward() writes rank = 0 for every UI-created
+            // grant. Gating those rows on `ma.rank >= LadderMinimum` would drop all
+            // of them from this report for any minimum >= 1 (controller.Reports
+            // forces 7 for the global view), even though the award is still an
+            // effective ladder. Exempt them from the rank gate instead of excluding
+            // them for carrying a rank the award no longer uses.
+            $ladderMinimum = (int) $request['LadderMinimum'];
+            $rank_gate = "ma.rank >= $ladderMinimum";
+            $monthlyIds = implode(',', array_filter(
+                array_map('intval', array_keys(Award::GetLadderMasterMap())),
+                static function ($award_id) {
+                    return Award::IsMonthlyLadder($award_id);
+                }
+            ));
+            if ($monthlyIds !== '') {
+                $rank_gate = "($rank_gate or COALESCE(alias.award_id, a.award_id) in ($monthlyIds))";
+            }
+            $ladder_clause = " or (" . Award::LadderSql('ka', 'a', 'alias') . " = 1 and $rank_gate)";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
@@ -617,6 +642,25 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
+    // Single source of truth for the Report.PlayerAwardRecommendations cache key.
+    // GhettoCache::key() composes VALUES ONLY, positionally, and bust() deletes the
+    // literally composed string — so the read/write side and every bust site MUST
+    // build the key through this method. Player::bust_player_award_recs_cache()
+    // calls it; do not hand-roll the array anywhere.
+    // 'v' (row-shape version): bump whenever the shape of a recommendation row
+    // changes, so a pre-deploy entry cannot keep serving the old shape for the
+    // full 300s TTL. Version 1: IsLadder / MaxRank / KaMaxLevel added for the
+    // ladder rank picker.
+    public static function RecommendationsCacheKey($kingdom_id, $park_id, $player_id)
+    {
+        return Ork3::$Lib->ghettocache->key([
+            'KingdomId' => (int)$kingdom_id,
+            'ParkId'    => (int)$park_id,
+            'PlayerId'  => (int)$player_id,
+            'v'         => 1,
+        ]);
+    }
+
     public function PlayerAwardRecommendations($request)
     {
 
@@ -624,11 +668,11 @@ class Report extends Ork3
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
         // computed after the cache hit so one bust clears the data for everyone.
         $viewer_id = (int)($request['RequestedBy'] ?? 0);
-        $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-        ]);
+        $key = self::RecommendationsCacheKey(
+            $request['KingdomId'] ?? 0,
+            $request['ParkId'] ?? 0,
+            $request['PlayerId'] ?? 0
+        );
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $this->applyViewerFlags($cache, $viewer_id);
         }

@@ -109,9 +109,7 @@
 							<?php endif; ?>
 							<?php if ($CanManageKingdom ?? false): ?>
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>"
-								data-max-rank="<?= (int) $rec['MaxRank'] ?>"
-								data-ka-max-level="<?= (int) $rec['KaMaxLevel'] ?>">
+								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
 								<i class="fas fa-medal"></i> Grant
 							</button>
 							<button class="pk-rec-dismiss-btn"

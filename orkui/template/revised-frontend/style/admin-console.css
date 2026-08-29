@@ -319,6 +319,11 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 .ka-admin-table .ka-tdel:hover { opacity: 1; }
 .ka-admin-table .ka-tsave { background: none; border: none; color: #3182ce; cursor: pointer; font-size: 12px; padding: 4px; opacity: 0.6; }
 .ka-admin-table .ka-tsave:hover { opacity: 1; }
+/* #3182ce measures ~2.6:1 on the dark table surface and #e53e3e ~2.9:1 -- the two
+   inline row actions would be the least legible controls on the page. Both lift to
+   the tokens the rest of this file's tinted text already uses in dark mode. */
+html[data-theme="dark"] .ka-admin-table .ka-tsave { color: var(--ork-blue-link); }
+html[data-theme="dark"] .ka-admin-table .ka-tdel  { color: var(--ork-badge-red-text); }
 .ka-admin-table-wrap { overflow-x: auto; }
 /* Award group headers */
 .ka-award-group-hdr td {

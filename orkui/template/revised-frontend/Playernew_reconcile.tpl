@@ -24,17 +24,28 @@
 	$realRanksByAwardId = is_array($RealRanksByAwardId ?? null) ? $RealRanksByAwardId : [];
 	$awardTypeCount     = count(array_unique(array_column($historicalAwards, 'AwardId')));
 	$totalCount         = count($historicalAwards);
-	// Order of the Zodiac (Award::IsMonthlyLadder()) is granted once per calendar
-	// month, so its historical grants need a month picker here, not the rank
-	// input -- and the explanatory copy below needs different wording for it.
+	// Order of the Zodiac is granted once per calendar month, so its historical
+	// grants need a month picker here, not the rank input -- and the explanatory
+	// copy below needs different wording for it. array_key_exists('SuggestedMonth')
+	// (not a domain call) is the discriminator: GetReconcileSuggestions() attaches
+	// that key to exactly the rows Award::IsMonthlyLadder() flags, so the template
+	// reads the server's own answer instead of re-deciding it.
 	$hasZodiacHistorical = false;
 	foreach ($historicalAwards as $_ha) {
-		if (Award::IsMonthlyLadder((int)($_ha['AwardId'] ?? 0))) {
+		if (array_key_exists('SuggestedMonth', $_ha)) {
 			$hasZodiacHistorical = true;
 			break;
 		}
 	}
 	unset($_ha);
+	// Calendar month labels for the month picker below. Resolved from PHP's own
+	// calendar rather than from the ork3 domain layer -- a month name is
+	// presentation, and a template may not reach into a domain class.
+	$monthNames = [];
+	for ($_mi = 1; $_mi <= 12; $_mi++) {
+		$monthNames[$_mi] = date('F', mktime(0, 0, 0, $_mi, 1, 2001));
+	}
+	unset($_mi);
 	$playerId       = (int)($Player['MundaneId'] ?? 0);
 	$persona        = htmlspecialchars($Player['Persona'] ?? 'Player');
 	$heraldryUrl    = ($Player['HasHeraldry'] ?? 0) > 0
@@ -213,7 +224,7 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 					// never written automatically. legacyRank is shown read-only as context
 					// ("recorded as level N") so the officer can see what the old system
 					// captured without being invited to treat it as a month.
-					$isMonthly      = Award::IsMonthlyLadder($aid);
+					$isMonthly      = array_key_exists('SuggestedMonth', $a);
 					$suggestedMonth = $isMonthly ? (int)($a['SuggestedMonth'] ?? 0) : 0;
 					$legacyRank     = (int)($a['Rank'] ?? 0);
 
@@ -277,15 +288,19 @@ html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
 							<select class="rc-field-month">
 								<option value="">Select month…</option>
 								<?php for ($_m = 1; $_m <= 12; $_m++): ?>
-								<option value="<?= $_m ?>"<?= $suggestedMonth === $_m ? ' selected' : '' ?>><?= Award::MonthName($_m) ?></option>
+								<option value="<?= $_m ?>"<?= $suggestedMonth === $_m ? ' selected' : '' ?>><?= htmlspecialchars($monthNames[$_m] ?? '') ?></option>
 								<?php endfor; ?>
 							</select>
 							<?php if ($legacyRank > 0): ?>
 							<div style="font-size:11px;color:var(--ork-text-hint);margin-top:3px;white-space:nowrap">recorded as level <?= $legacyRank ?></div>
 							<?php endif; ?>
 						<?php elseif ($isLadder): ?>
-							<input type="number" class="rc-field-rank" min="1" max="<?= $maxRank ?>"
-							       value="<?= $sugRank > 0 ? $sugRank : '' ?>" title="Rank (max <?= $maxRank ?>)">
+							<!-- data-tip, never a native title= (project tooltip convention); an
+							     <input> cannot carry a ::after tip itself, so it is wrapped. -->
+							<span data-tip="Rank (max <?= $maxRank ?>)" style="display:block">
+								<input type="number" class="rc-field-rank" min="1" max="<?= $maxRank ?>"
+								       value="<?= $sugRank > 0 ? $sugRank : '' ?>">
+							</span>
 						<?php else: ?>
 							<span style="color:#a0aec0">—</span>
 							<input type="hidden" class="rc-field-rank" value="0">
@@ -559,6 +574,13 @@ var RcConfig = {
 			var kid = parseInt(row.querySelector('.rc-field-award').value||'0',10);
 			var gid = parseInt(row.querySelector('.rc-field-givenby-id').value||'0',10);
 			if (!kid || !gid) { next(); return; }
+			// Same month guard doReconcile() enforces: a monthly-ladder row with no
+			// month selected would submit ZodiacMonth=0 and drop out of the pending
+			// list permanently with the month lost. Flag it and leave it pending.
+			if (row.dataset.isMonthly === '1') {
+				var monthEl = row.querySelector('.rc-field-month');
+				if (!monthEl || !monthEl.value) { flashError(row, 'Please select a month.'); next(); return; }
+			}
 			fetch(RcConfig.uir + 'PlayerAjax/player/' + RcConfig.playerId + '/reconcileaward', {
 				method: 'POST', body: buildFd(row, kid, gid)
 			})

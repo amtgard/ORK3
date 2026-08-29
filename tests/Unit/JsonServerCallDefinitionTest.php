@@ -42,6 +42,10 @@ final class JsonServerCallDefinitionTest extends TestCase
             'Player/AddAwardRecommendation0' => ['Player', 'AddAwardRecommendation0', ['ZodiacMonth']],
             'Kingdom/CreateAward0' => ['Kingdom', 'CreateAward0', ['IsLadder', 'MaxLevel']],
             'Kingdom/EditAward0' => ['Kingdom', 'EditAward0', ['IsLadder', 'MaxLevel']],
+            // The Award:: twins of the two above -- JSON-API-only entry points whose
+            // $request['IsLadder'] reads are now array_key_exists()-guarded.
+            'Award/CreateAward0' => ['Award', 'CreateAward0', ['IsLadder']],
+            'Award/EditAward0' => ['Award', 'EditAward0', ['IsLadder']],
         ];
     }
 

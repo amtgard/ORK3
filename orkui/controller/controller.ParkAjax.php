@@ -475,9 +475,10 @@ class Controller_ParkAjax extends Controller
                 'EndDate'   => $end,
                 'Notes'     => $notes,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'editofficerhistory') {
             $ohid  = (int)($_POST['OfficerHistoryId'] ?? 0);
@@ -508,9 +509,10 @@ class Controller_ParkAjax extends Controller
                 'EndDate'          => $end,
                 'Notes'            => $notes,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'deleteofficerhistory') {
             $ohid = (int)($_POST['OfficerHistoryId'] ?? 0);
@@ -525,9 +527,10 @@ class Controller_ParkAjax extends Controller
                 'ParkId'           => $park_id,
                 'OfficerHistoryId' => $ohid,
             ]);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
+            // A response with no Status is a FAILURE, not a pass (see setaward above).
+            echo (isset($r['Status']) && $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'selfreg_link') {
             $this->load_model('Player');

@@ -308,9 +308,9 @@ class Kingdom extends Ork3
             $ladder_clause = " and " . Award::LadderSql() . " = 0";
         }
         if ($request['IsTitle'] == 'Title') {
-            $ladder_clause = " and is_title = 1";
+            $title_clause = " and ka.is_title = 1";
         } elseif ($request['IsTitle'] == 'NonTitle') {
-            $ladder_clause = " and is_title = 0";
+            $title_clause = " and ka.is_title = 0";
         }
         $disabled_clause = empty($request['IncludeDisabled']) ? " and ka.disabled = 0" : "";
         $kingdom_id = (int) $request['KingdomId'];
@@ -415,8 +415,15 @@ class Kingdom extends Ork3
             // two fields; the other two would otherwise demote a kingdom ladder to a
             // flat award as a side effect of a rename. Same array_key_exists()
             // discipline Player::UpdateAward/ReconcileAward use for ZodiacMonth.
+            //
+            // The flags are also kept in LOCAL variables: the record was clear()ed
+            // above, so reading back a field this request never assigned throws
+            // "There is no active record set." -- which is exactly what every create
+            // that omits IsLadder used to do before it reached save().
+            $ladderFlag = 0;
             if (!$officialLadder && array_key_exists('IsLadder', $request)) {
-                $this->kingdomaward->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
+                $ladderFlag = (int) $request['IsLadder'] === 1 ? 1 : 0;
+                $this->kingdomaward->is_ladder = $ladderFlag;
             }
             if (!$officialLadder && array_key_exists('MaxLevel', $request)) {
                 $this->kingdomaward->max_level = min(12, max(0, (int) $request['MaxLevel'])); // Rule 2
@@ -426,8 +433,8 @@ class Kingdom extends Ork3
             // arrives with both Ladder and Title? ticked used to be created as a
             // silent ladder-only row while the modal echoed back the Title? the
             // officer chose. See the long note on EditAward's copy of this guard.
-            $effectiveLadder = $officialLadder || (int) $this->kingdomaward->is_ladder === 1;
-            if ($effectiveLadder && (int) $this->kingdomaward->is_title === 1) {
+            $effectiveLadder = $officialLadder || $ladderFlag === 1;
+            if ($effectiveLadder && (int) ($request['IsTitle'] ?? 0) === 1) {
                 return InvalidParameter(
                     null,
                     'A ladder award cannot also be a title. Untick "Title?" to keep it a ladder, or untick "Ladder" to make it a title.'
@@ -1177,14 +1184,17 @@ class Kingdom extends Ork3
 
     public function GetOfficers($request)
     {
-        $kingdom_id = mysql_real_escape_string($request['KingdomId']);
+        // (int) cast, NOT mysql_real_escape_string(): that function is a no-op shim in
+        // this codebase, so the raw caller value used to reach two SQL interpolation
+        // sites unescaped.
+        $kingdom_id = (int) $request['KingdomId'];
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $is_authorized = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $kingdom_id, AUTH_EDIT);
 
         // Kingdom-level officers: scope to this kingdom with no park, and resolve
         // title aliases against this kingdom's own alias rows.
-        $aliasKingdomExpr = "'" . $kingdom_id . "'";
-        $whereClause = "o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0";
+        $aliasKingdomExpr = (string) $kingdom_id;
+        $whereClause = "o.kingdom_id = " . $kingdom_id . " and o.park_id = 0";
 
         return Kingdom::buildOfficerRows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
     }

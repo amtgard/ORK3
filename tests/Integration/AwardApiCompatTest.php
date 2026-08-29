@@ -14,10 +14,11 @@ use PHPUnit\Framework\TestCase;
  * and the ladder's real height must be resolvable without the client
  * guessing it from the award's name.
  *
- * AwardsForPlayer() takes no Token (it is a plain read), so no
- * AuthorizedOfficerFixture is needed here -- only a seeded recipient and
- * directly-inserted ork_awards rows (grantRaw()), exactly the pattern
- * ZodiacGrantTest uses for the same kind of read-path assertion.
+ * AwardsForPlayer() takes no Token (it is a plain read), so no authorized
+ * officer is created here -- only a seeded recipient (AuthorizedOfficerFixture::
+ * seedRecipient(), shared rather than re-declared) and directly-inserted
+ * ork_awards rows (grantRaw()), exactly the pattern ZodiacGrantTest uses for
+ * the same kind of read-path assertion.
  */
 final class AwardApiCompatTest extends TestCase
 {
@@ -30,6 +31,7 @@ final class AwardApiCompatTest extends TestCase
 
     private PDO $pdo;
     private Player $player;
+    private AuthorizedOfficerFixture $fixture;
     private int $recipientId;
 
     /** @var list<int> kingdomaward ids to clean up (and their ork_awards grants) */
@@ -47,7 +49,8 @@ final class AwardApiCompatTest extends TestCase
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         $this->player = new Player();
-        $this->recipientId = $this->seedRecipient();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
+        $this->recipientId = $this->fixture->seedRecipient();
     }
 
     protected function tearDown(): void
@@ -58,39 +61,9 @@ final class AwardApiCompatTest extends TestCase
         $this->kingdomAwardIdsToClean = [];
 
         $this->pdo->exec("DELETE FROM ork_kingdomaward WHERE name LIKE '" . self::MARKER . "%'");
-        if (isset($this->recipientId)) {
-            $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id = ' . $this->recipientId);
+        if (isset($this->fixture)) {
+            $this->fixture->cleanup();
         }
-    }
-
-    private function seedRecipient(): int
-    {
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO ork_mundane
-                (given_name, surname, other_name, username, persona, email, park_id, kingdom_id,
-                 token, waiver_ext, password_expires, password_salt, xtoken, reeve_qualified_until)
-             VALUES
-                (:given_name, :surname, :other_name, :username, :persona, :email, 0, :kingdom_id,
-                 :token, :waiver_ext, :password_expires, :password_salt, :xtoken, :reeve_qualified_until)'
-        );
-        $username = strtolower(self::MARKER . '_recipient_' . bin2hex(random_bytes(4)));
-        $stmt->execute([
-            ':given_name' => self::MARKER,
-            ':surname' => 'Recipient',
-            ':other_name' => '',
-            ':username' => $username,
-            ':persona' => self::MARKER . ' Recipient',
-            ':email' => $username . '@example.test',
-            ':kingdom_id' => self::KINGDOM_ID,
-            ':token' => md5($username),
-            ':waiver_ext' => '',
-            ':password_expires' => '2099-01-01 00:00:00',
-            ':password_salt' => '',
-            ':xtoken' => '',
-            ':reeve_qualified_until' => '2000-01-01',
-        ]);
-
-        return (int) $this->pdo->lastInsertId();
     }
 
     /**
