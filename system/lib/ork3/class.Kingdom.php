@@ -416,15 +416,22 @@ class Kingdom extends Ork3
             // flat award as a side effect of a rename. Same array_key_exists()
             // discipline Player::UpdateAward/ReconcileAward use for ZodiacMonth.
             if (!$officialLadder && array_key_exists('IsLadder', $request)) {
-                $isLadder = (int) $request['IsLadder'] === 1 ? 1 : 0;
-                $this->kingdomaward->is_ladder = $isLadder;
-                if ($isLadder === 1) {
-                    // Ladder and Title? are mutually exclusive.
-                    $this->kingdomaward->is_title = 0;
-                }
+                $this->kingdomaward->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
             }
             if (!$officialLadder && array_key_exists('MaxLevel', $request)) {
                 $this->kingdomaward->max_level = min(12, max(0, (int) $request['MaxLevel'])); // Rule 2
+            }
+
+            // Same rule as EditAward, and refused the same way: a new award that
+            // arrives with both Ladder and Title? ticked used to be created as a
+            // silent ladder-only row while the modal echoed back the Title? the
+            // officer chose. See the long note on EditAward's copy of this guard.
+            $effectiveLadder = $officialLadder || (int) $this->kingdomaward->is_ladder === 1;
+            if ($effectiveLadder && (int) $this->kingdomaward->is_title === 1) {
+                return InvalidParameter(
+                    null,
+                    'A ladder award cannot also be a title. Untick "Title?" to keep it a ladder, or untick "Ladder" to make it a title.'
+                );
             }
 
             $this->kingdomaward->save();
@@ -504,20 +511,39 @@ class Kingdom extends Ork3
         // Player::UpdateAward/ReconcileAward already use for ZodiacMonth.
         if (!$officialLadder && array_key_exists('IsLadder', $request)) {
             // yapo drops null, so write 0 rather than null to clear the flag.
-            $isLadder = (int) $request['IsLadder'] === 1 ? 1 : 0;
-            $this->kingdomaward->is_ladder = $isLadder;
-            if ($isLadder === 1) {
-                // Ladder and Title? are mutually exclusive.
-                $this->kingdomaward->is_title = 0;
-            }
-        } elseif (!$officialLadder && (int) $this->kingdomaward->is_ladder === 1) {
-            // The row is a ladder and this editor did not offer the flag, so it also
-            // cannot be offering a coherent Title? value: keep the two mutually
-            // exclusive rather than letting an unrelated save set both to 1.
-            $this->kingdomaward->is_title = 0;
+            $this->kingdomaward->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
         }
         if (!$officialLadder && array_key_exists('MaxLevel', $request)) {
             $this->kingdomaward->max_level = min(12, max(0, (int) $request['MaxLevel'])); // Rule 2
+        }
+
+        // Ladder and Title? are mutually exclusive -- REFUSED, never silently dropped.
+        //
+        // This used to enforce exclusivity by quietly clearing is_title: the Manage
+        // Awards modal (the only editor that sends IsLadder) forced is_title = 0
+        // whenever its ladder box was ticked -- while its own onSuccess handler wrote
+        // the ticked value back into the row it re-renders, so the screen showed a
+        // Title? the database had refused. An `elseif` then did the same to ANY ladder
+        // row saved from an editor that does not offer the ladder flag, so an officer
+        // on Kingdom profile > Admin > Awards could tick "Title?" on a ladder award,
+        // read "Award saved!", and get is_title = 0 with no explanation -- and an
+        // unrelated rename silently cleared is_title on a pre-existing ladder+title
+        // row as a side effect.
+        //
+        // That is the "reports success, writes something else" pattern this module
+        // just spent four commits removing. Rejecting instead names the conflict and
+        // leaves every field the officer did not touch alone, so absence still means
+        // "leave alone" -- nothing is written on this path at all.
+        //
+        // Effective ladder, not the stored column: Award::LadderSql() is
+        // GREATEST(ka.is_ladder, a.is_ladder), and every one of the 16 official
+        // Amtgard ladders carries ka.is_ladder = 0 with the flag on the ork_award row.
+        $effectiveLadder = $officialLadder || (int) $this->kingdomaward->is_ladder === 1;
+        if ($effectiveLadder && (int) $this->kingdomaward->is_title === 1) {
+            return InvalidParameter(
+                null,
+                'A ladder award cannot also be a title. Untick "Title?" to keep it a ladder, or untick "Ladder" to make it a title.'
+            );
         }
 
         $this->kingdomaward->save();

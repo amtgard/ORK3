@@ -92,6 +92,20 @@ final class EditAwardLadderTest extends TestCase
         return ['is_ladder' => (int) $row['is_ladder'], 'max_level' => (int) $row['max_level']];
     }
 
+    private function titleOf(int $id): int
+    {
+        $stmt = $this->pdo->prepare('SELECT is_title FROM ork_kingdomaward WHERE kingdomaward_id = :id');
+        $stmt->execute([':id' => $id]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /** Status 0 is success; anything else is a refusal the caller must surface. */
+    private static function refused($response): bool
+    {
+        return is_array($response) && (int) ($response['Status'] ?? 1) !== 0;
+    }
+
     public function testAKingdomCanLadderifyItsOwnAward(): void
     {
         $id = $this->seed(0);
@@ -367,5 +381,139 @@ final class EditAwardLadderTest extends TestCase
         ]);
 
         $this->assertSame(12, $this->readBack($this->findByName($name))['max_level']);
+    }
+
+    /* ============================================================
+       Ladder and Title? are mutually exclusive -- REFUSED, not silently dropped.
+
+       Exclusivity used to be enforced by quietly writing is_title = 0, so an
+       officer who ticked "Title?" on a ladder award was told "Award saved!" and
+       got a row that did not carry the flag they set. These prove the refusal
+       reaches the caller AND that nothing at all is written on that path.
+       ============================================================ */
+
+    /**
+     * The reported scenario: Kingdom profile > Admin > Awards sends IsTitle but
+     * never IsLadder. Ticking Title? on a row that is already a ladder used to
+     * report success and write is_title = 0.
+     */
+    public function testTickingTitleOnALadderAwardIsRefusedRatherThanSilentlyDropped(): void
+    {
+        $id = $this->seedLadder(5);
+        $originalName = $this->nameOf($id);
+        $attemptedName = self::MARKER . '-titleattempt-' . uniqid();
+
+        $r = $this->kingdom->EditAward(
+            ['IsTitle' => 1] + $this->unrelatedEdit($id, $attemptedName)
+        );
+
+        $this->assertTrue(self::refused($r), 'the officer must be told, not quietly overruled');
+        $this->assertStringContainsStringIgnoringCase(
+            'title',
+            (string) ($r['Error'] ?? ''),
+            'the refusal has to name the conflict'
+        );
+        // Nothing was written -- not the flag, and not the rest of the edit either.
+        $this->assertSame(0, $this->titleOf($id));
+        $this->assertSame(1, $this->readBack($id)['is_ladder']);
+        $this->assertSame($originalName, $this->nameOf($id));
+    }
+
+    /**
+     * The ladder-owning editor has the same hole: the Manage Awards modal offers
+     * both checkboxes with no client-side exclusion, and its own success handler
+     * writes the ticked Title? back into the row it re-renders -- so the screen
+     * showed a flag the database had refused.
+     */
+    public function testTickingBothLadderAndTitleFromTheLadderOwningEditorIsRefused(): void
+    {
+        $id = $this->seed(0);
+
+        $r = $this->kingdom->EditAward(
+            ['IsLadder' => 1, 'MaxLevel' => 7, 'IsTitle' => 1] + $this->unrelatedEdit($id, $this->nameOf($id))
+        );
+
+        $this->assertTrue(self::refused($r));
+        $this->assertSame(['is_ladder' => 0, 'max_level' => 0], $this->readBack($id));
+        $this->assertSame(0, $this->titleOf($id));
+    }
+
+    /**
+     * An official ladder's is_ladder lives on the ork_award row, not on
+     * ork_kingdomaward -- Award::LadderSql() is GREATEST(ka.is_ladder,
+     * a.is_ladder). Reading the stored column alone would let Title? through on
+     * all 16 official orders. award_id 21 = Order of the Rose.
+     */
+    public function testTickingTitleOnAnOfficialLadderIsRefused(): void
+    {
+        $id = $this->seed(21);
+
+        $r = $this->kingdom->EditAward(
+            ['IsTitle' => 1] + $this->unrelatedEdit($id, self::MARKER . '-officialtitle-' . uniqid())
+        );
+
+        $this->assertTrue(self::refused($r));
+        $this->assertSame(0, $this->titleOf($id));
+    }
+
+    /** The refusal must not become a trap: dropping the ladder in the same save works. */
+    public function testConvertingALadderIntoATitleInOneSaveIsAllowed(): void
+    {
+        $id = $this->seedLadder(5);
+        $newName = self::MARKER . '-toTitle-' . uniqid();
+
+        $r = $this->kingdom->EditAward(
+            ['IsLadder' => 0, 'IsTitle' => 1] + $this->unrelatedEdit($id, $newName)
+        );
+
+        $this->assertFalse(self::refused($r));
+        $this->assertSame(0, $this->readBack($id)['is_ladder']);
+        $this->assertSame(1, $this->titleOf($id));
+        $this->assertSame($newName, $this->nameOf($id));
+    }
+
+    /** ...and a plain title on a plain award is untouched by any of this. */
+    public function testTitleOnANonLadderAwardStillSaves(): void
+    {
+        $id = $this->seed(0);
+        $newName = self::MARKER . '-plaintitle-' . uniqid();
+
+        $r = $this->kingdom->EditAward(['IsTitle' => 1] + $this->unrelatedEdit($id, $newName));
+
+        $this->assertFalse(self::refused($r));
+        $this->assertSame(1, $this->titleOf($id));
+        $this->assertSame($newName, $this->nameOf($id));
+    }
+
+    /**
+     * The side effect the old `elseif` had: it cleared is_title on ANY ladder row
+     * an editor without the ladder flag saved, so a rename wiped the flag on a
+     * pre-existing ladder+title row. Refusing preserves it instead.
+     */
+    public function testAnUnrelatedEditNoLongerSilentlyClearsIsTitleOnALadderRow(): void
+    {
+        $id = $this->seedLadder(5);
+        $this->pdo->exec("UPDATE ork_kingdomaward SET is_title = 1 WHERE kingdomaward_id = {$id}");
+
+        $this->kingdom->EditAward(['IsTitle' => 1] + $this->unrelatedEdit($id, self::MARKER . '-legacy-' . uniqid()));
+
+        $this->assertSame(1, $this->titleOf($id), 'a rename must never clear a flag it was not editing');
+    }
+
+    /** Same rule on the create path, refused the same way. */
+    public function testCreateAwardRefusesAnAwardThatIsBothLadderAndTitle(): void
+    {
+        $name = self::MARKER . '-createboth-' . uniqid();
+
+        $r = $this->kingdom->CreateAward([
+            'KingdomId' => self::KINGDOM_ID, 'AwardId' => 0, 'Name' => $name,
+            'ReignLimit' => 0, 'MonthLimit' => 0, 'IsTitle' => 1, 'TitleClass' => '',
+            'IsLadder' => 1, 'MaxLevel' => 7, 'Token' => $this->token,
+        ]);
+
+        $this->assertTrue(self::refused($r));
+        $stmt = $this->pdo->prepare('SELECT count(*) FROM ork_kingdomaward WHERE kingdom_id = 1 AND name = :name');
+        $stmt->execute([':name' => $name]);
+        $this->assertSame(0, (int) $stmt->fetchColumn(), 'a refused create must not leave a row behind');
     }
 }
