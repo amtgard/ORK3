@@ -11,6 +11,8 @@ require_once __DIR__ . '/lib/Wiring.php';
 require_once __DIR__ . '/lib/DeploymentTier.php';
 require_once __DIR__ . '/lib/MigrationClassifier.php';
 require_once __DIR__ . '/lib/SchemaIntrospection.php';
+require_once __DIR__ . '/lib/SchemaTableIndex.php';
+require_once __DIR__ . '/lib/TableReferenceScan.php';
 require_once __DIR__ . '/lib/LastRender.php';
 require_once __DIR__ . '/Validate.php';
 require_once __DIR__ . '/Init.php';
@@ -146,6 +148,7 @@ function parseOptions(array $argv): array
     $forceRefresh = false;
     $skipUseDev = false;
     $strict = false;
+    $allowCatalogDrift = false;
     $target = null;
     $positional = [];
 
@@ -215,6 +218,10 @@ function parseOptions(array $argv): array
             $strict = true;
             continue;
         }
+        if ($arg === '--allow-catalog-drift') {
+            $allowCatalogDrift = true;
+            continue;
+        }
         if (str_starts_with($arg, '--mode=')) {
             $mode = substr($arg, strlen('--mode='));
             continue;
@@ -259,6 +266,7 @@ function parseOptions(array $argv): array
         'force_refresh' => $forceRefresh,
         'skip_use_dev' => $skipUseDev,
         'strict' => $strict,
+        'allow-catalog-drift' => $allowCatalogDrift,
         'target' => $target,
     ];
 }
@@ -283,7 +291,7 @@ Usage:
   bin/ork-db seed-test-credentials [--target sandbox|mirror|both]
   bin/ork-db generate-assets [--seed N]
   bin/ork-db deploy-assets
-  bin/ork-db drift-check [--strict]
+  bin/ork-db drift-check [--strict] [--allow-catalog-drift]
   bin/ork-db schema-diff
   bin/ork-db help [command]
 
@@ -402,7 +410,10 @@ function runDriftCheck(DeploymentTier $tier, DriftCheck $driftCheck, array $opti
 {
     unset($tier);
 
-    $result = $driftCheck->run((bool) ($options['strict'] ?? false));
+    $result = $driftCheck->run(
+        (bool) ($options['strict'] ?? false),
+        (bool) ($options['allow-catalog-drift'] ?? false)
+    );
     foreach ($result['lines'] as $line) {
         fwrite(STDOUT, $line . PHP_EOL);
     }

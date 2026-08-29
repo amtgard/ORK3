@@ -25,6 +25,24 @@
   "render_seed_default": 42,
   "content_seed": 42,
   "content_seed_basis": null,
+
+  // DELIBERATELY NOT BASELINED. Do not "helpfully" fill this in.
+  //
+  // schema_fingerprint pins the LIVE MIRROR's structure against a recorded hash. The
+  // mirror is a shared, constantly-drifting database: a schema-drift audit found 89
+  // tables in it belonging to other branches. Baselining this value makes drift-check
+  // fail for everyone within days, and the only way to clear the failure is to
+  // re-baseline — which trains reviewers to rubber-stamp a schema gate. A check people
+  // reflexively silence is worse than no check.
+  //
+  // The comparison that actually matters is mirror vs rendered sandbox, and
+  // `bin/ork-db schema-diff` already does it. If you want live-schema drift gated,
+  // gate schema-diff with a scoped ignore list — do not put a hash here.
+  //
+  // The specific failure this null once hid — repo code referencing schema the repo does
+  // not define — is now covered structurally by the table-reference check in
+  // DriftCheck::checkTableReferences(), which compares code against the COMMITTED schema
+  // sources and needs no baseline at all.
   "schema_fingerprint": null,
   "catalog_hashes": {
     "award": "sha256:aa39e5312c714dbedcd5adc93c15a5b85196bfd06a4a0666d28a6dc540a368d3",

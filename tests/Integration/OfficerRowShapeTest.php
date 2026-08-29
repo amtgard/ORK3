@@ -139,10 +139,8 @@ final class OfficerRowShapeTest extends TestCase
         // the position columns come back NULL. Pin that shape so a tree builder can
         // rely on 0 never colliding with a real AUTO_INCREMENT id.
         //
-        // Matched by OfficerId, not CanonicalKey: an unmapped row falls back to
-        // $r->role, which resolves to ork_authorization.role (selected by `a.*`), not
-        // ork_officer.role (selected as officer_role) -- a pre-existing quirk this
-        // change neither causes nor fixes.
+        // Matched by OfficerId rather than by looking the row up under a slug: the
+        // legacy-officer role fallback has its own tests below.
         $officerId = $this->seedOfficer(self::KINGDOM_ID, 0, 0, 'legacy', 1);
 
         $legacy = $this->rowByOfficerId(
@@ -157,6 +155,94 @@ final class OfficerRowShapeTest extends TestCase
         $this->assertSame(0, $legacy['PositionId']);
         $this->assertNull($legacy['Classification']);
         $this->assertSame(0, $legacy['SortOrder']);
+    }
+
+    // ============================================================
+    // LEGACY-OFFICER ROLE FALLBACK
+    //
+    // buildOfficerRows() selects `a.*` -- that is ork_authorization, whose own
+    // `role` column is enum('edit','create','admin') -- alongside
+    // `o.role as officer_role`. So a bare $r->role inside the row loop is the
+    // AUTHORIZATION's role, never the officer's. Role, CanonicalKey and
+    // DisplayTitle all fall back through it for a legacy officer row that maps to
+    // no registry position, which is precisely when the fallback is the only value
+    // there is.
+    // ============================================================
+
+    public function testLegacyOfficerRoleFallbackIsNotTheAuthorizationsRole(): void
+    {
+        // The row HAS an authorization row, so `a.role` is a real value -- and the
+        // wrong one. This is the case that silently emits access-level strings
+        // ('edit'/'create'/'admin') where an office name belongs.
+        $authId = $this->seedAuthorization(self::KINGDOM_ID, 'admin');
+        $officerId = $this->seedOfficer(self::KINGDOM_ID, 0, 0, 'legacy_auth', 1, $authId);
+        $expected = self::MARKER . '_legacy_auth';
+
+        $legacy = $this->rowByOfficerId(
+            Ork3::$Lib->kingdom->GetOfficers(['KingdomId' => self::KINGDOM_ID, 'Token' => '']),
+            $officerId
+        );
+
+        $this->assertNotNull($legacy, 'legacy row must still be listed');
+        $this->assertSame($expected, $legacy['Role'], "Role must be the OFFICER's role, not the authorization's");
+        $this->assertSame($expected, $legacy['CanonicalKey'], 'CanonicalKey must fall back to the officer role');
+        $this->assertSame($expected, $legacy['DisplayTitle'], 'DisplayTitle must fall back to the officer role');
+    }
+
+    public function testLegacyOfficerWithNoAuthorizationRowStillReportsItsOwnRole(): void
+    {
+        // ork_officer.authorization_id = 0, so the LEFT JOIN to ork_authorization
+        // misses entirely and `a.role` is NULL: all three fallbacks come back null
+        // and the office has no name at all on either profile page.
+        $officerId = $this->seedOfficer(self::KINGDOM_ID, 0, 0, 'legacy_noauth', 1);
+        $expected = self::MARKER . '_legacy_noauth';
+
+        $legacy = $this->rowByOfficerId(
+            Ork3::$Lib->kingdom->GetOfficers(['KingdomId' => self::KINGDOM_ID, 'Token' => '']),
+            $officerId
+        );
+
+        $this->assertNotNull($legacy, 'legacy row must still be listed');
+        $this->assertSame($expected, $legacy['Role']);
+        $this->assertSame($expected, $legacy['CanonicalKey']);
+        $this->assertSame($expected, $legacy['DisplayTitle']);
+    }
+
+    public function testTheParkListGetsTheSameLegacyFallback(): void
+    {
+        // Park::GetOfficers runs through the identical builder, so the park profile
+        // is affected the same way and is fixed by the same change.
+        $authId = $this->seedAuthorization(self::KINGDOM_ID, 'edit');
+        $officerId = $this->seedOfficer(self::KINGDOM_ID, self::PARK_ID, 0, 'p_legacy', 1, $authId);
+        $expected = self::MARKER . '_p_legacy';
+
+        $legacy = $this->rowByOfficerId(
+            Ork3::$Lib->park->GetOfficers(['ParkId' => self::PARK_ID, 'Token' => '']),
+            $officerId
+        );
+
+        $this->assertNotNull($legacy, 'legacy park row must still be listed');
+        $this->assertSame($expected, $legacy['Role']);
+        $this->assertSame($expected, $legacy['CanonicalKey']);
+        $this->assertSame($expected, $legacy['DisplayTitle']);
+    }
+
+    public function testAMappedRowStillPrefersItsRegistryValues(): void
+    {
+        // The fallback must stay a fallback: a row WITH a registry position keeps
+        // taking its key and title from op/al, authorization row or not.
+        $authId = $this->seedAuthorization(self::KINGDOM_ID, 'admin');
+        $officerId = $this->seedOfficer(self::KINGDOM_ID, 0, $this->seeded['crown'], 'mapped_auth', 1, $authId);
+
+        $mapped = $this->rowByOfficerId(
+            Ork3::$Lib->kingdom->GetOfficers(['KingdomId' => self::KINGDOM_ID, 'Token' => '']),
+            $officerId
+        );
+
+        $this->assertNotNull($mapped);
+        $this->assertSame(self::MARKER . '_crown', $mapped['Role'], 'a mapped row keeps its canonical key');
+        $this->assertSame(self::MARKER . '_crown', $mapped['CanonicalKey']);
+        $this->assertSame('Row Shape crown', $mapped['DisplayTitle'], 'a mapped row keeps its registry title');
     }
 
     public function testExistingKeysAreUnchanged(): void
@@ -373,18 +459,45 @@ final class OfficerRowShapeTest extends TestCase
         return (int) $this->pdo->lastInsertId();
     }
 
-    private function seedOfficer(int $kingdomId, int $parkId, int $positionId, string $slug, int $mundaneId = 0): int
-    {
+    private function seedOfficer(
+        int $kingdomId,
+        int $parkId,
+        int $positionId,
+        string $slug,
+        int $mundaneId = 0,
+        int $authorizationId = 0
+    ): int {
         $this->pdo->prepare(
             'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, position_id, system, authorization_id)
-             VALUES (:kid, :pkid, :mid, :role, :pid, 0, 0)'
+             VALUES (:kid, :pkid, :mid, :role, :pid, 0, :aid)'
         )->execute([
             ':kid' => $kingdomId,
             ':pkid' => $parkId,
             ':mid' => $mundaneId,
             ':role' => self::MARKER . '_' . $slug,
             ':pid' => $positionId,
+            ':aid' => $authorizationId,
         ]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * An ork_authorization row for a legacy officer to hang off. Its `role` is the
+     * access enum ('edit'|'create'|'admin') -- deliberately NOT an office name, so
+     * a row that leaks it into Role/DisplayTitle is unmistakable.
+     *
+     * Cleaned up by purgeMarkerRows(), which deletes authorization rows by joining
+     * through the marker officer rows rather than by tracking ids in the fixture:
+     * ids in a property are lost when a run dies mid-test, which is exactly when
+     * leftovers matter.
+     */
+    private function seedAuthorization(int $kingdomId, string $role): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role)
+             VALUES (0, 0, :kid, 0, 0, :role)'
+        )->execute([':kid' => $kingdomId, ':role' => $role]);
 
         return (int) $this->pdo->lastInsertId();
     }
@@ -412,6 +525,13 @@ final class OfficerRowShapeTest extends TestCase
 
     private function purgeMarkerRows(): void
     {
+        // Authorization rows first, while the marker officer rows that identify them
+        // still exist to join through.
+        $this->pdo->exec(
+            "DELETE a FROM ork_authorization a
+             JOIN ork_officer o ON o.authorization_id = a.authorization_id
+             WHERE o.role LIKE '" . self::MARKER . "\\_%'"
+        );
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "\\_%'");
         $this->pdo->exec("DELETE FROM ork_officer_position_alias WHERE canonical_key LIKE '" . self::MARKER . "\\_%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "\\_%'");

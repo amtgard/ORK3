@@ -14,6 +14,8 @@ require_once ORK3_ROOT . '/tools/ork-db/lib/Wiring.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/DeploymentTier.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/MigrationClassifier.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/SchemaIntrospection.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/SchemaTableIndex.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/TableReferenceScan.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/LastRender.php';
 require_once ORK3_ROOT . '/tools/ork-db/Validate.php';
 require_once ORK3_ROOT . '/tools/ork-db/Extract.php';

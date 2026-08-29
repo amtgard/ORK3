@@ -87,7 +87,7 @@ By default, the sandbox database is enriched with known logins for manual and au
 | **`apply`** | Wipe `ork_test`, load rendered SQL, post-validate (prompt unless `--yes`) |
 | **`validate`** | Safety checks: wiring locks, canaries, kingdom fingerprints, blocklist |
 | **`generate-assets` / `deploy-assets`** | Build heraldry rasters → copy into repo `assets/` |
-| **`drift-check`** | Migration classification coverage + catalog fingerprints (`--strict` for CI) |
+| **`drift-check`** | Migration classification coverage + catalog fingerprints + code-vs-schema table references (`--strict` for CI) |
 | **`schema-diff`** | Compare `SHOW CREATE TABLE` mirror vs sandbox |
 
 **Exit codes:** `0` ok · `1` runtime · `2` validation / tier refusal · `3` user cancelled apply confirm.
@@ -307,6 +307,38 @@ bin/ork-db drift-check
 # --strict: non-zero exit on unclassified migrations or fingerprint mismatches (CI).
 bin/ork-db drift-check --strict
 ```
+
+#### Table-reference check
+
+`drift-check` also fails when domain code names a table the repository's **committed**
+schema sources do not create. This is the guard against the recurring failure where code
+ships against schema that only ever existed on prod or in an untracked migrations
+directory — `ork_officer_position` and its seven siblings broke `KingdomProfileTest` for
+weeks that way.
+
+| | |
+|---|---|
+| **Code scanned** | `system/lib/ork3/` (the only layer permitted to touch the DB) |
+| **Schema compared against** | `ork.sql` + `templates/schema/` + every classified migration + `templates/catalogs/` — all committed. **Not** `rendered/sandbox.sql`, which is `.gitignored` and would make the check a silent no-op on a fresh clone |
+| **How references are found** | `token_get_all()`, so comments and commented-out code are structurally excluded rather than filtered |
+| **Granularity** | Tables only |
+
+Recognised forms: `DB_PREFIX . 'name'`, `DB_PREFIX . "name …"`, `$p = DB_PREFIX;` followed
+by `"{$p}name"` or `$p . 'name'`, and bare `ork_*` literals inside SQL strings.
+
+**Not covered**, and reported as a `NOTE` on every run so a green result never implies
+otherwise:
+
+- **Columns.** SQL here is concatenated across statements, so binding a column to its
+  table needs a real SQL parser. The `ork_recommendations.snoozed_by_id` and
+  `ork_kingdomaward.disabled` incidents were column-level and would **not** be caught.
+- **Runtime-computed names** (`DB_PREFIX . $table` in `class.Banner.php`,
+  `class.DangerAudit.php`, `class.Report.php`). Counted, never guessed at.
+
+When a table legitimately lives only on prod or the mirror, record it in
+`manifests/table-reference-allowlist.json5` with a reason — entries without one are
+rejected. Every entry is echoed in `drift-check` output, and an entry whose reference
+disappears is reported as stale and fails until deleted.
 
 ### `schema-diff`
 

@@ -1270,8 +1270,22 @@ class Kingdom extends Ork3
                             'KingdomId' => $r->kingdom_id,
                             'EventId' => $r->event_id,
                             'UnitId' => $r->unit_id,
-                            'Role' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
-                            'CanonicalKey' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
+                            // $r->officer_role, NEVER a bare $r->role. The SELECT above
+                            // takes `a.*` -- that is ork_authorization, whose own `role`
+                            // column is enum('edit','create','admin') -- so `$r->role`
+                            // resolves to the AUTHORIZATION's access level and shadows
+                            // ork_officer.role entirely. ork_officer.role is selected
+                            // deliberately under the distinct alias `officer_role`, and
+                            // that is the only name that reaches it.
+                            //
+                            // This is the fallback for a LEGACY officer row that maps to
+                            // no registry position, i.e. exactly the case where the
+                            // officer's own role string is the only office name that
+                            // exists. Off ork_authorization it emitted 'edit'/'admin'
+                            // where an office name belonged, or null when the officer had
+                            // no authorization row at all and the LEFT JOIN missed.
+                            'Role' => $r->canonical_key !== null ? $r->canonical_key : $r->officer_role,
+                            'CanonicalKey' => $r->canonical_key !== null ? $r->canonical_key : $r->officer_role,
                             // PositionId is an identity, not a relationship, so it is a plain
                             // int -- 0, not null, for a legacy officer row that maps to no
                             // registry position. That is the column's own semantics
@@ -1291,7 +1305,8 @@ class Kingdom extends Ork3
                             // re-sorts client-side disagree with the order it was handed.
                             'SortOrder' => (int)$r->effective_sort_order,
                             'HideWhenVacant' => (int)$r->hide_when_vacant,
-                            'DisplayTitle' => $r->display_title !== null ? $r->display_title : $r->role,
+                            // officer_role, not role -- see the note on 'Role' above.
+                            'DisplayTitle' => $r->display_title !== null ? $r->display_title : $r->officer_role,
                             'ParkName' => $r->park_name,
                             'KingdomName' => $r->kingdom_name,
                             'EventName' => $r->event_name,

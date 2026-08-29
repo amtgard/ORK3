@@ -306,6 +306,75 @@ class OfficerPosition extends Ork3
     // ================================================================
 
     /**
+     * The sort_order that puts a row at the END of a sibling group, as $kingdom_id
+     * sees that group: MAX(effective sort_order) + 10.
+     *
+     * Shared by the two ways a row ARRIVES in a group -- CreatePosition() (a brand
+     * new position) and ReinstatePosition() (a retired one coming back). Both mean
+     * "this row has no place in the group yet, put it at the end", and both have to
+     * measure the group the same way or the two paths disagree about where the end
+     * is.
+     *
+     * MEASURED AGAINST THE EFFECTIVE ORDER, not the raw column. The Core Five are
+     * SHARED rows (kingdom_id = 0) whose per-kingdom order lives in
+     * officer_position_alias, so a kingdom that had dragged them down would get its
+     * arrival wedged into the middle of the list it actually sees.
+     *
+     * SCOPED TO THE SIBLING GROUP, not to classification. sort_order orders
+     * siblings, and Manage Officers renders crown and supporting as ONE list, so a
+     * classification-scoped MAX draws from the wrong sequence: a kingdom whose only
+     * supporting offices are nested children (10/20/30 within their parent) would
+     * hand its first TOP-LEVEL supporting office 40 -- colliding with a crown office
+     * already at 40, the tie then broken arbitrarily by role name.
+     *
+     * An EMPTY group yields 10 (MAX over no rows is NULL, and (int) NULL + 10 = 10),
+     * which is the same base ReorderSiblings() renumbers from. The literal 100 is
+     * reached only when the query itself fails.
+     *
+     * @param int      $kingdom_id           Kingdom whose effective order is measured.
+     * @param int|null $parent_position_id   0/''/null = the top-level group.
+     * @param int      $exclude_position_id  A row to leave out of the measurement --
+     *                                       the row being placed, when it is already
+     *                                       in the group. Without it a row retired at
+     *                                       the group's own maximum would measure
+     *                                       against itself and drift further out on
+     *                                       every retire/reinstate cycle.
+     * @return int
+     */
+    private function NextSortOrderInGroup($kingdom_id, $parent_position_id, $exclude_position_id = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $exclude_position_id = (int) $exclude_position_id;
+
+        // parent_position_id is interpolated, not bound: it is NULL-or-int and yapo
+        // drops nulls from bindings. The non-null branch is (int)-cast, as is the
+        // exclusion -- mysql_real_escape_string() is a no-op shim in this codebase.
+        $parentScope = ($parent_position_id === null || $parent_position_id === '' || (int) $parent_position_id === 0)
+            ? 'p.parent_position_id IS NULL'
+            : 'p.parent_position_id = ' . (int) $parent_position_id;
+        $excludeScope = $exclude_position_id > 0
+            ? ' AND p.position_id != ' . $exclude_position_id
+            : '';
+
+        $DB->Clear();
+        $DB->so_kid = $kingdom_id;
+        $DB->so_kid2 = $kingdom_id;
+        $mx = $DB->DataSet(
+            "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
+			 FROM " . DB_PREFIX . "officer_position p
+			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+			   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
+			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope . $excludeScope
+        );
+        $sort_order = 100;
+        if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
+            $sort_order = ((int) $mx->mx) + 10;
+        }
+        return $sort_order;
+    }
+
+    /**
      * Create a new kingdom-custom position.
      *
      * @param int    $kingdom_id
@@ -399,35 +468,8 @@ class OfficerPosition extends Ork3
             }
         }
 
-        // sort_order = max in group + 10, measured against the EFFECTIVE order this
-        // kingdom sees. Against the raw column, a kingdom that had dragged the shared
-        // rows down would get its new position wedged into the middle of its own list.
-        $DB->Clear();
-        $DB->so_kid = $kingdom_id;
-        $DB->so_kid2 = $kingdom_id;
-        // Scoped to the new position's SIBLING GROUP, not to its classification.
-        // sort_order orders siblings, and Manage Officers now renders crown and
-        // supporting as ONE list, so a classification-scoped MAX draws from the wrong
-        // sequence: a kingdom whose only supporting offices are nested children
-        // (10/20/30 within their parent) would hand its first TOP-LEVEL supporting
-        // office 40 -- colliding with a crown office already at 40, the tie then
-        // broken arbitrarily by role name.
-        // parent_position_id is interpolated, not bound: it is NULL-or-int and yapo
-        // drops nulls from bindings. The non-null branch is (int)-cast.
-        $parentScope = ($parent_position_id === null || $parent_position_id === '')
-            ? 'p.parent_position_id IS NULL'
-            : 'p.parent_position_id = ' . (int) $parent_position_id;
-        $mx = $DB->DataSet(
-            "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
-			 FROM " . DB_PREFIX . "officer_position p
-			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
-			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope
-        );
-        $sort_order = 100;
-        if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
-            $sort_order = ((int) $mx->mx) + 10;
-        }
+        // sort_order = end of the sibling group. See NextSortOrderInGroup().
+        $sort_order = $this->NextSortOrderInGroup($kingdom_id, $parent_position_id);
 
         $DB->Clear();
         $DB->c_kid = $kingdom_id;
@@ -1151,7 +1193,32 @@ class OfficerPosition extends Ork3
      * Reinstate a retired position. Classification is the unchanged column value
      * (retire never touched it), so no snapshot restore is needed.
      *
+     * PLACEMENT. Retire sets only retired_at and never touches sort_order, and the
+     * UI never lists retired siblings -- so ReorderSiblings() renumbers the group
+     * WITHOUT the retired row, and its stale value drifts to mean nothing. A row
+     * retired at 15 out of 10/15/20/30 comes back into a group renumbered to
+     * 10/20/30 still holding 15, and reappears wedged between the first and second
+     * live siblings at a slot nobody chose. Reinstate therefore assigns a fresh
+     * sort_order at the END of the row's CURRENT sibling group -- positionally, a
+     * reinstated position is a new arrival -- using the same measurement
+     * CreatePosition makes (NextSortOrderInGroup()), so the two arrival paths agree
+     * on where the end is.
+     *
+     * WHERE that placement is written depends on who owns the row, exactly as in
+     * ReorderSiblings(). A kingdom-owned row keeps its order on the row. A SHARED
+     * row (kingdom_id = 0) is read by every kingdom in the game, so writing
+     * officer_position.sort_order would re-order the officer list for all of them
+     * on one kingdom's reinstate; the acting kingdom's placement goes into its own
+     * officer_position_alias row instead. Only sort_order is in that upsert's UPDATE
+     * clause, so a kingdom's custom title_alias on the same row survives untouched.
+     *
+     * With NO acting kingdom (0) and a shared row there is no list to place it into
+     * and the only reachable column is the shared one, so the order is deliberately
+     * left alone and reinstate does nothing but clear retired_at. Guessing a
+     * placement there would mean writing the globally-shared column.
+     *
      * @param int $position_id
+     * @param int $acting_kingdom_id
      * @return array
      */
     public function ReinstatePosition($position_id, $acting_kingdom_id = 0)
@@ -1168,11 +1235,58 @@ class OfficerPosition extends Ork3
             return NoAuthorization('Position does not belong to this kingdom.');
         }
 
+        $owner_kingdom_id = (int) $position['KingdomId'];
+        // Whose order is being measured. An owned row has exactly one candidate --
+        // its own kingdom (the guard above already proved acting == owner whenever
+        // acting is known). A shared row has no order of its own worth measuring,
+        // since every kingdom sees a different effective one, so it is the ACTING
+        // kingdom's list the row is being placed back into.
+        $measure_kingdom_id = $owner_kingdom_id > 0 ? $owner_kingdom_id : $acting_kingdom_id;
+
+        // Two writes in the shared case (alias upsert + the row's retired_at), so
+        // they commit or roll back together rather than leaving a placement behind
+        // for a position that is still retired.
+        $DB->BeginTrans();
+
+        $set_sort = '';
+        if ($measure_kingdom_id > 0) {
+            $sort_order = $this->NextSortOrderInGroup(
+                $measure_kingdom_id,
+                $position['ParentPositionId'],
+                $position_id
+            );
+            if ($owner_kingdom_id > 0) {
+                // Integer from NextSortOrderInGroup(); (int)-cast at the interpolation
+                // site rather than bound, so it sits alongside :ri_pid below.
+                $set_sort = 'sort_order = ' . (int) $sort_order . ', ';
+            } else {
+                $DB->Clear();
+                $DB->ri_key = $position['CanonicalKey'];
+                if (!$DB->ExecuteChecked(
+                    "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+					 VALUES (" . (int) $measure_kingdom_id . ", :ri_key, " . (int) $sort_order . ")
+					 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+                )) {
+                    $DB->RollbackTrans();
+                    return ProcessingError('The position could not be reinstated. Please try again.');
+                }
+            }
+        }
+
         $DB->Clear();
         $DB->ri_pid = $position_id;
-        $DB->Execute(
-            "UPDATE " . DB_PREFIX . "officer_position SET retired_at = NULL WHERE position_id = :ri_pid"
-        );
+        if (!$DB->ExecuteChecked(
+            "UPDATE " . DB_PREFIX . "officer_position
+			 SET " . $set_sort . "retired_at = NULL
+			 WHERE position_id = :ri_pid"
+        )) {
+            $DB->RollbackTrans();
+            return ProcessingError('The position could not be reinstated. Please try again.');
+        }
+
+        if (!$DB->CommitTrans()) {
+            return ProcessingError('The position could not be reinstated. Please try again.');
+        }
         return Success($position_id);
     }
 

@@ -15,8 +15,19 @@ if [ ! -f vendor/bin/phpunit ]; then
     exit 1
 fi
 
-echo "== ork-db drift-check --strict =="
-php tools/ork-db/cli.php drift-check --strict
+# --allow-catalog-drift downgrades ONE check: the committed catalog hashes. Those cover the
+# `fixed_extract` catalogs, which are extracted from the mirror into tools/ork-db/extracted/ --
+# a .gitignored directory -- so the check compares a committed constant against a file every
+# developer regenerates locally, and any legitimate prod reload turns it red for everyone.
+#
+# It had been red long enough that this script never reached PHPUnit at all (drift-check runs
+# under `set -e`, above), so people ran phpunit directly and the sign-off command stopped being
+# used. A permanently-red gate is not a gate. The drift is still PRINTED on every run, and
+# `bin/ork-db drift-check --strict` without this flag still fails on it, so nothing is hidden --
+# it just no longer blocks the tests. Every deterministic check here still blocks, including
+# table references, which reads only committed sources.
+echo "== ork-db drift-check --strict --allow-catalog-drift =="
+php tools/ork-db/cli.php drift-check --strict --allow-catalog-drift
 
 export ENVIRONMENT=TEST
 exec php vendor/bin/phpunit -c phpunit.xml.dist "$@"
