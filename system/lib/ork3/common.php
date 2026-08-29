@@ -875,8 +875,18 @@ class Common
                 $this->officer->role = $role;
             }
 
+            // Stamp the holder change. ork_officer.modified has no ON UPDATE clause --
+            // deliberately, because its only consumer (CloseOfficerHistoryTerm's
+            // $held_since) wants a START date, and ON UPDATE would reset it on every
+            // unrelated edit. But nothing assigned it here either, so it recorded when the
+            // OFFICE ROW was created rather than when this person took office: a Monarch
+            // seat created in 2016 and held by five people since would have backfilled the
+            // current holder as serving since 2016. Assigning it on the holder change is
+            // what makes the column mean "held since" and makes that backfill honest.
+            $heldSince = date('Y-m-d H:i:s');
             if ($bypass_auth) {
                 $this->officer->mundane_id = $new_officer_id;
+                $this->officer->modified = $heldSince;
                 $this->officer->save();
                 $officer_changed = true;
             } else {
@@ -884,6 +894,7 @@ class Common
                 $this->authorization->authorization_id = $this->officer->authorization_id;
                 if ($this->authorization->find()) {
                     $this->officer->mundane_id = $new_officer_id;
+                    $this->officer->modified = $heldSince;
                     $this->authorization->mundane_id = $new_officer_id;
                     $this->officer->save();
                     $this->authorization->save();
@@ -1039,7 +1050,11 @@ class Common
         $this->officer->role = $role;
         $this->officer->position_id = $position_id;
         $this->officer->system = $system;
-        $this->officer->modified = time();
+        // date(), NOT time(). An epoch integer in a TIMESTAMP column is not a valid
+        // datetime literal, so MariaDB coerces it to '0000-00-00 00:00:00' -- which is
+        // why 4,685 of 5,590 ork_officer rows carry a zero date. The event and config
+        // writes in this same file already spell it this way.
+        $this->officer->modified = date('Y-m-d H:i:s');
         if (strlen($authorization) > 0) {
             $A = new Authorization();
             $r = $A->add_auth_h([
