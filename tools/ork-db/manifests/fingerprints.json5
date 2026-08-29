@@ -44,10 +44,20 @@
   // DriftCheck::checkTableReferences(), which compares code against the COMMITTED schema
   // sources and needs no baseline at all.
   "schema_fingerprint": null,
+  // sha256 of tools/ork-db/templates/catalogs/<table>.sql for every `fixed_extract` table.
+  //
+  // These used to hash tools/ork-db/extracted/<table>.sql, which is .gitignored, so the
+  // check compared a committed constant against a file each developer regenerated from
+  // their own mirror -- red for everyone after any prod reload, and unfixable except by
+  // re-recording. The catalogs are now committed, so this hash covers a tracked file and
+  // only moves when someone deliberately changes committed reference data.
+  //
+  // Re-record after `bin/ork-db extract` changes a catalog, in the same commit as the
+  // catalog diff.
   "catalog_hashes": {
-    "award": "sha256:aa39e5312c714dbedcd5adc93c15a5b85196bfd06a4a0666d28a6dc540a368d3",
-    "class": "sha256:6108479ca17b6e80e9baa87c8536150eb5ac3011ea7f603ddeb1c52b19ad580e",
-    "parktitle": "sha256:2646cae661c0cc3bbf21ebb44b704b46dbf2d9a8cb492d48ba6620e505a466b6",
-    "pronoun": "sha256:9c8b8cdb13a14abc6ca3feca51fc456a5437dad22b0cfc5c81f7a9cae38f3e0e"
+    "award": "sha256:86fc15bba12eb4a76ba7724d8a15b300a0fcb72447542bf8a6ffe37c60779ffb",
+    "class": "sha256:da486ec92065a355d782aeb568ab86732bce35ddae068588893dcbf999402f6f",
+    "parktitle": "sha256:840c6e29fd12b20df1d34d9605db0cedd7506bcc4638a2014e55d73fb025edef",
+    "pronoun": "sha256:f5893ed52606fe73b224c84c26d4d1181866a8539cf90fcb4ec849437881f392"
   }
 }

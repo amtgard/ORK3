@@ -37,7 +37,7 @@ final class DriftCheckTest extends TestCase
         $this->assertIsString($fingerprints);
         file_put_contents(
             $fingerprintsPath,
-            str_replace('"award": "sha256:aa39e5312c714dbedcd5adc93c15a5b85196bfd06a4a0666d28a6dc540a368d3"', '"award": "sha256:deadbeef"', $fingerprints)
+            str_replace('"award": "sha256:86fc15bba12eb4a76ba7724d8a15b300a0fcb72447542bf8a6ffe37c60779ffb"', '"award": "sha256:deadbeef"', $fingerprints)
         );
 
         $driftCheck = new DriftCheck(new Wiring($toolRoot), $toolRoot, ORK3_ROOT);
@@ -49,17 +49,17 @@ final class DriftCheckTest extends TestCase
         $this->removeTree($toolRoot);
     }
 
-    public function testStrictFailsWhenExtractFileMissing(): void
+    public function testStrictFailsWhenCommittedCatalogMissing(): void
     {
         $toolRoot = sys_get_temp_dir() . '/ork-db-drift-missing-' . uniqid('', true);
         $this->copyTree(ORK3_ROOT . '/tools/ork-db', $toolRoot);
-        unlink($toolRoot . '/extracted/award.sql');
+        unlink($toolRoot . '/templates/catalogs/award.sql');
 
         $driftCheck = new DriftCheck(new Wiring($toolRoot), $toolRoot, ORK3_ROOT, null, static fn (): bool => false);
         $result = $driftCheck->run(true);
 
         $this->assertFalse($result['passed']);
-        $this->assertStringContainsString('award: missing extracted/award.sql', implode("\n", $result['lines']));
+        $this->assertStringContainsString('award: missing templates/catalogs/award.sql', implode("\n", $result['lines']));
 
         $this->removeTree($toolRoot);
     }

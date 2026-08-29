@@ -29,7 +29,7 @@ final class DriftCheck
     /**
      * @return array{lines: list<string>, exit_code: int, passed: bool}
      */
-    public function run(bool $strict = false, bool $allowCatalogDrift = false): array
+    public function run(bool $strict = false): array
     {
         $lines = ['DRIFT CHECK'];
         $issues = 0;
@@ -49,60 +49,31 @@ final class DriftCheck
         $issues += $this->checkTableReferences($lines);
 
         $fingerprints = Json5::decodeFile($this->toolRoot . '/manifests/fingerprints.json5');
-        $catalogIssues = $this->checkCommittedCatalogHashes($fingerprints);
-        $catalogFails = array_values(array_filter($catalogIssues, static fn ($i) => ($i['kind'] ?? 'fail') === 'fail'));
-        $catalogWarns = array_values(array_filter($catalogIssues, static fn ($i) => ($i['kind'] ?? 'fail') === 'warn'));
-        // Catalog-hash MISMATCH is a hard failure by default -- DriftCheckTest pins that, and
-        // a wrong hash genuinely is a problem. But these hashes cover the `fixed_extract`
-        // catalogs, which are extracted FROM THE MIRROR into tools/ork-db/extracted/, a
-        // .gitignored directory (.gitignore:53). So the check compares a committed constant
-        // against a file each developer regenerates locally, and any legitimate prod reload
-        // that touches this reference data turns it red until someone re-records the hash.
+        // Catalog-hash mismatch is a hard failure, and it is now a MEANINGFUL one.
         //
-        // That is exactly what happened: it had been red long enough that
-        // bin/run-unit-tests.sh -- which runs this under `set -e` BEFORE PHPUnit -- never
-        // reached the tests at all, and people invoked phpunit directly instead. A
-        // permanently-red gate is not a gate; it is a thing you learn to step around, and it
-        // was masking checks that ARE deterministic (table references reads only committed
-        // sources). $allowCatalogDrift lets the suite runner opt out of THIS ONE check
-        // explicitly, rather than silently weakening it for everybody.
-        if ($allowCatalogDrift && $catalogWarns !== []) {
-            // WARN, not FAIL, and deliberately so. These hashes cover the `fixed_extract`
-            // catalogs (award/class/parktitle/pronoun), which are extracted FROM THE MIRROR
-            // into tools/ork-db/extracted/ -- a directory that is .gitignored (.gitignore:53).
-            // The check therefore compares a committed constant against a file each developer
-            // regenerates locally, so any legitimate prod reload that touches this reference
-            // data turns it red for everyone until someone re-records the hash.
-            //
-            // It had been red long enough that `bin/run-unit-tests.sh` -- which runs this under
-            // `set -e` BEFORE PHPUnit -- never reached the tests at all, and people (this author
-            // included) invoked phpunit directly instead. A permanently-red gate is not a gate;
-            // it is a thing you learn to step around, and it was hiding a check that IS
-            // deterministic (table references, which reads only committed sources).
-            //
-            // The drift is still reported on every run and is still printed on every run
-            // but no longer blocks the suite or --strict. Re-record with the
-            // catalog extract you trust when prod's reference data genuinely changes.
-            //
-            // A MISSING hash or a MISSING extract file is NOT machine variance -- that is a
-            // broken setup -- so those stay a hard FAIL below, and DriftCheckTest pins both.
-            $lines[] = 'WARN  committed catalog hash drift (local extract; advisory)';
-            foreach ($catalogWarns as $issue) {
-                $lines[] = '      - ' . $issue['text'];
-            }
-        }
-        if (!$allowCatalogDrift) {
-            $catalogFails = array_merge($catalogFails, $catalogWarns);
-            $catalogWarns = [];
-        }
-        if ($catalogFails !== []) {
-            $issues += count($catalogFails);
+        // These hashes cover the `fixed_extract` catalogs (award/class/parktitle/pronoun).
+        // They used to be compared against tools/ork-db/extracted/<table>.sql -- a
+        // .gitignored directory (.gitignore:53) every developer regenerated from their own
+        // mirror -- so the check pitted a committed constant against a local artefact and
+        // any legitimate prod reload turned it red for everybody. It stayed red long enough
+        // that bin/run-unit-tests.sh (which runs this under `set -e` BEFORE PHPUnit) never
+        // reached the tests at all, and a --allow-catalog-drift opt-out had to be invented
+        // to get the suite moving again.
+        //
+        // The catalogs now live in tools/ork-db/templates/catalogs/, which git tracks, so
+        // the hash covers a file that only changes when someone commits a change to it.
+        // That is stable across machines and still fails loudly if committed reference data
+        // is edited without re-recording the hash -- so the opt-out is gone.
+        $catalogIssues = $this->checkCommittedCatalogHashes($fingerprints);
+        if ($catalogIssues !== []) {
+            $issues += count($catalogIssues);
             $lines[] = 'FAIL  committed catalog hash drift';
-            foreach ($catalogFails as $issue) {
-                $lines[] = '      - ' . $issue['text'];
+            foreach ($catalogIssues as $issue) {
+                $lines[] = '      - ' . $issue;
             }
-        }
-        if ($catalogWarns === [] && $catalogFails === []) {
+            $lines[] = '      Re-record with the catalog you intend to ship, then update';
+            $lines[] = '      tools/ork-db/manifests/fingerprints.json5 catalog_hashes.';
+        } else {
             $lines[] = 'OK    committed catalog hashes match fingerprints.json5';
         }
 
@@ -237,30 +208,36 @@ final class DriftCheck
         $issues = [];
         $expected = $fingerprints['catalog_hashes'] ?? [];
         if (!is_array($expected) || $expected === []) {
-            return [['kind' => 'fail', 'text' => 'catalog_hashes missing in fingerprints.json5']];
+            return ['catalog_hashes missing in fingerprints.json5'];
         }
 
         $extractManifest = Json5::decodeFile($this->toolRoot . '/manifests/extract-sources.json5');
         foreach ($extractManifest['fixed_extract'] ?? [] as $table) {
             $table = (string) $table;
-            $path = $this->toolRoot . '/extracted/' . $table . '.sql';
+            $path = $this->catalogPath($table);
             if (!is_readable($path)) {
-                $issues[] = ['kind' => 'fail', 'text' => "{$table}: missing extracted/{$table}.sql"];
+                $issues[] = "{$table}: missing templates/catalogs/{$table}.sql";
                 continue;
             }
 
             $actual = SchemaIntrospection::hashFileContents($path);
             $recorded = (string) ($expected[$table] ?? '');
             if ($recorded === '') {
-                $issues[] = ['kind' => 'fail', 'text' => "{$table}: no catalog hash recorded in fingerprints.json5"];
+                $issues[] = "{$table}: no catalog hash recorded in fingerprints.json5";
                 continue;
             }
             if ($actual !== $recorded) {
-                $issues[] = ['kind' => 'warn', 'text' => "{$table}: committed extract hash mismatch (recorded {$recorded}, actual {$actual})"];
+                $issues[] = "{$table}: committed catalog hash mismatch (recorded {$recorded}, actual {$actual})";
             }
         }
 
         return $issues;
+    }
+
+    /** Committed home of the `fixed_extract` reference catalogs. */
+    private function catalogPath(string $table): string
+    {
+        return $this->toolRoot . '/templates/catalogs/' . $table . '.sql';
     }
 
     /** @param array<string, mixed> $fingerprints @return list<string> */
@@ -283,9 +260,9 @@ final class DriftCheck
         $extract = new Extract($this->wiring, $this->toolRoot, fn (): PDO => $pdo);
         foreach ($extractManifest['fixed_extract'] ?? [] as $table) {
             $table = (string) $table;
-            $path = $this->toolRoot . '/extracted/' . $table . '.sql';
+            $path = $this->catalogPath($table);
             if (!is_readable($path)) {
-                $issues[] = "{$table}: missing committed extract for live comparison";
+                $issues[] = "{$table}: missing committed catalog for live comparison";
                 continue;
             }
 

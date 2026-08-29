@@ -23,10 +23,15 @@ namespace OrkDb;
  *   every migration MigrationClassifier::renderSources() yields (render: full|override)
  *   tools/ork-db/templates/schema/post-schema-indexes.sql
  *   tools/ork-db/templates/schema/supplements.sql
- *   tools/ork-db/templates/catalogs/*.sql   (embedded catalogs, e.g. ork_day_convert)
+ *   tools/ork-db/templates/catalogs/*.sql   (committed catalogs: the hand-maintained
+ *                                            ork_day_convert, plus award/class/parktitle/
+ *                                            pronoun, which extract refreshes in place)
  *
- * tools/ork-db/extracted/*.sql is NOT a source. It is .gitignored, and every table it
- * carries is already created by ork.sql — extract only supplies catalog ROW DATA.
+ * tools/ork-db/extracted/*.sql is NOT a source. It is .gitignored — it holds
+ * mundane_real.json and configuration.sql, which carry real player data — and every table
+ * it carries is already created by ork.sql; extract only supplies ROW DATA. Note that of
+ * the committed catalogs only day_convert.sql carries DDL; the four extracted ones are
+ * INSERT-only and therefore define no tables here.
  */
 final class SchemaTableIndex
 {
