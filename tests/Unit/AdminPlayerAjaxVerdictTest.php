@@ -148,27 +148,68 @@ final class AdminPlayerAjaxVerdictTest extends TestCase
     }
 
     /**
-     * The four handlers the finding named must go through the shared helpers.
-     * A handler that quietly reverts to `if (resp.ok)` is the bug coming back.
+     * Every handler that POSTs to Admin/player/... must go through the shared
+     * helpers. A handler that quietly reverts to `if (resp.ok)` is the bug
+     * coming back.
+     *
+     * Originally four (the award modals). Four more were converted later -- the
+     * Player-profile image upload, Update Account, Add Dues and Edit
+     * Qualifications modals -- plus the Revoke Dues row button, which also
+     * posted here and reported success on every failure. Nine in total.
      */
-    public function testTheFourAwardSaveHandlersReadTheServerVerdict(): void
+    public function testEveryAdminPlayerSaveHandlerReadsTheServerVerdict(): void
     {
         $js = file_get_contents(DIR_UI . 'template/revised-frontend/script/revised.js');
         $this->assertNotFalse($js);
 
+        // Eight take an existing FormData; Revoke Dues had no body at all and
+        // builds one purely to carry the marker.
         $this->assertSame(
-            4,
+            8,
             substr_count($js, 'body: tnAwardSavePayload(fd)'),
-            'all four award-save fetch bodies must carry the Ajax=1 marker'
+            'every Admin/player fetch body must carry the Ajax=1 marker'
         );
         $this->assertSame(
-            4,
-            substr_count($js, '.then(tnReadAwardSaveResponse)'),
-            'all four must branch on the server verdict, not on resp.ok'
+            1,
+            substr_count($js, 'body: tnAwardSavePayload(new FormData())'),
+            'the bodyless Revoke Dues POST must still carry the Ajax=1 marker'
+        );
+
+        // The reader is used bare by the four award callers and with a
+        // caller-specific fallback message by the five later ones.
+        $this->assertSame(
+            9,
+            substr_count($js, '.then(tnReadAwardSaveResponse)')
+                + substr_count($js, 'return tnReadAwardSaveResponse(resp,'),
+            'every one must branch on the server verdict, not on resp.ok'
         );
 
         // The marker the server switches on is written in exactly one place.
         $this->assertSame(1, substr_count($js, "fd.append('Ajax', '1')"));
+    }
+
+    /**
+     * The converted handlers must not fall back to a native dialog on failure:
+     * alert()/confirm()/prompt() block the page and freeze the browser
+     * automation harness. Scoped to the Player-profile handlers this change
+     * touched -- other surfaces in this file still carry legacy alerts.
+     */
+    public function testTheRevokeDuesHandlerUsesTheHouseDialog(): void
+    {
+        $js = file_get_contents(DIR_UI . 'template/revised-frontend/script/revised.js');
+        $this->assertNotFalse($js);
+
+        $at = strpos($js, "'/revokedues/'");
+        $this->assertNotFalse($at);
+        // The handler and its two continuations; stop before the next IIFE.
+        $handler = substr($js, $at - 900, 1800);
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?<![\w.])alert\s*\(/',
+            $handler,
+            'revoke-dues failure must not raise a native dialog'
+        );
+        $this->assertStringContainsString('orkAlert(', $handler, 'it must use the house one-button dialog');
     }
 
     /**

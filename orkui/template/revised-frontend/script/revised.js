@@ -287,7 +287,16 @@ function tnAwardSavePayload(fd) {
     fd.append('Ajax', '1');
     return fd;
 }
-function tnReadAwardSaveResponse(resp) {
+function tnReadAwardSaveResponse(resp, fallbackError) {
+    /* fallbackError is optional and only used when the server reported a
+       failure without a message. It exists because this reader is no longer
+       award-only -- the image-upload, account, dues and qualifications modals
+       route through it too, and "The award could not be saved." is wrong in
+       those. Omitting it keeps the original wording for the four award
+       callers, so their behaviour is unchanged. */
+    var noMessage = (typeof fallbackError === 'string' && fallbackError !== '')
+        ? fallbackError
+        : 'The award could not be saved.';
     return resp.text().then(function(body) {
         var d = null;
         try { d = JSON.parse(body); } catch (e) { d = null; }
@@ -306,7 +315,7 @@ function tnReadAwardSaveResponse(resp) {
             ok: false,
             error: (typeof d.error === 'string' && d.error.trim() !== '')
                 ? d.error.trim()
-                : 'The award could not be saved.'
+                : noMessage
         };
     }).catch(function() {
         return { ok: false, error: 'The server response could not be read.' };
@@ -1440,7 +1449,11 @@ if (PnConfig.recError) {
         function showError(msg) {
             var el = gid('pn-img-error');
             el.textContent = msg;
-            el.style.display = '';
+            // 'block', not '': .pn-form-error is display:none in revised.css, so
+            // clearing the inline value just falls back to the stylesheet and the
+            // box stays hidden. This modal's error affordance was never visible.
+            // The other three modals on this page already use 'block'.
+            el.style.display = 'block';
         }
 
         window.pnOpenImgModal = function(type) {
@@ -1700,15 +1713,31 @@ if (PnConfig.recError) {
             fd.append('Update', 'Update Media');
             var outName = origImgIsPng ? 'image.png' : 'image.jpg';
             fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, outName);
-            fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            // Admin/player/{id}/update renders the admin HTML page with HTTP 200
+            // on failure, so resp.ok alone said "uploaded" for a rejected file,
+            // an expired session and a permission failure alike -- and then
+            // reloaded the page back onto the old image. Ask for the {status,
+            // error} envelope instead and only claim success on status 0.
+            fetch(UPLOAD_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return tnReadAwardSaveResponse(resp, 'The image could not be uploaded.');
+                })
+                .then(function(res) {
+                    if (!res.ok) {
+                        showStep('pn-img-step-select');
+                        showError('Upload failed: ' + res.error);
+                        return;
+                    }
                     showStep('pn-img-step-success');
                     setTimeout(function() { window.location.reload(); }, 1400);
                 })
                 .catch(function(err) {
+                    // tnReadAwardSaveResponse never rejects, so an HTTP-level
+                    // failure can no longer land here -- this is now only the
+                    // transport dying (offline, DNS, connection reset), which
+                    // has no response and therefore no server message.
                     showStep('pn-img-step-select');
-                    showError('Upload failed: ' + err.message);
+                    showError('Upload failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         }
 
@@ -1849,28 +1878,32 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(SAVE_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+
+            // Admin/player/{id}/update answers 200-with-the-admin-page on failure.
+            // This used to scrape .error-message out of that HTML, which missed
+            // any failure the page renders differently (and read a login-page
+            // redirect as a clean save). Ask for the {status, error} envelope.
+            fetch(SAVE_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    return resp.text();
+                    return tnReadAwardSaveResponse(resp, 'The account could not be saved.');
                 })
-                .then(function(html) {
-                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
-                    if (m) {
-                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-                        errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = 'block';
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
                         return;
                     }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                    // Only reachable now if fetch() itself rejects: the reader
+                    // resolves on every HTTP outcome, including non-2xx.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
 
@@ -2030,16 +2063,30 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(DUES_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
+            }
+
+            // adddues rejects an invalid player or Kingdom, and add_dues can
+            // reject on its own -- both render the admin page with HTTP 200, so
+            // resp.ok alone reloaded the profile as though the dues had landed.
+            fetch(DUES_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return tnReadAwardSaveResponse(resp, 'The dues could not be added.');
+                })
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
+                        return;
+                    }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
+                    // Reader never rejects; this is a dead transport only.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
     })();
@@ -2132,28 +2179,29 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(SAVE_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+
+            // Same 200-on-failure page as the account modal, and the same
+            // reason the .error-message scrape was not good enough.
+            fetch(SAVE_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    return resp.text();
+                    return tnReadAwardSaveResponse(resp, 'The qualifications could not be saved.');
                 })
-                .then(function(html) {
-                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
-                    if (m) {
-                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-                        errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = 'block';
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
                         return;
                     }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                    // Reader never rejects; this is a dead transport only.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
     })();
@@ -13129,14 +13177,34 @@ function setupPronounPicker(cfg) {
             if (!duesId) return;
             pnConfirm({ title: 'Revoke Dues', message: 'Revoke this dues record? This cannot be undone.', confirmText: 'Revoke', danger: true }, function() {
                 btn.disabled = true;
-                fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
-                    method: 'POST'
-                }).then(function(r) {
-                    if (!r.ok) throw new Error('Server returned ' + r.status);
-                    window.location.reload();
-                }).catch(function() {
+                // Same 200-on-failure surface as the other Admin/player POSTs on
+                // this page: revoke_dues can reject, and no_authorization() answers
+                // 200 with the admin page, so r.ok alone reloaded the profile as
+                // though the record had been revoked. This POST carried no body at
+                // all, so it needs one purely to carry the Ajax=1 marker.
+                function revokeFailed(msg) {
                     btn.disabled = false;
-                    alert('Request failed.');
+                    // orkAlert is the house one-button dialog (the alertMode shell
+                    // above) and replaces the native window dialog this used to
+                    // raise -- a native one blocks the page and freezes the
+                    // automation harness. This row lives in the dues-history modal,
+                    // which has no inline error box of its own.
+                    orkAlert(msg, { title: 'Revoke Failed' });
+                }
+                fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
+                    method: 'POST',
+                    body: tnAwardSavePayload(new FormData())
+                }).then(function(resp) {
+                    return tnReadAwardSaveResponse(resp, 'The dues record could not be revoked.');
+                }).then(function(res) {
+                    if (!res.ok) {
+                        revokeFailed(res.error);
+                        return;
+                    }
+                    window.location.reload();
+                }).catch(function(err) {
+                    // Reader never rejects; only a dead transport reaches here.
+                    revokeFailed((err && err.message) || 'The server could not be reached.');
                 });
             });
         });

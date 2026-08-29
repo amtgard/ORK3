@@ -1040,6 +1040,17 @@ class Controller_Admin extends Controller
                                 ));
                         }
                         if ($this->request->Update == 'Update Media') {
+                            // SetHeraldry/SetWaiver/SetImage/one_shot each returned a status
+                            // that was thrown away, so a domain-layer rejection was invisible to
+                            // BOTH $r and data['Error'] and the request reported success having
+                            // written nothing. Record the FIRST failure so a later successful
+                            // file in the same multi-file upload cannot mask an earlier one.
+                            $mediaFailure = null;
+                            if ($_FILES['Heraldry']['size'] > 0 && !Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the heraldry.';
+                            }
                             if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
                                 if ((int) $_FILES['Heraldry']['size'] / 1.333 > 465000) {
                                     $this->data['Error'] = 'Image Error: File size is too large.';
@@ -1049,23 +1060,31 @@ class Controller_Admin extends Controller
                                         if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
                                             $h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
                                             $h_imdata = base64_encode($h_im);
-                                            $this->Player->SetHeraldry(array(
+                                            $mediaResult = $this->Player->SetHeraldry(array(
                                                 'MundaneId' => $id,
                                                 'Heraldry' => strlen($h_imdata) > 0 ? $h_imdata : null,
                                                 'HeraldryMimeType' => strlen($h_imdata) > 0 ? $_FILES['Heraldry']['type'] : '',
                                                 'Token' => $this->session->token
                                             ));
+                                            if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                                $mediaFailure = $mediaResult;
+                                            }
                                         }
                                     } else {
                                         die('TMP_DIR is not writable.');
                                     }
                                 }
                             }
+                            if ($_FILES['Waiver']['size'] > 0 && !Common::supported_mime_types($_FILES['Waiver']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the waiver.';
+                            }
                             if ($_FILES['Waiver']['size'] > 0 && Common::supported_mime_types($_FILES['Waiver']['type'])) {
                                 if (move_uploaded_file($_FILES['Waiver']['tmp_name'], DIR_TMP . sprintf("w_%06d", $id))) {
                                     $w_im = file_get_contents(DIR_TMP . sprintf("w_%06d", $id));
                                     $w_imdata = base64_encode($w_im);
-                                    $this->Player->SetWaiver(array(
+                                    $mediaResult = $this->Player->SetWaiver(array(
                                         'MundaneId' => $id,
                                         'HasImage' => strlen($pi_imdata),
                                         'Waivered' => strlen($w_imdata),
@@ -1073,7 +1092,15 @@ class Controller_Admin extends Controller
                                         'WaiverMimeType' => strlen($w_imdata) > 0 ? $_FILES['Waiver']['type'] : '',
                                         'Token' => $this->session->token
                                     ));
+                                    if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                        $mediaFailure = $mediaResult;
+                                    }
                                 }
+                            }
+                            if ($_FILES['PlayerImage']['size'] > 0 && !Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the player photo.';
                             }
                             if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
                                 if ((int) $_FILES['PlayerImage']['size'] * 1.333 > 465000) {
@@ -1083,15 +1110,23 @@ class Controller_Admin extends Controller
                                     if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
                                         $pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
                                         $pi_imdata = base64_encode($pi_im);
-                                        $this->Player->SetImage(array(
+                                        $mediaResult = $this->Player->SetImage(array(
                                             'MundaneId' => $id,
                                             'HasImage' => strlen($pi_imdata),
                                             'Image' => strlen($pi_imdata) > 0 ? $pi_imdata : null,
                                             'ImageMimeType' => strlen($pi_imdata) > 0 ? $_FILES['PlayerImage']['type'] : '',
                                             'Token' => $this->session->token
                                         ));
+                                        if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                            $mediaFailure = $mediaResult;
+                                        }
                                     }
                                 }
+                            }
+                            if ($_FILES['PlayerFace']['size'] > 0 && !Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the profile face image.';
                             }
                             if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
                                 if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
@@ -1102,8 +1137,16 @@ class Controller_Admin extends Controller
                                         'MundaneId' => $id,
                                         'Base64FaceImage' => $face_imdata
                                         ]);
+                                    if ($mediaFailure === null && is_array($one) && (int) ($one['Status'] ?? 0) !== 0) {
+                                        $mediaFailure = $one;
+                                    }
                                     unlink(DIR_TMP . sprintf("fi_%06d", $id));
                                 }
+                            }
+                            if ($mediaFailure !== null) {
+                                // The shared post-switch block turns a non-zero $r['Status'] into
+                                // data['Error'], which is what the Ajax envelope reports.
+                                $r = $mediaFailure;
                             }
                         }
                         if ($this->request->Update == 'Update Details') {
