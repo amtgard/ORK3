@@ -115,8 +115,27 @@ final class MigrationClassifier
                 continue;
             }
 
-            $line = preg_replace('/`(?:ork|[\w]+)`\.`(\w+)`/', '`\1`', $line) ?? $line;
-            $line = preg_replace('/\b(?:ork|[\w]+)\.(\w+)/', '\1', $line) ?? $line;
+            // Strip a DATABASE qualifier (`ork`.`foo` / ork.foo) so a migration written
+            // against the mirror applies to the sandbox schema.
+            //
+            // Bounded to the real database names ON PURPOSE. The previous pattern was
+            // (?:ork|[\w]+), and that [\w]+ branch matched ANY identifier before a dot --
+            // so it also stripped table ALIASES and table-qualified columns. A correct
+            // multi-table UPDATE in db-migrations/2026-08-25-04-officer-position.sql:
+            //     UPDATE `ork_officer` o JOIN `ork_officer_position` p
+            //       ON p.kingdom_id=0 AND p.canonical_key=o.role
+            //       SET o.position_id=p.position_id;
+            // rendered as `SET position_id=position_id`, which MariaDB rejects with
+            // "Column 'position_id' in SET is ambiguous" -- the render simply would not
+            // build. Where two joined columns have DIFFERENT names it is worse than an
+            // error: the statement silently becomes a self-assignment.
+            //
+            // Exact names matter here: `ork.ork_officer` is a database-qualified table
+            // and must lose its prefix, while `ork_officer.role` is a TABLE-qualified
+            // column and must keep it. A looser 'ork\w*' would wrongly strip the latter.
+            $dbQualifier = 'ork_test|ork';
+            $line = preg_replace('/`(?:' . $dbQualifier . ')`\.`(\w+)`/', '`\1`', $line) ?? $line;
+            $line = preg_replace('/\b(?:' . $dbQualifier . ')\.(\w+)/', '\1', $line) ?? $line;
 
             $kept[] = $line;
         }
