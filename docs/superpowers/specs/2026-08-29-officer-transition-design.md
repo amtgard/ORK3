@@ -221,7 +221,8 @@ Five rules govern the conversion:
    (`EnsureCrownSlot`, `CloseOfficerHistoryTerm`, `InsertOfficerRow`, the crown advisory
    lock, cycle detection in `ValidateParent`) is not rewritten — it is wrapped. The one
    exception is the crown-uniqueness check, which is wrong against production data and is
-   corrected rather than preserved. See the next section.
+   deleted rather than preserved, because the ORK imposes no such limit. See the next
+   section.
 
 ### Methods converted
 
@@ -373,47 +374,31 @@ Enforced in the domain, so the API and the wizard cannot diverge:
 - The incoming officer must be a member of the scope, matching the existing rule in
   `Kingdom::SetOfficer:1348`.
 
-## The crown-uniqueness rule refuses legitimate transitions
+## The crown-uniqueness check is removed
 
 `SetOfficerByPosition` enforces *"A person may hold only one Crown office"* across every
-scope at once (`class.OfficerPosition.php:1420-1447`). The conflict query excludes only
-the exact `(kingdom, park, position)` being written; any other crown row for that person,
-anywhere, is a refusal.
+scope at once (`class.OfficerPosition.php:1420-1447`). **The ORK does not limit holding
+multiple offices, or offices at multiple levels.** The check is an invention of this
+branch, it does not describe how Amtgard works, and against the production backup it
+would refuse **242 people who hold office right now** — 176 of them holding two offices
+in the same park, which is ordinary practice in a small park.
 
-Measured against the production backup, that rule is violated by **242 people who hold
-office right now**:
+The check is deleted. No scoped or softened replacement is written, and multi-office
+policy is explicitly not in scope for this work.
 
-| Overlap | People |
-|---|---|
-| Two or more crown offices in the **same park** | 176 |
-| Crown offices in **more than one park** | 59 |
-| A **park** crown office and a **kingdom** crown office | 30 |
-| Two or more **kingdom-level** crown offices | **0** |
-
-The cause is classification, not policy. All five system positions are seeded
-`classification = 'crown'` (`db-migrations/2026-08-25-04-officer-position.sql`, step 4),
-and parks reuse those same shared `kingdom_id = 0` rows — 2,506 of 2,507 seated officers
-sit on them. So "crown" tags a park's Champion exactly as it tags a kingdom's Monarch,
-and a small park where one person is both Sheriff and Champion trips a rule meant to stop
-someone being Monarch of two kingdoms.
-
-This matters here because the wizard is built on this method. Left as is, a transition
-would be refused for a large share of real appointments, with a message naming an
-unrelated park.
-
-**The fix is to scope the rule to kingdom-level offices** — add `park_id = 0` to the
-conflict query. The data supports this precisely: zero of the 135 seated kingdom-level
-officers hold two kingdom crown offices, so the rule is correct at the scope it was
-written for and only over-applies below it. No existing row needs reconciling, and the
-constraint stays meaningful where it earns its keep.
-
-Park-level overlap becomes legal and silent. If a kingdom wants to discourage it, that is
-a policy layer on top, not a hard refusal in the write path — and nobody has asked for it.
-
-A regression test asserts a park officer can take a kingdom crown office, and that a
-sitting kingdom Monarch still cannot take a second kingdom crown office.
+One consequence to handle while removing it: the advisory lock wrapping the check
+(`GET_LOCK('crown_assign_' . $mundane_id)`) is keyed on the **person**, because
+serialising the cross-scope conflict query was its whole purpose. With the query gone,
+that key guards nothing that matters — two admins assigning *different* people to the
+*same* office are not serialised, which is the race a transition actually has. The lock
+is re-keyed to the office being written (`kingdom_id`, `park_id`, `position_id`). This is
+a correctness fix inside code being rewritten anyway, not a new feature.
 
 ## One seat per office
+
+This is the mirror image of the rule removed above, not a survivor of it. **An office
+holds one person; a person may hold any number of offices, at any number of levels.** The
+constraint is on the seat, never on the human.
 
 `Occupants[]` collapses to `Occupant` in `actionList` (`controller.OfficerAdminAjax.php:298`),
 so crown and supporting rows carry the same shape. `InsertOfficerRow` refuses a second
@@ -526,8 +511,8 @@ Extends the existing suites (`OfficerPositionReorderTest`, `OfficerPositionReins
 - **Audit** — a transition writes a `dangeraudit` row with correct before/after, and
   `by_whom_id` is the token's owner rather than 0 (the `IsAuthorized`-before-`audit`
   ordering dependency).
-- **Crown scope** — a park officer can take a kingdom crown office; a sitting kingdom
-  Monarch still cannot take a second kingdom crown office.
+- **No office limits** — a park officer can take a kingdom office, and a person can hold
+  two offices in one park. Both are refused by current code and must pass.
 - **History is written once** — a transition produces exactly one new term and closes
   exactly one, with `Common::set_officer`'s own history write suppressed.
 - **Position retirement still clears every scope** — `RetirePosition` on a position held
@@ -551,6 +536,8 @@ Extends the existing suites (`OfficerPositionReorderTest`, `OfficerPositionReins
   21-method read surface needs an authorization pass first.
 - Restoring `bin/check-layering.sh` to this branch, and extending it with a rule that
   tests domain-method *shape*. Worth doing; it is its own piece of work.
+- Any limit on holding multiple offices, or offices at multiple levels. The ORK does not
+  impose one; this work does not introduce one.
 - Officer terms as first-class objects with succession planning. Not asked for.
 
 ## Risks
