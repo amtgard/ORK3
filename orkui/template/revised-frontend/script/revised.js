@@ -12843,7 +12843,17 @@ function setupPronounPicker(cfg) {
                 if (tnRankMonths(rcRankPills, 'pn', awardId, 'Award', function(month) { rcRankVal.value = month; })) return;
 
                 /* suggest next rank = max held rank + 1, capped at maxRank */
-                var heldMax    = (PnConfig.awardRanks && awardId) ? (PnConfig.awardRanks[awardId] || 0) : 0;
+                /* The fifth picker. PnConfig.awardRanks has no numeric key 0 any more,
+                   and every kingdom ladder <option> carries data-award-id="0" -- so
+                   awardRanks[awardId] read 0 for all of them: no green held pills, a
+                   "suggest next rank" that always proposed 1, and no star even for a
+                   player already at the top of that ladder. tnRankHeldFor() takes the
+                   ALREADY-SELECTED option and falls back to its 'k' + kingdomaward_id
+                   key, which is exactly what the other four pickers do. `opt` is the
+                   selected option read from this.selectedIndex just above; never
+                   re-look it up by data-award-id, which resolves to the FIRST kingdom
+                   ladder in the list rather than the chosen one. */
+                var heldMax    = tnRankHeldFor(opt, PnConfig.awardRanks || {});
                 var suggested  = heldMax + 1;
                 var maxRank    = tnRankMaxFor(opt);
                 if (suggested > maxRank) suggested = 0;
