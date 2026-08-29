@@ -112,7 +112,18 @@ Non-conformant, and introduced by this branch:
 | `RBACService` | 8 | no | no | no | no |
 | `PermissionRegistry` | 2 (seed/bootstrap) | no | no | no | no |
 
-`ConfigRegistry` was checked and is clear: one public method, no writes — a read-only catalog.
+`RBACService`'s mutators are reachable from **two** controllers, not one:
+`controller.OfficerAdminAjax.php:90`, and the role-management block this branch added to
+`controller.KingdomAjax.php` (`grantrole`, `revokerole`, `createrole`, `editrole`,
+`deleterole`, gated on `kingdom.auth.manage`). Both gate correctly today. Two gated
+callers is two chances for a third that doesn't.
+
+`ConfigRegistry` was checked and is clear on writes, but not as small as it first looked:
+21 functions, of which **10 are `public static`** (`GetAll`, `Exists`, `Get`, `Label`,
+`Groups`, `GetByGroup`, `GetGrouped`, `FilterKnown`, `Count`, `Validate`). All are
+PascalCase readers over an in-memory catalog with no DB access. It stays unregistered —
+which, given the all-or-nothing registration behaviour described below, is a decision
+rather than an oversight.
 
 Pre-existing and explicitly **out of scope** (verified against `master`):
 `AddAward`/`UpdateAward`/`CreateAward`/`EditAward` not calling `dangeraudit`;
@@ -140,6 +151,11 @@ Measured against a production backup on 2026-08-29:
 | Seated officers with no open term | **2,507** |
 | History rows with a future `end_date` | 1 |
 
+Three assumptions the backfill depends on were checked and hold: **0** seated officers
+sit in an inactive or deleted park, **0** reference a missing `ork_mundane` row, and
+**0** positions hold more than one occupant — so the backfill population is clean, and
+one-seat enforcement is additive rather than a migration.
+
 The single history row is `officer_history_id 1`: kingdom 17, `royal_scribe`,
 `start_date 2026-08-29`, `end_date 2026-11-30`. Mundane 46193 still holds the office
 (`officer_id 5850`), but because `end_date IS NULL` is what defines "current", that
@@ -161,8 +177,9 @@ public function TransitionOfficer($request)
     }
     $scope    = ((int)$request['ParkId'] > 0) ? 'park' : 'kingdom';
     $scope_id = ($scope === 'park') ? (int)$request['ParkId'] : (int)$request['KingdomId'];
+    // The permission KEY is scoped too, not just the scope argument -- see the matrix below.
     if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id, 'kingdom.officer.set', $scope, $scope_id, AUTH_EDIT)) {
+            $actor_id, $scope . '.officer.set', $scope, $scope_id, AUTH_EDIT)) {
         return NoAuthorization();
     }
     // validate → close outgoing term → open incoming term → note → RBAC sync
@@ -174,14 +191,18 @@ public function TransitionOfficer($request)
 }
 ```
 
-Four rules govern the conversion:
+Five rules govern the conversion:
 
 1. **The actor comes from the token, never from an argument.** `$changed_by`,
    `$creator_id`, `$acting_uid`, `$granter_id`, `$revoker_id`, `$editor_id`,
    `$deleter_id` are all removed from the public signatures and derived from
    `IsAuthorized`. This is what makes registration safe.
-2. **Scope is derived inside the domain** from `ParkId`, so a park-scoped caller is
-   gated against their park. This is a hard requirement, not a nicety — see below.
+2. **Scope is derived inside the domain** from `ParkId`, and so is the permission key.
+   `checkPermissionOrAuthority` maps `'park'` to `AUTH_PARK`
+   (`class.AuthorizationGate.php:52-57`), so the scope argument works — but the *key*
+   must change with it. `kingdom.officer.set` checked in a park scope is a kingdom
+   permission looked up against a park id, and would simply fail. This is a hard
+   requirement, not a nicety — see *Permissions* below.
 3. **The UI supplies the token from the session.** The controller passes
    `$this->session->token` into the model, which puts it in `$request['Token']` — the
    same way `model.Kingdom::set_officers($token, …)` and `model.Attendance::add_attendance($token, …)`
@@ -189,9 +210,18 @@ Four rules govern the conversion:
    fail fast on a logged-out request, but it is no longer the security boundary. Note the
    standing gotcha: the controller session accessor is `$this->session->user_id`, not
    `$this->__session`, which silently yields uid 0.
-4. **Existing positional methods become private helpers.** The working logic
+4. **`IsAuthorized` must run before `audit`, and that is load-bearing.**
+   `DangerAudit::audit` does not take an actor. It reads
+   `$_SESSION['is_authorized_mundane_id']` (`class.DangerAudit.php:65`), which is
+   populated as a side effect of `Authorization::IsAuthorized`
+   (`class.Authorization.php:982`). The order in the sample above is therefore not
+   stylistic: authorize first, or every audit row is attributed to uid 0. This is
+   asserted by a test rather than left to the next editor to notice.
+5. **Existing positional methods become private helpers.** Most of the working logic
    (`EnsureCrownSlot`, `CloseOfficerHistoryTerm`, `InsertOfficerRow`, the crown advisory
-   lock, cycle detection in `ValidateParent`) is not rewritten. It is wrapped.
+   lock, cycle detection in `ValidateParent`) is not rewritten — it is wrapped. The one
+   exception is the crown-uniqueness check, which is wrong against production data and is
+   corrected rather than preserved. See the next section.
 
 ### Methods converted
 
@@ -261,6 +291,30 @@ controllers instead)."* The in-process path for our own frontend and the HTTP pa
 external clients converging on one gated method is the intended architecture, stated in
 the code.
 
+### Permissions
+
+The registry already defines a full park mirror
+(`class.PermissionRegistry.php:56-72, 139-157`). The correct key is picked per action
+*and* per scope:
+
+| Action | Kingdom key | Park key |
+|---|---|---|
+| Assign / transition | `kingdom.officer.set` | `park.officer.set` |
+| Vacate | `kingdom.officer.vacate` | `park.officer.vacate` |
+| Create/edit/retire a position | `kingdom.officer.position.manage` | `park.officer.position.manage` |
+| Add/edit/delete a history term | `kingdom.officer_history.manage` | `park.officer_history.manage` |
+
+Two things this table fixes that are wrong today:
+
+- **`kingdom.officer.vacate` and `kingdom.officer_history.manage` are defined but never
+  checked by the officer admin.** `controller.OfficerAdminAjax.php:70-84` maps every
+  vacate action to `kingdom.officer.set`. The distinct permissions exist and are honoured
+  by the *legacy* path in `class.Kingdom.php`, so the newer console is strictly coarser
+  than the one it replaces.
+- **`park.officer.position.manage` is defined and checked by nothing at all.** It has no
+  reference anywhere outside the registry. Building a Park officer admin without wiring
+  it would ship park position management ungated.
+
 ### The park authorization gap
 
 `controller.OfficerAdminAjax.php:90` gates every action on
@@ -319,12 +373,61 @@ Enforced in the domain, so the API and the wizard cannot diverge:
 - The incoming officer must be a member of the scope, matching the existing rule in
   `Kingdom::SetOfficer:1348`.
 
+## The crown-uniqueness rule refuses legitimate transitions
+
+`SetOfficerByPosition` enforces *"A person may hold only one Crown office"* across every
+scope at once (`class.OfficerPosition.php:1420-1447`). The conflict query excludes only
+the exact `(kingdom, park, position)` being written; any other crown row for that person,
+anywhere, is a refusal.
+
+Measured against the production backup, that rule is violated by **242 people who hold
+office right now**:
+
+| Overlap | People |
+|---|---|
+| Two or more crown offices in the **same park** | 176 |
+| Crown offices in **more than one park** | 59 |
+| A **park** crown office and a **kingdom** crown office | 30 |
+| Two or more **kingdom-level** crown offices | **0** |
+
+The cause is classification, not policy. All five system positions are seeded
+`classification = 'crown'` (`db-migrations/2026-08-25-04-officer-position.sql`, step 4),
+and parks reuse those same shared `kingdom_id = 0` rows — 2,506 of 2,507 seated officers
+sit on them. So "crown" tags a park's Champion exactly as it tags a kingdom's Monarch,
+and a small park where one person is both Sheriff and Champion trips a rule meant to stop
+someone being Monarch of two kingdoms.
+
+This matters here because the wizard is built on this method. Left as is, a transition
+would be refused for a large share of real appointments, with a message naming an
+unrelated park.
+
+**The fix is to scope the rule to kingdom-level offices** — add `park_id = 0` to the
+conflict query. The data supports this precisely: zero of the 135 seated kingdom-level
+officers hold two kingdom crown offices, so the rule is correct at the scope it was
+written for and only over-applies below it. No existing row needs reconciling, and the
+constraint stays meaningful where it earns its keep.
+
+Park-level overlap becomes legal and silent. If a kingdom wants to discourage it, that is
+a policy layer on top, not a hard refusal in the write path — and nobody has asked for it.
+
+A regression test asserts a park officer can take a kingdom crown office, and that a
+sitting kingdom Monarch still cannot take a second kingdom crown office.
+
 ## One seat per office
 
 `Occupants[]` collapses to `Occupant` in `actionList` (`controller.OfficerAdminAjax.php:298`),
 so crown and supporting rows carry the same shape. `InsertOfficerRow` refuses a second
-holder instead of appending. `vacateall` is retired; `vacateholder` becomes the only
-vacate route. Assigning to an occupied office is a transition whatever the classification.
+holder instead of appending. Assigning to an occupied office is a transition whatever the
+classification.
+
+**The `vacateall` HTTP action is retired; the service path behind it is not.**
+`RetirePosition` (`class.OfficerPosition.php:1180`) calls `VacateOfficerByPosition` with
+no `$mundane_id`, deliberately relying on all-holders semantics — retiring a position has
+to clear it in every park *and* the kingdom at once. One-seat is a **per-scope** rule;
+retire is **cross-scope**. Collapsing the two would break position retirement. The
+service method keeps the all-holders branch as an internal path, renamed
+`vacateAllHoldersOfPosition` (lowercase-initial, so the dispatcher cannot reach it), and
+only `vacateholder` survives as a client-callable verb.
 
 Verified safe to enforce: a production backup has **zero** positions holding more than
 one occupant, so no reconciliation of existing data is required. The constraint is
@@ -377,9 +480,18 @@ registered API verb and stays. `model.Principality::set_officers` is dead code w
 callers and is removed with them.
 
 `Kingdom::SetOfficer`, `Kingdom::VacateOfficer`, `Park::SetOfficer` and
-`Park::VacateOfficer` are **kept**. They are correctly-shaped API methods, they are
-registered, and external clients may already call them. They are re-pointed at the
-shared internal helpers so both entry points write history identically.
+`Park::VacateOfficer` are **kept**. They are correctly-shaped API methods on registered
+classes, and external clients may already call them.
+
+**Convergence must be explicit, because the obvious wiring double-writes history.**
+`Kingdom::SetOfficer` calls `Common::set_officer`, which calls `record_officer_history`
+(`common.php:946`) and writes a term on its own. If `TransitionOfficer` writes its own
+term *and* delegates to `set_officer`, every transition produces two history rows and
+closes the outgoing term twice. The rule: exactly one function writes
+`ork_officer_history` per transition. `Common::set_officer` gains an optional
+`$skip_history` flag defaulting to false — so every existing caller is unchanged — and
+the new path sets it, owning the history write itself along with the dates and note that
+`record_officer_history` cannot express. A test asserts one row in, one row closed.
 
 ### Added
 
@@ -411,7 +523,19 @@ Extends the existing suites (`OfficerPositionReorderTest`, `OfficerPositionReins
 - **One seat** — a second occupant is refused for both classifications.
 - **Migration** — idempotent on re-run; the 66/2,441 split lands correctly; the
   future-end-date row reopens; a re-run does not reopen a legitimately closed term.
-- **Audit** — a transition writes a `dangeraudit` row with correct before/after.
+- **Audit** — a transition writes a `dangeraudit` row with correct before/after, and
+  `by_whom_id` is the token's owner rather than 0 (the `IsAuthorized`-before-`audit`
+  ordering dependency).
+- **Crown scope** — a park officer can take a kingdom crown office; a sitting kingdom
+  Monarch still cannot take a second kingdom crown office.
+- **History is written once** — a transition produces exactly one new term and closes
+  exactly one, with `Common::set_officer`'s own history write suppressed.
+- **Position retirement still clears every scope** — `RetirePosition` on a position held
+  in three parks vacates all three, proving the all-holders path survived the removal of
+  the `vacateall` HTTP action.
+- **Permission keys** — a park actor holding only `park.officer.set` can assign but not
+  vacate (needs `park.officer.vacate`) and not manage positions (needs
+  `park.officer.position.manage`).
 - **Exposure** — a test enumerates every public PascalCase method on each registered
   class and asserts each is either token-gated or on an explicit reviewed-public list.
   This is the regression guard for the all-or-nothing registration behaviour: without it,
