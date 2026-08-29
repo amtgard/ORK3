@@ -606,10 +606,13 @@ $ofJsConfig = json_encode([
 /* Replaces the hardcoded <em style="color:#a0aec0">Vacant</em> the sidebars
    use — a class, with a dark counterpart, instead of an inline literal. */
 #of-officers-overlay .of-vacant {
+	/* --ork-text-secondary, not the #a0aec0 the old sidebars hardcode: that measures
+	   2.26:1 on the light modal surface, and "Vacant" is real information about the
+	   office, not decoration. The italic already marks it as secondary.
+	   #4a5568 light = 7.53:1, #cbd5e0 dark = 8.07:1. */
 	font-style: italic;
-	color: #a0aec0;
+	color: var(--ork-text-secondary);
 }
-html[data-theme="dark"] #of-officers-overlay .of-vacant { color: var(--ork-text-muted); }
 
 /* ---- Empty states ---- */
 #of-officers-overlay .of-empty {

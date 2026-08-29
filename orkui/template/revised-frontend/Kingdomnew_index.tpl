@@ -249,18 +249,75 @@
 	<div class="kn-sidebar">
 
 		<!-- Officers -->
+		<style>
+		/* "See more" affordance on the Officers bar. Copies the established
+		   .pna-card-more treatment (Playernew_index.tpl:260-261) rather than
+		   inventing a chevron. It is shown to EVERY viewer, and sits beside the
+		   manage pencil when the viewer can manage. Colours are --ork-* tokens,
+		   which already flip in dark mode. */
+		.kn-officers-bar-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+		.kn-officers-more {
+			font-weight: 600;
+			font-size: 11px;
+			color: var(--ork-link);
+			text-decoration: none;
+			text-transform: none;
+			letter-spacing: 0;
+			white-space: nowrap;
+		}
+		.kn-officers-more:hover { text-decoration: underline; }
+		.kn-officers-more:focus-visible {
+			outline: 2px solid var(--ork-blue-link);
+			outline-offset: 2px;
+			border-radius: 3px;
+			text-decoration: underline;
+		}
+		</style>
+		<?php
+			/* ---------------------------------------------------------------
+			   CROWN-ONLY sidebar.
+
+			   `Classification` is a NEW key on the officer row and is null or
+			   absent for any officer with no registry position
+			   (ork_officer.position_id = 0). Such a row is treated as CROWN and
+			   is SHOWN. Only a row we can POSITIVELY identify as 'supporting' is
+			   hidden, so a missing/unknown key can never silently empty the whole
+			   sidebar on data this dev mirror does not contain.
+
+			   The complete set -- crown + supporting, nested -- is one click away
+			   in the officer details modal.
+			   --------------------------------------------------------------- */
+			$knCrownOfficers = [];
+			foreach ($officerList as $_knOfficer) {
+				$_knClass = strtolower(trim((string)($_knOfficer['Classification'] ?? '')));
+				if ($_knClass === 'supporting') {
+					continue;
+				}
+				$knCrownOfficers[] = $_knOfficer;
+			}
+			// Card gate stays on the FULL list: a group whose officers happen to be
+			// all-supporting still needs its card, because the card carries the only
+			// route into the modal that shows them.
+		?>
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
 			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if ($CanManageKingdom ?? false): ?>
-				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="kn-officers-bar-actions">
+					<?php if ($CanManageKingdom ?? false): ?>
+					<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
+						<i class="fas fa-pencil-alt"></i>
+					</button>
+					<?php endif; ?>
+					<?php /* Short data-tip on purpose: [data-tip]::after is centred on the
+					         element and nowrap, and this sits at the card's right edge, so a
+					         long tip clips at the viewport edge on a phone. */ ?>
+					<a class="kn-officers-more" href="#" data-tip="All officers"
+						onclick="if (window.ofOpenOfficerModal) { window.ofOpenOfficerModal(); } return false;">All <?= count($officerList) ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="kn-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($knCrownOfficers as $o): ?>
 				<li>
 					<span class="kn-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="kn-officer-name">
@@ -272,8 +329,8 @@
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (count($officerList) === 0): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (count($knCrownOfficers) === 0): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= count($officerList) > 0 ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -346,9 +403,9 @@
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
-				<li data-kntab="officerhistory">
-					<i class="fas fa-history"></i><span class="kn-tab-label"> Officer History</span>
-				</li>
+				<?php // Officer History is no longer a main-content tab -- it now lives in
+					  // the "Officer History" tab of partials/_officer_details_modal.tpl,
+					  // reached from the Officers sidebar arrow. ?>
 				<?php if ($ShowRecsTab ?? false):
 					$_recsN = (int)($AwardRecommendationsCount ?? 0);
 				?>
@@ -909,43 +966,12 @@
 				</div>
 			</div>
 
-		<!-- Officer History Tab -->
-		<div class="kn-tab-panel" id="kn-tab-officerhistory" style="display:none">
-			<div class="kn-oh-toolbar">
-				<select id="kn-oh-role-filter" class="kn-oh-filter-select" onchange="knLoadOfficerHistory()">
-					<option value="">All Roles</option>
-					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
-					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
-					<?php endforeach; ?>
-				</select>
-				<?php if ($CanEditKingdom ?? false): ?>
-				<button class="kn-btn kn-btn-secondary" onclick="knOpenOhBackfillModal()">
-					<i class="fas fa-plus"></i> Add Historical Record
-				</button>
-				<?php endif; ?>
-			</div>
-			<div id="kn-oh-loading" style="text-align:center;padding:24px;color:#a0aec0;display:none">
-				<i class="fas fa-spinner fa-spin"></i> Loading officer history...
-			</div>
-			<div id="kn-oh-empty" style="text-align:center;padding:32px 16px;color:#a0aec0;display:none">
-				No officer history records found.
-			</div>
-			<table class="kn-oh-table" id="kn-oh-table" style="display:none">
-				<thead>
-					<tr>
-						<th>Role</th>
-						<th>Persona</th>
-						<th>Start Date</th>
-						<th>End Date</th>
-						<th>Notes</th>
-						<?php if ($CanEditKingdom ?? false): ?>
-						<th style="width:40px"></th>
-						<?php endif; ?>
-					</tr>
-				</thead>
-				<tbody id="kn-oh-tbody"></tbody>
-			</table>
-		</div>
+		<?php /* The Officer History main-content panel (#kn-tab-officerhistory) was
+		         removed: the view now lives in the officer details modal
+		         (partials/_officer_details_modal.tpl), which detects the absence of
+		         #kn-tab-officerhistory and re-points knLoadOfficerHistory() at its own
+		         table. The Add / Edit / Delete history modals below are DELIBERATELY
+		         kept -- the modal calls through to them. */ ?>
 
 
 
@@ -1111,6 +1137,21 @@
 <?php endif; ?>
 
 <?php endif; ?>
+
+<!-- Officer Details Modal (shared with Parknew_index.tpl) -->
+<?php
+	/* Inputs for partials/_officer_details_modal.tpl -- see its docblock.
+	   $officerList is the FULL (crown + supporting) row set built at the top of
+	   this file; the modal groups it into the position tree.
+	   $ohRoleOptions / $OfficerHistoryRoleOptions and $CanEditKingdom are already
+	   in scope and the partial picks them up on its own.
+	   Included unconditionally: the arrow on the officers bar is shown to every
+	   viewer, so the modal must exist for every viewer. */
+	$ofScope   = 'kingdom';
+	$ofOrgId   = (int)$kingdom_id;
+	$ofOrgName = (string)($kingdom_name ?? '');
+	include __DIR__ . '/partials/_officer_details_modal.tpl';
+?>
 
 
 
@@ -3358,7 +3399,9 @@ initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
 // =============================================
 // Officer History Tab
 // =============================================
-var knOhLoaded = false;
+// knOhData stays global: the officer details modal keeps window.knOhData in step
+// with the rows it renders so knOpenOhEditModal(idx) still resolves the right row.
+// (The old knOhLoaded latch went with the main-content tab that used it.)
 var knOhData   = [];
 
 function knLoadOfficerHistory() {
@@ -3639,15 +3682,10 @@ function knSaveOhEdit() {
     });
 })();
 
-// Hook into tab activation to lazy-load officer history
-var _origKnActivateTab = typeof knActivateTab === 'function' ? knActivateTab : null;
-// We can't override knActivateTab before revised.js loads, so use a MutationObserver or just hook via the tab click
-$(document).on('click', '.kn-tab-nav li[data-kntab="officerhistory"]', function() {
-    if (!knOhLoaded) {
-        knOhLoaded = true;
-        knLoadOfficerHistory();
-    }
-});
+// The officer-history lazy-load hook that used to live here bound to
+// '.kn-tab-nav li[data-kntab="officerhistory"]'. That nav item is gone, so the
+// handler could never fire again. The officer details modal now lazy-loads the
+// history itself on first activation of its History tab.
 window.knUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'kn-addplayer-username',
 	statusId:    'kn-addplayer-username-status',

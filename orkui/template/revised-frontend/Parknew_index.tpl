@@ -39,6 +39,27 @@
 		if ($_ck === 'regent')  $regent  = $o;
 	}
 
+	// ---- Sidebar shows CROWN offices only ----------------------------------
+	// $officerList keeps the FULL set (crown + supporting) for the Officer
+	// Details modal; the sidebar renders this filtered copy.
+	//
+	// Classification is a NEW key on the buildOfficerRows() row and is null for
+	// an officer with no registry position (ork_officer.position_id = 0). So the
+	// test is deliberately NEGATIVE: hide only what is positively identified as
+	// 'supporting', and show everything else. Writing `=== 'crown'` here would
+	// empty the entire sidebar on any data set where the key is absent or
+	// unmapped -- a far worse failure than one extra row.
+	$crownOfficerList = [];
+	foreach ($officerList as $_o) {
+		if (!is_array($_o)) {
+			continue;
+		}
+		if (strtolower(trim((string)($_o['Classification'] ?? ''))) === 'supporting') {
+			continue;
+		}
+		$crownOfficerList[] = $_o;
+	}
+
 	// Officer-history role options (canonical key => display title) are shaped by the
 	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
 	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
@@ -507,29 +528,34 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="pk-officers-bar-actions">
+					<?php if (!empty($CanAdminPark)): ?>
+					<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
+						<i class="fas fa-pencil-alt"></i>
+					</button>
+					<?php endif; ?>
+					<!-- Available to EVERY viewer, not just park admins. -->
+					<a href="#" class="pk-officers-more" data-tip="See every office, including supporting offices, plus officer history"
+					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= count($officerList) > 0 ? 'All ' . (int)count($officerList) : 'Details' ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="pk-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($crownOfficerList as $o): ?>
 				<li>
 					<span class="pk-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= (int)$o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona'] ?? '') ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (empty($officerList)): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (empty($crownOfficerList)): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= !empty($officerList) ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -616,9 +642,6 @@
 				<?php endif; ?>
 				<li data-pktab="reports">
 					<i class="fas fa-chart-bar"></i><span class="pk-tab-label"> Reports</span>
-				</li>
-				<li data-pktab="officerhistory">
-					<i class="fas fa-history"></i><span class="pk-tab-label"> Officer History</span>
 				</li>
 				<?php if (!empty($ShowRecsTab)): ?>
 				<li data-pktab="recommendations">
@@ -1291,43 +1314,10 @@
 				</div>
 			</div>
 
-			<!-- Officer History Tab -->
-			<div class="pk-tab-panel" id="pk-tab-officerhistory" style="display:none">
-				<div class="pk-oh-toolbar">
-					<select id="pk-oh-role-filter" class="pk-oh-filter-select" onchange="pkLoadOfficerHistory()">
-						<option value="">All Roles</option>
-						<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
-						<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
-						<?php endforeach; ?>
-					</select>
-					<?php if (!empty($CanManagePark)): ?>
-					<button class="pk-btn pk-btn-secondary" onclick="pkOpenOhBackfillModal()">
-						<i class="fas fa-plus"></i> Add Historical Record
-					</button>
-					<?php endif; ?>
-				</div>
-				<div id="pk-oh-loading" style="text-align:center;padding:24px;color:#a0aec0;display:none">
-					<i class="fas fa-spinner fa-spin"></i> Loading officer history...
-				</div>
-				<div id="pk-oh-empty" style="text-align:center;padding:32px 16px;color:#a0aec0;display:none">
-					No officer history records found.
-				</div>
-				<table class="pk-oh-table" id="pk-oh-table" style="display:none">
-					<thead>
-						<tr>
-							<th>Role</th>
-							<th>Persona</th>
-							<th>Start Date</th>
-							<th>End Date</th>
-							<th>Notes</th>
-							<?php if (!empty($CanManagePark)): ?>
-							<th style="width:40px"></th>
-							<?php endif; ?>
-						</tr>
-					</thead>
-					<tbody id="pk-oh-tbody"></tbody>
-				</table>
-			</div>
+			<!-- Officer History moved into the shared Officer Details modal
+			     (partials/_officer_details_modal.tpl, "Officer History" tab).
+			     The Add/Edit history modals below stay put; the partial calls
+			     through to them. -->
 
 			<!-- Admin Tab -->
 			<?php if (!empty($CanAdminPark)): ?>
@@ -1506,6 +1496,19 @@
 
 </div><!-- /pk-layout -->
 
+<!-- =============================================
+     Officer Details Modal (shared with Kingdom)
+     Current Officers tree + the re-homed Officer History tab.
+     Inputs per the partial's docblock; $officerList is the FULL set here
+     (crown + supporting) -- the sidebar above renders $crownOfficerList.
+     ============================================= -->
+<?php
+	$ofScope   = 'park';
+	$ofOrgId   = (int)$park_id;
+	$ofOrgName = (string)($park_name ?? '');
+?>
+<?php include __DIR__ . '/partials/_officer_details_modal.tpl'; ?>
+
 <!-- Officer History Backfill Modal -->
 <?php if (!empty($CanManagePark)): ?>
 <div id="pk-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
@@ -1619,6 +1622,23 @@
 <?php endif; ?>
 
 <style>
+/* ---- Officers sidebar bar: "see more" affordance ----
+   Copies the established .pna-card-more house affordance (Playernew_index.tpl
+   :260-261) rather than inventing a chevron. Sits beside the edit pencil when
+   the viewer can manage; shown to EVERY viewer. */
+.pk-officers-bar-actions {
+	display:inline-flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.pk-officers-bar-actions a.pk-officers-more {
+	font-weight:600; font-size:11px; color:#4299e1; text-decoration:none;
+	text-transform:none; letter-spacing:0; white-space:nowrap;
+}
+.pk-officers-bar-actions a.pk-officers-more:hover { text-decoration:underline; }
+.pk-officers-bar-actions a.pk-officers-more:focus-visible {
+	outline:2px solid var(--ork-blue-link); outline-offset:2px; border-radius:3px;
+}
+html[data-theme="dark"] .pk-officers-bar-actions a.pk-officers-more { color:#63b3ed; }
+
 /* Officer History Tab */
 .pk-oh-toolbar {
 	display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
@@ -3525,7 +3545,8 @@ initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
 // =============================================
 // Officer History Tab
 // =============================================
-var pkOhLoaded = false;
+// pkOhData is still read by pkOpenOhEditModal(); the Officer Details modal
+// keeps it in step via window.pkOhData before opening the Edit modal.
 var pkOhData   = [];
 
 function pkLoadOfficerHistory() {
@@ -3809,13 +3830,8 @@ function pkSaveOhEdit() {
     });
 })();
 
-// Hook into tab activation to lazy-load officer history
-$(document).on('click', '.pk-tab-nav li[data-pktab="officerhistory"]', function() {
-    if (!pkOhLoaded) {
-        pkOhLoaded = true;
-        pkLoadOfficerHistory();
-    }
-});
+// The officer-history main-content tab is gone; the Officer Details modal
+// lazy-loads history on its own tab activation, so no hook is needed here.
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',
