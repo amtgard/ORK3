@@ -863,17 +863,6 @@ $ofJsConfig = json_encode([
 	color: var(--ork-text);
 	overflow-wrap: anywhere;
 }
-#of-officers-overlay .of-oh-count {
-	flex-shrink: 0;
-	font-size: 11px;
-	font-weight: 600;
-	white-space: nowrap;
-	color: var(--ork-text-muted);
-	background: var(--ork-card-bg);
-	border: 1px solid var(--ork-border);
-	border-radius: 999px;
-	padding: 1px 8px;
-}
 #of-officers-overlay .of-oh-body {
 	padding: 10px 12px 12px;
 	border-top: 1px solid var(--ork-border);
@@ -995,7 +984,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	/* Office + count stay on line one, the holder drops to its own line under
 	   them rather than being squeezed to a two-character column. */
 	#of-officers-overlay .of-oh-office { flex: 1 1 auto; }
-	#of-officers-overlay .of-oh-count  { order: 2; }
 	#of-officers-overlay .of-oh-holder {
 		order: 3;
 		flex: 0 0 100%;
@@ -1118,7 +1106,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 									echo '<span class="of-vacant">Vacant</span>';
 								}
 							?></span>
-							<span class="of-oh-count"></span>
 						</summary>
 						<div class="of-oh-body">
 							<div class="of-oh-none">Loading&hellip;</div>
@@ -1300,9 +1287,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 		clearFilterOptions();
 		var panels = box.querySelectorAll('.of-oh-panel');
 		for (var i = 0; i < panels.length; i++) {
-			var count = panels[i].querySelector('.of-oh-count');
-			var body  = panels[i].querySelector('.of-oh-body');
-			if (count) { count.textContent = ''; }
+			var body = panels[i].querySelector('.of-oh-body');
 			if (body) {
 				body.textContent = '';
 				body.appendChild(el('div', 'of-oh-none', bodyText || ''));
@@ -1477,7 +1462,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 		holder.appendChild(el('span', 'of-vacant', 'Not a current office'));
 		s.appendChild(holder);
 
-		s.appendChild(el('span', 'of-oh-count'));
 		d.appendChild(s);
 		d.appendChild(el('div', 'of-oh-body'));
 		return d;
@@ -1559,13 +1543,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	}
 
 	function fillPanel(panel, indices, rows) {
-		var count = panel.querySelector('.of-oh-count');
-		var body  = panel.querySelector('.of-oh-body');
-		if (count) {
-			count.textContent = indices.length === 0
-				? 'No terms'
-				: (indices.length + (indices.length === 1 ? ' term' : ' terms'));
-		}
+		var body = panel.querySelector('.of-oh-body');
 		if (!body) { return; }
 		body.textContent = '';
 		if (indices.length === 0) {
