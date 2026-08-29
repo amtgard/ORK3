@@ -107,6 +107,43 @@ Endpoint `KingdomAjax/kingdom/{id}/officerhistory` (`controller.KingdomAjax.php:
 Rows key off `role` (a canonical-key **string**), not `position_id`, so history cannot be
 joined to the position tree.
 
+## Informed by the admin rework (0db735f9)
+
+The Manage Officers admin screen was rebuilt first, deliberately, so its treatment could
+drive this one. What that changed for this spec:
+
+**Per-kingdom ordering now exists, and this surface already inherits it.** A kingdom can
+re-order the shared Core Five without affecting other kingdoms, via a nullable `sort_order`
+on `ork_officer_position_alias` resolved by `OfficerPosition::SortOrderSql()`.
+`buildOfficerRows`'s ORDER BY was routed through it (`class.Kingdom.php:1240`), so the
+sidebar and modal show the kingdom's own order with no further work here. This was not true
+when this spec was first written.
+
+**Still outstanding, unchanged:** `buildOfficerRows` emits `ParentPositionId` but not
+`PositionId`, `Classification` or `SortOrder`. The three additive keys are still required.
+
+**Mirror the admin's visual language rather than inventing one.** The row treatment is now
+established: one list with no crown/supporting divider, a gold crown glyph
+(`.mo-crown-glyph`, `#d69e2e`) marking crown offices, and nesting shown by indent inside a
+`.mo-children` container with a rail. The public modal should read as the same system.
+
+**Reuse the admin's tree guards.** `renderGroupTree` walks with a `seen{}` cycle guard, a
+depth cap of 12, and renders an orphan at root rather than dropping it. `WouldCreateCycle`
+protects writes only; rows already in the table can still be malformed.
+
+**Merging the two groups is what makes nesting work.** The admin's tree was previously built
+*within* a classification group, so a supporting deputy reporting to a crown office rendered
+as a false root. The modal's Current Officers tab must build its tree across the whole set,
+then present crown at top level -- not build two trees.
+
+**Orphans: diverge from the admin deliberately.** When a parent is retired, its children
+render at top level. The admin labels these "Reports to X (retired)" because an officer
+admin needs to know why the row cannot be re-ordered and how to fix it. The public modal has
+no such need and no such action, so it renders the row at top level with **no** reports-to
+caption -- a member reading a kingdom's officers should not see a dangling reference to a
+retired office. The public modal therefore omits the reports-to caption entirely; indent is
+the only nesting signal it needs.
+
 ## Requirements
 
 1. Kingdom and Park sidebars list **only** `Classification === 'crown'` officers.
