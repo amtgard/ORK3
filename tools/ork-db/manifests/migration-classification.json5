@@ -92,6 +92,7 @@
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
     "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-08-27-kingdomaward-ladder-columns.sql": { "class": "S", "render": "full", "notes": "Adds is_ladder/max_level/disabled to ork_kingdomaward. All three exist in prod via direct DB access but were never migrated, so fresh builds lacked them; disabled backs award soft-delete (95944b80). Idempotent ADD COLUMN IF NOT EXISTS, no backfill." },
-    "2026-08-27-zodiac-month.sql": { "class": "S", "render": "full", "notes": "Adds zodiac_month to ork_awards and ork_recommendations for Order of the Zodiac monthly tracking. Idempotent ADD COLUMN IF NOT EXISTS, no backfill; existing ranks unchanged." }
+    "2026-08-27-zodiac-month.sql": { "class": "S", "render": "full", "notes": "Adds zodiac_month to ork_awards and ork_recommendations for Order of the Zodiac monthly tracking. Idempotent ADD COLUMN IF NOT EXISTS, no backfill; existing ranks unchanged." },
+    "2026-08-28-recommendations-triage-columns.sql": { "class": "S", "render": "full", "notes": "Adds snoozed_by_id/passed_to_local to ork_recommendations. Both exist in prod via direct DB access but were never migrated; Kingdom::GetAdminDashboard() reads them in a raw DataSet(), so on a fresh build the query errors and the guard drops WaiveredMembers -- the Reset Waivers pre-count. Idempotent ADD COLUMN IF NOT EXISTS, no backfill." }
   }
 }
