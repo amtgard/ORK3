@@ -1213,6 +1213,10 @@ class Kingdom extends Ork3
      * that join per kingdom (Park::GetOfficers passes o.kingdom_id, so a park list
      * inherits its kingdom's order, which is what a park officer expects to see).
      *
+     * The emitted SortOrder is that same effective value, not raw op.sort_order --
+     * a consumer that re-sorts the array client-side has to land on the order the
+     * query already returned.
+     *
      * @param object $db               DB handle ($this->db).
      * @param string $aliasKingdomExpr SQL expr for al.kingdom_id match
      *                                 (e.g. "'5'" for a kingdom, "o.kingdom_id" for a park).
@@ -1220,11 +1224,21 @@ class Kingdom extends Ork3
      * @param int    $mundane_id       Requesting mundane id (privacy gate).
      * @param bool   $is_authorized    Whether the requester may see private name fields.
      */
+    /*
+     * Ordering carries NO classification sort key, deliberately. Manage Officers presents
+     * crown and supporting offices as ONE list, and ReorderSiblings renumbers across both,
+     * so sorting by classification here would silently discard a cross-classification move:
+     * an admin drags a supporting office above the Monarch, the save reports success, and
+     * the kingdom and park pages still list every crown office first. The kingdom's chosen
+     * order is authoritative. OfficerPosition::GetOfficersForDisplay() keeps its
+     * classification sort because it returns explicit crown/supporting GROUPS.
+     */
     public static function buildOfficerRows($db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized)
     {
         $sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
 					op.canonical_key as canonical_key, op.parent_position_id as parent_position_id, op.hide_when_vacant as hide_when_vacant, op.classification as classification,
-					" . OfficerPosition::DisplayTitleSql('op', 'al') . " as display_title
+					" . OfficerPosition::DisplayTitleSql('op', 'al') . " as display_title,
+					" . OfficerPosition::SortOrderSql('op', 'al') . " as effective_sort_order
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "officer_position op on op.position_id = o.position_id
 						left join " . DB_PREFIX . "officer_position_alias al on al.kingdom_id = " . $aliasKingdomExpr . " and al.canonical_key = op.canonical_key
@@ -1237,7 +1251,7 @@ class Kingdom extends Ork3
 				where " . $whereClause . "
 				  and (op.retired_at IS NULL or op.position_id IS NULL)
 				  and NOT (op.hide_when_vacant = 1 and op.classification != 'crown' and (o.mundane_id IS NULL or o.mundane_id = 0))
-				order by op.classification, " . OfficerPosition::SortOrderSql('op', 'al') . ", o.role
+				order by " . OfficerPosition::SortOrderSql('op', 'al') . ", o.role
 			";
         $r = $db->query($sql);
         $response = array();
@@ -1258,7 +1272,24 @@ class Kingdom extends Ork3
                             'UnitId' => $r->unit_id,
                             'Role' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
                             'CanonicalKey' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
+                            // PositionId is an identity, not a relationship, so it is a plain
+                            // int -- 0, not null, for a legacy officer row that maps to no
+                            // registry position. That is the column's own semantics
+                            // (ork_officer.position_id is NOT NULL DEFAULT 0) and it matches
+                            // OfficerPosition::RowToArray(), so a consumer can key rows from
+                            // either source the same way. ParentPositionId stays null-or-int
+                            // because there null genuinely means "reports to nothing", and 0
+                            // never collides with a real AUTO_INCREMENT id either way.
+                            'PositionId' => (int)$r->position_id,
                             'ParentPositionId' => ($r->parent_position_id === null || $r->parent_position_id === '') ? null : (int)$r->parent_position_id,
+                            // Null (not 'supporting') when the officer row maps to no registry
+                            // position: an unclassified row is not evidence of a classification.
+                            'Classification' => $r->classification,
+                            // The EFFECTIVE order, matching the ORDER BY: this kingdom's alias
+                            // override for a shared (kingdom_id = 0) row, else the row's own
+                            // value. Emitting raw op.sort_order would let a consumer that
+                            // re-sorts client-side disagree with the order it was handed.
+                            'SortOrder' => (int)$r->effective_sort_order,
                             'HideWhenVacant' => (int)$r->hide_when_vacant,
                             'DisplayTitle' => $r->display_title !== null ? $r->display_title : $r->role,
                             'ParkName' => $r->park_name,

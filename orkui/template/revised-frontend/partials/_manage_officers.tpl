@@ -350,11 +350,15 @@ html[data-theme="dark"] .mo-children { border-left-color:var(--ork-border); }
 /* Inert placeholder: keeps the row aligned, explains itself, drags nowhere. */
 .mo-grip-off { cursor:default; opacity:0.35; }
 .mo-grip-off:hover { background:none; color:#a0aec0; }
+/* The inert grip's explanation was previously data-tip only -- hover is mouse-only, so a
+   screen-reader user got no hint that the row cannot be re-ordered or why. */
+.mo-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 html[data-theme="dark"] .mo-grip-off:hover { background:none; color:var(--ork-text-muted); }
 html[data-theme="dark"] .mo-grip { color:var(--ork-text-muted); }
 html[data-theme="dark"] .mo-grip:hover { background:var(--ork-bg-tertiary); color:var(--ork-text); }
 html[data-theme="dark"] .mo-grip:focus-visible { color:var(--ork-text); }
-.mo-grip[data-tip]:hover::after { left:0 !important; right:auto !important; transform:none !important; }
+.mo-grip[data-tip]:hover::after,
+.mo-grip[data-tip]:focus-visible::after { left:0 !important; right:auto !important; transform:none !important; }
 
 .mo-node.mo-dragging > .mo-row { opacity:0.45; }
 /* Insertion marker. box-shadow, not a border, so nothing reflows mid-drag. */
@@ -685,9 +689,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var pid      = parseInt(pos.PositionId, 10);
 		var realPar  = parseInt(pos.ParentPositionId || 0, 10) || 0;
 		if (realPar !== (parseInt(effParentId || 0, 10) || 0)) {
-			return '<span class="mo-grip mo-grip-off" aria-hidden="true"' +
+			return '<span class="mo-grip mo-grip-off"' +
 				' data-tip="This office reports to a retired position, so it has no sibling group to re-order within. Change its “Reports To” to re-order it.">' +
-				'<i class="fas fa-grip-vertical"></i></span>';
+				'<i class="fas fa-grip-vertical" aria-hidden="true"></i>' +
+				'<span class="mo-sr-only">Re-ordering unavailable: this office reports to a retired position. Change its Reports To setting to re-order it.</span>' +
+				'</span>';
 		}
 		var label = 'Re-order ' + (pos.DisplayTitle || pos.Title || 'this office') +
 		            ' among the offices at its level: drag, or press the up and down arrow keys';
@@ -1042,20 +1048,29 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	function moPersistOrder(node) {
 		if (moReorderBusy) return;
 		var parentId = parseInt(node.getAttribute('data-parent') || 0, 10) || 0;   // 0 = top level
+		// EXCLUDE ORPHANS. A child of a RETIRED office renders at top level (RetirePosition
+		// deliberately does not reparent children), but its real parent_position_id still
+		// points at that retired row. ReorderSiblings rejects the WHOLE batch if any id's
+		// real parent differs from the posted ParentPositionId, so including such a row
+		// would break every top-level re-order for that kingdom permanently — the Core Five
+		// included. Those rows carry an inert grip; renumber around them. The server allows
+		// a partial list on purpose: unlisted siblings keep their sort_order.
 		var order = moSiblings(node)
+			.filter(function(n) { return !n.querySelector(':scope > .mo-row > .mo-grip-off'); })
 			.map(function(n) { return parseInt(n.getAttribute('data-pid'), 10) || 0; })
 			.filter(function(id) { return id > 0; })
 			.join(',');
 		if (!order) return;
+		// Held until moRender() finishes, NOT until the POST returns: clearing it early lets
+		// a second keypress post while the first refresh is still in flight, and the older
+		// response then rebuilds the list without the second move — the row visibly jumps back.
 		moReorderBusy  = true;
 		moFocusGripPid = parseInt(node.getAttribute('data-pid'), 10) || 0;
 		moPost('reorderpositions', { ParentPositionId: parentId, Order: order }, function() {
-			moReorderBusy = false;
 			moRefresh();
 		}, function() {
 			// The row was moved optimistically — re-read the server's truth rather than
 			// leaving the list showing an order that was never saved.
-			moReorderBusy  = false;
 			moFocusGripPid = 0;
 			moRefresh();
 		});
