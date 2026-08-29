@@ -1445,10 +1445,13 @@ class Kingdom extends Ork3
         $role_filter = isset($request['Role']) && strlen(trim($request['Role'])) > 0 ? trim($request['Role']) : null;
 
         $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
+		                oh.position_id, oh.display_label,
 		                oh.start_date, oh.end_date, oh.changed_by, oh.notes, oh.created_at,
 		                m.persona, m.username,
-		                cb.persona AS changed_by_persona
+		                cb.persona AS changed_by_persona,
+		                op.classification AS classification
 		         FROM " . DB_PREFIX . "officer_history oh
+		         LEFT JOIN " . DB_PREFIX . "officer_position op ON op.position_id = oh.position_id
 		         LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = oh.mundane_id
 		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
 		         WHERE oh.kingdom_id = " . $kingdom_id . " AND oh.park_id = 0";
@@ -1477,6 +1480,26 @@ class Kingdom extends Ork3
                     'ParkId'           => (int)$r->park_id,
                     'MundaneId'        => (int)$r->mundane_id,
                     'Role'             => $r->role,
+                    // PositionId is an identity, not a relationship, so it is a plain int
+                    // -- 0, not null, for a row that predates the position registry. That
+                    // is the column's own semantics (ork_officer_history.position_id is
+                    // INT NOT NULL DEFAULT 0, the same shape as ork_officer.position_id)
+                    // and it matches how buildOfficerRows() emits it, so a consumer can
+                    // key history rows and current-officer rows the same way.
+                    'PositionId'       => (int)$r->position_id,
+                    // The SNAPSHOT of what the office was CALLED at the time -- the whole
+                    // reason the column exists, since a kingdom can rename an office
+                    // afterwards and a past term must keep the name it was held under.
+                    // Without it, Role (a raw canonical key) was the only office
+                    // identifier reaching the UI, which rendered offices as
+                    // "royal_scribe" where an office name belonged.
+                    'DisplayLabel'     => $r->display_label ?? '',
+                    // Null (not 'supporting') when the row's position no longer exists or
+                    // the row predates the registry: an unclassified row is not evidence
+                    // of a classification. The caller sorts crown offices first and needs
+                    // to tell "definitely not crown" from "unknown"; defaulting would
+                    // silently promote an unknown into a group it may not belong to.
+                    'Classification'   => $r->classification,
                     'StartDate'        => $r->start_date,
                     'EndDate'          => $r->end_date,
                     'ChangedBy'        => (int)$r->changed_by,
@@ -1512,6 +1535,31 @@ class Kingdom extends Ork3
             // shim here (startup.php: `return $str;`), so the previous string concatenation
             // was a straight injection through Role / StartDate / EndDate / Notes.
             global $DB;
+            // Resolve the office this term belongs to, and SNAPSHOT what it was called.
+            // Without this the row lands with position_id = 0 and display_label = '', which the
+            // history UI reads as "office unknown" and files it under a catch-all panel instead
+            // of under the office the user just picked. The three other writers
+            // (Common::record_officer_history and both OfficerPosition backfills) already do
+            // this; only this manual "Add Historical Record" path did not.
+            // DisplayTitleSql gives the EFFECTIVE title, so a kingdom that renamed a shared
+            // office snapshots ITS name -- which is the whole point of storing a snapshot.
+            $DB->Clear();
+            $DB->op_kid = $kid;
+            $DB->op_key = $role;
+            $_ohPos = $DB->DataSet(
+                "SELECT p.position_id, " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
+				   FROM " . DB_PREFIX . "officer_position p
+				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key
+				  WHERE p.canonical_key = :op_key AND (p.kingdom_id = 0 OR p.kingdom_id = :op_kid)
+				  ORDER BY p.kingdom_id DESC LIMIT 1"
+            );
+            $_ohPosId = 0;
+            $_ohLabel = '';
+            if ($_ohPos !== false && $_ohPos->Size() > 0 && $_ohPos->Next()) {
+                $_ohPosId = (int) $_ohPos->position_id;
+                $_ohLabel = (string) $_ohPos->display_title;
+            }
             $DB->Clear();
             $DB->oh_kid   = $kid;
             $DB->oh_mid   = $mid;
@@ -1520,10 +1568,12 @@ class Kingdom extends Ork3
             $DB->oh_end   = strlen($end) > 0 ? $end : null;
             $DB->oh_cb    = (int)$mundane_id;
             $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
+            $DB->oh_pos   = $_ohPosId;
+            $DB->oh_label = $_ohLabel;
             $DB->Execute(
                 "INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, notes, created_at)
-				 VALUES (:oh_kid, 0, :oh_mid, :oh_role, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, notes, created_at)
+				 VALUES (:oh_kid, 0, :oh_mid, :oh_role, :oh_pos, :oh_label, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
             );
             $response = Success();
         } else {

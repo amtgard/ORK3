@@ -176,15 +176,25 @@ if (!function_exists('of_officer_build_nodes')) {
 
 				$parentId = (int)($row['ParentPositionId'] ?? 0);
 
+				// Lower-cased canonical key. The officer-HISTORY grouping falls back to
+				// it whenever a row carries no usable PositionId (legacy officer rows,
+				// and history rows written before the registry existed), so it is
+				// captured here rather than re-derived from $ofRows a second time.
+				$canonicalKey = strtolower(trim((string)($row['CanonicalKey'] ?? '')));
+				if ($canonicalKey === '') {
+					$canonicalKey = strtolower(trim((string)($row['Role'] ?? '')));
+				}
+
 				$nodes[$key] = [
-					'Key'        => $key,
-					'PositionId' => $positionId,
-					'ParentId'   => $parentId > 0 ? $parentId : 0,
-					'IsCrown'    => ((string)($row['Classification'] ?? '')) === 'crown',
-					'Title'      => $title,
-					'SortOrder'  => $sortOrder,
-					'Seq'        => $seq,
-					'Holders'    => [],
+					'Key'          => $key,
+					'PositionId'   => $positionId,
+					'CanonicalKey' => $canonicalKey,
+					'ParentId'     => $parentId > 0 ? $parentId : 0,
+					'IsCrown'      => ((string)($row['Classification'] ?? '')) === 'crown',
+					'Title'        => $title,
+					'SortOrder'    => $sortOrder,
+					'Seq'          => $seq,
+					'Holders'      => [],
 				];
 			}
 
@@ -379,6 +389,110 @@ if (!function_exists('of_officer_render_tree')) {
 
 $ofTreeHtml = of_officer_render_tree($ofRows);
 
+// ---------------------------------------------------------------------------
+// Officer History panels
+// ---------------------------------------------------------------------------
+// The history tab is ONE COLLAPSIBLE PANEL PER OFFICE, and the panel list is
+// driven by the CURRENT offices, not by the history rows: every office earns a
+// panel even with zero recorded terms, because the header itself carries
+// information (who holds it right now). The shells are therefore rendered
+// server-side from the very same nodes the Current Officers tree is built from,
+// so the tab paints with current holders instantly; the existing lazy fetch then
+// only has to fill the bodies.
+//
+// A history row that matches no current office -- a retired position, or a
+// legacy row whose position_id is 0 -- is NOT dropped. The JS appends a panel
+// for it at the bottom of the list, labelled from the row's own DisplayLabel
+// snapshot. See renderHistory() below.
+if (!function_exists('of_history_group_key')) {
+	/**
+	 * The grouping key a history row and a current office have to agree on:
+	 * PositionId when it is real, else the (lower-cased) role/canonical key.
+	 *
+	 * $suffix keeps two DISTINCT legacy offices that both have an empty role
+	 * string from collapsing into one panel titled after whichever came first.
+	 */
+	function of_history_group_key($positionId, $role, $suffix = '')
+	{
+		$positionId = (int)$positionId;
+		if ($positionId > 0) {
+			return 'p' . $positionId;
+		}
+		$role = strtolower(trim((string)$role));
+		return $role !== '' ? ('r:' . $role) : ('n:' . $suffix);
+	}
+}
+
+if (!function_exists('of_officer_history_panels')) {
+	/**
+	 * Flatten the office NODES into the ordered panel list.
+	 *
+	 * Order: crown offices pinned to the top, then supporting. Within each group
+	 * the comparator is of_officer_cmp() -- the SAME sort the Current Officers
+	 * tree orders siblings with, not a second one invented here, so the two tabs
+	 * can never disagree about where an office sits.
+	 *
+	 * The list is FLAT rather than nested: a panel is a disclosure, and nesting
+	 * disclosures inside disclosures would bury a deputy's history two clicks
+	 * deep. A supporting deputy of a crown office therefore appears in the
+	 * supporting group, not under its parent.
+	 *
+	 * @param array $nodes from of_officer_build_nodes()
+	 * @return array ordered list of panel descriptors
+	 */
+	function of_officer_history_panels(array $nodes)
+	{
+		$panels = [];
+		foreach ($nodes as $node) {
+			$group = of_history_group_key($node['PositionId'], $node['CanonicalKey'], $node['Key']);
+
+			// Two legacy officer ROWS sharing one role string are one office held
+			// by two people, not two offices. Merge the holders instead of
+			// emitting a duplicate panel.
+			if (isset($panels[$group])) {
+				foreach ($node['Holders'] as $holder) {
+					$panels[$group]['Holders'][] = $holder;
+				}
+				continue;
+			}
+
+			$panels[$group] = [
+				'Group'     => $group,
+				'Role'      => $node['CanonicalKey'],
+				'Title'     => $node['Title'],
+				'IsCrown'   => $node['IsCrown'],
+				'SortOrder' => $node['SortOrder'],
+				'Seq'       => $node['Seq'],
+				'Holders'   => $node['Holders'],
+			];
+		}
+
+		$crown = [];
+		$supporting = [];
+		foreach ($panels as $panel) {
+			if ($panel['IsCrown']) {
+				$crown[] = $panel;
+			} else {
+				$supporting[] = $panel;
+			}
+		}
+		usort($crown, 'of_officer_cmp');
+		usort($supporting, 'of_officer_cmp');
+		return array_merge($crown, $supporting);
+	}
+}
+
+$ofPanels = of_officer_history_panels(of_officer_build_nodes($ofRows));
+
+// Registry labels, keyed by LOWER-CASED canonical key, for the JS to name a
+// history-only panel with when the row carries no DisplayLabel snapshot.
+// history_role_options() sources these from the position registry INCLUDING
+// retired positions, which is exactly the set a history-only panel comes from.
+$ofRoleLabels = [];
+foreach ($ofRoleOptions as $_ofRoleKey => $_ofRoleLabel) {
+	$ofRoleLabels[strtolower(trim((string)$_ofRoleKey))] = (string)$_ofRoleLabel;
+}
+
 // Config handed to the JS below. JSON_HEX_* so nothing in a kingdom name can
 // break out of the <script> element.
 $ofJsConfig = json_encode([
@@ -387,6 +501,7 @@ $ofJsConfig = json_encode([
 	'historyUrl'  => $ofHistoryUrl,
 	'playerUrl'   => UIR . 'Player/profile/',
 	'canEdit'     => (bool)$ofCanEditHistory,
+	'roleLabels'  => $ofRoleLabels,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
 
@@ -688,6 +803,102 @@ $ofJsConfig = json_encode([
 	outline: 2px solid var(--ork-blue-link);
 	outline-offset: 1px;
 }
+/* ---- Officer History: one collapsible panel per office ----
+   Real <details>/<summary> disclosures, NOT a div with a click handler: that
+   buys keyboard operation (Tab to the summary, Enter/Space to toggle) and the
+   correct expanded/collapsed semantics for free, with no aria bookkeeping to
+   drift out of step. */
+#of-officers-overlay .of-oh-panels {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+#of-officers-overlay .of-oh-panel {
+	border: 1px solid var(--ork-border);
+	border-radius: 8px;
+	background: var(--ork-card-bg);
+	overflow: hidden;
+}
+/* The filter hides non-matching panels with [hidden]; the rule above sets no
+   display, but a UA stylesheet gives <details> display:block, so state it. */
+#of-officers-overlay .of-oh-panel[hidden] { display: none; }
+#of-officers-overlay .of-oh-summary {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+	padding: 9px 12px;
+	font-size: 13px;
+	cursor: pointer;
+	background: var(--ork-bg-secondary);
+	/* Both are needed: ::marker is the standard, ::-webkit-details-marker is
+	   what Safari still uses. list-style:none alone leaves Safari's triangle. */
+	list-style: none;
+}
+#of-officers-overlay .of-oh-summary::-webkit-details-marker { display: none; }
+#of-officers-overlay .of-oh-summary::marker { content: ''; }
+#of-officers-overlay .of-oh-summary:hover { background: var(--ork-bg-tertiary); }
+#of-officers-overlay .of-oh-summary:focus-visible {
+	outline: 2px solid var(--ork-blue-link);
+	outline-offset: -2px;
+}
+#of-officers-overlay .of-oh-chev {
+	flex-shrink: 0;
+	width: 11px;
+	font-size: 11px;
+	color: var(--ork-text-muted);
+	transition: transform 0.15s ease;
+}
+#of-officers-overlay .of-oh-panel[open] > .of-oh-summary .of-oh-chev { transform: rotate(90deg); }
+#of-officers-overlay .of-oh-office {
+	font-weight: 600;
+	color: var(--ork-text-secondary);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+#of-officers-overlay .of-oh-holder {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: right;
+	color: var(--ork-text);
+	overflow-wrap: anywhere;
+}
+#of-officers-overlay .of-oh-count {
+	flex-shrink: 0;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	color: var(--ork-text-muted);
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
+	border-radius: 999px;
+	padding: 1px 8px;
+}
+#of-officers-overlay .of-oh-body {
+	padding: 10px 12px 12px;
+	border-top: 1px solid var(--ork-border);
+}
+#of-officers-overlay .of-oh-none {
+	font-size: 12px;
+	font-style: italic;
+	color: var(--ork-text-muted);
+	line-height: 1.5;
+}
+/* Compact status line ABOVE the panel list, for the states where the panels are
+   still worth showing (signed out, fetch failed, nothing recorded yet) and the
+   big centred .of-empty would push them off the first screen. */
+#of-officers-overlay .of-oh-note {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--ork-text-muted);
+	background: var(--ork-bg-secondary);
+	border: 1px solid var(--ork-border);
+	border-radius: 6px;
+	padding: 8px 12px;
+	margin-bottom: 10px;
+}
+#of-officers-overlay .of-oh-note i { margin-right: 6px; opacity: 0.7; }
+
 /* Wide content scrolls inside its OWN container; the page body never moves. */
 #of-officers-overlay .of-table-wrap {
 	overflow-x: auto;
@@ -719,20 +930,10 @@ $ofJsConfig = json_encode([
 }
 #of-officers-overlay .of-oh-table td a { color: var(--ork-link); text-decoration: none; }
 #of-officers-overlay .of-oh-table td a:hover { text-decoration: underline; }
-#of-officers-overlay .of-oh-role-badge {
-	display: inline-block;
-	padding: 2px 8px;
-	border-radius: 4px;
-	font-size: 11px;
-	font-weight: 600;
-	background: var(--ork-badge-blue-bg);
-	color: var(--ork-badge-blue-text);
-	white-space: nowrap;
-}
-#of-officers-overlay .of-oh-role-badge.of-oh-current {
-	background: var(--ork-badge-green-bg);
-	color: var(--ork-badge-green-text);
-}
+/* No .of-oh-role-badge: the Role column is gone, so the badge that carried the
+   office name and its "(current)" suffix has nothing left to say inside a
+   per-office panel. "Present" in the End Date column is now the only marker of
+   a running term. */
 #of-officers-overlay .of-oh-present { color: #276749; font-style: italic; }
 html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 #of-officers-overlay .of-oh-notes {
@@ -791,11 +992,23 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	#of-officers-overlay .of-holder { text-align: left; }
 	#of-officers-overlay .of-children { margin-left: 4px; padding-left: 10px; }
 	#of-officers-overlay .of-oh-notes { max-width: 160px; }
+	/* Office + count stay on line one, the holder drops to its own line under
+	   them rather than being squeezed to a two-character column. */
+	#of-officers-overlay .of-oh-office { flex: 1 1 auto; }
+	#of-officers-overlay .of-oh-count  { order: 2; }
+	#of-officers-overlay .of-oh-holder {
+		order: 3;
+		flex: 0 0 100%;
+		text-align: left;
+		padding-left: 19px;
+	}
+	#of-officers-overlay .of-oh-body { padding: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
 	#of-officers-overlay,
 	#of-officers-overlay.of-open,
+	#of-officers-overlay .of-oh-chev,
 	#of-officers-overlay .of-oh-edit-btn,
 	#of-officers-overlay .of-oh-del-btn {
 		transition: none;
@@ -863,24 +1076,55 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 					<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading officer history&hellip;
 				</div>
 
+				<div class="of-oh-note" id="of-oh-note" style="display:none" role="status"></div>
+
 				<div class="of-empty" id="of-oh-empty" style="display:none" role="status"></div>
 
-				<div class="of-table-wrap" id="of-oh-table-wrap" style="display:none">
-					<table class="of-oh-table" id="of-oh-table">
-						<thead>
-							<tr>
-								<th scope="col">Role</th>
-								<th scope="col">Persona</th>
-								<th scope="col">Start Date</th>
-								<th scope="col">End Date</th>
-								<th scope="col">Notes</th>
-								<?php if ($ofCanEditHistory): ?>
-								<th scope="col"><span class="of-sr-only">Actions</span></th>
-								<?php endif; ?>
-							</tr>
-						</thead>
-						<tbody id="of-oh-tbody"></tbody>
-					</table>
+				<!-- Panel shells, one per CURRENT office, rendered server-side so the
+				     tab paints with current holders before the history fetch returns.
+				     Panels for offices that exist only in history are appended at the
+				     bottom of this container by renderHistory(). -->
+				<div class="of-oh-panels" id="of-oh-panels">
+					<?php foreach ($ofPanels as $_ofPanel): ?>
+					<details class="of-oh-panel"
+						data-group="<?= htmlspecialchars($_ofPanel['Group']) ?>"
+						data-role="<?= htmlspecialchars($_ofPanel['Role']) ?>"
+						data-title="<?= htmlspecialchars(strtolower($_ofPanel['Title'])) ?>">
+						<summary class="of-oh-summary">
+							<i class="fas fa-chevron-right of-oh-chev" aria-hidden="true"></i>
+							<span class="of-oh-office"><?php if ($_ofPanel['IsCrown']): ?><i class="fas fa-crown of-crown-glyph" aria-hidden="true"></i><span class="of-sr-only">Crown office: </span><?php endif; ?><?= htmlspecialchars($_ofPanel['Title']) ?></span>
+							<span class="of-oh-holder"><?php
+								/* EVERY holder is named -- a multi-occupant supporting
+								   office must not silently lose a name in the one place a
+								   member goes to read who holds it.
+								   Separator is " · ", NOT the ", " the Current Officers
+								   tab uses: there the names are anchors, so the comma is
+								   unambiguous, but here they are plain text and personas
+								   in this database really do contain commas (mundane
+								   105622 is "Hank the Tank,  Firebug of Crystal Groves",
+								   one person), which would read as two holders.
+								   Plain text, not links: an anchor nested inside a
+								   <summary> is a second interactive control competing
+								   with the disclosure for the same click and the same
+								   Enter key. The Current Officers tab is where the links
+								   live. */
+								if (!empty($_ofPanel['Holders'])) {
+									$_ofNames = [];
+									foreach ($_ofPanel['Holders'] as $_ofHolder) {
+										$_ofNames[] = htmlspecialchars($_ofHolder['Name']);
+									}
+									echo implode('<span class="of-holder-sep"> &middot; </span>', $_ofNames);
+								} else {
+									echo '<span class="of-vacant">Vacant</span>';
+								}
+							?></span>
+							<span class="of-oh-count"></span>
+						</summary>
+						<div class="of-oh-body">
+							<div class="of-oh-none">Loading&hellip;</div>
+						</div>
+					</details>
+					<?php endforeach; ?>
 				</div>
 			</div>
 
@@ -997,23 +1241,80 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 	// ---------------------------------------------------------------------
 	var ohRows = [];
 
-	function showOnly(which, message) {
-		var loading = gid('of-oh-loading');
-		var empty   = gid('of-oh-empty');
-		var wrap    = gid('of-oh-table-wrap');
-		if (loading) { loading.style.display = (which === 'loading') ? '' : 'none'; }
-		if (wrap)    { wrap.style.display    = (which === 'table')   ? '' : 'none'; }
-		if (empty) {
-			empty.style.display = (which === 'empty') ? '' : 'none';
-			if (which === 'empty') {
-				empty.textContent = '';
-				var icon = document.createElement('i');
-				icon.className = 'fas fa-scroll';
-				icon.setAttribute('aria-hidden', 'true');
-				empty.appendChild(icon);
-				empty.appendChild(document.createTextNode(message || ''));
+	function el(tag, cls, text) {
+		var n = document.createElement(tag);
+		if (cls) { n.className = cls; }
+		if (text !== undefined && text !== null) { n.textContent = text; }
+		return n;
+	}
+
+	function icon(cls) {
+		var i = document.createElement('i');
+		i.className = cls;
+		i.setAttribute('aria-hidden', 'true');
+		return i;
+	}
+
+	function panelsBox() { return gid('of-oh-panels'); }
+
+	function allPanels() {
+		var box = panelsBox();
+		return box ? box.querySelectorAll('.of-oh-panel') : [];
+	}
+
+	function setLoading(on) {
+		var l = gid('of-oh-loading');
+		if (l) { l.style.display = on ? '' : 'none'; }
+	}
+
+	// Compact line above the panels, for states where the panel HEADERS are
+	// still worth reading (signed out, fetch failed, nothing recorded yet).
+	function showNote(message) {
+		var note = gid('of-oh-note');
+		if (!note) { return; }
+		note.textContent = '';
+		if (!message) { note.style.display = 'none'; return; }
+		note.appendChild(icon('fas fa-info-circle'));
+		note.appendChild(document.createTextNode(' ' + message));
+		note.style.display = '';
+	}
+
+	// Full-height empty state, for when there is nothing to show at all.
+	function showEmpty(message) {
+		var empty = gid('of-oh-empty');
+		if (!empty) { return; }
+		empty.textContent = '';
+		if (!message) { empty.style.display = 'none'; return; }
+		empty.appendChild(icon('fas fa-scroll'));
+		empty.appendChild(document.createTextNode(' ' + message));
+		empty.style.display = '';
+	}
+
+	// Blank every panel body/count and drop the panels a previous render
+	// invented. Used both to reset before a fetch and to degrade on failure.
+	function resetPanels(bodyText) {
+		var box = panelsBox();
+		if (!box) { return; }
+		var stale = box.querySelectorAll('.of-oh-dynamic');
+		for (var s = 0; s < stale.length; s++) { stale[s].parentNode.removeChild(stale[s]); }
+		clearFilterOptions();
+		var panels = box.querySelectorAll('.of-oh-panel');
+		for (var i = 0; i < panels.length; i++) {
+			var count = panels[i].querySelector('.of-oh-count');
+			var body  = panels[i].querySelector('.of-oh-body');
+			if (count) { count.textContent = ''; }
+			if (body) {
+				body.textContent = '';
+				body.appendChild(el('div', 'of-oh-none', bodyText || ''));
 			}
 		}
+	}
+
+	function degrade(message) {
+		resetPanels(message);
+		showEmpty(allPanels().length === 0 ? message : '');
+		showNote(allPanels().length === 0 ? '' : message);
+		applyFilter();
 	}
 
 	function loadHistory() {
@@ -1027,7 +1328,10 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 		// build "?Role=" — see the report; that filter is broken today.)
 		var url  = OF.historyUrl + (role ? ('&Role=' + encodeURIComponent(role)) : '');
 
-		showOnly('loading');
+		setLoading(true);
+		showNote('');
+		showEmpty('');
+		resetPanels('Loading…');
 
 		fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
 			.then(function (r) {
@@ -1035,15 +1339,17 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 				return r.json();
 			})
 			.then(function (resp) {
+				setLoading(false);
 				// Both endpoints answer {"status":5} to a signed-out visitor.
 				// This modal is on a public profile, so that is an expected
-				// state, not a failure.
+				// state, not a failure. The panel HEADERS stay — current
+				// holders are public and were rendered server-side.
 				if (resp && resp.status === 5) {
-					showOnly('empty', 'Sign in to view officer history.');
+					degrade('Sign in to view officer history.');
 					return;
 				}
 				if (!resp || resp.status !== 0) {
-					showOnly('empty', 'Officer history could not be loaded.');
+					degrade('Officer history could not be loaded.');
 					return;
 				}
 				ohRows = resp.history || [];
@@ -1053,7 +1359,8 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 				renderHistory(ohRows);
 			})
 			.catch(function () {
-				showOnly('empty', 'Officer history could not be loaded.');
+				setLoading(false);
+				degrade('Officer history could not be loaded.');
 			});
 	}
 
@@ -1077,83 +1384,323 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 		return cell;
 	}
 
-	// Rows are built with createElement + textContent throughout. Persona,
-	// Role and Notes are user-supplied free text; nothing here goes near
-	// innerHTML, so there is no escaping to get wrong.
-	function renderHistory(rows) {
-		var tbody = gid('of-oh-tbody');
-		if (!tbody) { return; }
-		tbody.textContent = '';
+	// -----------------------------------------------------------------
+	// Grouping history rows onto office panels
+	// -----------------------------------------------------------------
+	// Classification is 'crown' | 'supporting' | null, and null means UNKNOWN
+	// (retired position, or a row that predates the registry) -- NOT supporting.
+	// It therefore sorts AFTER supporting, never with crown.
+	function classRank(classification) {
+		var c = String(classification || '').toLowerCase();
+		if (c === 'crown') { return 0; }
+		if (c === 'supporting') { return 1; }
+		return 2;
+	}
 
-		if (!rows || rows.length === 0) {
-			// ork_officer_history is near-empty across the whole database, so
-			// "no records" is the NORMAL state here, not an error. Say so in a
-			// way that reads as finished rather than broken.
-			showOnly('empty', ' No officer terms have been recorded here yet. Past officers appear once their terms are entered.');
-			return;
+	// What to CALL an office that exists only in history. The snapshot of what
+	// it was called at the time wins: history should say what the office was
+	// called then, not what the registry renamed it to since.
+	function labelFor(h) {
+		var snapshot = String((h && h.DisplayLabel) || '').trim();
+		if (snapshot !== '') { return snapshot; }
+		var role = String((h && h.Role) || '').trim();
+		// The role filter's options come from the position registry INCLUDING
+		// retired positions, so a retired office usually still has a real name
+		// available here.
+		var registry = (OF.roleLabels && OF.roleLabels[role.toLowerCase()]) || '';
+		if (registry !== '') { return String(registry); }
+		if (role === '') { return 'Unrecorded office'; }
+		// Last resort only. "royal_scribe" is a database identifier, not an
+		// office name, and must never reach a member's screen as-is.
+		return role.replace(/_/g, ' ').replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+	}
+
+	// Newest term first: start date descending, then id descending so two terms
+	// that start on the same day still have a stable order.
+	function cmpTerm(a, b) {
+		var sa = String((a && a.StartDate) || '');
+		var sb = String((b && b.StartDate) || '');
+		if (sa !== sb) { return sa < sb ? 1 : -1; }
+		return (parseInt(b && b.OfficerHistoryId, 10) || 0) - (parseInt(a && a.OfficerHistoryId, 10) || 0);
+	}
+
+	// The role filter is server-rendered from the position REGISTRY, so an office
+	// that exists only in history (a legacy row whose position_id is 0) has no
+	// option and would be reachable only via "All Roles". Add one, so the filter
+	// can navigate to every panel it can see. Marked, and cleared on each render,
+	// so repeated fetches cannot pile duplicates up.
+	function addFilterOption(spec) {
+		var sel = gid('of-oh-role-filter');
+		if (!sel || !spec.role) { return; }
+		for (var i = 0; i < sel.options.length; i++) {
+			if (String(sel.options[i].value).toLowerCase() === spec.role) { return; }
 		}
+		var opt = document.createElement('option');
+		opt.value = spec.role;
+		opt.textContent = spec.label;
+		opt.setAttribute('data-of-dynamic', '1');
+		sel.appendChild(opt);
+	}
 
-		showOnly('table');
+	function clearFilterOptions() {
+		var sel = gid('of-oh-role-filter');
+		if (!sel) { return; }
+		var added = sel.querySelectorAll('option[data-of-dynamic]');
+		for (var i = 0; i < added.length; i++) {
+			// Never remove the option the viewer is currently filtered by --
+			// that would silently reset the control to "All Roles".
+			if (!added[i].selected) { added[i].parentNode.removeChild(added[i]); }
+		}
+	}
 
-		for (var i = 0; i < rows.length; i++) {
-			var h  = rows[i];
-			var tr = document.createElement('tr');
+	function makeDynamicPanel(spec) {
+		var d = document.createElement('details');
+		d.className = 'of-oh-panel of-oh-dynamic';
+		d.setAttribute('data-group', spec.key);
+		d.setAttribute('data-role', spec.role);
+		d.setAttribute('data-title', spec.label.toLowerCase());
+
+		var s = el('summary', 'of-oh-summary');
+		s.appendChild(icon('fas fa-chevron-right of-oh-chev'));
+
+		var office = el('span', 'of-oh-office');
+		if (spec.rank === 0) {
+			office.appendChild(icon('fas fa-crown of-crown-glyph'));
+			office.appendChild(el('span', 'of-sr-only', 'Crown office: '));
+		}
+		office.appendChild(document.createTextNode(spec.label));
+		s.appendChild(office);
+
+		// Deliberately NOT "Vacant": the office is not part of this group's
+		// current roster at all, which is a different statement.
+		var holder = el('span', 'of-oh-holder');
+		holder.appendChild(el('span', 'of-vacant', 'Not a current office'));
+		s.appendChild(holder);
+
+		s.appendChild(el('span', 'of-oh-count'));
+		d.appendChild(s);
+		d.appendChild(el('div', 'of-oh-body'));
+		return d;
+	}
+
+	// Rows are built with createElement + textContent throughout. Persona and
+	// Notes are user-supplied free text; nothing here goes near innerHTML, so
+	// there is no escaping to get wrong.
+	function buildTermTable(indices, rows) {
+		var wrap  = el('div', 'of-table-wrap');
+		var table = el('table', 'of-oh-table');
+		var thead = document.createElement('thead');
+		var htr   = document.createElement('tr');
+		// No Role column: inside a per-office panel it repeats the header.
+		var cols  = ['Persona', 'Start Date', 'End Date', 'Notes'];
+		for (var c = 0; c < cols.length; c++) {
+			var th = el('th', null, cols[c]);
+			th.setAttribute('scope', 'col');
+			htr.appendChild(th);
+		}
+		if (OF.canEdit) {
+			var actTh = document.createElement('th');
+			actTh.setAttribute('scope', 'col');
+			actTh.appendChild(el('span', 'of-sr-only', 'Actions'));
+			htr.appendChild(actTh);
+		}
+		thead.appendChild(htr);
+		table.appendChild(thead);
+
+		var tbody = document.createElement('tbody');
+		for (var i = 0; i < indices.length; i++) {
+			var idx = indices[i];
+			var h   = rows[idx];
+			var tr  = document.createElement('tr');
 			var isCurrent = !h.EndDate || String(h.EndDate).indexOf('0000') === 0;
 
-			var badge = document.createElement('span');
-			badge.className = 'of-oh-role-badge' + (isCurrent ? ' of-oh-current' : '');
-			badge.textContent = (h.Role || '') + (isCurrent ? ' (current)' : '');
-			tr.appendChild(td(badge));
-
-			var personaCell;
 			if (parseInt(h.MundaneId, 10) > 0) {
 				var a = document.createElement('a');
 				a.href = OF.playerUrl + parseInt(h.MundaneId, 10);
 				a.textContent = h.Persona || 'Unknown';
-				personaCell = td(a);
+				tr.appendChild(td(a));
 			} else {
-				var vac = document.createElement('span');
-				vac.className = 'of-vacant';
-				vac.textContent = 'Vacant';
-				personaCell = td(vac);
+				tr.appendChild(td(el('span', 'of-vacant', 'Vacant')));
 			}
-			tr.appendChild(personaCell);
 
 			var startCell = td(fmtDate(h.StartDate));
 			startCell.className = 'of-oh-nowrap';
 			tr.appendChild(startCell);
 
-			var endCell;
-			if (isCurrent) {
-				var pres = document.createElement('span');
-				pres.className = 'of-oh-present';
-				pres.textContent = 'Present';
-				endCell = td(pres);
-			} else {
-				endCell = td(fmtDate(h.EndDate));
-			}
+			// "Present" is the only remaining marker that a term is the running
+			// one, now that the role badge that used to carry "(current)" is
+			// gone with the Role column.
+			var endCell = isCurrent ? td(el('span', 'of-oh-present', 'Present')) : td(fmtDate(h.EndDate));
 			endCell.className = 'of-oh-nowrap';
 			tr.appendChild(endCell);
 
 			var notesCell = document.createElement('td');
 			if (h.Notes) {
-				var n = document.createElement('span');
-				n.className = 'of-oh-notes';
-				n.textContent = h.Notes;
-				notesCell.appendChild(n);
+				notesCell.appendChild(el('span', 'of-oh-notes', h.Notes));
 			}
 			tr.appendChild(notesCell);
 
 			if (OF.canEdit) {
 				var actions = document.createElement('td');
 				actions.className = 'of-oh-nowrap';
-				actions.appendChild(actionBtn('edit', i, h));
-				actions.appendChild(actionBtn('delete', i, h));
+				// The index passed through is the row's position in the FLAT
+				// response array, not its position in this panel: the host
+				// page's Edit modal indexes into window.<prefix>OhData.
+				actions.appendChild(actionBtn('edit', idx, h));
+				actions.appendChild(actionBtn('delete', idx, h));
 				tr.appendChild(actions);
 			}
 
 			tbody.appendChild(tr);
 		}
+		table.appendChild(tbody);
+		wrap.appendChild(table);
+		return wrap;
+	}
+
+	function fillPanel(panel, indices, rows) {
+		var count = panel.querySelector('.of-oh-count');
+		var body  = panel.querySelector('.of-oh-body');
+		if (count) {
+			count.textContent = indices.length === 0
+				? 'No terms'
+				: (indices.length + (indices.length === 1 ? ' term' : ' terms'));
+		}
+		if (!body) { return; }
+		body.textContent = '';
+		if (indices.length === 0) {
+			// An office with nothing recorded says so, rather than opening onto
+			// an empty table with headings and no rows.
+			body.appendChild(el('div', 'of-oh-none', 'No terms have been recorded for this office yet.'));
+			return;
+		}
+		indices.sort(function (a, b) { return cmpTerm(rows[a], rows[b]); });
+		body.appendChild(buildTermTable(indices, rows));
+	}
+
+	function renderHistory(rows) {
+		var box = panelsBox();
+		if (!box) { return; }
+		rows = rows || [];
+
+		// Drop the panels the PREVIOUS render invented; the server-rendered
+		// shells stay where they are.
+		var stale = box.querySelectorAll('.of-oh-dynamic');
+		for (var s = 0; s < stale.length; s++) { stale[s].parentNode.removeChild(stale[s]); }
+
+		// Indices over the server-rendered shells. byRole/byTitle are the
+		// graceful-degradation path: until the backend emits PositionId on
+		// history rows, every row arrives with 0 and has to find its office by
+		// canonical key (byRole) or, for a legacy row that stored a human label
+		// rather than a key, by office name (byTitle).
+		var byGroup = {}, byRole = {}, byTitle = {};
+		var shells = box.querySelectorAll('.of-oh-panel');
+		for (var p = 0; p < shells.length; p++) {
+			var shell = shells[p];
+			byGroup[shell.getAttribute('data-group')] = shell;
+			var sr = shell.getAttribute('data-role');
+			if (sr && !byRole[sr]) { byRole[sr] = shell; }
+			var st = shell.getAttribute('data-title');
+			if (st && !byTitle[st]) { byTitle[st] = shell; }
+		}
+
+		var groups = {};   // panel group key -> [index into rows]
+		var extras = {};   // group key -> descriptor for a panel we must invent
+		for (var i = 0; i < rows.length; i++) {
+			var h    = rows[i] || {};
+			var pid  = parseInt(h.PositionId, 10) || 0;
+			var role = String(h.Role || '').trim().toLowerCase();
+			var key;
+			if (pid > 0 && byGroup['p' + pid]) {
+				key = 'p' + pid;
+			} else if (role && byRole[role]) {
+				key = byRole[role].getAttribute('data-group');
+			} else if (role && byTitle[role]) {
+				key = byTitle[role].getAttribute('data-group');
+			} else {
+				// No current office answers for this row -- a retired position,
+				// or a legacy row whose position_id is 0. It gets its own panel
+				// at the bottom rather than being dropped on the floor.
+				key = 'h:' + (pid > 0 ? ('p' + pid) : ('r:' + role));
+				if (!extras[key]) {
+					extras[key] = {
+						key:   key,
+						role:  role,
+						label: labelFor(h),
+						rank:  classRank(h.Classification)
+					};
+				}
+			}
+			if (!groups[key]) { groups[key] = []; }
+			groups[key].push(i);
+		}
+
+		// History-only panels all sit BELOW the current offices; among
+		// themselves they keep crown -> supporting -> unknown, then name.
+		var extraKeys = [];
+		for (var k in extras) {
+			if (Object.prototype.hasOwnProperty.call(extras, k)) { extraKeys.push(k); }
+		}
+		extraKeys.sort(function (a, b) {
+			if (extras[a].rank !== extras[b].rank) { return extras[a].rank - extras[b].rank; }
+			return extras[a].label.localeCompare(extras[b].label);
+		});
+		for (var e = 0; e < extraKeys.length; e++) {
+			box.appendChild(makeDynamicPanel(extras[extraKeys[e]]));
+			addFilterOption(extras[extraKeys[e]]);
+		}
+
+		var panels = box.querySelectorAll('.of-oh-panel');
+		for (var q = 0; q < panels.length; q++) {
+			fillPanel(panels[q], groups[panels[q].getAttribute('data-group')] || [], rows);
+		}
+
+		var visible = applyFilter();
+		var sel     = gid('of-oh-role-filter');
+		var filtered = sel ? String(sel.value || '').trim() : '';
+
+		if (panels.length === 0) {
+			// Nothing current, nothing historical. ork_officer_history is
+			// near-empty across the whole database, so this reads as finished
+			// rather than broken.
+			showNote('');
+			showEmpty('No officer terms have been recorded here yet. Past officers appear once their terms are entered.');
+		} else if (filtered !== '' && visible === 0) {
+			showNote('');
+			showEmpty('No officer terms are recorded for ' + selectedRoleLabel() + '.');
+		} else if (rows.length === 0) {
+			showEmpty('');
+			showNote('No officer terms have been recorded here yet. Each office below still shows who holds it now.');
+		} else {
+			showEmpty('');
+			showNote('');
+		}
+	}
+
+	function selectedRoleLabel() {
+		var sel = gid('of-oh-role-filter');
+		if (!sel || sel.selectedIndex < 0) { return 'this office'; }
+		var text = String(sel.options[sel.selectedIndex].text || '').trim();
+		return text !== '' ? text : 'this office';
+	}
+
+	// Choosing a role narrows the list to that one office and opens it, because
+	// picking it IS the request to read it. "All Roles" restores every panel,
+	// collapsed.
+	function applyFilter() {
+		var sel  = gid('of-oh-role-filter');
+		var role = sel ? String(sel.value || '').trim().toLowerCase() : '';
+		var box  = panelsBox();
+		if (!box) { return 0; }
+		var panels = box.querySelectorAll('.of-oh-panel');
+		var shown  = 0;
+		for (var i = 0; i < panels.length; i++) {
+			var match = (role === '') || (String(panels[i].getAttribute('data-role') || '') === role);
+			panels[i].hidden = !match;
+			panels[i].open   = (role !== '' && match);
+			if (match) { shown++; }
+		}
+		return shown;
 	}
 
 	// The Add / Edit / Delete history modals stay on the host page — this modal

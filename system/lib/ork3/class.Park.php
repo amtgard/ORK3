@@ -1236,10 +1236,13 @@ class Park extends Ork3
         $kingdom_id = (int)$this->GetParkKingdomId($park_id);
 
         $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
+		                oh.position_id, oh.display_label,
 		                oh.start_date, oh.end_date, oh.changed_by, oh.notes, oh.created_at,
 		                m.persona, m.username,
-		                cb.persona AS changed_by_persona
+		                cb.persona AS changed_by_persona,
+		                op.classification AS classification
 		         FROM " . DB_PREFIX . "officer_history oh
+		         LEFT JOIN " . DB_PREFIX . "officer_position op ON op.position_id = oh.position_id
 		         LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = oh.mundane_id
 		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
 		         WHERE oh.park_id = " . $park_id . " AND oh.kingdom_id = " . $kingdom_id;
@@ -1266,6 +1269,20 @@ class Park extends Ork3
                     'ParkId'           => (int)$r->park_id,
                     'MundaneId'        => (int)$r->mundane_id,
                     'Role'             => $r->role,
+                    // Same three keys, same shapes, as Kingdom::GetOfficerHistory() --
+                    // see the notes there. This is a SEPARATE implementation of the same
+                    // read, so the park officer-history surface only gets an office name
+                    // instead of a raw canonical key if it is fixed here too.
+                    //
+                    // PositionId: plain int, 0 (never null) for a row that predates the
+                    // registry, matching ork_officer_history.position_id INT NOT NULL
+                    // DEFAULT 0 and buildOfficerRows().
+                    'PositionId'       => (int)$r->position_id,
+                    // DisplayLabel: the snapshot of what the office was called at the time.
+                    'DisplayLabel'     => $r->display_label ?? '',
+                    // Classification: null, never defaulted, when the position no longer
+                    // exists or the row predates the registry.
+                    'Classification'   => $r->classification,
                     'StartDate'        => $r->start_date,
                     'EndDate'          => $r->end_date,
                     'ChangedBy'        => (int)$r->changed_by,
@@ -1300,6 +1317,31 @@ class Park extends Ork3
             // Bound, not concatenated -- mysql_real_escape_string() is a no-op shim in this
             // codebase (startup.php: `return $str;`), so the previous form was an injection.
             global $DB;
+            // Resolve the office this term belongs to, and SNAPSHOT what it was called.
+            // Without this the row lands with position_id = 0 and display_label = '', which the
+            // history UI reads as "office unknown" and files it under a catch-all panel instead
+            // of under the office the user just picked. The three other writers
+            // (Common::record_officer_history and both OfficerPosition backfills) already do
+            // this; only this manual "Add Historical Record" path did not.
+            // DisplayTitleSql gives the EFFECTIVE title, so a kingdom that renamed a shared
+            // office snapshots ITS name -- which is the whole point of storing a snapshot.
+            $DB->Clear();
+            $DB->op_kid = $kid;
+            $DB->op_key = $role;
+            $_ohPos = $DB->DataSet(
+                "SELECT p.position_id, " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
+				   FROM " . DB_PREFIX . "officer_position p
+				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key
+				  WHERE p.canonical_key = :op_key AND (p.kingdom_id = 0 OR p.kingdom_id = :op_kid)
+				  ORDER BY p.kingdom_id DESC LIMIT 1"
+            );
+            $_ohPosId = 0;
+            $_ohLabel = '';
+            if ($_ohPos !== false && $_ohPos->Size() > 0 && $_ohPos->Next()) {
+                $_ohPosId = (int) $_ohPos->position_id;
+                $_ohLabel = (string) $_ohPos->display_title;
+            }
             $DB->Clear();
             $DB->oh_kid   = $kid;
             $DB->oh_pid   = $pid;
@@ -1309,10 +1351,12 @@ class Park extends Ork3
             $DB->oh_end   = strlen($end) > 0 ? $end : null;
             $DB->oh_cb    = (int)$mundane_id;
             $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
+            $DB->oh_pos   = $_ohPosId;
+            $DB->oh_label = $_ohLabel;
             $DB->Execute(
                 "INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, notes, created_at)
-				 VALUES (:oh_kid, :oh_pid, :oh_mid, :oh_role, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, notes, created_at)
+				 VALUES (:oh_kid, :oh_pid, :oh_mid, :oh_role, :oh_pos, :oh_label, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
             );
             $response = Success();
         } else {
