@@ -234,9 +234,10 @@ ones: `TransitionOfficer`, `AddHistoryTerm`, `EditHistoryTerm`, `DeleteHistoryTe
 `RBACService` — 8 public mutators: `GrantRole`, `RevokeRole`, `CreateRole`, `EditRole`,
 `DeleteRole`, `SyncOfficerRole`, `SyncOfficerRoleByPositionId`, `SyncNewOfficerSlot`.
 The three `Sync*` methods are internal — called from `Common::set_officer` and
-`InsertOfficerRow`, never by a client — so they are renamed lowercase-initial (see *the
-naming lever* below), which puts them permanently out of the dispatcher's reach without
-token-gating an internal call. The five user-facing
+`InsertOfficerRow`, never by a client — so they are renamed with underscores
+(`sync_officer_role`, `sync_officer_role_by_position_id`, `sync_new_officer_slot`), which
+puts them permanently out of the dispatcher's reach without token-gating an internal call.
+They cannot simply be made `private`: they are called from another class. The five user-facing
 ones get the full treatment. `GrantRole`'s escalation check stays, now comparing the
 *proven* actor's permissions.
 
@@ -262,7 +263,8 @@ gated *before* registration, not after.
 `GetEffectivePermissions`, `GetUserRoles`, `GetKingdomRoleAssignments`,
 `GetAllPermissions` — who holds which permissions, across every kingdom, unauthenticated.
 `InvalidateUserCache` is an unauthenticated cache eviction. `DisplayTitleSql` and
-`SortOrderSql` are SQL-fragment builders that have no business being API verbs.
+`SortOrderSql` are SQL-fragment builders that have no business being API verbs; they are
+renamed `display_title_sql` / `sort_order_sql`.
 
 So registration is split, and the split is deliberate:
 
@@ -276,13 +278,36 @@ So registration is split, and the split is deliberate:
 in `Ork3::$Lib` — `startup.php:57-70` auto-registers every `system/lib/ork3/class.*.php`
 by lowercased name — so registration is the whitelist entry alone.
 
-**The naming lever.** Because `validate_method` refuses lowercase-initial and
-underscore-bearing names, a public PHP method that should not be API surface can be made
-unreachable by renaming rather than by restructuring. `DisplayTitleSql` and
-`SortOrderSql` become `displayTitleSql` / `sortOrderSql`: still public to their callers
-in `class.Kingdom.php`, `class.Park.php` and `common.php`, permanently invisible to the
-dispatcher. After this pass, PascalCase on a registered class means "deliberate API
-verb", and that becomes a rule a future reviewer can actually apply.
+**Hiding a method from the dispatcher: what actually works.** The obvious lever —
+renaming a method lowercase-initial, since `validate_method` rejects a lowercase-initial
+*request* — **does not work**, and the plan must not rely on it. PHP method names are
+case-insensitive, and the caller controls the casing of the requested string. Verified:
+
+```php
+class T { public function lowerStart($x) { return "REACHED: $x"; } }
+$requested = "LowerStart";                       // what an API caller sends
+ctype_lower(substr($requested, 0, 1));           // false -> validate_method ALLOWS it
+method_exists(new T(), $requested);              // true  -> case-insensitive
+(new T())->$requested("payload");                // "REACHED: payload"
+```
+
+Two levers do work, and each was verified the same way:
+
+- **An underscore in the name.** To reach `sync_officer_role` a caller must request a
+  string containing `_`, and `validate_method` rejects that outright. Use this for
+  internals that another class must still call — `RBACService`'s three `Sync*` methods
+  (called from `Common::set_officer` and the officer insert path) and the two SQL-fragment
+  builders (called from `class.Kingdom.php`, `class.Park.php`, `common.php`). This is also
+  the idiomatic shape here: `common.php` names its own methods `set_officer`,
+  `record_officer_history`.
+- **`private` visibility.** Invoking a private method from outside throws `Error`, so it
+  never executes. Use this for helpers nothing outside the class calls. It is the stronger
+  lever, but it is not available across class boundaries, and it surfaces as a 500 rather
+  than a clean refusal — so underscore naming is preferred at the boundary.
+
+After this pass the rule is: **on a registered class, any public method without an
+underscore is deliberate API surface and must be gated.** That is a rule a reviewer can
+apply, and `ApiExposureTest` enforces it.
 
 This is corroborated by the dispatcher's own comment at `class.JsonServer.php:265`:
 *"orkservice/Json/index.php is the only caller that ever constructs a JsonServer, so
@@ -410,9 +435,8 @@ classification.
 no `$mundane_id`, deliberately relying on all-holders semantics — retiring a position has
 to clear it in every park *and* the kingdom at once. One-seat is a **per-scope** rule;
 retire is **cross-scope**. Collapsing the two would break position retirement. The
-service method keeps the all-holders branch as an internal path, renamed
-`vacateAllHoldersOfPosition` (lowercase-initial, so the dispatcher cannot reach it), and
-only `vacateholder` survives as a client-callable verb.
+service method keeps the all-holders branch as a `private` internal path, and only the
+single-holder vacate survives as a client-callable verb.
 
 Verified safe to enforce: a production backup has **zero** positions holding more than
 one occupant, so no reconciliation of existing data is required. The constraint is
