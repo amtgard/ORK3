@@ -1065,6 +1065,16 @@ html[data-theme="dark"] .ka-confirm-danger #ka-confirm-ok {
 		if (!overlay) return;
 		overlay.classList.add('ka-open');
 		document.body.style.overflow = 'hidden';
+		// A prior visit may have left the transition wizard (#ot-root) visible if the
+		// whole modal was dismissed (Escape / backdrop / X) while the wizard was open --
+		// closeMo() only hides the overlay, it never runs the wizard's own teardown. Force
+		// the officer-list view back to the front on every open so a stale wizard never
+		// sits beneath the freshly-loaded #mo-cards (moLoad() shows #mo-cards on its own
+		// timeline and does not know #ot-root exists).
+		var otRoot  = document.getElementById('ot-root');
+		var moCards = document.getElementById('mo-cards');
+		if (otRoot)  { otRoot.style.display = 'none'; }
+		if (moCards) { moCards.style.display = ''; }
 		if (typeof window.moRefresh === 'function') { try { window.moRefresh(); } catch (e) {} }
 	}
 	function closeMo() {

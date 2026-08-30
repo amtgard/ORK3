@@ -60,7 +60,7 @@
 			<div class="kn-ac-results" id="ot-in-results" style="position:fixed" role="listbox"></div>
 		</div>
 		<div class="ka-field">
-			<label for="ot-in-start">Takes office <span class="ka-hint">(optional &mdash; defaults to the outgoing term&rsquo;s end)</span></label>
+			<label for="ot-in-start">Takes office <span class="ka-hint">(optional &mdash; defaults to today)</span></label>
 			<input type="text" id="ot-in-start" autocomplete="off" />
 		</div>
 		<div class="ka-field">
@@ -174,7 +174,9 @@
 		if (typeof flatpickr === 'undefined') return;
 		var opts = { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y' };
 		if (!otOutStartFp) otOutStartFp = flatpickr('#ot-out-start', opts);
-		if (!otOutEndFp)   otOutEndFp   = flatpickr('#ot-out-end', opts);
+		// The server (class.OfficerPosition.php) always rejects a future term-end date --
+		// don't let the picker offer dates it will only bounce back.
+		if (!otOutEndFp)   otOutEndFp   = flatpickr('#ot-out-end', Object.assign({}, opts, { maxDate: 'today' }));
 		if (!otInStartFp)  otInStartFp  = flatpickr('#ot-in-start', opts);
 	}
 
@@ -229,7 +231,18 @@
 		// Already on file -- a transition never overwrites an existing start date
 		// server-side, so editing this field would silently do nothing. Disabling it
 		// says so instead of inviting an edit that cannot take effect.
+		//
+		// Flatpickr copies `disabled` onto its altInput ONCE, at construction time
+		// (initOtFp(), which runs before this ever executes) -- it never re-reads the
+		// original input afterward. Disabling only outStartEl here would leave the
+		// VISIBLE altInput enabled: still clickable, still typeable, still opening the
+		// calendar. Sync both the original input and the altInput/clickOpens setting
+		// so the field the user actually sees and touches is genuinely inert.
 		outStartEl.disabled = hasStart;
+		if (otOutStartFp) {
+			otOutStartFp.altInput.disabled = hasStart;
+			otOutStartFp.set('clickOpens', !hasStart);
+		}
 		if (otOutEndFp) { otOutEndFp.clear(); } else { document.getElementById('ot-out-end').value = ''; }
 
 		// Step 2 -- incoming officer.
@@ -283,16 +296,20 @@
 		var occ  = occs[0] || null;
 		var officeName = s.pos.DisplayTitle || s.pos.Title || 'this office';
 		var inName  = document.getElementById('ot-in-player').value || 'The selected member';
-		var inStart = otHumanize(otRaw('ot-in-start')) || 'today';
+		// otHumanize() returns its input VERBATIM when it does not match the Y-m-d shape
+		// it expects -- e.g. when flatpickr failed to load (initOtFp() bails silently)
+		// and these became plain text inputs a user can type anything into. Every value
+		// reaching this innerHTML must go through moEsc() same as its siblings.
+		var inStart = window.moEsc(otHumanize(otRaw('ot-in-start')) || 'today');
 		var lines = [];
 
 		if (s.mode === 'transition' && occ) {
-			var outEnd = otHumanize(otRaw('ot-out-end')) || 'today';
+			var outEnd = window.moEsc(otHumanize(otRaw('ot-out-end')) || 'today');
 			lines.push('<li>' + window.moEsc(occ.Persona || 'The current officer') +
 				'&rsquo;s term as <strong>' + window.moEsc(officeName) + '</strong> ends ' + outEnd + '.</li>');
 			var outStart = otRaw('ot-out-start');
 			if (outStart && !occ.TermStartRaw) {
-				lines.push('<li>Their term start will be recorded as ' + otHumanize(outStart) + '.</li>');
+				lines.push('<li>Their term start will be recorded as ' + window.moEsc(otHumanize(outStart)) + '.</li>');
 			}
 		}
 		lines.push('<li><strong>' + window.moEsc(inName) + '</strong> becomes <strong>' +
@@ -352,12 +369,22 @@
 		var original = btn.innerHTML;
 		btn.disabled = true;
 		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-		window.moPost('transition', d, function () {
-			otClose();
-		}, function () {
+		// A synchronous throw inside moPost() (e.g. $ unresolvable, base() throwing, the
+		// bridge never having been assigned because the host IIFE died) would otherwise
+		// strand the button on "Saving..." forever with no POST ever issued -- indistin-
+		// guishable from a hung network request. Restore the button on that path too.
+		try {
+			window.moPost('transition', d, function () {
+				otClose();
+			}, function () {
+				btn.disabled = false;
+				btn.innerHTML = original;
+			});
+		} catch (e) {
 			btn.disabled = false;
 			btn.innerHTML = original;
-		});
+			window.moShowNotice('Error', 'Could not submit the transition. Please try again.');
+		}
 	};
 
 	// ---------- Incoming officer autocomplete (copies the host's occupant search
@@ -433,6 +460,12 @@
 				e.preventDefault();
 				if (focused) otAcSelect(focused);
 			} else if (e.key === 'Escape') {
+				// Dismiss only the dropdown. The wizard is not on MO_STACK, so if this
+				// event is left to bubble it reaches the host modal's own document-level
+				// Escape handler (_kingdom_admin_modals.tpl) and closes the ENTIRE
+				// Manage Officers modal out from under the wizard.
+				e.preventDefault();
+				e.stopPropagation();
 				otAcClose();
 			}
 		});
