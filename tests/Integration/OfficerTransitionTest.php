@@ -16,6 +16,8 @@ final class OfficerTransitionTest extends TestCase
     private array $seededPositions = [];
     /** @var list<int> */
     private array $seededMundanes = [];
+    /** @var list<int> ork_park rows seeded for park-scoped transitions */
+    private array $seededParkIds = [];
 
     protected function setUp(): void
     {
@@ -41,10 +43,22 @@ final class OfficerTransitionTest extends TestCase
             return;
         }
         $this->fixture->cleanup();
-        $this->pdo->exec("DELETE FROM ork_danger_audit WHERE method_call = 'OfficerPosition::TransitionOfficer'");
+        // Scoped to entity ids this test owns (self::KINGDOM_ID + any park seeded
+        // below), not a blanket delete of every TransitionOfficer audit row in
+        // the database -- ork_danger_audit carries no marker column, and
+        // entity_id is the closest scoped key TransitionOfficer's audit() call
+        // writes.
+        $entityIds = array_merge([self::KINGDOM_ID], $this->seededParkIds);
+        $this->pdo->exec(
+            "DELETE FROM ork_danger_audit WHERE method_call = 'OfficerPosition::TransitionOfficer'"
+            . ' AND entity_id IN (' . implode(',', array_map('intval', $entityIds)) . ')'
+        );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
+        if ($this->seededParkIds) {
+            $this->pdo->exec('DELETE FROM ork_park WHERE park_id IN (' . implode(',', $this->seededParkIds) . ')');
+        }
         if ($this->seededMundanes) {
             $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id IN (' . implode(',', $this->seededMundanes) . ')');
         }
@@ -123,7 +137,28 @@ final class OfficerTransitionTest extends TestCase
         );
     }
 
-    private function seedPosition(string $suffix, string $classification): int
+    private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0): int
+    {
+        $key = self::MARKER . '_' . $suffix;
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_officer_position
+                (kingdom_id, canonical_key, title, title_alias, classification,
+                 is_pinned, is_system, rbac_role_id, has_auth_role, sort_order,
+                 parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
+             VALUES (:kid, :key, :title, "", :cls, 0, 0, 0, :har, 100, NULL, 0, NULL, 0, NOW())'
+        );
+        $stmt->execute([
+            ':kid' => self::KINGDOM_ID,
+            ':key' => $key,
+            ':title' => 'Test ' . $suffix,
+            ':cls' => $classification,
+            ':har' => $hasAuthRole,
+        ]);
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /** seedPosition(), but in an arbitrary kingdom -- for the park-scoped test. */
+    private function seedPositionInKingdom(string $suffix, string $classification, int $kingdomId): int
     {
         $key = self::MARKER . '_' . $suffix;
         $stmt = $this->pdo->prepare(
@@ -134,12 +169,31 @@ final class OfficerTransitionTest extends TestCase
              VALUES (:kid, :key, :title, "", :cls, 0, 0, 0, 0, 100, NULL, 0, NULL, 0, NOW())'
         );
         $stmt->execute([
-            ':kid' => self::KINGDOM_ID,
+            ':kid' => $kingdomId,
             ':key' => $key,
             ':title' => 'Test ' . $suffix,
             ':cls' => $classification,
         ]);
         return (int) $this->pdo->lastInsertId();
+    }
+
+    private function seedPark(int $kingdomId): int
+    {
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO ork_park
+                (kingdom_id, name, abbreviation, url, address, city, province,
+                 postal_code, google_geocode, latitude, longitude, location,
+                 map_url, description, directions)
+             VALUES (:kid, :name, 'ZZT', '', '', '', '', '', '', 0, 0, '', '', '', '')"
+        );
+        $stmt->execute([
+            ':kid' => $kingdomId,
+            ':name' => self::MARKER . '_park_' . bin2hex(random_bytes(3)),
+        ]);
+        $parkId = (int) $this->pdo->lastInsertId();
+        $this->seededParkIds[] = $parkId;
+
+        return $parkId;
     }
 
     private function seedMundane(string $suffix): int
@@ -205,6 +259,13 @@ final class OfficerTransitionTest extends TestCase
         self::assertSame('2026-08-15', $rows[1]['start_date']);
         self::assertNull($rows[1]['end_date'], 'the incoming term must be open');
         self::assertSame('Reign 42', $rows[1]['notes'], 'the note must persist');
+
+        // The history rows alone don't prove the seat itself moved -- under C2
+        // (set_officer's silent no-op on a missing authorization row) this could
+        // pass with the outgoing officer still seated in ork_officer.
+        $seatStmt = $this->pdo->prepare('SELECT mundane_id FROM ork_officer WHERE position_id = :pid');
+        $seatStmt->execute([':pid' => $positionId]);
+        self::assertSame($incoming, (int) $seatStmt->fetchColumn(), 'the seat itself must have moved');
     }
 
     public function testRejectsAFutureEndDate(): void
@@ -225,7 +286,7 @@ final class OfficerTransitionTest extends TestCase
         );
     }
 
-    public function testRejectsAnEndDateBeforeTheTermStart(): void
+    public function testRejectsAnEndDateBeforeTheOpenTermBegan(): void
     {
         $positionId = $this->seededPositions['crown_a'];
         $token      = $this->fixture->createAuthorizedOfficer();
@@ -236,7 +297,37 @@ final class OfficerTransitionTest extends TestCase
             'PositionId' => $positionId, 'MundaneId' => $this->seededMundanes[0],
             'OutgoingEndDate' => '2026-01-01',
         ]);
-        self::assertSame(4, (int) $r['Status']);
+        self::assertSame(
+            4,
+            (int) $r['Status'],
+            'the outgoing term opened 2026-03-02; an end date before that is rejected by the $end < $open_start check'
+        );
+    }
+
+    /**
+     * Distinct from testRejectsAnEndDateBeforeTheOpenTermBegan(): that test's end
+     * date fails the $end < $open_start check without TermStart ever being
+     * exercised (TermStart defaults to OutgoingEndDate, so $start < $end can
+     * never be true when TermStart is omitted). This test passes an explicit
+     * TermStart to reach the `$start < $end` branch specifically.
+     */
+    public function testRejectsATermStartBeforeTheOutgoingEndDate(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $token      = $this->fixture->createAuthorizedOfficer();
+        $this->seatWithOpenTerm($positionId, $this->seededMundanes[0], '2026-03-02');
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $this->seededMundanes[0],
+            'OutgoingEndDate' => '2026-08-15',
+            'TermStart' => '2026-08-01',
+        ]);
+        self::assertSame(
+            4,
+            (int) $r['Status'],
+            'an incoming TermStart before the outgoing OutgoingEndDate must be rejected'
+        );
     }
 
     public function testAuditRowIsAttributedToTheTokenOwnerNotZero(): void
@@ -284,6 +375,140 @@ final class OfficerTransitionTest extends TestCase
         );
     }
 
+    public function testOutgoingStartDateBackfillsANullStart(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $outgoing   = $this->seededMundanes[0];
+        $incoming   = $this->seedMundane('backfill_incoming');
+        $this->seededMundanes[] = $incoming;
+        $token      = $this->fixture->createAuthorizedOfficer();
+
+        // Appointed before officer history tracked a start date.
+        $this->seatWithOpenTerm($positionId, $outgoing, null);
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+            'OutgoingEndDate' => '2026-08-15',
+            'OutgoingStartDate' => '2020-01-01',
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $stmt = $this->pdo->prepare(
+            'SELECT start_date FROM ork_officer_history WHERE position_id = :pid AND mundane_id = :mid'
+        );
+        $stmt->execute([':pid' => $positionId, ':mid' => $outgoing]);
+        self::assertSame(
+            '2020-01-01',
+            $stmt->fetchColumn(),
+            'a NULL start_date on the closed term must be backfilled from OutgoingStartDate'
+        );
+    }
+
+    public function testOutgoingStartDateNeverOverwritesAnExistingStart(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $outgoing   = $this->seededMundanes[0];
+        $incoming   = $this->seedMundane('nooverwrite_incoming');
+        $this->seededMundanes[] = $incoming;
+        $token      = $this->fixture->createAuthorizedOfficer();
+
+        $this->seatWithOpenTerm($positionId, $outgoing, '2026-03-02');
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+            'OutgoingEndDate' => '2026-08-15',
+            'OutgoingStartDate' => '2020-01-01',
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $stmt = $this->pdo->prepare(
+            'SELECT start_date FROM ork_officer_history WHERE position_id = :pid AND mundane_id = :mid'
+        );
+        $stmt->execute([':pid' => $positionId, ':mid' => $outgoing]);
+        self::assertSame(
+            '2026-03-02',
+            $stmt->fetchColumn(),
+            'a start_date already on the row must never be overwritten by OutgoingStartDate'
+        );
+    }
+
+    /**
+     * The office could exist only in a foreign kingdom the actor was never
+     * authorized against, so has_auth_role=1 (the Core Five's shape) plus
+     * EnsureCrownSlot's authorization_id=0 placeholder is the concrete case
+     * where set_officer() silently no-ops (common.php ~888-902). Before C2 this
+     * returned Success() with the outgoing term closed and the seat unmoved.
+     */
+    public function testAMissingAuthorizationRowAbortsAsProcessingErrorNotSuccess(): void
+    {
+        $positionId = $this->seedPosition('authgated', 'crown', 1);
+        $incoming   = $this->seedMundane('authgated_incoming');
+        $this->seededMundanes[] = $incoming;
+        $token      = $this->fixture->createAuthorizedOfficer();
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+        ]);
+        self::assertSame(
+            3,
+            (int) $r['Status'],
+            'a has_auth_role position with no matching ork_authorization row must abort as ProcessingError'
+        );
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND end_date IS NULL'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(
+            0,
+            (int) $stmt->fetchColumn(),
+            'no new open term may be recorded when the seat was never actually reassigned'
+        );
+    }
+
+    /**
+     * Every other test passes ParkId => 0, so PermissionKeyFor('set', $park_id)
+     * never returns 'park.officer.set' and the C3 kingdom-derivation path never
+     * runs. KingdomId is deliberately omitted (0) here to prove it really is
+     * derived from the park rather than trusted from the request.
+     */
+    public function testParkScopedTransitionDerivesKingdomFromThePark(): void
+    {
+        $parkKingdomId = 999888;
+        $parkId        = $this->seedPark($parkKingdomId);
+        $positionId    = $this->seedPositionInKingdom('park_crown', 'crown', $parkKingdomId);
+        $outgoing      = $this->seedMundaneInKingdom('park_outgoing', $parkKingdomId);
+        $incoming      = $this->seedMundaneInKingdom('park_incoming', $parkKingdomId);
+        $this->seededMundanes[] = $outgoing;
+        $this->seededMundanes[] = $incoming;
+
+        $token = $this->fixture->createAuthorizedOfficer();
+        $this->fixture->grantParkAuthority($parkId);
+
+        $this->seatWithOpenTerm($positionId, $outgoing, '2026-03-02', $parkKingdomId, $parkId);
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => 0, 'ParkId' => $parkId,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $seatStmt = $this->pdo->prepare(
+            'SELECT mundane_id, kingdom_id FROM ork_officer WHERE position_id = :pid AND park_id = :parkid'
+        );
+        $seatStmt->execute([':pid' => $positionId, ':parkid' => $parkId]);
+        $row = $seatStmt->fetch(PDO::FETCH_ASSOC);
+        self::assertSame($incoming, (int) $row['mundane_id'], 'the seat must move under the park-scoped permission');
+        self::assertSame(
+            $parkKingdomId,
+            (int) $row['kingdom_id'],
+            'kingdom_id must be derived from the park, not the (omitted) request value'
+        );
+    }
+
     /** seedMundane(), but in an arbitrary kingdom. */
     private function seedMundaneInKingdom(string $suffix, int $kingdomId): int
     {
@@ -301,23 +526,24 @@ final class OfficerTransitionTest extends TestCase
         return (int) $this->pdo->lastInsertId();
     }
 
-    private function seatWithOpenTerm(int $positionId, int $mundaneId, string $start): void
+    /** $start = null seats an officer with a NULL start_date, for OutgoingStartDate backfill tests. */
+    private function seatWithOpenTerm(int $positionId, int $mundaneId, ?string $start, int $kingdomId = self::KINGDOM_ID, int $parkId = 0): void
     {
         $this->pdo->prepare(
             'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, system,
                                       authorization_id, position_id, modified)
-             VALUES (:kid, 0, :mid, :role, 0, 0, :pid, NOW())'
+             VALUES (:kid, :parkid, :mid, :role, 0, 0, :pid, NOW())'
         )->execute([
-            ':kid' => self::KINGDOM_ID, ':mid' => $mundaneId,
+            ':kid' => $kingdomId, ':parkid' => $parkId, ':mid' => $mundaneId,
             ':role' => self::MARKER . '_crown_a', ':pid' => $positionId,
         ]);
         $this->pdo->prepare(
             'INSERT INTO ork_officer_history (kingdom_id, park_id, mundane_id, role,
                                               position_id, display_label, start_date,
                                               end_date, changed_by, created_at)
-             VALUES (:kid, 0, :mid, :role, :pid, :label, :start, NULL, NULL, NOW())'
+             VALUES (:kid, :parkid, :mid, :role, :pid, :label, :start, NULL, NULL, NOW())'
         )->execute([
-            ':kid' => self::KINGDOM_ID, ':mid' => $mundaneId,
+            ':kid' => $kingdomId, ':parkid' => $parkId, ':mid' => $mundaneId,
             ':role' => self::MARKER . '_crown_a', ':pid' => $positionId,
             ':label' => 'Test crown_a', ':start' => $start,
         ]);
