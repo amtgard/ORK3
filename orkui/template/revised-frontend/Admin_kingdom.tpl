@@ -93,34 +93,10 @@ $totalAttendance = $TotalAttendance ?? 0;
      WORK QUEUE
      ============================================= -->
 <?php
-/**
- * One queue card. A zero is not a task, so it renders muted with a tick instead
- * of a number the reader has to interpret, and stops being a link.
- */
-function _ka_queue($count, $icon, $label, $sub, $clear, $href, $onclick = '')
-{
-	$count = (int)$count;
-	// Linkable only when there is somewhere to go: without permission to manage
-	// officers the vacancy card has no destination, so it stays a plain card
-	// rather than an anchor to '#'.
-	$open  = $count > 0;
-	$link  = $open && ($onclick !== '' || $href !== '#');
-	$attrs = $link
-		? ($onclick !== ''
-			? 'href="#" onclick="' . htmlspecialchars($onclick) . '; return false;"'
-			: 'href="' . htmlspecialchars($href) . '"')
-		: '';
-	$tag = $link ? 'a' : 'div';
-	echo '<' . $tag . ' class="ka-ts-card' . ($link ? ' ka-ts-card-link' : '') . ($open ? '' : ' ka-ts-card-clear') . '" ' . $attrs . '>'
-		. '<div class="ka-ts-icon"><i class="fas ' . $icon . '"></i></div>'
-		. '<div class="ka-ts-body">'
-		. '<div class="ka-ts-num"><span class="ka-ts-val">'
-		. ($open ? number_format($count) : '<i class="fas fa-check"></i>')
-		. '</span></div>'
-		. '<div class="ka-ts-lbl">' . htmlspecialchars($open ? $label : $clear) . '</div>'
-		. ($open ? '<div class="ka-ts-sub">' . htmlspecialchars($sub) . '</div>' : '')
-		. '</div></' . $tag . '>';
-}
+/* _ka_queue() -- the one queue card, shared with the Park console. It used to be
+   defined inline here; the body is unchanged, it just lives in the partial now so
+   there is only ever one of it. */
+include __DIR__ . '/partials/_ka_queue.tpl';
 ?>
 <div class="ka-ts-row">
 <?php
