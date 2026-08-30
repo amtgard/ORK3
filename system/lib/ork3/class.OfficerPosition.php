@@ -96,12 +96,12 @@ class OfficerPosition extends Ork3
         $kingdom_id = (int) $kingdom_id;
 
         $sql = "SELECT p.*,
-				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-				" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
-			FROM " . DB_PREFIX . "officer_position p
-			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
-			WHERE (p.kingdom_id = 0 OR p.kingdom_id = :kingdom_id2)";
+    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+    			" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
+    		FROM " . DB_PREFIX . "officer_position p
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
+    		WHERE (p.kingdom_id = 0 OR p.kingdom_id = :kingdom_id2)";
         if (!$include_retired) {
             $sql .= " AND p.retired_at IS NULL";
         }
@@ -147,12 +147,12 @@ class OfficerPosition extends Ork3
         $DB->gp_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT p.*,
-				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-				" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
-			FROM " . DB_PREFIX . "officer_position p
-			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
-			WHERE p.position_id = :pid LIMIT 1"
+    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+    			" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
+    		FROM " . DB_PREFIX . "officer_position p
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
+    		WHERE p.position_id = :pid LIMIT 1"
         );
         if ($r === false || $r->size() == 0 || !$r->Next()) {
             return false;
@@ -167,10 +167,10 @@ class OfficerPosition extends Ork3
             $DB->rid = $rbac_role_id;
             $pr = $DB->DataSet(
                 "SELECT pm.`key` AS perm_key
-				 FROM " . DB_PREFIX . "role_permission rp
-				 JOIN " . DB_PREFIX . "permission pm ON pm.permission_id = rp.permission_id
-				 WHERE rp.role_id = :rid
-				 ORDER BY pm.`key`"
+    			 FROM " . DB_PREFIX . "role_permission rp
+    			 JOIN " . DB_PREFIX . "permission pm ON pm.permission_id = rp.permission_id
+    			 WHERE rp.role_id = :rid
+    			 ORDER BY pm.`key`"
             );
             if ($pr !== false && $pr->size() > 0) {
                 while ($pr->Next()) {
@@ -240,8 +240,8 @@ class OfficerPosition extends Ork3
         $DB->rp_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT position_id FROM " . DB_PREFIX . "officer_position
-			 WHERE canonical_key = :rp_key AND (kingdom_id = 0 OR kingdom_id = :rp_kid)
-			 ORDER BY kingdom_id DESC LIMIT 1"
+    		 WHERE canonical_key = :rp_key AND (kingdom_id = 0 OR kingdom_id = :rp_kid)
+    		 ORDER BY kingdom_id DESC LIMIT 1"
         );
         if ($r !== false && $r->size() > 0 && $r->Next()) {
             return (int) $r->position_id;
@@ -268,8 +268,8 @@ class OfficerPosition extends Ork3
         $DB->rc_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT canonical_key FROM " . DB_PREFIX . "officer_position
-			 WHERE canonical_key = :rc_key AND (kingdom_id = 0 OR kingdom_id = :rc_kid)
-			 ORDER BY kingdom_id DESC LIMIT 1"
+    		 WHERE canonical_key = :rc_key AND (kingdom_id = 0 OR kingdom_id = :rc_kid)
+    		 ORDER BY kingdom_id DESC LIMIT 1"
         );
         if ($r !== false && $r->size() > 0 && $r->Next()) {
             return $r->canonical_key;
@@ -362,10 +362,10 @@ class OfficerPosition extends Ork3
         $DB->so_kid2 = $kingdom_id;
         $mx = $DB->DataSet(
             "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
-			 FROM " . DB_PREFIX . "officer_position p
-			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
-			 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope . $excludeScope
+    		 FROM " . DB_PREFIX . "officer_position p
+    		 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
+    		 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope . $excludeScope
         );
         $sort_order = 100;
         if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
@@ -415,7 +415,7 @@ class OfficerPosition extends Ork3
         $DB->u_key = $slug;
         $exists = $DB->DataSet(
             "SELECT position_id FROM " . DB_PREFIX . "officer_position
-			 WHERE canonical_key = :u_key AND (kingdom_id = 0 OR kingdom_id = :u_kid) LIMIT 1"
+    		 WHERE canonical_key = :u_key AND (kingdom_id = 0 OR kingdom_id = :u_kid) LIMIT 1"
         );
         if ($exists !== false && $exists->size() > 0) {
             return InvalidParameter(null, 'A position with this key already exists for this kingdom.');
@@ -484,8 +484,8 @@ class OfficerPosition extends Ork3
         $parent_sql = ($parent_position_id === null) ? 'NULL' : (int) $parent_position_id;
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_position
-			 (kingdom_id, canonical_key, title, title_alias, classification, is_pinned, is_system, rbac_role_id, has_auth_role, sort_order, parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
-			 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, " . $parent_sql . ", :c_hwv, NULL, :c_cb, NOW())"
+    		 (kingdom_id, canonical_key, title, title_alias, classification, is_pinned, is_system, rbac_role_id, has_auth_role, sort_order, parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
+    		 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, " . $parent_sql . ", :c_hwv, NULL, :c_cb, NOW())"
         );
 
         // Prefer the driver's last-insert-id accessor over a SELECT-after-INSERT.
@@ -504,7 +504,7 @@ class OfficerPosition extends Ork3
                 $DB->orphan_kid = $kingdom_id;
                 $DB->Execute(
                     "DELETE FROM " . DB_PREFIX . "role
-					 WHERE role_id = :orphan_rid AND kingdom_id = :orphan_kid AND is_system = 0"
+    				 WHERE role_id = :orphan_rid AND kingdom_id = :orphan_kid AND is_system = 0"
                 );
             }
             return ProcessingError('The position could not be created. Please try again.');
@@ -584,8 +584,8 @@ class OfficerPosition extends Ork3
                 $DB->al_alias = $alias;
                 $DB->Execute(
                     "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, title_alias)
-					 VALUES (:al_kid, :al_key, :al_alias)
-					 ON DUPLICATE KEY UPDATE title_alias = VALUES(title_alias)"
+    				 VALUES (:al_kid, :al_key, :al_alias)
+    				 ON DUPLICATE KEY UPDATE title_alias = VALUES(title_alias)"
                 );
             } else {
                 // uq_kingdom_canonical means the title alias and the per-kingdom sort
@@ -598,16 +598,16 @@ class OfficerPosition extends Ork3
                 $DB->ad_key = $canonical_key;
                 $DB->Execute(
                     "UPDATE " . DB_PREFIX . "officer_position_alias
-					 SET title_alias = ''
-					 WHERE kingdom_id = :ad_kid AND canonical_key = :ad_key"
+    				 SET title_alias = ''
+    				 WHERE kingdom_id = :ad_kid AND canonical_key = :ad_key"
                 );
                 $DB->Clear();
                 $DB->adx_kid = $acting_kingdom_id;
                 $DB->adx_key = $canonical_key;
                 $DB->Execute(
                     "DELETE FROM " . DB_PREFIX . "officer_position_alias
-					 WHERE kingdom_id = :adx_kid AND canonical_key = :adx_key
-					   AND title_alias = '' AND sort_order IS NULL"
+    				 WHERE kingdom_id = :adx_kid AND canonical_key = :adx_key
+    				   AND title_alias = '' AND sort_order IS NULL"
                 );
             }
         }
@@ -628,8 +628,8 @@ class OfficerPosition extends Ork3
             $DB->eps_val = (int) $fields['sort_order'];
             $DB->Execute(
                 "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
-				 VALUES (:eps_kid, :eps_key, :eps_val)
-				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+    			 VALUES (:eps_kid, :eps_key, :eps_val)
+    			 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
             );
             $apply_sort_on_row = false;
         }
@@ -848,8 +848,8 @@ class OfficerPosition extends Ork3
         $DB->Clear();
         $r = $DB->DataSet(
             "SELECT position_id, kingdom_id, parent_position_id, canonical_key
-			 FROM " . DB_PREFIX . "officer_position
-			 WHERE position_id IN (" . implode(', ', $ids) . ")"
+    		 FROM " . DB_PREFIX . "officer_position
+    		 WHERE position_id IN (" . implode(', ', $ids) . ")"
         );
         $found = [];
         if ($r !== false && $r->size() > 0) {
@@ -912,8 +912,8 @@ class OfficerPosition extends Ork3
             $DB->Clear();
             if (!$DB->ExecuteChecked(
                 "UPDATE " . DB_PREFIX . "officer_position
-				 SET sort_order = CASE position_id " . implode(' ', $owned_cases) . " ELSE sort_order END
-				 WHERE position_id IN (" . implode(', ', $owned_ids) . ")"
+    			 SET sort_order = CASE position_id " . implode(' ', $owned_cases) . " ELSE sort_order END
+    			 WHERE position_id IN (" . implode(', ', $owned_ids) . ")"
             )) {
                 $DB->RollbackTrans();
                 return ProcessingError('The positions could not be reordered. Please try again.');
@@ -937,8 +937,8 @@ class OfficerPosition extends Ork3
             }
             if (!$DB->ExecuteChecked(
                 "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
-				 VALUES " . implode(', ', $tuples) . "
-				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+    			 VALUES " . implode(', ', $tuples) . "
+    			 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
             )) {
                 $DB->RollbackTrans();
                 return ProcessingError('The positions could not be reordered. Please try again.');
@@ -979,7 +979,7 @@ class OfficerPosition extends Ork3
         $DB->vp_pid = $proposed_parent_id;
         $r = $DB->DataSet(
             "SELECT position_id, kingdom_id FROM " . DB_PREFIX . "officer_position
-			 WHERE position_id = :vp_pid LIMIT 1"
+    		 WHERE position_id = :vp_pid LIMIT 1"
         );
         if ($r === false || $r->size() == 0 || !$r->Next()) {
             return InvalidParameter(null, 'The selected parent position does not exist.');
@@ -1015,7 +1015,7 @@ class OfficerPosition extends Ork3
         $DB->wc_kid = $pos_kingdom_id;
         $r = $DB->DataSet(
             "SELECT position_id, parent_position_id FROM " . DB_PREFIX . "officer_position
-			 WHERE kingdom_id = 0 OR kingdom_id = :wc_kid"
+    		 WHERE kingdom_id = 0 OR kingdom_id = :wc_kid"
         );
         $parent_of = [];
         if ($r !== false && $r->size() > 0) {
@@ -1059,7 +1059,7 @@ class OfficerPosition extends Ork3
         $DB->rcb_pid = $position_id;
         $occ = $DB->DataSet(
             "SELECT mundane_id, kingdom_id, park_id FROM " . DB_PREFIX . "officer
-			 WHERE position_id = :rcb_pid AND mundane_id > 0"
+    		 WHERE position_id = :rcb_pid AND mundane_id > 0"
         );
         if ($occ === false || $occ->size() == 0) {
             return;
@@ -1092,8 +1092,8 @@ class OfficerPosition extends Ork3
                 $DB->Clear();
                 if (!$DB->ExecuteChecked(
                     "DELETE FROM " . DB_PREFIX . "user_role
-					 WHERE role_id = " . $old_rbac_role_id . "
-					   AND (mundane_id, kingdom_id, park_id) IN (" . implode(', ', $tuples) . ")"
+    				 WHERE role_id = " . $old_rbac_role_id . "
+    				   AND (mundane_id, kingdom_id, park_id) IN (" . implode(', ', $tuples) . ")"
                 )) {
                     throw new Exception('officer role revoke failed');
                 }
@@ -1109,8 +1109,8 @@ class OfficerPosition extends Ork3
                 $DB->Clear();
                 if (!$DB->ExecuteChecked(
                     "INSERT IGNORE INTO " . DB_PREFIX . "user_role
-					 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
-					 VALUES " . implode(', ', $values)
+    				 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
+    				 VALUES " . implode(', ', $values)
                 )) {
                     throw new Exception('officer role grant failed');
                 }
@@ -1163,7 +1163,7 @@ class OfficerPosition extends Ork3
         $DB->rt_pid = $position_id;
         $occ = $DB->DataSet(
             "SELECT mundane_id, kingdom_id, park_id FROM " . DB_PREFIX . "officer
-			 WHERE position_id = :rt_pid AND mundane_id > 0"
+    		 WHERE position_id = :rt_pid AND mundane_id > 0"
         );
         $vacated = [];
         if ($occ !== false && $occ->size() > 0) {
@@ -1264,8 +1264,8 @@ class OfficerPosition extends Ork3
                 $DB->ri_key = $position['CanonicalKey'];
                 if (!$DB->ExecuteChecked(
                     "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
-					 VALUES (" . (int) $measure_kingdom_id . ", :ri_key, " . (int) $sort_order . ")
-					 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+    				 VALUES (" . (int) $measure_kingdom_id . ", :ri_key, " . (int) $sort_order . ")
+    				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
                 )) {
                     $DB->RollbackTrans();
                     return ProcessingError('The position could not be reinstated. Please try again.');
@@ -1277,8 +1277,8 @@ class OfficerPosition extends Ork3
         $DB->ri_pid = $position_id;
         if (!$DB->ExecuteChecked(
             "UPDATE " . DB_PREFIX . "officer_position
-			 SET " . $set_sort . "retired_at = NULL
-			 WHERE position_id = :ri_pid"
+    		 SET " . $set_sort . "retired_at = NULL
+    		 WHERE position_id = :ri_pid"
         )) {
             $DB->RollbackTrans();
             return ProcessingError('The position could not be reinstated. Please try again.');
@@ -1311,16 +1311,16 @@ class OfficerPosition extends Ork3
         $park_id = (int) $park_id;
 
         $sql = "SELECT o.officer_id, o.mundane_id, o.position_id, o.role,
-				p.canonical_key, p.classification, p.sort_order,
-				p.parent_position_id, p.hide_when_vacant,
-				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-				m.persona, m.given_name, m.surname, m.username
-			FROM " . DB_PREFIX . "officer o
-			JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
-			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			  ON a.kingdom_id = :kid AND a.canonical_key = p.canonical_key
-			LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
-			WHERE o.kingdom_id = :kid2 AND o.park_id = :pid";
+    			p.canonical_key, p.classification, p.sort_order,
+    			p.parent_position_id, p.hide_when_vacant,
+    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+    			m.persona, m.given_name, m.surname, m.username
+    		FROM " . DB_PREFIX . "officer o
+    		JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :kid AND a.canonical_key = p.canonical_key
+    		LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+    		WHERE o.kingdom_id = :kid2 AND o.park_id = :pid";
         if (!$include_retired) {
             $sql .= " AND p.retired_at IS NULL";
         }
@@ -1426,18 +1426,18 @@ class OfficerPosition extends Ork3
             $DB->cp_pos = $position_id;
             $conflict = $DB->DataSet(
                 "SELECT o.kingdom_id, o.park_id, o.position_id,
-					" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-					k.name AS kingdom_name, pk.name AS park_name
-				 FROM " . DB_PREFIX . "officer o
-				 JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
-				 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-				   ON a.kingdom_id = o.kingdom_id AND a.canonical_key = p.canonical_key
-				 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = o.kingdom_id
-				 LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = o.park_id
-				 WHERE p.classification = 'crown' AND p.retired_at IS NULL
-				   AND o.mundane_id = :cp_mid
-				   AND NOT (o.kingdom_id = :cp_k AND o.park_id = :cp_p AND o.position_id = :cp_pos)
-				 LIMIT 1"
+    				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+    				k.name AS kingdom_name, pk.name AS park_name
+    			 FROM " . DB_PREFIX . "officer o
+    			 JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
+    			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    			   ON a.kingdom_id = o.kingdom_id AND a.canonical_key = p.canonical_key
+    			 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = o.kingdom_id
+    			 LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = o.park_id
+    			 WHERE p.classification = 'crown' AND p.retired_at IS NULL
+    			   AND o.mundane_id = :cp_mid
+    			   AND NOT (o.kingdom_id = :cp_k AND o.park_id = :cp_p AND o.position_id = :cp_pos)
+    			 LIMIT 1"
             );
             if ($conflict !== false && $conflict->size() > 0 && $conflict->Next()) {
                 $scope = ((int) $conflict->park_id > 0)
@@ -1535,9 +1535,9 @@ class OfficerPosition extends Ork3
             $DB->vs_pos = $position_id;
             $rows = $DB->DataSet(
                 "SELECT officer_id, mundane_id, modified FROM " . DB_PREFIX . "officer
-				 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos
-				   AND mundane_id > 0
-				 ORDER BY officer_id"
+    			 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos
+    			   AND mundane_id > 0
+    			 ORDER BY officer_id"
             );
             $occupied = [];
             if ($rows !== false && $rows->size() > 0) {
@@ -1598,8 +1598,8 @@ class OfficerPosition extends Ork3
                 } else {
                     $DB->Execute(
                         "UPDATE " . DB_PREFIX . "officer
-						 SET mundane_id = 0, modified = NOW()
-						 WHERE officer_id = :vd_oid"
+    					 SET mundane_id = 0, modified = NOW()
+    					 WHERE officer_id = :vd_oid"
                     );
                 }
                 $remaining--;
@@ -1627,8 +1627,8 @@ class OfficerPosition extends Ork3
             $DB->vc_mid = $mundane_id;
             $cur = $DB->DataSet(
                 "SELECT officer_id FROM " . DB_PREFIX . "officer
-				 WHERE kingdom_id = :vc_kid AND park_id = :vc_pid
-				   AND position_id = :vc_pos AND mundane_id = :vc_mid LIMIT 1"
+    			 WHERE kingdom_id = :vc_kid AND park_id = :vc_pid
+    			   AND position_id = :vc_pos AND mundane_id = :vc_mid LIMIT 1"
             );
             if ($cur === false || $cur->size() == 0) {
                 return InvalidParameter(null, 'That member does not currently hold this position.');
@@ -1661,7 +1661,7 @@ class OfficerPosition extends Ork3
         $DB->ec_pos = (int) $position_id;
         $ex = $DB->DataSet(
             "SELECT officer_id FROM " . DB_PREFIX . "officer
-			 WHERE kingdom_id = :ec_kid AND park_id = :ec_pid AND position_id = :ec_pos LIMIT 1"
+    		 WHERE kingdom_id = :ec_kid AND park_id = :ec_pid AND position_id = :ec_pos LIMIT 1"
         );
         if ($ex !== false && $ex->size() > 0) {
             return;
@@ -1673,8 +1673,8 @@ class OfficerPosition extends Ork3
         $DB->ic_role = $canonical_key;
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer
-			 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
-			 VALUES (:ic_kid, :ic_pid, 0, :ic_role, 0, 0, :ic_pos, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+    		 VALUES (:ic_kid, :ic_pid, 0, :ic_role, 0, 0, :ic_pos, NOW())"
         );
     }
 
@@ -1717,8 +1717,8 @@ class OfficerPosition extends Ork3
         // Legacy rows written before position_id existed carry position_id = 0 and
         // identify the office by canonical key alone; match those too.
         $match = "kingdom_id = :ch_kid AND park_id = :ch_pid AND mundane_id = :ch_mid
-			   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
-			   AND end_date IS NULL";
+    		   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
+    		   AND end_date IS NULL";
 
         $DB->Clear();
         $DB->ch_kid = $kingdom_id;
@@ -1728,7 +1728,7 @@ class OfficerPosition extends Ork3
         $DB->ch_role = $canonical_key;
         $open = $DB->DataSet(
             "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history
-			 WHERE " . $match . " LIMIT 1"
+    		 WHERE " . $match . " LIMIT 1"
         );
 
         if ($open !== false && $open->size() > 0) {
@@ -1743,8 +1743,8 @@ class OfficerPosition extends Ork3
             $DB->ch_role = $canonical_key;
             $DB->Execute(
                 "UPDATE " . DB_PREFIX . "officer_history
-				 SET end_date = :ch_end
-				 WHERE " . $match
+    			 SET end_date = :ch_end
+    			 WHERE " . $match
             );
             return;
         }
@@ -1767,8 +1767,8 @@ class OfficerPosition extends Ork3
         $DB->cb_cb = ($changed_by > 0 ? $changed_by : null);
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_history
-			 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-			 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label, :cb_start, :cb_end, :cb_cb, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+    		 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label, :cb_start, :cb_end, :cb_cb, NOW())"
         );
     }
 
@@ -1793,7 +1793,7 @@ class OfficerPosition extends Ork3
         $DB->io_mid = $mundane_id;
         $dup = $DB->DataSet(
             "SELECT officer_id FROM " . DB_PREFIX . "officer
-			 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id = :io_mid LIMIT 1"
+    		 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id = :io_mid LIMIT 1"
         );
         if ($dup !== false && $dup->size() > 0) {
             return;
@@ -1807,8 +1807,8 @@ class OfficerPosition extends Ork3
         $DB->ins_pos = $position_id;
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer
-			 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
-			 VALUES (:ins_kid, :ins_pid, :ins_mid, :ins_role, 0, 0, :ins_pos, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+    		 VALUES (:ins_kid, :ins_pid, :ins_mid, :ins_role, 0, 0, :ins_pos, NOW())"
         );
 
         // Open an ork_officer_history term for this supporting appointment so the
@@ -1837,8 +1837,8 @@ class OfficerPosition extends Ork3
         }
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_history
-			 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-			 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", :ih_cb, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", :ih_cb, NOW())"
         );
 
         // RBAC grant via the shared service.
