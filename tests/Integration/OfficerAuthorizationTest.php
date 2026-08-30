@@ -324,6 +324,89 @@ final class OfficerAuthorizationTest extends TestCase
         self::assertStringContainsString((string) $mundaneId, (string) $priorState);
     }
 
+    public function testAddHistoryTermRefusesASecondOpenTerm(): void
+    {
+        $token      = $this->fixture->createAuthorizedOfficer();
+        $positionId = $this->seededPositions['crown_a'];
+        $first      = $this->seededMundanes[0];
+        $second     = $this->seedMundane('second_open');
+        $this->seededMundanes[] = $second;
+
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+                 'PositionId' => $positionId];
+
+        $a = $this->positions->AddHistoryTerm($base + ['MundaneId' => $first, 'StartDate' => '2026-01-01']);
+        self::assertSame(0, (int)$a['Status'], $a['Error'] ?? '');
+
+        $b = $this->positions->AddHistoryTerm($base + ['MundaneId' => $second, 'StartDate' => '2026-02-01']);
+        self::assertSame(
+            4,
+            (int)$b['Status'],
+            'two open terms on one office means it reads as held by two people'
+        );
+    }
+
+    public function testEditHistoryTermRefusesReopeningIntoASecondOpenTerm(): void
+    {
+        $token      = $this->fixture->createAuthorizedOfficer();
+        $positionId = $this->seededPositions['crown_b'];
+        $former     = $this->seedMundane('former_reopen');
+        $current    = $this->seedMundane('current_reopen');
+        $this->seededMundanes[] = $former;
+        $this->seededMundanes[] = $current;
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+                 'PositionId' => $positionId];
+
+        // A closed term, then an open one on the same office.
+        $closed = $this->positions->AddHistoryTerm(
+            $base + ['MundaneId' => $former, 'StartDate' => '2025-01-01', 'EndDate' => '2025-12-31']
+        );
+        self::assertSame(0, (int)$closed['Status'], $closed['Error'] ?? '');
+        $this->positions->AddHistoryTerm($base + ['MundaneId' => $current, 'StartDate' => '2026-01-01']);
+
+        $closedId = (int)$this->pdo->query(
+            "SELECT officer_history_id FROM ork_officer_history
+              WHERE position_id = {$positionId} AND end_date IS NOT NULL
+              ORDER BY officer_history_id DESC LIMIT 1"
+        )->fetchColumn();
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $closedId, 'EndDate' => '',
+        ]);
+        self::assertSame(
+            4,
+            (int)$r['Status'],
+            'clearing EndDate must not create a second open term'
+        );
+    }
+
+    public function testEditHistoryTermStillAllowsClearingWhenNoOtherOpenTermExists(): void
+    {
+        $token      = $this->fixture->createAuthorizedOfficer();
+        $positionId = $this->seededPositions['crown_a'];
+        $who        = $this->seedMundane('lone_reopen');
+        $this->seededMundanes[] = $who;
+
+        $this->positions->AddHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $who,
+            'StartDate' => '2025-01-01', 'EndDate' => '2025-12-31',
+        ]);
+        $id = (int)$this->pdo->query(
+            "SELECT officer_history_id FROM ork_officer_history
+              WHERE position_id = {$positionId} AND mundane_id = {$who} LIMIT 1"
+        )->fetchColumn();
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $id, 'EndDate' => '',
+        ]);
+        self::assertSame(
+            0,
+            (int)$r['Status'],
+            'reopening the ONLY term must still work -- the guard is about a SECOND one'
+        );
+    }
+
     /** @return list<array{0:string,1:array<string,mixed>}> */
     public static function positionMethodProvider(): array
     {

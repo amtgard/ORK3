@@ -2311,6 +2311,34 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * True when this office+scope already has an open term other than $except_id.
+     *
+     * `end_date IS NULL` is what defines "current officer" everywhere in this
+     * codebase, so a second open row makes one office read as held by two people --
+     * the state the 2026-08-29 backfill was written to repair. Matches the legacy
+     * position_id = 0 fallback the rest of the class uses.
+     */
+    private function hasOtherOpenTerm($kingdom_id, $park_id, $position_id, $canonical_key, $except_id = 0)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ho_kid = (int) $kingdom_id;
+        $DB->ho_pid = (int) $park_id;
+        $DB->ho_pos = (int) $position_id;
+        $DB->ho_role = (string) $canonical_key;
+        $DB->ho_except = (int) $except_id;
+        $r = $DB->DataSet(
+            'SELECT officer_history_id FROM ' . DB_PREFIX . 'officer_history
+              WHERE kingdom_id = :ho_kid AND park_id = :ho_pid
+                AND ( position_id = :ho_pos OR ( position_id = 0 AND role = :ho_role ) )
+                AND end_date IS NULL
+                AND officer_history_id <> :ho_except
+              LIMIT 1'
+        );
+        return ($r !== false && $r->size() > 0);
+    }
+
+    /**
      * Add a new officer_history term directly, independent of any live seat
      * change. Gated on PermissionKeyFor('history', $park_id).
      *
@@ -2387,6 +2415,9 @@ class OfficerPosition extends Ork3
         }
         if ($start !== '' && $end !== '' && $end < $start) {
             return InvalidParameter(null, 'A term cannot end before it began.');
+        }
+        if ($end === '' && $this->hasOtherOpenTerm($kingdom_id, $park_id, $position_id, $position['CanonicalKey'])) {
+            return InvalidParameter(null, 'That office already has an open term. Close it first.');
         }
         // mb_substr, not substr: Note is free text and a byte-based cut can slice
         // a multi-byte character in half, leaving invalid UTF-8 in the column.
@@ -2502,6 +2533,15 @@ class OfficerPosition extends Ork3
         }
         if ($start !== '' && $end !== '' && $end < $start) {
             return InvalidParameter(null, 'A term cannot end before it began.');
+        }
+        if ($end === '' && $this->hasOtherOpenTerm(
+            $row['kingdom_id'],
+            $row['park_id'],
+            $row['position_id'],
+            $row['role'],
+            $history_id
+        )) {
+            return InvalidParameter(null, 'That office already has an open term. Close it first.');
         }
         $note = array_key_exists('Note', $request)
             ? mb_substr(trim((string) $request['Note']), 0, 500)
