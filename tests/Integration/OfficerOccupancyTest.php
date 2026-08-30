@@ -38,6 +38,7 @@ final class OfficerOccupancyTest extends TestCase
         $this->fixture->grantParkAuthority(self::PARK_B);
         $this->seededPositions['crown_a'] = $this->seedPosition('crown_a', 'crown');
         $this->seededPositions['crown_b'] = $this->seedPosition('crown_b', 'crown');
+        $this->seededPositions['support_a'] = $this->seedPosition('support_a', 'supporting');
         $this->seededMundanes[] = $this->seedMundane('holder');
     }
 
@@ -121,6 +122,94 @@ final class OfficerOccupancyTest extends TestCase
             0,
             (int) $second['Status'],
             'two offices in one park must be allowed: ' . ($second['Error'] ?? '')
+        );
+    }
+
+    /**
+     * A supporting position used to append a second ork_officer row per new
+     * occupant (crown replaces in place via set_officer; supporting had no
+     * equivalent guard). An office holds exactly one person -- a kingdom that
+     * wants two deputies creates two offices.
+     */
+    public function testASecondPersonCannotTakeAnOccupiedSeat(): void
+    {
+        $positionId = $this->seededPositions['support_a'];
+        $first  = $this->seededMundanes[0];
+        $second = $this->seedMundane('second');
+        $this->seededMundanes[] = $second;
+
+        $token = $this->fixture->createAuthorizedOfficer();
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+                 'PositionId' => $positionId];
+        $firstResult = $this->positions->SetOccupant($base + ['MundaneId' => $first]);
+        self::assertSame(0, (int) $firstResult['Status'], 'first appointment should succeed: ' . ($firstResult['Error'] ?? ''));
+
+        $secondResult = $this->positions->SetOccupant($base + ['MundaneId' => $second]);
+        self::assertSame(
+            4,
+            (int) $secondResult['Status'],
+            'a second, different person must be refused the occupied seat'
+        );
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer WHERE position_id = :pid AND mundane_id > 0'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(1, (int) $stmt->fetchColumn(), 'an office holds exactly one person');
+    }
+
+    /**
+     * Re-seating the SAME person into a seat they already hold is idempotent,
+     * not a refusal -- the refusal is only for a different person.
+     */
+    public function testReseatingTheSameHolderIsIdempotent(): void
+    {
+        $positionId = $this->seededPositions['support_a'];
+        $mundaneId  = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+                 'PositionId' => $positionId, 'MundaneId' => $mundaneId];
+
+        $this->positions->SetOccupant($base);
+        $again = $this->positions->SetOccupant($base);
+        self::assertSame(0, (int) $again['Status'], 'reseating the same holder is idempotent: ' . ($again['Error'] ?? ''));
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer WHERE position_id = :pid AND mundane_id > 0'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(1, (int) $stmt->fetchColumn(), 'idempotent reseating must not duplicate the row');
+    }
+
+    /**
+     * Retire is CROSS-SCOPE (clears the position everywhere); one-seat is
+     * PER-SCOPE. Collapsing them would break retirement, which must still
+     * clear a crown position seated in two parks plus the kingdom at once.
+     */
+    public function testRetireStillClearsEveryScope(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $mundaneId  = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        foreach ([self::PARK_A, self::PARK_B, 0] as $parkId) {
+            $this->positions->SetOccupant([
+                'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => $parkId,
+                'PositionId' => $positionId, 'MundaneId' => $mundaneId,
+            ]);
+        }
+        $this->positions->RetirePosition([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId,
+        ]);
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer WHERE position_id = :pid AND mundane_id > 0'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(
+            0,
+            (int) $stmt->fetchColumn(),
+            'retire is cross-scope; one-seat is per-scope. Collapsing them breaks retirement.'
         );
     }
 

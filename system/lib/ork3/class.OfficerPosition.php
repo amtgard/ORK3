@@ -2642,11 +2642,10 @@ class OfficerPosition extends Ork3
         $classification = $position['Classification'];
 
         if ($classification !== 'crown') {
-            // Supporting: no lock, no global check, multiple rows allowed. Each
-            // assignment is a fresh ork_officer row (set_officer is single-slot and
-            // cannot represent multi-occupant supporting positions).
-            $this->InsertOfficerRow($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start, $term_end, $position['DisplayTitle']);
-            return Success();
+            // Supporting: no lock, single-occupant-per-scope like crown (see
+            // InsertOfficerRow). Propagate its result -- a refusal must reach
+            // the API response, not be swallowed here.
+            return $this->InsertOfficerRow($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start, $term_end, $position['DisplayTitle']);
         }
 
         // Serialize on the OFFICE being written, not the person. The old key
@@ -3000,18 +2999,23 @@ class OfficerPosition extends Ork3
         $mundane_id = (int) $mundane_id;
         $changed_by = (int) $changed_by;
 
-        // Idempotency: do not add the same person twice to the same supporting slot.
+        // One seat per office. A kingdom that wants two deputies creates two
+        // offices. This is the mirror of the removed crown rule, not a survivor of
+        // it: the constraint is on the seat, never on the person -- a person may
+        // hold any number of offices, at any number of levels.
         $DB->Clear();
         $DB->io_kid = $kingdom_id;
         $DB->io_pid = $park_id;
         $DB->io_pos = $position_id;
-        $DB->io_mid = $mundane_id;
-        $dup = $DB->DataSet(
-            "SELECT officer_id FROM " . DB_PREFIX . "officer
-    		 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id = :io_mid LIMIT 1"
+        $held = $DB->DataSet(
+            "SELECT mundane_id FROM " . DB_PREFIX . "officer
+    		 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id > 0 LIMIT 1"
         );
-        if ($dup !== false && $dup->size() > 0) {
-            return;
+        if ($held !== false && $held->size() > 0 && $held->Next()) {
+            if ((int) $held->mundane_id === $mundane_id) {
+                return Success();   // idempotent: already seated
+            }
+            return InvalidParameter(null, 'This office already has a holder. Transition it instead.');
         }
 
         $DB->Clear();
@@ -3064,5 +3068,7 @@ class OfficerPosition extends Ork3
                 logtrace('RBAC supporting grant failed', $e->getMessage());
             }
         }
+
+        return Success();
     }
 }
