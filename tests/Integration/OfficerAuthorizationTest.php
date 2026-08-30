@@ -11,6 +11,7 @@ final class OfficerAuthorizationTest extends TestCase
 
     private PDO $pdo;
     private OfficerPosition $positions;
+    private AuthorizedOfficerFixture $fixture;
     /** @var array<string,int> */
     private array $seededPositions = [];
     /** @var list<int> */
@@ -28,6 +29,7 @@ final class OfficerAuthorizationTest extends TestCase
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         $this->positions = new OfficerPosition();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
         $this->seededPositions['crown_a'] = $this->seedPosition('crown_a', 'crown');
         $this->seededPositions['crown_b'] = $this->seedPosition('crown_b', 'crown');
         $this->seededMundanes[] = $this->seedMundane('holder');
@@ -38,6 +40,15 @@ final class OfficerAuthorizationTest extends TestCase
         if (!isset($this->pdo)) {
             return;
         }
+        $this->fixture->cleanup();
+        // Scoped to entity_id = self::KINGDOM_ID (every test in this file posts
+        // ParkId => 0), not a blanket delete of every audit row in the database --
+        // ork_danger_audit carries no marker column.
+        $this->pdo->exec(
+            "DELETE FROM ork_danger_audit WHERE method_call IN"
+            . " ('OfficerPosition::SetOccupant', 'OfficerPosition::VacateOffice', 'OfficerPosition::VacateOfficer')"
+            . ' AND entity_id = ' . self::KINGDOM_ID
+        );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
@@ -87,6 +98,79 @@ final class OfficerAuthorizationTest extends TestCase
         self::assertTrue($r->getMethod('vacateOfficerByPosition')->isPrivate());
         self::assertTrue($r->getMethod('SetOccupant')->isPublic());
         self::assertTrue($r->getMethod('VacateOfficer')->isPublic());
+        self::assertTrue($r->getMethod('VacateOffice')->isPublic());
+    }
+
+    public function testVacateOfficeRejectsAnInvalidToken(): void
+    {
+        $r = $this->positions->VacateOffice([
+            'Token' => 'not-a-real-token', 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $this->seededPositions['crown_a'],
+        ]);
+        self::assertSame(5, (int) $r['Status']);
+    }
+
+    /**
+     * VacateOffice is the console's ONLY vacate control for crown offices
+     * (_manage_officers.tpl's per-holder button is gated to non-crown
+     * positions) and takes no MundaneId at all -- restoring it after it was
+     * mistakenly deleted (Task 5) is what this test guards against
+     * regressing again.
+     */
+    public function testVacateOfficeClearsTheSeatAndClosesTheOpenTerm(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $mundaneId  = $this->seededMundanes[0];
+        $token      = $this->fixture->createAuthorizedOfficer();
+
+        $seat = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $mundaneId,
+        ]);
+        self::assertSame(0, (int) $seat['Status'], 'setup: seating the officer must succeed: ' . ($seat['Error'] ?? ''));
+
+        $r = $this->positions->VacateOffice([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId,
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $seatStmt = $this->pdo->prepare(
+            'SELECT mundane_id FROM ork_officer WHERE kingdom_id = :kid AND park_id = 0 AND position_id = :pid'
+        );
+        $seatStmt->execute([':kid' => self::KINGDOM_ID, ':pid' => $positionId]);
+        $remaining = $seatStmt->fetchAll(PDO::FETCH_COLUMN);
+        self::assertNotContains(
+            $mundaneId,
+            array_map('intval', $remaining),
+            'the office must no longer show this person as the seated occupant'
+        );
+
+        $historyStmt = $this->pdo->prepare(
+            'SELECT end_date FROM ork_officer_history
+             WHERE position_id = :pid AND mundane_id = :mid ORDER BY officer_history_id DESC LIMIT 1'
+        );
+        $historyStmt->execute([':pid' => $positionId, ':mid' => $mundaneId]);
+        self::assertNotNull(
+            $historyStmt->fetchColumn(),
+            'vacating must close the open history term, not leave it open'
+        );
+    }
+
+    /**
+     * Proves VacateOfficer and VacateOffice stayed two distinct verbs: a
+     * missing MundaneId on VacateOfficer is rejected rather than silently
+     * falling back to the all-holders behaviour VacateOffice provides.
+     */
+    public function testVacateOfficerStillRejectsAMissingMundaneId(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+
+        $r = $this->positions->VacateOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $this->seededPositions['crown_a'],
+        ]);
+        self::assertSame(4, (int) $r['Status']);
     }
 
     private function seedPosition(string $suffix, string $classification): int

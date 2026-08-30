@@ -13,14 +13,19 @@
  *
  * ParkId comes from POST 'ParkId' (default 0 = kingdom scope for the prototype).
  *
- * Vacating: both routes remove a single holder -- OfficerPosition::VacateOfficer
- * REQUIRES a MundaneId, so "clear the whole office" is no longer reachable from
- * this console entry point (it stays available internally to RetirePosition,
- * which needs it to clear a retired position across every scope at once).
- *   vacateholder — POST MundaneId required; removes that one holder.
- *   vacate       — legacy entry point; also requires MundaneId now.
+ * Vacating comes in two explicitly-named flavours so "remove this person" and
+ * "clear the whole office" can never be confused at the wire level -- scope is
+ * decided by the ROUTE, never by whether a payload field happens to be present:
+ *   vacateholder — POST MundaneId required; removes that one holder. Routed to
+ *                  OfficerPosition::VacateOfficer, which REQUIRES a MundaneId.
+ *   vacate       — legacy entry point; also requires MundaneId now, same as
+ *                  vacateholder above.
+ *   vacateall    — removes every holder of the position in this scope. This is
+ *                  the ONLY vacate control the console renders for crown
+ *                  offices (the per-holder button is gated to non-crown
+ *                  positions), so it must keep resolving. Routed to
+ *                  OfficerPosition::VacateOffice, which takes no MundaneId.
  *
-
  * Response envelope: success => {status:0, ...}; failure => {status:N, error:'...'}.
  * Not logged in => {status:5}; invalid kingdom => {status:1}; unauthorized => {status:5}.
  ***/
@@ -73,6 +78,7 @@ class Controller_OfficerAdminAjax extends Controller
             'setoccupant'    => 'kingdom.officer.set',
             'vacate'         => 'kingdom.officer.set',
             'vacateholder'   => 'kingdom.officer.set',
+            'vacateall'      => 'kingdom.officer.set',
             'createposition' => 'kingdom.officer.position.manage',
             'editposition'   => 'kingdom.officer.position.manage',
             'reorderpositions' => 'kingdom.officer.position.manage',
@@ -104,6 +110,8 @@ class Controller_OfficerAdminAjax extends Controller
             case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid, null);
                 break;
             case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid, 'holder');
+                break;
+            case 'vacateall':    $this->actionVacateAll($kingdom_id, $park_id);
                 break;
             case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);
                 break;
@@ -551,6 +559,36 @@ class Controller_OfficerAdminAjax extends Controller
             'PositionId' => $position_id,
             'MundaneId'  => $mundane_id,
             'Scope'      => 'holder',
+        ]]);
+    }
+
+    /**
+     * Clear every holder of an office in this scope. This is the console's
+     * primary Vacate control for crown offices -- the per-holder button is
+     * rendered only for non-crown positions -- so unlike actionVacate() above
+     * it takes no MundaneId at all; routed to OfficerPosition::VacateOffice,
+     * a separate verb from VacateOfficer precisely so a missing/stray
+     * MundaneId can never be what decides whether one person or the whole
+     * office gets cleared.
+     */
+    private function actionVacateAll($kingdom_id, $park_id)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->VacateOffice([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
+        $this->emitServiceResult($r, ['data' => [
+            'PositionId' => $position_id,
+            'MundaneId'  => 0,
+            'Scope'      => 'all',
         ]]);
     }
 
