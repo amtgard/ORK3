@@ -524,7 +524,7 @@ class OfficerPosition extends Ork3
             if (!isset(Ork3::$Lib->rbacservice)) {
                 return ProcessingError('RBAC service unavailable; cannot create custom role.');
             }
-            $res = Ork3::$Lib->rbacservice->createRoleInternal(
+            $res = Ork3::$Lib->rbacservice->create_role_internal(
                 $creator_id,
                 $kingdom_id,
                 'officer:' . $slug,
@@ -890,7 +890,7 @@ class OfficerPosition extends Ork3
             // Custom-permission upsert on the bound role.
             if (isset($fields['permission_keys']) && is_array($fields['permission_keys'])
                 && isset(Ork3::$Lib->rbacservice) && $old_rbac_role_id > 0) {
-                Ork3::$Lib->rbacservice->editRoleInternal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
+                Ork3::$Lib->rbacservice->edit_role_internal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
             }
 
             // Rebinding to a different existing role (validated up-front into

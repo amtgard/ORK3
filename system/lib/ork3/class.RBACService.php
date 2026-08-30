@@ -702,12 +702,12 @@ class RBACService extends Ork3
 
     /**
      * Token-gated entry point. Create a custom role for a kingdom. Resolves the
-     * acting user from the token, then delegates to createRoleInternal() with the proven
+     * acting user from the token, then delegates to create_role_internal() with the proven
      * identity.
      *
-     * NOTE: createRoleInternal() also has an internal caller --
+     * NOTE: create_role_internal() also has an internal caller --
      * OfficerPosition::createPositionInternal() -- which already holds a proven
-     * actor_id from its own token-gated wrapper and calls createRoleInternal() directly,
+     * actor_id from its own token-gated wrapper and calls create_role_internal() directly,
      * bypassing this token check. That is intentional: it is a domain-to-domain
      * call with an already-verified identity, not a second HTTP entry point.
      *
@@ -733,7 +733,7 @@ class RBACService extends Ork3
         }
 
         $permission_keys = $request['Permissions'] ?? [];
-        $r = $this->createRoleInternal(
+        $r = $this->create_role_internal(
             $actor_id,
             $kingdom_id,
             (string) ($request['Name'] ?? ''),
@@ -771,7 +771,7 @@ class RBACService extends Ork3
      * @param array  $permission_keys  Array of permission key strings
      * @return array  Standard ORK response array (Detail = new role_id on success)
      */
-    public function createRoleInternal($creator_id, $kingdom_id, $name, $display_name, $description, $scope_type, $permission_keys = [])
+    public function create_role_internal($creator_id, $kingdom_id, $name, $display_name, $description, $scope_type, $permission_keys = [])
     {
         global $DB;
 
@@ -860,12 +860,12 @@ class RBACService extends Ork3
 
     /**
      * Token-gated entry point. Edit a custom role's permissions. Resolves the
-     * acting user from the token, then delegates to editRoleInternal() with the proven
+     * acting user from the token, then delegates to edit_role_internal() with the proven
      * identity.
      *
-     * NOTE: editRoleInternal() also has an internal caller --
+     * NOTE: edit_role_internal() also has an internal caller --
      * OfficerPosition::editPositionInternal() -- which already holds a proven
-     * actor_id from its own token-gated wrapper and calls editRoleInternal() directly,
+     * actor_id from its own token-gated wrapper and calls edit_role_internal() directly,
      * bypassing this token check. That is intentional: it is a domain-to-domain
      * call with an already-verified identity, not a second HTTP entry point.
      *
@@ -891,7 +891,7 @@ class RBACService extends Ork3
         }
 
         $permission_keys = $request['Permissions'] ?? [];
-        $r = $this->editRoleInternal(
+        $r = $this->edit_role_internal(
             $actor_id,
             (int) ($request['RoleId'] ?? 0),
             is_array($permission_keys) ? $permission_keys : [],
@@ -931,7 +931,7 @@ class RBACService extends Ork3
      * @param int $acting_kingdom_id  Kingdom the CALLER was authorized for. The role must
      *                                belong to it. 0 skips the check (admin/CLI callers only).
      */
-    public function editRoleInternal($editor_id, $role_id, $permission_keys, $display_name = null, $description = null, $acting_kingdom_id = 0)
+    public function edit_role_internal($editor_id, $role_id, $permission_keys, $display_name = null, $description = null, $acting_kingdom_id = 0)
     {
         global $DB;
 
