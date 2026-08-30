@@ -1356,8 +1356,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	function ensureRoles(cb) {
 		if (moRoles) { cb(); return; }
 		// See the ParkId comment on moLoad()'s list call above -- same GET-only
-		// constraint. Here it's authorization-only (the RBAC catalog isn't park-specific),
-		// but a park-only officer would otherwise be refused just opening this modal.
+		// constraint. NOTE: ParkId no longer buys authorization here. 'roles' and
+		// 'permissions' are in the 'position' family, which the controller now gates at
+		// KINGDOM scope regardless of ParkId, so a park-ONLY officer IS refused these two.
+		// That is fine: both loaders run only inside the position create/edit modal, whose
+		// entry points are hidden when moCanManagePositions is false. ParkId still matters
+		// -- it makes the controller derive the kingdom from the park instead of trusting
+		// the URL segment -- so keep sending it.
 		$.getJSON(base() + 'roles' + (MoConfig.parkId ? '&ParkId=' + MoConfig.parkId : ''), function(resp) {
 			if (resp && resp.status === 0) { moRoles = resp.data || []; }
 			else { moRoles = null; moLoadFailed('officer roles', (resp && resp.error) || resp); }
