@@ -90,4 +90,20 @@ final class OfficerAdminGateTest extends TestCase
             'the normalizer, the vacancy count and the crown/supporting split all collapse together'
         );
     }
+
+    public function testThePartialDeclaresAParkIdInItsIncludeContract(): void
+    {
+        $tpl = file_get_contents(dirname(__DIR__, 2)
+            . '/orkui/template/revised-frontend/partials/_manage_officers.tpl');
+        self::assertStringContainsString(
+            '$mo_park_id',
+            $tpl,
+            'one partial must serve both the kingdom and park consoles'
+        );
+        self::assertMatchesRegularExpression(
+            '/parkId\s*:/',
+            $tpl,
+            'MoConfig must carry parkId so every POST can scope itself'
+        );
+    }
 }

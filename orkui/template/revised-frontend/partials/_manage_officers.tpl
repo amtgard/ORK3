@@ -4,6 +4,7 @@
    ---------------------------------------------------------------------
    INCLUDE CONTRACT (set these PHP locals before including):
      $mo_kingdom_id (int)  — the kingdom whose officer positions to manage
+     $mo_park_id    (int)  — 0 for the kingdom console, or the park's id
      $mo_can_manage (bool) — must be truthy or this partial renders nothing
    The partial is self-contained: it emits its own CSS, its own JS module,
    its own window.MoConfig, and exposes window.moRefresh() to (re)load and
@@ -12,6 +13,7 @@
    ===================================================================== */
 if (empty($mo_can_manage)) return;
 $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
+$mo_park_id = (int)($mo_park_id ?? 0);
 ?>
 
 <!-- ============ Manage Officers — UI ============ -->
@@ -568,7 +570,7 @@ html[data-theme="dark"] .mo-tab.mo-tab-active { color:#63b3ed; border-bottom-col
 
 <!-- ============ Manage Officers — JS module ============ -->
 <script>
-window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir: '<?= UIR ?>' };
+window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_park_id ?>, canManage: true, uir: '<?= UIR ?>' };
 	/* The z-index an autocomplete dropdown must carry to clear the modal scale.
 	   Derived from the token scale (--z-modal-top + 1) rather than hardcoded: this
 	   value is an INLINE style, so a literal 10001 beats -- and defeats -- the

@@ -366,9 +366,11 @@
 			d.OutgoingEndDate   = otRaw('ot-out-end');
 			d.OutgoingStartDate = otRaw('ot-out-start');
 		}
-		// MoConfig.parkId does not exist until a later task adds it. The guard is
-		// falsy-safe against undefined, so this is correct both before and after
-		// that task -- the kingdom console simply never sets ParkId.
+		// transition creates a new incumbent's OfficerHistory row, which has no
+		// existing PositionId/OfficerHistoryId scope for the domain to authorize
+		// against yet -- so ParkId must travel explicitly, same as addhistory in
+		// _correct_the_rolls.tpl. The kingdom console never sets MoConfig.parkId,
+		// so this stays a no-op there.
 		if (window.MoConfig && window.MoConfig.parkId) { d.ParkId = window.MoConfig.parkId; }
 
 		var original = btn.innerHTML;
