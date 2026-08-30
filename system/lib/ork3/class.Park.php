@@ -56,6 +56,169 @@ class Park extends Ork3
         return null;
     }
 
+    /**
+     * Headline numbers and the work queue for the park admin console.
+     *
+     * The park mirror of Kingdom::GetAdminDashboard(), and deliberately the same
+     * shape: "Standing" is how the park is doing, "Queue" is what is waiting on
+     * the officer reading the page, and every Queue entry is a set someone can
+     * actually work. 'Windows' returns the thresholds the counts used so the
+     * template can describe them without restating literals that would drift
+     * away from this SQL.
+     *
+     * Scope is this park and only this park. There is no principality-style
+     * rollup at park level, so unlike the kingdom console both halves share one
+     * scope and cannot disagree.
+     *
+     * Where this deliberately does NOT match the park PROFILE page:
+     *  - 'Members' counts every ork_mundane row homed here, including suspended
+     *    and inactive players, because the admin console's job is the whole
+     *    membership record. ParkProfile::GetParkPlayersRoster() filters to
+     *    active + unsuspended, so it will read lower. That is not a defect.
+     *  - 'ActivePlayers' counts distinct players who signed in AT this park in
+     *    the window regardless of where they are homed -- the attendance-scoped
+     *    question the kingdom console asks -- not "members of this park who
+     *    signed in somewhere", which is what the profile's roster answers.
+     *
+     * One Queue member is not a work queue at all: 'WaiveredMembers' is the
+     * blast radius for the Reset Waivers action, so the confirm modal can say
+     * how many players are about to be cleared. It is scoped exactly like that
+     * UPDATE -- park_id + waivered = 1, with NO active filter. Adding one here
+     * would under-report what the reset is about to clear.
+     *
+     * QuietDays is NULL, never 0 and never an absurd number, when the park has
+     * no usable attendance date: a brand new park genuinely has no "days since
+     * last signin" and a caller must be able to tell that apart from "signed in
+     * today". Zero dates ('0000-00-00') are excluded from the MAX for the same
+     * reason -- they are placeholder rows, and DATEDIFF against one produces
+     * either NULL or nonsense depending on the server's date handling.
+     *
+     * @param int $park_id
+     * @return array ['Standing' => [...], 'Queue' => [...], 'Windows' => [...]]
+     */
+    public function GetAdminDashboard($park_id)
+    {
+        global $DB;
+        $park_id = (int) $park_id;
+        $activeWindowDays = 182;
+        $quietThreshold   = 60;
+
+        $out = [
+            'Standing' => ['Members' => 0, 'ActivePlayers' => 0, 'AttendanceYtd' => 0],
+            'Queue'    => [
+                'UnwaiveredActive'    => 0,
+                'VacantOffices'       => 0,
+                'QuietDays'           => null,
+                'OpenRecommendations' => 0,
+                'WaiveredMembers'     => 0,
+            ],
+            'Windows'  => [
+                'ActiveWindowDays'  => $activeWindowDays,
+                'QuietThreshold'    => $quietThreshold,
+                'OfficeCount'       => 0,
+                'VacantOfficeNames' => [],
+            ],
+        ];
+        if ($park_id <= 0) {
+            return $out;
+        }
+
+        // ---- Standing -------------------------------------------------------
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . ") AS members,
+                (SELECT COUNT(DISTINCT a.mundane_id) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date >= (CURDATE() - INTERVAL " . $activeWindowDays . " DAY)) AS active_players,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date_year = YEAR(CURDATE())) AS attendance_ytd"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Standing']['Members']       = (int) $r->members;
+            $out['Standing']['ActivePlayers'] = (int) $r->active_players;
+            $out['Standing']['AttendanceYtd'] = (int) $r->attendance_ytd;
+        }
+
+        // ---- Queue ----------------------------------------------------------
+        // "Open" for a recommendation is deleted_at IS NULL, matching the Recs
+        // Manager; snoozed and passed-to-local rows are somebody else's problem.
+        // Recommendations carry no park column, so the park is resolved through
+        // the recommended player's home park.
+        //
+        // quiet_days is left NULL by MAX() over an empty set -- see the docblock.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . "
+                    AND m.waivered = 0 AND m.active = 1) AS unwaivered_active,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . "
+                    AND m.waivered = 1) AS waivered_members,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations rc
+                    JOIN " . DB_PREFIX . "mundane rm ON rm.mundane_id = rc.mundane_id
+                  WHERE rm.park_id = " . $park_id . "
+                    AND rc.deleted_at IS NULL
+                    AND COALESCE(rc.snoozed_by_id, 0) = 0
+                    AND COALESCE(rc.passed_to_local, 0) = 0) AS open_recs,
+                (SELECT DATEDIFF(CURDATE(), MAX(a.date)) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date > '0000-00-00') AS quiet_days"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Queue']['UnwaiveredActive']    = (int) $r->unwaivered_active;
+            $out['Queue']['WaiveredMembers']     = (int) $r->waivered_members;
+            $out['Queue']['OpenRecommendations'] = (int) $r->open_recs;
+            // A future-dated signin would make DATEDIFF negative; "quiet for -3
+            // days" is not a thing a queue can say, so clamp at zero. NULL is
+            // preserved untouched -- it means something different.
+            $out['Queue']['QuietDays'] = ($r->quiet_days === null)
+                ? null
+                : max(0, (int) $r->quiet_days);
+        }
+
+        // Vacant park offices. ork_officer holds one row per office per park and
+        // parks a vacancy as mundane_id = 0 rather than deleting the row, so the
+        // seat table is the office roster -- the same source
+        // OfficerPosition::get_officers_for_display() renders on the Manage
+        // Officers panel, filtered the same way, so the count and the list a
+        // click opens cannot disagree.
+        //
+        // Retired positions (officer_position.retired_at) are excluded: a retired
+        // office is not a vacancy anyone is expected to fill. hide_when_vacant
+        // positions stay in OfficeCount but never appear as a vacancy, because
+        // the roster deliberately does not show them when empty and a queue item
+        // that opens to nothing visible is not workable.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT o.mundane_id, p.hide_when_vacant,
+                    " . OfficerPosition::display_title_sql('p', 'al') . " AS display_title
+               FROM " . DB_PREFIX . "park pk
+               JOIN " . DB_PREFIX . "officer o ON o.park_id = pk.park_id
+               JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
+               LEFT JOIN " . DB_PREFIX . "officer_position_alias al
+                      ON al.kingdom_id = pk.kingdom_id AND al.canonical_key = p.canonical_key
+              WHERE pk.park_id = " . $park_id . "
+                AND p.retired_at IS NULL
+              ORDER BY p.classification, " . OfficerPosition::sort_order_sql('p', 'al') . ", o.officer_id ASC"
+        );
+        if ($r !== false) {
+            while ($r->Next()) {
+                $out['Windows']['OfficeCount']++;
+                if ((int) $r->mundane_id > 0 || (int) $r->hide_when_vacant === 1) {
+                    continue;
+                }
+                $out['Queue']['VacantOffices']++;
+                $out['Windows']['VacantOfficeNames'][] = (string) $r->display_title;
+            }
+        }
+
+        return $out;
+    }
+
     // Migrate every member of one park into another, and clear the source park's
     // officer roster and park-scoped permission grants.
     //

@@ -2126,6 +2126,12 @@ class Controller_Admin extends Controller
             exit;
         }
 
+        // Park standing + work queue, the park mirror of the kingdom console's
+        // AdminDashboard. Loaded AFTER the front door above on purpose: these are
+        // membership and waiver counts for a specific park, so nothing should
+        // compute them for a visitor who is about to be redirected home.
+        $this->data['ParkAdminDashboard'] = $this->Park->get_admin_dashboard((int)$id);
+
         // Reset Waivers' own action (Admin::resetwaivers()) gates a park reset on
         // admin_has_kingdom_standing() for the park's KINGDOM, not on park authority --
         // it never widened to accept AUTH_PARK. A park-only officer passes
