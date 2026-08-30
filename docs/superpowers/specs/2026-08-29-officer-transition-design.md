@@ -581,6 +581,43 @@ Extends the existing suites (`OfficerPositionReorderTest`, `OfficerPositionReins
   impose one; this work does not introduce one.
 - Officer terms as first-class objects with succession planning. Not asked for.
 
+## Follow-ups discovered during implementation
+
+Found by review while building Plan 1, deliberately not fixed there. Plan 2 should pick these up.
+
+**Blocking Plan 2's park work.** `controller.OfficerAdminAjax.php`'s outer gate still checks
+`('kingdom.officer.set', 'kingdom', $kingdom_id)` for every action. The domain half of park
+authorization is now correct and tested, but a park-only officer is still refused at the controller
+before reaching it. Removing that hardcoded gate is a prerequisite for park officers to use the
+admin console — nothing else in Plan 2's park story works until it happens.
+
+**Roll integrity (security-adjacent).** Nothing prevents two rows with `end_date IS NULL` for one
+office: `AddHistoryTerm` can insert a second open term, and `EditHistoryTerm` can re-open a closed
+one by clearing `EndDate`. Since `end_date IS NULL` defines "current officer", either path makes one
+office read as held by two people. Legacy `Kingdom::AddOfficerHistory` has the same gap, so this is
+pre-existing rather than a regression — but the backfill establishes the invariant these two can
+break.
+
+**`RevokeRole` has no row-scope check.** A caller holding `kingdom.auth.manage` for their own
+kingdom can revoke a `user_role` row belonging to another kingdom by id. This is structurally the
+same defect `EditHistoryTerm`/`DeleteHistoryTerm` fixed by authorizing against the *row's* scope
+rather than the caller's claim; apply the same fix.
+
+**`ApiExposureTest` proves authentication, not authorization.** It asserts a method's body contains
+`IsAuthorized`, never `checkPermissionOrAuthority`. A future method that authenticates and then
+returns officer PII would pass. It also strips comments but not string literals, and covers
+`OfficerPosition` only — `Player`, `Kingdom`, `Award` and the rest are unswept. Strengthen before
+relying on it for a second registered class.
+
+**~24 admin error messages never reach the user.** `emitServiceResult` prefers `Error` over
+`Detail`, but the single-argument `ProcessingError('msg')` / `NoAuthorization('msg')` form fills
+`Detail`. Every such call — "Pinned/system positions cannot be reclassified", and roughly 23 others,
+all pre-existing — is replaced by a generic string in the UI. The two-argument `(null, 'msg')` form
+is correct.
+
+**Migration ordering.** The backfill assumes `2026-08-25-04-officer-position.sql` has already run,
+and takes no `officer_assign_*` locks. Run it in a maintenance window.
+
 ## Risks
 
 - **Removing four write surfaces at once.** Mitigated by the park-scope test above and by
