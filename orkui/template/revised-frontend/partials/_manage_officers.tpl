@@ -63,6 +63,7 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 			<div class="mo-list" id="mo-cards-retired"></div>
 		</div>
 	</div>
+	<?php include __DIR__ . '/_officer_transition.tpl'; ?>
 </div>
 
 <!-- ============ Manage Officers — Sub-modals ============
@@ -282,8 +283,7 @@ html[data-theme="dark"] .mo-term { color:var(--ork-text-secondary); }
 .mo-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
 .mo-row-actions { flex:0 1 auto; margin-left:auto; margin-top:0; justify-content:flex-end; align-items:flex-start; }
 /* These tips sit at the row's right edge and the host modal box clips horizontal
-   overflow, so right-anchor them instead of centring (same reason, and the same
-   !important, as .mo-occ-remove below). */
+   overflow, so right-anchor them instead of centring. */
 .mo-row-actions [data-tip]:hover::after, .mo-row-actions [data-tip]:focus-visible::after {
 	left:auto !important; right:0 !important; transform:none !important;
 }
@@ -470,26 +470,9 @@ html[data-theme="dark"] .mo-warn-box { color:var(--ork-text); }
 .mo-empty-text { font-size:13px; color:var(--ork-text-muted); line-height:1.55; max-width:52ch; }
 .mo-empty .kn-btn { margin-top:4px; }
 
-/* Occupant row: name + per-holder remove control (supporting offices only) */
-.mo-occ-row { display:flex; align-items:center; gap:6px; }
-.mo-occ-row .mo-occ-name { flex:1; min-width:0; overflow-wrap:anywhere; }
-.mo-occ-remove {
-	flex-shrink:0; background:none; border:1px solid transparent; border-radius:5px;
-	color:var(--ork-text-lighter); cursor:pointer; font-size:11px; line-height:1; padding:4px 6px;
-}
-.mo-occ-remove:hover, .mo-occ-remove:focus-visible {
-	background:var(--ork-badge-red-bg); border-color:var(--ork-badge-red-bg); color:var(--ork-badge-red-text);
-}
-.mo-occ-remove:focus-visible { outline:2px solid #3182ce; outline-offset:1px; }
-
-/* The remove control sits at the card's right edge, and the host modal box clips
-   horizontal overflow — so right-anchor its tip instead of centering it. !important
-   because the generic [data-tip]:not(...)x5 rule in revised.css outspecifies this. */
-.mo-occ-remove[data-tip]:hover::after { left:auto !important; right:0 !important; transform:none !important; }
-
-/* Confirm-dialog persona list (Vacate All / Retire name every affected persona) */
-.mo-confirm-list { margin:8px 0 0; padding-left:20px; }
-.mo-confirm-list li { margin:2px 0; font-weight:600; }
+/* Occupant name link (one office, one holder — the card-level Vacate/Transition
+   buttons act on them, so there is no per-holder control on this row). */
+.mo-occ-name { overflow-wrap:anywhere; }
 
 </style>
 
@@ -600,11 +583,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		if (results) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); }
 		if (input) input.setAttribute('aria-expanded', 'false');
 	}
-	function personaList(occs) {
-		return '<ul class="mo-confirm-list">' + occs.map(function(o) {
-			return '<li>' + esc(o.Persona || 'Unknown') + '</li>';
-		}).join('') + '</ul>';
-	}
 
 	// .ka-feedback is display:none in the stylesheet, so showing it needs an explicit
 	// 'block' — style.display = '' would fall back to the stylesheet's none.
@@ -650,30 +628,32 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 	// Public refresh: (re)load + render the cards into #mo-cards.
 	window.moRefresh = moLoad;
 
+	// ---------- Bridges for the Officer Transition wizard ----------
+	// _officer_transition.tpl renders into this same modal (#ot-root sits right
+	// after #mo-cards), but its own <script> tag is a separate closure — these
+	// small, pure/read-only helpers are exposed so it reuses THIS module's AJAX,
+	// notice UI and position lookup rather than inventing a second copy (and a
+	// second error path). All are `function` declarations above, so hoisting
+	// makes this assignment valid even though it runs before their definitions.
+	window.moPost         = moPost;
+	window.moShowNotice   = moShowNotice;
+	window.moFindPosition = findPos;
+	window.moOccupancyOf  = occupantsOf;
+	window.moEsc          = esc;
+	window.moBase         = base;
+	window.moSearchUrl    = searchUrl;
+
+	// One office, one occupant. The card-level Vacate button (see rowHtml) already
+	// removes them, so there is no separate per-holder control here.
 	function occupantLine(pos) {
 		var occs = occupantsOf(pos);
 		if (!occs.length) return '<div class="mo-occupant"><span class="mo-vacant">(Vacant)</span></div>';
-		var pid = parseInt(pos.PositionId, 10);
-		// Supporting offices can hold several people at once, so each one gets its own
-		// remove control (MundaneId-scoped vacate). A crown office has exactly one
-		// holder — the card-level Vacate button already does that job.
-		var perHolder = pos.Classification !== 'crown';
-		var html = '';
-		for (var i = 0; i < occs.length; i++) {
-			var o = occs[i];
-			var mid = parseInt(o.MundaneId, 10) || 0;
-			var name = o.Persona || 'Unknown';
-			var tip = 'Remove ' + name + ' from ' + (pos.DisplayTitle || pos.Title || 'this office');
-			var row = '<a href="' + UIR + 'Player/profile/' + mid + '" class="mo-occ-name">' + esc(name) + '</a>';
-			if (perHolder && mid) {
-				row += '<button type="button" class="mo-occ-remove" data-tip="' + escAttr(tip) + '"' +
-				       ' aria-label="' + escAttr(tip) + '"' +
-				       ' onclick="moVacateHolder(' + pid + ',' + mid + ')"><i class="fas fa-user-minus"></i></button>';
-			}
-			html += '<div class="mo-occupant"><div class="mo-occ-row">' + row + '</div></div>';
-			var term = termLine(o);
-			if (term) html += '<div class="mo-term">' + term + '</div>';
-		}
+		var o = occs[0];
+		var mid = parseInt(o.MundaneId, 10) || 0;
+		var name = o.Persona || 'Unknown';
+		var html = '<div class="mo-occupant"><a href="' + UIR + 'Player/profile/' + mid + '" class="mo-occ-name">' + esc(name) + '</a></div>';
+		var term = termLine(o);
+		if (term) html += '<div class="mo-term">' + term + '</div>';
 		return html;
 	}
 
@@ -723,16 +703,14 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 
 		// actions
 		var acts = '';
-		acts += '<button class="mo-act-btn" onclick="moOpenOcc(' + pid + ')"><i class="fas fa-user-plus"></i> Set Occupant</button>';
+		// One office, one holder: Transition closes the outgoing term and opens the
+		// incoming one in a single wizard; Appoint is the same wizard starting at its
+		// second step, since a vacant office has no outgoing term to close.
 		if (filled) {
-			// One holder = "Vacate"; several = "Vacate All", because that is exactly what
-			// the button does. Both route to the vacateall endpoint and both name every
-			// affected persona in the confirm.
-			var vacLabel = holders.length > 1 ? 'Vacate All' : 'Vacate';
-			var vacTip = holders.length > 1
-				? 'End the term for all ' + holders.length + ' current holders of this office'
-				: 'End the current term and remove this office\'s permissions';
-			acts += '<button class="mo-act-btn" data-tip="' + escAttr(vacTip) + '" onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> ' + vacLabel + '</button>';
+			acts += '<button class="mo-act-btn" onclick="otOpen(' + pid + ',\'transition\')"><i class="fas fa-people-arrows"></i> Transition &rarr;</button>';
+			acts += '<button class="mo-act-btn" data-tip="End the current term and remove this office\'s permissions" onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> Vacate</button>';
+		} else {
+			acts += '<button class="mo-act-btn" onclick="otOpen(' + pid + ',\'appoint\')"><i class="fas fa-user-plus"></i> Appoint &rarr;</button>';
 		}
 		acts += '<button class="mo-act-btn" onclick="moOpenEdit(' + pid + ')"><i class="fas fa-pencil-alt"></i> Edit</button>';
 
@@ -958,9 +936,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		moPost('reclassify', { PositionId: pid, Classification: cls }, function() { moRefresh(); });
 	};
 
-	// Vacate ALL holders of an office. The old copy said "the occupant's" (singular)
-	// while clearing everyone; it now names the office and lists every affected
-	// persona, the same way moRetire does.
+	// Vacate the office's one holder. Ends their term and removes their officer
+	// permissions for this office.
 	window.moVacate = function(pid) {
 		var pos  = findPos(pid);
 		var dt   = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
@@ -971,33 +948,12 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			return;
 		}
 
-		var many = occs.length > 1;
-		var msg = (many
-				? 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for all ' + occs.length + ' holders:'
-				: 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for:') +
-			personaList(occs) +
-			'<p style="margin:10px 0 0">Their officer permissions for this office are removed. Continue?</p>';
+		var who = occs[0].Persona || 'Unknown';
+		var msg = 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for <strong>' + esc(who) + '</strong> ' +
+			'and remove their officer permissions for this office. Continue?';
 
-		moShowConfirm(many ? 'Vacate All Officers' : 'Vacate Position', msg, many ? 'Vacate All' : 'Vacate', function() {
+		moShowConfirm('Vacate Position', msg, 'Vacate', function() {
 			moPost('vacateall', { PositionId: pid }, function() { moCloseConfirm(); moRefresh(); });
-		});
-	};
-
-	// Vacate ONE holder (supporting offices, which can have several at once).
-	window.moVacateHolder = function(pid, mid) {
-		var pos = findPos(pid);
-		var dt  = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
-		var occs = occupantsOf(pos);
-		var match = occs.filter(function(o) { return parseInt(o.MundaneId, 10) === parseInt(mid, 10); })[0];
-		var who = match ? (match.Persona || 'Unknown') : 'this member';
-		var others = occs.length - (match ? 1 : 0);
-
-		var msg = 'Remove <strong>' + esc(who) + '</strong> from <strong>' + esc(dt) + '</strong>? ' +
-			'This ends their term and removes their officer permissions for this office.' +
-			(others > 0 ? ' The other ' + others + ' holder' + (others > 1 ? 's are' : ' is') + ' not affected.' : '');
-
-		moShowConfirm('Remove Officer', msg, 'Remove', function() {
-			moPost('vacateholder', { PositionId: pid, MundaneId: mid }, function() { moCloseConfirm(); moRefresh(); });
 		});
 	};
 
