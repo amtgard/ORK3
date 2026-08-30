@@ -202,6 +202,11 @@
 		otAcClose();
 		otState = null;
 		window.moRefresh();
+		// otCommit()'s success path routes through here. Correct the Rolls lists the
+		// same history rows a transition writes -- without this, a user who has that
+		// tab open and switches back to it after a transition sees stale data. Guarded:
+		// crRefresh may not exist in every host this wizard is dropped into.
+		if (typeof window.crRefresh === 'function') { try { window.crRefresh(); } catch (e) {} }
 	};
 
 	function otResetForm() {
