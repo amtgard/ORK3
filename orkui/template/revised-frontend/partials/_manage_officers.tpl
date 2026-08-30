@@ -31,7 +31,7 @@ $mo_park_id = (int)($mo_park_id ?? 0);
 
 	<div class="mo-tabpanel" id="mo-tabpanel-positions" role="tabpanel" aria-labelledby="mo-tabbtn-positions">
 	<div class="mo-toolbar">
-		<button class="kn-btn kn-btn-primary" onclick="moOpenCreate()">
+		<button class="kn-btn kn-btn-primary" id="mo-create-btn" onclick="moOpenCreate()">
 			<i class="fas fa-plus"></i> Create Position
 		</button>
 		<button class="mo-retired-toggle" id="mo-retired-toggle" onclick="moToggleRetired()" style="display:none">
@@ -55,7 +55,7 @@ $mo_park_id = (int)($mo_park_id ?? 0);
 				Officers listed elsewhere on this page aren&rsquo;t linked to a position until one exists here &mdash;
 				create the offices your kingdom actually uses, then attach the people who hold them.
 			</div>
-			<button type="button" class="kn-btn kn-btn-primary" onclick="moOpenCreate()">
+			<button type="button" class="kn-btn kn-btn-primary" id="mo-create-btn-empty" onclick="moOpenCreate()">
 				<i class="fas fa-plus" style="margin-right:6px"></i> Create your first position
 			</button>
 		</div>
@@ -580,6 +580,14 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	function searchUrl(q) { return UIR + 'KingdomAjax/playersearch/' + MoConfig.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=own&include_inactive=1'; }
 
 	var moData  = { crown: [], supporting: [], retired: [] };
+	// Capability, not scope: whether THIS user holds kingdom-scope position-management
+	// authority, as reported by actionList's CanManagePositions (mirrors the controller's
+	// 'position' family gate, which is always kingdom-scoped regardless of ParkId). A
+	// park-only officer gets false here and the create/edit/reclassify/retire/reorder
+	// controls are hidden rather than left as dead buttons that 400 on click. Defaults
+	// true so the kingdom console (which already requires this authority just to open
+	// this partial) never flashes hidden before the first load resolves.
+	var moCanManagePositions = true;
 	var moRoles = null;
 	var moPerms = null;
 	var moEditId = 0;       // 0 = create mode
@@ -631,6 +639,18 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		if (el) el.style.display = 'none';
 	}
 
+	// Show/hide the controls that only a kingdom-scope position manager can use.
+	// Called after every list load (moCanManagePositions is only known once the
+	// server has answered), so both create buttons start visible (matching the
+	// default true above) and only disappear for a park-only officer once the
+	// real answer is in.
+	function moApplyCapability() {
+		['mo-create-btn', 'mo-create-btn-empty'].forEach(function(id) {
+			var el = document.getElementById(id);
+			if (el) el.style.display = moCanManagePositions ? '' : 'none';
+		});
+	}
+
 	// ---------- Load + render ----------
 	function moLoad() {
 		var loadingEl = document.getElementById('mo-loading');
@@ -654,6 +674,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 				return;
 			}
 			moData = resp.data || { crown: [], supporting: [], retired: [] };
+			moCanManagePositions = !!moData.CanManagePositions;
+			moApplyCapability();
 			moRender();
 			contentEl.style.display = '';
 		}).fail(function() {
@@ -723,6 +745,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	// ReorderSiblings refuses a group its parent_position_id does not match, so such a
 	// row gets an inert placeholder instead of a handle that could only ever error.
 	function gripHtml(pos, effParentId) {
+		// Re-ordering is part of the 'position' family (kingdom-scoped, see the
+		// controller's Blocker-2 fix); a park-only officer has no group to drag
+		// within, so omit the handle entirely rather than render one that 400s.
+		if (!moCanManagePositions) return '';
 		var pid      = parseInt(pos.PositionId, 10);
 		var realPar  = parseInt(pos.ParentPositionId || 0, 10) || 0;
 		if (realPar !== (parseInt(effParentId || 0, 10) || 0)) {
@@ -769,25 +795,33 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		} else {
 			acts += '<button class="mo-act-btn" onclick="otOpen(' + pid + ',\'appoint\')"><i class="fas fa-user-plus"></i> Appoint &rarr;</button>';
 		}
-		acts += '<button class="mo-act-btn" onclick="moOpenEdit(' + pid + ')"><i class="fas fa-pencil-alt"></i> Edit</button>';
+		// Edit/Reclassify/Retire all belong to the 'position' family, which the
+		// controller gates at KINGDOM scope regardless of ParkId (Blocker 2 fix) --
+		// so a park-only officer never has authority to reach them. Hide rather than
+		// render disabled: unlike the isPinned disabled states above (a core office
+		// that NO ONE may reclassify/retire), this is per-USER, and a button that is
+		// merely greyed out here would still read as "maybe if I ask nicely."
+		if (moCanManagePositions) {
+			acts += '<button class="mo-act-btn" onclick="moOpenEdit(' + pid + ')"><i class="fas fa-pencil-alt"></i> Edit</button>';
 
-		// reclassify dropdown
-		if (isPinned) {
-			acts += '<button class="mo-act-btn" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-exchange-alt"></i> Reclassify</button>';
-		} else {
-			var target = isCrown ? 'supporting' : 'crown';
-			var targetLabel = isCrown ? 'Move to Supporting' : 'Move to Crown';
-			acts += '<span class="mo-reclass" id="mo-reclass-' + pid + '">' +
-			        '<button class="mo-act-btn" onclick="moToggleReclass(' + pid + ')"><i class="fas fa-exchange-alt"></i> Reclassify</button>' +
-			        '<div class="mo-reclass-menu"><button onclick="moReclassify(' + pid + ',\'' + target + '\')">' + targetLabel + '</button></div>' +
-			        '</span>';
-		}
+			// reclassify dropdown
+			if (isPinned) {
+				acts += '<button class="mo-act-btn" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-exchange-alt"></i> Reclassify</button>';
+			} else {
+				var target = isCrown ? 'supporting' : 'crown';
+				var targetLabel = isCrown ? 'Move to Supporting' : 'Move to Crown';
+				acts += '<span class="mo-reclass" id="mo-reclass-' + pid + '">' +
+				        '<button class="mo-act-btn" onclick="moToggleReclass(' + pid + ')"><i class="fas fa-exchange-alt"></i> Reclassify</button>' +
+				        '<div class="mo-reclass-menu"><button onclick="moReclassify(' + pid + ',\'' + target + '\')">' + targetLabel + '</button></div>' +
+				        '</span>';
+			}
 
-		// retire
-		if (isPinned) {
-			acts += '<button class="mo-act-btn mo-act-danger" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-archive"></i> Retire</button>';
-		} else {
-			acts += '<button class="mo-act-btn mo-act-danger" onclick="moRetire(' + pid + ')"><i class="fas fa-archive"></i> Retire</button>';
+			// retire
+			if (isPinned) {
+				acts += '<button class="mo-act-btn mo-act-danger" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-archive"></i> Retire</button>';
+			} else {
+				acts += '<button class="mo-act-btn mo-act-danger" onclick="moRetire(' + pid + ')"><i class="fas fa-archive"></i> Retire</button>';
+			}
 		}
 
 		// Reports-to caption (when this card has a parent that exists somewhere).

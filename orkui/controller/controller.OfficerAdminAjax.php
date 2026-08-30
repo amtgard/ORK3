@@ -82,6 +82,27 @@ class Controller_OfficerAdminAjax extends Controller
         // request_order setting, and this code should not be sensitive to that.
         $park_id = (int)($_POST['ParkId'] ?? $_GET['ParkId'] ?? 0);
 
+        // SECURITY: $kingdom_id above is the URL route segment -- caller-controlled, and
+        // never validated against $park_id. When this request is park-scoped, the gate
+        // below correctly authorizes against the PARK (scope_id=$park_id), but nothing
+        // stopped a caller who legitimately holds authority over THEIR OWN park from
+        // naming a DIFFERENT kingdom in the URL: the gate would still pass, and that
+        // foreign $kingdom_id would flow into GetPositions()/GetAvailableRoles() below,
+        // disclosing another kingdom's position registry and custom RBAC role/permission
+        // names. Every write path already derives the kingdom from the park internally
+        // (OfficerPosition::*, via GetParkKingdomId) rather than trusting a passed
+        // KingdomId, so derive it here too and OVERWRITE the URL value whenever a park is
+        // named -- both the gate and every action method below inherit the corrected id.
+        if ($park_id > 0) {
+            $this->load_model('KingdomProfile');
+            $park_kingdom_id = (int)$this->KingdomProfile->park_kingdom_id($park_id);
+            if ($park_kingdom_id <= 0) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park']);
+                exit;
+            }
+            $kingdom_id = $park_kingdom_id;
+        }
+
         // Which permission FAMILY each action belongs to. The concrete key is resolved
         // per-scope by PermissionKeyFor, so a park-scoped request is checked against
         // park.officer.* rather than kingdom.officer.* -- checking a kingdom key against
@@ -110,8 +131,26 @@ class Controller_OfficerAdminAjax extends Controller
             exit;
         }
 
-        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
+        $scope             = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id          = ($park_id > 0) ? $park_id : $kingdom_id;
+        $permission_park_id = $park_id;
+
+        // SECURITY: ork_officer_position is a per-KINGDOM registry, not per-park -- but
+        // PermissionKeyFor('position', $park_id) resolves to the PARK key
+        // (park.officer.position.manage) whenever a ParkId is present, so a park-only
+        // officer's console could reach CreatePosition/EditPosition/ReorderPositions and,
+        // worst case, RetirePosition -- which vacates EVERY holder of that position ACROSS
+        // EVERY SCOPE in the kingdom. One park officer retiring a shared position would
+        // remove officers from every other park. Gate the 'position' family at KINGDOM
+        // scope always, against the DERIVED $kingdom_id (never the URL value -- see the
+        // park/kingdom derivation above), so the permission check matches what the domain
+        // actually does. Occupancy families (set/vacate/history) are genuinely per-scope
+        // and stay exactly as they were.
+        if ($action_kind[$action] === 'position') {
+            $scope              = 'kingdom';
+            $scope_id           = $kingdom_id;
+            $permission_park_id = 0;
+        }
 
         // edithistory/deletehistory are deliberately looser HERE and stricter in the
         // domain: their methods authorize against the ROW's own kingdom and park, which
@@ -119,7 +158,7 @@ class Controller_OfficerAdminAjax extends Controller
         // authority. Do not "fix" the apparent inconsistency by trusting the payload.
         if (!$this->Authorization->has_permission_or_authority(
             $uid,
-            OfficerPosition::PermissionKeyFor($action_kind[$action], $park_id),
+            OfficerPosition::PermissionKeyFor($action_kind[$action], $permission_park_id),
             $scope,
             $scope_id,
             AUTH_EDIT
@@ -132,7 +171,7 @@ class Controller_OfficerAdminAjax extends Controller
         $this->load_model('RBACService');
 
         switch ($action) {
-            case 'list':         $this->actionList($kingdom_id, $park_id);
+            case 'list':         $this->actionList($kingdom_id, $park_id, $uid);
                 break;
             case 'transition':    $this->actionTransition($kingdom_id, $park_id);
                 break;
@@ -279,7 +318,7 @@ class Controller_OfficerAdminAjax extends Controller
     // ACTIONS
     // ============================================================
 
-    private function actionList($kingdom_id, $park_id)
+    private function actionList($kingdom_id, $park_id, $uid = 0)
     {
         // P4: two intentionally-separate sources. GetPositions is the full registry
         // (drives vacant positions + the retired bucket — rows with no occupancy at
@@ -354,10 +393,30 @@ class Controller_OfficerAdminAjax extends Controller
             }
         }
 
+        // Blocker-2 companion (dead-control cleanup): a park console's $mo_can_manage is
+        // a page-level "you may open this console" gate -- Admin_park.tpl hardcodes it
+        // true because the route already checked park authority -- so a park-ONLY
+        // officer can open Manage Officers and see Create/Edit/Reclassify/Retire/reorder
+        // controls the 'position' family gate above now refuses (that gate is
+        // kingdom-scoped, matching what ork_officer_position actually is). Rather than
+        // let those clicks 400 the console, tell the client whether THIS user actually
+        // holds kingdom-scope position-management authority, via the SAME check the
+        // gate uses, so it can hide rather than disable-on-click. Kingdom console users
+        // are unaffected: Admin_kingdom.tpl already requires kingdom.officer.position.manage
+        // just to reach this partial at all, so this is always true there.
+        $can_manage_positions = $uid > 0 && $this->Authorization->has_permission_or_authority(
+            $uid,
+            OfficerPosition::PermissionKeyFor('position', 0),
+            'kingdom',
+            $kingdom_id,
+            AUTH_EDIT
+        );
+
         echo json_encode(['status' => 0, 'data' => [
             'crown'      => $crown,
             'supporting' => $supporting,
             'retired'    => $retired,
+            'CanManagePositions' => (bool)$can_manage_positions,
         ]]);
     }
 
