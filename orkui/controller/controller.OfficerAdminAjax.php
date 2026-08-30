@@ -72,29 +72,49 @@ class Controller_OfficerAdminAjax extends Controller
         $uid     = (int)$this->session->user_id;
         $park_id = (int)($_POST['ParkId'] ?? 0);
 
-        // Per-action permission gate (scope = kingdom, id = kingdom_id).
-        $gate = [
-            'list'           => 'kingdom.officer.set',
-            'setoccupant'    => 'kingdom.officer.set',
-            'vacate'         => 'kingdom.officer.set',
-            'vacateholder'   => 'kingdom.officer.set',
-            'vacateall'      => 'kingdom.officer.set',
-            'createposition' => 'kingdom.officer.position.manage',
-            'editposition'   => 'kingdom.officer.position.manage',
-            'reorderpositions' => 'kingdom.officer.position.manage',
-            'reclassify'     => 'kingdom.officer.position.manage',
-            'retire'         => 'kingdom.officer.position.manage',
-            'reinstate'      => 'kingdom.officer.position.manage',
-            'roles'          => 'kingdom.officer.position.manage',
-            'permissions'    => 'kingdom.officer.position.manage',
+        // Which permission FAMILY each action belongs to. The concrete key is resolved
+        // per-scope by PermissionKeyFor, so a park-scoped request is checked against
+        // park.officer.* rather than kingdom.officer.* -- checking a kingdom key against
+        // a park id simply fails, which is what refused every park officer before.
+        $action_kind = [
+            'list'             => 'set',
+            'transition'       => 'set',
+            'setoccupant'      => 'set',
+            'vacate'           => 'vacate',
+            'vacateholder'     => 'vacate',
+            'vacateall'        => 'vacate',
+            'createposition'   => 'position',
+            'editposition'     => 'position',
+            'reorderpositions' => 'position',
+            'reclassify'       => 'position',
+            'retire'           => 'position',
+            'reinstate'        => 'position',
+            'roles'            => 'position',
+            'permissions'      => 'position',
+            'addhistory'       => 'history',
+            'edithistory'      => 'history',
+            'deletehistory'    => 'history',
         ];
 
-        if (!isset($gate[$action])) {
+        if (!isset($action_kind[$action])) {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
             exit;
         }
 
-        if (!$this->Authorization->has_permission_or_authority($uid, $gate[$action], 'kingdom', $kingdom_id, AUTH_EDIT)) {
+        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
+
+        // edithistory/deletehistory are deliberately looser HERE and stricter in the
+        // domain: their methods authorize against the ROW's own kingdom and park, which
+        // this controller does not know. This gate is a cheap pre-filter, not the
+        // authority. Do not "fix" the apparent inconsistency by trusting the payload.
+        if (!$this->Authorization->has_permission_or_authority(
+            $uid,
+            OfficerPosition::PermissionKeyFor($action_kind[$action], $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }

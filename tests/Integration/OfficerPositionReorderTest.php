@@ -539,10 +539,13 @@ final class OfficerPositionReorderTest extends TestCase
     {
         // The gate lives in a per-action map in officer(), not inside each action
         // method, so the guarantee to test is that the new action is IN that map
-        // with the same permission key the other position-management actions use.
+        // with the same permission KIND the other position-management actions use.
+        // (The gate became scope-aware: the map now stores a kind resolved through
+        // OfficerPosition::PermissionKeyFor rather than a literal permission string,
+        // so a park-scoped request checks park.officer.* instead of kingdom.officer.*.)
         $src = file_get_contents(DIR_UI . 'controller/controller.OfficerAdminAjax.php');
         $this->assertMatchesRegularExpression(
-            "/'reorderpositions'\s*=>\s*'kingdom\.officer\.position\.manage'/",
+            "/'reorderpositions'\s*=>\s*'position'/",
             (string) $src,
             'reorderpositions must sit in the same permission gate map as editposition/reclassify'
         );
