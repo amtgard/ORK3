@@ -113,17 +113,17 @@ class Controller_OfficerAdminAjax extends Controller
                 break;
             case 'vacateall':    $this->actionVacateAll($kingdom_id, $park_id);
                 break;
-            case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);
+            case 'createposition': $this->actionCreatePosition($kingdom_id, $park_id);
                 break;
-            case 'editposition': $this->actionEditPosition($kingdom_id, $uid);
+            case 'editposition': $this->actionEditPosition($kingdom_id, $park_id);
                 break;
-            case 'reorderpositions': $this->actionReorderPositions($kingdom_id, $uid);
+            case 'reorderpositions': $this->actionReorderPositions($kingdom_id, $park_id);
                 break;
-            case 'reclassify':   $this->actionReclassify($kingdom_id, $uid);
+            case 'reclassify':   $this->actionReclassify($kingdom_id, $park_id);
                 break;
-            case 'retire':       $this->actionRetire($kingdom_id, $uid);
+            case 'retire':       $this->actionRetire($kingdom_id, $park_id);
                 break;
-            case 'reinstate':    $this->actionReinstate($kingdom_id);
+            case 'reinstate':    $this->actionReinstate($kingdom_id, $park_id);
                 break;
             case 'roles':        $this->actionRoles($kingdom_id);
                 break;
@@ -592,7 +592,7 @@ class Controller_OfficerAdminAjax extends Controller
         ]]);
     }
 
-    private function actionCreatePosition($kingdom_id, $uid)
+    private function actionCreatePosition($kingdom_id, $park_id)
     {
         $title          = trim($_POST['Title'] ?? '');
         $classification = strtolower(trim($_POST['Classification'] ?? ''));
@@ -617,7 +617,17 @@ class Controller_OfficerAdminAjax extends Controller
         $parent_position_id = ($parent_raw === '' || (int)$parent_raw === 0) ? null : (int)$parent_raw;
         $hide_when_vacant = (int)($_POST['HideWhenVacant'] ?? 0) ? 1 : 0;
 
-        $r = $this->OfficerPosition->CreatePosition($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $uid, $parent_position_id, $hide_when_vacant);
+        $r = $this->OfficerPosition->CreatePosition([
+            'Token'            => $this->session->token,
+            'KingdomId'        => $kingdom_id,
+            'ParkId'           => $park_id,
+            'CanonicalKey'     => $canonical_key,
+            'Title'            => $title,
+            'Classification'   => $classification,
+            'RbacChoice'       => $rbac_choice,
+            'ParentPositionId' => $parent_position_id,
+            'HideWhenVacant'   => $hide_when_vacant,
+        ]);
         // C1: a "success" carrying a non-positive PositionId means the INSERT failed
         // (the service rolls back any orphaned custom role); surface it as an error.
         if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
@@ -632,7 +642,7 @@ class Controller_OfficerAdminAjax extends Controller
         }
     }
 
-    private function actionEditPosition($kingdom_id, $uid)
+    private function actionEditPosition($kingdom_id, $park_id)
     {
         $position_id = (int)($_POST['PositionId'] ?? 0);
         if (!valid_id($position_id)) {
@@ -640,7 +650,9 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $fields = ['changed_by' => $uid, 'editor_id' => $uid];
+        // changed_by / editor_id are no longer accepted from the client: the
+        // domain forces them to the token-resolved actor.
+        $fields = [];
 
         if (isset($_POST['Title'])) {
             $fields['title'] = trim($_POST['Title']);
@@ -674,7 +686,13 @@ class Controller_OfficerAdminAjax extends Controller
             $fields['rbac_role_id'] = 0;
         }
 
-        $r = $this->OfficerPosition->EditPosition($position_id, $fields, $kingdom_id);
+        $r = $this->OfficerPosition->EditPosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'Fields'     => $fields,
+        ]);
         $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
     }
 
@@ -692,7 +710,7 @@ class Controller_OfficerAdminAjax extends Controller
      * Response: {status:0, data:{ParentPositionId:N, Order:[ids in applied order]}}
      *           or the shared {status:N, error:'...'} envelope.
      */
-    private function actionReorderPositions($kingdom_id, $uid)
+    private function actionReorderPositions($kingdom_id, $park_id)
     {
         $parent_raw = $_POST['ParentPositionId'] ?? '';
         $parent_position_id = (is_array($parent_raw) || trim((string)$parent_raw) === '')
@@ -716,14 +734,20 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $r = $this->OfficerPosition->ReorderSiblings($kingdom_id, $parent_position_id, $position_ids, $uid);
+        $r = $this->OfficerPosition->ReorderPositions([
+            'Token'              => $this->session->token,
+            'KingdomId'          => $kingdom_id,
+            'ParkId'             => $park_id,
+            'ParentPositionId'   => $parent_position_id,
+            'OrderedPositionIds' => $position_ids,
+        ]);
         $this->emitServiceResult($r, ['data' => [
             'ParentPositionId' => $parent_position_id,
             'Order'            => $position_ids,
         ]]);
     }
 
-    private function actionReclassify($kingdom_id, $uid)
+    private function actionReclassify($kingdom_id, $park_id)
     {
         $position_id    = (int)($_POST['PositionId'] ?? 0);
         $classification = strtolower(trim($_POST['Classification'] ?? ''));
@@ -736,15 +760,17 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $r = $this->OfficerPosition->EditPosition($position_id, [
-            'classification' => $classification,
-            'changed_by'     => $uid,
-            'editor_id'      => $uid,
-        ], $kingdom_id);
+        $r = $this->OfficerPosition->EditPosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'Fields'     => ['classification' => $classification],
+        ]);
         $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
     }
 
-    private function actionRetire($kingdom_id, $uid)
+    private function actionRetire($kingdom_id, $park_id)
     {
         $position_id = (int)($_POST['PositionId'] ?? 0);
         if (!valid_id($position_id)) {
@@ -752,7 +778,12 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $r = $this->OfficerPosition->RetirePosition($position_id, $uid, $kingdom_id);
+        $r = $this->OfficerPosition->RetirePosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
         // On success the service returns the list of vacated occupants in Detail so
         // the UI can confirm what was cleared.
         if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
@@ -763,7 +794,7 @@ class Controller_OfficerAdminAjax extends Controller
         }
     }
 
-    private function actionReinstate($kingdom_id)
+    private function actionReinstate($kingdom_id, $park_id)
     {
         $position_id = (int)($_POST['PositionId'] ?? 0);
         if (!valid_id($position_id)) {
@@ -771,7 +802,12 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $r = $this->OfficerPosition->ReinstatePosition($position_id, $kingdom_id);
+        $r = $this->OfficerPosition->ReinstatePosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
         $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
     }
 

@@ -173,6 +173,35 @@ final class OfficerAuthorizationTest extends TestCase
         self::assertSame(4, (int) $r['Status']);
     }
 
+    /** @return list<array{0:string,1:array<string,mixed>}> */
+    public static function positionMethodProvider(): array
+    {
+        return [
+            ['CreatePosition',    ['Title' => 'Test Office', 'Classification' => 'supporting']],
+            ['EditPosition',      ['PositionId' => 1, 'Title' => 'Renamed']],
+            ['ReorderPositions',  ['ParentPositionId' => 0, 'OrderedPositionIds' => [1, 2]]],
+            ['RetirePosition',    ['PositionId' => 1]],
+            ['ReinstatePosition', ['PositionId' => 1]],
+        ];
+    }
+
+    /** @dataProvider positionMethodProvider */
+    public function testEveryPositionMethodRejectsAnInvalidToken(string $method, array $payload): void
+    {
+        $payload['Token'] = 'not-a-real-token';
+        $payload['KingdomId'] = self::KINGDOM_ID;
+        $payload['ParkId'] = 0;
+        $r = $this->positions->{$method}($payload);
+        self::assertSame(5, (int) $r['Status'], $method . ' must reject an invalid token');
+    }
+
+    public function testPositionManagementUsesThePositionPermission(): void
+    {
+        self::assertSame('kingdom.officer.position.manage', OfficerPosition::PermissionKeyFor('position', 0));
+        // Defined in PermissionRegistry since this branch began, referenced nowhere.
+        self::assertSame('park.officer.position.manage', OfficerPosition::PermissionKeyFor('position', 9));
+    }
+
     private function seedPosition(string $suffix, string $classification): int
     {
         $key = self::MARKER . '_' . $suffix;

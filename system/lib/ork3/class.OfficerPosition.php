@@ -403,6 +403,73 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Token-gated entry point for createPositionInternal(). Gated on
+     * PermissionKeyFor('position', $park_id), legacy role AUTH_CREATE -- the
+     * role this action's HasAuthority() branch already used before this method
+     * authorized anything at all.
+     *
+     * @param array $request Token, KingdomId, ParkId, CanonicalKey, Title,
+     *                        Classification, RbacChoice, ParentPositionId, HideWhenVacant
+     * @return array
+     */
+    public function CreatePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $r = $this->createPositionInternal(
+            $kingdom_id,
+            (string) ($request['CanonicalKey'] ?? ''),
+            (string) ($request['Title'] ?? ''),
+            (string) ($request['Classification'] ?? ''),
+            $request['RbacChoice'] ?? null,
+            $actor_id,
+            array_key_exists('ParentPositionId', $request) ? $request['ParentPositionId'] : null,
+            (int) ($request['HideWhenVacant'] ?? 0)
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['PositionId' => (int) ($r['Detail'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Create a new kingdom-custom position.
      *
      * @param int    $kingdom_id
@@ -414,7 +481,7 @@ class OfficerPosition extends Ork3
      * @param int    $creator_id
      * @return array  Success(position_id) | error
      */
-    public function CreatePosition($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $creator_id = 0, $parent_position_id = null, $hide_when_vacant = 0)
+    private function createPositionInternal($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $creator_id = 0, $parent_position_id = null, $hide_when_vacant = 0)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
@@ -542,6 +609,69 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Token-gated entry point for editPositionInternal(). Gated on
+     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT. changed_by
+     * / editor_id are forced to the token-resolved actor, never taken from the
+     * request's Fields -- a caller-supplied actor id is exactly the bug this
+     * conversion closes.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, Fields (see
+     *                        editPositionInternal()'s $fields docblock)
+     * @return array
+     */
+    public function EditPosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $fields = is_array($request['Fields'] ?? null) ? $request['Fields'] : [];
+        $fields['changed_by'] = $actor_id;
+        $fields['editor_id']  = $actor_id;
+
+        $r = $this->editPositionInternal((int) ($request['PositionId'] ?? 0), $fields, $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Edit a position. title / title_alias / sort_order always editable.
      * For non-pinned positions, classification + rbac binding are also editable;
      * a binding change triggers §4.4 reconciliation for all live occupants.
@@ -551,7 +681,7 @@ class OfficerPosition extends Ork3
      *                       rbac_role_id, permission_keys, changed_by, editor_id
      * @return array
      */
-    public function EditPosition($position_id, $fields, $acting_kingdom_id = 0)
+    private function editPositionInternal($position_id, $fields, $acting_kingdom_id = 0)
     {
         global $DB;
         $position_id = (int) $position_id;
@@ -796,6 +926,69 @@ class OfficerPosition extends Ork3
     public const REORDER_MAX_BATCH = 500;
 
     /**
+     * Token-gated entry point for reorderSiblingsInternal(). Named ReorderPositions
+     * (not ReorderSiblings) to match the controller's existing 'reorderpositions'
+     * action name. Gated on PermissionKeyFor('position', $park_id), legacy role
+     * AUTH_EDIT.
+     *
+     * @param array $request Token, KingdomId, ParkId, ParentPositionId, OrderedPositionIds
+     * @return array
+     */
+    public function ReorderPositions($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $ordered_ids = $request['OrderedPositionIds'] ?? [];
+        $r = $this->reorderSiblingsInternal(
+            $kingdom_id,
+            array_key_exists('ParentPositionId', $request) ? $request['ParentPositionId'] : null,
+            is_array($ordered_ids) ? $ordered_ids : [],
+            $actor_id
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['OrderedPositionIds' => $r['Detail'] ?? null]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Renumber one sibling group's sort_order in a single atomic call.
      *
      * Reordering used to mean one EditPosition() per row, each writing a single
@@ -834,7 +1027,7 @@ class OfficerPosition extends Ork3
      * @param int      $acting_uid           Actor, for future auditing; not written today.
      * @return array  Success(list of ids in applied order) | InvalidParameter | NoAuthorization | ProcessingError
      */
-    public function ReorderSiblings($kingdom_id, $parent_position_id, array $ordered_position_ids, $acting_uid = 0)
+    private function reorderSiblingsInternal($kingdom_id, $parent_position_id, array $ordered_position_ids, $acting_uid = 0)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
@@ -1158,6 +1351,67 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Token-gated entry point for retirePositionInternal(). Gated on
+     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT.
+     *
+     * retirePositionInternal() calls the private vacateOfficerByPosition() path
+     * to clear the position across EVERY park and the kingdom at once -- retire
+     * is cross-scope even though single-occupant enforcement (one-seat) is
+     * per-scope. That fan-out stays inside the internal method; nothing here
+     * changes it.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId
+     * @return array
+     */
+    public function RetirePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $r = $this->retirePositionInternal((int) ($request['PositionId'] ?? 0), $actor_id, $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0), 'Vacated' => $r['Detail'] ?? []]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Retire a position: reject pinned/system; auto-vacate all live occupants
      * (closing terms + revoking ork_user_role); set retired_at=NOW(). Returns
      * Success() with the list of vacated occupants in Detail.
@@ -1166,7 +1420,7 @@ class OfficerPosition extends Ork3
      * @param int $changed_by
      * @return array
      */
-    public function RetirePosition($position_id, $changed_by, $acting_kingdom_id = 0)
+    private function retirePositionInternal($position_id, $changed_by, $acting_kingdom_id = 0)
     {
         global $DB;
         $position_id = (int) $position_id;
@@ -1218,6 +1472,61 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Token-gated entry point for reinstatePositionInternal(). Gated on
+     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId
+     * @return array
+     */
+    public function ReinstatePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $r = $this->reinstatePositionInternal((int) ($request['PositionId'] ?? 0), $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Reinstate a retired position. Classification is the unchanged column value
      * (retire never touched it), so no snapshot restore is needed.
      *
@@ -1249,7 +1558,7 @@ class OfficerPosition extends Ork3
      * @param int $acting_kingdom_id
      * @return array
      */
-    public function ReinstatePosition($position_id, $acting_kingdom_id = 0)
+    private function reinstatePositionInternal($position_id, $acting_kingdom_id = 0)
     {
         global $DB;
         $position_id = (int) $position_id;

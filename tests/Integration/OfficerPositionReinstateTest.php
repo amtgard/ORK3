@@ -42,6 +42,7 @@ final class OfficerPositionReinstateTest extends TestCase
 
     private PDO $pdo;
     private OfficerPosition $positions;
+    private AuthorizedOfficerFixture $fixture;
 
     /** @var array<string,int> label => position_id */
     private array $seeded = [];
@@ -60,6 +61,7 @@ final class OfficerPositionReinstateTest extends TestCase
         );
         $this->purgeMarkerRows();
         $this->positions = new OfficerPosition();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
 
         // A parent whose children form ONE closed sibling group. Nesting the group
         // under a parent keeps the real Core Five (shared, top-level) out of the
@@ -89,9 +91,36 @@ final class OfficerPositionReinstateTest extends TestCase
     protected function tearDown(): void
     {
         if (isset($this->pdo)) {
+            $this->fixture->cleanup();
             $this->purgeMarkerRows();
         }
         $this->seeded = [];
+    }
+
+    /** ReinstatePosition() through the token-gated public API. */
+    private function reinstate(int $positionId, int $kingdomId): array
+    {
+        return $this->positions->ReinstatePosition([
+            'Token'      => $this->fixture->createAuthorizedOfficer(),
+            'KingdomId'  => $kingdomId,
+            'ParkId'     => 0,
+            'PositionId' => $positionId,
+        ]);
+    }
+
+    /**
+     * reinstatePositionInternal(), reached directly. KingdomId=0 has no scope
+     * for the gated public API to authorize against (checkPermissionOrAuthority
+     * always rejects scope id 0, and the controller never sends it -- kingdom_id
+     * is validated > 0 before dispatch) -- see
+     * testSharedReinstateWithNoActingKingdomLeavesOrderAlone().
+     */
+    private function reinstatePositionInternalDirect(int $positionId, int $actingKingdomId): array
+    {
+        $m = new ReflectionMethod(OfficerPosition::class, 'reinstatePositionInternal');
+        $m->setAccessible(true);
+
+        return $m->invoke($this->positions, $positionId, $actingKingdomId);
     }
 
     // ============================================================
@@ -100,7 +129,7 @@ final class OfficerPositionReinstateTest extends TestCase
 
     public function testReinstateClearsRetiredAt(): void
     {
-        $r = $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $r = $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertIsArray($r);
         $this->assertSame(0, (int) $r['Status'], 'reinstate should succeed');
@@ -117,7 +146,7 @@ final class OfficerPositionReinstateTest extends TestCase
             $this->seeded['retiredOwned']
         );
 
-        $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertSame(
             $maxBefore + 10,
@@ -129,7 +158,7 @@ final class OfficerPositionReinstateTest extends TestCase
     public function testOwnedRowIsLastInTheGroupTheKingdomActuallySees(): void
     {
         // The behavioural statement: not a number, but a position in the list.
-        $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertSame(
             ['retired_shared', 'sib_a', 'sib_b', 'sib_c', 'retired_owned'],
@@ -148,7 +177,7 @@ final class OfficerPositionReinstateTest extends TestCase
             ->prepare('UPDATE ork_officer_position SET sort_order = 100 WHERE position_id = :id')
             ->execute([':id' => $this->seeded['retiredOwned']]);
 
-        $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertSame(
             40,
@@ -160,14 +189,14 @@ final class OfficerPositionReinstateTest extends TestCase
     public function testOwnedReinstateWritesNoAliasRow(): void
     {
         // The kingdom owns the row outright, so nothing belongs in the alias table.
-        $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertNull($this->aliasFor(self::KINGDOM_ID, 'retired_owned'));
     }
 
     public function testOwnedReinstateLeavesTheRestOfTheGroupAlone(): void
     {
-        $this->positions->ReinstatePosition($this->seeded['retiredOwned'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredOwned'], self::KINGDOM_ID);
 
         $this->assertSame(10, $this->rawSortOrderOf($this->seeded['sibA']));
         $this->assertSame(20, $this->rawSortOrderOf($this->seeded['sibB']));
@@ -191,7 +220,7 @@ final class OfficerPositionReinstateTest extends TestCase
             $this->seeded['retiredShared']
         );
 
-        $r = $this->positions->ReinstatePosition($this->seeded['retiredShared'], self::KINGDOM_ID);
+        $r = $this->reinstate($this->seeded['retiredShared'], self::KINGDOM_ID);
 
         $this->assertSame(0, (int) $r['Status'], 'reinstate should succeed');
         $alias = $this->aliasFor(self::KINGDOM_ID, 'retired_shared');
@@ -202,7 +231,7 @@ final class OfficerPositionReinstateTest extends TestCase
     public function testSharedRowsOwnSortOrderIsNeverRewritten(): void
     {
         // The globally destructive write: every kingdom reads this column.
-        $this->positions->ReinstatePosition($this->seeded['retiredShared'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredShared'], self::KINGDOM_ID);
 
         $this->assertSame(
             5,
@@ -213,7 +242,7 @@ final class OfficerPositionReinstateTest extends TestCase
 
     public function testAnotherKingdomsOrderIsUntouchedByASharedReinstate(): void
     {
-        $this->positions->ReinstatePosition($this->seeded['retiredShared'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredShared'], self::KINGDOM_ID);
 
         $this->assertSame(
             5,
@@ -224,7 +253,7 @@ final class OfficerPositionReinstateTest extends TestCase
 
     public function testSharedRowIsLastInTheActingKingdomsGroup(): void
     {
-        $this->positions->ReinstatePosition($this->seeded['retiredShared'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredShared'], self::KINGDOM_ID);
 
         // retired_owned is still retired at its stale 15, so it stays mid-list; the
         // reinstated shared row is the one that has to be at the end.
@@ -241,7 +270,7 @@ final class OfficerPositionReinstateTest extends TestCase
         // an upsert that named title_alias would blank it.
         $this->seedAlias(self::KINGDOM_ID, 'retired_shared', 'Court Herald', null);
 
-        $this->positions->ReinstatePosition($this->seeded['retiredShared'], self::KINGDOM_ID);
+        $this->reinstate($this->seeded['retiredShared'], self::KINGDOM_ID);
 
         $alias = $this->aliasFor(self::KINGDOM_ID, 'retired_shared');
         $this->assertNotNull($alias);
@@ -254,7 +283,13 @@ final class OfficerPositionReinstateTest extends TestCase
         // With no acting kingdom there is no list to place the row into, and the only
         // column reachable is the shared one -- which must not be written. Clearing
         // retired_at alone is the defensible outcome, not a guess at a placement.
-        $r = $this->positions->ReinstatePosition($this->seeded['retiredShared'], 0);
+        //
+        // KingdomId=0 has no scope for the token-gated public API to authorize
+        // against (checkPermissionOrAuthority rejects scope id 0 outright, and
+        // the controller never sends it -- kingdom_id is validated > 0 before
+        // dispatch), so this specific internal behaviour is reached directly,
+        // the same way nextSortOrderVia() below reaches NextSortOrderInGroup().
+        $r = $this->reinstatePositionInternalDirect($this->seeded['retiredShared'], 0);
 
         $this->assertSame(0, (int) $r['Status']);
         $this->assertNull($this->retiredAtOf($this->seeded['retiredShared']), 'retired_at must still be cleared');
@@ -270,7 +305,7 @@ final class OfficerPositionReinstateTest extends TestCase
     {
         $before = $this->snapshot();
 
-        $r = $this->positions->ReinstatePosition($this->seeded['foreign'], self::KINGDOM_ID);
+        $r = $this->reinstate($this->seeded['foreign'], self::KINGDOM_ID);
 
         $this->assertNotSame(0, (int) $r['Status'], "another kingdom's position must be refused");
         $this->assertNotNull($this->retiredAtOf($this->seeded['foreign']), 'the row must stay retired');
@@ -281,7 +316,7 @@ final class OfficerPositionReinstateTest extends TestCase
     {
         $before = $this->snapshot();
 
-        $r = $this->positions->ReinstatePosition(0, self::KINGDOM_ID);
+        $r = $this->reinstate(0, self::KINGDOM_ID);
 
         $this->assertNotSame(0, (int) $r['Status']);
         $this->assertSame($before, $this->snapshot());

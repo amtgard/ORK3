@@ -32,6 +32,7 @@ final class OfficerPositionReorderTest extends TestCase
 
     private PDO $pdo;
     private OfficerPosition $positions;
+    private AuthorizedOfficerFixture $fixture;
 
     /** @var array<string,int> label => position_id */
     private array $seeded = [];
@@ -50,6 +51,7 @@ final class OfficerPositionReorderTest extends TestCase
         );
         $this->purgeMarkerRows();
         $this->positions = new OfficerPosition();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
 
         // One parent with three children, all sharing sort_order 100. Equal (or
         // duplicate) sort_order values are exactly the state a swap-two-values
@@ -80,9 +82,34 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $_POST = [];
         if (isset($this->pdo)) {
+            $this->fixture->cleanup();
             $this->purgeMarkerRows();
         }
         $this->seeded = [];
+    }
+
+    /** ReorderPositions() through the token-gated public API, acting as KINGDOM_ID. */
+    private function reorder(int $kingdomId, ?int $parentId, array $order): array
+    {
+        return $this->positions->ReorderPositions([
+            'Token'              => $this->fixture->createAuthorizedOfficer(),
+            'KingdomId'          => $kingdomId,
+            'ParkId'             => 0,
+            'ParentPositionId'   => $parentId,
+            'OrderedPositionIds' => $order,
+        ]);
+    }
+
+    /** EditPosition() through the token-gated public API, acting as KINGDOM_ID. */
+    private function editPosition(int $positionId, array $fields): array
+    {
+        return $this->positions->EditPosition([
+            'Token'      => $this->fixture->createAuthorizedOfficer(),
+            'KingdomId'  => self::KINGDOM_ID,
+            'ParkId'     => 0,
+            'PositionId' => $positionId,
+            'Fields'     => $fields,
+        ]);
     }
 
     // ============================================================
@@ -93,7 +120,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $order = [$this->seeded['childC'], $this->seeded['childA'], $this->seeded['childB']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], $order);
+        $r = $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], $order);
 
         $this->assertIsArray($r);
         $this->assertSame(0, (int) $r['Status'], 'reorder should succeed');
@@ -106,7 +133,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $order = [$this->seeded['childB'], $this->seeded['childC'], $this->seeded['childA']];
 
-        $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], $order);
+        $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], $order);
 
         foreach (['childA', 'childB', 'childC'] as $label) {
             $this->assertSame(
@@ -121,7 +148,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $order = [$this->seeded['topB'], $this->seeded['topA'], $this->seeded['parent']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertSame(0, (int) $r['Status'], 'top-level reorder should succeed');
         $this->assertSame(10, $this->sortOrderOf($this->seeded['topB']));
@@ -136,7 +163,7 @@ final class OfficerPositionReorderTest extends TestCase
         $before = $this->snapshot();
         $order = [$this->seeded['topA'], $this->seeded['foreign'], $this->seeded['topB']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertNotSame(0, (int) $r['Status'], "a foreign kingdom's position must be rejected");
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -148,7 +175,7 @@ final class OfficerPositionReorderTest extends TestCase
         $before = $this->snapshot();
         $order = [$this->seeded['childA'], $this->seeded['topA'], $this->seeded['childB']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], $order);
+        $r = $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], $order);
 
         $this->assertNotSame(0, (int) $r['Status'], 'an id from another group must be rejected');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -161,7 +188,7 @@ final class OfficerPositionReorderTest extends TestCase
         $before = $this->snapshot();
         $order = [$this->seeded['topA'], $this->seeded['childA']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertNotSame(0, (int) $r['Status'], 'a nested position must not reorder as top-level');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -174,7 +201,7 @@ final class OfficerPositionReorderTest extends TestCase
         $ghost = (int) $this->pdo->query('SELECT MAX(position_id) FROM ork_officer_position')->fetchColumn() + 5000;
         $order = [$this->seeded['childA'], $ghost, $this->seeded['childB']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], $order);
+        $r = $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], $order);
 
         $this->assertNotSame(0, (int) $r['Status'], 'an id that does not exist must be rejected');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -185,7 +212,7 @@ final class OfficerPositionReorderTest extends TestCase
         $before = $this->snapshot();
         $order = [$this->seeded['childA'], $this->seeded['childB'], $this->seeded['childA']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], $order);
+        $r = $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], $order);
 
         $this->assertNotSame(0, (int) $r['Status'], 'a repeated id must be rejected');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -195,7 +222,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $before = $this->snapshot();
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, $this->seeded['parent'], []);
+        $r = $this->reorder(self::KINGDOM_ID, $this->seeded['parent'], []);
 
         $this->assertNotSame(0, (int) $r['Status'], 'an empty order must be rejected');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -205,7 +232,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $before = $this->snapshot();
 
-        $r = $this->positions->ReorderSiblings(0, $this->seeded['parent'], [$this->seeded['childA']]);
+        $r = $this->reorder(0, $this->seeded['parent'], [$this->seeded['childA']]);
 
         $this->assertNotSame(0, (int) $r['Status'], 'kingdom_id 0 must be rejected');
         $this->assertSame($before, $this->snapshot(), 'a rejected reorder must write nothing');
@@ -219,7 +246,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         $order = [$this->seeded['sharedC'], $this->seeded['sharedA'], $this->seeded['sharedB']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertSame(0, (int) $r['Status']);
 
@@ -242,7 +269,7 @@ final class OfficerPositionReorderTest extends TestCase
         $beforeB = $this->effectiveSequenceFor(self::OTHER_KINGDOM_ID, ['sharedA', 'sharedB', 'sharedC']);
         $this->assertSame(['sharedA', 'sharedB', 'sharedC'], $beforeB, 'precondition: B sees the shared order');
 
-        $this->positions->ReorderSiblings(
+        $this->reorder(
             self::KINGDOM_ID,
             0,
             [$this->seeded['sharedC'], $this->seeded['sharedB'], $this->seeded['sharedA']]
@@ -262,7 +289,7 @@ final class OfficerPositionReorderTest extends TestCase
 
     public function testOverrideWinsForItsOwnKingdomOnly(): void
     {
-        $this->positions->ReorderSiblings(
+        $this->reorder(
             self::KINGDOM_ID,
             0,
             [$this->seeded['sharedC'], $this->seeded['sharedA'], $this->seeded['sharedB']]
@@ -302,7 +329,7 @@ final class OfficerPositionReorderTest extends TestCase
             ':alias' => 'Sovereign of Sorting',
         ]);
 
-        $this->positions->ReorderSiblings(
+        $this->reorder(
             self::KINGDOM_ID,
             0,
             [$this->seeded['sharedB'], $this->seeded['sharedA']]
@@ -324,21 +351,13 @@ final class OfficerPositionReorderTest extends TestCase
         // EditPosition used to DELETE the alias row when a kingdom cleared its custom
         // title. With the sort override living on that same row, that delete would
         // silently reset the kingdom's order.
-        $this->positions->ReorderSiblings(
+        $this->reorder(
             self::KINGDOM_ID,
             0,
             [$this->seeded['sharedB'], $this->seeded['sharedA']]
         );
-        $this->positions->EditPosition(
-            $this->seeded['sharedA'],
-            ['title_alias' => 'Temporary Name', 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
-        $this->positions->EditPosition(
-            $this->seeded['sharedA'],
-            ['title_alias' => '', 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
+        $this->editPosition($this->seeded['sharedA'], ['title_alias' => 'Temporary Name']);
+        $this->editPosition($this->seeded['sharedA'], ['title_alias' => '']);
 
         $alias = $this->aliasFor(self::KINGDOM_ID, 'sharedA');
         $this->assertNotNull($alias, 'clearing the title must not drop the sort override row');
@@ -349,18 +368,10 @@ final class OfficerPositionReorderTest extends TestCase
     public function testClearingATitleAliasWithNoOverrideStillRemovesTheRow(): void
     {
         // The flip side: a row that carries nothing at all should not linger.
-        $this->positions->EditPosition(
-            $this->seeded['sharedA'],
-            ['title_alias' => 'Temporary Name', 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
+        $this->editPosition($this->seeded['sharedA'], ['title_alias' => 'Temporary Name']);
         $this->assertNotNull($this->aliasFor(self::KINGDOM_ID, 'sharedA'));
 
-        $this->positions->EditPosition(
-            $this->seeded['sharedA'],
-            ['title_alias' => '', 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
+        $this->editPosition($this->seeded['sharedA'], ['title_alias' => '']);
 
         $this->assertNull($this->aliasFor(self::KINGDOM_ID, 'sharedA'));
     }
@@ -369,11 +380,7 @@ final class OfficerPositionReorderTest extends TestCase
     {
         // EditPosition's own sort_order write is the same hazard as the batch path:
         // it must not write a globally shared row either.
-        $r = $this->positions->EditPosition(
-            $this->seeded['sharedA'],
-            ['sort_order' => 77, 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
+        $r = $this->editPosition($this->seeded['sharedA'], ['sort_order' => 77]);
 
         $this->assertSame(0, (int) $r['Status']);
         $this->assertSame(100, $this->sortOrderOf($this->seeded['sharedA']), 'the shared row must be untouched');
@@ -386,11 +393,7 @@ final class OfficerPositionReorderTest extends TestCase
 
     public function testSingleRowSortOrderEditOnAnOwnedRowStillWritesTheRow(): void
     {
-        $r = $this->positions->EditPosition(
-            $this->seeded['topA'],
-            ['sort_order' => 55, 'changed_by' => 0],
-            self::KINGDOM_ID
-        );
+        $r = $this->editPosition($this->seeded['topA'], ['sort_order' => 55]);
 
         $this->assertSame(0, (int) $r['Status']);
         $this->assertSame(55, $this->sortOrderOf($this->seeded['topA']));
@@ -410,7 +413,7 @@ final class OfficerPositionReorderTest extends TestCase
             $this->seeded['sharedC'],
         ];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertSame(0, (int) $r['Status']);
         $this->assertSame(
@@ -432,7 +435,7 @@ final class OfficerPositionReorderTest extends TestCase
         $before = $this->snapshot();
         $order = [$this->seeded['sharedA'], $this->seeded['topA'], $this->seeded['foreign']];
 
-        $r = $this->positions->ReorderSiblings(self::KINGDOM_ID, 0, $order);
+        $r = $this->reorder(self::KINGDOM_ID, 0, $order);
 
         $this->assertNotSame(0, (int) $r['Status']);
         $this->assertSame($before, $this->snapshot(), 'neither officer_position nor the alias table may change');
@@ -451,7 +454,7 @@ final class OfficerPositionReorderTest extends TestCase
             $this->seedOfficer(self::OTHER_KINGDOM_ID, $this->seeded[$label], $this->slugOf($label));
         }
 
-        $this->positions->ReorderSiblings(
+        $this->reorder(
             self::KINGDOM_ID,
             0,
             [$this->seeded['sharedC'], $this->seeded['sharedB'], $this->seeded['sharedA']]
@@ -563,6 +566,10 @@ final class OfficerPositionReorderTest extends TestCase
         $rc = new ReflectionClass('Controller_OfficerAdminAjax');
         $controller = $rc->newInstanceWithoutConstructor();
         $controller->OfficerPosition = new Model_OfficerPosition();
+        // actionReorderPositions() now reads $this->session->token to build the
+        // gated request; without this the action would send Token => null and
+        // every call would come back NoAuthorization.
+        $controller->session = (object) ['token' => $this->fixture->createAuthorizedOfficer()];
 
         $method = $rc->getMethod('actionReorderPositions');
         $method->setAccessible(true);
