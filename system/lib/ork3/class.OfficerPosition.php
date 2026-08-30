@@ -1205,7 +1205,7 @@ class OfficerPosition extends Ork3
         }
 
         foreach ($vacated as $v) {
-            $this->VacateOfficerByPosition($v['KingdomId'], $v['ParkId'], $position_id, $changed_by);
+            $this->vacateOfficerByPosition($v['KingdomId'], $v['ParkId'], $position_id, $changed_by);
         }
 
         $DB->Clear();
@@ -1722,6 +1722,148 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Token-gated entry point for setOfficerByPosition(). Mirrors
+     * TransitionOfficer's gate-then-delegate shape: IsAuthorized first (so
+     * DangerAudit's $_SESSION read is populated), then
+     * checkPermissionOrAuthority against the scope the caller is acting in.
+     *
+     * $kingdom_id is never trusted as-is when $park_id > 0 -- a park-scoped
+     * actor is authorized against the park, not the kingdom, so the kingdom_id
+     * that drives GetPosition's ownership guard and the kingdom_id column
+     * written to ork_officer/ork_officer_history must be derived from the
+     * park (same rule TransitionOfficer applies), not taken from the request.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId, TermStart, TermEnd, Note
+     * @return array
+     */
+    public function SetOccupant($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('set', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $r = $this->setOfficerByPosition(
+            $kingdom_id,
+            $park_id,
+            (int) ($request['PositionId'] ?? 0),
+            (int) ($request['MundaneId'] ?? 0),
+            (string) ($request['TermStart'] ?? ''),
+            (string) ($request['TermEnd'] ?? ''),
+            (string) ($request['Note'] ?? ''),
+            $actor_id
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['MundaneId' => (int) ($request['MundaneId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Token-gated entry point for vacateOfficerByPosition(), restricted to the
+     * single-holder path -- a MundaneId is REQUIRED here. The all-holders
+     * ("Vacate All") behaviour stays reachable only through
+     * vacateOfficerByPosition() directly, which RetirePosition uses to clear
+     * a position across every park and the kingdom at once when the position
+     * itself is retired; that is a different operation from removing one
+     * person from one seat and is not exposed through this method.
+     *
+     * Gated on PermissionKeyFor('vacate', ...), NOT 'set' -- the console's
+     * existing bug mapped every vacate action to kingdom.officer.set, which
+     * meant kingdom.officer.vacate / park.officer.vacate existed and were
+     * checked by nothing.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId
+     * @return array
+     */
+    public function VacateOfficer($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('vacate', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        $mundane_id = (int) ($request['MundaneId'] ?? 0);
+        if (!valid_id($mundane_id)) {
+            return InvalidParameter(null, 'A valid member is required to remove an officer.');
+        }
+
+        $r = $this->vacateOfficerByPosition($kingdom_id, $park_id, (int) ($request['PositionId'] ?? 0), $actor_id, $mundane_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                ['MundaneId' => $mundane_id],
+                ['MundaneId' => 0]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Set an officer occupant by position, enforcing §3.4 occupancy rules.
      * Occupancy is per-seat, not per-person: the ORK imposes no limit on how
      * many offices a person holds, so Crown here means single-occupant-per-scope
@@ -1738,7 +1880,7 @@ class OfficerPosition extends Ork3
      * @param int    $changed_by
      * @return array
      */
-    public function SetOfficerByPosition($kingdom_id, $park_id, $position_id, $mundane_id, $term_start, $term_end, $note, $changed_by)
+    private function setOfficerByPosition($kingdom_id, $park_id, $position_id, $mundane_id, $term_start, $term_end, $note, $changed_by)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
@@ -1839,7 +1981,7 @@ class OfficerPosition extends Ork3
      * @param int $mundane_id  Optional single holder to vacate; 0/omitted = all holders.
      * @return array
      */
-    public function VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $changed_by, $mundane_id = 0)
+    private function vacateOfficerByPosition($kingdom_id, $park_id, $position_id, $changed_by, $mundane_id = 0)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;

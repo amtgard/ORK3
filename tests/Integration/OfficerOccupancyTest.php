@@ -13,6 +13,7 @@ final class OfficerOccupancyTest extends TestCase
 
     private PDO $pdo;
     private OfficerPosition $positions;
+    private AuthorizedOfficerFixture $fixture;
     /** @var array<string,int> */
     private array $seededPositions = [];
     /** @var list<int> */
@@ -30,6 +31,11 @@ final class OfficerOccupancyTest extends TestCase
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         $this->positions = new OfficerPosition();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
+        $this->seedPark(self::PARK_A);
+        $this->seedPark(self::PARK_B);
+        $this->fixture->grantParkAuthority(self::PARK_A);
+        $this->fixture->grantParkAuthority(self::PARK_B);
         $this->seededPositions['crown_a'] = $this->seedPosition('crown_a', 'crown');
         $this->seededPositions['crown_b'] = $this->seedPosition('crown_b', 'crown');
         $this->seededMundanes[] = $this->seedMundane('holder');
@@ -40,12 +46,45 @@ final class OfficerOccupancyTest extends TestCase
         if (!isset($this->pdo)) {
             return;
         }
+        $this->fixture->cleanup();
+        // Scoped to entity ids this test owns, not a blanket delete of every
+        // SetOccupant audit row in the database (ork_danger_audit carries no
+        // marker column; entity_id is the closest scoped key SetOccupant's
+        // audit() call writes).
+        $this->pdo->exec(
+            "DELETE FROM ork_danger_audit WHERE method_call = 'OfficerPosition::SetOccupant'"
+            . ' AND entity_id IN (' . self::KINGDOM_ID . ', ' . self::PARK_A . ', ' . self::PARK_B . ')'
+        );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
+        $this->pdo->exec('DELETE FROM ork_park WHERE park_id IN (' . self::PARK_A . ', ' . self::PARK_B . ')');
         if ($this->seededMundanes) {
             $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id IN (' . implode(',', $this->seededMundanes) . ')');
         }
+    }
+
+    /**
+     * SetOccupant derives kingdom_id from the park (never trusts the request),
+     * so PARK_A/PARK_B need a real ork_park row to resolve against -- unlike
+     * the pre-token-gate SetOfficerByPosition, which never looked the park up
+     * at all. Explicit park_id (not auto-increment) to match the PARK_A/PARK_B
+     * constants every test in this file already references.
+     */
+    private function seedPark(int $parkId): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_park
+                (park_id, kingdom_id, name, abbreviation, url, address, city, province,
+                 postal_code, google_geocode, latitude, longitude, location,
+                 map_url, description, directions)
+             VALUES (:pid, :kid, :name, "ZZT", "", "", "", "", "", "", 0, 0, "", "", "", "")'
+        );
+        $stmt->execute([
+            ':pid' => $parkId,
+            ':kid' => self::KINGDOM_ID,
+            ':name' => self::MARKER . '_park_' . $parkId,
+        ]);
     }
 
     /**
@@ -56,29 +95,13 @@ final class OfficerOccupancyTest extends TestCase
     public function testAPersonMayHoldTwoCrownOfficesInDifferentScopes(): void
     {
         $mundaneId = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $base  = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'PositionId' => $this->seededPositions['crown_a']];
 
-        $first = $this->positions->SetOfficerByPosition(
-            self::KINGDOM_ID,
-            self::PARK_A,
-            $this->seededPositions['crown_a'],
-            $mundaneId,
-            '',
-            '',
-            '',
-            0
-        );
-        self::assertSame(0, (int) $first['Status'], 'first appointment should succeed');
+        $first = $this->positions->SetOccupant($base + ['ParkId' => self::PARK_A, 'MundaneId' => $mundaneId]);
+        self::assertSame(0, (int) $first['Status'], 'first appointment should succeed: ' . ($first['Error'] ?? ''));
 
-        $second = $this->positions->SetOfficerByPosition(
-            self::KINGDOM_ID,
-            self::PARK_B,
-            $this->seededPositions['crown_a'],
-            $mundaneId,
-            '',
-            '',
-            '',
-            0
-        );
+        $second = $this->positions->SetOccupant($base + ['ParkId' => self::PARK_B, 'MundaneId' => $mundaneId]);
         self::assertSame(
             0,
             (int) $second['Status'],
@@ -89,27 +112,11 @@ final class OfficerOccupancyTest extends TestCase
     public function testAPersonMayHoldTwoCrownOfficesInTheSameScope(): void
     {
         $mundaneId = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $base  = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_A, 'MundaneId' => $mundaneId];
 
-        $this->positions->SetOfficerByPosition(
-            self::KINGDOM_ID,
-            self::PARK_A,
-            $this->seededPositions['crown_a'],
-            $mundaneId,
-            '',
-            '',
-            '',
-            0
-        );
-        $second = $this->positions->SetOfficerByPosition(
-            self::KINGDOM_ID,
-            self::PARK_A,
-            $this->seededPositions['crown_b'],
-            $mundaneId,
-            '',
-            '',
-            '',
-            0
-        );
+        $this->positions->SetOccupant($base + ['PositionId' => $this->seededPositions['crown_a']]);
+        $second = $this->positions->SetOccupant($base + ['PositionId' => $this->seededPositions['crown_b']]);
         self::assertSame(
             0,
             (int) $second['Status'],

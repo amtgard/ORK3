@@ -13,13 +13,14 @@
  *
  * ParkId comes from POST 'ParkId' (default 0 = kingdom scope for the prototype).
  *
- * Vacating comes in three explicitly-named flavours so "remove this person" and
- * "clear the whole office" can never be confused at the wire level:
+ * Vacating: both routes remove a single holder -- OfficerPosition::VacateOfficer
+ * REQUIRES a MundaneId, so "clear the whole office" is no longer reachable from
+ * this console entry point (it stays available internally to RetirePosition,
+ * which needs it to clear a retired position across every scope at once).
  *   vacateholder — POST MundaneId required; removes that one holder.
- *   vacateall    — removes every holder of the position in this scope.
- *   vacate       — legacy entry point: MundaneId present => single holder,
- *                  absent => all holders (kept for existing callers).
+ *   vacate       — legacy entry point; also requires MundaneId now.
  *
+
  * Response envelope: success => {status:0, ...}; failure => {status:N, error:'...'}.
  * Not logged in => {status:5}; invalid kingdom => {status:1}; unauthorized => {status:5}.
  ***/
@@ -72,7 +73,6 @@ class Controller_OfficerAdminAjax extends Controller
             'setoccupant'    => 'kingdom.officer.set',
             'vacate'         => 'kingdom.officer.set',
             'vacateholder'   => 'kingdom.officer.set',
-            'vacateall'      => 'kingdom.officer.set',
             'createposition' => 'kingdom.officer.position.manage',
             'editposition'   => 'kingdom.officer.position.manage',
             'reorderpositions' => 'kingdom.officer.position.manage',
@@ -104,8 +104,6 @@ class Controller_OfficerAdminAjax extends Controller
             case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid, null);
                 break;
             case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid, 'holder');
-                break;
-            case 'vacateall':    $this->actionVacate($kingdom_id, $park_id, $uid, 'all');
                 break;
             case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);
                 break;
@@ -501,32 +499,32 @@ class Controller_OfficerAdminAjax extends Controller
             return;
         }
 
-        $r = $this->OfficerPosition->SetOfficerByPosition(
-            $kingdom_id,
-            $park_id,
-            $position_id,
-            $mundane_id,
-            $term_start,
-            $term_end,
-            $note,
-            $uid
-        );
+        $r = $this->OfficerPosition->SetOccupant([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'MundaneId'  => $mundane_id,
+            'TermStart'  => $term_start,
+            'TermEnd'    => $term_end,
+            'Note'       => $note,
+        ]);
         $this->emitServiceResult($r);
     }
 
     /**
-     * Vacate an office.
+     * Vacate a single holder of an office.
      *
-     * $scope decides who is removed and is set by the route, not by the payload,
-     * so a stray/missing MundaneId can never silently widen a one-person removal
-     * into "clear the entire office":
+     * OfficerPosition::VacateOfficer REQUIRES a MundaneId, so both routes below
+     * remove exactly one person -- "clear the whole office" is not reachable
+     * from this console entry point (RetirePosition still uses the all-holders
+     * path internally when a position itself is retired).
      *   'holder' — MundaneId is required; only that person is vacated.
-     *   'all'    — every holder in this scope is vacated; MundaneId is ignored.
-     *   null     — legacy 'vacate': MundaneId present => that holder, absent => all.
+     *   null     — legacy 'vacate' entry point; also requires MundaneId now.
      *
-     * The service (VacateOfficerByPosition, 5th arg $mundane_id) rejects a member
-     * who does not currently hold the position with its own message, which reaches
-     * the client through the normal emitServiceResult path.
+     * The service rejects a member who does not currently hold the position
+     * with its own message, which reaches the client through the normal
+     * emitServiceResult path.
      */
     private function actionVacate($kingdom_id, $park_id, $uid, $scope = null)
     {
@@ -537,21 +535,22 @@ class Controller_OfficerAdminAjax extends Controller
         }
 
         $mundane_id = (int)($_POST['MundaneId'] ?? 0);
-
-        if ($scope === 'all') {
-            $mundane_id = 0;
-        } elseif ($scope === 'holder' && !valid_id($mundane_id)) {
-            echo json_encode(['status' => 1, 'error' => 'A valid member is required to remove a single officer.']);
+        if (!valid_id($mundane_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid member is required to remove an officer.']);
             return;
-        } elseif ($mundane_id < 0) {
-            $mundane_id = 0;
         }
 
-        $r = $this->OfficerPosition->VacateOfficerByPosition($kingdom_id, $park_id, $position_id, $uid, $mundane_id);
+        $r = $this->OfficerPosition->VacateOfficer([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'MundaneId'  => $mundane_id,
+        ]);
         $this->emitServiceResult($r, ['data' => [
             'PositionId' => $position_id,
             'MundaneId'  => $mundane_id,
-            'Scope'      => $mundane_id > 0 ? 'holder' : 'all',
+            'Scope'      => 'holder',
         ]]);
     }
 
