@@ -1207,7 +1207,7 @@ class Kingdom extends Ork3
      * kingdom-match expression and (b) the WHERE clause scoping rows to a
      * kingdom or a park.
      *
-     * The ORDER BY resolves through OfficerPosition::SortOrderSql(), not raw
+     * The ORDER BY resolves through OfficerPosition::sort_order_sql(), not raw
      * op.sort_order: the Core Five are SHARED rows (kingdom_id = 0) and a kingdom's
      * ordering of them lives in its own alias row. $aliasKingdomExpr already scopes
      * that join per kingdom (Park::GetOfficers passes o.kingdom_id, so a park list
@@ -1237,8 +1237,8 @@ class Kingdom extends Ork3
     {
         $sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
 					op.canonical_key as canonical_key, op.parent_position_id as parent_position_id, op.hide_when_vacant as hide_when_vacant, op.classification as classification,
-					" . OfficerPosition::DisplayTitleSql('op', 'al') . " as display_title,
-					" . OfficerPosition::SortOrderSql('op', 'al') . " as effective_sort_order
+					" . OfficerPosition::display_title_sql('op', 'al') . " as display_title,
+					" . OfficerPosition::sort_order_sql('op', 'al') . " as effective_sort_order
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "officer_position op on op.position_id = o.position_id
 						left join " . DB_PREFIX . "officer_position_alias al on al.kingdom_id = " . $aliasKingdomExpr . " and al.canonical_key = op.canonical_key
@@ -1251,7 +1251,7 @@ class Kingdom extends Ork3
 				where " . $whereClause . "
 				  and (op.retired_at IS NULL or op.position_id IS NULL)
 				  and NOT (op.hide_when_vacant = 1 and op.classification != 'crown' and (o.mundane_id IS NULL or o.mundane_id = 0))
-				order by " . OfficerPosition::SortOrderSql('op', 'al') . ", o.role
+				order by " . OfficerPosition::sort_order_sql('op', 'al') . ", o.role
 			";
         $r = $db->query($sql);
         $response = array();
@@ -1541,13 +1541,13 @@ class Kingdom extends Ork3
             // of under the office the user just picked. The three other writers
             // (Common::record_officer_history and both OfficerPosition backfills) already do
             // this; only this manual "Add Historical Record" path did not.
-            // DisplayTitleSql gives the EFFECTIVE title, so a kingdom that renamed a shared
+            // display_title_sql gives the EFFECTIVE title, so a kingdom that renamed a shared
             // office snapshots ITS name -- which is the whole point of storing a snapshot.
             $DB->Clear();
             $DB->op_kid = $kid;
             $DB->op_key = $role;
             $_ohPos = $DB->DataSet(
-                "SELECT p.position_id, " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
+                "SELECT p.position_id, " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
 				   FROM " . DB_PREFIX . "officer_position p
 				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key

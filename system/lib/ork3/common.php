@@ -974,7 +974,7 @@ class Common
                 $DB->dl_pid = $posid;
                 $DB->dl_kid = $kid;
                 $dl = $DB->DataSet(
-                    "SELECT " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
+                    "SELECT " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
 					 FROM " . DB_PREFIX . "officer_position p
 					 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 					   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key

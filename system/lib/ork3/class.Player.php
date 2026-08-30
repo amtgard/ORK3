@@ -98,7 +98,7 @@ class Player extends Ork3
         $this->db->Clear();
         $officerSql = "SELECT o.role, o.park_id, o.position_id,
             op.canonical_key AS canonical_key,
-            " . OfficerPosition::DisplayTitleSql('op', 'al') . " AS display_title,
+            " . OfficerPosition::display_title_sql('op', 'al') . " AS display_title,
             CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
                  WHEN k.parent_kingdom_id > 0 THEN 'Principality'
                  ELSE 'Kingdom' END AS entity_type,
@@ -113,7 +113,7 @@ class Player extends Ork3
               AND k.active = 'Active'
               AND (o.park_id = 0 OR p.active = 'Active')
               AND (op.retired_at IS NULL OR op.position_id IS NULL)
-            ORDER BY o.park_id DESC, op.classification, " . OfficerPosition::SortOrderSql('op', 'al') . "";
+            ORDER BY o.park_id DESC, op.classification, " . OfficerPosition::sort_order_sql('op', 'al') . "";
         $officerResult = $this->db->DataSet($officerSql);
         $officerRoles = [];
         if ($officerResult && $officerResult->Size() > 0) {

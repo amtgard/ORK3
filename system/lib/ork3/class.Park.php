@@ -1323,13 +1323,13 @@ class Park extends Ork3
             // of under the office the user just picked. The three other writers
             // (Common::record_officer_history and both OfficerPosition backfills) already do
             // this; only this manual "Add Historical Record" path did not.
-            // DisplayTitleSql gives the EFFECTIVE title, so a kingdom that renamed a shared
+            // display_title_sql gives the EFFECTIVE title, so a kingdom that renamed a shared
             // office snapshots ITS name -- which is the whole point of storing a snapshot.
             $DB->Clear();
             $DB->op_kid = $kid;
             $DB->op_key = $role;
             $_ohPos = $DB->DataSet(
-                "SELECT p.position_id, " . OfficerPosition::DisplayTitleSql('p', 'a') . " AS display_title
+                "SELECT p.position_id, " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
 				   FROM " . DB_PREFIX . "officer_position p
 				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
 				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key

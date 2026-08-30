@@ -39,7 +39,7 @@ class OfficerPosition extends Ork3
      * @param string $alias  Table alias for officer_position_alias
      * @return string  SQL expression; caller supplies its own `AS <name>`
      */
-    public static function DisplayTitleSql($pos = 'p', $alias = 'a')
+    public static function display_title_sql($pos = 'p', $alias = 'a')
     {
         return 'IF(' . $pos . '.kingdom_id = 0,'
             . ' IF(' . $alias . '.title_alias IS NOT NULL AND ' . $alias . ".title_alias != '', "
@@ -76,7 +76,7 @@ class OfficerPosition extends Ork3
     /**
      * The effective sort_order resolution rule, as a SQL expression.
      *
-     * Sibling to DisplayTitleSql() and written for the same reason. The Core Five
+     * Sibling to display_title_sql() and written for the same reason. The Core Five
      * are SHARED rows (kingdom_id = 0) that every kingdom reads: on the dev mirror,
      * 37 kingdoms and exactly one of them owns a non-system position at all. So a
      * kingdom reordering "its" crown officers is, for 36 of 37 kingdoms, reordering
@@ -88,7 +88,7 @@ class OfficerPosition extends Ork3
      * kingdom's override in officer_position_alias, falling back to the shared value
      * when the kingdom has expressed no opinion (sort_order IS NULL).
      *
-     * IFNULL, not IF(... != ''), is correct here where DisplayTitleSql needs the
+     * IFNULL, not IF(... != ''), is correct here where display_title_sql needs the
      * opposite: sort_order is a nullable INT whose NULL genuinely means "unset",
      * while title_alias is NOT NULL DEFAULT '' where '' means "unset".
      *
@@ -96,7 +96,7 @@ class OfficerPosition extends Ork3
      * @param string $alias  Table alias for officer_position_alias
      * @return string  SQL expression; caller supplies its own `AS <name>`
      */
-    public static function SortOrderSql($pos = 'p', $alias = 'a')
+    public static function sort_order_sql($pos = 'p', $alias = 'a')
     {
         return 'IF(' . $pos . '.kingdom_id = 0,'
             . ' IFNULL(' . $alias . '.sort_order, ' . $pos . '.sort_order),'
@@ -124,8 +124,8 @@ class OfficerPosition extends Ork3
         $kingdom_id = (int) $kingdom_id;
 
         $sql = "SELECT p.*,
-    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-    			" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
+    			" . self::sort_order_sql('p', 'a') . " AS EffectiveSortOrder
     		FROM " . DB_PREFIX . "officer_position p
     		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
     		  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
@@ -136,7 +136,7 @@ class OfficerPosition extends Ork3
         if ($classification !== null) {
             $sql .= " AND p.classification = :classification";
         }
-        $sql .= " ORDER BY p.classification, " . self::SortOrderSql('p', 'a');
+        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a');
 
         $DB->Clear();
         $DB->kingdom_id = $kingdom_id;
@@ -175,8 +175,8 @@ class OfficerPosition extends Ork3
         $DB->gp_kid = $kingdom_id;
         $r = $DB->DataSet(
             "SELECT p.*,
-    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-    			" . self::SortOrderSql('p', 'a') . " AS EffectiveSortOrder
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
+    			" . self::sort_order_sql('p', 'a') . " AS EffectiveSortOrder
     		FROM " . DB_PREFIX . "officer_position p
     		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
     		  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
@@ -389,7 +389,7 @@ class OfficerPosition extends Ork3
         $DB->so_kid = $kingdom_id;
         $DB->so_kid2 = $kingdom_id;
         $mx = $DB->DataSet(
-            "SELECT MAX(" . self::SortOrderSql('p', 'a') . ") AS mx
+            "SELECT MAX(" . self::sort_order_sql('p', 'a') . ") AS mx
     		 FROM " . DB_PREFIX . "officer_position p
     		 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
     		   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
@@ -1007,7 +1007,7 @@ class OfficerPosition extends Ork3
      * (kingdom_id = 0) is read by all 37 kingdoms, so the acting kingdom's order goes
      * into its own officer_position_alias row instead -- the same table that already
      * holds its custom TITLE for that shared position. Reads resolve the two through
-     * SortOrderSql(), so a group mixing both kinds renumbers coherently.
+     * sort_order_sql(), so a group mixing both kinds renumbers coherently.
      *
      * VALIDATION RUNS TO COMPLETION BEFORE ANY WRITE. The group is identified by
      * ($kingdom_id, $parent_position_id), so an id that is not really in that group
@@ -1650,7 +1650,7 @@ class OfficerPosition extends Ork3
         $sql = "SELECT o.officer_id, o.mundane_id, o.position_id, o.role,
     			p.canonical_key, p.classification, p.sort_order,
     			p.parent_position_id, p.hide_when_vacant,
-    			" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
     			m.persona, m.given_name, m.surname, m.username
     		FROM " . DB_PREFIX . "officer o
     		JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
@@ -1661,7 +1661,7 @@ class OfficerPosition extends Ork3
         if (!$include_retired) {
             $sql .= " AND p.retired_at IS NULL";
         }
-        $sql .= " ORDER BY p.classification, " . self::SortOrderSql('p', 'a');
+        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a');
 
         $DB->Clear();
         $DB->kid = $kingdom_id;
