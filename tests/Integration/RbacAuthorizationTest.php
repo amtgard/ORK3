@@ -10,9 +10,23 @@ final class RbacAuthorizationTest extends TestCase
 
     private ?PDO $pdo = null;
     private ?int $unprivilegedMundaneId = null;
+    private ?AuthorizedOfficerFixture $fixture = null;
+
+    /** @var list<int> ork_user_role.user_role_id rows seeded by seedUserRoleInKingdom() */
+    private array $seededUserRoleIds = [];
 
     protected function tearDown(): void
     {
+        foreach ($this->seededUserRoleIds as $userRoleId) {
+            $this->pdo?->exec('DELETE FROM ork_user_role WHERE user_role_id = ' . $userRoleId);
+        }
+        $this->seededUserRoleIds = [];
+
+        // fixture->cleanup() removes its own mundane/session/authorization rows, but
+        // knows nothing about ork_user_role -- the delete above must run first/anyway.
+        $this->fixture?->cleanup();
+        $this->fixture = null;
+
         if ($this->pdo === null || $this->unprivilegedMundaneId === null) {
             return;
         }
@@ -21,6 +35,52 @@ final class RbacAuthorizationTest extends TestCase
         $this->pdo->exec('DELETE FROM ork_user_role WHERE mundane_id = ' . $this->unprivilegedMundaneId);
         $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id = ' . $this->unprivilegedMundaneId);
         $this->unprivilegedMundaneId = null;
+    }
+
+    private function pdoConnection(): PDO
+    {
+        if ($this->pdo === null) {
+            $this->pdo = new PDO(
+                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8', DB_HOSTNAME, DB_PORT, DB_DATABASE),
+                DB_USERNAME,
+                DB_PASSWORD,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        }
+
+        return $this->pdo;
+    }
+
+    /**
+     * Seeds one MARKER-tagged ork_user_role row scoped to $kingdomId, owned by a
+     * fresh recipient mundane (via the shared fixture), and returns its id.
+     * Tracked in $seededUserRoleIds for cleanup in tearDown() -- inline cleanup
+     * never runs on the failure path, which is exactly when a leftover row would
+     * poison the next run.
+     */
+    private function seedUserRoleInKingdom(int $kingdomId): int
+    {
+        $pdo = $this->pdoConnection();
+        if ($this->fixture === null) {
+            $this->fixture = new AuthorizedOfficerFixture($pdo, self::MARKER, self::KINGDOM_ID);
+        }
+
+        $mundaneId = $this->fixture->seedRecipient();
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO ork_user_role (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by)
+             VALUES (:mundane_id, 1, :kingdom_id, 0, 0, 0, :granted_by)'
+        );
+        $stmt->execute([
+            ':mundane_id' => $mundaneId,
+            ':kingdom_id' => $kingdomId,
+            ':granted_by' => $mundaneId,
+        ]);
+
+        $id = (int) $pdo->lastInsertId();
+        $this->seededUserRoleIds[] = $id;
+
+        return $id;
     }
 
     public function testEveryUserFacingMutatorRejectsAnInvalidToken(): void
@@ -148,14 +208,63 @@ final class RbacAuthorizationTest extends TestCase
             'Fixture bug: the seeded user must genuinely lack kingdom.auth.manage for this test to isolate the gate.'
         );
 
+        // RevokeRole (Task 11) now reads the target row's own scope BEFORE
+        // authorizing, mirroring OfficerPosition::EditHistoryTerm -- so it needs a
+        // real row to reach the permission gate at all; a bare UserRoleId of 0
+        // would correctly short-circuit to InvalidParameter (Status 4) instead,
+        // which would prove nothing about the permission check this test isolates.
+        $revokeTargetId = $this->seedUserRoleInKingdom(self::KINGDOM_ID);
+
         $rbac = new RBACService();
         foreach (['GrantRole', 'RevokeRole', 'CreateRole', 'EditRole', 'DeleteRole'] as $method) {
-            $r = $rbac->{$method}(['Token' => $token, 'KingdomId' => self::KINGDOM_ID]);
+            $req = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID];
+            if ($method === 'RevokeRole') {
+                $req['UserRoleId'] = $revokeTargetId;
+            }
+            $r = $rbac->{$method}($req);
             self::assertSame(
                 5,
                 (int) $r['Status'],
                 $method . ' must reject a valid, authenticated token that lacks kingdom.auth.manage'
             );
         }
+    }
+
+    /**
+     * Same defect class the officer-history methods fixed: RevokeRole authorized
+     * against the CALLER's claimed KingdomId, not the target row's own scope. A
+     * caller holding kingdom.auth.manage for their own kingdom could name that
+     * kingdom to pass the gate, then revoke an ork_user_role row belonging to any
+     * other kingdom by id -- nothing tied the authorized scope to the row being
+     * changed.
+     */
+    public function testRevokeRoleRefusesAUserRoleRowFromAnotherKingdom(): void
+    {
+        if (!ork3_test_db_available()) {
+            $this->markTestSkipped('Test database is not available.');
+        }
+
+        $rbac = new RBACService();
+        $this->fixture = new AuthorizedOfficerFixture($this->pdoConnection(), self::MARKER, self::KINGDOM_ID);
+        $token = $this->fixture->createAuthorizedOfficer();
+
+        $foreignUserRoleId = $this->seedUserRoleInKingdom(self::KINGDOM_ID + 1);
+
+        // The actual exploit: the caller passes their OWN kingdom to satisfy the
+        // gate (the vulnerability is that the gate checks the CALLER's claim), then
+        // targets a UserRoleId belonging to a different kingdom. Omitting KingdomId
+        // here would make the pre-fix call fail for an unrelated reason (the gate
+        // defaults an absent KingdomId to 0, which both the RBAC and legacy
+        // authority checks reject outright) and would not exercise the defect at all.
+        $r = $rbac->RevokeRole([
+            'Token' => $token,
+            'KingdomId' => self::KINGDOM_ID,
+            'UserRoleId' => $foreignUserRoleId,
+        ]);
+        self::assertSame(
+            5,
+            (int) $r['Status'],
+            'the row belongs to another kingdom; the caller administers only their own'
+        );
     }
 }

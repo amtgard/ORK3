@@ -469,29 +469,106 @@ class RBACService extends Ork3
 
     /**
      * Token-gated entry point. Revoke a role from a user. Resolves the acting
-     * user from the token, then delegates to revokeRoleInternal() with the proven identity.
+     * user from the token, reads the target row's own scope (KingdomId in the
+     * request is NOT trusted for the gate -- see the security note below), then
+     * delegates to revokeRoleInternal() with the proven identity.
      *
-     * @param array $request  Token, KingdomId (gate scope), UserRoleId
+     * @param array $request  Token, UserRoleId
      * @return array  Standard ORK response array
      */
     public function RevokeRole($request)
     {
+        global $DB;
+
         if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+        $user_role_id = (int) ($request['UserRoleId'] ?? 0);
+
+        // Authorize against the ROW's own scope, not the caller's claim. Without
+        // this, a caller holding kingdom.auth.manage for their own kingdom could
+        // pass the gate by naming that kingdom, then revoke any OTHER kingdom's
+        // grant by id -- the row was only ever looked up by id, nothing tied the
+        // authorized scope to the row being changed. Mirrors
+        // OfficerPosition::EditHistoryTerm/DeleteHistoryTerm, same defect class.
+        $DB->Clear();
+        $DB->rr_id = $user_role_id;
+        $row = $DB->DataSet(
+            'SELECT kingdom_id, park_id, event_id, unit_id FROM ' . DB_PREFIX . 'user_role
+              WHERE user_role_id = :rr_id LIMIT 1'
+        );
+        if ($row === false || $row->size() === 0 || !$row->Next()) {
+            return InvalidParameter(null, 'That role assignment does not exist.');
+        }
+
+        $row_kingdom_id = (int) $row->kingdom_id;
+        $row_park_id    = (int) $row->park_id;
+        $row_event_id   = (int) $row->event_id;
+        $row_unit_id    = (int) $row->unit_id;
+
+        // grantRoleInternal() writes exactly one of these four columns nonzero
+        // (the others are 0) -- a park/event/unit-scoped grant stores
+        // kingdom_id = 0. Resolve UP to the owning kingdom the same way
+        // CheckPermissionCascade()/GranterPermissionKeysAtScope() do, so
+        // kingdom.auth.manage stays a kingdom-level gate for every scope type.
+        // Gating on the row's raw kingdom_id alone would make a park/event/unit
+        // grant (kingdom_id = 0) unrevokable by anyone but a true global admin:
+        // checkPermissionOrAuthority()/HasPermission() both refuse scope_id = 0
+        // outright, and HasAuthority() short-circuits `0 == $id` to false before
+        // even reaching its admin bypass.
+        if ($row_kingdom_id > 0) {
+            $owning_kingdom_id = $row_kingdom_id;
+        } elseif ($row_park_id > 0) {
+            $DB->Clear();
+            $DB->rk_park_id = $row_park_id;
+            $kr = $DB->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = :rk_park_id LIMIT 1'
+            );
+            $owning_kingdom_id = ($kr !== false && $kr->size() > 0 && $kr->Next()) ? (int) $kr->kingdom_id : 0;
+        } elseif ($row_event_id > 0) {
+            $DB->Clear();
+            $DB->rk_event_id = $row_event_id;
+            $kr = $DB->DataSet(
+                'SELECT kingdom_id, park_id FROM ' . DB_PREFIX . 'event WHERE event_id = :rk_event_id LIMIT 1'
+            );
+            $owning_kingdom_id = 0;
+            if ($kr !== false && $kr->size() > 0 && $kr->Next()) {
+                if ((int) $kr->kingdom_id > 0) {
+                    $owning_kingdom_id = (int) $kr->kingdom_id;
+                } elseif ((int) $kr->park_id > 0) {
+                    $DB->Clear();
+                    $DB->rk_park_id2 = (int) $kr->park_id;
+                    $pkr = $DB->DataSet(
+                        'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = :rk_park_id2 LIMIT 1'
+                    );
+                    $owning_kingdom_id = ($pkr !== false && $pkr->size() > 0 && $pkr->Next()) ? (int) $pkr->kingdom_id : 0;
+                }
+            }
+        } elseif ($row_unit_id > 0) {
+            $DB->Clear();
+            $DB->rk_unit_id = $row_unit_id;
+            $kr = $DB->DataSet(
+                'SELECT p.kingdom_id FROM ' . DB_PREFIX . 'unit u
+                   JOIN ' . DB_PREFIX . 'park p ON p.park_id = u.park_id
+                  WHERE u.unit_id = :rk_unit_id LIMIT 1'
+            );
+            $owning_kingdom_id = ($kr !== false && $kr->size() > 0 && $kr->Next()) ? (int) $kr->kingdom_id : 0;
+        } else {
+            $owning_kingdom_id = 0;
+        }
+
+        if ($owning_kingdom_id <= 0 || !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
             $actor_id,
             'kingdom.auth.manage',
             'kingdom',
-            $kingdom_id,
+            $owning_kingdom_id,
             AUTH_CREATE
         )) {
             return NoAuthorization();
         }
 
-        $r = $this->revokeRoleInternal($actor_id, (int) ($request['UserRoleId'] ?? 0));
+        $r = $this->revokeRoleInternal($actor_id, $user_role_id);
 
         if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
             $safe = $request;
@@ -500,7 +577,7 @@ class RBACService extends Ork3
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
                 'Kingdom',
-                $kingdom_id,
+                $owning_kingdom_id,
                 null,
                 null
             );
