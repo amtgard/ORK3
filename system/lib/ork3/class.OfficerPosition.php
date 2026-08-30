@@ -1675,7 +1675,7 @@ class OfficerPosition extends Ork3
         if (!$include_retired) {
             $sql .= " AND p.retired_at IS NULL";
         }
-        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a');
+        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a') . ", o.officer_id ASC";
 
         $DB->Clear();
         $DB->kid = $kingdom_id;

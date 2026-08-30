@@ -127,6 +127,14 @@ class Controller_OfficerAdminAjax extends Controller
                 break;
             case 'setoccupant':  $this->actionSetOccupant($kingdom_id, $park_id, $uid);
                 break;
+            case 'transition':    $this->actionTransition($kingdom_id, $park_id);
+                break;
+            case 'addhistory':    $this->actionAddHistory($kingdom_id, $park_id);
+                break;
+            case 'edithistory':   $this->actionEditHistory();
+                break;
+            case 'deletehistory': $this->actionDeleteHistory();
+                break;
             case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid, null);
                 break;
             case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid, 'holder');
@@ -542,6 +550,76 @@ class Controller_OfficerAdminAjax extends Controller
             'TermStart'  => $term_start,
             'TermEnd'    => $term_end,
             'Note'       => $note,
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    /**
+     * Move an office from one holder to another, or fill a vacant one.
+     *
+     * The wizard posts here once, from its final step. Every date is optional:
+     * the domain defaults OutgoingEndDate to today and TermStart to that end date,
+     * and skips the ordering check entirely when the office is vacant.
+     */
+    private function actionTransition($kingdom_id, $park_id)
+    {
+        $r = $this->OfficerPosition->TransitionOfficer([
+            'Token'             => $this->session->token,
+            'KingdomId'         => $kingdom_id,
+            'ParkId'            => $park_id,
+            'PositionId'        => (int)($_POST['PositionId'] ?? 0),
+            'MundaneId'         => (int)($_POST['MundaneId'] ?? 0),
+            'OutgoingEndDate'   => trim((string)($_POST['OutgoingEndDate'] ?? '')),
+            'OutgoingStartDate' => trim((string)($_POST['OutgoingStartDate'] ?? '')),
+            'TermStart'         => trim((string)($_POST['TermStart'] ?? '')),
+            'Note'              => trim((string)($_POST['Note'] ?? '')),
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    private function actionAddHistory($kingdom_id, $park_id)
+    {
+        $r = $this->OfficerPosition->AddHistoryTerm([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => (int)($_POST['PositionId'] ?? 0),
+            'MundaneId'  => (int)($_POST['MundaneId'] ?? 0),
+            'StartDate'  => trim((string)($_POST['StartDate'] ?? '')),
+            'EndDate'    => trim((string)($_POST['EndDate'] ?? '')),
+            'Note'       => trim((string)($_POST['Note'] ?? '')),
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    /**
+     * Scope is deliberately absent. EditHistoryTerm reads the row's own kingdom and
+     * park and gates on those; passing a caller-supplied scope here would be an
+     * invitation to trust it.
+     *
+     * StartDate/EndDate use array_key_exists semantics in the domain: key present
+     * (even empty) clears the date, key absent leaves it alone. Only forward keys
+     * the client actually sent.
+     */
+    private function actionEditHistory()
+    {
+        $request = [
+            'Token'            => $this->session->token,
+            'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
+        ];
+        foreach (['StartDate', 'EndDate', 'Note'] as $field) {
+            if (array_key_exists($field, $_POST)) {
+                $request[$field] = trim((string)$_POST[$field]);
+            }
+        }
+        $this->emitServiceResult($this->OfficerPosition->EditHistoryTerm($request));
+    }
+
+    private function actionDeleteHistory()
+    {
+        $r = $this->OfficerPosition->DeleteHistoryTerm([
+            'Token'            => $this->session->token,
+            'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
         ]);
         $this->emitServiceResult($r);
     }
