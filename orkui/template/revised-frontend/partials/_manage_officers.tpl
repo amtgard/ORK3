@@ -583,11 +583,16 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	// Capability, not scope: whether THIS user holds kingdom-scope position-management
 	// authority, as reported by actionList's CanManagePositions (mirrors the controller's
 	// 'position' family gate, which is always kingdom-scoped regardless of ParkId). A
-	// park-only officer gets false here and the create/edit/reclassify/retire/reorder
-	// controls are hidden rather than left as dead buttons that 400 on click. Defaults
-	// true so the kingdom console (which already requires this authority just to open
-	// this partial) never flashes hidden before the first load resolves.
-	var moCanManagePositions = true;
+	// park-only officer gets false here and the create/edit/reclassify/retire/reinstate/
+	// reorder controls are hidden rather than left as dead buttons that 400 on click.
+	// SEEDED PER CONSOLE, and deliberately not a flat `true`: the create button lives in
+	// .mo-toolbar, OUTSIDE #mo-cards, so it paints before the first list response lands --
+	// a flat true left it live-and-refusing in that window, and left it live FOREVER when
+	// the list load failed. The kingdom console seeds true because Admin_kingdom.tpl
+	// already requires kingdom.officer.position.manage just to render this partial, so it
+	// never flashes hidden; a park console seeds false and reveals only if the server says
+	// so. Hide-then-reveal is the safe direction for a control backed by an authority check.
+	var moCanManagePositions = !MoConfig.parkId;
 	var moRoles = null;
 	var moPerms = null;
 	var moEditId = 0;       // 0 = create mode
@@ -640,15 +645,22 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	}
 
 	// Show/hide the controls that only a kingdom-scope position manager can use.
-	// Called after every list load (moCanManagePositions is only known once the
-	// server has answered), so both create buttons start visible (matching the
-	// default true above) and only disappear for a park-only officer once the
-	// real answer is in.
+	// Called after EVERY list outcome -- success, error payload, and network failure --
+	// not just success. On a failed load moCanManagePositions keeps its seeded value, and
+	// applying it there is what stops a park console's create button from surviving a
+	// failed refresh as a live control. The server gate is authoritative in all cases;
+	// this only keeps the UI from offering what it would refuse.
 	function moApplyCapability() {
 		['mo-create-btn', 'mo-create-btn-empty'].forEach(function(id) {
 			var el = document.getElementById(id);
 			if (el) el.style.display = moCanManagePositions ? '' : 'none';
 		});
+		// The mobile note advertises re-ordering. Without the authority there are no grips
+		// at any width, so the note would promise a desktop capability that does not exist.
+		// Clearing the inline style hands display back to the stylesheet's <=768px rule
+		// rather than forcing it visible -- see the markup comment on the note itself.
+		var note = document.getElementById('mo-reorder-note');
+		if (note && !moCanManagePositions) { note.style.display = 'none'; }
 	}
 
 	// ---------- Load + render ----------
@@ -671,6 +683,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			if (!resp || resp.status !== 0) {
 				errorEl.textContent = (resp && resp.error) ? resp.error : 'Failed to load positions.';
 				errorEl.style.display = '';
+				moApplyCapability();
 				return;
 			}
 			moData = resp.data || { crown: [], supporting: [], retired: [] };
@@ -685,6 +698,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			loadingEl.style.display = 'none';
 			errorEl.textContent = 'Network error loading positions.';
 			errorEl.style.display = '';
+			moApplyCapability();
 		});
 	}
 	// Public refresh: (re)load + render the cards into #mo-cards.
@@ -875,7 +889,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 				// as ISO produced a truncated string ("Aug 26, 20").
 				'<div class="mo-term">Retired' + (pos.RetiredAt ? ' ' + esc(pos.RetiredAt) : '') + '</div>' +
 			'</div>' +
-			'<div class="mo-actions mo-row-actions"><button class="mo-act-btn" onclick="moReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>' +
+			// Reinstate is in the controller's 'position' permission family, which is gated at
+			// KINGDOM scope -- so a park-only officer would get {status:5} on click. Retired rows
+			// still LIST for them (the payload is legitimately theirs to read); only the action
+			// is withheld.
+			(moCanManagePositions
+				? '<div class="mo-actions mo-row-actions"><button class="mo-act-btn" onclick="moReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>'
+				: '') +
 			'</div>';
 	}
 
@@ -965,8 +985,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		emptyEl.style.display = nothingConfigured ? '' : 'none';
 		listEl.style.display  = nothingConfigured ? 'none' : '';
 		// '' (not 'block'/'flex') so the stylesheet keeps deciding: hidden on desktop,
-		// shown below 768px.
-		if (noteEl) noteEl.style.display = nothingConfigured ? 'none' : '';
+		// shown below 768px. moRender runs AFTER moApplyCapability, so it MUST re-apply the
+		// capability here too -- otherwise the '' branch would silently undo the hide and
+		// restore a note advertising a re-order the user has no grips for.
+		if (noteEl) noteEl.style.display = (nothingConfigured || !moCanManagePositions) ? 'none' : '';
 
 		listEl.innerHTML = nothingConfigured ? '' : renderGroupTree(active);
 		moRestoreGripFocus();
