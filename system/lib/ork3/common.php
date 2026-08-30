@@ -839,7 +839,7 @@ class Common
             where ka.award_id in ";
     }
 
-    public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0, $display_label = '')
+    public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0, $display_label = '', $skip_history = false)
     {
         global $DB;
         // Resolve whether this position bypasses the ork_authorization path.
@@ -921,7 +921,13 @@ class Common
 
             // Record officer history only if the officer was actually changed
             if ($officer_changed && (int)$old_mundane_id !== (int)$new_officer_id) {
-                $this->record_officer_history($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id, $display_label);
+                // OfficerPosition::TransitionOfficer writes its own term, with the
+                // caller's dates and note -- things record_officer_history cannot
+                // express. Exactly one function writes ork_officer_history per
+                // transition; the flag is how the newer path claims that job.
+                if (!$skip_history) {
+                    $this->record_officer_history($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id, $display_label);
+                }
 
                 // RBAC dual-write: prefer position-id sync, fall back to legacy string path.
                 if (isset(Ork3::$Lib->rbacservice)) {
