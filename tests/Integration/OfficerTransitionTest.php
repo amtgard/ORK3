@@ -330,6 +330,50 @@ final class OfficerTransitionTest extends TestCase
         );
     }
 
+    /**
+     * The $start < $end check used to run unconditionally, before $outgoing was
+     * even read -- so filling a VACANT office with a term that began in the
+     * past failed unless the caller also sent a semantically meaningless
+     * OutgoingEndDate ($end defaults to today, and a January TermStart is
+     * always < today). The wizard skips step 1 when there is no outgoing
+     * officer, so it never sends OutgoingEndDate. crown_b has no seated holder
+     * -- setUp() never occupies it.
+     */
+    public function testAppointingToAVacantOfficeAllowsABackdatedTermStart(): void
+    {
+        $positionId = $this->seededPositions['crown_b'];
+        $incoming   = $this->seedMundane('vacant_incoming');
+        $this->seededMundanes[] = $incoming;
+        $token      = $this->fixture->createAuthorizedOfficer();
+
+        // Seed the vacant slot set_officer's find() requires.
+        $this->pdo->prepare(
+            'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, system,
+                                      authorization_id, position_id, modified)
+             VALUES (:kid, 0, 0, :role, 0, 0, :pid, NOW())'
+        )->execute([':kid' => self::KINGDOM_ID, ':role' => self::MARKER . '_crown_b', ':pid' => $positionId]);
+
+        $r = $this->positions->TransitionOfficer([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+            'TermStart' => '2026-01-15',
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $stmt = $this->pdo->prepare(
+            'SELECT start_date, end_date FROM ork_officer_history
+             WHERE position_id = :pid AND mundane_id = :mid'
+        );
+        $stmt->execute([':pid' => $positionId, ':mid' => $incoming]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        self::assertSame('2026-01-15', $row['start_date'], 'the backdated start date must be stored');
+        self::assertNull($row['end_date'], 'the new term must be open');
+
+        $seatStmt = $this->pdo->prepare('SELECT mundane_id FROM ork_officer WHERE position_id = :pid');
+        $seatStmt->execute([':pid' => $positionId]);
+        self::assertSame($incoming, (int) $seatStmt->fetchColumn(), 'the seat itself must have moved');
+    }
+
     public function testAuditRowIsAttributedToTheTokenOwnerNotZero(): void
     {
         $positionId = $this->seededPositions['crown_a'];

@@ -5,8 +5,18 @@
 -- were empty and no sitting officer had an open term. Both date columns are
 -- already DEFAULT NULL, so this migration alters nothing -- it is pure data.
 --
--- Idempotent: the reopen matches nothing on a second run (end_date is already
--- NULL), and the INSERT is guarded by a NOT EXISTS on the open term.
+-- Idempotent ONLY once InsertOfficerRow's future-end-date rejection
+-- (class.OfficerPosition.php, setOfficerByPosition's non-crown branch) is
+-- deployed -- with that guard in place, no NEW future-dated row can be
+-- created, so step 1's reopen matches nothing on a second run (end_date is
+-- already NULL) and step 2's INSERT is guarded by a NOT EXISTS on the open
+-- term. Re-running this migration against a database built from an OLDER
+-- release (one still missing that rejection, so still able to accept a
+-- caller-supplied future Term End) can find NEW legitimately-future-dated
+-- rows -- someone recording a projected term end -- and step 1 will erase
+-- them exactly like the one known-bad production row this migration was
+-- written to repair: end_date set to NULL with no audit row and no
+-- recoverable copy of the value it overwrote.
 --
 -- Order matters. Step 1 (reopen) MUST run before step 2 (insert): an officer
 -- whose only history row carries a future end_date has no OPEN term, so if

@@ -1813,9 +1813,6 @@ class OfficerPosition extends Ork3
         if ($end > $today) {
             return InvalidParameter(null, 'A term cannot end in the future.');
         }
-        if ($start < $end) {
-            return InvalidParameter(null, 'The incoming term cannot start before the outgoing term ends.');
-        }
 
         // The incoming officer must belong to the org, matching the rule the legacy
         // path has always applied (Kingdom::SetOfficer, class.Kingdom.php:1348).
@@ -1849,6 +1846,14 @@ class OfficerPosition extends Ork3
 
             $outgoing = $this->currentHolder($kingdom_id, $park_id, $position_id);
             if ($outgoing > 0) {
+                // Only meaningful when there IS an outgoing holder -- filling a
+                // VACANT office has no outgoing term for an incoming TermStart to
+                // conflict with, and $end defaults to today when no outgoing
+                // holder ever sent an OutgoingEndDate, which would otherwise
+                // reject any backdated TermStart on a vacant office.
+                if ($start < $end) {
+                    return InvalidParameter(null, 'The incoming term cannot start before the outgoing term ends.');
+                }
                 $open_start = $this->openTermStart($kingdom_id, $park_id, $position_id, $canonical_key, $outgoing);
                 if ($open_start !== null && $open_start !== '' && $end < $open_start) {
                     return InvalidParameter(null, 'A term cannot end before it began.');
@@ -2656,6 +2661,20 @@ class OfficerPosition extends Ork3
         $classification = $position['Classification'];
 
         if ($classification !== 'crown') {
+            // Same future-end-date rule TransitionOfficer/AddHistoryTerm/
+            // EditHistoryTerm already enforce. InsertOfficerRow -- reached from
+            // here, SetOccupant's live-console assignment path -- writes
+            // $term_end with no validation of its own; without this check a
+            // caller can record a projected term end that never closes, the
+            // exact shape the 2026-08-29 backfill migration had to repair.
+            $end_check = $this->normalizeDate($term_end, '');
+            if ($end_check === false) {
+                return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+            }
+            if ($end_check !== '' && $end_check > date('Y-m-d')) {
+                return InvalidParameter(null, 'A term cannot end in the future.');
+            }
+
             // Supporting: no lock, single-occupant-per-scope like crown (see
             // InsertOfficerRow). Propagate its result -- a refusal must reach
             // the API response, not be swallowed here.
@@ -2685,6 +2704,17 @@ class OfficerPosition extends Ork3
             $this->EnsureCrownSlot($kingdom_id, $park_id, $position_id, $canonical_key);
             $c = new Common();
             $c->set_officer($kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id, $position['DisplayTitle']);
+
+            // set_officer() returns void and silently no-ops when a has_auth_role
+            // position's ork_authorization row is missing -- exactly the shape
+            // EnsureCrownSlot's vacant placeholder leaves (authorization_id = 0).
+            // Re-read the seat rather than trust the call above did anything, so
+            // a no-op reassignment is reported as a failure instead of a
+            // Success() that left the seat unmoved. Mirrors TransitionOfficer's
+            // post-write currentHolder() verification.
+            if ($this->currentHolder($kingdom_id, $park_id, $position_id) !== $mundane_id) {
+                return ProcessingError(null, 'The office could not be reassigned.');
+            }
 
             return Success();
         } finally {

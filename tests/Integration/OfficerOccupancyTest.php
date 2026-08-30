@@ -213,7 +213,76 @@ final class OfficerOccupancyTest extends TestCase
         );
     }
 
-    private function seedPosition(string $suffix, string $classification): int
+    /**
+     * InsertOfficerRow (the write setOfficerByPosition's non-crown branch
+     * delegates to for a supporting position) had no future-end-date
+     * validation of its own -- exactly how the one known-bad production row
+     * the 2026-08-29 backfill migration repairs was created. TransitionOfficer/
+     * AddHistoryTerm/EditHistoryTerm already reject a future end date; this
+     * proves SetOccupant's InsertOfficerRow path now does too.
+     */
+    public function testRejectsAFutureTermEnd(): void
+    {
+        $positionId = $this->seededPositions['support_a'];
+        $mundaneId  = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+
+        $r = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $mundaneId,
+            'TermEnd' => date('Y-m-d', strtotime('+30 days')),
+        ]);
+        self::assertSame(
+            4,
+            (int) $r['Status'],
+            'a future TermEnd must be rejected before InsertOfficerRow writes anything'
+        );
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer WHERE position_id = :pid AND mundane_id > 0'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(0, (int) $stmt->fetchColumn(), 'the rejected request must write nothing');
+    }
+
+    /**
+     * has_auth_role=1 plus EnsureCrownSlot's authorization_id=0 placeholder is
+     * exactly the shape where Common::set_officer() silently no-ops
+     * (common.php ~888-902). TransitionOfficer already guards this with a
+     * post-write currentHolder() re-read (see
+     * OfficerTransitionTest::testAMissingAuthorizationRowAbortsAsProcessingErrorNotSuccess);
+     * SetOccupant is the ONLY assignment path the live console uses and never
+     * got the same guard.
+     */
+    public function testAMissingAuthorizationRowAbortsAsProcessingErrorNotSuccess(): void
+    {
+        $positionId = $this->seedPosition('authgated', 'crown', 1);
+        $incoming   = $this->seedMundane('authgated_incoming');
+        $this->seededMundanes[] = $incoming;
+        $token = $this->fixture->createAuthorizedOfficer();
+
+        $r = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $incoming,
+        ]);
+        self::assertSame(
+            3,
+            (int) $r['Status'],
+            'a has_auth_role position with no matching ork_authorization row must abort as ProcessingError'
+        );
+
+        $stmt = $this->pdo->prepare(
+            'SELECT mundane_id FROM ork_officer WHERE position_id = :pid'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(
+            '0',
+            (string) $stmt->fetchColumn(),
+            'the seat must remain vacant, not silently unmoved-but-reported-Success'
+        );
+    }
+
+    private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0): int
     {
         $key = self::MARKER . '_' . $suffix;
         $stmt = $this->pdo->prepare(
@@ -221,13 +290,14 @@ final class OfficerOccupancyTest extends TestCase
                 (kingdom_id, canonical_key, title, title_alias, classification,
                  is_pinned, is_system, rbac_role_id, has_auth_role, sort_order,
                  parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
-             VALUES (:kid, :key, :title, "", :cls, 0, 0, 0, 0, 100, NULL, 0, NULL, 0, NOW())'
+             VALUES (:kid, :key, :title, "", :cls, 0, 0, 0, :har, 100, NULL, 0, NULL, 0, NOW())'
         );
         $stmt->execute([
             ':kid' => self::KINGDOM_ID,
             ':key' => $key,
             ':title' => 'Test ' . $suffix,
             ':cls' => $classification,
+            ':har' => $hasAuthRole,
         ]);
         return (int) $this->pdo->lastInsertId();
     }
