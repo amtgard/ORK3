@@ -312,6 +312,53 @@ final class OfficerSurfaceRemovalTest extends TestCase
         );
     }
 
+    /**
+     * The park nameplate's Admin control must open the standalone Park admin
+     * console (Admin/park/{id}) -- the same move the kingdom nameplate already
+     * made -- not the pk-admin-overlay edit pad it used to open. That modal is
+     * the park's version of the edit pad this work replaced.
+     *
+     * The visibility gate matters as much as the destination: it must be
+     * $CanManagePark (park.details.edit @AUTH_EDIT), which is exactly the first
+     * disjunct of Admin::park()'s front door, NOT $CanAdminPark
+     * (park.officer.set @AUTH_CREATE). Gating on the latter would show the link
+     * to an officer the destination bounces silently to the home page.
+     */
+    public function testParkNameplateAdminOpensTheStandaloneConsole(): void
+    {
+        $tpl = file_get_contents(dirname(__DIR__, 2) . '/orkui/template/revised-frontend/Parknew_index.tpl');
+
+        self::assertMatchesRegularExpression(
+            '/if\s*\(!empty\(\$CanManagePark\)\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/park\//s',
+            $tpl,
+            'the park nameplate Admin control must be a link to Admin/park/{id}, gated on $CanManagePark'
+        );
+
+        self::assertStringNotContainsString(
+            'pkOpenAdminModal()',
+            $tpl,
+            'the park nameplate must not reopen the pk-admin-overlay edit pad -- '
+            . 'admin lives on the standalone console now'
+        );
+    }
+
+    /**
+     * Guards the gate choice specifically. $CanManagePark and $CanAdminPark are
+     * DIFFERENT permissions in controller.Park.php, and swapping them here is a
+     * silent dead-control regression rather than a visible failure.
+     */
+    public function testParkAdminLinkIsNotGatedOnTheOfficerSetPermission(): void
+    {
+        $tpl = file_get_contents(dirname(__DIR__, 2) . '/orkui/template/revised-frontend/Parknew_index.tpl');
+
+        self::assertDoesNotMatchRegularExpression(
+            '/if\s*\(!empty\(\$CanAdminPark\)\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/park\//s',
+            $tpl,
+            '$CanAdminPark is park.officer.set, but Admin::park() gates on park.details.edit -- '
+            . 'gate the console link on $CanManagePark or it becomes a dead control'
+        );
+    }
+
     public function testActionMapAndDispatchCasesMatchExactly(): void
     {
         $mapKeys = self::actionKindMapKeys();

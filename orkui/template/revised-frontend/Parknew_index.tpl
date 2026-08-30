@@ -381,9 +381,30 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
-					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
+				<?php endif; ?>
+				<?php /*
+				   Admin goes to the standalone Park admin console (Admin/park/{id}),
+				   mirroring the kingdom nameplate's Admin link -- it used to open the
+				   pk-admin-overlay edit pad, which is the park's version of the kingdom
+				   edit pad this work replaced. Everything that modal offered lives on the
+				   console: Park Details -> "Configure Park" (Admin/editpark saves the same
+				   Url/Address/City/Province/PostalCode/MapUrl/Description/Directions set),
+				   and Reset Waivers -> the Operations tile.
+
+				   GATED ON $CanManagePark, NOT $CanAdminPark. They are different
+				   permissions: CanAdminPark is park.officer.set @AUTH_CREATE, while
+				   Admin::park()'s front door is park.details.edit @AUTH_EDIT (or kingdom
+				   standing). CanManagePark IS that first disjunct -- same key, scope and
+				   level -- so anyone who sees this link can definitely open the page, and
+				   kingdom officers are covered too because HasAuthority(AUTH_PARK) walks
+				   up to the park's kingdom. Gating on CanAdminPark would have shown the
+				   link to a park officer holding officer.set but not details.edit, who
+				   would then be bounced silently to the home page.
+				*/ ?>
+				<?php if (!empty($CanManagePark)): ?>
+					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= (int)($park_id ?? 0) ?>">
 						<i class="fas fa-cog"></i> Admin
-					</button>
+					</a>
 				<?php endif; ?>
 
 			</div>
