@@ -2013,169 +2013,19 @@ var PkBannerConfig = {
 	</div>
 </div>
 
-<?php if ($CanAdminPark ?? false): ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
-<div class="pk-emod-overlay" id="pk-event-modal">
-	<div class="pk-emod-box">
-		<div class="pk-emod-header">
-			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
-			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
-		</div>
-		<div class="pk-emod-body">
-
-			<div class="pk-emod-typesel">
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="event" checked>
-					<span><i class="fas fa-flag"></i> Amtgard Event</span>
-				</label>
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="calendar-item">
-					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
-				</label>
-			</div>
-
-			<div class="pk-emod-field">
-				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
-				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
-			</div>
-			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
-				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
-			</div>
-			<!-- Copy from past event (collapsible, event-mode only) -->
-			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
-				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
-					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
-					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
-					<i class="fas fa-chevron-down pk-cfe-chev" id="pk-cfe-chev" style="margin-left:auto"></i>
-				</button>
-				<div class="pk-cfe-body" id="pk-cfe-body" style="display:none">
-					<div class="pk-cfe-field" id="pk-cfe-picker-wrap">
-						<label class="pk-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(park-level)</span></label>
-						<div class="kn-ac-wrap">
-							<input type="text" class="pk-emod-input" id="pk-cfe-search" autocomplete="off" placeholder="Search past events…">
-							<div class="kn-ac-results" id="pk-cfe-results"></div>
-						</div>
-						<input type="hidden" id="pk-cfe-source-id" value="">
-						<input type="hidden" id="pk-cfe-source-start" value="">
-						<input type="hidden" id="pk-cfe-source-end" value="">
-					</div>
-					<div class="pk-cfe-chip" id="pk-cfe-chip" style="display:none">
-						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
-						<span id="pk-cfe-chip-label"></span>
-						<button type="button" class="pk-cfe-chip-clear" onclick="pkCfeClear()" aria-label="Clear source">&times;</button>
-					</div>
-					<div class="pk-cfe-detail" id="pk-cfe-detail" style="display:none">
-						<div class="pk-emod-row" style="display:flex;gap:10px;margin-top:12px">
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-start" autocomplete="off" placeholder="Select start…">
-							</div>
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-end" autocomplete="off" placeholder="Select end…">
-							</div>
-						</div>
-						<div class="pk-cfe-modules" style="margin-top:12px">
-							<div class="pk-cfe-mod-title">What to copy</div>
-							<label class="pk-cfe-mod-row pk-cfe-mod-all">
-								<input type="checkbox" id="pk-cfe-mod-all" checked onchange="pkCfeToggleAll(this)">
-								<span><strong>Select all</strong></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-details" checked onchange="pkCfeSyncAll()">
-								<span>Event Details <span class="pk-cfe-mod-hint">description, address, fees, links</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-schedule" checked onchange="pkCfeSyncAll()">
-								<span>Schedule</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-staff" checked onchange="pkCfeSyncAll()">
-								<span>Staff <span class="pk-cfe-mod-hint">banned/deactivated people are skipped</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-feast" checked onchange="pkCfeSyncAll()">
-								<span>Feast</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-banner" onchange="pkCfeSyncAll()">
-								<span>Banner <span class="pk-cfe-mod-hint">image + framing config</span></span>
-							</label>
-						</div>
-					</div>
-				</div>
-			</div>
-
-						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
-
-			<!-- Calendar-item-only fields -->
-			<div class="pk-emod-ci-only" style="display:none">
-				<div class="pk-emod-field" style="margin-top:12px">
-					<label class="pk-emod-check-label">
-						<input type="checkbox" id="pk-ci-allday"> All day
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
-						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
-						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
-					</label>
-				</div>
-				<div style="display:flex;gap:10px;margin-top:8px">
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
-					</div>
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
-					</div>
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Color</label>
-					<div class="ci-swatches" id="pk-ci-swatches">
-						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
-						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
-						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
-						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
-						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
-						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
-						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
-					</div>
-					<input type="hidden" id="pk-ci-color" value="#64748b">
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Description</label>
-					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
-				</div>
-				<div class="pk-emod-ci-note">
-					<i class="fas fa-info-circle" style="margin-right:6px"></i>
-					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
-				</div>
-			</div>
-
-			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
-		</div>
-		<div class="pk-emod-footer">
-			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
-			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
-				<i class="fas fa-eye-slash"></i> Save as Draft
-			</button>
-			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
-			</button>
-		</div>
-	</div>
-</div>
-
-<?php endif; ?>
+<?php
+/* Create-event modal -- shared with the Park admin console.
+   The MARKUP is admin-only exactly as it was ($evCanCreate below stands in for
+   the `if ($CanAdminPark)` that used to wrap it). The partial's SCRIPT is not:
+   it also owns the calendar-item view overlay, the events-list rows and the
+   calendar-grid sync, which every viewer uses -- and which used to run for
+   every viewer from revised.js, off PkConfig. */
+$evParkId    = (int)($park_id ?? 0);
+$evKingdomId = (int)($kingdom_id ?? 0);
+$evParkName  = (string)($park_name ?? '');
+$evCanCreate = !empty($CanAdminPark);
+include __DIR__ . '/partials/_event_create_modal.tpl';
+?>
 
 <!-- Event Preview Overlay (calendar quick-look) -->
 <div class="evpv-overlay" id="evpv-overlay">

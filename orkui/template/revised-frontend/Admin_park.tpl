@@ -263,11 +263,15 @@ _ka_queue(
 						<div class="ka-action-label">Enter Attendance</div>
 						<div class="ka-action-desc">Sign players in for a park day</div>
 					</a>
-					<a class="ka-action-card" href="<?= $uir ?>Admin/createevent">
+<?php /* Opens the park profile's create-event modal, shared through
+         partials/_event_create_modal.tpl (hosted from the modal partial at the
+         foot of this page). This was the last tile on the console that left the
+         page -- a plain link to the legacy full-page Admin/createevent form. */ ?>
+					<button class="ka-action-card" onclick="pkOpenEventModal()">
 						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-calendar-plus"></i></div>
 						<div class="ka-action-label">Schedule an Event</div>
-						<div class="ka-action-desc">Add a one-off event for this park</div>
-					</a>
+						<div class="ka-action-desc">Add an event or a calendar item for this park</div>
+					</button>
 					<a class="ka-action-card" href="<?= $uir ?>Tournament/create&amp;ParkId=<?= $parkId ?>">
 						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-trophy"></i></div>
 						<div class="ka-action-label">Create Tournament</div>

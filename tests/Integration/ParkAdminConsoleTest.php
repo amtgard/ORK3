@@ -31,6 +31,9 @@ final class ParkAdminConsoleTest extends TestCase
     private const QUEUE   = 'orkui/template/revised-frontend/partials/_ka_queue.tpl';
     private const CHROME  = 'orkui/template/revised-frontend/partials/_ka_modal_chrome.tpl';
     private const KINGDOM = 'orkui/template/revised-frontend/Admin_kingdom.tpl';
+    private const EVMODAL = 'orkui/template/revised-frontend/partials/_event_create_modal.tpl';
+    private const PROFILE = 'orkui/template/revised-frontend/Parknew_index.tpl';
+    private const REVISED = 'orkui/template/revised-frontend/script/revised.js';
 
     /** Every modal id fixed by CONTRACT.md section C. */
     private const CONTRACT_MODAL_IDS = [
@@ -552,6 +555,209 @@ final class ParkAdminConsoleTest extends TestCase
             'id="ka-mo-overlay"',
             self::read(self::MODALS),
             'the Manage Officers host modal is not rendered'
+        );
+    }
+
+    /* ──────────────── Schedule an Event (shared with the profile) ────────────
+       The tile was the last thing on this console that navigated away: a plain
+       link to the legacy full-page Admin/createevent form, while the park
+       PROFILE had had the modal workflow for a while. These pin the fix so it
+       cannot regress back to a link, and so the two pages cannot fork. */
+
+    /** The tile opens the modal in place. Not a link, and never again a link to
+     *  the legacy form. */
+    public function testScheduleEventTileOpensTheModal(): void
+    {
+        $code = self::code(self::PAGE);
+        $this->assertMatchesRegularExpression(
+            '/<button class="ka-action-card" onclick="pkOpenEventModal\(\)">/',
+            $code,
+            'the Schedule an Event tile is not a button that opens the shared modal'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '#<a[^>]*href="[^"]*Admin/createevent#',
+            $code,
+            'the Schedule an Event tile still links to the legacy full-page form'
+        );
+        $this->assertStringNotContainsString(
+            'Admin/createevent',
+            $code,
+            'the console still references the legacy create-event route'
+        );
+    }
+
+    /** Every tile on the console is now modal-or-report; nothing bounces the
+     *  officer to a legacy form. (Attendance and Tournament are still links,
+     *  and deliberately so -- they are whole workflows, not a dialog.) */
+    public function testTheConsoleHostsTheSharedEventModal(): void
+    {
+        $this->assertStringContainsString(
+            "include __DIR__ . '/_event_create_modal.tpl'",
+            self::read(self::MODALS),
+            'the console does not include the shared create-event partial'
+        );
+        $this->assertStringNotContainsString(
+            'id="pk-event-modal"',
+            self::read(self::PAGE),
+            'the console inlines its own copy of the modal instead of including the partial'
+        );
+    }
+
+    /** The park PROFILE consumes the SAME partial. This is the assertion that
+     *  keeps the two surfaces from drifting: if somebody re-inlines the markup
+     *  on either page, one of these two fails. */
+    public function testTheProfileConsumesTheSamePartial(): void
+    {
+        $profile = self::read(self::PROFILE);
+        $this->assertStringContainsString(
+            "include __DIR__ . '/partials/_event_create_modal.tpl'",
+            $profile,
+            'the park profile no longer includes the shared create-event partial'
+        );
+        $this->assertStringNotContainsString(
+            'class="pk-emod-overlay" id="pk-event-modal"',
+            $profile,
+            'the park profile has its own copy of the modal markup again'
+        );
+    }
+
+    /** The console must NOT define PkConfig. Fourteen blocks in revised.js guard
+     *  on that name against park-PROFILE DOM; defining it here to wake the one
+     *  we want would wake all of them against markup that does not exist. */
+    public function testTheConsoleNeverDefinesPkConfig(): void
+    {
+        foreach ([self::PAGE, self::MODALS, self::EVMODAL] as $rel) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/(?:var|let|const)\s+PkConfig\s*=|window\.PkConfig\s*=/',
+                self::read($rel),
+                $rel . ' defines a PkConfig; the shared modal is keyed off EvCreateConfig '
+                    . 'precisely so the console does not have to'
+            );
+        }
+    }
+
+    /** The shared block is keyed off the neutral EvCreateConfig and reads
+     *  nothing off PkConfig, so it activates only where it was included. */
+    public function testTheSharedModalIsKeyedOffEvCreateConfig(): void
+    {
+        $src = self::read(self::EVMODAL);
+        $this->assertStringContainsString(
+            'window.EvCreateConfig = {',
+            $src,
+            'the shared partial does not emit EvCreateConfig'
+        );
+        foreach (['uir:', 'parkId:', 'kingdomId:'] as $key) {
+            $this->assertStringContainsString(
+                $key,
+                $src,
+                'EvCreateConfig is missing ' . $key . ', which the shared block reads'
+            );
+        }
+        $this->assertSame(
+            2,
+            preg_match_all("/typeof EvCreateConfig === 'undefined'/", $src),
+            'both blocks in the shared partial must carry the EvCreateConfig guard'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/PkConfig\s*\./',
+            $src,
+            'the shared partial still reads a value off PkConfig'
+        );
+    }
+
+    /** revised.js gave the block up rather than keeping a second copy. */
+    public function testRevisedJsNoLongerCarriesTheBlock(): void
+    {
+        $js = self::read(self::REVISED);
+        foreach (['pkOpenEventModal', 'pkCloseEventModal', 'pkCreateEvent', 'pkCfeToggleExpander', 'pkShowCalendarItemOverlay'] as $sym) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/window\\.' . $sym . '\\s*=/',
+                $js,
+                'revised.js still defines window.' . $sym . '; the shared partial owns it '
+                    . 'now, and two definitions would race'
+            );
+        }
+        // The CALL at the calendar day-cell add button stays -- that is the
+        // profile asking the shared modal to open, and it is feature-detected.
+        $this->assertStringContainsString(
+            'if (window.pkOpenEventModal) window.pkOpenEventModal(ds);',
+            $js,
+            'the calendar day-cell "+" no longer opens the create-event modal'
+        );
+    }
+
+    /** Every write still goes to an endpoint that already existed. */
+    public function testTheSharedModalUsesExistingEndpoints(): void
+    {
+        $src = self::read(self::EVMODAL);
+        foreach ([
+            'EventAjax/create',
+            'EventAjax/copy_source_list',
+            'EventAjax/create_with_copy',
+            'CalendarItemAjax/create',
+            'CalendarItemAjax/update',
+            'CalendarItemAjax/delete',
+            'CalendarItemAjax/get/',
+        ] as $endpoint) {
+            $this->assertStringContainsString(
+                $endpoint,
+                $src,
+                'the shared modal no longer posts to ' . $endpoint
+            );
+        }
+    }
+
+    /** The copy-from-past-event picker is the house kn-ac-results dropdown, and
+     *  it can position itself on BOTH host pages. tnPositionAcFixed is a
+     *  revised.js export; the console does not load revised.js, and without the
+     *  fallback the render threw a ReferenceError that the caller's .catch()
+     *  swallowed into a permanent "No matching past events". */
+    public function testTheCopyFromPickerCanPositionItselfOnBothPages(): void
+    {
+        $src = self::read(self::EVMODAL);
+        $this->assertStringContainsString(
+            'kn-ac-results',
+            $src,
+            'the copy-from picker is not the house kn-ac dropdown'
+        );
+        $this->assertStringNotContainsString(
+            'ui-autocomplete',
+            $src,
+            'the copy-from picker uses jQuery UI; this project uses kn-ac-results'
+        );
+        $this->assertStringContainsString(
+            'window.tnPositionAcFixed || window.tnFixedAcPosition',
+            $src,
+            'the copy-from dropdown has no positioner fallback, so it throws on any '
+                . 'page that does not load revised.js'
+        );
+    }
+
+    /** House rules for the shared partial. It is NOT in parkFileProvider: the
+     *  colour swatches carry title= attributes that came over verbatim from the
+     *  park profile's shipped markup, and rewriting them to data-tip would have
+     *  changed the profile's DOM, which this extraction is not allowed to do. */
+    public function testSharedModalHouseRules(): void
+    {
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?<![A-Za-z0-9_.$])(confirm|alert|prompt)\(/',
+            self::code(self::EVMODAL),
+            'the shared modal calls a native dialog -- they freeze the automation harness'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\{\$[A-Za-z_]/',
+            self::read(self::EVMODAL),
+            'the shared modal uses Smarty-style {$var}; these templates are plain PHP'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\{(if|foreach|else)\s/',
+            self::read(self::EVMODAL),
+            'the shared modal uses Smarty-style {if}; these templates are plain PHP'
+        );
+        $this->assertStringNotContainsString(
+            'Ork3::$Lib->',
+            self::read(self::EVMODAL),
+            'the shared modal calls Ork3::$Lib-> directly; templates read controller data'
         );
     }
 }

@@ -762,6 +762,26 @@ include __DIR__ . '/_ka_modal_chrome.tpl';
 		</div>
 	</div>
 </div>
+
+<?php
+/* Schedule an Event -- the SAME modal the park profile uses, out of
+   partials/_event_create_modal.tpl. The tile in Admin_park.tpl calls
+   pkOpenEventModal(), which that partial exports.
+
+   This is not a ka-* modal and deliberately does not register with
+   kaRegisterModal(): it carries its own overlay, its own Escape/backdrop
+   handling and its own dirty-free lifecycle, and it is the one surface the
+   park profile and this console must not be allowed to drift apart on.
+
+   $evParkName wants the RAW name -- the partial escapes it. $parkName in
+   Admin_park.tpl has already been through htmlspecialchars(). */
+$evParkId    = $parkId;
+$evKingdomId = $kingdomId;
+$evParkName  = (string)($ParkInfo['ParkName'] ?? '');
+$evCanCreate = true;
+include __DIR__ . '/_event_create_modal.tpl';
+?>
+
 <script>
 (function() {
 	var overlay = document.getElementById('ka-mo-overlay');
