@@ -53,6 +53,12 @@
   --ork-alert-info-bg: #ebf8ff;
   --ork-alert-info-border: #90cdf4;
   --ork-alert-info-text: #2a4365;
+  --ork-alert-success-bg: #c6f6d5;
+  --ork-alert-success-border: #276749;
+  --ork-alert-success-text: #276749;
+  --ork-alert-error-bg: #fed7d7;
+  --ork-alert-error-border: #fc8181;
+  --ork-alert-error-text: #9b2c2c;
 }
 
 html[data-theme="dark"] {
@@ -106,6 +112,12 @@ html[data-theme="dark"] {
   --ork-alert-info-bg: #2a4365;
   --ork-alert-info-border: #63b3ed;
   --ork-alert-info-text: #ebf8ff;
+  --ork-alert-success-bg: #22543d;
+  --ork-alert-success-border: #9ae6b4;
+  --ork-alert-success-text: #9ae6b4;
+  --ork-alert-error-bg: #742a2a;
+  --ork-alert-error-border: #fc8181;
+  --ork-alert-error-text: #feb2b2;
 }
 
 /* Button dark mode overrides */
