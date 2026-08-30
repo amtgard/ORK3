@@ -124,6 +124,19 @@ html[data-theme="dark"] .ka-ts-card.ka-ts-card-clear { background: var(--ork-bg)
 html[data-theme="dark"] .ka-ts-card-clear .ka-ts-icon { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 html[data-theme="dark"] .ka-ts-card-clear .ka-ts-val  { color: var(--ork-badge-green-text); }
 html[data-theme="dark"] .ka-ts-card-clear .ka-ts-lbl  { color: var(--ork-text-secondary); }
+/* Third queue state: the count could not be computed at all. .ka-ts-card-clear is
+   GREEN and means "done"; a park that has never recorded a single signin has no
+   "days since the last one", and painting that green would report an all-clear for
+   a question nobody answered. Grey, em dash, no tick. Same doubled-class trick as
+   the clear state above so the generic dark .ka-ts-* rules further down do not win
+   on source order -- without it an unknown card is identical to an open one. */
+.ka-ts-card-unknown .ka-ts-icon { background: #f7fafc; color: #a0aec0; }
+.ka-ts-card-unknown .ka-ts-val  { font-size: 18px; color: #a0aec0; }
+.ka-ts-card-unknown .ka-ts-lbl  { color: #718096; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 13px; }
+html[data-theme="dark"] .ka-ts-card.ka-ts-card-unknown { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-icon { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-val  { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-lbl  { color: var(--ork-text-secondary); }
 @media (max-width: 900px) { .ka-ts-row { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .ka-ts-row { grid-template-columns: 1fr; } }
 
@@ -291,8 +304,13 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 /* Field styles */
 .ka-field { margin-bottom: 14px; }
 .ka-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+/* time and date joined the list for the Park Days recurrence form. They were
+   missing, so those two controls rendered as bare native widgets: no border, no
+   padding, wrong font size, and -- because the dark block below mirrors this
+   selector list -- white-on-white in dark mode. */
 .ka-field input[type=text], .ka-field input[type=url], .ka-field input[type=email], .ka-field input[type=password],
-.ka-field input[type=number], .ka-field select, .ka-field textarea {
+.ka-field input[type=number], .ka-field input[type=time], .ka-field input[type=date],
+.ka-field select, .ka-field textarea {
     width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
     font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
 }
@@ -451,8 +469,12 @@ html[data-theme="dark"] .ka-admin-table .ka-tdel  { color: var(--ork-badge-red-t
     cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
 .ka-add-btn:hover { border-color: #90cdf4; background: #ebf8ff; color: #2b6cb0; }
-.ka-add-award-wrap { margin-top: 14px; padding: 14px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
-.ka-add-award-title { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
+/* The inset form panel inside a modal. .ka-add-award-wrap is its original name and
+   the awards modal still uses it; .ka-inset-panel is the same thing under a name
+   that does not claim to be about awards, for the Park console's park-day editor.
+   Alias only -- no declarations of its own, so the two can never diverge. */
+.ka-add-award-wrap, .ka-inset-panel { margin-top: 14px; padding: 14px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ka-add-award-title, .ka-inset-panel-title { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
 .ka-form-hint { font-size: 12px; color: #718096; margin: 0 0 10px; line-height: 1.5; }
 .ka-award-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
 .ka-field-grow { flex: 1; min-width: 140px; }
@@ -558,11 +580,20 @@ html[data-theme="dark"] .ka-modal-footer { background: var(--ork-bg-tertiary); b
 html[data-theme="dark"] .ka-field label { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .ka-field input[type=text], html[data-theme="dark"] .ka-field input[type=url],
 html[data-theme="dark"] .ka-field input[type=email], html[data-theme="dark"] .ka-field input[type=password],
-html[data-theme="dark"] .ka-field input[type=number], html[data-theme="dark"] .ka-field select,
+html[data-theme="dark"] .ka-field input[type=number], html[data-theme="dark"] .ka-field input[type=time],
+html[data-theme="dark"] .ka-field input[type=date], html[data-theme="dark"] .ka-field select,
 html[data-theme="dark"] .ka-field textarea {
     background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
 }
 html[data-theme="dark"] .ka-field input::placeholder, html[data-theme="dark"] .ka-field textarea::placeholder { color: var(--ork-text-muted); }
+/* The clock / calendar glyph and the drop-down panel inside a native time or
+   date control are painted by the browser, not by us, and they follow
+   color-scheme rather than any colour we set -- so without this they stay dark
+   ink on the dark input. revised.css already does exactly this for
+   input[type=date] globally; scoped to .ka-field here so the console fixes its
+   own controls without changing every date box in the app. */
+html[data-theme="dark"] .ka-field input[type=time],
+html[data-theme="dark"] .ka-field input[type=date] { color-scheme: dark; }
 html[data-theme="dark"] .ka-hint { color: var(--ork-text-muted); }
 
 /* Feedback */
@@ -615,8 +646,10 @@ html[data-theme="dark"] .ka-alias-hint { color: var(--ork-text-muted); }
 /* Save button stays accented (fine in dark); add/dashed buttons */
 html[data-theme="dark"] .ka-add-btn { color: var(--ork-text-secondary); border-color: var(--ork-border-dark); }
 html[data-theme="dark"] .ka-add-btn:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; color: #90cdf4; }
-html[data-theme="dark"] .ka-add-award-wrap { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
-html[data-theme="dark"] .ka-add-award-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-add-award-wrap,
+html[data-theme="dark"] .ka-inset-panel { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-add-award-title,
+html[data-theme="dark"] .ka-inset-panel-title { color: var(--ork-text); }
 html[data-theme="dark"] .ka-form-hint { color: var(--ork-text-secondary); }
 
 /* =============================================

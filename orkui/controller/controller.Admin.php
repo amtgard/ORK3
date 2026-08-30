@@ -2132,6 +2132,17 @@ class Controller_Admin extends Controller
         // compute them for a visitor who is about to be redirected home.
         $this->data['ParkAdminDashboard'] = $this->Park->get_admin_dashboard((int)$id);
 
+        // What the console's Edit Park Details / Heraldry / Park Days modals render
+        // from. get_park_info() above is GetParkShortInfo -- name, abbreviation,
+        // kingdom and the heraldry FLAG, nothing else -- so without this the detail
+        // fields would open blank, the heraldry preview would have no URL, and the
+        // park-day panel would have nothing to list. Same call Park::profile() makes
+        // for the same three field sets, so the console and the profile cannot drift.
+        $_parkDetails = $this->Park->get_park_details((int)$id);
+        $this->data['ParkDetails']  = $_parkDetails['ParkInfo'] ?? [];
+        $this->data['ParkDays']     = $_parkDetails['ParkDays']['ParkDays'] ?? [];
+        $this->data['ParkHeraldry'] = $_parkDetails['Heraldry'] ?? [];
+
         // Reset Waivers' own action (Admin::resetwaivers()) gates a park reset on
         // admin_has_kingdom_standing() for the park's KINGDOM, not on park authority --
         // it never widened to accept AUTH_PARK. A park-only officer passes
