@@ -407,6 +407,40 @@ final class OfficerAuthorizationTest extends TestCase
         );
     }
 
+    public function testEditHistoryTermAllowsANoteOnlyEditOfAnAlreadyOpenTerm(): void
+    {
+        // Regression guard for the $except_id self-exclusion: this row is
+        // OPEN (no EndDate) *before* the edit, so if the edit path failed to
+        // pass its own history_id as $except_id, hasOtherOpenTerm() would
+        // find the row itself and wrongly refuse an ordinary note-only edit
+        // that never touches EndDate at all.
+        $token      = $this->fixture->createAuthorizedOfficer();
+        $positionId = $this->seededPositions['crown_a'];
+        $who        = $this->seedMundane('note_only_edit');
+        $this->seededMundanes[] = $who;
+
+        $this->positions->AddHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $who,
+            'StartDate' => '2026-01-01',
+        ]);
+        $id = (int)$this->pdo->query(
+            "SELECT officer_history_id FROM ork_officer_history
+              WHERE position_id = {$positionId} AND mundane_id = {$who} LIMIT 1"
+        )->fetchColumn();
+
+        // No 'EndDate' key at all: array_key_exists semantics leave the row's
+        // existing (open) end_date untouched.
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $id, 'Note' => 'just a note update',
+        ]);
+        self::assertSame(
+            0,
+            (int)$r['Status'],
+            'a note-only edit of an already-open term must not trip the guard on itself'
+        );
+    }
+
     /** @return list<array{0:string,1:array<string,mixed>}> */
     public static function positionMethodProvider(): array
     {
