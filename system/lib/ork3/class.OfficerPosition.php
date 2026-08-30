@@ -1383,6 +1383,240 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Move an office from one holder to another as a single recorded transition.
+     *
+     * This is the API shape every other write in the application uses
+     * (compare Player::AddAward): a $request array carrying a Token, the actor
+     * resolved from that token rather than asserted by the caller, the permission
+     * gate inside the domain, and a dangeraudit row. It is the only officer write
+     * that can express a backdated end date or a note, because Common::set_officer's
+     * record_officer_history stamps today and has nowhere to put one.
+     *
+     * ork_officer is MyISAM -- no transactions -- so the order is fixed:
+     * close the outgoing term, then move the seat, then open the incoming term.
+     * A failure part-way leaves a closed term and a visibly vacant office, never a
+     * seated officer with no term.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId (incoming),
+     *                        OutgoingEndDate?, OutgoingStartDate?, TermStart?, Note?
+     * @return array
+     */
+    public function TransitionOfficer($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id  = (int) ($request['KingdomId'] ?? 0);
+        $park_id     = (int) ($request['ParkId'] ?? 0);
+        $position_id = (int) ($request['PositionId'] ?? 0);
+        $incoming_id = (int) ($request['MundaneId'] ?? 0);
+
+        $scope     = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id  = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('set', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        if (!valid_id($position_id)) {
+            return InvalidParameter(null, 'A valid position is required.');
+        }
+        if (!valid_id($incoming_id)) {
+            return InvalidParameter(null, 'A valid member is required.');
+        }
+
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0
+            && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization(null, 'Position does not belong to this kingdom.');
+        }
+        if ($position['RetiredAt'] !== null) {
+            return InvalidParameter(null, 'Cannot assign an occupant to a retired position.');
+        }
+
+        $today   = date('Y-m-d');
+        $end     = $this->normalizeDate($request['OutgoingEndDate'] ?? '', $today);
+        $start   = $this->normalizeDate($request['TermStart'] ?? '', $end);
+        $backfill_start = $this->normalizeDate($request['OutgoingStartDate'] ?? '', '');
+        $note    = substr(trim((string) ($request['Note'] ?? '')), 0, 500);
+
+        if ($end === false || $start === false || $backfill_start === false) {
+            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+        }
+        if ($end > $today) {
+            return InvalidParameter(null, 'A term cannot end in the future.');
+        }
+        if ($start < $end) {
+            return InvalidParameter(null, 'The incoming term cannot start before the outgoing term ends.');
+        }
+
+        // The incoming officer must belong to the org, matching the rule the legacy
+        // path has always applied (Kingdom::SetOfficer, class.Kingdom.php:1348).
+        $incoming = Ork3::$Lib->player->player_info($incoming_id);
+        if (!is_array($incoming) || (int) ($incoming['KingdomId'] ?? 0) !== $kingdom_id) {
+            return InvalidParameter(null, 'The new officer must be a member of this kingdom.');
+        }
+
+        $outgoing = $this->currentHolder($kingdom_id, $park_id, $position_id);
+        if ($outgoing > 0) {
+            $open_start = $this->openTermStart($kingdom_id, $park_id, $position_id, $outgoing);
+            if ($open_start !== null && $open_start !== '' && $end < $open_start) {
+                return InvalidParameter(null, 'A term cannot end before it began.');
+            }
+            $this->closeTermAt($kingdom_id, $park_id, $position_id, $outgoing, $end, $backfill_start);
+        }
+
+        // Move the seat, suppressing set_officer's own history write -- this method
+        // owns the term, with dates and a note that record_officer_history cannot carry.
+        $c = new Common();
+        $this->EnsureCrownSlot($kingdom_id, $park_id, $position_id, $position['CanonicalKey']);
+        $c->set_officer(
+            $kingdom_id,
+            $park_id,
+            $incoming_id,
+            $position['CanonicalKey'],
+            0,
+            $actor_id,
+            $position_id,
+            $position['DisplayTitle'],
+            true
+        );
+
+        $this->openTerm(
+            $kingdom_id,
+            $park_id,
+            $position_id,
+            $position['CanonicalKey'],
+            $incoming_id,
+            $actor_id,
+            $start,
+            $note,
+            $position['DisplayTitle']
+        );
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            $scope_id,
+            ['MundaneId' => $outgoing, 'PositionId' => $position_id, 'EndDate' => $end],
+            ['MundaneId' => $incoming_id, 'PositionId' => $position_id, 'StartDate' => $start]
+        );
+
+        return Success();
+    }
+
+    /** '' -> $default; a valid Y-m-d -> itself; anything else -> false. */
+    private function normalizeDate($value, $default)
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return $default;
+        }
+        $d = DateTime::createFromFormat('Y-m-d', $value);
+        if ($d === false || $d->format('Y-m-d') !== $value) {
+            return false;
+        }
+        return $value;
+    }
+
+    private function currentHolder($kingdom_id, $park_id, $position_id)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ch_kid = (int) $kingdom_id;
+        $DB->ch_pid = (int) $park_id;
+        $DB->ch_pos = (int) $position_id;
+        $r = $DB->DataSet(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'officer
+             WHERE kingdom_id = :ch_kid AND park_id = :ch_pid
+               AND position_id = :ch_pos AND mundane_id > 0 LIMIT 1'
+        );
+        return ($r !== false && $r->size() > 0 && $r->Next()) ? (int) $r->mundane_id : 0;
+    }
+
+    private function openTermStart($kingdom_id, $park_id, $position_id, $mundane_id)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->os_kid = (int) $kingdom_id;
+        $DB->os_pid = (int) $park_id;
+        $DB->os_pos = (int) $position_id;
+        $DB->os_mid = (int) $mundane_id;
+        $r = $DB->DataSet(
+            'SELECT start_date FROM ' . DB_PREFIX . 'officer_history
+             WHERE kingdom_id = :os_kid AND park_id = :os_pid AND position_id = :os_pos
+               AND mundane_id = :os_mid AND end_date IS NULL
+             ORDER BY officer_history_id DESC LIMIT 1'
+        );
+        return ($r !== false && $r->size() > 0 && $r->Next()) ? $r->start_date : null;
+    }
+
+    /**
+     * Close the open term at $end. $backfill_start fills a NULL start_date only --
+     * a start date already on the row is never overwritten by a transition.
+     */
+    private function closeTermAt($kingdom_id, $park_id, $position_id, $mundane_id, $end, $backfill_start)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ct_end = $end;
+        $DB->ct_kid = (int) $kingdom_id;
+        $DB->ct_pid = (int) $park_id;
+        $DB->ct_pos = (int) $position_id;
+        $DB->ct_mid = (int) $mundane_id;
+        $start_sql = '';
+        if ($backfill_start !== '') {
+            $DB->ct_start = $backfill_start;
+            $start_sql = ', start_date = IF(start_date IS NULL, :ct_start, start_date)';
+        }
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'officer_history
+             SET end_date = :ct_end' . $start_sql . '
+             WHERE kingdom_id = :ct_kid AND park_id = :ct_pid
+               AND position_id = :ct_pos AND mundane_id = :ct_mid
+               AND end_date IS NULL'
+        );
+    }
+
+    private function openTerm($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $actor_id, $start, $note, $display_label)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ot_kid = (int) $kingdom_id;
+        $DB->ot_pid = (int) $park_id;
+        $DB->ot_mid = (int) $mundane_id;
+        $DB->ot_role = $canonical_key;
+        $DB->ot_pos = (int) $position_id;
+        $DB->ot_label = ($display_label !== '') ? $display_label : $canonical_key;
+        $DB->ot_start = $start;
+        $DB->ot_cb = ($actor_id > 0 ? $actor_id : null);
+        $DB->ot_notes = $note;
+        // end_date is a SQL literal NULL: yapo drops a bound PHP null, which would
+        // leave the column at its default and make the new officer read as departed.
+        $DB->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'officer_history
+             (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+              start_date, end_date, changed_by, notes, created_at)
+             VALUES (:ot_kid, :ot_pid, :ot_mid, :ot_role, :ot_pos, :ot_label,
+                     :ot_start, NULL, :ot_cb, :ot_notes, NOW())'
+        );
+    }
+
+    /**
      * Set an officer occupant by position, enforcing §3.4 occupancy rules.
      * Occupancy is per-seat, not per-person: the ORK imposes no limit on how
      * many offices a person holds, so Crown here means single-occupant-per-scope
