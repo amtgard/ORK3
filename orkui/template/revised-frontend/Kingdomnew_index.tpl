@@ -979,15 +979,6 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 				</div>
 			</div>
 
-		<?php /* The Officer History main-content panel (#kn-tab-officerhistory) was
-		         removed: the view now lives in the officer details modal
-		         (partials/_officer_details_modal.tpl), which detects the absence of
-		         #kn-tab-officerhistory and re-points knLoadOfficerHistory() at its own
-		         table. The Add / Edit / Delete history modals below are DELIBERATELY
-		         kept -- the modal calls through to them. */ ?>
-
-
-
 		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
 		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
 		     busy kingdom) was blocking DOMContentLoaded for 1+ seconds. -->
@@ -1068,14 +1059,12 @@ var KnConfig = {
 	httpService:      '<?= HTTP_SERVICE ?>',
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
-	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
 	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'CanonicalKey' => $o['CanonicalKey'] ?? $o['OfficerRole'], 'DisplayTitle' => $o['DisplayTitle'] ?? $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,

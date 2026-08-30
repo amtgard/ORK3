@@ -8122,6 +8122,20 @@ html[data-theme="dark"] .kn-admin-feedback {
   border-color: rgba(99,179,237,0.3);
   color: #90cdf4;
 }
+/* Compound selectors so these outrank the plain .kn-admin-feedback dark rule
+   above regardless of source order -- Move Player / Merge Players render
+   both classes together (kn-admin-feedback kn-admin-ok/-err) and must show
+   distinct success/failure colors in dark mode, not the shared info blue. */
+html[data-theme="dark"] .kn-admin-feedback.kn-admin-ok {
+  background: rgba(72,187,120,0.15);
+  border-color: #68d391;
+  color: #9ae6b4;
+}
+html[data-theme="dark"] .kn-admin-feedback.kn-admin-err {
+  background: rgba(197,48,48,0.15);
+  border-color: #fc8181;
+  color: #feb2b2;
+}
 /* =====================================================
    DARK MODE — Player modals (pn-modal, pn-acct, pn-dues, pronouns)
    ===================================================== */

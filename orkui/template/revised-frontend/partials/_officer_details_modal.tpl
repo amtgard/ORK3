@@ -37,7 +37,6 @@
  *
  * OPTIONAL, picked up from the host page if present:
  *   $OfficerHistoryRoleOptions / $ohRoleOptions   array  key => label, role filter
- *   $CanEditKingdom (kingdom) / $CanManagePark (park)    bool, gates history edit
  *
  * -----------------------------------------------------------------------------
  * PUBLIC JS API (for the host page's officers-bar arrow button)
@@ -1115,13 +1114,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 
 	document.addEventListener('keydown', function (e) {
 		if ((e.key === 'Escape' || e.keyCode === 27) && isOpen()) {
-			// Let the stacked Add/Edit history modals handle their own Escape
-			// first — they sit at --z-modal-top above this one.
-			var top = document.getElementById(OF.hostPrefix + '-oh-backfill-overlay');
-			var edt = document.getElementById(OF.hostPrefix + '-oh-edit-overlay');
-			var stackedOpen = (top && top.style.display && top.style.display !== 'none')
-				|| (edt && edt.style.display && edt.style.display !== 'none');
-			if (!stackedOpen) { closeModal(); }
+			closeModal();
 		}
 	});
 
@@ -1239,8 +1232,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 		// string has already begun; a second "?" would be swallowed into the
 		// VALUE of Route, leaving $_GET['Role'] unset and $action equal to
 		// "officerhistory?Role=x", which matches no branch in the controller.
-		// (The host pages' knLoadOfficerHistory / pkLoadOfficerHistory still
-		// build "?Role=" — see the report; that filter is broken today.)
 		var url  = OF.historyUrl + (role ? ('&Role=' + encodeURIComponent(role)) : '');
 
 		setLoading(true);
@@ -1593,18 +1584,5 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 
 	var roleFilter = gid('of-oh-role-filter');
 	if (roleFilter) { roleFilter.addEventListener('change', loadHistory); }
-
-	// The host page's add / edit / delete handlers each finish by calling
-	// <prefix>LoadOfficerHistory() to refresh. Once the old main-content panel
-	// is removed that function's elements are gone and it throws. Re-point it
-	// at this modal's table — but only when the old panel really is gone, so
-	// that mid-migration (panel still present) the host keeps its own version.
-	document.addEventListener('DOMContentLoaded', function () {
-		if (document.getElementById(OF.hostPrefix + '-tab-officerhistory')) { return; }
-		window[OF.hostPrefix + 'LoadOfficerHistory'] = function () {
-			historyLoaded = true;
-			loadHistory();
-		};
-	});
 })();
 </script>
