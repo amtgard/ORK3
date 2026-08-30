@@ -746,6 +746,46 @@ final class ParkAdminConsoleTest extends TestCase
      *  `[data-tip]:not(...)` rule supplying both `position: relative` and the
      *  light/dark tooltip. Both hosts load that stylesheet, so the profile and
      *  the console pick up the change together and cannot drift. */
+    /**
+     * The tournament creator is deprecated pending a replacement, so its tile is
+     * de-emphasised -- but deliberately NOT removed or disabled: Tournament::create()
+     * still works, and taking a live capability away from park officers before the
+     * replacement ships would be worse than showing a discouraged one.
+     *
+     * Asserts all three halves, because any one alone is a half-finished state: the
+     * greying class, the visible "Deprecated" chip (styling alone is easy to miss,
+     * and reads as a rendering bug rather than an intention), and the surviving href.
+     */
+    public function testTournamentTileIsDeprecatedButStillReachable(): void
+    {
+        $tpl = self::read('orkui/template/revised-frontend/Admin_park.tpl');
+
+        self::assertMatchesRegularExpression(
+            '/class="ka-action-card ka-action-card-deprecated"[^>]*?href="[^"]*Tournament\/create/s',
+            $tpl,
+            'the tournament tile must carry ka-action-card-deprecated AND keep its href'
+        );
+        self::assertStringContainsString(
+            '<span class="ka-dep-chip">Deprecated</span>',
+            $tpl,
+            'a greyed tile with no label reads as a rendering bug; keep the Deprecated chip'
+        );
+
+        // Both themes, or the muted card reads as live in whichever one was missed --
+        // the exact failure this branch already shipped once with the alert banners.
+        $css = self::read('orkui/template/revised-frontend/style/admin-console.css');
+        self::assertStringContainsString(
+            '.ka-action-card-deprecated {',
+            $css,
+            'ka-action-card-deprecated has no light-theme rule'
+        );
+        self::assertStringContainsString(
+            'html[data-theme="dark"] .ka-action-card-deprecated {',
+            $css,
+            'ka-action-card-deprecated has no dark-theme rule; it would look live in dark mode'
+        );
+    }
+
     public function testSharedModalHouseRules(): void
     {
         $this->assertDoesNotMatchRegularExpression(

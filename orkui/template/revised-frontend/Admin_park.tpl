@@ -272,10 +272,18 @@ _ka_queue(
 						<div class="ka-action-label">Schedule an Event</div>
 						<div class="ka-action-desc">Add an event or a calendar item for this park</div>
 					</button>
-					<a class="ka-action-card" href="<?= $uir ?>Tournament/create&amp;ParkId=<?= $parkId ?>">
+					<?php /* DEPRECATED, not removed. Tournament::create() still exists and still
+					   works, so the tile stays reachable -- taking a live capability away from
+					   park officers before its replacement ships would be worse than leaving a
+					   discouraged one visible. It is de-emphasised instead: grey surface, drained
+					   icon, a "Deprecated" chip, and a data-tip saying what is coming. Drop the
+					   whole tile when the new tournament creator lands. */ ?>
+					<a class="ka-action-card ka-action-card-deprecated"
+						href="<?= $uir ?>Tournament/create&amp;ParkId=<?= $parkId ?>"
+						data-tip="The current tournament creator is deprecated. A replacement is in development; this still works in the meantime.">
 						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-trophy"></i></div>
-						<div class="ka-action-label">Create Tournament</div>
-						<div class="ka-action-desc">Set up a new tournament for this park</div>
+						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">Deprecated</span></div>
+						<div class="ka-action-desc">Being replaced &mdash; the current creator still works for now</div>
 					</a>
 <?php if (!empty($CanResetWaivers)) : ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-ops-overlay')">
