@@ -699,7 +699,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		loadingEl.style.display = '';
 		contentEl.style.display = 'none';
 		errorEl.style.display = 'none';
-		$.getJSON(base() + 'list', function(resp) {
+		// $.getJSON is GET-only (no body), so ParkId has to ride the query string here --
+		// moPost()'s POST-body injection can't reach this call. The controller reads
+		// $_POST['ParkId'] ?? $_GET['ParkId'], and the domain query itself keys off
+		// $park_id, so without this a park console would silently get the KINGDOM's
+		// officer list back. Kingdom console: MoConfig.parkId is 0, so this is a no-op
+		// and the URL is byte-identical to before.
+		$.getJSON(base() + 'list' + (MoConfig.parkId ? '&ParkId=' + MoConfig.parkId : ''), function(resp) {
 			loadingEl.style.display = 'none';
 			if (!resp || resp.status !== 0) {
 				errorEl.textContent = (resp && resp.error) ? resp.error : 'Failed to load positions.';
@@ -1382,7 +1388,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	}
 	function ensureRoles(cb) {
 		if (moRoles) { cb(); return; }
-		$.getJSON(base() + 'roles', function(resp) {
+		// See the ParkId comment on moLoad()'s list call above -- same GET-only
+		// constraint. Here it's authorization-only (the RBAC catalog isn't park-specific),
+		// but a park-only officer would otherwise be refused just opening this modal.
+		$.getJSON(base() + 'roles' + (MoConfig.parkId ? '&ParkId=' + MoConfig.parkId : ''), function(resp) {
 			if (resp && resp.status === 0) { moRoles = resp.data || []; }
 			else { moRoles = null; moLoadFailed('officer roles', (resp && resp.error) || resp); }
 			cb();
@@ -1394,7 +1403,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	}
 	function ensurePerms(cb) {
 		if (moPerms) { cb(); return; }
-		$.getJSON(base() + 'permissions', function(resp) {
+		// Same GET-only constraint as ensureRoles() above.
+		$.getJSON(base() + 'permissions' + (MoConfig.parkId ? '&ParkId=' + MoConfig.parkId : ''), function(resp) {
 			if (resp && resp.status === 0) { moPerms = resp.data || []; }
 			else { moPerms = null; moLoadFailed('officer permissions', (resp && resp.error) || resp); }
 			cb();

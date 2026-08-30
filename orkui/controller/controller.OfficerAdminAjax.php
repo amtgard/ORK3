@@ -11,7 +11,8 @@
  * Route shape (mirrors KingdomAjax):
  *   index.php?Route=OfficerAdminAjax/officer/{kingdom_id}/{action}
  *
- * ParkId comes from POST 'ParkId' (default 0 = kingdom scope for the prototype).
+ * ParkId comes from POST 'ParkId', or GET 'ParkId' for the read-only $.getJSON call
+ * sites (list/roles/permissions) that carry no body (default 0 = kingdom scope).
  *
  * Vacating comes in two explicitly-named flavours so "remove this person" and
  * "clear the whole office" can never be confused at the wire level -- scope is
@@ -69,8 +70,17 @@ class Controller_OfficerAdminAjax extends Controller
             exit;
         }
 
-        $uid     = (int)$this->session->user_id;
-        $park_id = (int)($_POST['ParkId'] ?? 0);
+        $uid = (int)$this->session->user_id;
+
+        // Accept ParkId from either transport, explicitly: writes go out as POST
+        // (moPost()), but list/roles/permissions go out as $.getJSON, which is GET-only
+        // and can never carry a POST body. The value is caller-supplied under either
+        // transport -- it grants nothing by itself, since every domain method below
+        // gates on it via the same authority/permission checks -- so accepting it via
+        // $_GET too is not a widened surface, just a widened transport. Deliberately
+        // NOT $_REQUEST: that superglobal's precedence depends on the php.ini
+        // request_order setting, and this code should not be sensitive to that.
+        $park_id = (int)($_POST['ParkId'] ?? $_GET['ParkId'] ?? 0);
 
         // Which permission FAMILY each action belongs to. The concrete key is resolved
         // per-scope by PermissionKeyFor, so a park-scoped request is checked against
