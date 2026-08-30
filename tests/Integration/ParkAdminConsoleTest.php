@@ -733,12 +733,26 @@ final class ParkAdminConsoleTest extends TestCase
         );
     }
 
-    /** House rules for the shared partial. It is NOT in parkFileProvider: the
-     *  colour swatches carry title= attributes that came over verbatim from the
-     *  park profile's shipped markup, and rewriting them to data-tip would have
-     *  changed the profile's DOM, which this extraction is not allowed to do. */
+    /** House rules for the shared partial. It is NOT in parkFileProvider only
+     *  because that provider is park-console-scoped; every rule it enforces is
+     *  asserted here directly, including the native-title ban.
+     *
+     *  History: the colour swatches arrived carrying title= attributes, copied
+     *  verbatim from the profile's shipped markup, because the extraction that
+     *  created this partial was required to leave the profile's DOM
+     *  byte-identical. That constraint applied to the MOVE, not forever. Once
+     *  the move was proven, the attributes were converted to data-tip -- which
+     *  needs no CSS of its own: revised.css already carries a broad
+     *  `[data-tip]:not(...)` rule supplying both `position: relative` and the
+     *  light/dark tooltip. Both hosts load that stylesheet, so the profile and
+     *  the console pick up the change together and cannot drift. */
     public function testSharedModalHouseRules(): void
     {
+        $this->assertDoesNotMatchRegularExpression(
+            '/\stitle\s*=\s*["\']/i',
+            self::code(self::EVMODAL),
+            'the shared modal uses a native title= tooltip; use data-tip'
+        );
         $this->assertDoesNotMatchRegularExpression(
             '/(?<![A-Za-z0-9_.$])(confirm|alert|prompt)\(/',
             self::code(self::EVMODAL),

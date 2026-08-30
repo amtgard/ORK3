@@ -177,14 +177,14 @@ window.EvCreateConfig = {
 				<div class="pk-emod-field" style="margin-top:10px">
 					<label class="pk-emod-label">Color</label>
 					<div class="ci-swatches" id="pk-ci-swatches">
-						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
-						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
-						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
-						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
-						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
-						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
-						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" data-tip="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" data-tip="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" data-tip="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" data-tip="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" data-tip="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" data-tip="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" data-tip="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" data-tip="Rose"></button>
 					</div>
 					<input type="hidden" id="pk-ci-color" value="#64748b">
 				</div>
