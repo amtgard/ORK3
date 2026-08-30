@@ -1032,6 +1032,14 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	// use it to release their in-flight lock and re-sync from the server.
 	function moPost(action, data, onOk, onErr) {
 		function fail() { if (typeof onErr === 'function') { try { onErr(); } catch (e) {} } }
+		// Centralised scope injection: every mutation this module (and the Officer
+		// Transition wizard / Correct the Rolls, both of which reach the server only
+		// through this bridge) issues gets ParkId for free when the host is a park
+		// console. edithistory/deletehistory ignore the field (their domain methods
+		// authorize off the row's own kingdom/park), so it is harmless there; every
+		// other action's controller pre-filter and domain call both key off it. The
+		// kingdom console never sets MoConfig.parkId, so this stays a no-op there.
+		if (MoConfig.parkId) { data = $.extend({}, data, { ParkId: MoConfig.parkId }); }
 		$.post(base() + action, data, function(resp) {
 			if (resp && resp.status === 0) { onOk(resp); }
 			else {
@@ -1695,6 +1703,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 		var action = moEditId ? 'editposition' : 'createposition';
 		if (moEditId) data.PositionId = moEditId;
+		// This posts directly rather than through moPost(), so it does not inherit
+		// that function's centralised ParkId injection -- add it here too. Both
+		// createposition and editposition key their controller pre-filter AND their
+		// domain call off ParkId, same as every other position action.
+		if (MoConfig.parkId) { data.ParkId = MoConfig.parkId; }
 
 		$.post(base() + action, data, function(resp) {
 			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Position';

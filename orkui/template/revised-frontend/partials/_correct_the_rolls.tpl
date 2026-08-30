@@ -520,10 +520,13 @@ html[data-theme="dark"] .cr-row-note { color:var(--ork-text-muted); }
 		if (!mid)   { crFormError('Please pick a player from the search results.'); return; }
 		crClearFormError();
 
-		// PositionId's kingdom already comes from base()'s URL; ParkId is the
-		// only scope this needs to add, because AddHistoryTerm is creating a row
-		// that does not exist yet for the domain to authorize against by its own
-		// kingdom/park (contrast edit/delete, which send neither).
+		// PositionId's kingdom already comes from base()'s URL. AddHistoryTerm is
+		// creating a row that does not exist yet for the domain to authorize
+		// against by its own kingdom/park (contrast edit/delete below, which send
+		// neither), so ParkId still matters here -- but window.moPost() (defined
+		// in the host _manage_officers.tpl) now injects it centrally onto every
+		// payload it posts when MoConfig.parkId is truthy, so it does not need to
+		// be added again on this object.
 		var d = {
 			PositionId: posId,
 			MundaneId:  mid,
@@ -531,7 +534,6 @@ html[data-theme="dark"] .cr-row-note { color:var(--ork-text-muted); }
 			EndDate:    crRaw('cr-add-end'),
 			Note:       document.getElementById('cr-add-note').value
 		};
-		if (window.MoConfig && MoConfig.parkId) { d.ParkId = MoConfig.parkId; }
 
 		var btn = document.getElementById('cr-add-btn');
 		if (btn.disabled) return;

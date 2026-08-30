@@ -366,12 +366,10 @@
 			d.OutgoingEndDate   = otRaw('ot-out-end');
 			d.OutgoingStartDate = otRaw('ot-out-start');
 		}
-		// transition creates a new incumbent's OfficerHistory row, which has no
-		// existing PositionId/OfficerHistoryId scope for the domain to authorize
-		// against yet -- so ParkId must travel explicitly, same as addhistory in
-		// _correct_the_rolls.tpl. The kingdom console never sets MoConfig.parkId,
-		// so this stays a no-op there.
-		if (window.MoConfig && window.MoConfig.parkId) { d.ParkId = window.MoConfig.parkId; }
+		// ParkId is no longer set here: window.moPost() (defined in the host
+		// _manage_officers.tpl) centrally injects it onto every payload it posts
+		// when MoConfig.parkId is truthy, so every caller of that bridge -- this
+		// wizard included -- gets it for free without duplicating the guard.
 
 		var original = btn.innerHTML;
 		btn.disabled = true;
