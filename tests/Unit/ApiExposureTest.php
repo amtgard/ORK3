@@ -5,8 +5,16 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * JsonServer publishes every public PascalCase method on a whitelisted class.
- * This test is the regression guard: without it, the next PascalCase method
- * added to a registered class is silently published, ungated.
+ *
+ * SCOPE: this test guards OfficerPosition ONLY. registeredClassProvider()
+ * intersects the whitelist with a hardcoded ['OfficerPosition'], so adding a
+ * new class to orkservice/Json/index.php does NOT automatically get a check
+ * here -- Player, Kingdom, Award and the rest of the existing registry have
+ * never been swept for ungated public methods, and widening the provider
+ * would immediately go red against that pre-existing surface, which is a
+ * separate, much larger piece of work than this task. Within OfficerPosition,
+ * this IS the regression guard: without it, the next public PascalCase method
+ * added to the class is silently published, ungated.
  */
 final class ApiExposureTest extends TestCase
 {
@@ -27,9 +35,8 @@ final class ApiExposureTest extends TestCase
     }
 
     /** @dataProvider registeredClassProvider */
-    public function testEveryPublishedMethodIsGatedOrReviewed(string $class): void
+    public function testEveryPublishedMethodOnOfficerPositionIsGatedOrReviewed(string $class): void
     {
-        $source = file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.' . $class . '.php');
         $reflection = new ReflectionClass($class);
 
         foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
@@ -46,7 +53,7 @@ final class ApiExposureTest extends TestCase
             if (in_array($name, self::REVIEWED_PUBLIC[$class] ?? [], true)) {
                 continue;
             }
-            $body = $this->methodBody($source, $name);
+            $body = $this->methodBody($method);
             self::assertStringContainsString(
                 'IsAuthorized',
                 $body,
@@ -80,14 +87,61 @@ final class ApiExposureTest extends TestCase
         );
     }
 
-    private function methodBody(string $source, string $name): string
+    /**
+     * Exact source of one method's body, comments stripped.
+     *
+     * Two bugs this deliberately avoids, both proven to produce false negatives
+     * in an earlier version of this test:
+     *
+     * 1. Anchoring on strpos($source, 'function NAME(') finds the first TEXTUAL
+     *    occurrence of that string in the whole file -- a docblock or comment
+     *    mentioning "function NAME(" in prose anchors the slice to the wrong
+     *    place entirely. ReflectionMethod::getStartLine()/getEndLine() give the
+     *    exact declared boundaries instead, with no text search involved.
+     *
+     * 2. Terminating the slice at the next "\n    public function " stops ONLY
+     *    at a non-static public method at 4-space indent -- not at `private`,
+     *    not `protected`, not `public static`. A method followed by private
+     *    helpers (as TransitionOfficer is) overshoots straight through those
+     *    helpers into the NEXT public method's leading docblock, which can
+     *    itself contain the word "IsAuthorized" in prose and make the assertion
+     *    pass for a method that never calls it. getEndLine() has no such gap:
+     *    it is the line of the method's own closing brace, period.
+     *
+     * Comments are then stripped via token_get_all() so a docblock that merely
+     * MENTIONS IsAuthorized (as TransitionOfficer's own neighbours do, in
+     * describing the gate-then-delegate pattern) cannot satisfy the assertion
+     * on behalf of a method that doesn't actually call it.
+     */
+    private function methodBody(ReflectionMethod $method): string
     {
-        $start = strpos($source, 'function ' . $name . '(');
-        if ($start === false) {
+        $file = $method->getFileName();
+        if ($file === false) {
             return '';
         }
-        $next = strpos($source, "\n    public function ", $start + 1);
-        $next = $next === false ? strlen($source) : $next;
-        return substr($source, $start, $next - $start);
+        $lines = file($file);
+        if ($lines === false) {
+            return '';
+        }
+        $start = $method->getStartLine() - 1;
+        $end = $method->getEndLine();
+        $slice = implode('', array_slice($lines, $start, max(0, $end - $start)));
+        return $this->stripComments($slice);
+    }
+
+    private function stripComments(string $code): string
+    {
+        $out = '';
+        foreach (token_get_all('<?php ' . $code) as $token) {
+            if (is_array($token)) {
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+                $out .= $token[1];
+            } else {
+                $out .= $token;
+            }
+        }
+        return $out;
     }
 }

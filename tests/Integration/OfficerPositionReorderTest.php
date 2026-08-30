@@ -601,7 +601,7 @@ final class OfficerPositionReorderTest extends TestCase
     private function officerListKeys($db, int $kingdomId): array
     {
         $db->Clear();
-        $result = Kingdom::buildOfficerRows(
+        $result = Kingdom::build_officer_rows(
             $db,
             (string) $kingdomId,
             'o.kingdom_id = ' . $kingdomId . ' and o.park_id = 0',

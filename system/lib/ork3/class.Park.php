@@ -497,7 +497,7 @@ class Park extends Ork3
         $aliasKingdomExpr = "o.kingdom_id";
         $whereClause = "o.park_id = '" . $park_id . "' and o.kingdom_id > 0";
 
-        return Kingdom::buildOfficerRows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
+        return Kingdom::build_officer_rows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
     }
 
     public function GetParkKingdomId($pid)

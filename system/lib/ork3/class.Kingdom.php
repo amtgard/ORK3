@@ -1196,7 +1196,7 @@ class Kingdom extends Ork3
         $aliasKingdomExpr = (string) $kingdom_id;
         $whereClause = "o.kingdom_id = " . $kingdom_id . " and o.park_id = 0";
 
-        return Kingdom::buildOfficerRows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
+        return Kingdom::build_officer_rows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
     }
 
     /**
@@ -1223,6 +1223,15 @@ class Kingdom extends Ork3
      * @param string $whereClause      Scoping WHERE predicate (without leading "where").
      * @param int    $mundane_id       Requesting mundane id (privacy gate).
      * @param bool   $is_authorized    Whether the requester may see private name fields.
+     *
+     * Underscored deliberately, NOT PascalCase: $db is a Yapo handle, not a token or a
+     * scalar, so it cannot be supplied over HTTP -- but JsonServer::validate_method
+     * whitelists a CLASS, not individual methods, and 'Kingdom' has been registered on
+     * the JSON API all along. A lowercase initial is not a filter (the caller picks the
+     * casing), so a public buildOfficerRows was still ?describe=Kingdom/BuildOfficerRows
+     * -reachable, enumerating $is_authorized (the very flag that gates GivenName/Surname
+     * below) and a raw $whereClause bound for SQL. The underscore is the only lever that
+     * makes it permanently unreachable from the dispatcher.
      */
     /*
      * Ordering carries NO classification sort key, deliberately. Manage Officers presents
@@ -1233,7 +1242,7 @@ class Kingdom extends Ork3
      * order is authoritative. OfficerPosition::get_officers_for_display() keeps its
      * classification sort because it returns explicit crown/supporting GROUPS.
      */
-    public static function buildOfficerRows($db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized)
+    public static function build_officer_rows($db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized)
     {
         $sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
 					op.canonical_key as canonical_key, op.parent_position_id as parent_position_id, op.hide_when_vacant as hide_when_vacant, op.classification as classification,

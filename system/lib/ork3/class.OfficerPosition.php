@@ -1640,10 +1640,13 @@ class OfficerPosition extends Ork3
      * unblanked for every caller, with no privacy parameter at all. It must never be
      * reachable from the JSON dispatcher (JsonServer::validate_method whitelists a
      * class, not a method, and only an underscore or __construct is unreachable).
-     * The public-facing equivalent, Kingdom::buildOfficerRows(), takes an explicit
-     * $is_authorized flag and blanks GivenName/Surname to "" for anyone who isn't an
-     * authorized, identified requester -- this method has no such gate, and adding one
-     * here would change the admin console's data shape, which is a separate decision.
+     * The public-facing equivalent, Kingdom::build_officer_rows() (itself underscored --
+     * it was found dispatcher-reachable as buildOfficerRows() on the registered
+     * Kingdom class, with no method whitelist to stop it -- see its own docblock),
+     * takes an explicit $is_authorized flag and blanks GivenName/Surname to "" for
+     * anyone who isn't an authorized, identified requester -- this method has no such
+     * gate, and adding one here would change the admin console's data shape, which is
+     * a separate decision.
      * Stays public because it's called across a class boundary from the model/controller
      * layer (controller.OfficerAdminAjax.php), so private is not available.
      *
