@@ -1151,7 +1151,14 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = $this->RBACService->GrantRole($uid, $target_id, $role_id, $scope_type, $scope_id);
+            $r = $this->RBACService->GrantRole([
+                'Token'      => $this->session->token,
+                'KingdomId'  => $kingdom_id,
+                'MundaneId'  => $target_id,
+                'RoleId'     => $role_id,
+                'ScopeType'  => $scope_type,
+                'ScopeId'    => $scope_id,
+            ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -1166,7 +1173,11 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = $this->RBACService->RevokeRole($uid, $user_role_id);
+            $r = $this->RBACService->RevokeRole([
+                'Token'       => $this->session->token,
+                'KingdomId'   => $kingdom_id,
+                'UserRoleId'  => $user_role_id,
+            ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -1185,7 +1196,15 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = $this->RBACService->CreateRole($uid, $kingdom_id, $name, $display_name, $description, $scope_type, $perm_keys ?: []);
+            $r = $this->RBACService->CreateRole([
+                'Token'        => $this->session->token,
+                'KingdomId'    => $kingdom_id,
+                'Name'         => $name,
+                'DisplayName'  => $display_name,
+                'Description'  => $description,
+                'ScopeType'    => $scope_type,
+                'Permissions'  => $perm_keys ?: [],
+            ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0, 'role_id' => $r['Detail'] ?? 0]);
             } else {
@@ -1203,7 +1222,14 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = $this->RBACService->EditRole($uid, $role_id, $perm_keys ?: [], $display_name, $description, $kingdom_id);
+            $r = $this->RBACService->EditRole([
+                'Token'        => $this->session->token,
+                'KingdomId'    => $kingdom_id,
+                'RoleId'       => $role_id,
+                'Permissions'  => $perm_keys ?: [],
+                'DisplayName'  => $display_name,
+                'Description'  => $description,
+            ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
@@ -1218,7 +1244,11 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $r = $this->RBACService->DeleteRole($uid, $role_id, $kingdom_id);
+            $r = $this->RBACService->DeleteRole([
+                'Token'      => $this->session->token,
+                'KingdomId'  => $kingdom_id,
+                'RoleId'     => $role_id,
+            ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {

@@ -933,9 +933,9 @@ class Common
                 if (isset(Ork3::$Lib->rbacservice)) {
                     try {
                         if ((int)$position_id > 0) {
-                            Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId($old_mundane_id, $new_officer_id, $position_id, $kingdom_id, $park_id, $changed_by);
+                            Ork3::$Lib->rbacservice->sync_officer_role_by_position_id($old_mundane_id, $new_officer_id, $position_id, $kingdom_id, $park_id, $changed_by);
                         } else {
-                            Ork3::$Lib->rbacservice->SyncOfficerRole($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by);
+                            Ork3::$Lib->rbacservice->sync_officer_role($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by);
                         }
                     } catch (Exception $e) {
                         logtrace('RBAC sync officer failed', $e->getMessage());
@@ -1077,7 +1077,7 @@ class Common
 
         // RBAC dual-write: notify that a new officer slot was created
         if (isset(Ork3::$Lib->rbacservice)) {
-            Ork3::$Lib->rbacservice->SyncNewOfficerSlot($kingdom_id, $park_id, $role, $position_id);
+            Ork3::$Lib->rbacservice->sync_new_officer_slot($kingdom_id, $park_id, $role, $position_id);
         }
     }
 

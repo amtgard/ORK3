@@ -16,7 +16,7 @@
  *   CreateRole()     — Create a custom kingdom-level role
  *   EditRole()       — Edit a custom role's permissions
  *   DeleteRole()     — Delete a custom role
- *   SyncOfficerRole() — Dual-write: create/update ork_user_role for an officer change
+ *   sync_officer_role() — Dual-write: create/update ork_user_role for an officer change
  ***/
 
 class RBACService extends Ork3
@@ -306,6 +306,57 @@ class RBACService extends Ork3
     // ================================================================
 
     /**
+     * Token-gated entry point. Grant a role to a user at a specific scope.
+     * Resolves the acting user from the token -- the caller cannot name the
+     * actor -- then delegates to grantRoleInternal() with the proven identity.
+     *
+     * @param array $request  Token, KingdomId (gate scope), MundaneId (target),
+     *                        RoleId, ScopeType, ScopeId, ExpiresAt (optional)
+     * @return array  Standard ORK response array
+     */
+    public function GrantRole($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            'kingdom.auth.manage',
+            'kingdom',
+            $kingdom_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        $r = $this->grantRoleInternal(
+            $actor_id,
+            (int) ($request['MundaneId'] ?? 0),
+            (int) ($request['RoleId'] ?? 0),
+            (string) ($request['ScopeType'] ?? 'kingdom'),
+            (int) ($request['ScopeId'] ?? $kingdom_id),
+            $request['ExpiresAt'] ?? null
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                null
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Grant a role to a user at a specific scope.
      *
      * Includes escalation prevention: the granter must hold ALL permissions
@@ -319,7 +370,7 @@ class RBACService extends Ork3
      * @param string|null $expires_at  Optional expiration (MySQL datetime), or null for permanent
      * @return array  Standard ORK response array
      */
-    public function GrantRole($granter_id, $target_id, $role_id, $scope_type, $scope_id, $expires_at = null)
+    private function grantRoleInternal($granter_id, $target_id, $role_id, $scope_type, $scope_id, $expires_at = null)
     {
         global $DB;
 
@@ -417,13 +468,55 @@ class RBACService extends Ork3
     }
 
     /**
+     * Token-gated entry point. Revoke a role from a user. Resolves the acting
+     * user from the token, then delegates to revokeRoleInternal() with the proven identity.
+     *
+     * @param array $request  Token, KingdomId (gate scope), UserRoleId
+     * @return array  Standard ORK response array
+     */
+    public function RevokeRole($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            'kingdom.auth.manage',
+            'kingdom',
+            $kingdom_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        $r = $this->revokeRoleInternal($actor_id, (int) ($request['UserRoleId'] ?? 0));
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                null
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Revoke a role from a user.
      *
      * @param int $revoker_id  Who is revoking
      * @param int $user_role_id  The ork_user_role.user_role_id to remove
      * @return array  Standard ORK response array
      */
-    public function RevokeRole($revoker_id, $user_role_id)
+    private function revokeRoleInternal($revoker_id, $user_role_id)
     {
         global $DB;
 
@@ -608,6 +701,65 @@ class RBACService extends Ork3
     // ================================================================
 
     /**
+     * Token-gated entry point. Create a custom role for a kingdom. Resolves the
+     * acting user from the token, then delegates to createRoleInternal() with the proven
+     * identity.
+     *
+     * NOTE: createRoleInternal() also has an internal caller --
+     * OfficerPosition::createPositionInternal() -- which already holds a proven
+     * actor_id from its own token-gated wrapper and calls createRoleInternal() directly,
+     * bypassing this token check. That is intentional: it is a domain-to-domain
+     * call with an already-verified identity, not a second HTTP entry point.
+     *
+     * @param array $request  Token, KingdomId (owning kingdom + gate scope), Name,
+     *                        DisplayName, Description, ScopeType, Permissions
+     * @return array  Standard ORK response array (Detail = new role_id on success)
+     */
+    public function CreateRole($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            'kingdom.auth.manage',
+            'kingdom',
+            $kingdom_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        $permission_keys = $request['Permissions'] ?? [];
+        $r = $this->createRoleInternal(
+            $actor_id,
+            $kingdom_id,
+            (string) ($request['Name'] ?? ''),
+            (string) ($request['DisplayName'] ?? ''),
+            (string) ($request['Description'] ?? ''),
+            (string) ($request['ScopeType'] ?? 'kingdom'),
+            is_array($permission_keys) ? $permission_keys : []
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['RoleId' => (int) ($r['Detail'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Create a custom role for a kingdom.
      *
      * @param int    $creator_id    Who is creating the role
@@ -619,7 +771,7 @@ class RBACService extends Ork3
      * @param array  $permission_keys  Array of permission key strings
      * @return array  Standard ORK response array (Detail = new role_id on success)
      */
-    public function CreateRole($creator_id, $kingdom_id, $name, $display_name, $description, $scope_type, $permission_keys = [])
+    public function createRoleInternal($creator_id, $kingdom_id, $name, $display_name, $description, $scope_type, $permission_keys = [])
     {
         global $DB;
 
@@ -707,6 +859,64 @@ class RBACService extends Ork3
     }
 
     /**
+     * Token-gated entry point. Edit a custom role's permissions. Resolves the
+     * acting user from the token, then delegates to editRoleInternal() with the proven
+     * identity.
+     *
+     * NOTE: editRoleInternal() also has an internal caller --
+     * OfficerPosition::editPositionInternal() -- which already holds a proven
+     * actor_id from its own token-gated wrapper and calls editRoleInternal() directly,
+     * bypassing this token check. That is intentional: it is a domain-to-domain
+     * call with an already-verified identity, not a second HTTP entry point.
+     *
+     * @param array $request  Token, KingdomId (gate scope + acting kingdom), RoleId,
+     *                        Permissions, DisplayName (optional), Description (optional)
+     * @return array  Standard ORK response
+     */
+    public function EditRole($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            'kingdom.auth.manage',
+            'kingdom',
+            $kingdom_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        $permission_keys = $request['Permissions'] ?? [];
+        $r = $this->editRoleInternal(
+            $actor_id,
+            (int) ($request['RoleId'] ?? 0),
+            is_array($permission_keys) ? $permission_keys : [],
+            array_key_exists('DisplayName', $request) ? $request['DisplayName'] : null,
+            array_key_exists('Description', $request) ? $request['Description'] : null,
+            $kingdom_id
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                null
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Edit a custom role's permissions.
      * System roles (is_system=1) cannot be edited.
      *
@@ -721,7 +931,7 @@ class RBACService extends Ork3
      * @param int $acting_kingdom_id  Kingdom the CALLER was authorized for. The role must
      *                                belong to it. 0 skips the check (admin/CLI callers only).
      */
-    public function EditRole($editor_id, $role_id, $permission_keys, $display_name = null, $description = null, $acting_kingdom_id = 0)
+    public function editRoleInternal($editor_id, $role_id, $permission_keys, $display_name = null, $description = null, $acting_kingdom_id = 0)
     {
         global $DB;
 
@@ -833,13 +1043,55 @@ class RBACService extends Ork3
     }
 
     /**
+     * Token-gated entry point. Delete a custom role. Resolves the acting user
+     * from the token, then delegates to deleteRoleInternal() with the proven identity.
+     *
+     * @param array $request  Token, KingdomId (gate scope + acting kingdom), RoleId
+     * @return array  Standard ORK response
+     */
+    public function DeleteRole($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            'kingdom.auth.manage',
+            'kingdom',
+            $kingdom_id,
+            AUTH_CREATE
+        )) {
+            return NoAuthorization();
+        }
+
+        $r = $this->deleteRoleInternal($actor_id, (int) ($request['RoleId'] ?? 0), $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                null
+            );
+        }
+
+        return $r;
+    }
+
+    /**
      * Delete a custom role. System roles cannot be deleted.
      *
      * @param int $deleter_id  Who is deleting
      * @param int $role_id     Role to delete
      * @return array  Standard ORK response
      */
-    public function DeleteRole($deleter_id, $role_id, $acting_kingdom_id = 0)
+    private function deleteRoleInternal($deleter_id, $role_id, $acting_kingdom_id = 0)
     {
         global $DB;
 
@@ -910,7 +1162,7 @@ class RBACService extends Ork3
      * LEGACY fallback path. Sync an officer change to ork_user_role by ROLE NAME.
      *
      * Called from Common::set_officer() only when no position_id is available. The
-     * current path is SyncOfficerRoleByPositionId(), which resolves the RBAC role from
+     * current path is sync_officer_role_by_position_id(), which resolves the RBAC role from
      * ork_officer_position.rbac_role_id instead of from a role string; this one remains
      * for callers that still pass position_id = 0.
      *
@@ -927,10 +1179,10 @@ class RBACService extends Ork3
      */
     /**
      * @deprecated Legacy string-map sync. Used ONLY as a fallback for un-migrated
-     * ork_officer rows with position_id = 0. New code path is SyncOfficerRoleByPositionId().
+     * ork_officer rows with position_id = 0. New code path is sync_officer_role_by_position_id().
      * TODO: remove once all ork_officer rows have position_id > 0.
      */
-    public function SyncOfficerRole($kingdom_id, $park_id, $old_officer_id, $new_officer_id, $role, $changed_by = 0)
+    public function sync_officer_role($kingdom_id, $park_id, $old_officer_id, $new_officer_id, $role, $changed_by = 0)
     {
         global $DB;
 
@@ -943,7 +1195,7 @@ class RBACService extends Ork3
         // Map officer role to RBAC role name
         $rbac_role_name = PermissionRegistry::OfficerRoleToRbacRole($role);
         if ($rbac_role_name === null) {
-            logtrace('RBACService::SyncOfficerRole', 'Unknown officer role: ' . $role);
+            logtrace('RBACService::sync_officer_role', 'Unknown officer role: ' . $role);
             return;
         }
 
@@ -956,7 +1208,7 @@ class RBACService extends Ork3
 			LIMIT 1";
         $result = $DB->DataSet($sql);
         if ($result === false || $result->size() == 0 || !$result->Next()) {
-            logtrace('RBACService::SyncOfficerRole', 'System role not found for: ' . $rbac_role_name);
+            logtrace('RBACService::sync_officer_role', 'System role not found for: ' . $rbac_role_name);
             return;
         }
         $rbac_role_id = (int) $result->role_id;
@@ -1020,7 +1272,7 @@ class RBACService extends Ork3
      * @param int $park_id
      * @param int $changed_by
      */
-    public function SyncOfficerRoleByPositionId($old_officer_mundane_id, $new_officer_mundane_id, $position_id, $kingdom_id, $park_id, $changed_by)
+    public function sync_officer_role_by_position_id($old_officer_mundane_id, $new_officer_mundane_id, $position_id, $kingdom_id, $park_id, $changed_by)
     {
         global $DB;
         $old_officer_mundane_id = (int) $old_officer_mundane_id;
@@ -1078,12 +1330,12 @@ class RBACService extends Ork3
      * @param int    $park_id     Park ID (0 for kingdom-level)
      * @param string $role        Officer role display name
      */
-    public function SyncNewOfficerSlot($kingdom_id, $park_id, $role, $position_id = 0)
+    public function sync_new_officer_slot($kingdom_id, $park_id, $role, $position_id = 0)
     {
         // New officer slots are created with mundane_id = 0, so there's nothing
         // to write to ork_user_role. When an actual officer is appointed via
-        // set_officer(), SyncOfficerRole() will handle the RBAC assignment.
-        logtrace('RBACService::SyncNewOfficerSlot', 'Slot created for ' . $role . ' at kingdom:' . $kingdom_id . ' park:' . $park_id);
+        // set_officer(), sync_officer_role() will handle the RBAC assignment.
+        logtrace('RBACService::sync_new_officer_slot', 'Slot created for ' . $role . ' at kingdom:' . $kingdom_id . ' park:' . $park_id);
     }
 
     // ================================================================

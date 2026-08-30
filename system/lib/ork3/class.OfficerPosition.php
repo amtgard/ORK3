@@ -524,7 +524,7 @@ class OfficerPosition extends Ork3
             if (!isset(Ork3::$Lib->rbacservice)) {
                 return ProcessingError('RBAC service unavailable; cannot create custom role.');
             }
-            $res = Ork3::$Lib->rbacservice->CreateRole(
+            $res = Ork3::$Lib->rbacservice->createRoleInternal(
                 $creator_id,
                 $kingdom_id,
                 'officer:' . $slug,
@@ -890,7 +890,7 @@ class OfficerPosition extends Ork3
             // Custom-permission upsert on the bound role.
             if (isset($fields['permission_keys']) && is_array($fields['permission_keys'])
                 && isset(Ork3::$Lib->rbacservice) && $old_rbac_role_id > 0) {
-                Ork3::$Lib->rbacservice->EditRole($editor_id, $old_rbac_role_id, $fields['permission_keys']);
+                Ork3::$Lib->rbacservice->editRoleInternal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
             }
 
             // Rebinding to a different existing role (validated up-front into
@@ -2821,7 +2821,7 @@ class OfficerPosition extends Ork3
                 // 3. Revoke the synced RBAC role for this holder.
                 if (!isset($handled[$mid]) && isset(Ork3::$Lib->rbacservice)) {
                     try {
-                        Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId($mid, 0, $position_id, $kingdom_id, $park_id, $changed_by);
+                        Ork3::$Lib->rbacservice->sync_officer_role_by_position_id($mid, 0, $position_id, $kingdom_id, $park_id, $changed_by);
                     } catch (Exception $e) {
                         logtrace('RBAC vacate supporting failed', $e->getMessage());
                     }
@@ -3063,7 +3063,7 @@ class OfficerPosition extends Ork3
         // RBAC grant via the shared service.
         if (isset(Ork3::$Lib->rbacservice)) {
             try {
-                Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId(0, $mundane_id, $position_id, $kingdom_id, $park_id, $changed_by);
+                Ork3::$Lib->rbacservice->sync_officer_role_by_position_id(0, $mundane_id, $position_id, $kingdom_id, $park_id, $changed_by);
             } catch (Exception $e) {
                 logtrace('RBAC supporting grant failed', $e->getMessage());
             }
