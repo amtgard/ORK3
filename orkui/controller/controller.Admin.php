@@ -375,169 +375,6 @@ class Controller_Admin extends Controller
         $this->data['ParkInfo']    = $this->Kingdom->get_park_info($kingdom_id);
     }
 
-    public function setkingdomofficers($post = null)
-    {
-        $this->load_model('Kingdom');
-        if (strlen($post) > 0) {
-            $this->request->save('Admin_setofficers', true);
-            if (!isset($this->session->user_id)) {
-                header('Location: '.UIR.'Login/login/Admin/setkingdomofficers');
-                exit;
-            } else {
-                $officers = array();
-                if (valid_id($this->request->Admin_setofficers->MonarchId)) {
-                    $officers['Monarch'] = array( 'MundaneId' => $this->request->Admin_setofficers->MonarchId, 'Role' => 'Monarch' );
-                }
-                if (valid_id($this->request->Admin_setofficers->Prime_MinisterId)) {
-                    $officers['Prime_Minister'] = array( 'MundaneId' => $this->request->Admin_setofficers->Prime_MinisterId, 'Role' => 'Prime Minister' );
-                }
-                if (valid_id($this->request->Admin_setofficers->RegentId)) {
-                    $officers['Regent'] = array( 'MundaneId' => $this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
-                }
-                if (valid_id($this->request->Admin_setofficers->ChampionId)) {
-                    $officers['Champion'] = array( 'MundaneId' => $this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
-                }
-                if (valid_id($this->request->Admin_setofficers->GMRId)) {
-                    $officers['GMR'] = array( 'MundaneId' => $this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
-                }
-                $r = $this->Kingdom->set_officers($this->session->token, $this->session->kingdom_id, $officers);
-                $error = false;
-                foreach ($r as $k => $Status) {
-                    if ($Status['Status'] != 0) {
-                        $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
-                        $error = true;
-                    } elseif ($r['Status'] == 5) {
-                        $this->no_authorization('Admin/setkingdomofficers');
-                    }
-                }
-                if (!$error) {
-                    $this->data['Message'] = "The Kingdom Officers have been updated.";
-                    $this->request->clear('Admin_setofficers');
-                }
-            }
-        }
-        $this->template = 'Admin_setofficers.tpl';
-        if (($officers = $this->Kingdom->get_officers($this->request->KingdomId, $this->session->token))) {
-            $this->data['Officers'] = $officers;
-        } else {
-            $this->data['Officers'] = array();
-        }
-        $this->data['Type'] = 'KingdomId';
-        $this->data['Id'] = $this->request->KingdomId;
-        if ($this->request->exists('Admin_setofficers')) {
-            $this->data['Admin_setofficers'] = $this->request->Admin_setofficers->Request;
-        }
-    }
-
-    public function setparkofficers($post = null)
-    {
-        $this->load_model('Park');
-        $this->session->park_id = $this->request->ParkId;
-        if (strlen($post) > 0) {
-            $this->request->save('Admin_setofficers', true);
-            if (!isset($this->session->user_id)) {
-                header('Location: '.UIR.'Login/login/Admin/setparkofficers');
-                exit;
-            } else {
-                $officers = array();
-                if (valid_id($this->request->Admin_setofficers->MonarchId)) {
-                    $officers['Monarch'] = array( 'MundaneId' => $this->request->Admin_setofficers->MonarchId, 'Role' => 'Monarch' );
-                }
-                if (valid_id($this->request->Admin_setofficers->Prime_MinisterId)) {
-                    $officers['Prime_Minister'] = array( 'MundaneId' => $this->request->Admin_setofficers->Prime_MinisterId, 'Role' => 'Prime Minister' );
-                }
-                if (valid_id($this->request->Admin_setofficers->RegentId)) {
-                    $officers['Regent'] = array( 'MundaneId' => $this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
-                }
-                if (valid_id($this->request->Admin_setofficers->ChampionId)) {
-                    $officers['Champion'] = array( 'MundaneId' => $this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
-                }
-                if (valid_id($this->request->Admin_setofficers->GMRId)) {
-                    $officers['GMR'] = array( 'MundaneId' => $this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
-                }
-                $r = $this->Park->set_officers($this->session->token, $this->session->park_id, $officers);
-                $error = false;
-                foreach ($r as $k => $Status) {
-                    if ($Status['Status'] != 0) {
-                        $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
-                        $error = true;
-                    } elseif ($r['Status'] == 5) {
-                        $this->no_authorization('Admin/setparkofficers');
-                    }
-                }
-                if (!$error) {
-                    $this->data['Message'] = "The Park Officers have been updated.";
-                    $this->request->clear('Admin_setofficers');
-                }
-            }
-        }
-        $this->template = 'Admin_setofficers.tpl';
-        if (($officers = $this->Park->get_officers($this->request->ParkId, $this->session->token))) {
-            $this->data['Officers'] = $officers;
-        } else {
-            $this->data['Officers'] = array();
-        }
-        $this->data['Type'] = 'ParkId';
-        $this->data['Id'] = $this->session->park_id;
-        if ($this->request->exists('Admin_setofficers')) {
-            $this->data['Admin_setofficers'] = $this->request->Admin_setofficers->Request;
-        }
-    }
-
-    public function vacatekingdomofficer()
-    {
-        $this->load_model('Kingdom');
-        $kingdom_id = $this->request->KingdomId;
-        if (!isset($this->session->user_id)) {
-            header('Location: ' . UIR . 'Login/login/Admin/setkingdomofficers');
-            exit;
-        } else {
-            $role = $this->request->Role;
-            $r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
-            if (isset($r['Status']) && $r['Status'] != 0) {
-                $this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
-            } else {
-                $this->data['Message'] = "The $role position has been vacated.";
-            }
-        }
-        $this->template = 'Admin_setofficers.tpl';
-        if (($officers = $this->Kingdom->get_officers($kingdom_id, $this->session->token))) {
-            $this->data['Officers'] = $officers;
-        } else {
-            $this->data['Officers'] = array();
-        }
-        $this->data['Type'] = 'KingdomId';
-        $this->data['Id'] = $kingdom_id;
-        $this->data['Call'] = 'setkingdomofficers';
-    }
-
-    public function vacateparkofficer()
-    {
-        $this->load_model('Park');
-        $park_id = $this->request->ParkId;
-        if (!isset($this->session->user_id)) {
-            header('Location: ' . UIR . 'Login/login/Admin/setparkofficers');
-            exit;
-        } else {
-            $role = $this->request->Role;
-            $r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
-            if (isset($r['Status']) && $r['Status'] != 0) {
-                $this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
-            } else {
-                $this->data['Message'] = "The $role position has been vacated.";
-            }
-        }
-        $this->template = 'Admin_setofficers.tpl';
-        if (($officers = $this->Park->get_officers($park_id, $this->session->token))) {
-            $this->data['Officers'] = $officers;
-        } else {
-            $this->data['Officers'] = array();
-        }
-        $this->data['Type'] = 'ParkId';
-        $this->data['Id'] = $park_id;
-        $this->data['Call'] = 'setparkofficers';
-    }
-
     public function event($p)
     {
         $params = explode('/', $p);
@@ -2289,7 +2126,14 @@ class Controller_Admin extends Controller
             exit;
         }
 
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
+        // Reset Waivers' own action (Admin::resetwaivers()) gates a park reset on
+        // admin_has_kingdom_standing() for the park's KINGDOM, not on park authority --
+        // it never widened to accept AUTH_PARK. A park-only officer passes
+        // admin_can_reset_waivers() (AUTH_PARK) but would be bounced home with no
+        // message and no reset, so the tile must also require the same kingdom
+        // standing the action actually checks, or it offers a control that cannot work.
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id)
+            && $this->admin_has_kingdom_standing($_uid, $_standingKingdomId);
         $this->template = '../revised-frontend/Admin_park.tpl';
     }
 
@@ -2532,7 +2376,11 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
+            // Same tile/action mismatch guarded against in Admin::park() -- see that
+            // method's comment. This route re-renders the same console after a reset
+            // attempt, so its own CanResetWaivers flag must match too.
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id)
+                && $this->admin_has_kingdom_standing($_uid, $_standingKingdomId);
             $this->template = '../revised-frontend/Admin_park.tpl';
         }
     }

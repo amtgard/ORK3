@@ -87,11 +87,6 @@ $ofHistoryUrl = UIR . ($ofIsPark
 	? 'ParkAjax/park/' . $ofOrgId . '/officerhistory'
 	: 'KingdomAjax/kingdom/' . $ofOrgId . '/officerhistory');
 
-// History editing permission, per surface (Kingdom and Park do not share a flag).
-$ofCanEditHistory = $ofIsPark
-	? !empty($CanManagePark)
-	: (bool)($CanEditKingdom ?? false);
-
 // Role filter options. Both host templates already derive this from
 // $OfficerHistoryRoleOptions; re-derive rather than depend on include order.
 $ofRoleOptions = [];
@@ -500,7 +495,6 @@ $ofJsConfig = json_encode([
 	'hostPrefix'  => $ofHostPrefix,
 	'historyUrl'  => $ofHistoryUrl,
 	'playerUrl'   => UIR . 'Player/profile/',
-	'canEdit'     => (bool)$ofCanEditHistory,
 	'roleLabels'  => $ofRoleLabels,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
@@ -541,19 +535,6 @@ $ofJsConfig = json_encode([
 	pointer-events: auto;
 	visibility: visible;
 	transition: opacity 0.2s, visibility 0s 0s;
-}
-
-/* The Add / Edit officer-history modals live on the host page and carry an
-   INLINE z-index of var(--z-modal) — the same layer as this modal — so they
-   would open behind it. Inline styles beat a stylesheet rule, hence
-   !important. This is the relationship .ka-overlay-top already uses
-   (admin-console.css:255). These four ids only ever exist on the two pages
-   that include this partial. */
-#kn-oh-backfill-overlay,
-#kn-oh-edit-overlay,
-#pk-oh-backfill-overlay,
-#pk-oh-edit-overlay {
-	z-index: var(--z-modal-top, 10200) !important;
 }
 
 /* ---- Box / header / body ---- */
@@ -782,27 +763,6 @@ $ofJsConfig = json_encode([
 	outline: 2px solid var(--ork-blue-link);
 	outline-offset: 1px;
 }
-#of-officers-overlay .of-oh-add-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	font-size: 13px;
-	font-weight: 600;
-	border-radius: 6px;
-	border: 1px solid var(--ork-border);
-	background: var(--ork-card-bg);
-	color: var(--ork-text-secondary);
-	cursor: pointer;
-}
-#of-officers-overlay .of-oh-add-btn:hover {
-	background: var(--ork-bg-tertiary);
-	color: var(--ork-text);
-}
-#of-officers-overlay .of-oh-add-btn:focus-visible {
-	outline: 2px solid var(--ork-blue-link);
-	outline-offset: 1px;
-}
 /* ---- Officer History: one collapsible panel per office ----
    Real <details>/<summary> disclosures, NOT a div with a click handler: that
    buys keyboard operation (Tab to the summary, Enter/Space to toggle) and the
@@ -934,28 +894,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 	overflow-wrap: anywhere;
 }
 #of-officers-overlay .of-oh-nowrap { white-space: nowrap; }
-#of-officers-overlay .of-oh-edit-btn,
-#of-officers-overlay .of-oh-del-btn {
-	background: none;
-	border: 1px solid transparent;
-	cursor: pointer;
-	font-size: 14px;
-	padding: 4px;
-	border-radius: 4px;
-	opacity: 0.6;
-	transition: opacity 0.15s;
-}
-#of-officers-overlay .of-oh-edit-btn { color: var(--ork-blue-link); margin-right: 2px; }
-#of-officers-overlay .of-oh-del-btn { color: #e53e3e; }
-html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
-#of-officers-overlay .of-oh-edit-btn:hover,
-#of-officers-overlay .of-oh-del-btn:hover { opacity: 1; background: var(--ork-bg-tertiary); }
-#of-officers-overlay .of-oh-edit-btn:focus-visible,
-#of-officers-overlay .of-oh-del-btn:focus-visible {
-	opacity: 1;
-	outline: 2px solid var(--ork-blue-link);
-	outline-offset: 1px;
-}
 
 /* ---- Screen-reader-only text ---- */
 #of-officers-overlay .of-sr-only {
@@ -996,9 +934,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 @media (prefers-reduced-motion: reduce) {
 	#of-officers-overlay,
 	#of-officers-overlay.of-open,
-	#of-officers-overlay .of-oh-chev,
-	#of-officers-overlay .of-oh-edit-btn,
-	#of-officers-overlay .of-oh-del-btn {
+	#of-officers-overlay .of-oh-chev {
 		transition: none;
 	}
 }
@@ -1052,12 +988,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 						<option value="<?= htmlspecialchars((string)$_ofRoleKey) ?>"><?= htmlspecialchars((string)$_ofRoleLabel) ?></option>
 						<?php endforeach; ?>
 					</select>
-					<?php if ($ofCanEditHistory): ?>
-					<button type="button" class="of-oh-add-btn" id="of-oh-add-btn"
-						data-tip="Record an officer term that predates the ORK">
-						<i class="fas fa-plus" aria-hidden="true"></i> Add Historical Record
-					</button>
-					<?php endif; ?>
 				</div>
 
 				<div class="of-loading" id="of-oh-loading" style="display:none" role="status">
@@ -1338,9 +1268,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 					return;
 				}
 				ohRows = resp.history || [];
-				// The host page's Add/Edit handlers index into <prefix>OhData.
-				// Keep it in step so the stacked Edit modal opens the right row.
-				window[OF.hostPrefix + 'OhData'] = ohRows;
 				renderHistory(ohRows);
 			})
 			.catch(function () {
@@ -1482,12 +1409,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 			th.setAttribute('scope', 'col');
 			htr.appendChild(th);
 		}
-		if (OF.canEdit) {
-			var actTh = document.createElement('th');
-			actTh.setAttribute('scope', 'col');
-			actTh.appendChild(el('span', 'of-sr-only', 'Actions'));
-			htr.appendChild(actTh);
-		}
 		thead.appendChild(htr);
 		table.appendChild(thead);
 
@@ -1523,17 +1444,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 				notesCell.appendChild(el('span', 'of-oh-notes', h.Notes));
 			}
 			tr.appendChild(notesCell);
-
-			if (OF.canEdit) {
-				var actions = document.createElement('td');
-				actions.className = 'of-oh-nowrap';
-				// The index passed through is the row's position in the FLAT
-				// response array, not its position in this panel: the host
-				// page's Edit modal indexes into window.<prefix>OhData.
-				actions.appendChild(actionBtn('edit', idx, h));
-				actions.appendChild(actionBtn('delete', idx, h));
-				tr.appendChild(actions);
-			}
 
 			tbody.appendChild(tr);
 		}
@@ -1681,48 +1591,8 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-del-btn { color: #fc8181; }
 		return shown;
 	}
 
-	// The Add / Edit / Delete history modals stay on the host page — this modal
-	// re-homes the VIEW, not the editors. Call through to the host's functions
-	// by name, and no-op safely if the host does not expose them.
-	function hostCall(name, arg) {
-		var fn = window[OF.hostPrefix + name];
-		if (typeof fn === 'function') { fn(arg); }
-	}
-
-	function actionBtn(kind, index, row) {
-		var b = document.createElement('button');
-		b.type = 'button';
-		var icon = document.createElement('i');
-		icon.setAttribute('aria-hidden', 'true');
-		if (kind === 'edit') {
-			b.className = 'of-oh-edit-btn';
-			b.setAttribute('data-tip', 'Edit this record');
-			b.setAttribute('aria-label', 'Edit officer history record');
-			icon.className = 'fas fa-pencil-alt';
-			b.addEventListener('click', function () {
-				window[OF.hostPrefix + 'OhData'] = ohRows;
-				hostCall('OpenOhEditModal', index);
-			});
-		} else {
-			b.className = 'of-oh-del-btn';
-			b.setAttribute('data-tip', 'Delete this record');
-			b.setAttribute('aria-label', 'Delete officer history record');
-			icon.className = 'fas fa-trash-alt';
-			b.addEventListener('click', function () {
-				hostCall('DeleteOhRecord', parseInt(row.OfficerHistoryId, 10));
-			});
-		}
-		b.appendChild(icon);
-		return b;
-	}
-
 	var roleFilter = gid('of-oh-role-filter');
 	if (roleFilter) { roleFilter.addEventListener('change', loadHistory); }
-
-	var addBtn = gid('of-oh-add-btn');
-	if (addBtn) {
-		addBtn.addEventListener('click', function () { hostCall('OpenOhBackfillModal'); });
-	}
 
 	// The host page's add / edit / delete handlers each finish by calling
 	// <prefix>LoadOfficerHistory() to refresh. Once the old main-content panel

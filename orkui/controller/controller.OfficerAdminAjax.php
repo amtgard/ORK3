@@ -89,7 +89,6 @@ class Controller_OfficerAdminAjax extends Controller
         $action_kind = [
             'list'             => 'set',
             'transition'       => 'set',
-            'setoccupant'      => 'set',
             'vacate'           => 'vacate',
             'vacateholder'     => 'vacate',
             'vacateall'        => 'vacate',
@@ -134,8 +133,6 @@ class Controller_OfficerAdminAjax extends Controller
 
         switch ($action) {
             case 'list':         $this->actionList($kingdom_id, $park_id);
-                break;
-            case 'setoccupant':  $this->actionSetOccupant($kingdom_id, $park_id, $uid);
                 break;
             case 'transition':    $this->actionTransition($kingdom_id, $park_id);
                 break;
@@ -532,36 +529,6 @@ class Controller_OfficerAdminAjax extends Controller
             ];
         }
         return $map;
-    }
-
-    private function actionSetOccupant($kingdom_id, $park_id, $uid)
-    {
-        $position_id = (int)($_POST['PositionId'] ?? 0);
-        $mundane_id  = (int)($_POST['MundaneId'] ?? 0);
-        $term_start  = trim($_POST['TermStart'] ?? '');
-        $term_end    = trim($_POST['TermEnd'] ?? '');
-        $note        = trim($_POST['Note'] ?? '');
-
-        if (!valid_id($position_id)) {
-            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
-            return;
-        }
-        if (!valid_id($mundane_id)) {
-            echo json_encode(['status' => 1, 'error' => 'A valid member is required.']);
-            return;
-        }
-
-        $r = $this->OfficerPosition->SetOccupant([
-            'Token'      => $this->session->token,
-            'KingdomId'  => $kingdom_id,
-            'ParkId'     => $park_id,
-            'PositionId' => $position_id,
-            'MundaneId'  => $mundane_id,
-            'TermStart'  => $term_start,
-            'TermEnd'    => $term_end,
-            'Note'       => $note,
-        ]);
-        $this->emitServiceResult($r);
     }
 
     /**

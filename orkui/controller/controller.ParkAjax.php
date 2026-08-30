@@ -21,41 +21,7 @@ class Controller_ParkAjax extends Controller
 
         $this->load_model('Park');
 
-        if ($action === 'setofficers') {
-            $officers = [];
-            foreach ($_POST as $key => $val) {
-                if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
-                    $role = str_replace('_', ' ', $m[1]);
-                    $officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
-                }
-            }
-            if (empty($officers)) {
-                echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
-                exit;
-            }
-            $results = $this->Park->set_officers($this->session->token, $park_id, $officers);
-            $errors  = [];
-            foreach ($results as $r) {
-                if (isset($r['Status']) && $r['Status'] != 0) {
-                    $errors[] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
-                }
-            }
-            echo $errors
-                ? json_encode(['status' => 1, 'error' => implode('; ', $errors)])
-                : json_encode(['status' => 0]);
-
-        } elseif ($action === 'vacateofficer') {
-            $role = trim($_POST['Role'] ?? '');
-            if (!strlen($role)) {
-                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
-                exit;
-            }
-            $r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
-            echo (!isset($r['Status']) || $r['Status'] == 0)
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
-
-        } elseif ($action === 'addparkday') {
+        if ($action === 'addparkday') {
             $recurrence = trim($_POST['Recurrence'] ?? '');
             $time       = trim($_POST['Time']       ?? '');
             if (!strlen($recurrence)) {
@@ -445,92 +411,6 @@ class Controller_ParkAjax extends Controller
                 'status'  => 0,
                 'history' => $r['History'] ?? [],
             ]);
-
-        } elseif ($action === 'addofficerhistory') {
-            $mid   = (int)($_POST['MundaneId'] ?? 0);
-            $role  = trim($_POST['Role']       ?? '');
-            $start = trim($_POST['StartDate']  ?? '');
-            $end   = trim($_POST['EndDate']    ?? '');
-            $notes = trim($_POST['Notes']      ?? '');
-
-            if (!$mid) {
-                echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
-                exit;
-            }
-            if (!strlen($role)) {
-                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
-                exit;
-            }
-            if (!strlen($start)) {
-                echo json_encode(['status' => 1, 'error' => 'Start date is required.']);
-                exit;
-            }
-
-            $r = $this->Park->add_officer_history([
-                'Token'     => $this->session->token,
-                'ParkId'    => $park_id,
-                'MundaneId' => $mid,
-                'Role'      => $role,
-                'StartDate' => $start,
-                'EndDate'   => $end,
-                'Notes'     => $notes,
-            ]);
-            // A response with no Status is a FAILURE, not a pass (see setaward above).
-            echo (isset($r['Status']) && $r['Status'] == 0)
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-
-        } elseif ($action === 'editofficerhistory') {
-            $ohid  = (int)($_POST['OfficerHistoryId'] ?? 0);
-            $role  = trim($_POST['Role']       ?? '');
-            $start = trim($_POST['StartDate']  ?? '');
-            $end   = trim($_POST['EndDate']    ?? '');
-            $notes = trim($_POST['Notes']      ?? '');
-
-            if (!$ohid) {
-                echo json_encode(['status' => 1, 'error' => 'Invalid history record.']);
-                exit;
-            }
-            if (!strlen($role)) {
-                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
-                exit;
-            }
-            if (!strlen($start)) {
-                echo json_encode(['status' => 1, 'error' => 'Start date is required.']);
-                exit;
-            }
-
-            $r = $this->Park->edit_officer_history([
-                'Token'            => $this->session->token,
-                'ParkId'           => $park_id,
-                'OfficerHistoryId' => $ohid,
-                'Role'             => $role,
-                'StartDate'        => $start,
-                'EndDate'          => $end,
-                'Notes'            => $notes,
-            ]);
-            // A response with no Status is a FAILURE, not a pass (see setaward above).
-            echo (isset($r['Status']) && $r['Status'] == 0)
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-
-        } elseif ($action === 'deleteofficerhistory') {
-            $ohid = (int)($_POST['OfficerHistoryId'] ?? 0);
-
-            if (!$ohid) {
-                echo json_encode(['status' => 1, 'error' => 'Invalid history record.']);
-                exit;
-            }
-
-            $r = $this->Park->delete_officer_history([
-                'Token'            => $this->session->token,
-                'ParkId'           => $park_id,
-                'OfficerHistoryId' => $ohid,
-            ]);
-            // A response with no Status is a FAILURE, not a pass (see setaward above).
-            echo (isset($r['Status']) && $r['Status'] == 0)
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'selfreg_link') {
             $this->load_model('Player');

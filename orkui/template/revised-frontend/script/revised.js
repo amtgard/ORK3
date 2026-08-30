@@ -4963,236 +4963,6 @@ $(document).ready(function() {
     });
 })();
 
-// ---- Edit Officers Modal ----
-(function() {
-    if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
-
-    // OFFICER_ROLES derived from the embedded officerList: each entry keys on the
-    // stable canonical_key (matching), renders DisplayTitle (display). No display
-    // string ever drives officer logic.
-    var OFFICER_ROLES = (KnConfig.officerList || []).map(function(o) {
-        return { key: o.CanonicalKey || o.OfficerRole, label: o.DisplayTitle || o.OfficerRole };
-    });
-    var SET_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/setofficers';
-    var VACATE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/vacateofficer';
-    var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
-
-    function gid(id) { return document.getElementById(id); }
-    function roleSlug(role) { return role.replace(/ /g, '_'); }
-
-    function buildOfficerMap() {
-        var map = {};
-        (KnConfig.officerList || []).forEach(function(o) { map[o.CanonicalKey || o.OfficerRole] = o; });
-        return map;
-    }
-
-    function showFeedback(msg, ok) {
-        var el = gid('kn-editoff-feedback');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'kn-editoff-feedback ' + (ok ? 'kn-editoff-ok' : 'kn-editoff-err');
-        el.style.display = '';
-    }
-    function hideFeedback() {
-        var el = gid('kn-editoff-feedback');
-        if (el) { el.style.display = 'none'; el.textContent = ''; }
-    }
-
-    // --- Open / Close ---
-    window.knOpenEditOfficersModal = function() {
-        var overlay = gid('kn-editoff-overlay');
-        if (!overlay) return;
-        buildRows();
-        hideFeedback();
-        overlay.classList.add('kn-open');
-        document.body.style.overflow = 'hidden';
-    };
-
-    function knCloseEditOfficersModal() {
-        var overlay = gid('kn-editoff-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('kn-open');
-        document.body.style.overflow = '';
-    }
-
-    // --- Build rows (once; refresh values on re-open) ---
-    var rowsBuilt = false;
-    function buildRows() {
-        var officerMap = buildOfficerMap();
-        if (rowsBuilt) {
-            // Refresh current holder values without rebuilding DOM
-            OFFICER_ROLES.forEach(function(entry) {
-                var slug    = roleSlug(entry.key);
-                var o       = officerMap[entry.key];
-                var nameEl  = gid('kn-editoff-name-' + slug);
-                var idEl    = gid('kn-editoff-id-'   + slug);
-                var vacBtn  = gid('kn-editoff-vacate-' + slug);
-                if (nameEl && idEl) {
-                    nameEl.value = (o && o.MundaneId > 0) ? o.Persona   : '';
-                    idEl.value   = (o && o.MundaneId > 0) ? o.MundaneId : '';
-                }
-                if (vacBtn) vacBtn.style.display = (o && o.MundaneId > 0) ? '' : 'none';
-            });
-            return;
-        }
-        rowsBuilt = true;
-        var container = gid('kn-editoff-rows');
-        if (!container) return;
-        container.innerHTML = '';
-
-        OFFICER_ROLES.forEach(function(entry) {
-            var role     = entry.key;
-            var slug     = roleSlug(entry.key);
-            var o        = officerMap[entry.key];
-            var occupied = o && o.MundaneId > 0;
-
-            var row = document.createElement('div');
-            row.className = 'kn-editoff-row';
-
-            // Role label
-            var label = document.createElement('div');
-            label.className = 'kn-editoff-role-label';
-            label.textContent = entry.label;
-            row.appendChild(label);
-
-            // Player wrap (autocomplete input + hidden id)
-            var wrap = document.createElement('div');
-            wrap.className = 'kn-editoff-player-wrap';
-
-            var nameInput = document.createElement('input');
-            nameInput.type          = 'text';
-            nameInput.id            = 'kn-editoff-name-' + slug;
-            nameInput.className     = 'kn-editoff-name-input';
-            nameInput.autocomplete  = 'off';
-            nameInput.placeholder   = 'Search players\u2026';
-            if (occupied) nameInput.value = o.Persona;
-            wrap.appendChild(nameInput);
-
-            var hiddenInput = document.createElement('input');
-            hiddenInput.type  = 'hidden';
-            hiddenInput.id    = 'kn-editoff-id-' + slug;
-            if (occupied) hiddenInput.value = o.MundaneId;
-            wrap.appendChild(hiddenInput);
-            row.appendChild(wrap);
-
-            // Vacate button
-            var vacateBtn = document.createElement('button');
-            vacateBtn.type      = 'button';
-            vacateBtn.id        = 'kn-editoff-vacate-' + slug;
-            vacateBtn.className = 'kn-editoff-vacate-btn';
-            vacateBtn.textContent       = 'Vacate';
-            vacateBtn.style.display     = occupied ? '' : 'none';
-            (function(r, rLabel, btn, ni, hi) {
-                btn.addEventListener('click', function() {
-                    pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + rLabel + '?',
-                        confirmText: 'Vacate',
-                        danger: true
-                    }, function() {
-                        btn.disabled    = true;
-                        btn.textContent = '\u2026';
-                        $.post(VACATE_URL, { Role: r }, function(result) {
-                            if (result && result.status === 0) {
-                                ni.value = '';
-                                hi.value = '';
-                                btn.style.display = 'none';
-                                btn.disabled      = false;
-                                btn.textContent   = 'Vacate';
-                                (KnConfig.officerList || []).forEach(function(off) {
-                                    if ((off.CanonicalKey || off.OfficerRole) === r) { off.MundaneId = 0; off.Persona = ''; }
-                                });
-                                showFeedback(rLabel + ' vacated.', true);
-                            } else {
-                                btn.disabled    = false;
-                                btn.textContent = 'Vacate';
-                                showFeedback((result && result.error) ? result.error : 'Vacate failed.', false);
-                            }
-                        }, 'json').fail(function() {
-                            btn.disabled    = false;
-                            btn.textContent = 'Vacate';
-                            showFeedback('Request failed.', false);
-                        });
-                    });
-                });
-            })(entry.key, entry.label, vacateBtn, nameInput, hiddenInput);
-            row.appendChild(vacateBtn);
-
-            container.appendChild(row);
-
-            // Autocomplete (kingdom-scoped search)
-            (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: KnConfig.kingdomId, limit: 12 },
-                            function(data) {
-                                res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                            }
-                        );
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) {
-                        $(ni).val(ui.item.label);
-                        hi.value          = ui.item.value;
-                        vb.style.display  = '';
-                        return false;
-                    },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
-                });
-            })(nameInput, hiddenInput, vacateBtn);
-        });
-    }
-
-    // --- Event listeners (in ready() to guard against null elements) ---
-    $(document).ready(function() {
-        var submitBtn = gid('kn-editoff-submit');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function() {
-                var data   = {};
-                var hasAny = false;
-                OFFICER_ROLES.forEach(function(entry) {
-                    var idEl = gid('kn-editoff-id-' + roleSlug(entry.key));
-                    var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(entry.key) + 'Id'] = mid; hasAny = true; }
-                });
-                if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
-                submitBtn.disabled = true;
-                $.post(SET_URL, data, function(result) {
-                    submitBtn.disabled = false;
-                    if (result && result.status === 0) {
-                        showFeedback('Officers saved!', true);
-                        setTimeout(function() { location.reload(); }, 900);
-                    } else {
-                        showFeedback((result && result.error) ? result.error : 'Save failed.', false);
-                    }
-                }, 'json').fail(function() {
-                    submitBtn.disabled = false;
-                    showFeedback('Request failed.', false);
-                });
-            });
-        }
-
-        var cancelBtn = gid('kn-editoff-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', knCloseEditOfficersModal);
-
-        var closeBtn = gid('kn-editoff-close-btn');
-        if (closeBtn) closeBtn.addEventListener('click', knCloseEditOfficersModal);
-
-        var overlay = gid('kn-editoff-overlay');
-        if (overlay) {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) knCloseEditOfficersModal();
-            });
-        }
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && gid('kn-editoff-overlay') && gid('kn-editoff-overlay').classList.contains('kn-open'))
-                knCloseEditOfficersModal();
-        });
-    });
-})();
-
 // ---- Kingdom Admin Overlay ----
 (function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
@@ -13211,217 +12981,6 @@ function setupPronounPicker(cfg) {
     });
 })();
 
-// ---- Parknew: Edit Officers ----
-(function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
-
-    // OFFICER_ROLES derived from the embedded officerList: each entry keys on the
-    // stable canonical_key (matching), renders DisplayTitle (display).
-    var OFFICER_ROLES = (PkConfig.officerList || []).map(function(o) {
-        return { key: o.CanonicalKey || o.OfficerRole, label: o.DisplayTitle || o.OfficerRole };
-    });
-    var SET_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setofficers';
-    var VACATE_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/vacateofficer';
-    var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
-
-    function gid(id) { return document.getElementById(id); }
-    function roleSlug(role) { return role.replace(/ /g, '_'); }
-
-    function buildOfficerMap() {
-        var map = {};
-        (PkConfig.officerList || []).forEach(function(o) { map[o.CanonicalKey || o.OfficerRole] = o; });
-        return map;
-    }
-
-    function showFeedback(msg, ok) {
-        var el = gid('pk-editoff-feedback');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'pk-editoff-feedback ' + (ok ? 'pk-editoff-ok' : 'pk-editoff-err');
-        el.style.display = '';
-    }
-    function hideFeedback() {
-        var el = gid('pk-editoff-feedback');
-        if (el) { el.style.display = 'none'; el.textContent = ''; }
-    }
-
-    window.pkOpenEditOfficersModal = function() {
-        var overlay = gid('pk-editoff-overlay');
-        if (!overlay) return;
-        buildRows();
-        hideFeedback();
-        overlay.classList.add('pk-open');
-        document.body.style.overflow = 'hidden';
-    };
-
-    function pkCloseEditOfficersModal() {
-        var overlay = gid('pk-editoff-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('pk-open');
-        document.body.style.overflow = '';
-    }
-
-    var rowsBuilt = false;
-    function buildRows() {
-        var officerMap = buildOfficerMap();
-        if (rowsBuilt) {
-            OFFICER_ROLES.forEach(function(entry) {
-                var slug   = roleSlug(entry.key);
-                var o      = officerMap[entry.key];
-                var nameEl = gid('pk-editoff-name-' + slug);
-                var idEl   = gid('pk-editoff-id-'   + slug);
-                var vacBtn = gid('pk-editoff-vacate-' + slug);
-                if (nameEl && idEl) {
-                    nameEl.value = (o && o.MundaneId > 0) ? o.Persona   : '';
-                    idEl.value   = (o && o.MundaneId > 0) ? o.MundaneId : '';
-                }
-                if (vacBtn) vacBtn.style.display = (o && o.MundaneId > 0) ? '' : 'none';
-            });
-            return;
-        }
-        rowsBuilt = true;
-        var container = gid('pk-editoff-rows');
-        if (!container) return;
-        container.innerHTML = '';
-
-        OFFICER_ROLES.forEach(function(entry) {
-            var role     = entry.key;
-            var slug     = roleSlug(entry.key);
-            var o        = officerMap[entry.key];
-            var occupied = o && o.MundaneId > 0;
-
-            var row = document.createElement('div');
-            row.className = 'pk-editoff-row';
-
-            var label = document.createElement('div');
-            label.className   = 'pk-editoff-role-label';
-            label.textContent = entry.label;
-            row.appendChild(label);
-
-            var wrap = document.createElement('div');
-            wrap.className = 'pk-editoff-player-wrap';
-
-            var nameInput = document.createElement('input');
-            nameInput.type         = 'text';
-            nameInput.id           = 'pk-editoff-name-' + slug;
-            nameInput.className    = 'pk-editoff-name-input';
-            nameInput.autocomplete = 'off';
-            nameInput.placeholder  = 'Search players\u2026';
-            if (occupied) nameInput.value = o.Persona;
-            wrap.appendChild(nameInput);
-
-            var hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.id   = 'pk-editoff-id-' + slug;
-            if (occupied) hiddenInput.value = o.MundaneId;
-            wrap.appendChild(hiddenInput);
-            row.appendChild(wrap);
-
-            var vacateBtn = document.createElement('button');
-            vacateBtn.type          = 'button';
-            vacateBtn.id            = 'pk-editoff-vacate-' + slug;
-            vacateBtn.className     = 'pk-editoff-vacate-btn';
-            vacateBtn.textContent   = 'Vacate';
-            vacateBtn.style.display = occupied ? '' : 'none';
-            (function(r, rLabel, btn, ni, hi) {
-                btn.addEventListener('click', function() {
-                    pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + rLabel + '?',
-                        confirmText: 'Vacate',
-                        danger: true
-                    }, function() {
-                        btn.disabled    = true;
-                        btn.textContent = '\u2026';
-                        $.post(VACATE_URL, { Role: r }, function(result) {
-                            if (result && result.status === 0) {
-                                ni.value = ''; hi.value = '';
-                                btn.style.display = 'none';
-                                btn.disabled      = false;
-                                btn.textContent   = 'Vacate';
-                                (PkConfig.officerList || []).forEach(function(off) {
-                                    if ((off.CanonicalKey || off.OfficerRole) === r) { off.MundaneId = 0; off.Persona = ''; }
-                                });
-                                showFeedback(rLabel + ' vacated.', true);
-                            } else {
-                                btn.disabled    = false;
-                                btn.textContent = 'Vacate';
-                                showFeedback((result && result.error) ? result.error : 'Vacate failed.', false);
-                            }
-                        }, 'json').fail(function() {
-                            btn.disabled    = false;
-                            btn.textContent = 'Vacate';
-                            showFeedback('Request failed.', false);
-                        });
-                    });
-                });
-            })(entry.key, entry.label, vacateBtn, nameInput, hiddenInput);
-            row.appendChild(vacateBtn);
-
-            container.appendChild(row);
-
-            (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        // Search all players in the kingdom — do NOT filter by park_id.
-                        // Park officers don't have to already be at this park (the
-                        // Edit Officers flow is the way they get assigned here in
-                        // the first place), and on a freshly-created park with zero
-                        // members, the park-scoped search returns empty for everyone.
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
-                            res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                        });
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) { $(ni).val(ui.item.label); hi.value = ui.item.value; vb.style.display = ''; return false; },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
-                });
-            })(nameInput, hiddenInput, vacateBtn);
-        });
-    }
-
-    $(document).ready(function() {
-        var submitBtn = gid('pk-editoff-submit');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function() {
-                var data   = {};
-                var hasAny = false;
-                OFFICER_ROLES.forEach(function(entry) {
-                    var idEl = gid('pk-editoff-id-' + roleSlug(entry.key));
-                    var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(entry.key) + 'Id'] = mid; hasAny = true; }
-                });
-                if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
-                submitBtn.disabled = true;
-                $.post(SET_URL, data, function(result) {
-                    submitBtn.disabled = false;
-                    if (result && result.status === 0) {
-                        showFeedback('Officers saved!', true);
-                        setTimeout(function() { location.reload(); }, 900);
-                    } else {
-                        showFeedback((result && result.error) ? result.error : 'Save failed.', false);
-                    }
-                }, 'json').fail(function() {
-                    submitBtn.disabled = false;
-                    showFeedback('Request failed.', false);
-                });
-            });
-        }
-
-        var cancelBtn = gid('pk-editoff-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', pkCloseEditOfficersModal);
-        var closeBtn  = gid('pk-editoff-close-btn');
-        if (closeBtn)  closeBtn.addEventListener('click', pkCloseEditOfficersModal);
-        var overlay = gid('pk-editoff-overlay');
-        if (overlay) overlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEditOfficersModal(); });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && gid('pk-editoff-overlay') && gid('pk-editoff-overlay').classList.contains('pk-open'))
-                pkCloseEditOfficersModal();
-        });
-    });
-})();
-
 // ---- Parknew: Park Day Management ----
 (function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
@@ -14803,7 +14362,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('kn-moveplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'kn-admin-feedback kn-admin-ok' : 'kn-admin-feedback kn-admin-err';
         el.style.display = '';
     }
 
@@ -15011,7 +14570,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('kn-mergeplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'kn-admin-feedback kn-admin-ok' : 'kn-admin-feedback kn-admin-err';
         el.style.display = '';
     }
 
@@ -15175,7 +14734,7 @@ window.pnCloseUnitCreateModal = function() {
         var el = gid('pk-heraldry-feedback');
         if (!el) return;
         el.style.display = 'block';
-        el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.textContent = msg;
     }
 
@@ -15317,7 +14876,7 @@ window.pnCloseUnitCreateModal = function() {
         var el = gid('pk-moveplayer-feedback');
         if (!el) return;
         el.style.display = 'block';
-        el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.textContent = msg;
     }
 
@@ -15616,7 +15175,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('pk-mergeplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.style.display = '';
     }
 

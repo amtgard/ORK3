@@ -174,55 +174,6 @@ $mo_park_id = (int)($mo_park_id ?? 0);
 	</div>
 </div>
 
-<!-- Set Occupant Modal -->
-<div id="mo-occ-overlay" class="ka-overlay ka-overlay-top" role="dialog" aria-modal="true" aria-labelledby="mo-occ-heading">
-	<div class="ka-modal-box ka-modal-box-md">
-		<div class="ka-modal-header">
-			<h3 class="ka-modal-title" id="mo-occ-heading"><i class="fas fa-user-plus" style="margin-right:8px;color:var(--ork-badge-green-text)"></i>Set Occupant &mdash; <span id="mo-occ-title"></span></h3>
-			<button type="button" class="ka-modal-close" onclick="moCloseOcc()" aria-label="Close">&times;</button>
-		</div>
-		<div class="ka-modal-body">
-			<form id="mo-occ-form" autocomplete="off">
-				<div class="ka-feedback ka-feedback-err" id="mo-occ-error"></div>
-				<input type="hidden" id="mo-occ-pos-id" value="" />
-
-				<div class="ka-field ka-field-ac">
-					<label for="mo-occ-player-text">Player <span class="ka-req" aria-hidden="true">*</span></label>
-					<input type="text" id="mo-occ-player-text" placeholder="Search by persona..." autocomplete="off" required aria-required="true" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mo-occ-player-results" />
-					<input type="hidden" id="mo-occ-player-id" value="" />
-					<div class="kn-ac-results" id="mo-occ-player-results" style="position:fixed"></div>
-				</div>
-
-				<div class="ka-field-row">
-					<div class="ka-field">
-						<!-- NO `required` on the date inputs: flatpickr's altInput turns the
-						     real input into type=hidden, and a required hidden control aborts
-						     submission with an unfocusable-invalid-control error. Term start
-						     is validated in moSaveOcc() instead. -->
-						<label for="mo-occ-start">Term Start <span class="ka-req" aria-hidden="true">*</span></label>
-						<input type="text" id="mo-occ-start" autocomplete="off" aria-required="true" />
-					</div>
-					<div class="ka-field">
-						<label for="mo-occ-end">Term End <span class="ka-hint">(optional)</span></label>
-						<input type="text" id="mo-occ-end" autocomplete="off" />
-					</div>
-				</div>
-
-				<div class="ka-field">
-					<label for="mo-occ-note">Note <span class="ka-hint">(optional)</span></label>
-					<textarea id="mo-occ-note" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
-				</div>
-			</form>
-		</div>
-		<div class="ka-modal-footer">
-			<button type="button" class="kn-btn kn-btn-secondary" onclick="moCloseOcc()">Cancel</button>
-			<button type="submit" form="mo-occ-form" class="kn-btn kn-btn-primary" id="mo-occ-save-btn">
-				<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant
-			</button>
-		</div>
-	</div>
-</div>
-
 <!-- Confirm (Retire / Vacate) Modal -->
 <div id="mo-confirm-overlay" class="ka-overlay ka-overlay-topmost" role="dialog" aria-modal="true" aria-labelledby="mo-confirm-title">
 	<div class="ka-modal-box ka-modal-box-sm">
@@ -635,7 +586,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	var moPinnedClass = false;
 	var moClass = 'crown';
 	var moRbacMode = 'existing';
-	var moStartFp = null, moEndFp = null;
 	var moNudgeFp = null;   // flatpickr for the Set Term Start modal (the unknown-start-date nudge)
 	var moConfirmFn = null;
 	var moRetiredOpen = false;
@@ -668,15 +618,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	function occupantsOf(pos) {
 		return (pos && pos.Occupant && pos.Occupant.MundaneId) ? [pos.Occupant] : [];
 	}
-	// Autocomplete dismissal lives at module scope so the Escape handler and the
-	// dropdown's own handlers close it exactly the same way.
-	function moAcClose() {
-		var input   = document.getElementById('mo-occ-player-text');
-		var results = document.getElementById('mo-occ-player-results');
-		if (results) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); }
-		if (input) input.setAttribute('aria-expanded', 'false');
-	}
-
 	// .ka-feedback is display:none in the stylesheet, so showing it needs an explicit
 	// 'block' — style.display = '' would fall back to the stylesheet's none.
 	function moFormError(id, message) {
@@ -1263,11 +1204,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	// ---------- Sub-modal overlay plumbing (shared .ka-overlay chrome) ----------
 	// Topmost FIRST. Escape, backdrop-click and the focus trap all work off this order
 	// so a nested overlay never takes the whole stack down with it.
-	var MO_STACK = ['mo-confirm-overlay', 'mo-start-overlay', 'mo-occ-overlay', 'mo-pos-overlay'];
+	var MO_STACK = ['mo-confirm-overlay', 'mo-start-overlay', 'mo-pos-overlay'];
 	var MO_CLOSERS = {
 		'mo-confirm-overlay': function() { window.moCloseConfirm(); },
 		'mo-start-overlay':   function() { window.moCloseStart(); },
-		'mo-occ-overlay':     function() { window.moCloseOcc(); },
 		'mo-pos-overlay':     function() { window.moClosePos(); }
 	};
 	var moLastFocus = {};
@@ -1349,14 +1289,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		var top = moTopOverlay();
 		if (!top) return;
 
-		// An open autocomplete is its own topmost layer above the occupant form.
-		var acr = document.getElementById('mo-occ-player-results');
-		var acOpen = !!(acr && acr.classList.contains('kn-ac-open'));
-		if (top === 'mo-occ-overlay' && acOpen) {
-			moAcClose();
-		} else {
-			MO_CLOSERS[top]();
-		}
+		MO_CLOSERS[top]();
 		e.preventDefault();
 		e.stopPropagation();
 		if (e.stopImmediatePropagation) e.stopImmediatePropagation();
@@ -1729,59 +1662,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		});
 	};
 
-	// ---------- Set Occupant modal ----------
-	function initOccFp() {
-		if (typeof flatpickr === 'undefined') return;
-		var opts = { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y' };
-		if (!moStartFp) moStartFp = flatpickr('#mo-occ-start', opts);
-		if (!moEndFp)   moEndFp   = flatpickr('#mo-occ-end', opts);
-	}
-
-	window.moOpenOcc = function(pid) {
-		var pos = findPos(pid);
-		moClearFormError('mo-occ-error');
-		document.getElementById('mo-occ-pos-id').value = pid;
-		document.getElementById('mo-occ-title').textContent = pos ? (pos.DisplayTitle || pos.Title) : '';
-		document.getElementById('mo-occ-player-text').value = '';
-		document.getElementById('mo-occ-player-id').value = '';
-		document.getElementById('mo-occ-note').value = '';
-		moAcClose();
-		initOccFp();
-		if (moStartFp) moStartFp.setDate(new Date(), true);
-		if (moEndFp)   moEndFp.clear();
-		else { document.getElementById('mo-occ-start').value = ''; document.getElementById('mo-occ-end').value = ''; }
-		// Open AFTER flatpickr has run: altInput replaces the visible date field, and
-		// moFocusables() has to see the final controls to trap focus correctly.
-		moOpenOverlay('mo-occ-overlay', 'mo-occ-player-text');
-	};
-
-	window.moCloseOcc = function() {
-		moCloseOverlay('mo-occ-overlay');
-		moAcClose();
-	};
-
-	window.moSaveOcc = function() {
-		var pid = document.getElementById('mo-occ-pos-id').value;
-		var mid = document.getElementById('mo-occ-player-id').value;
-		var start = document.getElementById('mo-occ-start').value;
-		var end   = document.getElementById('mo-occ-end').value;
-		var note  = document.getElementById('mo-occ-note').value;
-		if (!mid)   { moFormError('mo-occ-error', 'Please pick a player from the search results.'); return; }
-		if (!start) { moFormError('mo-occ-error', 'Term start is required.'); return; }
-		moClearFormError('mo-occ-error');
-
-		var btn = document.getElementById('mo-occ-save-btn');
-		btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-		$.post(base() + 'setoccupant', { PositionId: pid, MundaneId: mid, TermStart: start, TermEnd: end, Note: note }, function(resp) {
-			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
-			if (resp && resp.status === 0) { moCloseOcc(); moRefresh(); }
-			else { moFormError('mo-occ-error', (resp && resp.error) ? resp.error : 'Failed to set occupant.'); }
-		}, 'json').fail(function() {
-			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
-			moFormError('mo-occ-error', 'Network error.');
-		});
-	};
-
 	// ---------- Set Term Start modal (the unknown-start-date nudge) ----------
 	// Same officerhistory READ endpoint Correct the Rolls uses (_correct_the_rolls.tpl's
 	// crUrl()) -- duplicated here in shape rather than reached across the file boundary,
@@ -1834,8 +1714,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		btn.disabled = true; // held off until the history row id resolves below
 		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Looking up term...';
 
-		// Open AFTER flatpickr has run, same ordering as moOpenOcc above: altInput
-		// replaces the visible field, and moFocusables() must see the final controls.
+		// Open AFTER flatpickr has run: altInput replaces the visible field, and
+		// moFocusables() must see the final controls.
 		moOpenOverlay('mo-start-overlay', 'mo-start-date');
 
 		$.getJSON(historyUrl(), function(resp) {
@@ -1909,10 +1789,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		if (posForm) {
 			posForm.addEventListener('submit', function(e) { e.preventDefault(); window.moSavePos(); });
 		}
-		var occForm = document.getElementById('mo-occ-form');
-		if (occForm) {
-			occForm.addEventListener('submit', function(e) { e.preventDefault(); window.moSaveOcc(); });
-		}
 		var startForm = document.getElementById('mo-start-form');
 		if (startForm) {
 			startForm.addEventListener('submit', function(e) { e.preventDefault(); window.moSaveStart(); });
@@ -1927,87 +1803,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 				}
 			});
 		}
-	})();
-
-	// ---------- Occupant player autocomplete (kingdom-scoped, kn-ac-results) ----------
-	(function() {
-		var input   = document.getElementById('mo-occ-player-text');
-		var hidden  = document.getElementById('mo-occ-player-id');
-		var results = document.getElementById('mo-occ-player-results');
-		if (!input) return;
-		var debounce;
-		function moAcSelect(el) {
-			if (!el) return;
-			input.value  = el.getAttribute('data-persona') || '';
-			hidden.value = el.getAttribute('data-id') || '';
-			moAcClose();
-		}
-		function moAcOpen() {
-			if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
-			results.classList.add('kn-ac-open');
-			input.setAttribute('aria-expanded', 'true');
-		}
-		input.addEventListener('input', function() {
-			clearTimeout(debounce);
-			hidden.value = '';
-			var q = input.value.trim();
-			if (q.length < 2) { moAcClose(); return; }
-			debounce = setTimeout(function() {
-				$.getJSON(searchUrl(q), function(data) {
-					results.innerHTML = '';
-					if (!data || data.length === 0) {
-						results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
-						moAcOpen();
-						return;
-					}
-					for (var i = 0; i < data.length; i++) {
-						var d = data[i];
-						var el = document.createElement('div');
-						el.className = 'kn-ac-item';
-						el.setAttribute('data-id', d.MundaneId);
-						el.setAttribute('data-persona', d.Persona || '');
-						el.innerHTML = esc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + esc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
-						el.addEventListener('click', (function(node) {
-							return function() { moAcSelect(node); };
-						})(el));
-						results.appendChild(el);
-					}
-					moAcOpen();
-				});
-			}, 250);
-		});
-		input.addEventListener('keydown', function(e) {
-			// Enter inside an open dropdown must never reach the <form>: it picks the
-			// highlighted result (or does nothing), it does not submit the modal.
-			var acOpen = results.classList.contains('kn-ac-open');
-			var items = results.querySelectorAll('.kn-ac-item[data-id]');
-			if (!items.length) {
-				if (e.key === 'Enter' && acOpen) e.preventDefault();
-				return;
-			}
-			var focused = results.querySelector('.kn-ac-focused');
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				var next = focused ? (focused.nextElementSibling || items[0]) : items[0];
-				if (focused) focused.classList.remove('kn-ac-focused');
-				if (next && next.getAttribute('data-id')) next.classList.add('kn-ac-focused');
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				var prev = focused ? (focused.previousElementSibling || items[items.length - 1]) : items[items.length - 1];
-				if (focused) focused.classList.remove('kn-ac-focused');
-				if (prev && prev.getAttribute('data-id')) prev.classList.add('kn-ac-focused');
-			} else if (e.key === 'Enter' && acOpen) {
-				e.preventDefault();
-				if (focused) moAcSelect(focused);
-			} else if (e.key === 'Escape') {
-				// Normally unreachable — the document-capture Escape handler above closes
-				// the dropdown first — but kept so the field still behaves on its own.
-				moAcClose();
-			}
-		});
-		document.addEventListener('click', function(e) {
-			if (!results.contains(e.target) && e.target !== input) moAcClose();
-		});
 	})();
 
 	// Initial load (partial HTML is present at this point since the script follows it).
