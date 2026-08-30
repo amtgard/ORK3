@@ -14,6 +14,7 @@ final class OfficerHistoryBackfillTest extends TestCase
     private array $seededPositions = [];
     /** @var list<int> */
     private array $seededMundanes = [];
+    private int $historySnapshotId = 0;
 
     protected function setUp(): void
     {
@@ -26,6 +27,15 @@ final class OfficerHistoryBackfillTest extends TestCase
             DB_PASSWORD,
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
+        // runBackfill() executes the real, unscoped migration against the whole
+        // sandbox -- every seated officer without an open term anywhere in the
+        // test database gets a new history row, not just this test's own
+        // marker-tagged fixtures. Snapshot the high-water mark now so tearDown
+        // can remove everything the migration run created, not just the rows
+        // this test explicitly seeded.
+        $this->historySnapshotId = (int) $this->pdo
+            ->query('SELECT COALESCE(MAX(officer_history_id), 0) FROM ork_officer_history')
+            ->fetchColumn();
         $this->seededPositions['crown_a'] = $this->seedPosition('crown_a', 'crown');
         $this->seededPositions['crown_b'] = $this->seedPosition('crown_b', 'crown');
         $this->seededMundanes[] = $this->seedMundane('holder');
@@ -36,6 +46,9 @@ final class OfficerHistoryBackfillTest extends TestCase
         if (!isset($this->pdo)) {
             return;
         }
+        // Catches every row the migration created for pre-existing sandbox
+        // officers this test never marked, plus this test's own rows.
+        $this->pdo->exec('DELETE FROM ork_officer_history WHERE officer_history_id > ' . $this->historySnapshotId);
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
@@ -44,7 +57,18 @@ final class OfficerHistoryBackfillTest extends TestCase
         }
     }
 
-    public function testSeatedOfficerWithUsableModifiedGetsThatStartDate(): void
+    /**
+     * RULING 16 (spec-level override): start_date is written as NULL for every
+     * row, including one with a usable ork_officer.modified. Commit 52f729f7
+     * already reached this in words -- "Any history backfill has to treat
+     * pre-existing rows as start-date-unknown rather than reading this
+     * column" -- and the data confirms it: 42 rows share modified =
+     * 2022-11-17 across 42 distinct parks, 17 share modified = 2024-09-10
+     * across 17 distinct parks. Nobody takes office in dozens of parks on the
+     * same day; those are bulk row-creation artifacts, not appointment dates.
+     * Reading modified would fabricate a date and present it as recorded fact.
+     */
+    public function testSeatedOfficerWithUsableModifiedStillGetsANullStartDate(): void
     {
         $positionId = $this->seededPositions['crown_a'];
         $mundaneId  = $this->seededMundanes[0];
@@ -54,7 +78,10 @@ final class OfficerHistoryBackfillTest extends TestCase
 
         $row = $this->openTerm($positionId, $mundaneId);
         self::assertNotNull($row, 'a seated officer must end up with an open term');
-        self::assertSame('2024-05-01', $row['start_date']);
+        self::assertNull(
+            $row['start_date'],
+            'start_date is never derived from ork_officer.modified -- unknown means NULL, always'
+        );
         self::assertNull($row['end_date']);
     }
 
@@ -90,6 +117,14 @@ final class OfficerHistoryBackfillTest extends TestCase
         self::assertSame(1, (int) $stmt->fetchColumn(), 'the migration must be idempotent');
     }
 
+    /**
+     * F3: this must assert the OPEN-TERM COUNT, not merely that one exists.
+     * Under the wrong statement order (INSERT before UPDATE) the officer
+     * ends up with TWO open rows -- the pre-existing future-dated one (now
+     * reopened) and a fresh one from the INSERT, whose NOT EXISTS guard ran
+     * before the reopen and saw no open term yet. assertNotNull() with
+     * LIMIT 1 cannot see that second row; COUNT(*) can.
+     */
     public function testAFutureEndDateOnASeatedOfficerIsReopened(): void
     {
         $positionId = $this->seededPositions['crown_a'];
@@ -107,31 +142,44 @@ final class OfficerHistoryBackfillTest extends TestCase
 
         $this->runBackfill();
 
-        self::assertNotNull(
-            $this->openTerm($positionId, $mundaneId),
-            'a future end date on a still-seated officer made them read as departed'
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND mundane_id = :mid AND end_date IS NULL'
+        );
+        $stmt->execute([':pid' => $positionId, ':mid' => $mundaneId]);
+        self::assertSame(
+            1,
+            (int) $stmt->fetchColumn(),
+            'a future end date on a still-seated officer must reopen to exactly ONE open term, never a second'
         );
     }
 
+    /**
+     * F4: the holder is deliberately NOT seated (no ork_officer row), so this
+     * exercises the JOIN to a still-seated officer -- not the date
+     * comparison. A future end_date with no matching seated officer must
+     * stay closed; only the JOIN, not CURDATE(), can tell the two cases
+     * apart.
+     */
     public function testALegitimatelyClosedTermIsNotReopened(): void
     {
         $positionId = $this->seededPositions['crown_b'];
         $formerId   = $this->seedMundane('former');
         $this->seededMundanes[] = $formerId;
+        $future = date('Y-m-d', strtotime('+90 days'));
         $this->pdo->prepare(
             'INSERT INTO ork_officer_history (kingdom_id, park_id, mundane_id, role,
                  position_id, display_label, start_date, end_date, changed_by, created_at)
-             VALUES (:kid, 0, :mid, :role, :pid, "Test", "2025-01-01", "2025-12-31", NULL, NOW())'
+             VALUES (:kid, 0, :mid, :role, :pid, "Test", "2025-01-01", :end, NULL, NOW())'
         )->execute([
             ':kid' => self::KINGDOM_ID, ':mid' => $formerId,
-            ':role' => self::MARKER . '_crown_b', ':pid' => $positionId,
+            ':role' => self::MARKER . '_crown_b', ':pid' => $positionId, ':end' => $future,
         ]);
 
         $this->runBackfill();
 
         self::assertNull(
             $this->openTerm($positionId, $formerId),
-            'a person who is no longer seated must stay closed'
+            'a person who is no longer seated must stay closed even with a future end date'
         );
     }
 
