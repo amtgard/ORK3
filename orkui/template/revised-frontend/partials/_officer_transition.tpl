@@ -440,6 +440,24 @@
 		});
 		input.addEventListener('keydown', function (e) {
 			var acOpen = results.classList.contains('kn-ac-open');
+			// Escape is handled BEFORE the items.length early-return below, and is
+			// gated on acOpen (the dropdown's visibility) rather than on whether it
+			// has any selectable items. items is `.kn-ac-item[data-id]`, which is
+			// EMPTY both when the dropdown is closed AND when it is open showing the
+			// "No results" placeholder (that div carries no data-id) -- gating on
+			// items.length let a no-results Escape fall through the early return
+			// and bubble to the host modal's document-level Escape handler
+			// (_kingdom_admin_modals.tpl), closing the ENTIRE Manage Officers modal
+			// out from under the wizard. When the dropdown is not open, Escape is
+			// left alone so it can still bubble and close the host modal as usual.
+			if (e.key === 'Escape') {
+				if (acOpen) {
+					e.preventDefault();
+					e.stopPropagation();
+					otAcClose();
+				}
+				return;
+			}
 			var items = results.querySelectorAll('.kn-ac-item[data-id]');
 			if (!items.length) {
 				if (e.key === 'Enter' && acOpen) e.preventDefault();
@@ -459,14 +477,6 @@
 			} else if (e.key === 'Enter' && acOpen) {
 				e.preventDefault();
 				if (focused) otAcSelect(focused);
-			} else if (e.key === 'Escape') {
-				// Dismiss only the dropdown. The wizard is not on MO_STACK, so if this
-				// event is left to bubble it reaches the host modal's own document-level
-				// Escape handler (_kingdom_admin_modals.tpl) and closes the ENTIRE
-				// Manage Officers modal out from under the wizard.
-				e.preventDefault();
-				e.stopPropagation();
-				otAcClose();
 			}
 		});
 		document.addEventListener('click', function (e) {
