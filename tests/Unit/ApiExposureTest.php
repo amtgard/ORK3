@@ -13,7 +13,7 @@ final class ApiExposureTest extends TestCase
     /** Methods deliberately public and safe to call without a token. */
     private const REVIEWED_PUBLIC = [
         'OfficerPosition' => [
-            'GetPositions', 'GetPosition', 'GetOfficersForDisplay',
+            'GetPositions', 'GetOfficersForDisplay',
             'ResolvePositionId', 'ResolveCanonicalKey', 'PermissionKeyFor',
         ],
     ];

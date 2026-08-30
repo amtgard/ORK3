@@ -161,7 +161,7 @@ class OfficerPosition extends Ork3
      * @param int $position_id
      * @return array|false
      */
-    public function GetPosition($position_id, $kingdom_id = 0)
+    private function GetPosition($position_id, $kingdom_id = 0)
     {
         global $DB;
         $position_id = (int) $position_id;
