@@ -449,15 +449,32 @@ additive.
 
 `db-migrations/2026-08-29-officer-history-backfill.sql`, idempotent:
 
-1. **Open a term for every seated officer with none** — 2,507 rows. `start_date` takes
-   `ork_officer.modified` where it is usable (66 rows), NULL otherwise (2,441). Never a
-   derived or inferred date: the Zodiac work established that presenting an inferred
-   value as recorded fact is its own bug. `display_label` snapshots the position's
-   `DisplayTitle` via `OfficerPosition::DisplayTitleSql`, matching how live writes fill it.
-2. **Repair the future-end-date row** — `officer_history_id 1`. The holder is still
-   seated, so the term is reopened (`end_date = NULL`). Written as a targeted
-   `WHERE end_date > CURDATE() AND` the holder is still in `ork_officer`, so it is
-   general rather than hardcoded to one id.
+1. **Repair the future-end-date rows first** — the reopen must run BEFORE the insert. An officer
+   whose only row carries a future `end_date` has no *open* term, so an insert-first order would add
+   a second one and leave them with two. Written generally (`end_date > CURDATE()` joined to a
+   still-seated holder), not against the one known id.
+2. **Open a term for every seated officer with none** — 2,506 rows after step 1.
+   `display_label` snapshots the position's DisplayTitle using the same tiering as
+   `OfficerPosition::display_title_sql()`.
+
+**`start_date` is written as NULL for every row. (Revised during implementation — see below.)**
+
+The original design said to use `ork_officer.modified` where usable (66 of 2,507 rows), NULL
+otherwise. That was wrong, and the branch had already said so: commit `52f729f7` concludes *"Any
+history backfill has to treat pre-existing rows as start-date-unknown rather than reading this
+column."* The data confirms it — of the 66 "usable" values, **42 share a single date across 42
+distinct parks** and 17 share another across 17. Those are bulk row-creation artifacts, not people
+taking office. Writing them would be exactly the inferred-date-as-recorded-fact bug this design
+rejects elsewhere, and the one genuinely trustworthy value belongs to the row the insert skips.
+
+So every backfilled `start_date` is NULL, and the unknown-start-date nudge below is the only path
+by which the rolls acquire real start dates.
+
+**Re-run safety is conditional, and the migration header says so.** `InsertOfficerRow` was the one
+history writer that accepted a caller-supplied future `TermEnd` without validation — which is how
+the single bad production row was created. That rejection is now in place, so no new future-dated
+row can appear and step 1 matches nothing on a second run. Against a database built from an older
+release, step 1 would erase a legitimately projected term end with no audit row.
 
 Per the standing rule, the new file must be classified in ork-db's
 `migration-classification.json5` or `drift-check --strict` blocks the unit-test run.
