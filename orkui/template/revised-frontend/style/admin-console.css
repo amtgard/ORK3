@@ -192,6 +192,11 @@ html[data-theme="dark"] .ka-ts-card-link:focus-visible {
     font-size: 14px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 8px;
     background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0;
 }
+/* Generic padded body for a .ka-card whose content isn't one of the
+   pre-padded list patterns above (.ka-report-list etc.) -- e.g. the Park
+   console's Officers card, which drops the Manage Officers partial's
+   markup straight in. Spacing only, no color, so no dark-mode override. */
+.ka-card-body { padding: 20px; }
 .ka-report-list { list-style: none; padding: 0; margin: 0; }
 .ka-report-list li { border-bottom: 1px solid #edf2f7; }
 .ka-report-list li:last-child { border-bottom: none; }

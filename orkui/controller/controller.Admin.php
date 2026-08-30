@@ -2290,6 +2290,7 @@ class Controller_Admin extends Controller
         }
 
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
+        $this->template = '../revised-frontend/Admin_park.tpl';
     }
 
     public function new_player_attendance()
@@ -2532,7 +2533,7 @@ class Controller_Admin extends Controller
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
             $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
-            $this->template = 'Admin_park.tpl';
+            $this->template = '../revised-frontend/Admin_park.tpl';
         }
     }
 
