@@ -46,6 +46,32 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * The permission key for an officer action in a given scope.
+     *
+     * The key is scoped as well as the scope argument. checkPermissionOrAuthority()
+     * maps 'park' to AUTH_PARK, so passing scope='park' with a kingdom.* key looks
+     * up a kingdom permission against a park id and simply fails. PermissionRegistry
+     * has defined a full park mirror since this branch began; nothing used it.
+     *
+     * @param string $action one of set|vacate|position|history
+     * @param int    $park_id 0 for kingdom scope, otherwise park scope
+     */
+    public static function PermissionKeyFor($action, $park_id)
+    {
+        $prefix = ((int) $park_id > 0) ? 'park' : 'kingdom';
+        $map = [
+            'set'      => '.officer.set',
+            'vacate'   => '.officer.vacate',
+            'position' => '.officer.position.manage',
+            'history'  => '.officer_history.manage',
+        ];
+        if (!isset($map[$action])) {
+            throw new InvalidArgumentException('Unknown officer action: ' . $action);
+        }
+        return $prefix . $map[$action];
+    }
+
+    /**
      * The effective sort_order resolution rule, as a SQL expression.
      *
      * Sibling to DisplayTitleSql() and written for the same reason. The Core Five
