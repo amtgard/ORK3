@@ -2237,6 +2237,366 @@ class OfficerPosition extends Ork3
         return $r;
     }
 
+    // ================================================================
+    // HISTORY TERM WRITES (public-profile roll editing, gated)
+    //
+    // The public Kingdom/Park profile modal currently writes these rows
+    // through KingdomAjax|ParkAjax/{add,edit,delete}officerhistory, unchecked
+    // by any permission. A later plan removes those and moves editing into
+    // the admin area; these three give that capability a gated domain home
+    // first, on PermissionKeyFor('history', $park_id) -- the
+    // kingdom.officer_history.manage / park.officer_history.manage keys
+    // PermissionRegistry already defines and, until now, nothing checked.
+    // ================================================================
+
+    /**
+     * The officer_history row's own kingdom_id/park_id (and every other
+     * column), by id. EditHistoryTerm/DeleteHistoryTerm gate authorization
+     * against THESE values, never the caller-supplied KingdomId/ParkId --
+     * see EditHistoryTerm's docblock for why that distinction matters.
+     *
+     * @return array|false
+     */
+    private function getHistoryRow($history_id)
+    {
+        global $DB;
+        $history_id = (int) $history_id;
+        if ($history_id <= 0) {
+            return false;
+        }
+        $DB->Clear();
+        $DB->gh_id = $history_id;
+        $r = $DB->DataSet(
+            'SELECT officer_history_id, kingdom_id, park_id, mundane_id, role, position_id,
+    				display_label, start_date, end_date, changed_by, notes, created_at
+    			 FROM ' . DB_PREFIX . 'officer_history
+    			 WHERE officer_history_id = :gh_id LIMIT 1'
+        );
+        if ($r === false || $r->size() == 0 || !$r->Next()) {
+            return false;
+        }
+        return [
+            'officer_history_id' => (int) $r->officer_history_id,
+            'kingdom_id'    => (int) $r->kingdom_id,
+            'park_id'       => (int) $r->park_id,
+            'mundane_id'    => (int) $r->mundane_id,
+            'role'          => $r->role,
+            'position_id'   => (int) $r->position_id,
+            'display_label' => $r->display_label,
+            'start_date'    => $r->start_date,
+            'end_date'      => $r->end_date,
+            'changed_by'    => $r->changed_by,
+            'notes'         => $r->notes,
+            'created_at'    => $r->created_at,
+        ];
+    }
+
+    /**
+     * Add a new officer_history term directly, independent of any live seat
+     * change. Gated on PermissionKeyFor('history', $park_id).
+     *
+     * A park-scoped call's KingdomId is never trusted: derived from the park
+     * (matching TransitionOfficer / SetOccupant / Park::SetOfficer), so a
+     * park-scoped actor cannot smuggle a foreign kingdom into the column
+     * written to ork_officer_history.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId,
+     *                        StartDate?, EndDate?, Note?
+     * @return array
+     */
+    public function AddHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id  = (int) ($request['KingdomId'] ?? 0);
+        $park_id     = (int) ($request['ParkId'] ?? 0);
+        $position_id = (int) ($request['PositionId'] ?? 0);
+        $mundane_id  = (int) ($request['MundaneId'] ?? 0);
+
+        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('history', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // See SetOccupant's docblock: derive from the park rather than trust
+        // the request, exactly as TransitionOfficer does.
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return InvalidParameter(null, 'Park not found.');
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        if (!valid_id($position_id)) {
+            return InvalidParameter(null, 'A valid position is required.');
+        }
+        if (!valid_id($mundane_id)) {
+            return InvalidParameter(null, 'A valid member is required.');
+        }
+
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0
+            && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization(null, 'Position does not belong to this kingdom.');
+        }
+
+        // Same date rules as a transition: start may be NULL (unknown), end
+        // may not be in the future, end may not precede start.
+        $start = $this->normalizeDate($request['StartDate'] ?? '', '');
+        $end   = $this->normalizeDate($request['EndDate'] ?? '', '');
+        if ($start === false || $end === false) {
+            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+        }
+        $today = date('Y-m-d');
+        if ($end !== '' && $end > $today) {
+            return InvalidParameter(null, 'A term cannot end in the future.');
+        }
+        if ($start !== '' && $end !== '' && $end < $start) {
+            return InvalidParameter(null, 'A term cannot end before it began.');
+        }
+        // mb_substr, not substr: Note is free text and a byte-based cut can slice
+        // a multi-byte character in half, leaving invalid UTF-8 in the column.
+        $note = mb_substr(trim((string) ($request['Note'] ?? '')), 0, 500);
+
+        $DB->Clear();
+        $DB->ah_kid   = $kingdom_id;
+        $DB->ah_pid   = $park_id;
+        $DB->ah_mid   = $mundane_id;
+        $DB->ah_role  = $position['CanonicalKey'];
+        $DB->ah_pos   = $position_id;
+        $DB->ah_label = ($position['DisplayTitle'] !== '') ? $position['DisplayTitle'] : $position['CanonicalKey'];
+        $DB->ah_cb    = $actor_id;
+        $DB->ah_notes = $note;
+        // start_date/end_date are NULL-or-string; yapo drops a bound PHP null
+        // from INSERT/UPDATE (see openTerm()'s docblock), so an empty value is
+        // emitted as the SQL literal NULL instead of bound.
+        $start_sql = ':ah_start';
+        if ($start === '') {
+            $start_sql = 'NULL';
+        } else {
+            $DB->ah_start = $start;
+        }
+        $end_sql = ':ah_end';
+        if ($end === '') {
+            $end_sql = 'NULL';
+        } else {
+            $DB->ah_end = $end;
+        }
+        $ok = $DB->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'officer_history
+    			 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+    			  start_date, end_date, changed_by, notes, created_at)
+    			 VALUES (:ah_kid, :ah_pid, :ah_mid, :ah_role, :ah_pos, :ah_label,
+    			         ' . $start_sql . ', ' . $end_sql . ', :ah_cb, :ah_notes, NOW())'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be recorded.');
+        }
+        $history_id = (int) $DB->GetLastInsertId();
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            $scope_id,
+            null,
+            ['OfficerHistoryId' => $history_id, 'MundaneId' => $mundane_id, 'PositionId' => $position_id]
+        );
+
+        return Success($history_id);
+    }
+
+    /**
+     * Edit the dates/note on an existing officer_history row.
+     *
+     * THE GATE IS ON THE ROW'S OWN SCOPE, NEVER THE REQUEST'S. The row is
+     * read by OfficerHistoryId first, and its kingdom_id/park_id -- not the
+     * caller-supplied KingdomId/ParkId -- decide which permission this actor
+     * is checked against. Gating on the request's claim would let anyone who
+     * administers ANY kingdom edit another kingdom's rolls simply by naming
+     * their own kingdom in the request while pointing OfficerHistoryId at a
+     * row that belongs to someone else.
+     *
+     * Same date rules as a transition: start may be NULL (unknown), end may
+     * not be in the future, end may not precede start.
+     *
+     * @param array $request Token, KingdomId, ParkId, OfficerHistoryId, StartDate?, EndDate?, Note?
+     * @return array
+     */
+    public function EditHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
+        $row = $this->getHistoryRow($history_id);
+        if ($row === false) {
+            return InvalidParameter(null, 'History term not found.');
+        }
+
+        $kingdom_id = $row['kingdom_id'];
+        $park_id    = $row['park_id'];
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('history', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        $start = array_key_exists('StartDate', $request)
+            ? $this->normalizeDate($request['StartDate'], '')
+            : (string) ($row['start_date'] ?? '');
+        $end = array_key_exists('EndDate', $request)
+            ? $this->normalizeDate($request['EndDate'], '')
+            : (string) ($row['end_date'] ?? '');
+        if ($start === false || $end === false) {
+            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+        }
+        $today = date('Y-m-d');
+        if ($end !== '' && $end > $today) {
+            return InvalidParameter(null, 'A term cannot end in the future.');
+        }
+        if ($start !== '' && $end !== '' && $end < $start) {
+            return InvalidParameter(null, 'A term cannot end before it began.');
+        }
+        $note = array_key_exists('Note', $request)
+            ? mb_substr(trim((string) $request['Note']), 0, 500)
+            : (string) $row['notes'];
+
+        $DB->Clear();
+        $DB->eh_id    = $history_id;
+        $DB->eh_notes = $note;
+        $start_sql = ':eh_start';
+        if ($start === '') {
+            $start_sql = 'NULL';
+        } else {
+            $DB->eh_start = $start;
+        }
+        $end_sql = ':eh_end';
+        if ($end === '') {
+            $end_sql = 'NULL';
+        } else {
+            $DB->eh_end = $end;
+        }
+        $ok = $DB->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'officer_history
+    			 SET start_date = ' . $start_sql . ', end_date = ' . $end_sql . ', notes = :eh_notes
+    			 WHERE officer_history_id = :eh_id'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be updated.');
+        }
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            $scope_id,
+            [
+                'OfficerHistoryId' => $history_id,
+                'StartDate' => $row['start_date'],
+                'EndDate' => $row['end_date'],
+                'Notes' => $row['notes'],
+            ],
+            [
+                'OfficerHistoryId' => $history_id,
+                'StartDate' => ($start === '') ? null : $start,
+                'EndDate' => ($end === '') ? null : $end,
+                'Notes' => $note,
+            ]
+        );
+
+        return Success();
+    }
+
+    /**
+     * Delete an officer_history row outright.
+     *
+     * Same row-scoped gate as EditHistoryTerm -- see its docblock. Audits the
+     * FULL deleted row as $prior_state; a delete has no other way to recover
+     * what was removed.
+     *
+     * @param array $request Token, KingdomId, ParkId, OfficerHistoryId
+     * @return array
+     */
+    public function DeleteHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
+        $row = $this->getHistoryRow($history_id);
+        if ($row === false) {
+            return InvalidParameter(null, 'History term not found.');
+        }
+
+        $kingdom_id = $row['kingdom_id'];
+        $park_id    = $row['park_id'];
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('history', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        $DB->Clear();
+        $DB->dh_id = $history_id;
+        $ok = $DB->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'officer_history WHERE officer_history_id = :dh_id'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be deleted.');
+        }
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            $scope_id,
+            $row,
+            null
+        );
+
+        return Success();
+    }
+
     /**
      * Set an officer occupant by position, enforcing §3.4 occupancy rules.
      * Occupancy is per-seat, not per-person: the ORK imposes no limit on how

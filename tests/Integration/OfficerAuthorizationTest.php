@@ -46,7 +46,8 @@ final class OfficerAuthorizationTest extends TestCase
         // ork_danger_audit carries no marker column.
         $this->pdo->exec(
             "DELETE FROM ork_danger_audit WHERE method_call IN"
-            . " ('OfficerPosition::SetOccupant', 'OfficerPosition::VacateOffice', 'OfficerPosition::VacateOfficer')"
+            . " ('OfficerPosition::SetOccupant', 'OfficerPosition::VacateOffice', 'OfficerPosition::VacateOfficer',"
+            . " 'OfficerPosition::AddHistoryTerm', 'OfficerPosition::EditHistoryTerm', 'OfficerPosition::DeleteHistoryTerm')"
             . ' AND entity_id = ' . self::KINGDOM_ID
         );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
@@ -173,6 +174,156 @@ final class OfficerAuthorizationTest extends TestCase
         self::assertSame(4, (int) $r['Status']);
     }
 
+    public function testHistoryMethodsRejectAnInvalidToken(): void
+    {
+        foreach (['AddHistoryTerm', 'EditHistoryTerm', 'DeleteHistoryTerm'] as $method) {
+            $r = $this->positions->{$method}([
+                'Token' => 'not-a-real-token', 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+                'PositionId' => $this->seededPositions['crown_a'],
+                'OfficerHistoryId' => 1, 'MundaneId' => $this->seededMundanes[0],
+            ]);
+            self::assertSame(5, (int) $r['Status'], $method . ' must reject an invalid token');
+        }
+    }
+
+    public function testAddHistoryTermCreatesATermUnderTheHistoryPermission(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $positionId = $this->seededPositions['crown_a'];
+        $mundaneId = $this->seededMundanes[0];
+
+        $r = $this->positions->AddHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $mundaneId,
+            'StartDate' => '2020-01-01', 'EndDate' => '2020-06-01', 'Note' => 'seeded term',
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $stmt = $this->pdo->prepare(
+            'SELECT kingdom_id, park_id, mundane_id, position_id, start_date, end_date, notes
+             FROM ork_officer_history WHERE officer_history_id = :id'
+        );
+        $stmt->execute([':id' => $r['Detail']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        self::assertNotFalse($row, 'the term must actually be written');
+        self::assertSame(self::KINGDOM_ID, (int) $row['kingdom_id']);
+        self::assertSame(0, (int) $row['park_id']);
+        self::assertSame($mundaneId, (int) $row['mundane_id']);
+        self::assertSame($positionId, (int) $row['position_id']);
+        self::assertSame('2020-01-01', $row['start_date']);
+        self::assertSame('2020-06-01', $row['end_date']);
+
+        $auditStmt = $this->pdo->prepare(
+            "SELECT entity FROM ork_danger_audit
+             WHERE method_call = 'OfficerPosition::AddHistoryTerm' AND entity_id = :kid
+             ORDER BY danger_audit_id DESC LIMIT 1"
+        );
+        $auditStmt->execute([':kid' => self::KINGDOM_ID]);
+        self::assertSame('Kingdom', $auditStmt->fetchColumn(), 'entity must be the capitalized DangerAudit vocabulary');
+    }
+
+    public function testEditHistoryTermRejectsAFutureEndDate(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $historyId = $this->seedHistoryRow(self::KINGDOM_ID, 0, $this->seededMundanes[0], $this->seededPositions['crown_a']);
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'OfficerHistoryId' => $historyId,
+            'EndDate' => date('Y-m-d', strtotime('+30 days')),
+        ]);
+        self::assertSame(
+            4,
+            (int) $r['Status'],
+            'the rolls must not be able to record a term ending in the future'
+        );
+    }
+
+    public function testEditHistoryTermRefusesANonexistentRow(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        // officer_history_id 0 never exists.
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'OfficerHistoryId' => 0, 'EndDate' => '2026-01-01',
+        ]);
+        self::assertSame(4, (int) $r['Status']);
+    }
+
+    /**
+     * THE MOST IMPORTANT TEST IN THIS TASK. A row belonging to a DIFFERENT
+     * kingdom must be refused even though the caller supplies their own
+     * (legitimate) KingdomId -- the gate must run against the ROW's own
+     * scope, never the caller's claim. If this ever regresses to gating on
+     * the request's KingdomId, this test starts failing because the actor's
+     * authority is scoped only to self::KINGDOM_ID, not the foreign kingdom.
+     */
+    public function testEditHistoryTermRefusesARowBelongingToADifferentKingdom(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $foreignKingdomId = self::KINGDOM_ID + 1;
+        $foreignHistoryId = $this->seedHistoryRow($foreignKingdomId, 0, $this->seededMundanes[0], 0);
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'OfficerHistoryId' => $foreignHistoryId, 'EndDate' => '2020-01-01',
+        ]);
+        self::assertSame(
+            5,
+            (int) $r['Status'],
+            'naming your own kingdom must not reach a different kingdom\'s row'
+        );
+
+        $this->pdo->exec('DELETE FROM ork_officer_history WHERE officer_history_id = ' . $foreignHistoryId);
+    }
+
+    public function testDeleteHistoryTermRefusesARowBelongingToADifferentKingdom(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $foreignKingdomId = self::KINGDOM_ID + 1;
+        $foreignHistoryId = $this->seedHistoryRow($foreignKingdomId, 0, $this->seededMundanes[0], 0);
+
+        $r = $this->positions->DeleteHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'OfficerHistoryId' => $foreignHistoryId,
+        ]);
+        self::assertSame(5, (int) $r['Status']);
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM ork_officer_history WHERE officer_history_id = :id');
+        $stmt->execute([':id' => $foreignHistoryId]);
+        self::assertSame(1, (int) $stmt->fetchColumn(), 'the refused row must not be deleted');
+
+        $this->pdo->exec('DELETE FROM ork_officer_history WHERE officer_history_id = ' . $foreignHistoryId);
+    }
+
+    public function testDeleteHistoryTermAuditsTheFullDeletedRowAsPriorState(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $mundaneId = $this->seededMundanes[0];
+        $historyId = $this->seedHistoryRow(self::KINGDOM_ID, 0, $mundaneId, $this->seededPositions['crown_a']);
+
+        $r = $this->positions->DeleteHistoryTerm([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'OfficerHistoryId' => $historyId,
+        ]);
+        self::assertSame(0, (int) $r['Status'], $r['Error'] ?? '');
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM ork_officer_history WHERE officer_history_id = :id');
+        $stmt->execute([':id' => $historyId]);
+        self::assertSame(0, (int) $stmt->fetchColumn(), 'the row must actually be gone');
+
+        $auditStmt = $this->pdo->prepare(
+            "SELECT prior_state FROM ork_danger_audit
+             WHERE method_call = 'OfficerPosition::DeleteHistoryTerm' AND entity_id = :kid
+             ORDER BY danger_audit_id DESC LIMIT 1"
+        );
+        $auditStmt->execute([':kid' => self::KINGDOM_ID]);
+        $priorState = $auditStmt->fetchColumn();
+        self::assertNotFalse($priorState);
+        self::assertStringContainsString((string) $historyId, (string) $priorState);
+        self::assertStringContainsString((string) $mundaneId, (string) $priorState);
+    }
+
     /** @return list<array{0:string,1:array<string,mixed>}> */
     public static function positionMethodProvider(): array
     {
@@ -217,6 +368,32 @@ final class OfficerAuthorizationTest extends TestCase
             ':key' => $key,
             ':title' => 'Test ' . $suffix,
             ':cls' => $classification,
+        ]);
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * Seed one ork_officer_history row directly (bypassing the domain methods
+     * under test), so EditHistoryTerm/DeleteHistoryTerm tests have a real row
+     * to authorize against. role carries the MARKER prefix so tearDown's
+     * blanket cleanup catches it even for a $kingdomId this test never
+     * registers elsewhere (the cross-kingdom tests use self::KINGDOM_ID + 1).
+     */
+    private function seedHistoryRow(int $kingdomId, int $parkId, int $mundaneId, int $positionId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_officer_history
+                (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+                 start_date, end_date, changed_by, notes, created_at)
+             VALUES (:kid, :pid, :mid, :role, :posid, :label, "2019-01-01", NULL, 0, "", NOW())'
+        );
+        $stmt->execute([
+            ':kid' => $kingdomId,
+            ':pid' => $parkId,
+            ':mid' => $mundaneId,
+            ':role' => self::MARKER . '_manual',
+            ':posid' => $positionId,
+            ':label' => self::MARKER . ' manual term',
         ]);
         return (int) $this->pdo->lastInsertId();
     }
