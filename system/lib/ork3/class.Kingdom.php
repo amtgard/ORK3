@@ -1230,7 +1230,7 @@ class Kingdom extends Ork3
      * so sorting by classification here would silently discard a cross-classification move:
      * an admin drags a supporting office above the Monarch, the save reports success, and
      * the kingdom and park pages still list every crown office first. The kingdom's chosen
-     * order is authoritative. OfficerPosition::GetOfficersForDisplay() keeps its
+     * order is authoritative. OfficerPosition::get_officers_for_display() keeps its
      * classification sort because it returns explicit crown/supporting GROUPS.
      */
     public static function buildOfficerRows($db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized)

@@ -226,7 +226,7 @@ class Controller_OfficerAdminAjax extends Controller
         return date('Y-m-d', $ts);
     }
 
-    /** Compose a persona/name display string from a GetOfficersForDisplay row. */
+    /** Compose a persona/name display string from a get_officers_for_display row. */
     private function personaLabel($row)
     {
         $persona = trim((string)($row['Persona'] ?? ''));
@@ -248,10 +248,10 @@ class Controller_OfficerAdminAjax extends Controller
     {
         // P4: two intentionally-separate sources. GetPositions is the full registry
         // (drives vacant positions + the retired bucket — rows with no occupancy at
-        // all), while GetOfficersForDisplay is scope occupancy (who currently holds
+        // all), while get_officers_for_display is scope occupancy (who currently holds
         // each slot). They cannot be safely collapsed into one query without dropping
         // vacant/retired registry rows, so they stay distinct.
-        $display = $this->OfficerPosition->GetOfficersForDisplay($kingdom_id, $park_id, false);
+        $display = $this->OfficerPosition->get_officers_for_display($kingdom_id, $park_id, false);
         $positions = $this->OfficerPosition->GetPositions($kingdom_id, true, null);
 
         // Term dates and the position's bound permission set are both fetched ONCE
@@ -369,7 +369,7 @@ class Controller_OfficerAdminAjax extends Controller
     }
 
     /**
-     * Contracted occupant object from a GetOfficersForDisplay row.
+     * Contracted occupant object from a get_officers_for_display row.
      *
      * Term dates come from $terms (termIndex()). The create form makes term start
      * required, so an officer card that printed an empty term was showing a blank
@@ -397,7 +397,7 @@ class Controller_OfficerAdminAjax extends Controller
     /**
      * mundane_id|canonical_key => ['StartDate'=>..,'EndDate'=>..] for the scope.
      *
-     * GetOfficersForDisplay returns occupancy only; the term itself lives in
+     * get_officers_for_display returns occupancy only; the term itself lives in
      * ork_officer_history, so it is read through the existing Kingdom/Park officer
      * history model call — ONE query for the whole list rather than one per card,
      * and no SQL in the controller.

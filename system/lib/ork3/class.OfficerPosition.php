@@ -213,7 +213,7 @@ class OfficerPosition extends Ork3
      * Normalize a DataSet registry row into an associative array in the
      * contracted PascalCase shape (PositionId, CanonicalKey, DisplayTitle, ...).
      *
-     * PascalCase-only: every consumer of GetPositions/GetPosition/GetOfficersForDisplay
+     * PascalCase-only: every consumer of GetPositions/GetPosition/get_officers_for_display
      * output (controller.OfficerAdminAjax, _manage_officers.tpl via the JSON envelope,
      * and the write methods in this class) reads the PascalCase keys. Kingdom/Park
      * only call ResolvePositionId/ResolveCanonicalKey (scalar returns, not RowToArray),
@@ -1636,12 +1636,23 @@ class OfficerPosition extends Ork3
      * Each entry carries CanonicalKey, DisplayTitle, occupant info, and term line.
      * Retired positions filtered out unless requested.
      *
+     * Underscored deliberately, NOT PascalCase: this method returns GivenName/Surname
+     * unblanked for every caller, with no privacy parameter at all. It must never be
+     * reachable from the JSON dispatcher (JsonServer::validate_method whitelists a
+     * class, not a method, and only an underscore or __construct is unreachable).
+     * The public-facing equivalent, Kingdom::buildOfficerRows(), takes an explicit
+     * $is_authorized flag and blanks GivenName/Surname to "" for anyone who isn't an
+     * authorized, identified requester -- this method has no such gate, and adding one
+     * here would change the admin console's data shape, which is a separate decision.
+     * Stays public because it's called across a class boundary from the model/controller
+     * layer (controller.OfficerAdminAjax.php), so private is not available.
+     *
      * @param int  $kingdom_id
      * @param int  $park_id
      * @param bool $include_retired
      * @return array
      */
-    public function GetOfficersForDisplay($kingdom_id, $park_id, $include_retired = false)
+    public function get_officers_for_display($kingdom_id, $park_id, $include_retired = false)
     {
         global $DB;
         $kingdom_id = (int) $kingdom_id;
