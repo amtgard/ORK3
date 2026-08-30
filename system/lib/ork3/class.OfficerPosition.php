@@ -13,10 +13,12 @@
  *   - $DB->Clear() before every raw Execute/DataSet (stale PDO binding guard).
  *   - DisplayTitle resolution uses IF(alias != '', alias, title), NEVER COALESCE
  *     (a cleared yapo alias is '' not NULL; COALESCE('',...) returns '').
- *   - Crown occupancy (single-per-scope, crown-per-person) is enforced at the
- *     app layer because ork_officer is MyISAM (no transactions, no partial unique
- *     indexes); the crown-per-person SELECT-then-write is serialized per person
- *     with GET_LOCK('crown_assign_<mundane_id>', timeout) / RELEASE_LOCK in finally.
+ *   - Crown occupancy is per-seat, not per-person: the ORK imposes no limit on
+ *     how many offices a person holds. Single-occupant-per-scope is enforced at
+ *     the app layer because ork_officer is MyISAM (no transactions, no partial
+ *     unique indexes); the SELECT-then-write is serialized per office with
+ *     GET_LOCK('officer_assign_<kingdom_id>_<park_id>_<position_id>', timeout) /
+ *     RELEASE_LOCK in finally.
  ***/
 
 class OfficerPosition extends Ork3
@@ -1382,9 +1384,10 @@ class OfficerPosition extends Ork3
 
     /**
      * Set an officer occupant by position, enforcing §3.4 occupancy rules.
-     * Crown: GET_LOCK on the incoming person, crown-per-person global check,
-     * single-occupant-per-scope (vacate existing), then write. Supporting:
-     * unrestricted, multi-occupant.
+     * Occupancy is per-seat, not per-person: the ORK imposes no limit on how
+     * many offices a person holds, so Crown here means single-occupant-per-scope
+     * (vacate existing, then write) under a GET_LOCK on the seat being written.
+     * Supporting: unrestricted, multi-occupant.
      *
      * @param int    $kingdom_id
      * @param int    $park_id
@@ -1431,8 +1434,11 @@ class OfficerPosition extends Ork3
             return Success();
         }
 
-        // Crown: serialize per person across all scopes with an advisory lock.
-        $lock_name = 'crown_assign_' . $mundane_id;
+        // Serialize on the OFFICE being written, not the person. The old key
+        // ('crown_assign_' . $mundane_id) existed only to serialize a cross-scope
+        // uniqueness query that no longer exists; it never guarded the race a
+        // transition actually has, which is two admins writing the same seat.
+        $lock_name = 'officer_assign_' . $kingdom_id . '_' . $park_id . '_' . $position_id;
         $locked = false;
         try {
             $DB->Clear();
@@ -1443,38 +1449,6 @@ class OfficerPosition extends Ork3
                 return ProcessingError('Could not acquire the crown assignment lock; please retry.');
             }
             $locked = true;
-
-            // Crown-per-person global check across kingdom + park scopes.
-            $DB->Clear();
-            $DB->cp_mid = $mundane_id;
-            $DB->cp_k = $kingdom_id;
-            $DB->cp_p = $park_id;
-            $DB->cp_pos = $position_id;
-            $conflict = $DB->DataSet(
-                "SELECT o.kingdom_id, o.park_id, o.position_id,
-    				" . self::DisplayTitleSql('p', 'a') . " AS DisplayTitle,
-    				k.name AS kingdom_name, pk.name AS park_name
-    			 FROM " . DB_PREFIX . "officer o
-    			 JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
-    			 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-    			   ON a.kingdom_id = o.kingdom_id AND a.canonical_key = p.canonical_key
-    			 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = o.kingdom_id
-    			 LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = o.park_id
-    			 WHERE p.classification = 'crown' AND p.retired_at IS NULL
-    			   AND o.mundane_id = :cp_mid
-    			   AND NOT (o.kingdom_id = :cp_k AND o.park_id = :cp_p AND o.position_id = :cp_pos)
-    			 LIMIT 1"
-            );
-            if ($conflict !== false && $conflict->size() > 0 && $conflict->Next()) {
-                $scope = ((int) $conflict->park_id > 0)
-                    ? ('park ' . $conflict->park_name)
-                    : ('kingdom ' . $conflict->kingdom_name);
-                return InvalidParameter(
-                    null,
-                    'This person already holds a Crown office: ' . $conflict->DisplayTitle . ' in ' . $scope
-                    . '. A person may hold only one Crown office.'
-                );
-            }
 
             // Single-occupant-per-scope: set_officer find() keyed on position_id
             // replaces the occupant of the single crown row in place. For custom
