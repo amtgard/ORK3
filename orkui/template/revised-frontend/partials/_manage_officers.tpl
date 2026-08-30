@@ -587,13 +587,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		if (start)          return 'Term: ' + start + ' \u2013 present';
 		return 'Term ended ' + end;
 	}
-	// Every current holder of a position, crown or supporting, as one flat list.
+	// One office, one person. Kept as a list-returning helper so the callers
+	// that iterate do not all have to change shape.
 	function occupantsOf(pos) {
-		if (!pos) return [];
-		if (pos.Classification === 'crown') {
-			return (pos.Occupant && pos.Occupant.MundaneId) ? [pos.Occupant] : [];
-		}
-		return (pos.Occupants || []).filter(function(o) { return o && o.MundaneId; });
+		return (pos && pos.Occupant && pos.Occupant.MundaneId) ? [pos.Occupant] : [];
 	}
 	// Autocomplete dismissal lives at module scope so the Escape handler and the
 	// dropdown's own handlers close it exactly the same way.
@@ -709,9 +706,9 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var isCrown  = pos.Classification === 'crown';
 		var isPinned = parseInt(pos.IsPinned, 10) === 1;
 		var pid = parseInt(pos.PositionId, 10);
-		// occupantsOf() drops MundaneId=0 rows. Vacating the LAST holder of a supporting
-		// office blanks the occupancy row rather than deleting it, so a raw
-		// Occupants.length would still count that office as filled.
+		// occupantsOf() drops a MundaneId=0 row. Vacating a supporting office's
+		// holder blanks the occupancy row rather than deleting it, so reading
+		// pos.Occupant directly would still count that office as filled.
 		var holders = occupantsOf(pos);
 		var filled = holders.length > 0;
 
@@ -1008,8 +1005,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var pos = findPos(pid);
 		var who = '';
 		if (pos) {
-			if (pos.Classification === 'crown' && pos.Occupant && pos.Occupant.MundaneId) who = pos.Occupant.Persona;
-			else if (pos.Occupants && pos.Occupants.length) who = pos.Occupants.map(function(o){ return o.Persona; }).join(', ');
+			if (pos.Occupant && pos.Occupant.MundaneId) who = pos.Occupant.Persona;
 		}
 		var dt = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
 		var msg = who

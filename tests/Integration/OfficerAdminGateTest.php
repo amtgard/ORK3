@@ -68,4 +68,26 @@ final class OfficerAdminGateTest extends TestCase
             'an action absent from the map must be refused, not defaulted'
         );
     }
+
+    public function testActionListEmitsOnlyTheSingularOccupantKey(): void
+    {
+        $src = file_get_contents(dirname(__DIR__, 2) . '/orkui/controller/controller.OfficerAdminAjax.php');
+        self::assertStringNotContainsString(
+            "'Occupants'",
+            $src,
+            'one office holds one person; the plural array has no referent'
+        );
+        self::assertStringContainsString("'Occupant'", $src);
+    }
+
+    public function testNoTemplateConsumerReadsOccupants(): void
+    {
+        $tpl = file_get_contents(dirname(__DIR__, 2)
+            . '/orkui/template/revised-frontend/partials/_manage_officers.tpl');
+        self::assertStringNotContainsString(
+            'Occupants',
+            $tpl,
+            'the normalizer, the vacancy count and the crown/supporting split all collapse together'
+        );
+    }
 }

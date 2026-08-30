@@ -320,11 +320,17 @@ class Controller_OfficerAdminAjax extends Controller
             }
 
             if ($pos['Classification'] === 'supporting') {
-                $occ = [];
-                foreach (($supportingOcc[$pid] ?? []) as $row) {
-                    $occ[] = $this->occupant($row, $terms);
+                // One office holds one person (Plan 1, Task 8). Take the first
+                // occupied row; insertOfficerRow now refuses a second holder, so
+                // there can only be one.
+                $row = null;
+                foreach (($supportingOcc[$pid] ?? []) as $candidate) {
+                    if ((int)$candidate['MundaneId'] > 0) {
+                        $row = $candidate;
+                        break;
+                    }
                 }
-                $base['Occupants'] = $occ;
+                $base['Occupant'] = $row ? $this->occupant($row, $terms) : null;
                 $supporting[] = $base;
             } else {
                 $row = $crownOcc[$pid] ?? null;
