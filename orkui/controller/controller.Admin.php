@@ -1934,6 +1934,15 @@ class Controller_Admin extends Controller
         $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
+        // Schedule an Event. The console's tile opens the shared create-event modal,
+        // which posts EventAjax/create with ParkId 0 -- and Event::CreateEvent()
+        // authorizes that kingdom-scoped branch on 'park.event.create' at KINGDOM scope
+        // with AUTH_CREATE. Gate the tile on that exact check, the same discipline
+        // Admin::park() applies to Reset Waivers: a tile promising an action its own
+        // endpoint will refuse is worse than no tile. The nearest existing flag,
+        // CanManageKingdom, is a different capability (kingdom.officer.set) that merely
+        // happens to travel with this one on all three seeded kingdom roles.
+        $this->data['CanCreateEvent']   = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'park.event.create', 'kingdom', (int)$id, AUTH_CREATE);
 
         // Qualification tests (Walker) moved here from the Kingdom profile's Admin
         // Tasks tab. The four capabilities are separate on purpose: a subject-matter

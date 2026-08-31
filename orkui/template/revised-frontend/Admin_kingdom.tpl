@@ -308,15 +308,55 @@ _ka_queue(
 				</div>
 			</div>
 
-			<!-- Operations -->
+			<!-- Operations. Same tile set and same order as the Park console's
+			     Operations section, so an officer who administers both surfaces
+			     finds the same things in the same place. -->
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-tools"></i> Operations</div>
 				<div class="ka-action-tiles">
+					<?php if (!empty($CanCreateEvent)): ?>
+					<?php /* Opens the SAME create-event modal the park console and the park
+					   profile use, out of partials/_event_create_modal.tpl (hosted from
+					   partials/_kingdom_admin_modals.tpl). Included with parkId 0, so
+					   EventAjax/create takes the KingdomId branch and the result is a
+					   kingdom-level event -- exactly what the legacy console's
+					   Admin/createevent link was for, and what the kingdom PROFILE's own
+					   kn-emod-* modal still offers on its Events tab. */ ?>
+					<button class="ka-action-card" onclick="pkOpenEventModal()">
+						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-calendar-plus"></i></div>
+						<div class="ka-action-label">Schedule an Event</div>
+						<div class="ka-action-desc">Add a <?= strtolower($entityLabel) ?>-level event or calendar item</div>
+					</button>
+					<?php endif; ?>
+					<?php /* RETIRED, and inert for the same reason as the Park console's copy
+					   (see Admin_park.tpl): the legacy tournament builder is gone, so a link
+					   would send an officer to a dead page. The tile is kept so its absence
+					   does not read as "the ORK lost tournaments" rather than "this is
+					   coming" -- the legacy kingdom console offered Create Tournament and
+					   this one offered nothing at all, which is the worse of the two
+					   silences. A <div>, not a disabled <button>: there is no action, so it
+					   should not be focusable or announce itself as an operable control.
+					   Replace this whole block with a real tile when the new creator lands. */ ?>
+					<div class="ka-action-card ka-action-card-deprecated" aria-disabled="true"
+						data-tip="The legacy tournament builder has been retired. A new tournament creator is in development.">
+						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-trophy"></i></div>
+						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">In development</span></div>
+						<div class="ka-action-desc">The legacy builder has been retired &mdash; a new one is on the way</div>
+					</div>
+					<?php /* The legacy console gated its Reset Waivers link on this same flag
+					   (default/Admin_kingdom.tpl); the rebuild dropped the gate and the tile
+					   rendered for everyone the front door admits -- including a
+					   qualification-test manager with no kingdom authority, for whom
+					   Player::ResetWaivers returns NoAuthorization. $CanResetWaivers is
+					   already computed for kingdom scope by set_admin_kingdom_auth_flags(),
+					   and it mirrors the domain check exactly. */ ?>
+					<?php if (!empty($CanResetWaivers)): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-ops-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-undo"></i></div>
 						<div class="ka-action-label">Reset Waivers &amp; Status</div>
 						<div class="ka-action-desc">Clear waivers or active flags <?= strtolower($entityLabel) ?>-wide</div>
 					</button>
+					<?php endif; ?>
 					<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-prinz-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-crown"></i></div>
@@ -333,6 +373,24 @@ _ka_queue(
 	<!-- RIGHT COLUMN — Reports & Links -->
 	<div class="ka-sidebar">
 
+		<?php /* DELIBERATELY UNGATED, unlike the legacy page, which wrapped this whole
+		   list in `if (!empty($CanEditKingdomReports))`. Two reasons that gate does not
+		   belong here:
+
+		   1. It was standing in for a front door that now exists. master's
+		      Admin::kingdom() had NO authorization at all -- any logged-in player could
+		      load any kingdom's admin page -- so the flag was the only thing keeping the
+		      report menu off a stranger's screen. load_kingdom_admin_data() now gates the
+		      whole page on admin_has_kingdom_standing().
+		   2. These are read-only links, and the reports do not gate on that flag
+		      themselves. Reports::roster(), for one, needs nothing but a login and hides
+		      only its mundane-name column behind authority. Hiding the LINK from someone
+		      who can reach the same page by typing the URL hides nothing; it just makes
+		      the console lie about what exists.
+
+		   The remaining audience delta is a qualification-test manager with no kingdom
+		   authority, who legitimately wants Reeve Qualified / Corpora Qualified from this
+		   very list. The Park console's sidebar is ungated for the same reasons. */ ?>
 		<div class="ka-card" id="ka-reports-card">
 			<div class="ka-card-header">
 				<div class="ka-card-title"><i class="fas fa-chart-bar"></i> Reports</div>

@@ -856,6 +856,34 @@ include __DIR__ . '/_ka_modal_chrome.tpl';
 <?php endif; ?>
 
 <?php
+/* Schedule an Event -- the SAME modal the park console and the park profile use,
+   out of partials/_event_create_modal.tpl. The tile in Admin_kingdom.tpl calls
+   pkOpenEventModal(), which that partial exports.
+
+   $evParkId = 0 is the point: EventAjax::create takes a KingdomId or a ParkId, and
+   with no park the event is created at kingdom (or principality) scope. The
+   partial's park-only pieces -- the copy-from-past-event expander -- gate
+   themselves off that same 0.
+
+   Not a ka-* modal, and deliberately does not register with kaRegisterModal(): it
+   carries its own overlay, Escape/backdrop handling and dirty-free lifecycle, and
+   it is the one surface the three admin pages must not be allowed to drift apart
+   on.
+
+   $evOrgName wants the RAW name -- the partial escapes it. $kingdomName in
+   Admin_kingdom.tpl has already been through htmlspecialchars(), so read the
+   controller's own value instead. There is no id collision with the kingdom
+   PROFILE's kn-emod-* modal: that is a different page, this console does not load
+   revised.js, and the two implementations share no element id. */
+$evParkId    = 0;
+$evKingdomId = $kid;
+$evParkName  = '';
+$evOrgName   = (string)($AdminInfo['Name'] ?? $KingdomInfo['KingdomName'] ?? '');
+$evCanCreate = !empty($CanCreateEvent);
+include __DIR__ . '/_event_create_modal.tpl';
+?>
+
+<?php
 /* The generic modal engine (overlay stack, focus trap, dirty guard, kaConfirm).
    Included AFTER the markup above -- it wires dialog semantics and backdrop
    clicks at parse time -- and BEFORE the console script below, which drives it. */

@@ -1,6 +1,7 @@
 <?php
 /* -----------------------------------------------------------------------
-   Create-event modal -- shared by the park PROFILE and the Park ADMIN CONSOLE.
+   Create-event modal -- shared by the park PROFILE, the Park ADMIN CONSOLE and
+   the KINGDOM ADMIN CONSOLE.
 
    The park profile has had the modern create-event workflow for a while:
    Amtgard Event vs Calendar Item, copy-from-a-past-event, date prefill, and
@@ -20,10 +21,24 @@
    partial ever sets. It activates exactly where it was deliberately included.
 
    INPUTS (set them before the include):
-     $evParkId     int    park the modal creates for            (required)
-     $evKingdomId  int    that park's kingdom                   (required)
-     $evParkName   string unescaped park name, for the copy hint (required)
+     $evParkId     int    park the modal creates for, 0 for kingdom scope
+     $evKingdomId  int    the kingdom the event belongs to      (required)
+     $evParkName   string unescaped park name                   (park scope)
+     $evOrgName    string unescaped kingdom/principality name   (kingdom scope)
      $evCanCreate  bool   emit the MARKUP + flatpickr assets?   (default false)
+
+   PARK SCOPE vs KINGDOM SCOPE. EventAjax::create takes either a KingdomId or a
+   ParkId, and Event::CreateEvent authorizes `park.event.create` against whichever
+   it was handed -- so $evParkId = 0 produces a legitimate kingdom-level event, the
+   same thing the kingdom PROFILE's own kn-emod-* modal makes. Two things in the
+   markup below are park-only and are gated on $_evParkId accordingly:
+
+     * "Copy from past event" -- its script block already guards on
+       EvCreateConfig.parkId (the source list is fetched park-scoped). Left
+       ungated, the markup would render an expander whose onclick handler was
+       never defined, i.e. a ReferenceError on the first click.
+     * the "will be assigned to X" hint -- reads $_evScopeName, which is the park
+       name at park scope and the kingdom/principality name at kingdom scope.
 
    WHY $evCanCreate GATES THE MARKUP ONLY, NEVER THE SCRIPT. The same script
    also owns the calendar-item view overlay, the events-list rows and the
@@ -39,6 +54,8 @@ $_evParkId    = (int)($evParkId    ?? 0);
 $_evKingdomId = (int)($evKingdomId ?? 0);
 $_evParkName  = (string)($evParkName ?? '');
 $_evCanCreate = !empty($evCanCreate);
+/* Who the new event gets assigned to, in the words the officer will read. */
+$_evScopeName = $_evParkId > 0 ? $_evParkName : (string)($evOrgName ?? '');
 ?>
 <script>
 /* Read by the two blocks at the bottom of this partial and by nothing else. */
@@ -80,7 +97,12 @@ window.EvCreateConfig = {
 			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
-			<!-- Copy from past event (collapsible, event-mode only) -->
+			<!-- Copy from past event (collapsible, event-mode only).
+			     PARK SCOPE ONLY, and gated on exactly what its script block guards on
+			     (EvCreateConfig.parkId): the source list is fetched park-scoped, so at
+			     kingdom scope none of pkCfe* is ever defined and this markup would be an
+			     expander whose onclick throws ReferenceError. -->
+<?php if ($_evParkId > 0) : ?>
 			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
 				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
 					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
@@ -144,8 +166,9 @@ window.EvCreateConfig = {
 					</div>
 				</div>
 			</div>
+<?php endif; ?>
 
-						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($_evParkName) ?></strong>. You'll set dates and details on the next page.</p>
+						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($_evScopeName) ?></strong>. You'll set dates and details on the next page.</p>
 
 			<!-- Calendar-item-only fields -->
 			<div class="pk-emod-ci-only" style="display:none">
