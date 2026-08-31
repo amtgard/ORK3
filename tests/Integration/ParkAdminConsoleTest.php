@@ -587,8 +587,9 @@ final class ParkAdminConsoleTest extends TestCase
     }
 
     /** Every tile on the console is now modal-or-report; nothing bounces the
-     *  officer to a legacy form. (Attendance and Tournament are still links,
-     *  and deliberately so -- they are whole workflows, not a dialog.) */
+     *  officer to a legacy form. (Attendance is still a link, deliberately -- it
+     *  is a whole workflow, not a dialog. Tournament is no longer a link at all:
+     *  the legacy builder is gone, so its tile is inert pending the replacement.) */
     public function testTheConsoleHostsTheSharedEventModal(): void
     {
         $this->assertStringContainsString(
@@ -747,28 +748,36 @@ final class ParkAdminConsoleTest extends TestCase
      *  light/dark tooltip. Both hosts load that stylesheet, so the profile and
      *  the console pick up the change together and cannot drift. */
     /**
-     * The tournament creator is deprecated pending a replacement, so its tile is
-     * de-emphasised -- but deliberately NOT removed or disabled: Tournament::create()
-     * still works, and taking a live capability away from park officers before the
-     * replacement ships would be worse than showing a discouraged one.
+     * The legacy tournament builder is GONE, so this tile must NOT be clickable -- a
+     * link would send an officer to a dead builder. An earlier revision kept the href
+     * on the reasoning that "deprecated is not removed", which was wrong about this
+     * feature; this test exists so that reasoning cannot quietly come back.
      *
-     * Asserts all three halves, because any one alone is a half-finished state: the
-     * greying class, the visible "Deprecated" chip (styling alone is easy to miss,
-     * and reads as a rendering bug rather than an intention), and the surviving href.
+     * The tile is KEPT, inert, because a replacement is in development and a silently
+     * missing tile reads as "the ORK lost tournaments" rather than "this is coming".
+     *
+     * Asserts every half, because any one alone is a half-finished state: an inert
+     * non-focusable element, no link, the visible status chip (styling alone reads as
+     * a rendering bug rather than an intention), and a rule in EACH theme.
      */
-    public function testTournamentTileIsDeprecatedButStillReachable(): void
+    public function testTournamentTileIsInertAndNotLinked(): void
     {
         $tpl = self::read('orkui/template/revised-frontend/Admin_park.tpl');
 
         self::assertMatchesRegularExpression(
-            '/class="ka-action-card ka-action-card-deprecated"[^>]*?href="[^"]*Tournament\/create/s',
+            '/<div class="ka-action-card ka-action-card-deprecated" aria-disabled="true"/',
             $tpl,
-            'the tournament tile must carry ka-action-card-deprecated AND keep its href'
+            'the tournament tile must be an inert <div> with aria-disabled -- not a link or button'
+        );
+        self::assertStringNotContainsString(
+            'Tournament/create',
+            $tpl,
+            'the legacy tournament builder is GONE; the tile must not link to it'
         );
         self::assertStringContainsString(
-            '<span class="ka-dep-chip">Deprecated</span>',
+            '<span class="ka-dep-chip">In development</span>',
             $tpl,
-            'a greyed tile with no label reads as a rendering bug; keep the Deprecated chip'
+            'a greyed tile with no label reads as a rendering bug; keep the status chip'
         );
 
         // Both themes, or the muted card reads as live in whichever one was missed --

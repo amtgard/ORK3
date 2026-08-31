@@ -272,19 +272,23 @@ _ka_queue(
 						<div class="ka-action-label">Schedule an Event</div>
 						<div class="ka-action-desc">Add an event or a calendar item for this park</div>
 					</button>
-					<?php /* DEPRECATED, not removed. Tournament::create() still exists and still
-					   works, so the tile stays reachable -- taking a live capability away from
-					   park officers before its replacement ships would be worse than leaving a
-					   discouraged one visible. It is de-emphasised instead: grey surface, drained
-					   icon, a "Deprecated" chip, and a data-tip saying what is coming. Drop the
-					   whole tile when the new tournament creator lands. */ ?>
-					<a class="ka-action-card ka-action-card-deprecated"
-						href="<?= $uir ?>Tournament/create&amp;ParkId=<?= $parkId ?>"
-						data-tip="The current tournament creator is deprecated. A replacement is in development; this still works in the meantime.">
+					<?php /* RETIRED. The legacy tournament builder is gone, so this must NOT be
+					   clickable -- an earlier revision left the href in place on the reasoning
+					   that "deprecated is not removed", which was simply wrong about this
+					   feature. A link here would send an officer to a dead builder.
+
+					   The tile is kept, inert, because a replacement is in development and a
+					   silently missing tile reads as "the ORK lost tournaments" rather than
+					   "this is coming". Rendered as a <div>, not a disabled <button>: there is
+					   no action to perform, so it should not be focusable or announce itself as
+					   an operable control. aria-disabled marks the state for assistive tech.
+					   Replace this whole block with a real tile when the new creator lands. */ ?>
+					<div class="ka-action-card ka-action-card-deprecated" aria-disabled="true"
+						data-tip="The legacy tournament builder has been retired. A new tournament creator is in development.">
 						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-trophy"></i></div>
-						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">Deprecated</span></div>
-						<div class="ka-action-desc">Being replaced &mdash; the current creator still works for now</div>
-					</a>
+						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">In development</span></div>
+						<div class="ka-action-desc">The legacy builder has been retired &mdash; a new one is on the way</div>
+					</div>
 <?php if (!empty($CanResetWaivers)) : ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-ops-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-undo"></i></div>
