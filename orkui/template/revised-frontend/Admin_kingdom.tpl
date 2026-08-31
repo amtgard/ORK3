@@ -45,6 +45,17 @@ $totalAttendance = $TotalAttendance ?? 0;
      ============================================= -->
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/admin-console.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/admin-console.css') ?>">
 
+<?php /* Outcome banner for Admin::resetwaivers(), which renders this console after
+         performing the reset. Same two classes the park console uses (orkui.css
+         styles both, in both themes) so the two pages report an outcome
+         identically. Admin::kingdom() sets neither key, so on that route this
+         emits nothing. */ ?>
+<?php if (strlen($Message ?? '') > 0) : ?>
+	<div class="success-message"><?= $Message ?></div>
+<?php endif; ?>
+<?php if (strlen($Error ?? '') > 0) : ?>
+	<div class="error-message"><?= $Error ?></div>
+<?php endif; ?>
 
 <!-- =============================================
      HERO

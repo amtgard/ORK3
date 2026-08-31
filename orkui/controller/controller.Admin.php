@@ -2380,32 +2380,46 @@ class Controller_Admin extends Controller
             $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
         }
 
+        // Re-render the console by DELEGATING to the method that owns it, rather than
+        // re-assembling a subset of its data here.
+        //
+        // This arm used to hand-roll the render: kingdom_route + get_kingdom_details +
+        // get_park_summary + set_admin_kingdom_auth_flags, then point $this->template at
+        // the revised console. That was correct while the template was the small legacy
+        // Admin_kingdom.tpl, which needed exactly those keys. Once the route was
+        // re-pointed at ../revised-frontend/Admin_kingdom.tpl it stopped being correct
+        // and became a half-built page: AdminDashboard, ActiveParkCount, ActivePlayers,
+        // TotalAttendance, AdminInfo/AdminConfig/AdminParkTitles/AdminAwards,
+        // CanManageKingdom, CanAddPark, IsOrkAdmin, the officer-position flag and every
+        // qualification-test flag are set only by load_kingdom_admin_data(), which this
+        // route never called. Every read is ??-guarded, so it rendered rather than
+        // fataled -- a zeroed hero, four empty work-queue cards, placeholder heraldry,
+        // missing tiles and five modals that open blank. The park arm had the identical
+        // shape, missing ParkAdminDashboard / ParkDetails / ParkDays / ParkHeraldry.
+        //
+        // Delegating leaves exactly ONE place that assembles each console, so the next
+        // key added to either one cannot be missed here. Both delegates re-run their own
+        // front door, which is strictly narrower than or equal to the kingdom-standing
+        // check above, and both are idempotent reads.
+        //
+        // Message/Error are captured and re-applied AFTER the delegate: the outcome of
+        // the reset is the whole point of this route, and the delegates splat
+        // get_kingdom_details()/get_park_info() straight into $this->data, so a future
+        // key of either name in those payloads would silently eat the notice.
+        $_notice      = $this->data['Message'] ?? null;
+        $_noticeError = $this->data['Error']   ?? null;
+
         if ($type == 'kingdom') {
-            $this->kingdom_route($id);
-            $r = $this->Kingdom->get_kingdom_details($id);
-            foreach ($r as $key => $detail) {
-                $this->data[$key] = $detail;
-            }
-            $this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
-            $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
-            $r = $this->Kingdom->get_park_summary($id);
-            $this->data['park_summary'] = $r;
-            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
-            $this->template = '../revised-frontend/Admin_kingdom.tpl';
+            $this->kingdom($id);
         } elseif ($type == 'park') {
-            $this->park_route($id);
-            $r = $this->Park->get_park_info($id);
-            foreach ($r as $key => $detail) {
-                $this->data[$key] = $detail;
-            }
-            $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
-            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            // Must match Admin::park()'s flag exactly -- see the comment there. This
-            // route re-renders the same console, so a narrower flag here would make the
-            // tile vanish after a reset for someone who is allowed to do it again.
-            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
-            $this->template = '../revised-frontend/Admin_park.tpl';
+            $this->park($id);
+        }
+
+        if ($_notice !== null) {
+            $this->data['Message'] = $_notice;
+        }
+        if ($_noticeError !== null) {
+            $this->data['Error'] = $_noticeError;
         }
     }
 

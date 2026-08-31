@@ -806,8 +806,16 @@ final class ParkAdminConsoleTest extends TestCase
      * tile linked to Admin::resetwaivers() (which does demand kingdom standing). After
      * the tile became a modal, that conjunction silently hid the control from 1,609
      * park-only officers in the production mirror who could do it before this branch.
-     * Both call sites must stay in step, or the tile vanishes after a reset for someone
-     * entitled to run it again.
+     *
+     * WHY THIS COUNTS NOTHING. An earlier revision asserted exactly TWO park-scoped
+     * assignments -- Admin::park() and a copy in Admin::resetwaivers()'s park arm -- which
+     * then had to be kept in step by hand. Admin::resetwaivers() now delegates its whole
+     * render to Admin::park() (it was assembling a half-built console otherwise), so that
+     * second assignment is gone and the count is 1. The count was only ever a proxy for
+     * "every park-scoped site agrees"; one site agrees with itself trivially, and the
+     * refactor is what made that true. So assert the invariant instead: at least one site
+     * exists, and EVERY site derives the flag the same, correct way. That survives both
+     * this refactor and the next one.
      */
     public function testResetWaiversTileMatchesItsEndpointsAuthority(): void
     {
@@ -818,18 +826,16 @@ final class ParkAdminConsoleTest extends TestCase
             $src,
             $m
         );
-        // Three assignments exist: Admin::park(), Admin::resetwaivers()'s park arm, and
-        // load_kingdom_admin_data()'s KINGDOM-scoped one. Only the park pair is this
-        // test's business -- the kingdom flag legitimately gates on kingdom authority.
+        // Only the park-scoped assignments are this test's business -- the kingdom flag
+        // in load_kingdom_admin_data() legitimately gates on kingdom authority.
         $parkExprs = array_values(array_filter(
             $m[1],
             static fn (string $e): bool => str_contains($e, "'park'")
         ));
-        self::assertCount(
-            2,
+        self::assertNotEmpty(
             $parkExprs,
-            'expected exactly two park-scoped CanResetWaivers assignments '
-                . '(Admin::park and Admin::resetwaivers park arm)'
+            'no park-scoped CanResetWaivers assignment survives; the park console can no '
+                . 'longer offer a capability its own endpoint grants'
         );
 
         foreach ($parkExprs as $expr) {
