@@ -2354,12 +2354,10 @@ html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; co
 .kn-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
 .kn-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
 
-#kn-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
-#kn-cfe-results .kn-ac-row:hover, #kn-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
-#kn-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
-#kn-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
-#kn-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
-#kn-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+/* The .kn-ac-row / -title / -meta / .kn-ac-empty rules that used to live here were
+   ID-scoped to #kn-cfe-results, so the same markup rendered into #pk-cfe-results was
+   unstyled. They now live in revised.css keyed off .kn-ac-results, which this page
+   loads, so the dropdown looks the same here and is finally styled everywhere else. */
 
 html[data-theme="dark"] .kn-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
 html[data-theme="dark"] .kn-cfe-toggle { color: var(--ork-text); }
@@ -2373,11 +2371,6 @@ html[data-theme="dark"] .kn-cfe-mod-title { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .kn-cfe-mod-row { color: var(--ork-text); }
 html[data-theme="dark"] .kn-cfe-mod-hint { color: var(--ork-text-muted); }
 html[data-theme="dark"] .kn-cfe-mod-all { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #kn-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row-title { color: var(--ork-text); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
 
 </style>
 <div id="kn-moveplayer-overlay">

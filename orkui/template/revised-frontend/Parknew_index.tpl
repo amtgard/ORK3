@@ -2731,47 +2731,13 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 
 /* ============================================================
 
-/* ---- Copy from past event (pk-cfe-*) ---- */
-.pk-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
-.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
-.pk-cfe-toggle:hover { background: #edf2f7; }
-.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
-.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
-.pk-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
-.pk-cfe-field { position: relative; }
-.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
-.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
-.pk-cfe-chip-clear:hover { color: #1a365d; }
-.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
-.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
-.pk-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
-.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
-
-#pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
-#pk-cfe-results .kn-ac-row:hover, #pk-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
-#pk-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
-#pk-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
-#pk-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
-#pk-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
-
-html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
-html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #pk-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+/* The pk-cfe-* (Copy from past event) rules that used to live here now live in
+   revised.css. They styled markup that has since moved into the shared partial
+   partials/_event_create_modal.tpl, so keeping them in THIS page's inline <style>
+   meant the park admin console -- which includes the partial but not this template
+   -- rendered the toggle with no styling at all: a white bar in dark mode. The
+   #pk-cfe-results row rules are gone entirely, superseded by the id-agnostic
+   .kn-ac-results rules in revised.css. */
 
 
 /* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */

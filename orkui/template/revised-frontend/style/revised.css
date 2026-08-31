@@ -2889,6 +2889,27 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 .kn-officer-chip.kn-selected { background:#ebf4ff; border-color:#90cdf4; color:var(--kn-accent-mid, #276749); font-weight:600; }
 .kn-ac-results { position:absolute; left:0; right:0; z-index:var(--z-dropdown); margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
+
+/* Copy-from-past-event dropdown rows (.kn-ac-row / -title / -meta / .kn-ac-empty).
+   These used to exist ONLY as `#kn-cfe-results .kn-ac-row` in an inline <style> in
+   Kingdomnew_index.tpl. That ID scoping meant the identical markup rendered into
+   #pk-cfe-results -- the park profile, and now the park admin console, which share
+   one partial -- matched NOTHING and fell back to unstyled block text: no padding,
+   no row separators, no title/meta hierarchy, no hover.
+   Keyed off the .kn-ac-results container instead of any id, so every host that uses
+   this dropdown is styled by construction rather than by remembering to copy a
+   block. Distinct from .kn-ac-item, which is the player-search row and unaffected. */
+.kn-ac-results .kn-ac-row { display:block; padding:8px 10px; border-bottom:1px solid #edf2f7; cursor:pointer; }
+.kn-ac-results .kn-ac-row:hover, .kn-ac-results .kn-ac-row.kn-ac-active { background:#ebf8ff; }
+.kn-ac-results .kn-ac-row:last-child { border-bottom:0; }
+.kn-ac-results .kn-ac-row-title { font-size:13px; color:#2d3748; font-weight:500; }
+.kn-ac-results .kn-ac-row-meta { font-size:11px; color:#718096; margin-top:1px; }
+.kn-ac-results .kn-ac-empty { padding:10px; color:#a0aec0; font-style:italic; font-size:12px; }
+html[data-theme="dark"] .kn-ac-results .kn-ac-row { border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-ac-results .kn-ac-row:hover, html[data-theme="dark"] .kn-ac-results .kn-ac-row.kn-ac-active { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-ac-results .kn-ac-row-title { color:var(--ork-text); }
+html[data-theme="dark"] .kn-ac-results .kn-ac-row-meta { color:var(--ork-text-muted); }
+html[data-theme="dark"] .kn-ac-results .kn-ac-empty { color:var(--ork-text-muted); }
 #kn-award-overlay .kn-ac-results,
 #kn-rec-overlay .kn-ac-results,
 #kn-moveplayer-overlay .kn-ac-results,
@@ -10869,3 +10890,40 @@ html[data-theme="dark"] .banner-confirm-ok:hover { background: #9b2c2c; }
 /* "N at field so far" on the Park Day Today card */
 .pk-field-count { color: #2f9e63; font-weight: 700; margin-top: 3px; cursor: help; }
 html[data-theme="dark"] .pk-field-count { color: #48bb78; }
+
+/* ============================================================================
+   Copy from past event (pk-cfe-*) -- moved out of Parknew_index.tpl's inline
+   <style> so every host of partials/_event_create_modal.tpl is styled. The park
+   admin console includes that partial but not that template, so these rules were
+   simply absent there and the toggle fell back to a browser-default white button
+   in dark mode. Light and dark are defined together, as one unit, for that reason.
+   ============================================================================ */
+.pk-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
+.pk-cfe-toggle:hover { background: #edf2f7; }
+.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
+.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
+.pk-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.pk-cfe-field { position: relative; }
+.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
+.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
+.pk-cfe-chip-clear:hover { color: #1a365d; }
+.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
+.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
+.pk-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
+
+
+html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
+html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
