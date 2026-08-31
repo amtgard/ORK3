@@ -2143,14 +2143,22 @@ class Controller_Admin extends Controller
         $this->data['ParkDays']     = $_parkDetails['ParkDays']['ParkDays'] ?? [];
         $this->data['ParkHeraldry'] = $_parkDetails['Heraldry'] ?? [];
 
-        // Reset Waivers' own action (Admin::resetwaivers()) gates a park reset on
-        // admin_has_kingdom_standing() for the park's KINGDOM, not on park authority --
-        // it never widened to accept AUTH_PARK. A park-only officer passes
-        // admin_can_reset_waivers() (AUTH_PARK) but would be bounced home with no
-        // message and no reset, so the tile must also require the same kingdom
-        // standing the action actually checks, or it offers a control that cannot work.
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id)
-            && $this->admin_has_kingdom_standing($_uid, $_standingKingdomId);
+        // Gate the tile on exactly what the tile's OWN endpoint checks, and nothing
+        // more. The console's Reset Waivers modal posts to ParkAjax .../resetwaivers,
+        // which calls Player::ResetWaivers -- and that accepts a park officer outright:
+        // HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT). admin_can_reset_waivers()
+        // on 'park' is that same check, so it is the correct and complete gate.
+        //
+        // This previously also required admin_has_kingdom_standing(). That was right
+        // when the tile was a LINK to Admin::resetwaivers(), which really does demand
+        // kingdom standing -- but the rebuild turned the tile into a modal posting to
+        // ParkAjax, and the extra condition was left behind. The result was a silent
+        // capability regression: 1,609 park-only officers in the production mirror
+        // hold park authority with no kingdom row, could reset waivers from the park
+        // profile's old admin pad before this branch, and saw no tile at all after it,
+        // even though the endpoint would have said yes. Do not re-add the conjunction
+        // without also changing where the modal posts.
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
         $this->template = '../revised-frontend/Admin_park.tpl';
     }
 
@@ -2393,11 +2401,10 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            // Same tile/action mismatch guarded against in Admin::park() -- see that
-            // method's comment. This route re-renders the same console after a reset
-            // attempt, so its own CanResetWaivers flag must match too.
-            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id)
-                && $this->admin_has_kingdom_standing($_uid, $_standingKingdomId);
+            // Must match Admin::park()'s flag exactly -- see the comment there. This
+            // route re-renders the same console, so a narrower flag here would make the
+            // tile vanish after a reset for someone who is allowed to do it again.
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
             $this->template = '../revised-frontend/Admin_park.tpl';
         }
     }

@@ -795,6 +795,59 @@ final class ParkAdminConsoleTest extends TestCase
         );
     }
 
+    /**
+     * Reset Waivers must be offered to exactly the people its own endpoint accepts.
+     *
+     * The console's modal posts to ParkAjax .../resetwaivers -> Player::ResetWaivers,
+     * which accepts a bare park officer: HasAuthority($uid, AUTH_PARK, $id, AUTH_EDIT).
+     * admin_can_reset_waivers($uid,'park',$id) is that same check.
+     *
+     * It previously ALSO required admin_has_kingdom_standing(), left over from when the
+     * tile linked to Admin::resetwaivers() (which does demand kingdom standing). After
+     * the tile became a modal, that conjunction silently hid the control from 1,609
+     * park-only officers in the production mirror who could do it before this branch.
+     * Both call sites must stay in step, or the tile vanishes after a reset for someone
+     * entitled to run it again.
+     */
+    public function testResetWaiversTileMatchesItsEndpointsAuthority(): void
+    {
+        $src = self::code('orkui/controller/controller.Admin.php');
+
+        preg_match_all(
+            "/\\\$this->data\\['CanResetWaivers'\\]\\s*=\\s*([^;]+);/s",
+            $src,
+            $m
+        );
+        // Three assignments exist: Admin::park(), Admin::resetwaivers()'s park arm, and
+        // load_kingdom_admin_data()'s KINGDOM-scoped one. Only the park pair is this
+        // test's business -- the kingdom flag legitimately gates on kingdom authority.
+        $parkExprs = array_values(array_filter(
+            $m[1],
+            static fn (string $e): bool => str_contains($e, "'park'")
+        ));
+        self::assertCount(
+            2,
+            $parkExprs,
+            'expected exactly two park-scoped CanResetWaivers assignments '
+                . '(Admin::park and Admin::resetwaivers park arm)'
+        );
+
+        foreach ($parkExprs as $expr) {
+            self::assertStringContainsString(
+                "admin_can_reset_waivers(\$_uid, 'park'",
+                $expr,
+                'the park Reset Waivers flag must come from admin_can_reset_waivers'
+            );
+            self::assertStringNotContainsString(
+                'admin_has_kingdom_standing',
+                $expr,
+                'the park Reset Waivers tile must NOT require kingdom standing -- its endpoint '
+                    . '(Player::ResetWaivers via ParkAjax) accepts AUTH_PARK/AUTH_EDIT outright, '
+                    . 'and requiring more hides the control from park-only officers who can use it'
+            );
+        }
+    }
+
     public function testSharedModalHouseRules(): void
     {
         $this->assertDoesNotMatchRegularExpression(
