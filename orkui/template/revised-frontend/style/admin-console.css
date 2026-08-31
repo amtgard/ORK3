@@ -173,18 +173,26 @@ html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-lbl  { color: var(--ork-text-
     text-decoration: none; color: inherit;
 }
 
-/* Deprecated action. The feature still WORKS and stays reachable -- deprecated is
-   not removed, and greying out a live capability the officer may still need would
-   be worse than the noise of leaving it bright. So this de-emphasises without
-   disabling: muted surface, drained icon, and a "Deprecated" chip that says why.
-   Hover deliberately keeps a border change so it still reads as clickable; it just
-   does not get the blue "come use me" treatment the live cards get. */
-.ka-action-card-deprecated { background: #f7fafc; border-color: #edf2f7; }
+/* Retired action. The feature is GONE, not merely discouraged: commit 28d23853 made
+   the tournament tile an inert <div> with no href and no onclick, because a link
+   would send an officer to a builder that no longer exists. The tile is kept, muted,
+   only so its absence does not read as "the ORK lost tournaments" instead of "this
+   is coming" -- see the template comment beside the markup.
+   (An earlier revision of this comment claimed the feature "still WORKS and stays
+   reachable" and hover kept a border change to read as clickable. Both were true of
+   the deprecated-but-live tile that shipped first, and neither has been true since
+   the tile went inert.)
+   So: muted surface, drained icon, an "In development" chip that says why, the
+   default cursor, and NO hover response at all. A hand cursor or a hover highlight
+   on an element that cannot be activated is an affordance that lies. */
+.ka-action-card-deprecated { background: #f7fafc; border-color: #edf2f7; cursor: default; }
 .ka-action-card-deprecated .ka-action-label { color: #718096; }
 .ka-action-card-deprecated .ka-action-desc  { color: #a0aec0; }
 .ka-action-card-deprecated .ka-action-icon  { filter: grayscale(1); opacity: 0.55; }
+/* Restates the resting values rather than being deleted: without it the generic
+   .ka-action-card:hover above would repaint the tile blue on hover. */
 .ka-action-card-deprecated:hover {
-    background: #edf2f7; border-color: #cbd5e0; box-shadow: none;
+    background: #f7fafc; border-color: #edf2f7; box-shadow: none;
 }
 .ka-dep-chip {
     display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px;
@@ -574,7 +582,9 @@ html[data-theme="dark"] .ka-action-desc { color: var(--ork-text-secondary); }
    a live card there, which is the failure this branch already shipped once with
    the success/error banners. */
 html[data-theme="dark"] .ka-action-card-deprecated { background: var(--ork-bg); border-color: var(--ork-border); }
-html[data-theme="dark"] .ka-action-card-deprecated:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); box-shadow: none; }
+/* Resting values repeated, not deleted: the dark .ka-action-card:hover two lines up
+   would otherwise light the inert tile blue on hover. Same reasoning as the light rule. */
+html[data-theme="dark"] .ka-action-card-deprecated:hover { background: var(--ork-bg); border-color: var(--ork-border); box-shadow: none; }
 html[data-theme="dark"] .ka-action-card-deprecated .ka-action-label { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .ka-action-card-deprecated .ka-action-desc  { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ka-dep-chip { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); }
