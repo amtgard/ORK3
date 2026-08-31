@@ -2021,7 +2021,19 @@ var PkBannerConfig = {
    calendar-grid sync, which every viewer uses -- and which used to run for
    every viewer from revised.js, off PkConfig. */
 $evParkId    = (int)($park_id ?? 0);
-$evKingdomId = (int)($kingdom_id ?? 0);
+// The PARK's kingdom, not $kingdom_id. controller.Park.php:26 sets $kingdom_id from
+// $this->session->kingdom_id -- the VIEWER's kingdom -- so on a park belonging to any
+// other kingdom this passed the wrong id, and EventPlanning::CreateEvent writes
+// kingdom_id straight from the request. An officer viewing another kingdom's park and
+// creating an event there stamped it with their OWN kingdom.
+// $parkInfo is set at the top of this file from $park_info['ParkInfo'], which
+// controller.Park.php already treats as the authoritative source for the park's
+// kingdom (see its OfficerHistoryRoleOptions call).
+// NOTE: $kingdom_id is viewer-scoped everywhere else on this page too -- the kingdom
+// breadcrumb and ~10 Reports links carry it -- which misfilters those views for a
+// cross-kingdom viewer. That is a separate, display-only, pre-existing bug; only the
+// WRITE path is corrected here.
+$evKingdomId = (int)($parkInfo['KingdomId'] ?? 0);
 $evParkName  = (string)($park_name ?? '');
 $evCanCreate = !empty($CanAdminPark);
 include __DIR__ . '/partials/_event_create_modal.tpl';
