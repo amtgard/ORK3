@@ -545,6 +545,11 @@ class Model_Player extends Model
         return $this->_player()->GetAwardMaxRanks($mundane_id);
     }
 
+    public function get_zodiac_held_months($mundane_id)
+    {
+        return $this->_player()->GetZodiacHeldMonths($mundane_id);
+    }
+
     public function save_own_email($email)
     {
         return $this->_player()->SaveOwnEmail([

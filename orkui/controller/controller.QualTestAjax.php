@@ -65,10 +65,17 @@ class Controller_QualTestAjax extends Controller
         ]);
     }
 
-    private function requireAdmin($kingdom_id)
+    /**
+     * Capability gate. Model_QualTest::CAP_CONFIG sets the rules, CAP_QUESTIONS authors
+     * the bank, CAP_PUBLISH pushes a draft live, CAP_RESULTS reads who passed.
+     * The split matters most for the test-manager list: a kingdom adds a
+     * subject-matter expert there to WRITE questions, and that must not also let
+     * them lower the pass mark or publish.
+     */
+    private function requireCap($kingdom_id, $capability)
     {
         $uid = $this->requireLogin();
-        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can($uid, (int)$kingdom_id, $capability)) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
         return $uid;
@@ -91,7 +98,7 @@ class Controller_QualTestAjax extends Controller
     public function saveconfig($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_CONFIG);
 
         $test_type      = $_POST['TestType']      ?? 'reeve';
         $question_count = (int)($_POST['QuestionCount'] ?? 10);
@@ -134,7 +141,7 @@ class Controller_QualTestAjax extends Controller
     {
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $uid = $this->requireAdmin($kingdom_id);
+        $uid = $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         // If editing, verify the question belongs to this kingdom
         if ($question_id > 0) {
@@ -221,7 +228,7 @@ class Controller_QualTestAjax extends Controller
         $question_id = (int)($_POST['QuestionId'] ?? 0);
         $status      = ($_POST['Status'] ?? '') === 'archived' ? 'archived' : 'active';
 
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -252,7 +259,7 @@ class Controller_QualTestAjax extends Controller
         if (!valid_id($kingdom_id) || !valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid request.']);
         }
-        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_QUESTIONS)) {
             $this->jsonOut(['status' => 1, 'error' => 'Insufficient permissions.']);
         }
 
@@ -304,7 +311,7 @@ class Controller_QualTestAjax extends Controller
     {
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -323,7 +330,7 @@ class Controller_QualTestAjax extends Controller
     {
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -340,7 +347,7 @@ class Controller_QualTestAjax extends Controller
     public function getlibrary($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         // Verify this kingdom is opted in
         $config = $this->QualTest->config($kingdom_id, 'reeve');
@@ -380,7 +387,7 @@ class Controller_QualTestAjax extends Controller
     {
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $uid = $this->requireAdmin($kingdom_id);
+        $uid = $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -420,7 +427,7 @@ class Controller_QualTestAjax extends Controller
     public function resetretakes($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_CONFIG);
         $test_type = $_POST['TestType'] ?? 'reeve';
         $this->QualTest->reset_all_retakes($kingdom_id, $test_type);
         $this->jsonOut(['status' => 0]);
@@ -433,7 +440,7 @@ class Controller_QualTestAjax extends Controller
     public function resetplayerretakes($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_CONFIG);
         $player_id = (int)($_POST['PlayerId'] ?? 0);
         $test_type = $_POST['TestType'] ?? 'reeve';
         if (!valid_id($player_id)) {
@@ -457,7 +464,7 @@ class Controller_QualTestAjax extends Controller
     public function addmanager($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_CONFIG);
 
         $mundane_id = (int)($_POST['MundaneId'] ?? 0);
         if (!$mundane_id) {
@@ -482,7 +489,7 @@ class Controller_QualTestAjax extends Controller
     public function removemanager($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_CONFIG);
 
         $mundane_id = (int)($_POST['MundaneId'] ?? 0);
         if (!$mundane_id) {
@@ -696,7 +703,7 @@ class Controller_QualTestAjax extends Controller
     public function bulkstatus($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         $status = ($_POST['Status'] ?? '') === 'archived' ? 'archived' : 'active';
 
@@ -733,7 +740,7 @@ class Controller_QualTestAjax extends Controller
     {
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -763,7 +770,7 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
         }
 
-        $this->requireAdmin($kingdom_id);
+        $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         $test_type = $_POST['TestType'] ?? 'reeve';
         $config    = $this->QualTest->config($kingdom_id, $test_type);
@@ -830,7 +837,7 @@ class Controller_QualTestAjax extends Controller
     public function bulkimport($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $uid = $this->requireAdmin($kingdom_id);
+        $uid = $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
 
         $test_type = $_POST['TestType'] ?? 'reeve';
         $raw       = $_POST['Questions'] ?? '';
@@ -868,13 +875,20 @@ class Controller_QualTestAjax extends Controller
     // -----------------------------------------------------------------------
 
     /** Load a set and authorize the caller against ITS kingdom. Exits on failure. */
-    private function requireSet($set_id)
+    /**
+     * Resolve a set and authorize against the SET's own kingdom -- never a kingdom id
+     * from the request, or this would reach into another kingdom's bank.
+     *
+     * @param int    $set_id
+     * @param string $capability  Defaults to question authoring; publishset passes CAP_PUBLISH.
+     */
+    private function requireSet($set_id, $capability = Model_QualTest::CAP_QUESTIONS)
     {
         $set = $this->QualTest->set_by_id((int)$set_id);
         if ($set === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Version not found.']);
         }
-        $this->requireAdmin((int)$set['KingdomId']);
+        $this->requireCap((int)$set['KingdomId'], $capability);
         return $set;
     }
 
@@ -882,7 +896,7 @@ class Controller_QualTestAjax extends Controller
     public function createdraft($p = null)
     {
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-        $uid        = $this->requireAdmin($kingdom_id);
+        $uid        = $this->requireCap($kingdom_id, Model_QualTest::CAP_QUESTIONS);
         $test_type  = ($_POST['TestType'] ?? 'reeve') === 'corpora' ? 'corpora' : 'reeve';
 
         // An empty name is fine — the model numbers it ("Version 3"). Naming it is the GMR's
@@ -933,7 +947,7 @@ class Controller_QualTestAjax extends Controller
     // POST: SetId  — hard-refuses if the draft can't make a valid test.
     public function publishset($p = null)
     {
-        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        $set = $this->requireSet($_POST['SetId'] ?? 0, Model_QualTest::CAP_PUBLISH);
         $res = $this->QualTest->publish_set((int)$set['SetId']);
         if (!$res['ok']) {
             $this->jsonOut(['status' => 1, 'error' => $res['error']]);
@@ -956,7 +970,7 @@ class Controller_QualTestAjax extends Controller
     // Removing does NOT archive the question: it stays live in the published set.
     // Read one version back, including a retired one — this is how a manager inspects what a
     // previous version of the test actually contained. Read-only by construction: it returns
-    // data and touches nothing. requireSet() enforces canManage() on the set's own kingdom, so
+    // data and touches nothing. requireSet() enforces the capability on the set's own kingdom, so
     // this cannot be used to read another kingdom's bank.
     public function setquestions($p = null)
     {
@@ -1012,7 +1026,7 @@ class Controller_QualTestAjax extends Controller
         // Viewing another player's history is a manager action and MUST be scoped
         // to a kingdom the caller manages (no cross-kingdom fishing).
         if ($player_id !== $uid) {
-            if ($kingdom_id <= 0 || !$this->QualTest->can_manage($uid, $kingdom_id)) {
+            if ($kingdom_id <= 0 || !$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_RESULTS)) {
                 $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
             }
         }
@@ -1042,7 +1056,7 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Attempt not found.']);
         }
 
-        $isManager = $this->QualTest->can_manage($uid, (int)$detail['KingdomId']);
+        $isManager = $this->QualTest->can($uid, (int)$detail['KingdomId'], Model_QualTest::CAP_RESULTS);
         if ((int)$detail['PlayerId'] !== $uid && !$isManager) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }

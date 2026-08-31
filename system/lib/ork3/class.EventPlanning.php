@@ -497,11 +497,22 @@ class EventPlanning extends Ork3
             'UPDATE ' . DB_PREFIX . 'attendance SET event_calendardetail_id = ' . $newDetailId
             . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
         );
+        // ork_attendance_myisam is a PROD-SIDE backup twin of ork_attendance that feeds the
+        // nightly dump (see db-migrations/2026-08-21-innodb-merge-tables.sql). It exists only
+        // on the production mirror -- a repo-built database (the ork-db sandbox, a fresh
+        // deploy) does not have it, so this UPDATE errored there on every reconcile while the
+        // ork_attendance UPDATE above succeeded, leaving the two halves inconsistent wherever
+        // the table DOES exist later. Execute() reports nothing, so it failed silently.
+        // Guarded rather than removed: where the twin exists it must stay in step.
         $this->db->Clear();
-        $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'attendance_myisam SET event_calendardetail_id = ' . $newDetailId
-            . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
-        );
+        $myisamTable = $this->db->DataSet("SHOW TABLES LIKE '" . DB_PREFIX . "attendance_myisam'");
+        if ($myisamTable !== false && $myisamTable->Size() > 0) {
+            $this->db->Clear();
+            $this->db->Execute(
+                'UPDATE ' . DB_PREFIX . 'attendance_myisam SET event_calendardetail_id = ' . $newDetailId
+                . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
+            );
+        }
 
         $oldKey = Ork3::$Lib->ghettocache->key([$detailId]);
         $newKey = Ork3::$Lib->ghettocache->key([$newDetailId]);

@@ -122,6 +122,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 				</div>
 				<div class="rp-filter-card-body">
 					<form method="POST" action="<?=UIR?>Reports/park_attendance_explorer" class="rp-explorer-form">
+						<input type="hidden" name="KingdomId" value="<?=(int)($kingdom_id ?? 0)?>" />
 						<div class="rp-form-group">
 							<label for="StartDate">Start Date</label>
 							<input type="text" id="StartDate" name="StartDate" class="datepicker rp-form-input" value="<?=htmlspecialchars($form['StartDate'] ?? '')?>" />

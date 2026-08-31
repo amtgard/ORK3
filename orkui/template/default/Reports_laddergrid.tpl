@@ -25,19 +25,35 @@ if ($isKingdom && !empty($rows)) {
 	});
 }
 
-// Sort awards: knighthood groups first, then ungrouped, alphabetically within each
+// Sort awards: official columns first (knighthood groups, then ungrouped,
+// alphabetically within each), THEN the kingdom's own ladders as a separated
+// group -- kingdom ladders are never comparable across kingdoms (spec
+// requirement 4), so they must never interleave with the official columns.
 $_groupOrder = ['Battle' => 0, 'Sword' => 1, 'Crown' => 2, 'Flame' => 3, 'Serpent' => 4, '' => 5];
 uasort($awardList, function ($a, $b) use ($_groupOrder) {
+	$sa = (($a['Scope'] ?? '') === 'kingdom') ? 1 : 0;
+	$sb = (($b['Scope'] ?? '') === 'kingdom') ? 1 : 0;
+	if ($sa !== $sb) {
+		return $sa <=> $sb;
+	}
 	$ga = $_groupOrder[$a['KnightGroup'] ?? ''] ?? 5;
 	$gb = $_groupOrder[$b['KnightGroup'] ?? ''] ?? 5;
 	return $ga !== $gb ? $ga - $gb : strcasecmp($a['DisplayName'] ?? $a['Name'], $b['DisplayName'] ?? $b['Name']);
 });
 $awardIds = array_keys($awardList);
 
+// Per-column group key used for header grouping + cell tinting. Kingdom-scoped
+// ladders get their own 'Kingdom' bucket regardless of KnightGroup so they
+// never visually merge with the ungrouped official column.
+$awardGroupKey = [];
+foreach ($awardList as $_aid => $_ainfo) {
+	$awardGroupKey[$_aid] = (($_ainfo['Scope'] ?? '') === 'kingdom') ? 'Kingdom' : (string)($_ainfo['KnightGroup'] ?? '');
+}
+
 // Count columns per group for colspan on group header row
-$_groupCounts = ['Battle' => 0, 'Sword' => 0, 'Crown' => 0, 'Flame' => 0, 'Serpent' => 0, '' => 0];
-foreach ($awardList as $ainfo) {
-	$g = $ainfo['KnightGroup'] ?? '';
+$_groupCounts = ['Battle' => 0, 'Sword' => 0, 'Crown' => 0, 'Flame' => 0, 'Serpent' => 0, '' => 0, 'Kingdom' => 0];
+foreach ($awardList as $_aid => $ainfo) {
+	$g = $awardGroupKey[$_aid];
 	$_groupCounts[$g] = ($_groupCounts[$g] ?? 0) + 1;
 }
 $_groupLabels = [
@@ -46,6 +62,7 @@ $_groupLabels = [
 	'Crown'   => 'Knight of the Crown',
 	'Flame'   => 'Knight of the Flame',
 	'Serpent' => 'Knight of the Serpent',
+	'Kingdom' => 'Kingdom Ladders',
 ];
 
 $numPlayers = count($rows);
@@ -156,6 +173,14 @@ th.lg-group-serpent .lg-th-inner { color: #14532d; }
 td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:nth-child(even) td.lg-group-serpent { background: #e6fbee !important; }
 
+/* Kingdom ladders — violet trim (the kingdom's OWN ladders, never an official
+   order; kept visually separate everywhere per spec requirement 4). */
+th.lg-group-kingdom { background: #ede9fe !important; color: #5b21b6; }
+th.lg-group-kingdom .lg-th-inner { color: #5b21b6; }
+.lg-group-header-row th.lg-group-kingdom { border-left: 3px solid #c4b5fd; }
+td.lg-group-kingdom { background: #f5f3ff !important; }
+.lg-table tbody tr:nth-child(even) td.lg-group-kingdom { background: #efeaff !important; }
+
 /* ── Knight highlight: player is a knight in that group ───────── */
 /* Uses :nth-child(n) (matches every row) to reach (0,3,3) specificity —
    same level as the even-row group tint rules above, but declared after
@@ -172,6 +197,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:hover td.lg-group-crown   { background: #fdf4b8 !important; }
 .lg-table tbody tr:hover td.lg-group-flame   { background: #fde0e0 !important; }
 .lg-table tbody tr:hover td.lg-group-serpent { background: #d4f5e0 !important; }
+.lg-table tbody tr:hover td.lg-group-kingdom { background: #ede9fe !important; }
 .lg-table tbody tr:hover td.lg-cell-knight-battle  { background: #60a5fa !important; }
 .lg-table tbody tr:hover td.lg-cell-knight-sword   { background: #94a3b8 !important; }
 .lg-table tbody tr:hover td.lg-cell-knight-crown   { background: #f59e0b !important; }
@@ -344,6 +370,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-award-pill-crown   { border-color: #fbbf24; color: #713f12; }
 .lg-award-pill-flame   { border-color: #fca5a5; color: #991b1b; }
 .lg-award-pill-serpent { border-color: #86efac; color: #14532d; }
+.lg-award-pill-kingdom { border-color: #c4b5fd; color: #5b21b6; }
 
 /* Active state uses the group's header colour as background */
 .lg-award-pill-battle.lg-award-pill-active  { background: #3b82f6; }
@@ -351,7 +378,8 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-award-pill-crown.lg-award-pill-active   { background: #d97706; }
 .lg-award-pill-flame.lg-award-pill-active   { background: #ef4444; }
 .lg-award-pill-serpent.lg-award-pill-active { background: #22c55e; }
-.lg-award-pill.lg-award-pill-active:not([class*="lg-award-pill-battle"]):not([class*="lg-award-pill-sword"]):not([class*="lg-award-pill-crown"]):not([class*="lg-award-pill-flame"]):not([class*="lg-award-pill-serpent"]) {
+.lg-award-pill-kingdom.lg-award-pill-active { background: #7c3aed; }
+.lg-award-pill.lg-award-pill-active:not([class*="lg-award-pill-battle"]):not([class*="lg-award-pill-sword"]):not([class*="lg-award-pill-crown"]):not([class*="lg-award-pill-flame"]):not([class*="lg-award-pill-serpent"]):not([class*="lg-award-pill-kingdom"]) {
 	background: var(--rp-accent);
 }
 
@@ -426,6 +454,12 @@ html[data-theme="dark"] .lg-group-header-row th.lg-group-serpent { border-left-c
 html[data-theme="dark"] td.lg-group-serpent { background: #142e22 !important; }
 html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-serpent { background: #10261c !important; }
 
+html[data-theme="dark"] th.lg-group-kingdom { background: #2e1a47 !important; color: #c4b5fd; }
+html[data-theme="dark"] th.lg-group-kingdom .lg-th-inner { color: #c4b5fd; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-kingdom { border-left-color: #6d28d9; }
+html[data-theme="dark"] td.lg-group-kingdom { background: #23153a !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-kingdom { background: #1d1230 !important; }
+
 /* Knight cell highlights */
 html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-battle  { background: #2a4a7f !important; }
 html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-sword   { background: #4a5568 !important; }
@@ -439,6 +473,7 @@ html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-sword   { backgroun
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-crown   { background: #3d2b00 !important; }
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-flame   { background: #3d1a1a !important; }
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-serpent { background: #1a3a2a !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-kingdom { background: #2e1a47 !important; }
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-battle  { background: #3a5f9f !important; }
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-sword   { background: #5a6a80 !important; }
 html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-crown   { background: #9c5800 !important; }
@@ -460,6 +495,7 @@ html[data-theme="dark"] .lg-award-pill-sword   { border-color: #4a5568; color: #
 html[data-theme="dark"] .lg-award-pill-crown   { border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .lg-award-pill-flame   { border-color: #9b2c2c; color: #fca5a5; }
 html[data-theme="dark"] .lg-award-pill-serpent { border-color: #276749; color: #9ae6b4; }
+html[data-theme="dark"] .lg-award-pill-kingdom { border-color: #6d28d9; color: #c4b5fd; }
 html[data-theme="dark"] .lg-dual-range-track { background: var(--ork-border); }
 html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-player::after { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
@@ -493,7 +529,7 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 	<!-- ── Context ────────────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Ladder award ranks for all active players. <strong>M</strong> = Master. Numbers indicate current rank. Players with no ladder awards are hidden.
+		<span>Ladder award ranks for all active players. <strong>M</strong> = Master. Numbers indicate current rank, except the Zodiac column, which is granted monthly rather than ranked and shows the total granted. Players with no ladder awards are hidden.
 			Columns are grouped by Knighthood path with colour-coded headers
 			(<span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border:1px solid #93c5fd;border-radius:2px;vertical-align:middle;"></span> Battle,
 			<span style="display:inline-block;width:10px;height:10px;background:#e2e8f0;border:1px solid #94a3b8;border-radius:2px;vertical-align:middle;"></span> Sword,
@@ -555,7 +591,7 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 <?php
 $_prevGroup = null;
 foreach ($awardList as $_aid => $_ainfo) :
-	$_grp = strtolower($_ainfo['KnightGroup'] ?? '');
+	$_grp = strtolower($awardGroupKey[$_aid] ?? '');
 	if ($_grp !== $_prevGroup && $_prevGroup !== null) : ?>
 				<span class="lg-award-pill-sep"></span>
 <?php   endif; $_prevGroup = $_grp; ?>
@@ -579,7 +615,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 <?php if ($isKingdom) : ?>
 						<th class="lg-col-park" rowspan="2">Park</th>
 <?php endif; ?>
-<?php foreach (['Battle', 'Sword', 'Crown', 'Flame', 'Serpent', ''] as $_grp) : ?>
+<?php foreach (['Battle', 'Sword', 'Crown', 'Flame', 'Serpent', '', 'Kingdom'] as $_grp) : ?>
 <?php   if (($_groupCounts[$_grp] ?? 0) > 0) : ?>
 						<th colspan="<?= $_groupCounts[$_grp] ?>" class="lg-group-header-cell<?= $_grp ? ' lg-group-' . strtolower($_grp) : '' ?>">
 							<?= $_grp ? htmlspecialchars($_groupLabels[$_grp]) : '' ?>
@@ -590,8 +626,9 @@ foreach ($awardList as $_aid => $_ainfo) :
 					<!-- Individual award columns -->
 					<tr class="lg-header-row">
 <?php foreach ($awardList as $aid => $ainfo) : ?>
-<?php   $_gc = strtolower($ainfo['KnightGroup'] ?? ''); ?>
-						<th class="lg-col-award<?= $_gc ? ' lg-group-' . $_gc : '' ?>" title="<?= htmlspecialchars($ainfo['Name']) ?>">
+<?php   $_gc = strtolower($awardGroupKey[$aid]); ?>
+<?php   $_title = htmlspecialchars($ainfo['Name']) . (($ainfo['Scope'] ?? '') === 'kingdom' ? ' (kingdom ladder)' : ''); ?>
+						<th class="lg-col-award<?= $_gc ? ' lg-group-' . $_gc : '' ?>" title="<?= $_title ?>">
 							<div class="lg-th-inner"><?= htmlspecialchars($ainfo['DisplayName'] ?? $ainfo['Name']) ?></div>
 						</th>
 <?php endforeach; ?>
@@ -637,7 +674,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 <?php endif; ?>
 <?php foreach ($awardIds as $aid) : ?>
 <?php   $info = $row['Awards'][$aid] ?? null; ?>
-<?php   $_gc  = strtolower($awardList[$aid]['KnightGroup'] ?? ''); ?>
+<?php   $_gc  = strtolower($awardGroupKey[$aid] ?? ''); ?>
 <?php   $_knighted = $_gc && isset($_knightGroups[ucfirst($_gc)]); ?>
 <?php   $_tdClass = 'lg-col-award' . ($_gc ? ' lg-group-' . $_gc : '') . ($_knighted ? ' lg-cell-knight-' . $_gc : ''); ?>
 <?php   if ($info !== null && $info['IsMaster']) : ?>

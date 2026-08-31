@@ -884,6 +884,57 @@ class Controller_Admin extends Controller
         $this->data['PermInheritedKingdomName']  = $inheritedKingdomName;
     }
 
+    public function permissionsgrid($path = null)
+    {
+        $parts = explode('/', $path ?? '');
+        $type  = in_array($parts[0] ?? '', ['Kingdom', 'Park']) ? $parts[0] : null;
+        $id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+        $uid   = (int)($this->session->user_id ?? 0);
+
+        if (!$type || !$id) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        // Mirror Admin::roles(), the sibling page that MANAGES exactly this data: RBAC
+        // permission key first, legacy authority row as the fallback, global admin spelled
+        // out. Gating on has_authority() alone shut an officer who holds *.auth.manage
+        // through an RBAC role -- and can therefore grant these permissions -- out of the
+        // read-only grid that shows what those grants do.
+        $permKey = $type === 'Kingdom' ? 'kingdom.auth.manage' : 'park.auth.manage';
+        if (
+            !$this->Authorization->has_permission_or_authority($uid, $permKey, strtolower($type), $id, AUTH_EDIT)
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        $this->template = '../revised-frontend/Admin_permissions_grid.tpl';
+    }
+
+    /**
+     * Is this player-action request an AJAX call that wants a JSON verdict?
+     *
+     * Two conditions, both required, both impossible for a browser navigation:
+     * a POST, and an explicit Ajax=1 field in the POST BODY (not $_REQUEST --
+     * $_GET must never be able to turn a page load into a JSON response, and
+     * $_REQUEST merges the two). Request::restore(), the only code path that
+     * could ever refill $_POST from a previous request, has no callers.
+     *
+     * Deliberately not X-Requested-With: jQuery sets that header automatically on
+     * every $.ajax()/$.post(), so keying on it would silently convert callers
+     * that still expect HTML.
+     *
+     * @return bool
+     */
+    private function is_ajax_player_action()
+    {
+        return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+            && isset($_POST['Ajax'])
+            && (string) $_POST['Ajax'] === '1';
+    }
+
     public function player($id)
     {
         logtrace("player call", $_REQUEST);
@@ -918,6 +969,14 @@ class Controller_Admin extends Controller
         // it; curl gets everything.
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         if ($_uid <= 0) {
+            // An AJAX save must be told WHY. fetch() follows the 302 below to a 200
+            // HTML login page, which is indistinguishable from a successful save to
+            // anything reading resp.ok.
+            if ($this->is_ajax_player_action()) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 5, 'error' => 'Your session has expired. Log in again and retry.']);
+                exit;
+            }
             header('Location: ' . UIR . "Login/login/Admin/player/$id");
             exit;
         }
@@ -943,6 +1002,14 @@ class Controller_Admin extends Controller
         if (!$_is_self_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
+            // Same reason as the logged-out gate: without this an unauthorised
+            // officer's Add Award fetch() follows this redirect to the player
+            // profile, gets a 200, and the modal reports "Award added!".
+            if ($this->is_ajax_player_action()) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 5, 'error' => 'You do not have permission to change this player\'s record.']);
+                exit;
+            }
             header('Location: ' . UIR . 'Player/profile/' . $id);
             exit;
         }
@@ -968,7 +1035,11 @@ class Controller_Admin extends Controller
                         }
                         break;
                     case 'update':
-                        if ($this->request->RemoveDues == 'Revoke Dues') {
+                        // RemoveDues is officer-only. The self-service carve-out above lets a
+                        // player POST their own photo/heraldry with no officer authority; this
+                        // branch is not scoped to Update='Update Details', so without the
+                        // guard the same request could also revoke the player's own dues.
+                        if (!$_is_self_media_post && $this->request->RemoveDues == 'Revoke Dues') {
                             $this->load_model('Treasury');
                             $this->Treasury->RemoveLastDuesPaid(array(
                                     'MundaneId' => $id,
@@ -976,6 +1047,17 @@ class Controller_Admin extends Controller
                                 ));
                         }
                         if ($this->request->Update == 'Update Media') {
+                            // SetHeraldry/SetWaiver/SetImage/one_shot each returned a status
+                            // that was thrown away, so a domain-layer rejection was invisible to
+                            // BOTH $r and data['Error'] and the request reported success having
+                            // written nothing. Record the FIRST failure so a later successful
+                            // file in the same multi-file upload cannot mask an earlier one.
+                            $mediaFailure = null;
+                            if ($_FILES['Heraldry']['size'] > 0 && !Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the heraldry.';
+                            }
                             if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
                                 if ((int) $_FILES['Heraldry']['size'] / 1.333 > 465000) {
                                     $this->data['Error'] = 'Image Error: File size is too large.';
@@ -985,23 +1067,31 @@ class Controller_Admin extends Controller
                                         if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
                                             $h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
                                             $h_imdata = base64_encode($h_im);
-                                            $this->Player->SetHeraldry(array(
+                                            $mediaResult = $this->Player->SetHeraldry(array(
                                                 'MundaneId' => $id,
                                                 'Heraldry' => strlen($h_imdata) > 0 ? $h_imdata : null,
                                                 'HeraldryMimeType' => strlen($h_imdata) > 0 ? $_FILES['Heraldry']['type'] : '',
                                                 'Token' => $this->session->token
                                             ));
+                                            if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                                $mediaFailure = $mediaResult;
+                                            }
                                         }
                                     } else {
                                         die('TMP_DIR is not writable.');
                                     }
                                 }
                             }
+                            if ($_FILES['Waiver']['size'] > 0 && !Common::supported_mime_types($_FILES['Waiver']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the waiver.';
+                            }
                             if ($_FILES['Waiver']['size'] > 0 && Common::supported_mime_types($_FILES['Waiver']['type'])) {
                                 if (move_uploaded_file($_FILES['Waiver']['tmp_name'], DIR_TMP . sprintf("w_%06d", $id))) {
                                     $w_im = file_get_contents(DIR_TMP . sprintf("w_%06d", $id));
                                     $w_imdata = base64_encode($w_im);
-                                    $this->Player->SetWaiver(array(
+                                    $mediaResult = $this->Player->SetWaiver(array(
                                         'MundaneId' => $id,
                                         'HasImage' => strlen($pi_imdata),
                                         'Waivered' => strlen($w_imdata),
@@ -1009,7 +1099,15 @@ class Controller_Admin extends Controller
                                         'WaiverMimeType' => strlen($w_imdata) > 0 ? $_FILES['Waiver']['type'] : '',
                                         'Token' => $this->session->token
                                     ));
+                                    if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                        $mediaFailure = $mediaResult;
+                                    }
                                 }
+                            }
+                            if ($_FILES['PlayerImage']['size'] > 0 && !Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the player photo.';
                             }
                             if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
                                 if ((int) $_FILES['PlayerImage']['size'] * 1.333 > 465000) {
@@ -1019,15 +1117,23 @@ class Controller_Admin extends Controller
                                     if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
                                         $pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
                                         $pi_imdata = base64_encode($pi_im);
-                                        $this->Player->SetImage(array(
+                                        $mediaResult = $this->Player->SetImage(array(
                                             'MundaneId' => $id,
                                             'HasImage' => strlen($pi_imdata),
                                             'Image' => strlen($pi_imdata) > 0 ? $pi_imdata : null,
                                             'ImageMimeType' => strlen($pi_imdata) > 0 ? $_FILES['PlayerImage']['type'] : '',
                                             'Token' => $this->session->token
                                         ));
+                                        if ($mediaFailure === null && is_array($mediaResult) && (int) ($mediaResult['Status'] ?? 0) !== 0) {
+                                            $mediaFailure = $mediaResult;
+                                        }
                                     }
                                 }
+                            }
+                            if ($_FILES['PlayerFace']['size'] > 0 && !Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
+                                // Previously skipped in silence: an unsupported type fell through every
+                                // arm, wrote nothing, and the request still reported success.
+                                $this->data['Error'] = 'Upload Error: that file type is not supported for the profile face image.';
                             }
                             if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
                                 if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
@@ -1038,8 +1144,16 @@ class Controller_Admin extends Controller
                                         'MundaneId' => $id,
                                         'Base64FaceImage' => $face_imdata
                                         ]);
+                                    if ($mediaFailure === null && is_array($one) && (int) ($one['Status'] ?? 0) !== 0) {
+                                        $mediaFailure = $one;
+                                    }
                                     unlink(DIR_TMP . sprintf("fi_%06d", $id));
                                 }
+                            }
+                            if ($mediaFailure !== null) {
+                                // The shared post-switch block turns a non-zero $r['Status'] into
+                                // data['Error'], which is what the Ajax envelope reports.
+                                $r = $mediaFailure;
                             }
                         }
                         if ($this->request->Update == 'Update Details') {
@@ -1115,6 +1229,7 @@ class Controller_Admin extends Controller
                                 'CustomName' => $this->request->Admin_player->AwardName,
                                 'AliasAwardId' => $this->request->Admin_player->AliasAwardId ?? 0,
                                 'Rank' => $this->request->Admin_player->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Admin_player->ZodiacMonth ?? 0),
                                 'Date' => $this->request->Admin_player->Date,
                                 'GivenById' => $this->request->Admin_player->GivenById,
                                 'Note' => $this->request->Admin_player->Note,
@@ -1154,6 +1269,7 @@ class Controller_Admin extends Controller
                                 'CustomName' => $this->request->Admin_player->AwardName ?? '',
                                 'AliasAwardId' => $this->request->Admin_player->AliasAwardId ?? 0,
                                 'Rank' => $this->request->Admin_player->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Admin_player->ZodiacMonth ?? 0),
                                 'Date' => $this->request->Admin_player->Date,
                                 'GivenById' => $this->request->Admin_player->GivenById,
                                 'Note' => $this->request->Admin_player->Note,
@@ -1168,6 +1284,7 @@ class Controller_Admin extends Controller
                                 'AwardsId' => $roastbeef,
                                 'KingdomAwardId' => $this->request->Admin_player->KingdomAwardId,
                                 'Rank' => $this->request->Admin_player->Rank,
+                                'ZodiacMonth' => (int) ($this->request->Admin_player->ZodiacMonth ?? 0),
                                 'Date' => $this->request->Admin_player->Date,
                                 'GivenById' => $this->request->Admin_player->GivenById,
                                 'Note' => $this->request->Admin_player->Note,
@@ -1221,6 +1338,63 @@ class Controller_Admin extends Controller
                         $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                     }
                 }
+
+                // AJAX callers get the verdict, not a 200-with-an-HTML-page.
+                //
+                // Everything above reports failure by setting $this->data['Error']
+                // and falling through to render the full admin page -- with HTTP
+                // 200. no_authorization() does the same for a logged-in caller
+                // without rights. Four fetch()es in revised.js (the Kingdom, Player
+                // and Park Add Award modals and the Player edit-award modal) used to
+                // branch on resp.ok alone, so an unauthorised officer, a Rule-1
+                // ladder rejection and an invalid-month rejection all rendered
+                // "Award added!" with nothing written to the database.
+                //
+                // DETECTION IS DELIBERATELY NARROW. This method also serves real page
+                // loads and half a dozen plain <form method=post> submits from
+                // Admin_player.tpl, and a controller that stops rendering its page is
+                // far worse than a modal that over-reports success. So the branch
+                // requires an explicit Ajax=1 field in $_POST, which only those four
+                // fetch bodies send. A browser navigation (GET, no body) can never
+                // satisfy it, nor can any existing form or link on the page. It is
+                // NOT keyed on X-Requested-With: jQuery sets that header on every
+                // $.ajax call, which would flip other callers to JSON without their
+                // knowing.
+                //
+                // Shape matches the *Ajax controllers ({status, error}, status 0 =
+                // success, 5 = no authorization) so the two conventions in this
+                // codebase converge instead of diverging further.
+                if ($this->is_ajax_player_action()) {
+                    header('Content-Type: application/json');
+                    // data['Error'] is the single source of truth for "did this fail",
+                    // because the validation arms above set it and break without ever
+                    // touching $r.
+                    if (trim((string) ($this->data['Error'] ?? '')) !== '') {
+                        $ajax_status = (int) ($r['Status'] ?? 1);
+                        $ajax_detail = trim((string) ($r['Detail'] ?? ''));
+                        // Prefer Detail: that is the specific sentence a domain
+                        // rejection wrote ("... is a ranked award — choose a rank").
+                        // data['Error'] glues the generic Error onto it with ':<p>'
+                        // for the page render, which flattens into a run-on line in a
+                        // modal. Only trust Detail when $r actually reported a
+                        // failure -- a validation arm leaves $r at Status 0 and any
+                        // Detail there belongs to an unrelated earlier call.
+                        $ajax_error = ($ajax_status !== 0 && $ajax_detail !== '')
+                            ? $ajax_detail
+                            : trim(strip_tags((string) $this->data['Error']));
+                        // Never report an error under a success status.
+                        echo json_encode([
+                            'status' => $ajax_status === 0 ? 1 : $ajax_status,
+                            'error' => $ajax_error,
+                        ]);
+                    } else {
+                        echo json_encode([
+                            'status' => 0,
+                            'message' => trim(strip_tags((string) ($this->data['Message'] ?? ''))),
+                        ]);
+                    }
+                    exit;
+                }
             }
         } else {
             $this->request->clear('Admin_player');
@@ -1242,7 +1416,7 @@ class Controller_Admin extends Controller
         $kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
         if (is_array($kingdomOfficers)) {
             foreach ($kingdomOfficers as $officer) {
-                if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                if (in_array($officer['OfficerRoleKey'] ?? '', array('monarch', 'regent'), true) && $officer['MundaneId'] > 0) {
                     $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
                 }
             }
@@ -1252,7 +1426,7 @@ class Controller_Admin extends Controller
             $parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
             if (is_array($parkOfficers)) {
                 foreach ($parkOfficers as $officer) {
-                    if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+                    if (in_array($officer['OfficerRoleKey'] ?? '', array('monarch', 'regent'), true) && $officer['MundaneId'] > 0) {
                         $preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
                     }
                 }
@@ -1274,7 +1448,7 @@ class Controller_Admin extends Controller
         $_parkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $this->data['CanEditPlayerMedia'] = $_uid > 0 && (
             $_uid === (int)$id
-            || $this->Authorization->has_authority($_uid, AUTH_PARK, $_parkId, AUTH_EDIT)
+            || $this->Authorization->has_permission_or_authority($_uid, 'player.heraldry.manage', 'park', $_parkId, AUTH_EDIT)
         );
     }
 
@@ -1824,7 +1998,69 @@ class Controller_Admin extends Controller
         }
     }
 
-    public function kingdom($id = null)
+    public function roles($path = null)
+    {
+        if (empty($this->session->user_id)) {
+            header('Location: ' . UIR . 'Login');
+            exit;
+        }
+        $parts = explode('/', $path ?? '');
+        $type  = ($parts[0] ?? '') === 'Kingdom' ? 'Kingdom' : null;
+        $id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+        $uid   = (int)($this->session->user_id ?? 0);
+
+        if (!$type || !valid_id($id)) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        // Must have kingdom.auth.manage permission or legacy kingdom CREATE auth or be admin
+        if (
+            !$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $id, AUTH_CREATE)
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
+            header('Location: ' . UIR . 'Admin/kingdom/' . $id);
+            exit;
+        }
+
+        $this->kingdom_route($id);
+        $this->load_model('Kingdom');
+        $this->load_model('RBACService');
+
+        $kd = $this->Kingdom->get_kingdom_details($id);
+        foreach ($kd as $key => $detail) {
+            $this->data[$key] = $detail;
+        }
+        $this->data['page_title'] = "RBAC Roles: " . ($this->data['KingdomInfo']['KingdomName'] ?? '');
+        $this->data['IsPrinz']    = $this->data['KingdomInfo']['IsPrincipality'] ?? false;
+        $this->data['IsOrkAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+        // Available roles (system + custom for this kingdom)
+        $this->data['AvailableRoles'] = $this->RBACService->GetAvailableRoles($id);
+
+        // All role assignments scoped to this kingdom
+        $this->data['RoleAssignments'] = $this->RBACService->GetKingdomRoleAssignments($id);
+
+        // Parks for scope selector
+        $r = $this->Kingdom->get_park_summary($id);
+        $this->data['park_summary'] = $r;
+
+        // All permissions from registry
+        $this->data['AllPermissions'] = $this->RBACService->GetAllPermissions();
+
+        // Effective permissions for current user (escalation prevention)
+        $this->data['UserEffectivePermissions'] = $this->RBACService->GetEffectivePermissions($uid, 'kingdom', $id);
+
+        // Custom roles with permission counts
+        $this->data['CustomRoles'] = $this->RBACService->GetCustomRolesWithCounts($id);
+        // The seeded starter roles (kingdom_id=0, is_system=1). CustomRoles filters
+        // is_system=0 by definition, so without this the page never showed them.
+        $this->data['SystemRoles'] = $this->RBACService->GetSystemRolesWithCounts($id);
+
+        $this->template = '../revised-frontend/Admin_roles.tpl';
+    }
+
+    private function load_kingdom_admin_data($id = null)
     {
         if (empty($this->session->user_id)) {
             header('Location: ' . UIR . 'Login/login/Admin/kingdom/' . (int)$id);
@@ -1834,17 +2070,198 @@ class Controller_Admin extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Front-door gate, BEFORE any data loading: the individual cards are each
+        // capability-gated, but the page itself (kingdom details, park summary, the
+        // Reports link list) should not render for someone with no administrative
+        // standing here. Placed above get_kingdom_details()/get_park_summary() -- the
+        // latter is a 26-week attendance aggregate -- so a rejected request does not
+        // pay for a page it will never see.
+        if (!$this->admin_has_kingdom_standing((int)($this->session->user_id ?? 0), (int)$id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
         $this->kingdom_route($id);
-        $r = $this->Kingdom->get_kingdom_details($id);
-        foreach ($r as $key => $detail) {
+        $kd = $this->Kingdom->get_kingdom_details($id);
+        foreach ($kd as $key => $detail) {
             $this->data[$key] = $detail;
         }
-        $this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
+        $this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
         $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
+
+        // Auth flags for revised admin template
+        $uid = $_uid;
+        $this->data['CanEditKingdom']   = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT);
+        $this->data['CanManageKingdom'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$id, AUTH_CREATE);
+        // Park creation is global-admin only. Passing a kingdom id as the AUTH_ADMIN scope
+        // is meaningless (HasAuthority() has no scoped-admin case and falls to `return
+        // false`), so spell it the way the server gate in ParkAjax::park() does.
+        $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
+        $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
+
+        // Qualification tests (Walker) moved here from the Kingdom profile's Admin
+        // Tasks tab. The four capabilities are separate on purpose: a subject-matter
+        // expert on the test-manager list may write questions without being able to
+        // change pass criteria or push a draft live.
+        $this->load_model('QualTest');
+        $qtCaps = $this->QualTest->capabilities($uid, (int)$id);
+        $this->data['CanManageTests']       = $uid > 0 && in_array(true, $qtCaps, true);
+        $this->data['CanConfigTests']       = $uid > 0 && $qtCaps['Config'];
+        $this->data['CanEditTestQuestions'] = $uid > 0 && $qtCaps['Questions'];
+        $this->data['CanPublishTests']      = $uid > 0 && $qtCaps['Publish'];
+        $this->data['CanViewTestResults']   = $uid > 0 && $qtCaps['Results'];
+
+        // One config read serves the qual-test toggles and AwardRecsPublic below.
+        $knConfigs = Common::get_configs($id, CFG_KINGDOM);
+        $this->data['QualTestReeveEnabled'] = isset($knConfigs['QualTestReeveEnabled'])
+            ? (bool)(int)$knConfigs['QualTestReeveEnabled']['Value']
+            : false;
+        $this->data['QualTestCorporaEnabled'] = isset($knConfigs['QualTestCorporaEnabled'])
+            ? (bool)(int)$knConfigs['QualTestCorporaEnabled']['Value']
+            : false;
+        $this->data['AwardRecsPublic'] = isset($knConfigs['AwardRecsPublic'])
+            ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+
+        // Admin data for the revised template
+        $this->data['AdminInfo']       = [];
+        $this->data['AdminConfig']     = [];
+        $this->data['AdminParkTitles'] = [];
+        $this->data['AdminAwards']     = [];
+        if ($this->data['CanManageKingdom']) {
+            $parentKingdomId   = (int)($kd['KingdomInfo']['ParentKingdomId'] ?? 0);
+            $parentKingdomName = '';
+            if ($parentKingdomId > 0) {
+                $parentKingdomName = $this->Kingdom->get_kingdom_name($parentKingdomId);
+            }
+            $this->data['AdminInfo'] = [
+                'Name'             => $kd['KingdomInfo']['KingdomName']  ?? '',
+                'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
+                'Description'      => $kd['KingdomInfo']['Description']  ?? '',
+                'Url'              => $kd['KingdomInfo']['Url']          ?? '',
+                'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
+                'ParentKingdomId'  => $parentKingdomId,
+                'ParentKingdomName' => $parentKingdomName,
+                'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
+            ];
+            // The Configuration modal used to receive ork_configuration rows straight from
+            // the database, filtered only on the user_setting flag. That flag is data, not
+            // contract: it renders whatever key any part of the app has ever written for
+            // this kingdom -- stale keys no code reads any more, and, because
+            // Treasury::create_accounts() stores the kingdom's ledger account ids the same
+            // way, pointer-style rows one flipped flag away from being an editable text box.
+            //
+            // ConfigRegistry is the allow-list AND the presentation contract: a key it does
+            // not know is not emitted at all, and every key it does know arrives with a
+            // label, help text, a control type, the values that control may produce, and a
+            // group. That is what lets the template render a typed control instead of
+            // guessing from the value's PHP type, and it is why no label map belongs in the
+            // template.
+            //
+            // Emitted as a list rather than a key => row map because the modal iterates it
+            // with forEach(); FilterKnown() returns the keys in registry group order and
+            // array_values() preserves that order.
+            $this->load_model('ConfigRegistry');
+            $this->data['AdminConfig']     = array_values(
+                $this->ConfigRegistry->filter_known($kd['KingdomConfiguration'] ?? [])
+            );
+            $this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
+
+            $rawAwards   = $kd['Awards']['Awards'] ?? [];
+            $adminAwards = [];
+            foreach ($rawAwards as $kawId => $aw) {
+                $adminAwards[] = [
+                    'KingdomAwardId'   => (int)$kawId,
+                    'KingdomAwardName' => $aw['KingdomAwardName']  ?? '',
+                    'AwardId'          => (int)($aw['AwardId']     ?? 0),
+                    'AwardName'        => $aw['AwardName']         ?? '',
+                    'IsLadder'         => (int)($aw['IsLadder']    ?? 0),
+                    // OfficialIsLadder is deliberately distinct from IsLadder above:
+                    // IsLadder is the EFFECTIVE flag (1 for a kingdom's own
+                    // ladder-ified awards too), while this is 1 only for the 16
+                    // standard Amtgard orders. The Manage Awards modal locks the
+                    // Ladder/Max Rank controls on this flag, never on IsLadder --
+                    // locking a kingdom's own ladder would be wrong.
+                    // Fails CLOSED (locked), not open: an absent key here (never
+                    // observed against real GetAwardList output, which always
+                    // supplies this key) must never be misread as "not official."
+                    'OfficialIsLadder' => (int)($aw['OfficialIsLadder'] ?? 1),
+                    'MaxLevel'         => (int)($aw['MaxLevel']    ?? 0),
+                    'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
+                    'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
+                    'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
+                    'TitleClass'       => (int)($aw['TitleClass']  ?? 0),
+                    // classifyAward() in _kingdom_admin_modals.tpl buckets every row by
+                    // Peerage first. Omitting it here made that test read undefined on
+                    // every award, so Knighthoods and Associate Titles fell through to
+                    // "Offices & Other" and each Paragon was filed -- and labelled to a
+                    // Monarch -- as a Masterhood. Kingdom::GetAwardList() has always
+                    // returned it; it just was not being carried across.
+                    'Peerage'          => (string)($aw['Peerage']  ?? ''),
+                    // Soft delete: kingdomaward.disabled. A retired award still exists and
+                    // still has grants hanging off it, so the modal has to be able to show
+                    // it struck through rather than pretend it was never there.
+                    'Disabled'         => (int)($aw['Disabled']    ?? 0),
+                ];
+            }
+            $this->data['AdminAwards'] = $adminAwards;
+
+            $this->load_model('Award');
+            $sysAwardResult = $this->Award->GetAwardList(['IsLadder' => null, 'IsTitle' => null, 'OfficerRole' => 'Awards']);
+            $sysAwards = [];
+            if (($sysAwardResult['Status']['Status'] ?? 1) == 0) {
+                foreach ($sysAwardResult['Awards'] as $sa) {
+                    $sysAwards[] = ['AwardId' => (int)$sa['AwardId'], 'Name' => $sa['AwardName'] ?? $sa['KingdomAwardName']];
+                }
+                usort($sysAwards, function ($a, $b) {
+                    return strcasecmp($a['Name'], $b['Name']);
+                });
+            }
+            $this->data['SystemAwards'] = $sysAwards;
+        }
+
+        // The template reads these; before this they were never assigned on the
+        // Admin route, so the hero art fell back to the placeholder, both hero
+        // counters and all four trend cards rendered 0, and the Parks admin table
+        // and every park-title select built from KaConfig came up empty.
+        $this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($id);
+
+        $dash = $this->Kingdom->get_admin_dashboard((int)$id);
+        $this->data['AdminDashboard'] = $dash;
+        $this->data['ActiveParkCount'] = $dash['Standing']['Parks'];
+        $this->data['ActivePlayers']   = $dash['Standing']['ActivePlayers'];
+        $this->data['TotalAttendance'] = $dash['Standing']['AttendanceYtd'];
+
+        $this->data['ParkTitleId_options'] = [];
+        foreach ($kd['ParkTitles'] ?? [] as $pt) {
+            $this->data['ParkTitleId_options'][$pt['ParkTitleId']] = $pt['Title'];
+        }
+
+        $this->data['park_edit_lookup'] = [];
+        $rawParks = $this->Kingdom->get_parks($id);
+        foreach (($rawParks['Parks'] ?? []) as $p) {
+            $this->data['park_edit_lookup'][(int)$p['ParkId']] = [
+                'ParkId'       => (int)$p['ParkId'],
+                'Name'         => $p['Name'],
+                'Abbreviation' => $p['Abbreviation'] ?? '',
+                'ParkTitleId'  => (int)($p['ParkTitleId'] ?? 0),
+                'Active'       => $p['Active'],
+            ];
+        }
+    }
+
+    /**
+     * Kingdom admin console.
+     */
+    public function kingdom($id = null)
+    {
+        $this->load_kingdom_admin_data($id);
+        $this->template = '../revised-frontend/Admin_kingdom.tpl';
     }
 
     public function park($id = null)
@@ -1864,7 +2281,22 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+
+        // Front door for Admin_park.tpl, the same one Admin::kingdom() and
+        // Admin::resetwaivers() apply to the kingdom console: without it the whole park
+        // admin page was served to ANY logged-in player for ANY park id. Park standing is
+        // accepted alongside kingdom standing because this console is the park officers'
+        // own page, not just the kingdom's view of it.
+        $_standingKingdomId = (int)($this->data['ParkInfo']['KingdomId'] ?? 0);
+        if (
+            !$this->Authorization->has_permission_or_authority($_uid, 'park.details.edit', 'park', (int)$id, AUTH_EDIT)
+            && !$this->admin_has_kingdom_standing($_uid, $_standingKingdomId)
+        ) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
     }
 
     public function new_player_attendance()
@@ -2045,6 +2477,23 @@ class Controller_Admin extends Controller
             exit;
         }
 
+        // This route renders Admin_kingdom.tpl / the park equivalent below, so it needs the
+        // same front-door check Admin::kingdom() applies -- without it the whole admin page
+        // (kingdom details, park summary, Reports list) was served to any logged-in player
+        // at a second URL, even though reset_waivers itself correctly refused.
+        $_uid = (int)($this->session->user_id ?? 0);
+        if ($type === 'kingdom') {
+            $_standingKingdomId = (int)$id;
+        } else {
+            $this->load_model('Park');
+            $_pi = $this->Park->get_park_info($id);
+            $_standingKingdomId = (int)($_pi['ParkInfo']['KingdomId'] ?? 0);
+        }
+        if (!$this->admin_has_kingdom_standing($_uid, $_standingKingdomId)) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
         $request = array('Token' => $this->session->token);
         if ($type == 'kingdom') {
             $request['KingdomId'] = $id;
@@ -2080,7 +2529,7 @@ class Controller_Admin extends Controller
             $this->data['park_summary'] = $r;
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
             $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
-            $this->template = 'Admin_kingdom.tpl';
+            $this->template = '../revised-frontend/Admin_kingdom.tpl';
         } elseif ($type == 'park') {
             $this->park_route($id);
             $r = $this->Park->get_park_info($id);
@@ -2089,7 +2538,7 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid, 'park', (int)$id);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2545,20 +2994,80 @@ class Controller_Admin extends Controller
         $this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
     }
 
-    private function admin_can_reset_waivers(int $uid): bool
+    /**
+     * Mirror of the authorization check inside Player::ResetWaivers (class.Player.php).
+     *
+     * The domain accepts three callers: a global ORK admin, a park officer holding EDIT
+     * on the target park, or a kingdom officer holding EDIT on the target kingdom.
+     * Gating the button on AUTH_ADMIN alone hid it from every officer in the second and
+     * third group -- the capability was theirs, but no UI ever offered it to them.
+     *
+     * $scope must be the scope the reset will actually be submitted under.
+     * Admin::resetwaivers() sends KingdomId for one and ParkId for the other, and the
+     * domain only tests the one it was handed: a park-scoped reset is authorized against
+     * the park, never against its kingdom. Passing the wrong scope here would show a
+     * button the domain then refuses.
+     */
+    private function admin_can_reset_waivers(int $uid, string $scope, int $scopeId): bool
     {
-        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        if ($uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (!valid_id($scopeId)) {
+            return false;
+        }
+        if ($scope === 'kingdom') {
+            return $this->Authorization->has_authority($uid, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
+        }
+        if ($scope === 'park') {
+            return $this->Authorization->has_authority($uid, AUTH_PARK, $scopeId, AUTH_EDIT);
+        }
+        return false;
     }
 
     private function admin_can_edit_kingdom_reports(int $uid, int $kingdomId): bool
     {
-        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT);
+        return $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kingdomId, AUTH_EDIT);
     }
 
     private function set_admin_kingdom_auth_flags(int $uid, int $kingdomId): void
     {
-        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid, 'kingdom', $kingdomId);
         $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
+    }
+
+    /**
+     * Does $uid have ANY administrative standing in this kingdom?
+     *
+     * The Admin_kingdom template exposes kingdom details, the park summary and the whole
+     * Reports link list, so the page itself needs a front door even though each card is
+     * separately capability-gated. Every route that renders that template must ask this --
+     * Admin::kingdom() is not the only one (Admin::resetwaivers() renders it too, and was
+     * serving the full page to any logged-in player).
+     *
+     * The qualification-test capabilities count: a non-officer test manager legitimately
+     * reaches this page for the Qualification Tests section.
+     */
+    private function admin_has_kingdom_standing(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (
+            $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kingdomId, AUTH_EDIT)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', $kingdomId, AUTH_CREATE)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', $kingdomId, AUTH_EDIT)
+        ) {
+            return true;
+        }
+        $this->load_model('QualTest');
+        return in_array(true, $this->QualTest->capabilities($uid, $kingdomId), true);
     }
 
 }

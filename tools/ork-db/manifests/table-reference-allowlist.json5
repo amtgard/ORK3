@@ -1,0 +1,37 @@
+{
+  // Inputs for drift-check's "code references a table the committed schema does not
+  // define" gate. See tools/ork-db/lib/TableReferenceScan.php for how references are
+  // collected and tools/ork-db/lib/SchemaTableIndex.php for what counts as defined.
+
+  // Where domain SQL lives. system/lib/ork3/ is the ONLY layer allowed to touch the
+  // database (agent-instructions/claude.md), and that rule is mechanically enforced by
+  // bin/check-layering.sh plus blocking pre-commit and pre-push hooks — so this single
+  // root is a complete scan surface, not a sample. Verified when this gate was added:
+  // orkui/ contains zero DB_PREFIX references, and orkservice/ has exactly two, both in
+  // *.test.php scratch files, both naming ork_mundane.
+  //
+  // tests/ is deliberately excluded: fixtures create and drop their own scratch tables,
+  // which are correctly absent from the shipped schema.
+  "scan_roots": [
+    "system/lib/ork3"
+  ],
+
+  // Tables the domain layer names that the committed schema does not define.
+  //
+  // Every entry MUST carry a reason — TableReferenceScan::allowList() throws without one.
+  // "kind" drives how drift-check reports the entry:
+  //
+  //   mirror_only   the table legitimately exists only on prod / the live mirror.
+  //   known_defect  the reference is a real bug that is not yet fixed. drift-check prints
+  //                 the offending file and line on every run so the debt stays visible.
+  //
+  // Every entry is named in drift-check's output regardless of kind, so the list cannot
+  // grow unnoticed. An entry whose reference disappears — or whose table becomes defined —
+  // is reported as STALE and fails the check until it is deleted.
+  "allowed": {
+    "ork_attendance_myisam": {
+      "kind": "mirror_only",
+      "reason": "Legacy MyISAM twin of ork_attendance. The *_myisam tables are deliberate prod-side backup/mirror copies that feed the nightly dump (see db-migrations/2026-08-21-innodb-merge-tables.sql, which calls out leaving them alone), so they are intentionally absent from the rendered schema — SchemaIntrospection::isIgnoredTable() applies the same *_myisam rule when fingerprinting. NOTE the standing exposure: system/lib/ork3/class.EventPlanning.php reconciliation UPDATEs this table unconditionally, so that one statement errors on a database built purely from the repo. Recorded here rather than fixed; the fix belongs in class.EventPlanning.php."
+    }
+  }
+}

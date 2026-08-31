@@ -407,6 +407,41 @@ class Common
     public static $rate_limit;
     public static $init;
 
+    /**
+     * Maximum accepted base64 length for an uploaded image payload.
+     *
+     * 465000 base64 characters is roughly 348836 raw bytes, which is exactly
+     * the byte budget resizeImageToLimit() in
+     * orkui/template/default/script/orkui.js targets at every one of its call
+     * sites. Downscaling happens in the browser; this constant is only the
+     * server-side backstop for a client with JS disabled, a direct API post, or
+     * a resize that failed. If one number moves the other must move with it.
+     */
+    public const MAX_IMAGE_BASE64_LENGTH = 465000;
+
+    public const IMAGE_TOO_LARGE_MESSAGE = 'That image is too large - it should have been resized before upload. Please pick a smaller image (roughly 340 KB or less) and try again.';
+    public const IMAGE_BAD_TYPE_MESSAGE = 'That file type is not supported. Please upload a PNG, JPG, or GIF image.';
+    public const IMAGE_UNREADABLE_MESSAGE = 'That file could not be read as an image. It may be corrupt, or it may not be an image at all - please try a different file.';
+
+    /**
+     * Validate a base64 image payload before it is handed to GD.
+     *
+     * Returns null when the payload is acceptable, otherwise a message that is
+     * safe to put in front of a person. Callers must treat a non-null return as
+     * a hard failure: previously an oversize or unsupported payload was
+     * silently dropped and the caller still reported success.
+     */
+    public static function image_payload_error($base64, $mime)
+    {
+        if (strlen((string)$base64) >= self::MAX_IMAGE_BASE64_LENGTH) {
+            return self::IMAGE_TOO_LARGE_MESSAGE;
+        }
+        if (!self::supported_mime_types($mime)) {
+            return self::IMAGE_BAD_TYPE_MESSAGE;
+        }
+        return null;
+    }
+
     public function __construct()
     {
         global $DB;
@@ -674,7 +709,9 @@ class Common
 
     public static function supported_mime_types($type)
     {
-        switch (strtoupper($type)) {
+        // (string) cast: a direct API post can omit the mime entirely, and
+        // strtoupper(null) is deprecated in PHP 8.1+.
+        switch (strtoupper((string)$type)) {
             case 'IMAGE/JPEG':
             case 'IMAGE/GIF':
             case 'IMAGE/PNG':
@@ -802,49 +839,228 @@ class Common
             where ka.award_id in ";
     }
 
-    public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0)
+    public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0, $display_label = '', $skip_history = false)
     {
+        global $DB;
+        // Resolve whether this position bypasses the ork_authorization path.
+        // Prefer the registry has_auth_role flag; fall back to the legacy string check.
+        $_role_key = PermissionRegistry::CanonicalOfficerRole($role);
+        $bypass_auth = ('champion' === $_role_key || 'gmr' === $_role_key);
+        if ((int)$position_id > 0) {
+            $DB->Clear();
+            $DB->pid = (int)$position_id;
+            $_har = $DB->DataSet("SELECT has_auth_role FROM " . DB_PREFIX . "officer_position WHERE position_id = :pid LIMIT 1");
+            if ($_har !== false && $_har->size() > 0 && $_har->Next()) {
+                $bypass_auth = ((int)$_har->has_auth_role === 0);
+            }
+        }
+
         $this->officer->clear();
         if (isset($kingdom_id)) {
             $this->officer->kingdom_id = $kingdom_id;
         }
         $this->officer->park_id = $park_id;
-        $this->officer->role = $role;
+        if ((int)$position_id > 0) {
+            $this->officer->position_id = (int)$position_id;
+        } else {
+            $this->officer->role = $role;
+        }
         $this->officer->system = $system;
         if ($this->officer->find()) {
-            if ('Champion' == $role || 'GMR' == $role) {
+            $old_mundane_id = $this->officer->mundane_id;
+            $officer_changed = false;
+            // Keep both the position_id and the canonical-key role cache in sync (dual-write).
+            if ((int)$position_id > 0) {
+                $this->officer->position_id = (int)$position_id;
+                $this->officer->role = $role;
+            }
+
+            // Stamp the holder change. ork_officer.modified has no ON UPDATE clause --
+            // deliberately, because its only consumer (CloseOfficerHistoryTerm's
+            // $held_since) wants a START date, and ON UPDATE would reset it on every
+            // unrelated edit. But nothing assigned it here either, so it recorded when the
+            // OFFICE ROW was created rather than when this person took office: a Monarch
+            // seat created in 2016 and held by five people since would have backfilled the
+            // current holder as serving since 2016. Assigning it on the holder change is
+            // what makes the column mean "held since" and makes that backfill honest.
+            $heldSince = date('Y-m-d H:i:s');
+            if ($bypass_auth) {
                 $this->officer->mundane_id = $new_officer_id;
+                $this->officer->modified = $heldSince;
                 $this->officer->save();
+                $officer_changed = true;
             } else {
                 $this->authorization->clear();
                 $this->authorization->authorization_id = $this->officer->authorization_id;
                 if ($this->authorization->find()) {
                     $this->officer->mundane_id = $new_officer_id;
+                    $this->officer->modified = $heldSince;
                     $this->authorization->mundane_id = $new_officer_id;
                     $this->officer->save();
                     $this->authorization->save();
+                    $officer_changed = true;
+                }
+            }
+
+            // C3: observability — a real change was requested ($new differs from $old)
+            // but $officer_changed never flipped (e.g. has_auth_role crown position whose
+            // ork_authorization row is missing, so find() failed). Leave a diagnosable
+            // breadcrumb rather than silently returning as if nothing was wrong.
+            if (!$officer_changed && (int)$new_officer_id !== (int)$old_mundane_id) {
+                logtrace('set_officer: officer NOT changed (missing authorization row?)', [
+                    'kingdom_id'   => (int)$kingdom_id,
+                    'park_id'      => (int)$park_id,
+                    'position_id'  => (int)$position_id,
+                    'role'         => $role,
+                    'old_mundane'  => (int)$old_mundane_id,
+                    'new_mundane'  => (int)$new_officer_id,
+                    'bypass_auth'  => $bypass_auth ? 1 : 0,
+                    'authorization_id' => (int)$this->officer->authorization_id,
+                ]);
+            }
+
+            // Record officer history only if the officer was actually changed
+            if ($officer_changed && (int)$old_mundane_id !== (int)$new_officer_id) {
+                // OfficerPosition::TransitionOfficer writes its own term, with the
+                // caller's dates and note -- things record_officer_history cannot
+                // express. Exactly one function writes ork_officer_history per
+                // transition; the flag is how the newer path claims that job.
+                if (!$skip_history) {
+                    $this->record_officer_history($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id, $display_label);
+                }
+
+                // RBAC dual-write: prefer position-id sync, fall back to legacy string path.
+                if (isset(Ork3::$Lib->rbacservice)) {
+                    try {
+                        if ((int)$position_id > 0) {
+                            Ork3::$Lib->rbacservice->sync_officer_role_by_position_id($old_mundane_id, $new_officer_id, $position_id, $kingdom_id, $park_id, $changed_by);
+                        } else {
+                            Ork3::$Lib->rbacservice->sync_officer_role($kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by);
+                        }
+                    } catch (Exception $e) {
+                        logtrace('RBAC sync officer failed', $e->getMessage());
+                    }
                 }
             }
         }
     }
 
+    /**
+     * Record officer change in the ork_officer_history table.
+     * Closes the previous officer's open record and opens a new one (unless vacating).
+     */
+    private function record_officer_history($kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0, $position_id = 0, $display_label = '')
+    {
+        global $DB;
+        $kid  = (int)$kingdom_id;
+        $pid  = (int)$park_id;
+        $posid = (int)$position_id;
+        $cb   = (int)$changed_by;
+        $today = date('Y-m-d');
+
+        // Resolve the snapshot DisplayTitle for this position at write time (requirement 7).
+        // IF(alias != '', alias, title) — never COALESCE.
+        // P3: callers that already resolved the DisplayTitle (e.g. SetOfficerByPosition
+        // via GetPosition) pass it in $display_label, letting us SKIP the inner SELECT.
+        // Backward compatible: when '' is passed (default, as legacy callers do), fall
+        // back to $role and re-run the snapshot SELECT exactly as before.
+        $passed_label = trim((string) $display_label);
+        if ($passed_label !== '') {
+            $display_label = $passed_label;
+        } else {
+            $display_label = $role;
+            if ($posid > 0) {
+                $DB->Clear();
+                $DB->dl_pid = $posid;
+                $DB->dl_kid = $kid;
+                $dl = $DB->DataSet(
+                    "SELECT " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
+					 FROM " . DB_PREFIX . "officer_position p
+					 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+					   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key
+					 WHERE p.position_id = :dl_pid LIMIT 1"
+                );
+                if ($dl !== false && $dl->size() > 0 && $dl->Next()) {
+                    $display_label = (string)$dl->display_title;
+                }
+            }
+        }
+
+        // Close any open history record for this role (where end_date IS NULL)
+        if ((int)$old_mundane_id > 0) {
+            $DB->Clear();
+            $DB->h_today = $today;
+            $DB->h_kid = $kid;
+            $DB->h_pid = $pid;
+            $DB->h_role = $role;
+            $DB->h_posid = $posid;
+            $DB->Execute(
+                "UPDATE " . DB_PREFIX . "officer_history
+				 SET end_date = :h_today
+				 WHERE kingdom_id = :h_kid
+				   AND park_id = :h_pid
+				   AND role = :h_role
+				   AND ( :h_posid = 0 OR position_id = :h_posid )
+				   AND end_date IS NULL"
+            );
+        }
+
+        // Open a new history record for the incoming officer (skip if vacating)
+        if ((int)$new_mundane_id > 0) {
+            $mid = (int)$new_mundane_id;
+            $DB->Clear();
+            $DB->i_kid = $kid;
+            $DB->i_pid = $pid;
+            $DB->i_mid = $mid;
+            $DB->i_role = $role;
+            $DB->i_posid = $posid;
+            $DB->i_label = $display_label;
+            $DB->i_today = $today;
+            $DB->i_cb = ($cb > 0 ? $cb : null);
+            $DB->Execute(
+                "INSERT INTO " . DB_PREFIX . "officer_history
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label, :i_today, NULL, :i_cb, NOW())"
+            );
+        }
+    }
+
     public function create_officers($kingdom_id, $park_id, $principality_id = 0)
     {
-        $this->create_officer($kingdom_id, $park_id, 'Monarch', 'create');
-        $this->create_officer($kingdom_id, $park_id, 'Regent', 'create');
-        $this->create_officer($kingdom_id, $park_id, 'Prime Minister', 'create');
-        $this->create_officer($kingdom_id, $park_id, 'Champion', null);
-        $this->create_officer($kingdom_id, $park_id, 'GMR', null);
+        $this->create_officer($kingdom_id, $park_id, 'monarch', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'regent', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'prime_minister', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'champion', null);
+        $this->create_officer($kingdom_id, $park_id, 'gmr', null);
+        if (valid_id($principality_id)) {
+            $this->create_officer($kingdom_id, $park_id, 'monarch', 'create', 1, $principality_id);
+            $this->create_officer($kingdom_id, $park_id, 'regent', 'create', 1, $principality_id);
+            $this->create_officer($kingdom_id, $park_id, 'prime_minister', 'create', 1, $principality_id);
+            $this->create_officer($kingdom_id, $park_id, 'champion', null, 1, $principality_id);
+            $this->create_officer($kingdom_id, $park_id, 'gmr', null, 1, $principality_id);
+        }
     }
 
     private function create_officer($kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0)
     {
+        // Resolve the system seed position_id for this canonical key (BUG-1).
+        global $DB;
+        $DB->Clear();
+        $DB->ck_role = $role;
+        $_posrow = $DB->DataSet("SELECT position_id FROM " . DB_PREFIX . "officer_position WHERE kingdom_id = 0 AND canonical_key = :ck_role LIMIT 1");
+        $position_id = ($_posrow !== false && $_posrow->size() > 0 && $_posrow->Next()) ? (int)$_posrow->position_id : 0;
+
         $this->officer->clear();
         $this->officer->kingdom_id = $kingdom_id;
         $this->officer->park_id = $park_id;
         $this->officer->role = $role;
+        $this->officer->position_id = $position_id;
         $this->officer->system = $system;
-        $this->officer->modified = time();
+        // date(), NOT time(). An epoch integer in a TIMESTAMP column is not a valid
+        // datetime literal, so MariaDB coerces it to '0000-00-00 00:00:00' -- which is
+        // why 4,685 of 5,590 ork_officer rows carry a zero date. The event and config
+        // writes in this same file already spell it this way.
+        $this->officer->modified = date('Y-m-d H:i:s');
         if (strlen($authorization) > 0) {
             $A = new Authorization();
             $r = $A->add_auth_h([
@@ -858,6 +1074,11 @@ class Common
             }
         }
         $this->officer->save();
+
+        // RBAC dual-write: notify that a new officer slot was created
+        if (isset(Ork3::$Lib->rbacservice)) {
+            Ork3::$Lib->rbacservice->sync_new_officer_slot($kingdom_id, $park_id, $role, $position_id);
+        }
     }
 
     public static function get_configs($id, $type = CFG_KINGDOM)

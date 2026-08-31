@@ -43,7 +43,7 @@ class Controller_Kingdom extends Controller
         unset($this->session->park_id);
         unset($this->session->park_name);
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                     array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
@@ -86,7 +86,7 @@ class Controller_Kingdom extends Controller
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         $kid     = (int)$kingdom_id;
         $uid     = (int)($this->session->user_id ?? 0);
-        $isAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+        $isAdmin = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kid, AUTH_EDIT);
         $this->load_model('KingdomProfile');
         $result = $this->KingdomProfile->extended_park_averages($kid, $isAdmin);
         header('Content-Type: application/json');
@@ -256,7 +256,7 @@ class Controller_Kingdom extends Controller
         $this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
         $preloadOfficers = [];
         foreach ($this->data['kingdom_officers']['Officers'] ?? [] as $o) {
-            if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0) {
+            if (in_array($o['OfficerRoleKey'] ?? '', ['monarch', 'regent'], true) && (int)$o['MundaneId'] > 0) {
                 $preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
             }
         }
@@ -353,7 +353,6 @@ class Controller_Kingdom extends Controller
         }
 
         $this->load_model('KingdomProfile');
-        $this->load_model('QualTest');
         $kid = (int)$kingdom_id;
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $kn_isAdmin = ($kn_uid > 0) ? $this->Authorization->has_authority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
@@ -370,10 +369,12 @@ class Controller_Kingdom extends Controller
         // Pin the logged-in user's home park to the first slot in the parks list
         $this->data['UserParkId'] = $uid > 0 ? $this->KingdomProfile->user_home_park_id($uid) : 0;
         $this->data['CanEditKingdom']   = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$kingdom_id, AUTH_CREATE);
+        $this->data['can_manage_officer_positions'] = $uid > 0
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
         // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
         // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
         // must mirror that check exactly; gating it on kingdom authority showed
@@ -393,23 +394,17 @@ class Controller_Kingdom extends Controller
             $this->data['CanManageAnyParkInKingdom'] = $this->KingdomProfile->has_park_create_auth($uid, (int)$kingdom_id);
         }
 
-        // Qualification Tests module: gate the Tests management UI.
-        $this->data['CanManageTests'] = $uid > 0 && $this->QualTest->can_manage($uid, (int)$kingdom_id);
+        // Qualification-test flags used to be shaped here for the profile's "Admin Tasks"
+        // tab. That tab is retired and the whole test workspace lives on the kingdom
+        // Admin page, which computes its own per-capability flags -- so nothing on this
+        // page reads them any more.
+        // Officer-history role options come from the position REGISTRY (all positions,
+        // including vacant and retired ones) -- history records who HELD an office, so a
+        // currently-empty seat must still be selectable.
+        $this->load_model('OfficerPosition');
+        $this->data['OfficerHistoryRoleOptions'] = $this->OfficerPosition->history_role_options((int)$kingdom_id);
 
-        // Kingdom-level configs are read in two places below (QualTest toggles
-        // and AwardRecsPublic). Fetch once here — before the qual-tests branch
-        // was merged with master this was assigned lower down, which left the
-        // QualTest reads reaching for an undefined variable and always
-        // resolving to false.
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
-
-        // Qualification Tests config toggles (per-kingdom enable of reeve/corpora tests).
-        $this->data['QualTestReeveEnabled'] = isset($knConfigs['QualTestReeveEnabled'])
-            ? (bool)(int)$knConfigs['QualTestReeveEnabled']['Value']
-            : false;
-        $this->data['QualTestCorporaEnabled'] = isset($knConfigs['QualTestCorporaEnabled'])
-            ? (bool)(int)$knConfigs['QualTestCorporaEnabled']['Value']
-            : false;
 
         // Gate the "Voting Eligible" Players-nav link by whether this kingdom has
         // voting rules defined. Single source of truth lives in

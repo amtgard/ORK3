@@ -34,9 +34,35 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
+
+	// ---- Sidebar shows CROWN offices only ----------------------------------
+	// $officerList keeps the FULL set (crown + supporting) for the Officer
+	// Details modal; the sidebar renders this filtered copy.
+	//
+	// Classification is a NEW key on the buildOfficerRows() row and is null for
+	// an officer with no registry position (ork_officer.position_id = 0). So the
+	// test is deliberately NEGATIVE: hide only what is positively identified as
+	// 'supporting', and show everything else. Writing `=== 'crown'` here would
+	// empty the entire sidebar on any data set where the key is absent or
+	// unmapped -- a far worse failure than one extra row.
+	$crownOfficerList = [];
+	foreach ($officerList as $_o) {
+		if (!is_array($_o)) {
+			continue;
+		}
+		if (strtolower(trim((string)($_o['Classification'] ?? ''))) === 'supporting') {
+			continue;
+		}
+		$crownOfficerList[] = $_o;
+	}
+
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
 
 	// Parse park main location for map links
 	$parkLat = null; $parkLng = null;
@@ -502,29 +528,52 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="pk-officers-bar-actions">
+					<?php if (!empty($CanAdminPark)): ?>
+					<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
+						<i class="fas fa-pencil-alt"></i>
+					</button>
+					<?php endif; ?>
+					<!-- Available to EVERY viewer, not just park admins. -->
+					<a href="#" class="pk-officers-more" data-tip="All officers"
+					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="pk-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($crownOfficerList as $o): ?>
 				<li>
-					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="pk-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= (int)$o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona'] ?? '') ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (empty($officerList)): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (empty($crownOfficerList)): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= !empty($officerList) ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -1283,6 +1332,11 @@
 				</div>
 			</div>
 
+			<!-- Officer History moved into the shared Officer Details modal
+			     (partials/_officer_details_modal.tpl, "Officer History" tab).
+			     The Add/Edit history modals below stay put; the partial calls
+			     through to them. -->
+
 			<!-- Admin Tab -->
 			<?php if (!empty($CanAdminPark)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
@@ -1461,6 +1515,198 @@
 </div><!-- /pk-layout -->
 
 <!-- =============================================
+     Officer Details Modal (shared with Kingdom)
+     Current Officers tree + the re-homed Officer History tab.
+     Inputs per the partial's docblock; $officerList is the FULL set here
+     (crown + supporting) -- the sidebar above renders $crownOfficerList.
+     ============================================= -->
+<?php
+	$ofScope   = 'park';
+	$ofOrgId   = (int)$park_id;
+	$ofOrgName = (string)($park_name ?? '');
+?>
+<?php include __DIR__ . '/partials/_officer_details_modal.tpl'; ?>
+
+<!-- Officer History Backfill Modal -->
+<?php if (!empty($CanManagePark)): ?>
+<div id="pk-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#276749"></i>Add Officer History Record</h3>
+			<button class="pk-modal-close-btn" onclick="pkCloseOhBackfillModal()">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="overflow:visible">
+			<div class="pk-form-error" id="pk-oh-bf-error"></div>
+			<div id="pk-oh-bf-success" class="pk-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record added successfully!
+			</div>
+
+			<div class="pk-acct-field" style="position:relative">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-oh-bf-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="pk-oh-bf-player-id" value="" />
+				<div class="kn-ac-results" id="pk-oh-bf-player-results" style="position:fixed"></div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="pk-oh-bf-role">
+					<option value="">Select role...</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="pk-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="pk-oh-bf-start" />
+				</div>
+				<div class="pk-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="pk-oh-bf-end" />
+				</div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="pk-oh-bf-notes" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-secondary" onclick="pkCloseOhBackfillModal()">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-oh-bf-save-btn" onclick="pkSaveOhBackfill()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Record
+			</button>
+		</div>
+	</div>
+</div>
+<!-- Officer History Edit Modal -->
+<?php if (!empty($CanManagePark)): ?>
+<div id="pk-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#276749"></i>Edit Officer History Record</h3>
+			<button class="pk-modal-close-btn" onclick="pkCloseOhEditModal()">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div class="pk-form-error" id="pk-oh-ed-error"></div>
+			<div id="pk-oh-ed-success" class="pk-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record updated successfully!
+			</div>
+			<input type="hidden" id="pk-oh-ed-id" value="" />
+
+			<div class="pk-acct-field">
+				<label>Player</label>
+				<input type="text" id="pk-oh-ed-player" disabled style="background:#f7fafc;color:#718096;cursor:not-allowed" />
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="pk-oh-ed-role">
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="pk-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="pk-oh-ed-start" />
+				</div>
+				<div class="pk-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="pk-oh-ed-end" />
+				</div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="pk-oh-ed-notes" rows="2" maxlength="500"></textarea>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-secondary" onclick="pkCloseOhEditModal()">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-oh-ed-save-btn" onclick="pkSaveOhEdit()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Changes
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
+
+<style>
+/* ---- Officers sidebar bar: "see more" affordance ----
+   Copies the established .pna-card-more house affordance (Playernew_index.tpl
+   :260-261) rather than inventing a chevron. Sits beside the edit pencil when
+   the viewer can manage; shown to EVERY viewer. */
+.pk-officers-bar-actions {
+	display:inline-flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.pk-officers-bar-actions a.pk-officers-more {
+	font-weight:600; font-size:11px; color:#4299e1; text-decoration:none;
+	text-transform:none; letter-spacing:0; white-space:nowrap;
+}
+.pk-officers-bar-actions a.pk-officers-more:hover { text-decoration:underline; }
+.pk-officers-bar-actions a.pk-officers-more:focus-visible {
+	outline:2px solid var(--ork-blue-link); outline-offset:2px; border-radius:3px;
+}
+html[data-theme="dark"] .pk-officers-bar-actions a.pk-officers-more { color:#63b3ed; }
+
+/* Officer History Tab */
+.pk-oh-toolbar {
+	display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.pk-oh-filter-select {
+	padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;
+	color:#4a5568; background:#fff; cursor:pointer;
+}
+.pk-oh-table {
+	width:100%; border-collapse:collapse; font-size:13px;
+}
+.pk-oh-table thead th {
+	background:#f7fafc; border-bottom:2px solid #e2e8f0; padding:8px 10px;
+	text-align:left; font-weight:600; color:#4a5568; font-size:12px;
+	text-transform:uppercase; letter-spacing:.03em;
+}
+.pk-oh-table tbody tr { border-bottom:1px solid #edf2f7; }
+.pk-oh-table tbody tr:hover { background:#f7fafc; }
+.pk-oh-table tbody td { padding:8px 10px; color:#2d3748; vertical-align:middle; }
+.pk-oh-table .pk-oh-role-badge {
+	display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px;
+	font-weight:600; background:#f0fff4; color:#276749;
+}
+.pk-oh-table .pk-oh-current { background:#c6f6d5; color:#276749; }
+.pk-oh-del-btn {
+	background:none; border:none; color:#e53e3e; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s;
+}
+.pk-oh-del-btn:hover { opacity:1; background:#fed7d7; }
+.pk-oh-edit-btn {
+	background:none; border:none; color:#3182ce; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s; margin-right:2px;
+}
+.pk-oh-edit-btn:hover { opacity:1; background:#ebf8ff; }
+.pk-oh-notes-text { font-size:11px; color:#718096; font-style:italic; max-width:200px; }
+.pk-oh-bf-success {
+	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
+	font-size:13px; margin-bottom:12px; text-align:center;
+}
+#pk-oh-edit-overlay .pk-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+#pk-oh-backfill-overlay .pk-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+</style>
+
+<!-- =============================================
      JavaScript
      ============================================= -->
 <script>
@@ -1481,7 +1727,7 @@ var PkConfig = {
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:     <?= json_encode(!empty($CanAdminPark) ? array_map(function($o) {
-		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
+		return ['OfficerRole' => $o['OfficerRole'], 'CanonicalKey' => $o['CanonicalKey'] ?? $o['OfficerRole'], 'DisplayTitle' => $o['DisplayTitle'] ?? $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
 	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkDetails: {
 		url:         <?= json_encode($parkInfo['Url']         ?? '') ?>,
@@ -3313,6 +3559,297 @@ $(function() {
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+
+// =============================================
+// Officer History Tab
+// =============================================
+// pkOhData is still read by pkOpenOhEditModal(); the Officer Details modal
+// keeps it in step via window.pkOhData before opening the Edit modal.
+var pkOhData   = [];
+
+function pkLoadOfficerHistory() {
+    var role = document.getElementById('pk-oh-role-filter').value;
+    var url  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/officerhistory';
+    if (role) url += '?Role=' + encodeURIComponent(role);
+
+    document.getElementById('pk-oh-loading').style.display = '';
+    document.getElementById('pk-oh-table').style.display = 'none';
+    document.getElementById('pk-oh-empty').style.display = 'none';
+
+    $.getJSON(url, function(resp) {
+        document.getElementById('pk-oh-loading').style.display = 'none';
+        if (resp.status !== 0) { return; }
+        pkOhData = resp.history || [];
+        pkRenderOhTable(pkOhData);
+    }).fail(function() {
+        document.getElementById('pk-oh-loading').style.display = 'none';
+        document.getElementById('pk-oh-empty').style.display = '';
+        document.getElementById('pk-oh-empty').textContent = 'Failed to load officer history.';
+    });
+}
+
+function pkRenderOhTable(data) {
+    var tbody = document.getElementById('pk-oh-tbody');
+    var table = document.getElementById('pk-oh-table');
+    var empty = document.getElementById('pk-oh-empty');
+    tbody.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'No officer history records found.';
+        return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+    var canEdit = PkConfig.canManage;
+
+    for (var i = 0; i < data.length; i++) {
+        var h = data[i];
+        var tr = document.createElement('tr');
+        var isCurrent = !h.EndDate;
+        var roleBadge = '<span class="pk-oh-role-badge' + (isCurrent ? ' pk-oh-current' : '') + '">' +
+                        pkHtmlEsc(h.Role) + (isCurrent ? ' (current)' : '') + '</span>';
+
+        var persona = h.MundaneId > 0
+            ? (isCurrent ? '<i class="fas fa-crown" style="color:#d69e2e;margin-right:4px" title="Current officer"></i>' : '') +
+              '<a href="' + PkConfig.uir + 'Player/profile/' + h.MundaneId + '">' + pkHtmlEsc(h.Persona || 'Unknown') + '</a>'
+            : '<em style="color:#a0aec0">Vacant</em>';
+
+        var startStr = h.StartDate ? pkFormatDate(h.StartDate) : '';
+        var endStr   = h.EndDate   ? pkFormatDate(h.EndDate)   : (isCurrent ? '<em style="color:#38a169">Present</em>' : '');
+        var notes    = h.Notes ? '<span class="pk-oh-notes-text">' + pkHtmlEsc(h.Notes) + '</span>' : '';
+
+        var delCell = '';
+        if (canEdit) {
+            delCell = '<td style="white-space:nowrap">' +
+                '<button class="pk-oh-edit-btn" onclick="pkOpenOhEditModal(' + i + ')" title="Edit record"><i class="fas fa-pencil-alt"></i></button>' +
+                '<button class="pk-oh-del-btn" onclick="pkDeleteOhRecord(' + h.OfficerHistoryId + ')" title="Delete record"><i class="fas fa-trash-alt"></i></button>' +
+                '</td>';
+        }
+
+        tr.innerHTML = '<td>' + roleBadge + '</td>' +
+                        '<td>' + persona + '</td>' +
+                        '<td>' + startStr + '</td>' +
+                        '<td>' + endStr + '</td>' +
+                        '<td>' + notes + '</td>' +
+                        delCell;
+        tbody.appendChild(tr);
+    }
+}
+
+function pkFormatDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr + 'T00:00:00');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function pkHtmlEsc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+function pkDeleteOhRecord(ohid) {
+    // knConfirm/orkAlert (revised.js) — native confirm()/alert() are banned house-wide.
+    // The Kingdom twin of this function already uses them; this copy had drifted.
+    knConfirm('Delete this officer history record?', function() {
+        $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteofficerhistory',
+            { OfficerHistoryId: ohid },
+            function(resp) {
+                if (resp.status === 0) {
+                    pkLoadOfficerHistory();
+                } else {
+                    orkAlert(resp.error || 'Failed to delete record.');
+                }
+            }, 'json'
+        ).fail(function() { orkAlert('Network error.'); });
+    });
+}
+
+// Backfill modal
+function pkOpenOhBackfillModal() {
+    var overlay = document.getElementById('pk-oh-backfill-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('pk-oh-bf-error').textContent = '';
+    document.getElementById('pk-oh-bf-error').style.display = 'none';
+    document.getElementById('pk-oh-bf-success').style.display = 'none';
+    document.getElementById('pk-oh-bf-player-text').value = '';
+    document.getElementById('pk-oh-bf-player-id').value = '';
+    document.getElementById('pk-oh-bf-role').value = '';
+    document.getElementById('pk-oh-bf-start').value = '';
+    document.getElementById('pk-oh-bf-end').value = '';
+    document.getElementById('pk-oh-bf-notes').value = '';
+}
+
+function pkCloseOhBackfillModal() {
+    document.getElementById('pk-oh-backfill-overlay').style.display = 'none';
+    var results = document.getElementById('pk-oh-bf-player-results');
+    results.innerHTML = '';
+    results.classList.remove('kn-ac-open');
+}
+
+function pkSaveOhBackfill() {
+    var mid   = document.getElementById('pk-oh-bf-player-id').value;
+    var role  = document.getElementById('pk-oh-bf-role').value;
+    var start = document.getElementById('pk-oh-bf-start').value;
+    var end   = document.getElementById('pk-oh-bf-end').value;
+    var notes = document.getElementById('pk-oh-bf-notes').value;
+    var errEl = document.getElementById('pk-oh-bf-error');
+
+    if (!mid)   { errEl.textContent = 'Please select a player.';  errEl.style.display = ''; return; }
+    if (!role)  { errEl.textContent = 'Role is required.';         errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.';   errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('pk-oh-bf-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/addofficerhistory',
+        { MundaneId: mid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+            if (resp.status === 0) {
+                document.getElementById('pk-oh-bf-success').style.display = '';
+                setTimeout(function() {
+                    pkCloseOhBackfillModal();
+                    pkLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save record.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Edit modal
+function pkOpenOhEditModal(idx) {
+    var h = pkOhData[idx];
+    if (!h) return;
+    var overlay = document.getElementById('pk-oh-edit-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('pk-oh-ed-error').textContent = '';
+    document.getElementById('pk-oh-ed-error').style.display = 'none';
+    document.getElementById('pk-oh-ed-success').style.display = 'none';
+    document.getElementById('pk-oh-ed-id').value = h.OfficerHistoryId;
+    document.getElementById('pk-oh-ed-player').value = h.Persona || h.UserName || '(unknown)';
+    document.getElementById('pk-oh-ed-role').value = h.Role;
+    document.getElementById('pk-oh-ed-start').value = h.StartDate || '';
+    document.getElementById('pk-oh-ed-end').value = h.EndDate || '';
+    document.getElementById('pk-oh-ed-notes').value = h.Notes || '';
+}
+
+function pkCloseOhEditModal() {
+    document.getElementById('pk-oh-edit-overlay').style.display = 'none';
+}
+
+function pkSaveOhEdit() {
+    var ohid  = document.getElementById('pk-oh-ed-id').value;
+    var role  = document.getElementById('pk-oh-ed-role').value;
+    var start = document.getElementById('pk-oh-ed-start').value;
+    var end   = document.getElementById('pk-oh-ed-end').value;
+    var notes = document.getElementById('pk-oh-ed-notes').value;
+    var errEl = document.getElementById('pk-oh-ed-error');
+
+    if (!role)  { errEl.textContent = 'Role is required.';       errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('pk-oh-ed-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/editofficerhistory',
+        { OfficerHistoryId: ohid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+            if (resp.status === 0) {
+                document.getElementById('pk-oh-ed-success').style.display = '';
+                setTimeout(function() {
+                    pkCloseOhEditModal();
+                    pkLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save changes.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Player autocomplete for backfill modal
+(function() {
+    var input   = document.getElementById('pk-oh-bf-player-text');
+    var hidden  = document.getElementById('pk-oh-bf-player-id');
+    var results = document.getElementById('pk-oh-bf-player-results');
+    if (!input) return;
+    var debounce;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounce);
+        hidden.value = '';
+        var q = input.value.trim();
+        if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+        debounce = setTimeout(function() {
+            var url = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1';
+            $.getJSON(url, function(data) {
+                results.innerHTML = '';
+                if (!data || data.length === 0) {
+                    results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
+                    if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                    results.classList.add('kn-ac-open');
+                    return;
+                }
+                for (var i = 0; i < data.length; i++) {
+                    var d = data[i];
+                    var el = document.createElement('div');
+                    el.className = 'kn-ac-item';
+                    el.setAttribute('data-id', d.MundaneId);
+                    el.innerHTML = '<span class="kn-ac-persona">' + pkHtmlEsc(d.Persona) + '</span>' +
+                                   '<span class="kn-ac-park">' + pkHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + '</span>';
+                    el.addEventListener('click', (function(dd) {
+                        return function() {
+                            input.value = dd.Persona;
+                            hidden.value = dd.MundaneId;
+                            results.innerHTML = '';
+                            results.classList.remove('kn-ac-open');
+                        };
+                    })(d));
+                    results.appendChild(el);
+                }
+                if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                results.classList.add('kn-ac-open');
+            });
+        }, 250);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!results.contains(e.target) && e.target !== input) {
+            results.innerHTML = '';
+            results.classList.remove('kn-ac-open');
+        }
+    });
+})();
+
+// The officer-history main-content tab is gone; the Officer Details modal
+// lazy-loads history on its own tab activation, so no hook is needed here.
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',

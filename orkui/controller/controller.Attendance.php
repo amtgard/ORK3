@@ -55,7 +55,7 @@ class Controller_Attendance extends Controller
 
         $_uid = (int)($this->session->user_id ?? 0);
         $this->data['CanAddAttendance'] = $_uid > 0
-            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'park.attendance.manage', 'kingdom', (int)$id, AUTH_EDIT);
 
         if (strlen($action) > 0) {
             $this->request->save('Attendance_kingdom', true);
@@ -197,7 +197,7 @@ class Controller_Attendance extends Controller
 
         $_uid = (int)($this->session->user_id ?? 0);
         $this->data['CanAddAttendance'] = $_uid > 0
-            && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'park.attendance.manage', 'park', (int)$id, AUTH_EDIT);
 
         if (strlen($action) > 0) {
             $this->request->save('Attendance_park', true);

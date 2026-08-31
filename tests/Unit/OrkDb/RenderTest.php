@@ -73,7 +73,7 @@ final class RenderTest extends TestCase
 
     public function testRunFailsWhenExtractCatalogMissing(): void
     {
-        unlink($this->toolRoot . '/extracted/award.sql');
+        unlink($this->toolRoot . '/templates/catalogs/award.sql');
         $render = new Render($this->toolRoot, $this->repoRoot);
 
         $this->expectException(ValidationException::class);

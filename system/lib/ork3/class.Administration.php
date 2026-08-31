@@ -400,7 +400,8 @@ class Administration
                     'UserName' => $rs->username,
                     'GivenName' => $rs->given_name,
                     'Surname' => $rs->surname,
-                    'OfficerRole' => $rs->officer_role,
+                    'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                    'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     'OfficerId' => $rs->officer_id,
                 ];
             }
@@ -445,7 +446,8 @@ class Administration
                     'UserName' => $rs->username,
                     'GivenName' => $rs->given_name,
                     'Surname' => $rs->surname,
-                    'OfficerRole' => $rs->officer_role,
+                    'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                    'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     'OfficerId' => $rs->officer_id,
                 ];
             }
@@ -526,7 +528,8 @@ class Administration
                         'Persona' => $rs->persona,
                         'GivenName' => $rs->given_name,
                         'Surname' => $rs->surname,
-                        'OfficerRole' => $rs->officer_role,
+                        'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                        'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     ];
                 }
             }
@@ -552,7 +555,8 @@ class Administration
                         'Persona' => $rs->persona,
                         'GivenName' => $rs->given_name,
                         'Surname' => $rs->surname,
-                        'OfficerRole' => $rs->officer_role,
+                        'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                        'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     ];
                 }
             }

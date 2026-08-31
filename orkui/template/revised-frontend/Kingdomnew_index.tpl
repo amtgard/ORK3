@@ -44,9 +44,14 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
+
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
 
 	// Players loaded via AJAX (players_json) — not available at render time
 	$knAllPlayers    = [];
@@ -193,9 +198,9 @@
 				<i class="fas fa-map"></i> Map
 			</a>
 			<?php if ($CanManageKingdom ?? false): ?>
-			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
+			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Admin/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
 				<i class="fas fa-cog"></i> Admin
-			</button>
+			</a>
 			<?php endif; ?>
 		</div>
 
@@ -244,20 +249,95 @@
 	<div class="kn-sidebar">
 
 		<!-- Officers -->
+		<style>
+		/* "See more" affordance on the Officers bar. Copies the established
+		   .pna-card-more treatment (Playernew_index.tpl:260-261) rather than
+		   inventing a chevron. It is shown to EVERY viewer, and sits beside the
+		   manage pencil when the viewer can manage. Colours are --ork-* tokens,
+		   which already flip in dark mode. */
+		.kn-officers-bar-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+		.kn-officers-more {
+			font-weight: 600;
+			font-size: 11px;
+			color: var(--ork-link);
+			text-decoration: none;
+			text-transform: none;
+			letter-spacing: 0;
+			white-space: nowrap;
+		}
+		.kn-officers-more:hover { text-decoration: underline; }
+		.kn-officers-more:focus-visible {
+			outline: 2px solid var(--ork-blue-link);
+			outline-offset: 2px;
+			border-radius: 3px;
+			text-decoration: underline;
+		}
+		</style>
+		<?php
+			/* ---------------------------------------------------------------
+			   CROWN-ONLY sidebar.
+
+			   `Classification` is a NEW key on the officer row and is null or
+			   absent for any officer with no registry position
+			   (ork_officer.position_id = 0). Such a row is treated as CROWN and
+			   is SHOWN. Only a row we can POSITIVELY identify as 'supporting' is
+			   hidden, so a missing/unknown key can never silently empty the whole
+			   sidebar on data this dev mirror does not contain.
+
+			   The complete set -- crown + supporting, nested -- is one click away
+			   in the officer details modal.
+			   --------------------------------------------------------------- */
+			$knCrownOfficers = [];
+			foreach ($officerList as $_knOfficer) {
+				$_knClass = strtolower(trim((string)($_knOfficer['Classification'] ?? '')));
+				if ($_knClass === 'supporting') {
+					continue;
+				}
+				$knCrownOfficers[] = $_knOfficer;
+			}
+			// Card gate stays on the FULL list: a group whose officers happen to be
+			// all-supporting still needs its card, because the card carries the only
+			// route into the modal that shows them.
+		?>
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if ($CanManageKingdom ?? false): ?>
-				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="kn-officers-bar-actions">
+					<?php if ($CanManageKingdom ?? false): ?>
+					<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
+						<i class="fas fa-pencil-alt"></i>
+					</button>
+					<?php endif; ?>
+					<?php /* Short data-tip on purpose: [data-tip]::after is centred on the
+					         element and nowrap, and this sits at the card's right edge, so a
+					         long tip clips at the viewport edge on a phone. */ ?>
+					<a class="kn-officers-more" href="#" data-tip="All officers"
+						onclick="if (window.ofOpenOfficerModal) { window.ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="kn-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($knCrownOfficers as $o): ?>
 				<li>
-					<span class="kn-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="kn-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="kn-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
 							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
@@ -267,8 +347,8 @@
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (count($officerList) === 0): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (count($knCrownOfficers) === 0): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= count($officerList) > 0 ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -341,6 +421,9 @@
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
+				<?php // Officer History is no longer a main-content tab -- it now lives in
+					  // the "Officer History" tab of partials/_officer_details_modal.tpl,
+					  // reached from the Officers sidebar arrow. ?>
 				<?php if ($ShowRecsTab ?? false):
 					$_recsN = (int)($AwardRecommendationsCount ?? 0);
 				?>
@@ -349,11 +432,10 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<li data-kntab="admin">
-					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
-				</li>
-				<?php endif; ?>
+				<?php // "Admin Tasks" retired: every item it carried now lives on the kingdom
+				      // Admin page (Admin/kingdom/{id}), linked from the Admin button in the hero
+				      // above. The last holdout was the Walker qualification-test group, which
+				      // moved there with per-capability gating. ?>
 			</ul>
 			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
@@ -880,9 +962,9 @@
 							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
-							<?php // Test Results now live under Admin Tasks -> Tests, with the rest of the test
-							      // workspace (configure, questions, results). They are officer-only, so they were
-							      // the only gated entries in this otherwise-public group. ?>
+							<?php // Test Results live on the kingdom Admin page under Qualification Tests,
+							      // with the rest of the test workspace. They are capability-gated, so they
+							      // were the only non-public entries in this otherwise-public group. ?>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -902,59 +984,14 @@
 				</div>
 			</div>
 
-		<!-- Admin Tab -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
-			<div class="kn-report-cols">
-				<?php if ($CanManageKingdom ?? false): ?>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-users-cog"></i> Players</h5>
-					<ul>
-						<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
-						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
-						<li><a href="#" onclick="knOpenMergePlayerModal();return false;">Merge Players</a></li>
-						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
-					</ul>
-				</div>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-cog"></i> Kingdom</h5>
-					<ul>
-						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
-						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-					</ul>
-				</div>
-				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<div class="kn-report-group">
-					<h5>
-						<i class="fas fa-clipboard-check"></i> Tests
-						<button type="button" class="kn-help-btn" data-doc="qualtests"
-						        title="How the Reeve's and Corpora tests work" aria-label="Help: qualification tests">
-							<i class="fas fa-question-circle"></i>
-						</button>
-					</h5>
-					<ul>
-						<li><a href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">Configure Tests</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/reeve">Reeve's Test Questions</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/corpora">Corpora Test Questions</a></li>
-						<?php // Results belong with the rest of the test workspace: whoever configures a
-						      // test and writes its questions is the same person who reads who passed it,
-						      // and they were a tab away in Reports. Same audience as this whole group
-						      // (the enclosing check is CanManageKingdom || CanManageTests), so only the
-						      // per-test "is it switched on" condition is needed here. Still listed under
-						      // Reports too, for anyone who goes looking for a report where reports live. ?>
-						<?php if (!empty($QualTestReeveEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kingdom_id ?>">Reeve's Test Results</a></li>
-						<?php endif; ?>
-						<?php if (!empty($QualTestCorporaEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kingdom_id ?>">Corpora Test Results</a></li>
-						<?php endif; ?>
-					</ul>
-				</div>
-				<?php endif; ?>
-			</div>
-		</div>
-		<?php endif; ?>
+		<?php /* The Officer History main-content panel (#kn-tab-officerhistory) was
+		         removed: the view now lives in the officer details modal
+		         (partials/_officer_details_modal.tpl), which detects the absence of
+		         #kn-tab-officerhistory and re-points knLoadOfficerHistory() at its own
+		         table. The Add / Edit / Delete history modals below are DELIBERATELY
+		         kept -- the modal calls through to them. */ ?>
+
+
 
 		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
 		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
@@ -1007,6 +1044,135 @@
 
 </div><!-- /kn-layout -->
 
+<!-- Officer History Backfill Modal -->
+<?php if ($CanEditKingdom ?? false): ?>
+<div id="kn-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#2b6cb0"></i>Add Officer History Record</h3>
+			<button class="kn-modal-close-btn" onclick="knCloseOhBackfillModal()">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="overflow:visible">
+			<div class="kn-form-error" id="kn-oh-bf-error"></div>
+			<div id="kn-oh-bf-success" class="kn-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record added successfully!
+			</div>
+
+			<div class="kn-acct-field" style="position:relative">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-oh-bf-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-oh-bf-player-id" value="" />
+				<div class="kn-ac-results" id="kn-oh-bf-player-results" style="position:fixed"></div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="kn-oh-bf-role">
+					<option value="">Select role...</option>
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="kn-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="kn-oh-bf-start" />
+				</div>
+				<div class="kn-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="kn-oh-bf-end" />
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="kn-oh-bf-notes" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knCloseOhBackfillModal()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-oh-bf-save-btn" onclick="knSaveOhBackfill()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Record
+			</button>
+		</div>
+	</div>
+</div>
+<!-- Officer History Edit Modal -->
+<?php if ($CanEditKingdom ?? false): ?>
+<div id="kn-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2b6cb0"></i>Edit Officer History Record</h3>
+			<button class="kn-modal-close-btn" onclick="knCloseOhEditModal()">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div class="kn-form-error" id="kn-oh-ed-error"></div>
+			<div id="kn-oh-ed-success" class="kn-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record updated successfully!
+			</div>
+			<input type="hidden" id="kn-oh-ed-id" value="" />
+
+			<div class="kn-acct-field">
+				<label>Player</label>
+				<input type="text" id="kn-oh-ed-player" disabled style="background:#f7fafc;color:#718096;cursor:not-allowed" />
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="kn-oh-ed-role">
+					<?php foreach ($ohRoleOptions as $_ohKey => $_ohLabel): ?>
+					<option value="<?= htmlspecialchars($_ohKey) ?>"><?= htmlspecialchars($_ohLabel) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="kn-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="kn-oh-ed-start" />
+				</div>
+				<div class="kn-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="kn-oh-ed-end" />
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="kn-oh-ed-notes" rows="2" maxlength="500"></textarea>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knCloseOhEditModal()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-oh-ed-save-btn" onclick="knSaveOhEdit()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Changes
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
+
+<!-- Officer Details Modal (shared with Parknew_index.tpl) -->
+<?php
+	/* Inputs for partials/_officer_details_modal.tpl -- see its docblock.
+	   $officerList is the FULL (crown + supporting) row set built at the top of
+	   this file; the modal groups it into the position tree.
+	   $ohRoleOptions / $OfficerHistoryRoleOptions and $CanEditKingdom are already
+	   in scope and the partial picks them up on its own.
+	   Included unconditionally: the arrow on the officers bar is shown to every
+	   viewer, so the modal must exist for every viewer. */
+	$ofScope   = 'kingdom';
+	$ofOrgId   = (int)$kingdom_id;
+	$ofOrgName = (string)($kingdom_name ?? '');
+	include __DIR__ . '/partials/_officer_details_modal.tpl';
+?>
+
+
+
 <!-- =============================================
      JavaScript
      ============================================= -->
@@ -1018,11 +1184,12 @@ var KnConfig = {
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
 	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'CanonicalKey' => $o['CanonicalKey'] ?? $o['OfficerRole'], 'DisplayTitle' => $o['DisplayTitle'] ?? $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -2303,6 +2470,56 @@ html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); borde
 .kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
 html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
 
+/* Officer History Tab */
+.kn-oh-toolbar {
+	display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.kn-oh-filter-select {
+	padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;
+	color:#4a5568; background:#fff; cursor:pointer;
+}
+.kn-oh-table {
+	width:100%; border-collapse:collapse; font-size:13px;
+}
+.kn-oh-table thead th {
+	background:#f7fafc; border-bottom:2px solid #e2e8f0; padding:8px 10px;
+	text-align:left; font-weight:600; color:#4a5568; font-size:12px;
+	text-transform:uppercase; letter-spacing:.03em;
+}
+.kn-oh-table tbody tr { border-bottom:1px solid #edf2f7; }
+.kn-oh-table tbody tr:hover { background:#f7fafc; }
+.kn-oh-table tbody td { padding:8px 10px; color:#2d3748; vertical-align:middle; }
+.kn-oh-table .kn-oh-role-badge {
+	display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px;
+	font-weight:600; background:#ebf4ff; color:#2b6cb0;
+}
+.kn-oh-table .kn-oh-current { background:#c6f6d5; color:#276749; }
+.kn-oh-del-btn {
+	background:none; border:none; color:#e53e3e; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s;
+}
+.kn-oh-del-btn:hover { opacity:1; background:#fed7d7; }
+.kn-oh-edit-btn {
+	background:none; border:none; color:#3182ce; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s; margin-right:2px;
+}
+.kn-oh-edit-btn:hover { opacity:1; background:#ebf8ff; }
+.kn-oh-notes-text { font-size:11px; color:#718096; font-style:italic; max-width:200px; }
+.kn-oh-bf-success {
+	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
+	font-size:13px; margin-bottom:12px; text-align:center;
+}
+/* Officer History modals: the shell (box/header/title/close/body/footer and the
+   .kn-acct-field controls) is one grouped, token-based rule in revised.css shared
+   with the #pk-oh-* pair. Only the rules unique to this page stay here. */
+#kn-oh-edit-overlay .kn-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+#kn-oh-backfill-overlay .kn-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
 /* Royal crowns / copy-link / data-tip — dark mode */
 html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
 html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
@@ -3196,6 +3413,297 @@ $(function() { window.knInitRecsTab(); });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+
+// =============================================
+// Officer History Tab
+// =============================================
+// knOhData stays global: the officer details modal keeps window.knOhData in step
+// with the rows it renders so knOpenOhEditModal(idx) still resolves the right row.
+// (The old knOhLoaded latch went with the main-content tab that used it.)
+var knOhData   = [];
+
+function knLoadOfficerHistory() {
+    var role = document.getElementById('kn-oh-role-filter').value;
+    var url  = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/officerhistory';
+    if (role) url += '?Role=' + encodeURIComponent(role);
+
+    document.getElementById('kn-oh-loading').style.display = '';
+    document.getElementById('kn-oh-table').style.display = 'none';
+    document.getElementById('kn-oh-empty').style.display = 'none';
+
+    $.getJSON(url, function(resp) {
+        document.getElementById('kn-oh-loading').style.display = 'none';
+        if (resp.status !== 0) { return; }
+        knOhData = resp.history || [];
+        knRenderOhTable(knOhData);
+    }).fail(function() {
+        document.getElementById('kn-oh-loading').style.display = 'none';
+        document.getElementById('kn-oh-empty').style.display = '';
+        document.getElementById('kn-oh-empty').textContent = 'Failed to load officer history.';
+    });
+}
+
+function knRenderOhTable(data) {
+    var tbody = document.getElementById('kn-oh-tbody');
+    var table = document.getElementById('kn-oh-table');
+    var empty = document.getElementById('kn-oh-empty');
+    tbody.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'No officer history records found.';
+        return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+    var canEdit = KnConfig.canEdit;
+
+    for (var i = 0; i < data.length; i++) {
+        var h = data[i];
+        var tr = document.createElement('tr');
+        var isCurrent = !h.EndDate;
+        var roleBadge = '<span class="kn-oh-role-badge' + (isCurrent ? ' kn-oh-current' : '') + '">' +
+                        knHtmlEsc(h.Role) + (isCurrent ? ' (current)' : '') + '</span>';
+
+        var persona = h.MundaneId > 0
+            ? (isCurrent ? '<i class="fas fa-crown" style="color:#d69e2e;margin-right:4px" title="Current officer"></i>' : '') +
+              '<a href="' + KnConfig.uir + 'Player/profile/' + h.MundaneId + '">' + knHtmlEsc(h.Persona || 'Unknown') + '</a>'
+            : '<em style="color:#a0aec0">Vacant</em>';
+
+        var startStr = h.StartDate ? knFormatDate(h.StartDate) : '';
+        var endStr   = h.EndDate   ? knFormatDate(h.EndDate)   : (isCurrent ? '<em style="color:#38a169">Present</em>' : '');
+        var notes    = h.Notes ? '<span class="kn-oh-notes-text">' + knHtmlEsc(h.Notes) + '</span>' : '';
+
+        var delCell = '';
+        if (canEdit) {
+            delCell = '<td style="white-space:nowrap">' +
+                '<button class="kn-oh-edit-btn" onclick="knOpenOhEditModal(' + i + ')" title="Edit record"><i class="fas fa-pencil-alt"></i></button>' +
+                '<button class="kn-oh-del-btn" onclick="knDeleteOhRecord(' + h.OfficerHistoryId + ')" title="Delete record"><i class="fas fa-trash-alt"></i></button>' +
+                '</td>';
+        }
+
+        tr.innerHTML = '<td>' + roleBadge + '</td>' +
+                        '<td>' + persona + '</td>' +
+                        '<td>' + startStr + '</td>' +
+                        '<td>' + endStr + '</td>' +
+                        '<td>' + notes + '</td>' +
+                        delCell;
+        tbody.appendChild(tr);
+    }
+}
+
+function knFormatDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr + 'T00:00:00');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function knHtmlEsc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+function knDeleteOhRecord(ohid) {
+    knConfirm('Delete this officer history record?', function() {
+        $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deleteofficerhistory',
+            { OfficerHistoryId: ohid },
+            function(resp) {
+                if (resp.status === 0) {
+                    knLoadOfficerHistory();
+                } else {
+                    orkAlert(resp.error || 'Failed to delete record.');
+                }
+            }, 'json'
+        ).fail(function() { orkAlert('Network error.'); });
+    });
+}
+
+// Backfill modal
+function knOpenOhBackfillModal() {
+    var overlay = document.getElementById('kn-oh-backfill-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('kn-oh-bf-error').textContent = '';
+    document.getElementById('kn-oh-bf-error').style.display = 'none';
+    document.getElementById('kn-oh-bf-success').style.display = 'none';
+    document.getElementById('kn-oh-bf-player-text').value = '';
+    document.getElementById('kn-oh-bf-player-id').value = '';
+    document.getElementById('kn-oh-bf-role').value = '';
+    document.getElementById('kn-oh-bf-start').value = '';
+    document.getElementById('kn-oh-bf-end').value = '';
+    document.getElementById('kn-oh-bf-notes').value = '';
+}
+
+function knCloseOhBackfillModal() {
+    document.getElementById('kn-oh-backfill-overlay').style.display = 'none';
+    var results = document.getElementById('kn-oh-bf-player-results');
+    results.innerHTML = '';
+    results.classList.remove('kn-ac-open');
+}
+
+function knSaveOhBackfill() {
+    var mid   = document.getElementById('kn-oh-bf-player-id').value;
+    var role  = document.getElementById('kn-oh-bf-role').value;
+    var start = document.getElementById('kn-oh-bf-start').value;
+    var end   = document.getElementById('kn-oh-bf-end').value;
+    var notes = document.getElementById('kn-oh-bf-notes').value;
+    var errEl = document.getElementById('kn-oh-bf-error');
+
+    if (!mid)   { errEl.textContent = 'Please select a player.';  errEl.style.display = ''; return; }
+    if (!role)  { errEl.textContent = 'Role is required.';         errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.';   errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('kn-oh-bf-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/addofficerhistory',
+        { MundaneId: mid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+            if (resp.status === 0) {
+                document.getElementById('kn-oh-bf-success').style.display = '';
+                setTimeout(function() {
+                    knCloseOhBackfillModal();
+                    knLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save record.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Edit modal
+function knOpenOhEditModal(idx) {
+    var h = knOhData[idx];
+    if (!h) return;
+    var overlay = document.getElementById('kn-oh-edit-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('kn-oh-ed-error').textContent = '';
+    document.getElementById('kn-oh-ed-error').style.display = 'none';
+    document.getElementById('kn-oh-ed-success').style.display = 'none';
+    document.getElementById('kn-oh-ed-id').value = h.OfficerHistoryId;
+    document.getElementById('kn-oh-ed-player').value = h.Persona || h.UserName || '(unknown)';
+    document.getElementById('kn-oh-ed-role').value = h.Role;
+    document.getElementById('kn-oh-ed-start').value = h.StartDate || '';
+    document.getElementById('kn-oh-ed-end').value = h.EndDate || '';
+    document.getElementById('kn-oh-ed-notes').value = h.Notes || '';
+}
+
+function knCloseOhEditModal() {
+    document.getElementById('kn-oh-edit-overlay').style.display = 'none';
+}
+
+function knSaveOhEdit() {
+    var ohid  = document.getElementById('kn-oh-ed-id').value;
+    var role  = document.getElementById('kn-oh-ed-role').value;
+    var start = document.getElementById('kn-oh-ed-start').value;
+    var end   = document.getElementById('kn-oh-ed-end').value;
+    var notes = document.getElementById('kn-oh-ed-notes').value;
+    var errEl = document.getElementById('kn-oh-ed-error');
+
+    if (!role)  { errEl.textContent = 'Role is required.';       errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('kn-oh-ed-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/editofficerhistory',
+        { OfficerHistoryId: ohid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+            if (resp.status === 0) {
+                document.getElementById('kn-oh-ed-success').style.display = '';
+                setTimeout(function() {
+                    knCloseOhEditModal();
+                    knLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save changes.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Player autocomplete for backfill modal
+(function() {
+    var input   = document.getElementById('kn-oh-bf-player-text');
+    var hidden  = document.getElementById('kn-oh-bf-player-id');
+    var results = document.getElementById('kn-oh-bf-player-results');
+    if (!input) return;
+    var debounce;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounce);
+        hidden.value = '';
+        var q = input.value.trim();
+        if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+        debounce = setTimeout(function() {
+            var url = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=own&include_inactive=1';
+            $.getJSON(url, function(data) {
+                results.innerHTML = '';
+                if (!data || data.length === 0) {
+                    results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
+                    if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                    results.classList.add('kn-ac-open');
+                    return;
+                }
+                for (var i = 0; i < data.length; i++) {
+                    var d = data[i];
+                    var el = document.createElement('div');
+                    el.className = 'kn-ac-item';
+                    el.setAttribute('data-id', d.MundaneId);
+                    el.innerHTML = knHtmlEsc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + knHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
+                    el.addEventListener('click', (function(dd) {
+                        return function() {
+                            input.value = dd.Persona;
+                            hidden.value = dd.MundaneId;
+                            results.innerHTML = '';
+                            results.classList.remove('kn-ac-open');
+                        };
+                    })(d));
+                    results.appendChild(el);
+                }
+                if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                results.classList.add('kn-ac-open');
+            });
+        }, 250);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!results.contains(e.target) && e.target !== input) {
+            results.innerHTML = '';
+            results.classList.remove('kn-ac-open');
+        }
+    });
+})();
+
+// The officer-history lazy-load hook that used to live here bound to
+// '.kn-tab-nav li[data-kntab="officerhistory"]'. That nav item is gone, so the
+// handler could never fire again. The officer details modal now lazy-loads the
+// history itself on first activation of its History tab.
 window.knUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'kn-addplayer-username',
 	statusId:    'kn-addplayer-username-status',
@@ -3213,6 +3721,7 @@ window.knUsernameCheck = initUsernameAvailabilityCheck({
 	};
 })();
 </script>
+
 
 <?php if (!empty($IsLoggedIn)): ?>
 <script>

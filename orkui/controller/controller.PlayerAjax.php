@@ -315,6 +315,11 @@ class Controller_PlayerAjax extends Controller
             $awards_id        = (int)($_POST['AwardsId']        ?? 0);
             $kingdom_award_id = (int)($_POST['KingdomAwardId'] ?? 0);
             $rank             = (int)($_POST['Rank']           ?? 0);
+            // Order of the Zodiac (Award::IsMonthlyLadder()) reconciles to a month
+            // instead of a rank -- Playernew_reconcile.tpl's month picker submits
+            // ZodiacMonth, never Rank, for those rows. Player::ReconcileAward()
+            // ignores this for every other award.
+            $zodiac_month     = (int)($_POST['ZodiacMonth']    ?? 0);
             $date             = trim($_POST['Date']            ?? '');
             $given_by_id      = (int)($_POST['GivenById']      ?? 0);
             $note             = trim($_POST['Note']            ?? '');
@@ -334,6 +339,7 @@ class Controller_PlayerAjax extends Controller
                 'AwardsId'       => $awards_id,
                 'KingdomAwardId' => $kingdom_award_id,
                 'Rank'           => $rank,
+                'ZodiacMonth'    => $zodiac_month,
                 'Date'           => $date,
                 'GivenById'      => $given_by_id,
                 'Note'           => $note,
@@ -366,7 +372,15 @@ class Controller_PlayerAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'awardranks') {
+            // Additive: existing consumers read this as a flat award_id => max_rank
+            // map. ZodiacMonths rides along under its own key rather than reshaping
+            // the response, so every current caller keeps working unchanged.
+            // GetAwardMaxRanks() now also emits a 'k' . kingdomaward_id entry for
+            // every row alongside the numeric award_id ones -- the only usable key
+            // for a kingdom ladder, since 17 of them carry award_id 0 and 9 share
+            // the 94 placeholder. Numeric keys keep their exact old meaning.
             $ranks = $this->Player->get_award_max_ranks((int)$player_id);
+            $ranks['ZodiacMonths'] = $this->Player->get_zodiac_held_months((int)$player_id);
             echo json_encode($ranks);
 
         } elseif ($action === 'info') {

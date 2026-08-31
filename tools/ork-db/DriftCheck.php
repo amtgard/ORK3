@@ -46,7 +46,24 @@ final class DriftCheck
             $lines[] = 'OK    migration coverage (' . count($classifier->repoMigrationFiles()) . ' files classified)';
         }
 
+        $issues += $this->checkTableReferences($lines);
+
         $fingerprints = Json5::decodeFile($this->toolRoot . '/manifests/fingerprints.json5');
+        // Catalog-hash mismatch is a hard failure, and it is now a MEANINGFUL one.
+        //
+        // These hashes cover the `fixed_extract` catalogs (award/class/parktitle/pronoun).
+        // They used to be compared against tools/ork-db/extracted/<table>.sql -- a
+        // .gitignored directory (.gitignore:53) every developer regenerated from their own
+        // mirror -- so the check pitted a committed constant against a local artefact and
+        // any legitimate prod reload turned it red for everybody. It stayed red long enough
+        // that bin/run-unit-tests.sh (which runs this under `set -e` BEFORE PHPUnit) never
+        // reached the tests at all, and a --allow-catalog-drift opt-out had to be invented
+        // to get the suite moving again.
+        //
+        // The catalogs now live in tools/ork-db/templates/catalogs/, which git tracks, so
+        // the hash covers a file that only changes when someone commits a change to it.
+        // That is stable across machines and still fails loudly if committed reference data
+        // is edited without re-recording the hash -- so the opt-out is gone.
         $catalogIssues = $this->checkCommittedCatalogHashes($fingerprints);
         if ($catalogIssues !== []) {
             $issues += count($catalogIssues);
@@ -54,6 +71,8 @@ final class DriftCheck
             foreach ($catalogIssues as $issue) {
                 $lines[] = '      - ' . $issue;
             }
+            $lines[] = '      Re-record with the catalog you intend to ship, then update';
+            $lines[] = '      tools/ork-db/manifests/fingerprints.json5 catalog_hashes.';
         } else {
             $lines[] = 'OK    committed catalog hashes match fingerprints.json5';
         }
@@ -94,6 +113,95 @@ final class DriftCheck
         ];
     }
 
+    /**
+     * Fail when domain code references a table the committed schema does not define.
+     *
+     * This is the gate for the failure mode that has bitten this codebase repeatedly:
+     * ork_kingdomaward.disabled, ork_recommendations.snoozed_by_id and the
+     * ork_officer_position family all reached the domain layer while the repo could not
+     * build the schema they need. Every one of them was invisible to the checks above,
+     * which compare committed catalog ROW DATA and (when baselined) the live mirror —
+     * never "does the repo define what the code asks for".
+     *
+     * Compared against the COMMITTED schema sources, not tools/ork-db/rendered/sandbox.sql:
+     * rendered/ is .gitignored, so a check reading it would silently pass everywhere it
+     * matters. See SchemaTableIndex.
+     *
+     * Table granularity only. Column-level checking is NOT attempted — SQL here is
+     * assembled by string concatenation, so binding a column to its table without a real
+     * SQL parser produces guesses, and a guessing gate gets switched off. The
+     * snoozed_by_id class of bug therefore stays uncovered, and the NOTE line below says
+     * so on every run rather than letting a green result imply otherwise.
+     *
+     * @param list<string> $lines
+     */
+    private function checkTableReferences(array &$lines): int
+    {
+        try {
+            $index = new SchemaTableIndex($this->repoRoot, $this->toolRoot);
+            $scan = new TableReferenceScan($this->repoRoot, $this->toolRoot);
+            $result = $scan->undefinedTables($index->definedTables());
+            $totals = $scan->scan();
+        } catch (\Throwable $e) {
+            $lines[] = 'FAIL  table reference check: ' . $e->getMessage();
+
+            return 1;
+        }
+
+        $issues = 0;
+
+        if ($result['undefined'] !== []) {
+            $issues += count($result['undefined']);
+            $lines[] = 'FAIL  code references tables the committed schema does not define';
+            foreach ($result['undefined'] as $table => $sites) {
+                $lines[] = '      - ' . $table . ' (' . count($sites) . ' site'
+                    . (count($sites) === 1 ? '' : 's') . ')';
+                foreach (array_slice($sites, 0, 5) as $site) {
+                    $lines[] = '          ' . $site;
+                }
+                if (count($sites) > 5) {
+                    $lines[] = '          ... and ' . (count($sites) - 5) . ' more';
+                }
+            }
+            $lines[] = '      Add a migration that creates the table, or — if it legitimately';
+            $lines[] = '      lives only on prod/the mirror — record it with a reason in';
+            $lines[] = '      tools/ork-db/manifests/table-reference-allowlist.json5.';
+        }
+
+        if ($result['stale_allowlist'] !== []) {
+            $issues += count($result['stale_allowlist']);
+            $lines[] = 'FAIL  stale table-reference allow-list entries';
+            foreach ($result['stale_allowlist'] as $table) {
+                $lines[] = '      - ' . $table . ' is no longer referenced (or is now defined)';
+            }
+            $lines[] = '      Delete these from tools/ork-db/manifests/table-reference-allowlist.json5';
+            $lines[] = '      so a real problem is never hidden behind an obsolete excuse.';
+        }
+
+        if ($issues === 0) {
+            $lines[] = 'OK    table references resolve to the committed schema ('
+                . count($totals['references']) . ' tables named across '
+                . $totals['files_scanned'] . ' files)';
+        }
+
+        // Always visible, pass or fail: the parts of this gate that are NOT covered.
+        foreach ($result['allowed_hits'] as $table => $hit) {
+            $detail = $hit['kind'] === 'known_defect' && $hit['sites'] !== []
+                ? ' — ' . implode(', ', array_slice($hit['sites'], 0, 3))
+                : '';
+            $lines[] = 'NOTE  allow-listed table ' . $table . ' [' . $hit['kind'] . ']' . $detail;
+        }
+
+        if ($totals['dynamic'] !== []) {
+            $lines[] = 'NOTE  ' . count($totals['dynamic'])
+                . ' runtime-computed table name(s) (DB_PREFIX . $var) cannot be checked';
+        }
+
+        $lines[] = 'NOTE  table granularity only — column references are not checked';
+
+        return $issues;
+    }
+
     /** @param array<string, mixed> $fingerprints @return list<string> */
     private function checkCommittedCatalogHashes(array $fingerprints): array
     {
@@ -106,9 +214,9 @@ final class DriftCheck
         $extractManifest = Json5::decodeFile($this->toolRoot . '/manifests/extract-sources.json5');
         foreach ($extractManifest['fixed_extract'] ?? [] as $table) {
             $table = (string) $table;
-            $path = $this->toolRoot . '/extracted/' . $table . '.sql';
+            $path = $this->catalogPath($table);
             if (!is_readable($path)) {
-                $issues[] = "{$table}: missing extracted/{$table}.sql";
+                $issues[] = "{$table}: missing templates/catalogs/{$table}.sql";
                 continue;
             }
 
@@ -119,11 +227,17 @@ final class DriftCheck
                 continue;
             }
             if ($actual !== $recorded) {
-                $issues[] = "{$table}: committed extract hash mismatch (recorded {$recorded}, actual {$actual})";
+                $issues[] = "{$table}: committed catalog hash mismatch (recorded {$recorded}, actual {$actual})";
             }
         }
 
         return $issues;
+    }
+
+    /** Committed home of the `fixed_extract` reference catalogs. */
+    private function catalogPath(string $table): string
+    {
+        return $this->toolRoot . '/templates/catalogs/' . $table . '.sql';
     }
 
     /** @param array<string, mixed> $fingerprints @return list<string> */
@@ -146,9 +260,9 @@ final class DriftCheck
         $extract = new Extract($this->wiring, $this->toolRoot, fn (): PDO => $pdo);
         foreach ($extractManifest['fixed_extract'] ?? [] as $table) {
             $table = (string) $table;
-            $path = $this->toolRoot . '/extracted/' . $table . '.sql';
+            $path = $this->catalogPath($table);
             if (!is_readable($path)) {
-                $issues[] = "{$table}: missing committed extract for live comparison";
+                $issues[] = "{$table}: missing committed catalog for live comparison";
                 continue;
             }
 

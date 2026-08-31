@@ -59,6 +59,7 @@ if (!class_exists('Memcached', false)) {
 
 require_once ORK3_ROOT . '/startup.php';
 
+require_once __DIR__ . '/Support/AuthorizedOfficerFixture.php';
 require_once __DIR__ . '/Support/EventRsvpFixture.php';
 require_once __DIR__ . '/Support/AuthorizationAddFixture.php';
 require_once __DIR__ . '/Support/BannerFixture.php';
@@ -76,6 +77,7 @@ require_once DIR_UI . 'model/model.Attendance.php';
 require_once DIR_UI . 'model/model.Player.php';
 require_once DIR_UI . 'model/model.Reports.php';
 require_once DIR_UI . 'model/model.Award.php';
+require_once DIR_UI . 'model/model.QualTest.php';
 require_once DIR_UI . 'controller/controller.PlayerAjax.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
 

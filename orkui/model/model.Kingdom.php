@@ -160,6 +160,14 @@ class Model_Kingdom extends Model
         );
     }
 
+    /**
+     * Headline numbers + the admin work queue. See Kingdom::GetAdminDashboard().
+     */
+    public function get_admin_dashboard($kingdom_id)
+    {
+        return $this->Kingdom->GetAdminDashboard($kingdom_id);
+    }
+
     public function get_kingdom_details($kingdom_id)
     {
         $r = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));
@@ -200,6 +208,30 @@ class Model_Kingdom extends Model
     private function _kingdom(): Kingdom
     {
         return new Kingdom();
+    }
+
+    public function get_officer_history($kingdom_id, $role = null)
+    {
+        $request = ['KingdomId' => $kingdom_id];
+        if ($role !== null && strlen(trim($role)) > 0) {
+            $request['Role'] = $role;
+        }
+        return $this->Kingdom->GetOfficerHistory($request);
+    }
+
+    public function add_officer_history($request)
+    {
+        return $this->Kingdom->AddOfficerHistory($request);
+    }
+
+    public function edit_officer_history($request)
+    {
+        return $this->Kingdom->EditOfficerHistory($request);
+    }
+
+    public function delete_officer_history($request)
+    {
+        return $this->Kingdom->DeleteOfficerHistory($request);
     }
 
 }

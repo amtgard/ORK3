@@ -399,7 +399,14 @@ class Report extends Ork3
     public function PlayerAwards($request)
     {
 
-        $key = Ork3::$Lib->ghettocache->key($request);
+        // 'v' (row-shape version) is bumped whenever the shape of a row in
+        // $response['Awards'] changes. The key is otherwise built purely from
+        // $request, so a request cached moments before a deploy would keep
+        // serving the OLD row shape for the full TTL after the new code is live,
+        // and consumers reading the new keys would see nulls for that window.
+        // Version 1: the IsMonthlyLadder / ZodiacMonth / ZodiacMonthName /
+        // ZodiacMonthInferred keys added for the Zodiac monthly-award change.
+        $key = Ork3::$Lib->ghettocache->key($request + ['v' => 1]);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
             return $cache;
         }
@@ -423,7 +430,25 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (COALESCE(alias.is_ladder, a.is_ladder) = 1 and ma.rank >= $request[LadderMinimum])";
+            // A monthly ladder (Order of the Zodiac) stores a calendar month, not a
+            // rank, and Player::AddAward() writes rank = 0 for every UI-created
+            // grant. Gating those rows on `ma.rank >= LadderMinimum` would drop all
+            // of them from this report for any minimum >= 1 (controller.Reports
+            // forces 7 for the global view), even though the award is still an
+            // effective ladder. Exempt them from the rank gate instead of excluding
+            // them for carrying a rank the award no longer uses.
+            $ladderMinimum = (int) $request['LadderMinimum'];
+            $rank_gate = "ma.rank >= $ladderMinimum";
+            $monthlyIds = implode(',', array_filter(
+                array_map('intval', array_keys(Award::GetLadderMasterMap())),
+                static function ($award_id) {
+                    return Award::IsMonthlyLadder($award_id);
+                }
+            ));
+            if ($monthlyIds !== '') {
+                $rank_gate = "($rank_gate or COALESCE(alias.award_id, a.award_id) in ($monthlyIds))";
+            }
+            $ladder_clause = " or (" . Award::LadderSql('ka', 'a', 'alias') . " = 1 and $rank_gate)";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
@@ -436,7 +461,8 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
+              COALESCE(alias.award_id, a.award_id) as effective_award_id,
+              m.persona, ma.date, m.mundane_id, ma.rank, ma.zodiac_month, m.suspended,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -457,6 +483,35 @@ class Report extends Ork3
         if ($r !== false && $r->size() > 0) {
             $response['Awards'] = array();
             while ($r->next()) {
+                // Order of the Zodiac is granted once per calendar month, not
+                // ranked -- surface the month so a consumer can render
+                // "Zodiac (March)" instead of the legacy, now-meaningless rank.
+                // Award::ZodiacMonthFromDate() guards the '0000-00-00' sentinel
+                // (sometimes '0000-00-00 00:00:00') so a monthless grant with no
+                // real date yields no month, never a spurious January.
+                //
+                // The date fallback is a SUGGESTION, not a record. 3,796 of 3,800
+                // Zodiac grants carry zodiac_month = 0, so without a flag this report
+                // would state a confident month for essentially every one of them
+                // while the player's own profile lists those exact rows as "month not
+                // recorded" and offers them for reconciliation -- two surfaces
+                // asserting opposite things about one row. ZodiacMonthInferred marks
+                // the derived ones so a consumer can render them as a question ("March?")
+                // rather than as fact. Additive: ZodiacMonth/ZodiacMonthName keep their
+                // existing values and meaning for API consumers already reading them.
+                $effectiveAwardId = (int) $r->effective_award_id;
+                $isMonthlyLadder = Award::IsMonthlyLadder($effectiveAwardId);
+                $zodiacMonth = 0;
+                $recordedMonth = 0;
+                if ($isMonthlyLadder) {
+                    $recordedMonth = (int) $r->zodiac_month;
+                    $zodiacMonth = Award::IsValidZodiacMonth($recordedMonth)
+                        ? $recordedMonth
+                        : Award::ZodiacMonthFromDate((string) $r->date);
+                }
+                $zodiacMonthInferred = $isMonthlyLadder
+                    && !Award::IsValidZodiacMonth($recordedMonth)
+                    && $zodiacMonth > 0;
                 $response['Awards'][] = array(
                         'MundaneId' => $r->mundane_id,
                         'Persona' => $r->persona,
@@ -471,8 +526,38 @@ class Report extends Ork3
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
                         'EnteredById' => $r->by_whom_id,
-                        'Suspended' => (int)$r->suspended
+                        'Suspended' => (int)$r->suspended,
+                        'IsMonthlyLadder' => $isMonthlyLadder,
+                        'ZodiacMonth' => $zodiacMonth,
+                        'ZodiacMonthName' => $zodiacMonth > 0 ? Award::MonthName($zodiacMonth) : '',
+                        'ZodiacMonthInferred' => $zodiacMonthInferred
                     );
+            }
+            // Chronological order for Zodiac rows only (spec: "Zodiac lists sort
+            // chronologically by grant date, not by rank"). PlayerAwards is a
+            // general report ordered by peerage/name/persona for every other
+            // award -- reordering the whole result set would silently change
+            // every other consumer of this method. Instead, re-sort ONLY the
+            // rows Award::IsMonthlyLadder() flags, in place, at the exact index
+            // positions they already occupy: every non-Zodiac row keeps its
+            // original position and relative order untouched.
+            $monthlyLadderIndexes = array();
+            foreach ($response['Awards'] as $i => $row) {
+                if ($row['IsMonthlyLadder']) {
+                    $monthlyLadderIndexes[] = $i;
+                }
+            }
+            if (count($monthlyLadderIndexes) > 1) {
+                $monthlyLadderRows = array();
+                foreach ($monthlyLadderIndexes as $i) {
+                    $monthlyLadderRows[] = $response['Awards'][$i];
+                }
+                usort($monthlyLadderRows, function ($a, $b) {
+                    return strcmp((string) $a['Date'], (string) $b['Date']);
+                });
+                foreach ($monthlyLadderIndexes as $pos => $i) {
+                    $response['Awards'][$i] = $monthlyLadderRows[$pos];
+                }
             }
             $response['Status'] = Success();
         } else {
@@ -519,7 +604,7 @@ class Report extends Ork3
 			where ma.custom_name is not null
 				and ma.custom_name != ''
 				and (ma.revoked = 0 or ma.revoked is null)
-				and (a.is_ladder = 0 or a.is_ladder is null)
+				and " . Award::LadderSql() . " = 0
 				and m.active = 1
 				$location_clause
 				and exists (
@@ -557,6 +642,25 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
+    // Single source of truth for the Report.PlayerAwardRecommendations cache key.
+    // GhettoCache::key() composes VALUES ONLY, positionally, and bust() deletes the
+    // literally composed string — so the read/write side and every bust site MUST
+    // build the key through this method. Player::bust_player_award_recs_cache()
+    // calls it; do not hand-roll the array anywhere.
+    // 'v' (row-shape version): bump whenever the shape of a recommendation row
+    // changes, so a pre-deploy entry cannot keep serving the old shape for the
+    // full 300s TTL. Version 1: IsLadder / MaxRank / KaMaxLevel added for the
+    // ladder rank picker.
+    public static function RecommendationsCacheKey($kingdom_id, $park_id, $player_id)
+    {
+        return Ork3::$Lib->ghettocache->key([
+            'KingdomId' => (int)$kingdom_id,
+            'ParkId'    => (int)$park_id,
+            'PlayerId'  => (int)$player_id,
+            'v'         => 1,
+        ]);
+    }
+
     public function PlayerAwardRecommendations($request)
     {
 
@@ -564,11 +668,11 @@ class Report extends Ork3
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
         // computed after the cache hit so one bust clears the data for everyone.
         $viewer_id = (int)($request['RequestedBy'] ?? 0);
-        $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-        ]);
+        $key = self::RecommendationsCacheKey(
+            $request['KingdomId'] ?? 0,
+            $request['ParkId'] ?? 0,
+            $request['PlayerId'] ?? 0
+        );
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $this->applyViewerFlags($cache, $viewer_id);
         }
@@ -588,9 +692,12 @@ class Report extends Ork3
             $location_clause = " AND recs.mundane_id = $request[PlayerId]";
         }
 
+        // a_is_ladder below is the effective (ka OR official) ladder flag, not the
+        // bare a.is_ladder column -- a kingdom-raised ladder must count as "already
+        // has" tracking too, same as an official one.
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
-			a.is_ladder as a_is_ladder,
+			" . Award::LadderSql() . " as a_is_ladder,
 			a.is_title  as a_is_title,
 			m.persona,
 			recs.date_recommended,
@@ -609,6 +716,7 @@ class Report extends Ork3
 			recs.deleted_by,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id,
+			ifnull(ka.max_level, 0) as ka_max_level,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
 			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
 			COALESCE(
@@ -658,6 +766,7 @@ class Report extends Ork3
                     'mask_giver'         => (int)$r->mask_giver,
                     'ka_kaward_id'       => (int)$r->ka_kaward_id,
                     'ka_award_id'        => (int)$r->ka_award_id,
+                    'ka_max_level'       => (int)$r->ka_max_level,
                     'recs_award_id'      => (int)$r->award_id,
                     'park_id'            => $r->park_id,
                     'kingdom_id'         => $r->kingdom_id,
@@ -702,8 +811,10 @@ class Report extends Ork3
             }
 
             // Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
-            // Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately be held many
-            // times, so they must never be filtered out as "already has".
+            // Custom awards (effective is_ladder=0 AND is_title=0 -- neither an official nor a
+            // kingdom-raised ladder) can legitimately be held many times, so they must never be
+            // filtered out as "already has". A kingdom that raises a plain award to ladder status
+            // now correctly falls out of this bucket and gets AlreadyHas tracking.
             $response['AwardRecommendations'] = array();
             foreach ($rawRows as $row) {
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
@@ -740,6 +851,11 @@ class Report extends Ork3
                     'CoveredByMaster' => $coveredByMaster,
                     'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
                     'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
+                    // IsLadder is the effective (ka OR official) flag -- a kingdom
+                    // ladder must bucket the same as an official one on the panel.
+                    'IsLadder' => $row->a_is_ladder,
+                    'MaxRank' => Award::MaxRankFor($recAwardId, $row->ka_max_level),
+                    'KaMaxLevel' => $row->ka_max_level,
                     'Seconds' => array(),
                     'SecondsCount' => 0,
                     'ViewerCanSecond' => false,
@@ -3261,6 +3377,14 @@ class Report extends Ork3
 
     public function KingdomOfficerDirectory($request)
     {
+        // Officer roles are matched as REPLACE(o.role,' ','_') because ork_officer.role
+        // holds the display name ('Prime Minister') on rows written before the officer
+        // position migration and the canonical key ('prime_minister') on rows written
+        // after it. The column is utf8mb4_unicode_ci, so case alone never mattered --
+        // but 'Prime Minister' and 'prime_minister' differ by a separator, so a literal
+        // comparison silently blanked every PM column here the moment that migration ran.
+        // Normalizing the separator matches both forms; these are select-list aggregates,
+        // not WHERE predicates, so no index is affected.
         $kingdom_id = valid_id($request['KingdomId']) ? (int)$request['KingdomId'] : null;
 
         if ($kingdom_id) {
@@ -3268,31 +3392,31 @@ class Report extends Ork3
             $sql = "SELECT
 						p.park_id    AS entity_id,
 						p.name       AS entity_name,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "park p
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.park_id = p.park_id
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
@@ -3306,31 +3430,31 @@ class Report extends Ork3
             $sql = "SELECT
 						k.kingdom_id AS entity_id,
 						k.name       AS entity_name,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
-						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
-						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
-						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
-						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
-					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
-					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
-					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
-					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'prime_minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN REPLACE(o.role,' ','_') = 'gmr'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "kingdom k
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
@@ -3679,8 +3803,8 @@ class Report extends Ork3
         }
 
         // Auth check: requester must have AUTH_PARK + AUTH_CREATE on the player's park
-        if (!Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane->park_id, AUTH_CREATE)
-            && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $mundane->kingdom_id, AUTH_EDIT)
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane->park_id, AUTH_CREATE)
+            && !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'kingdom', $mundane->kingdom_id, AUTH_EDIT)
             && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
             return NoAuthorization();
         }
@@ -6913,7 +7037,7 @@ class Report extends Ork3
     /**
      * Ladder awards grid report assembly (T-RPT-01).
      *
-     * @return array{ScopeName: string, LadderAwards: array<int, array<string, mixed>>, GridRows: list<array<string, mixed>>}
+     * @return array{ScopeName: string, LadderAwards: array<int|string, array<string, mixed>>, GridRows: list<array<string, mixed>>}
      */
     public function GetLadderAwardGrid($request)
     {
@@ -6966,17 +7090,26 @@ class Report extends Ork3
             }
         }
 
+        // Only the UNSCOPED (bare Park-only, no KingdomId at all) Ladder Grid compares
+        // players across kingdoms -- kingdom ladders are not comparable there (two
+        // kingdoms' "Order of the Hunter" are different rows), so THAT surface alone
+        // stays official-only. A Park-scoped request that also carries a KingdomId
+        // (the live route: Reports/ladder_grid falls through KingdomId -> Park without
+        // resetting $kingdom_id, see controller.Reports.php::ladder_grid) is NOT that
+        // case -- a park sits inside exactly one kingdom, so that kingdom's ladders ARE
+        // directly comparable for every player on the grid, and are deliberately
+        // included below (kingdom-column gate is on $kingdomId, not on $parkId).
         if ($kingdomId > 0) {
             $kSql = 'SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
                      FROM ' . DB_PREFIX . 'kingdomaward ka
                      JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                     WHERE ka.kingdom_id = ' . $kingdomId . "
-                       AND a.is_ladder = 1 AND a.award_id != 31
+                     WHERE ka.kingdom_id = ' . $kingdomId . '
+                       AND ' . Award::OfficialLadderSql() . " AND a.award_id != 31
                      ORDER BY IFNULL(ka.name, a.name)";
         } else {
             $kSql = 'SELECT DISTINCT a.award_id, a.name AS award_name, a.title_class
-                     FROM ' . DB_PREFIX . "award a
-                     WHERE a.is_ladder = 1 AND a.award_id != 31
+                     FROM ' . DB_PREFIX . 'award a
+                     WHERE ' . Award::OfficialLadderSql() . " AND a.award_id != 31
                      ORDER BY a.name";
         }
 
@@ -6992,19 +7125,105 @@ class Report extends Ork3
                 }
                 $name = $awardResult->award_name;
                 $awardCols[(int) $awardResult->award_id] = [
+                    'AwardId' => (int) $awardResult->award_id,
                     'Name' => $name,
                     'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
                     'KnightGroup' => $knightGroupMap[$name] ?? '',
                 ];
             }
         }
+        $officialAwardIds = array_keys($awardCols);
+
+        // Whenever a KingdomId is known -- Kingdom-scoped OR Park-scoped-within-a-
+        // kingdom (see the intent note above $kSql) -- append a second, separated
+        // group of the kingdom's OWN ladders (ka.is_ladder=1) that are not already
+        // official ladders. These are not comparable ACROSS kingdoms (a kingdom-raised
+        // custom award can share the generic award_id=94 "Custom Award" placeholder
+        // with a wholly different kingdom's award of the same name), so they are keyed
+        // on kingdomaward_id, never on award_id, and rendered after every official
+        // column. $locationClause below (park_id when set, else kingdom_id) still
+        // scopes the row data to the park when this is the Park-scoped case -- the
+        // kingdom's ladder COLUMNS are kingdom-wide, but the ROWS never widen past the
+        // requested park.
+        $kingdomCols = [];
+        if ($kingdomId > 0) {
+            // LEFT JOIN, never INNER: 17 of the 26 live ka.is_ladder = 1 rows carry
+            // ka.award_id = 0 (a pure kingdom award, linked to no ork_award row --
+            // there is no award_id = 0), and an INNER join silently dropped every one
+            // of them, hiding 2,247 grants and leaving ten of eighteen kingdoms with
+            // an empty kingdom group. Because `a` may now be entirely NULL, every
+            // predicate below that touches it must be NULL-proofed: in SQL a bare
+            // `a.award_id != 31` is NULL (not TRUE) for a missing row, and NULL fails
+            // the WHERE clause just as surely as the dropped join did.
+            //
+            // Both ladder helpers are NULL-proofed (Award::OfficialLadderSql() emits
+            // `IFNULL(a.is_ladder, 0) = 1`, never a bare `a.is_ladder = 1`), so the
+            // NOT (...) below is FALSE -- not NULL -- for a missing `a` and keeps
+            // exactly the rows this fix restores. This site used to inline that safe
+            // form by hand because the helper's own spelling was unsafe; the helper
+            // now emits it, so the sixth hand-written spelling is gone.
+            $kaSql = 'SELECT DISTINCT ka.kingdomaward_id, ka.award_id, IFNULL(ka.name, a.name) AS award_name,
+                            IFNULL(a.title_class, 0) AS title_class
+                     FROM ' . DB_PREFIX . 'kingdomaward ka
+                     LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                     WHERE ka.kingdom_id = ' . $kingdomId . '
+                       AND ka.disabled = 0
+                       AND ' . Award::LadderSql() . ' = 1
+                       AND NOT (' . Award::OfficialLadderSql() . ') AND IFNULL(a.award_id, 0) != 31
+                     ORDER BY IFNULL(ka.name, a.name)';
+
+            $this->db->Clear();
+            $kaResult = $this->db->DataSet($kaSql);
+            if ($kaResult) {
+                while ($kaResult->Next()) {
+                    $kaid = (int) $kaResult->kingdomaward_id;
+                    if (!$kaid) {
+                        continue;
+                    }
+                    // ka.name is NOT NULL in schema, so IFNULL(ka.name, a.name) is the
+                    // kingdom's own name for every row the LEFT JOIN now restores --
+                    // but coalesce anyway so a blank never reaches preg_replace().
+                    $name = (string) ($kaResult->award_name ?? '');
+                    $kingdomCols['k' . $kaid] = [
+                        'AwardId' => (int) $kaResult->award_id,
+                        'KingdomAwardId' => $kaid,
+                        'Scope' => 'kingdom',
+                        'Name' => $name,
+                        'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
+                        'KnightGroup' => $knightGroupMap[$name] ?? '',
+                    ];
+                }
+            }
+        }
+        $kingdomAwardIds = array_map(static function ($c) {
+            return $c['KingdomAwardId'];
+        }, $kingdomCols);
+
+        // Union preserves $awardCols' key order (official) then appends the keys that
+        // only exist in $kingdomCols (kingdom) -- official columns always come first.
+        $awardCols = $awardCols + $kingdomCols;
 
         if ($awardCols === []) {
             return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
         }
 
-        $awardIds = implode(',', array_keys($awardCols));
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+        // Fold both id sets into the cache key so a kingdom marking/unmarking a
+        // custom award as ladder busts the cached grid, same as an official change.
+        $awardIds = implode(',', $officialAwardIds) . '|' . implode(',', $kingdomAwardIds);
+        // 'gv' (grid version) bumped for the Zodiac total-count change: the award id
+        // set the key above is built from is unchanged by that change (award 30 was
+        // already an official ladder column before and after), so without an
+        // explicit version token a pre-deploy cache entry -- built with the old
+        // GREATEST(rank, count) cell value -- would keep serving for up to 1200s.
+        // gv 2 -> 3 for the kingdom-column LEFT JOIN fix: the award_id=0 kingdom
+        // ladders it restores add kingdomaward_ids to $awardIds for MOST kingdoms
+        // (which busts the key on its own), but for a kingdom whose ladders are ALL
+        // award_id=0 the pre-fix run produced an EMPTY kingdom set and returned
+        // early at `$awardCols === []` -- and for the rest the GridRows payload
+        // itself now carries extra 'k<id>' cells under a key that could otherwise
+        // still collide. Bumping gv guarantees no stale, column-incomplete grid is
+        // served for up to 1200s after deploy.
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'gv' => 3]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
@@ -7018,42 +7237,95 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
-                           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
-                    FROM " . DB_PREFIX . 'mundane m
-                    LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
-                    JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
-                    JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND a.is_ladder = 1
-                      AND a.award_id IN (' . $awardIds . ")
-                      AND (ma.revoked = 0 OR ma.revoked IS NULL)
-                      {$locationClause}
-                    GROUP BY m.mundane_id, a.award_id
-                    ORDER BY m.persona";
-
-        $this->db->Clear();
-        $dataResult = $this->db->DataSet($dataSql);
         $playerData = [];
-        if ($dataResult) {
-            while ($dataResult->Next()) {
-                $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
-                    continue;
+
+        if ($officialAwardIds !== []) {
+            $officialAwardIdsCsv = implode(',', $officialAwardIds);
+            $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
+                               MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
+                        FROM " . DB_PREFIX . 'mundane m
+                        LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+                        JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
+                        JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                        JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                        WHERE m.active = 1 AND ' . Award::OfficialLadderSql() . '
+                          AND a.award_id IN (' . $officialAwardIdsCsv . ")
+                          AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                          {$locationClause}
+                        GROUP BY m.mundane_id, a.award_id
+                        ORDER BY m.persona";
+
+            $this->db->Clear();
+            $dataResult = $this->db->DataSet($dataSql);
+            if ($dataResult) {
+                while ($dataResult->Next()) {
+                    $mid = (int) $dataResult->mundane_id;
+                    $aid = (int) $dataResult->award_id;
+                    if (!$mid || !$aid) {
+                        continue;
+                    }
+                    if (!isset($playerData[$mid])) {
+                        $playerData[$mid] = [
+                            'MundaneId' => $mid,
+                            'Persona' => $dataResult->persona,
+                            'ParkId' => (int) $dataResult->park_id,
+                            'ParkName' => $dataResult->park_name ?? '',
+                            'Suspended' => (int) $dataResult->suspended,
+                            'Awards' => [],
+                        ];
+                    }
+                    // Order of the Zodiac is granted once per calendar month, not
+                    // ranked -- its legacy `rank` column predates the monthly model
+                    // and is never a meaningful ceiling, so the cell must show the
+                    // total granted, never GREATEST(rank, count) (misleading for the
+                    // 35 players who already hold duplicate months).
+                    $val = Award::IsMonthlyLadder($aid)
+                        ? (int) $dataResult->grant_count
+                        : max((int) $dataResult->max_rank, (int) $dataResult->grant_count);
+                    $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
                 }
-                if (!isset($playerData[$mid])) {
-                    $playerData[$mid] = [
-                        'MundaneId' => $mid,
-                        'Persona' => $dataResult->persona,
-                        'ParkId' => (int) $dataResult->park_id,
-                        'ParkName' => $dataResult->park_name ?? '',
-                        'Suspended' => (int) $dataResult->suspended,
-                        'Awards' => [],
-                    ];
+            }
+        }
+
+        // Kingdom-own ladder ranks -- grouped and filtered on kingdomaward_id, never on
+        // award_id, so two kingdoms' custom ladders sharing the award_id=94 placeholder
+        // (or any other collision) can never merge into one column's data.
+        if ($kingdomAwardIds !== []) {
+            $kingdomAwardIdsCsv = implode(',', $kingdomAwardIds);
+            $kaDataSql = 'SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, ma.kingdomaward_id,
+                               GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+                        FROM ' . DB_PREFIX . 'mundane m
+                        LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+                        JOIN ' . DB_PREFIX . "awards ma ON ma.mundane_id = m.mundane_id
+                        WHERE m.active = 1
+                          AND ma.kingdomaward_id IN ({$kingdomAwardIdsCsv})
+                          AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                          {$locationClause}
+                        GROUP BY m.mundane_id, ma.kingdomaward_id
+                        ORDER BY m.persona";
+
+            $this->db->Clear();
+            $kaDataResult = $this->db->DataSet($kaDataSql);
+            if ($kaDataResult) {
+                while ($kaDataResult->Next()) {
+                    $mid = (int) $kaDataResult->mundane_id;
+                    $kaid = (int) $kaDataResult->kingdomaward_id;
+                    if (!$mid || !$kaid) {
+                        continue;
+                    }
+                    if (!isset($playerData[$mid])) {
+                        $playerData[$mid] = [
+                            'MundaneId' => $mid,
+                            'Persona' => $kaDataResult->persona,
+                            'ParkId' => (int) $kaDataResult->park_id,
+                            'ParkName' => $kaDataResult->park_name ?? '',
+                            'Suspended' => (int) $kaDataResult->suspended,
+                            'Awards' => [],
+                        ];
+                    }
+                    $val = (int) $kaDataResult->award_count;
+                    $playerData[$mid]['Awards']['k' . $kaid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
                 }
-                $val = (int) $dataResult->award_count;
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
             }
         }
 

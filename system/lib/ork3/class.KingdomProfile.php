@@ -489,9 +489,9 @@ class KingdomProfile extends Ork3
     public function AuthorizeMovePlayer(int $uid, int $playerKingdomId, int $destKingdomId): bool
     {
         $canSource = $playerKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT);
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'player.move', 'kingdom', $playerKingdomId, AUTH_EDIT);
         $canDest = $destKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $destKingdomId, AUTH_EDIT);
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'player.move', 'kingdom', $destKingdomId, AUTH_EDIT);
 
         return $canSource || $canDest;
     }

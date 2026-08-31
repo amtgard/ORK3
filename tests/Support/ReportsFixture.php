@@ -27,6 +27,9 @@ final class ReportsFixture
     /** @var list<int> */
     private array $authIds = [];
 
+    /** @var list<int> */
+    private array $kingdomAwardIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -249,25 +252,50 @@ final class ReportsFixture
         $stmt->execute([$name, $kingdomAwardId]);
     }
 
-    public function insertLadderAward(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank = 3): int
+    /**
+     * Self-contained ork_kingdomaward row (the table can be entirely empty on a fresh
+     * test DB, since T-RPT-01's migration adds is_ladder/max_level with no backfill).
+     * awardId=94 ("Custom Award") is the shared placeholder every kingdom's custom
+     * ladder points to in production -- pass it to reproduce that collision case.
+     */
+    public function createKingdomAward(int $kingdomId, int $awardId, string $name, bool $isLadder): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward
+             (is_title, title_class, kingdom_id, award_id, is_ladder, max_level, disabled, name, reign_limit, month_limit)
+             VALUES (0, 0, ?, ?, ?, 0, 0, ?, 0, 0)'
+        );
+        $stmt->execute([$kingdomId, $awardId, $isLadder ? 1 : 0, $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertLadderAward(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank = 3, string $date = '', int $zodiacMonth = 0): int
     {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'awards
              (kingdomaward_id, mundane_id, stripped_from, unit_id, park_id, kingdom_id, team_id, rank, date,
               given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, alias_award_id,
-              award_id, by_whom_id, entered_at, revoked)
-             VALUES (?, ?, 0, 0, ?, ?, 0, ?, CURDATE(), ?, \'\', 0, 0, 0, \'\', 0, ?, ?, NOW(), 0)'
+              award_id, by_whom_id, entered_at, revoked, zodiac_month)
+             VALUES (?, ?, 0, 0, ?, ?, 0, ?, ' . ($date === '' ? 'CURDATE()' : '?') . ', ?, \'\', 0, 0, 0, \'\', 0, ?, ?, NOW(), 0, ?)'
         );
-        $stmt->execute([
+        $params = [
             $kingdomAwardId,
             $mundaneId,
             $parkId,
             $kingdomId,
             $rank,
-            $mundaneId,
-            $awardId,
-            $mundaneId,
-        ]);
+        ];
+        if ($date !== '') {
+            $params[] = $date;
+        }
+        $params[] = $mundaneId;
+        $params[] = $awardId;
+        $params[] = $mundaneId;
+        $params[] = $zodiacMonth;
+        $stmt->execute($params);
         $id = (int) $this->pdo->lastInsertId();
         $this->awardIds[] = $id;
 
@@ -306,6 +334,13 @@ final class ReportsFixture
 
     public function cleanup(): void
     {
+        if ($this->kingdomAwardIds !== []) {
+            $in = implode(',', array_map('intval', $this->kingdomAwardIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "awards WHERE kingdomaward_id IN ({$in})");
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "kingdomaward WHERE kingdomaward_id IN ({$in})");
+            $this->kingdomAwardIds = [];
+        }
+
         if ($this->authIds !== []) {
             $in = implode(',', array_map('intval', $this->authIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "authorization WHERE authorization_id IN ({$in})");

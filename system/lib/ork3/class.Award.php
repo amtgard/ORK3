@@ -35,6 +35,145 @@ class Award extends Ork3
     }
 
     /**
+     * The official-ladder 0/1 VALUE (not a predicate) for one row, NULL-proofed.
+     *
+     * $alias is the optional Custom-Title alias leg: a custom title aliased to a
+     * peerage award (e.g. "Knight of the Sword") must read its ladder/peerage/title
+     * flags off the alias TARGET, so those queries join a second ork_award row as
+     * `alias` and COALESCE it in front of `a`. When the alias leg is absent the
+     * COALESCE would degenerate to `a` anyway, so the two-alias form deliberately
+     * omits it and emits exactly the SQL it always has.
+     *
+     * Private on purpose: callers want either LadderSql() (effective) or
+     * OfficialLadderSql() (a predicate). Nothing else should spell this out.
+     */
+    private static function OfficialLadderValueSql(string $a, ?string $alias): string
+    {
+        return $alias === null
+            ? 'IFNULL(' . $a . '.is_ladder, 0)'
+            : 'IFNULL(COALESCE(' . $alias . '.is_ladder, ' . $a . '.is_ladder), 0)';
+    }
+
+    /**
+     * Effective-ladder SQL predicate: a kingdom may raise an award to ladder status,
+     * but can never lower an official one. Additive by construction.
+     *
+     * Sole spelling of "is this a ladder?" for SQL. Do not fork it. Pass $alias to
+     * fold in a Custom-Title alias leg rather than hand-rolling a COALESCE (three
+     * sites did exactly that and would have silently fallen behind this helper).
+     */
+    public static function LadderSql(string $ka = 'ka', string $a = 'a', ?string $alias = null): string
+    {
+        return 'GREATEST(IFNULL(' . $ka . '.is_ladder, 0), ' . self::OfficialLadderValueSql($a, $alias) . ')';
+    }
+
+    /**
+     * Official-ladder SQL predicate — the 16 Amtgard orders. Cross-kingdom
+     * comparisons (the global Ladder Grid) key on this, never on LadderSql().
+     *
+     * NULL-PROOFED ON PURPOSE. A bare `a.is_ladder = 1` is NULL — not FALSE — for a
+     * LEFT JOIN that matched no ork_award row, and NULL under `NOT (...)` stays NULL,
+     * so the row is dropped exactly as an INNER join would have dropped it. The Ladder
+     * Grid's kingdom-column query hits that case for every pure kingdom award
+     * (ka.award_id = 0 links to no ork_award row) and had to inline the safe form by
+     * hand. `IFNULL(a.is_ladder, 0) = 1` is identical for every non-NULL row and
+     * correctly FALSE for a missing one, so it is strictly safer at every call site.
+     */
+    public static function OfficialLadderSql(string $a = 'a', ?string $alias = null): string
+    {
+        return self::OfficialLadderValueSql($a, $alias) . ' = 1';
+    }
+
+    /**
+     * Resolve an award's maximum rank.
+     *
+     * Cannot be done in SQL: the official ladders' maxes live in GetLadderMasterMap(),
+     * not in the database, and ka.max_level is 0 on every official row — so a SQL-only
+     * COALESCE(NULLIF(ka.max_level, 0), 10) would silently demote Zodiac from 12 to 10.
+     *
+     * @param int $awardId     ork_award.award_id; 0 for a pure kingdom award
+     * @param int $kaMaxLevel  ork_kingdomaward.max_level; 0 means unspecified
+     */
+    public static function MaxRankFor(int $awardId, int $kaMaxLevel = 0): int
+    {
+        $map = self::GetLadderMasterMap();
+        if (isset($map[$awardId]['MaxRank'])) {
+            return (int) $map[$awardId]['MaxRank'];
+        }
+        if ($kaMaxLevel > 0) {
+            return min(12, $kaMaxLevel);
+        }
+        return 10;
+    }
+
+    /**
+     * Whether the star pill should be offered: the recipient is already at or past
+     * the top of this ladder, so further recognition is expressed as an unranked
+     * grant rather than an out-of-range rank number.
+     */
+    public static function OffersStar(int $awardId, int $kaMaxLevel, int $currentRank): bool
+    {
+        return $currentRank >= self::MaxRankFor($awardId, $kaMaxLevel);
+    }
+
+    /**
+     * Order of the Zodiac is granted once per calendar month, so its twelve positions
+     * are months rather than levels. It is the only award of that nature.
+     *
+     * A name for a fact several call sites need — not a taxonomy over a family that
+     * does not exist. See 2026-08-27-zodiac-monthly-awards-design.md.
+     */
+    public static function IsMonthlyLadder(int $awardId): bool
+    {
+        return $awardId === 30;
+    }
+
+    /** @var list<string> 1-indexed in the accessors below. */
+    private const MONTH_NAMES = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+
+    /**
+     * Single-letter month label for a Zodiac pill: J F M A M J J A S O N D.
+     * Ambiguous on its own by design — the full name rides along in data-tip.
+     */
+    public static function MonthInitial(int $month): string
+    {
+        $name = self::MonthName($month);
+
+        return $name === '' ? '' : substr($name, 0, 1);
+    }
+
+    public static function MonthName(int $month): string
+    {
+        return self::IsValidZodiacMonth($month) ? self::MONTH_NAMES[$month - 1] : '';
+    }
+
+    public static function IsValidZodiacMonth(int $month): bool
+    {
+        return $month >= 1 && $month <= 12;
+    }
+
+    /**
+     * The month a grant date falls in — the reconciliation pre-fill. A suggestion the
+     * officer confirms, never an automatic write: a monthly award is usually granted
+     * at or just after the end of the month it honours.
+     */
+    public static function ZodiacMonthFromDate(string $date): int
+    {
+        if ($date === '' || strpos($date, '0000-00-00') === 0) {
+            return 0;
+        }
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return 0;
+        }
+
+        return (int) date('n', $timestamp);
+    }
+
+    /**
      * class_id => Paragon award_id (Class Levels / My Amtgard badge display).
      *
      * @return array<int, int>
@@ -123,15 +262,21 @@ class Award extends Ork3
 
     public function GetAwardList($request)
     {
+        // This query reads ork_award alone -- there is no kingdomaward (ka) join here --
+        // so "ladder" means the OFFICIAL ladder definition. Spelling it ka.is_ladder made
+        // every IsLadder=Ladder/NonLadder call a SQL error. Ladder and title are separate
+        // variables so passing both filters no longer clobbers one with the other.
+        $ladder_clause = '';
+        $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
-            $ladder_clause = " and ka.is_ladder = 1";
+            $ladder_clause = " and " . self::OfficialLadderSql('a');
         } elseif ($request['IsLadder'] == 'NonLadder') {
-            $ladder_clause = " and ka.is_ladder = 0";
+            $ladder_clause = " and not (" . self::OfficialLadderSql('a') . ")";
         }
         if ($request['IsTitle'] == 'Title') {
-            $ladder_clause = " and is_title = 1";
+            $title_clause = " and a.is_title = 1";
         } elseif ($request['IsTitle'] == 'NonTitle') {
-            $ladder_clause = " and is_title = 0";
+            $title_clause = " and a.is_title = 0";
         }
         if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards') {
             $officer_role_clause = " and officer_role = 'none'";
@@ -139,12 +284,12 @@ class Award extends Ork3
             $officer_role_clause = " and officer_role != 'none'";
         }
         $sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role, a.peerage
-					from " . DB_PREFIX . "award a 
-					where 1
-						$ladder_clause
-						$title_clause
+    				from " . DB_PREFIX . "award a 
+    				where 1
+    					$ladder_clause
+    					$title_clause
             $officer_role_clause
-					order by is_ladder, a.is_title, a.title_class desc, a.name";
+    				order by is_ladder, a.is_title, a.title_class desc, a.name";
         $r = $this->db->query($sql);
 
         $response = array();
@@ -182,12 +327,12 @@ class Award extends Ork3
     public function fetch_custom_title_alias_options()
     {
         $sql = "SELECT award_id, name, peerage, is_title
-			FROM " . DB_PREFIX . "award
-			WHERE officer_role = 'none'
-			  AND name <> 'Custom Title'
-			  AND name <> 'Custom Award'
-			  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
-			ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
+    		FROM " . DB_PREFIX . "award
+    		WHERE officer_role = 'none'
+    		  AND name <> 'Custom Title'
+    		  AND name <> 'Custom Award'
+    		  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
+    		ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
         $r = $this->db->query($sql);
         $peerage = [];
         $titles = [];
@@ -215,7 +360,14 @@ class Award extends Ork3
             $this->log->Write('Award', $mundane_id, LOG_ADD, $request);
             $this->award->clear();
             $this->award->name = $request['Name'];
-            $this->award->is_ladder = $request['IsLadder'];
+            // IsLadder is registered in JsonServer::ADDITIVE_OPTIONAL_PARAMETERS, so
+            // wrangle_parameters() no longer rejects a call that omits it. Absence
+            // means "leave alone" here too -- reading the key unconditionally warns
+            // and hands yapo a null, which it silently drops. Same array_key_exists()
+            // discipline Kingdom::CreateAward/EditAward use.
+            if (array_key_exists('IsLadder', $request)) {
+                $this->award->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
+            }
             $this->award->is_title = $request['IsTitle'];
             $this->award->title_class = $request['TitleClass'];
             $this->award->peerage = $request['Peerage'];
@@ -235,7 +387,10 @@ class Award extends Ork3
             $this->award->award_id = $request['AwardId'];
             if ($this->kingdomaward->find()) {
                 $this->award->name = $request['Name'];
-                $this->award->is_ladder = $request['IsLadder'];
+                // Absence means "leave alone" -- see CreateAward's note.
+                if (array_key_exists('IsLadder', $request)) {
+                    $this->award->is_ladder = (int) $request['IsLadder'] === 1 ? 1 : 0;
+                }
                 $this->award->is_title = $request['IsTitle'];
                 $this->award->title_class = $request['TitleClass'];
                 $this->award->peerage = $request['Peerage'];
@@ -423,18 +578,24 @@ class Award extends Ork3
             return strcmp($a['KingdomAwardName'] ?? '', $b['KingdomAwardName'] ?? '');
         });
 
-        $pseudoLadderIds = self::pseudoLadderKingdomAwardIds();
-        $custom = $ladder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
+        $custom = $officialLadder = $kingdomLadder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
 
         foreach ($items as $award) {
             $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            $isPseudoLadder = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-            if ($isPseudoLadder) {
-                $ladder[] = $award;
+            // OfficialIsLadder (a.is_ladder = 1: one of the 16 official Amtgard orders) wins
+            // ties -- requirement 1, a kingdom can never lower an official ladder. Kingdom::
+            // GetAwardList() (kingdomId > 0) carries OfficialIsLadder/KaIsLadder per row. The
+            // system-award list (kingdomId == 0, Award::GetAwardList()) has no kingdom row at
+            // all, so its IsLadder (== a.is_ladder there) doubles as official, and there is no
+            // KaIsLadder key to fall back on -- absence must never silently read as "official".
+            $isOfficialLadder = !empty($award['OfficialIsLadder'] ?? $award['IsLadder'] ?? 0);
+            $isKingdomLadder = !$isOfficialLadder && !empty($award['KaIsLadder'] ?? 0);
+            if ($isOfficialLadder) {
+                $officialLadder[] = $award;
+            } elseif ($isKingdomLadder) {
+                $kingdomLadder[] = $award;
             } elseif ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
                 $custom[] = $award;
-            } elseif (!empty($award['IsLadder'])) {
-                $ladder[] = $award;
             } elseif (in_array($sysName, ['Defender', 'Master'], true)) {
                 $nobles[] = $award;
             } elseif ($sysName === 'Weaponmaster') {
@@ -458,8 +619,13 @@ class Award extends Ork3
         }
 
         $groups = [];
-        if ($ladder !== []) {
-            $groups[] = ['Label' => 'Ladder Awards', 'Items' => $ladder];
+        // Requirement 4: official and kingdom ladders must be visibly distinguishable
+        // everywhere, so this is two groups instead of one shared "Ladder Awards" bucket.
+        if ($officialLadder !== []) {
+            $groups[] = ['Label' => 'Official Ladder Awards', 'Items' => $officialLadder];
+        }
+        if ($kingdomLadder !== []) {
+            $groups[] = ['Label' => 'Kingdom Ladder Awards', 'Items' => $kingdomLadder];
         }
         foreach ([
             'Knighthoods' => $knighthoods,
@@ -478,17 +644,86 @@ class Award extends Ork3
             'Status' => Success(),
             'Groups' => $groups,
             'StandaloneOptions' => $custom,
-            'PseudoLadderIds' => $pseudoLadderIds,
         ];
+    }
+
+    /**
+     * GhettoCache "call" name for the rendered <option> list.
+     *
+     * Named once so the writer (GetAwardOptionListHtml) and the invalidator
+     * (BustAwardOptionListCache) can never drift apart -- a bust that misses by
+     * one character is indistinguishable from no bust at all.
+     */
+    public const OPTION_LIST_CACHE_CALL = 'Award.GetAwardOptionListHtml';
+
+    /**
+     * Version 1: data-max-rank attribute added to <option> elements (2026-08-27).
+     * Bump this when the emitted <option> markup changes.
+     *
+     * A version bump only invalidates at DEPLOY. It does nothing for a monarch
+     * who toggles a ladder flag at runtime -- that is what the bust below is for.
+     */
+    private const OPTION_LIST_CACHE_VERSION = 1;
+
+    /**
+     * Every OfficerRole this list is ever cached under.
+     *
+     * Kept exhaustive on purpose: bust() can only delete keys it can name, so a
+     * new fetch_award_option_list() call site with a third role would silently
+     * keep serving a stale list. The two live values come from every caller of
+     * Model_Award::fetch_award_option_list(); null covers the method's own
+     * default should anything call it bare.
+     *
+     * @var list<string|null>
+     */
+    private const OPTION_LIST_OFFICER_ROLES = ['Awards', 'Officers', null];
+
+    /**
+     * @param string|null $officerRole
+     */
+    private static function OptionListCacheKey(int $kingdomId, $officerRole): string
+    {
+        return Ork3::$Lib->ghettocache->key([
+            'KingdomId' => $kingdomId,
+            'OfficerRole' => $officerRole,
+            'v' => self::OPTION_LIST_CACHE_VERSION,
+        ]);
+    }
+
+    /**
+     * Drop one kingdom's cached award <option> markup.
+     *
+     * WHY THIS EXISTS: the rendered markup carries data-is-ladder / data-max-rank,
+     * and the Add Award pill builder returns early when data-is-ladder is absent —
+     * it renders no rank control at all. Before ladders, a stale option list was
+     * cosmetic (an old award name for up to 20 minutes). Now that
+     * Player::RejectUnrankedLadderGrant() refuses a rankless ladder grant, a stale
+     * entry is a DEAD END: the officer is told to "choose a rank" by a page that
+     * never drew the rank control, and the award stays ungrantable until the TTL
+     * expires. So the moment a kingdom's ladder configuration changes, the markup
+     * describing it has to go.
+     *
+     * @param int $kingdomId
+     * @return void
+     */
+    public static function BustAwardOptionListCache($kingdomId)
+    {
+        $kingdomId = (int) $kingdomId;
+        if ($kingdomId <= 0) {
+            return;
+        }
+        foreach (self::OPTION_LIST_OFFICER_ROLES as $role) {
+            Ork3::$Lib->ghettocache->bust(
+                self::OPTION_LIST_CACHE_CALL,
+                self::OptionListCacheKey($kingdomId, $role)
+            );
+        }
     }
 
     public function GetAwardOptionListHtml(int $kingdomId = 0, $officerRole = null)
     {
-        $cacheKey = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int) $kingdomId,
-            'OfficerRole' => $officerRole,
-        ]);
-        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, 1200)) !== false) {
+        $cacheKey = self::OptionListCacheKey((int) $kingdomId, $officerRole);
+        if (($cached = Ork3::$Lib->ghettocache->get(self::OPTION_LIST_CACHE_CALL, $cacheKey, 1200)) !== false) {
             return $cached;
         }
 
@@ -500,7 +735,6 @@ class Award extends Ork3
             return false;
         }
 
-        $pseudoLadderIds = $grouped['PseudoLadderIds'] ?? self::pseudoLadderKingdomAwardIds();
         $options = '';
 
         foreach ($grouped['Groups'] ?? [] as $group) {
@@ -512,13 +746,18 @@ class Award extends Ork3
             $options .= "<optgroup label='" . htmlspecialchars($label, ENT_QUOTES) . "'>";
             foreach ($items as $award) {
                 $extra = '';
-                if ($label === 'Ladder Awards') {
-                    $isPseudo = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-                    $awardId = $isPseudo ? 0 : ($award['AwardId'] ?? 0);
-                    $extra = " data-is-ladder='1' data-award-id='" . htmlspecialchars($awardId, ENT_QUOTES) . "'";
+                if ($label === 'Kingdom Ladder Awards') {
+                    // No official award backs this rung -- data-award-id stays 0.
+                    $extra = " data-is-ladder='1' data-award-id='0'";
+                } elseif ($label === 'Official Ladder Awards') {
+                    $extra = " data-is-ladder='1' data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "'";
                 } elseif ($label === 'Masterhoods') {
                     $extra = " data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "' data-peerage='Master'";
                 }
+                // The client must never guess a ladder's height from the award NAME
+                // (see Award::MaxRankFor) -- every option carries the real answer.
+                $maxRank = self::MaxRankFor((int) ($award['AwardId'] ?? 0), (int) ($award['MaxLevel'] ?? 0));
+                $extra .= " data-max-rank='" . $maxRank . "'";
                 $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'{$extra}>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
             }
             $options .= "</optgroup>";
@@ -533,21 +772,10 @@ class Award extends Ork3
             } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
                 $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
             }
+            $dataAttrs .= " data-max-rank='" . self::MaxRankFor((int) ($award['AwardId'] ?? 0), (int) ($award['MaxLevel'] ?? 0)) . "'";
             $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
         }
 
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, $options);
-    }
-
-    /**
-     * @return list<int>
-     */
-    public static function pseudoLadderKingdomAwardIds(): array
-    {
-        return [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
+        return Ork3::$Lib->ghettocache->cache(self::OPTION_LIST_CACHE_CALL, $cacheKey, $options);
     }
 }
