@@ -449,7 +449,9 @@ window.atInitMap = async function() {
 // Lazy-load Google Maps on DOMContentLoaded
 (function() {
 	var s = document.createElement('script');
-	s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=atInitMap&v=weekly&libraries=marker';
+	// region pins label naming so every viewer sees the same map, and
+	// matches the OSM-based Live/Weather maps. Keep it on every loader.
+	s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=atInitMap&v=weekly&libraries=marker&region=CA';
 	s.async = true;
 	document.head.appendChild(s);
 })();
