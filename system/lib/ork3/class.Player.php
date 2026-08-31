@@ -3142,7 +3142,7 @@ class Player extends Ork3
         }
 
         $notices = '';
-        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_CREATE)
+        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)
             || $requester_id == $request['MundaneId']) {
 
             if (Ork3::$Lib->authorization->HasAuthority($request['MundaneId'], AUTH_ADMIN, 0, AUTH_EDIT)
@@ -3311,10 +3311,10 @@ class Player extends Ork3
                 $this->mundane->basic_fonts = is_null($request['BasicFonts']) ? $this->mundane->basic_fonts : ($request['BasicFonts'] ? 1 : 0);
                 $this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
-                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane['ParkId'], AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                     $this->mundane->active = is_null($request['Active']) ? $this->mundane->active : ($request['Active'] ? 1 : 0);
                 }
-                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                     $pms = $request['ParkMemberSince'];
                     $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
                 }
