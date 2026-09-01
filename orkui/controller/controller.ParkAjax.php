@@ -287,8 +287,10 @@ class Controller_ParkAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'deletedrecommendations') {
+            // Same permission as the delete action a few branches up: reviewing and
+            // restoring what was deleted is the same capability as deleting it.
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -298,7 +300,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -497,17 +499,27 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
         } elseif ($action === 'editpark') {
+            // Two different operations arrive in one POST from the Edit Park modal,
+            // exactly as they do in KingdomAjax::updateparks:
+            //
+            //   name / abbreviation / title  -> SetParkDetails  ('park.details.edit')
+            //   the Active toggle            -> RetirePark / RestorePark
+            //                                   ('kingdom.park.retire', danger-audited)
+            //
+            // They are gated separately because they are not the same permission.
+            // Sending Active through SetParkDetails let anyone who could rename a park
+            // also retire one, through a plain LOG_EDIT and with no danger-audit row.
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
-                echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
-                exit;
-            }
             $this->load_model('Park');
             $park_id = (int)($_POST['ParkId'] ?? 0);
             $name    = trim($_POST['Name'] ?? '');
             $abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
             $titleId = (int)($_POST['ParkTitleId'] ?? 0);
-            $active  = ($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
+            // Only treat Active as a requested change when the caller actually
+            // sent the field. An absent key must never read as "retire this park".
+            $active  = array_key_exists('Active', $_POST)
+                ? (($_POST['Active'] === 'Active') ? 'Active' : 'Retired')
+                : null;
 
             if (!valid_id($park_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Invalid park ID.']);
@@ -517,6 +529,26 @@ class Controller_ParkAjax extends Controller
             $this->load_model('ParkProfile');
             if (!$this->ParkProfile->park_belongs_to_kingdom($park_id, $kingdom_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
+                exit;
+            }
+            // Editing a park's details is 'park.details.edit', the key SetParkDetails
+            // itself accepts. It is NOT 'kingdom.auth.manage', which is the
+            // authorization-row key and has nothing to say about park details.
+            //
+            // BOTH clauses are required, and they are NOT redundant -- they guard two
+            // different gates inside the domain. Park::SetParkDetails has an outer gate at
+            // class.Park.php:1143 (park scope), but the only fields this endpoint writes --
+            // name, abbreviation, parktitle_id -- sit behind a SECOND, kingdom-scoped gate
+            // at class.Park.php:1164. A park-scope-only holder passes the first and fails
+            // the second, so SetParkDetails returns success having written none of the
+            // three, and this endpoint reported {"status":0} -> "Park updated!" with
+            // nothing saved. Verified live: a park-scope-only user renamed nothing and was
+            // told it worked. Neither the RBAC cascade nor the legacy walk rescues this --
+            // both resolve park -> kingdom, never kingdom -> park, so a park grant cannot
+            // satisfy a kingdom-scope check by any route.
+            if (!$this->Authorization->has_permission_or_authority($uid, 'park.details.edit', 'park', $park_id, AUTH_EDIT)
+                || !$this->Authorization->has_permission_or_authority($uid, 'park.details.edit', 'kingdom', $kingdom_id, AUTH_EDIT)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to edit this park.']);
                 exit;
             }
             if (!strlen($name)) {
@@ -532,20 +564,51 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
 
+            // Stored state, read once. Whether the Active toggle actually changed is
+            // decided against the database, never against what the browser posted, so
+            // an officer who may rename a park but not retire one is not denied for a
+            // checkbox they never moved.
+            $storedInfo   = (array)$this->Park->get_park_info($park_id);
+            $storedActive = (($storedInfo['ParkInfo']['Active'] ?? '') === 'Active') ? 'Active' : 'Retired';
+
             $r = $this->Park->set_park_details([
                 'Token'        => $this->session->token,
                 'ParkId'       => $park_id,
                 'Name'         => $name,
                 'Abbreviation' => $abbr,
                 'ParkTitleId'  => $titleId,
-                'Active'       => $active,
+                // Deliberately the STORED value, not the submitted one. SetParkDetails
+                // ignores Active; passing what is already on the row keeps this request
+                // a no-op for that column. The real change is below.
+                'Active'       => $storedActive,
             ]);
 
-            if ($r['Status'] == 0) {
-                echo json_encode(['status' => 0]);
-            } else {
+            if ($r['Status'] != 0) {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                exit;
             }
+
+            // The Active toggle: its own permission ('kingdom.park.retire'), its own
+            // LOG_RETIRE / LOG_RESTORE entry and its own danger-audit row, all written
+            // inside RetirePark / RestorePark.
+            if ($active !== null && $active !== $storedActive) {
+                $sr = ($active === 'Active')
+                    ? $this->Park->RestorePark(['Token' => $this->session->token, 'ParkId' => $park_id])
+                    : $this->Park->RetirePark(['Token' => $this->session->token, 'ParkId' => $park_id]);
+
+                if (!isset($sr['Status']) || $sr['Status'] != 0) {
+                    // The details saved; only the status change was refused, and the
+                    // response has to say so rather than report a clean success.
+                    echo json_encode([
+                        'status' => (int)($sr['Status'] ?? 1),
+                        'error'  => rtrim(($sr['Error'] ?? 'Error') . ': ' . ($sr['Detail'] ?? ''), ': ')
+                            . ' The park\'s other details were saved.',
+                    ]);
+                    exit;
+                }
+            }
+
+            echo json_encode(['status' => 0]);
         } elseif ($action === 'checkabbr') {
             $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
             $excludeId = (int)($_POST['ExcludeParkId'] ?? 0);

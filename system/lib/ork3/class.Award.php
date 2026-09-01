@@ -355,8 +355,11 @@ class Award extends Ork3
 
     public function CreateAward($request)
     {
+        // This is the SHARED award catalog every kingdom reads -- not Kingdom::CreateAward,
+        // which is a kingdom's own definitions and has always had kingdom.award.create.
+        // Editing it affects the whole installation, hence a global permission.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.award_catalog.manage', 'global', 0, AUTH_CREATE)) {
             $this->log->Write('Award', $mundane_id, LOG_ADD, $request);
             $this->award->clear();
             $this->award->name = $request['Name'];
@@ -380,12 +383,13 @@ class Award extends Ork3
 
     public function EditAward($request)
     {
+        // See CreateAward: the shared catalog, not a kingdom's own awards.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.award_catalog.manage', 'global', 0, AUTH_EDIT)) {
             $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
             $this->award->clear();
             $this->award->award_id = $request['AwardId'];
-            if ($this->kingdomaward->find()) {
+            if ($this->award->find()) {
                 $this->award->name = $request['Name'];
                 // Absence means "leave alone" -- see CreateAward's note.
                 if (array_key_exists('IsLadder', $request)) {
@@ -395,7 +399,7 @@ class Award extends Ork3
                 $this->award->title_class = $request['TitleClass'];
                 $this->award->peerage = $request['Peerage'];
                 $this->award->officer_role = $request['OfficerRole'];
-                $this->award->award->save();
+                $this->award->save();
 
             } else {
                 return InvalidParameter();
@@ -407,8 +411,9 @@ class Award extends Ork3
 
     public function RemoveAward($request)
     {
+        // See CreateAward: the shared catalog, not a kingdom's own awards.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.award_catalog.manage', 'global', 0, AUTH_EDIT)) {
             $this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
             $this->award->award_id = $request['AwardId'];
             if ($this->award->find()) {

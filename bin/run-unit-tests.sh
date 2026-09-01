@@ -65,6 +65,16 @@ php tools/ork-db/cli.php drift-check --strict
 echo "== ork-db suite (tests/Unit/OrkDb + tests/Integration/OrkDb) =="
 php vendor/bin/phpunit -c phpunit.ork-db.xml.dist $COVERAGE_FLAG --exclude-group mirror-data
 
+# PermissionRegistry is the declared source of truth for ork_permission, and until this
+# branch nothing ever called SyncToDatabase() -- no deploy step, no CLI, no CI job. That is
+# how the registry and the table drifted: a key declared in code, absent from the table, and
+# HasPermission() quietly false for everyone but global admins. RbacRegistryParityTest is a
+# net only if it runs against a fully migrated database; this forces the check itself.
+# Exit 2 = drift needing a human (missing keys, drifted definitions, orphan rows, or a
+# crown-role grant gap), and set -e stops the run on it.
+echo "== permission registry parity (dry run) =="
+ENVIRONMENT=TEST php bin/sync-permission-registry.php --dry-run
+
 echo "== main suite =="
 export ENVIRONMENT=TEST
 exec php vendor/bin/phpunit -c phpunit.xml.dist $COVERAGE_FLAG "$@"

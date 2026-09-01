@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
+
 final class OfficerAuthorizationTest extends TestCase
 {
     private const MARKER = 'zzofficerauth';
     private const KINGDOM_ID = 100031;
+    /** A real park inside KINGDOM_ID: authorizePositionFamily() resolves its kingdom. */
+    private const PARK_ID = 100063;
 
     private PDO $pdo;
     private OfficerPosition $positions;
     private AuthorizedOfficerFixture $fixture;
+    private ?RbacRoleFixture $rbac = null;
+    private bool $parkSeeded = false;
     /** @var array<string,int> */
     private array $seededPositions = [];
     /** @var list<int> */
@@ -55,6 +61,12 @@ final class OfficerAuthorizationTest extends TestCase
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
         if ($this->seededMundanes) {
             $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id IN (' . implode(',', $this->seededMundanes) . ')');
+        }
+        $this->rbac?->cleanup();
+        $this->rbac = null;
+        if ($this->parkSeeded) {
+            $this->pdo->exec('DELETE FROM ork_park WHERE park_id = ' . self::PARK_ID);
+            $this->parkSeeded = false;
         }
     }
 
@@ -247,7 +259,20 @@ final class OfficerAuthorizationTest extends TestCase
             'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
             'OfficerHistoryId' => 0, 'EndDate' => '2026-01-01',
         ]);
-        self::assertSame(4, (int) $r['Status']);
+
+        // NoAuthorization (5), not InvalidParameter (4). The distinction is the point:
+        // answering "that row does not exist" BEFORE authorizing turns the endpoint into
+        // an existence oracle -- a caller with no authority over any history row could
+        // walk officer_history_id and learn which ids are real from the differing refusal
+        // codes. A missing row and a forbidden row now refuse identically. Re-aimed at the
+        // new invariant rather than relaxed: the assertion is still exact, and the write
+        // is still refused.
+        self::assertSame(
+            5,
+            (int) $r['Status'],
+            'A nonexistent history row must be refused the same way a forbidden one is, '
+            . 'or the refusal code leaks which ids exist.'
+        );
     }
 
     /**
@@ -466,8 +491,143 @@ final class OfficerAuthorizationTest extends TestCase
     public function testPositionManagementUsesThePositionPermission(): void
     {
         self::assertSame('kingdom.officer.position.manage', OfficerPosition::PermissionKeyFor('position', 0));
-        // Defined in PermissionRegistry since this branch began, referenced nowhere.
-        self::assertSame('park.officer.position.manage', OfficerPosition::PermissionKeyFor('position', 9));
+        // And a ParkId does NOT narrow it. Officer positions are a per-kingdom registry
+        // shared by every park, so a park-scoped grant would be a kingdom-wide power.
+        self::assertSame('kingdom.officer.position.manage', OfficerPosition::PermissionKeyFor('position', 9));
+    }
+
+    /**
+     * The gap the branch summary names outright: OfficerAdminAjax was taught to force
+     * the kingdom key for the position family, but OfficerPosition is exposed on the
+     * JSON service, which does not go through that controller. So the DOMAIN has to
+     * refuse a park-scoped officer itself.
+     *
+     * positionMethodProvider above proves only that an INVALID token is refused, which
+     * every method would do even with no gate at all. This actor is fully authenticated
+     * and genuinely holds park.officer.set / park.officer.vacate for a real park in this
+     * kingdom -- and still must not reach the kingdom-wide position registry, because
+     * RetirePosition vacates every holder of a position in every park.
+     *
+     * @return array{0: string, 1: int} token, mundane id
+     */
+    private function seedParkOnlyOfficer(): array
+    {
+        $this->seedParkRow();
+        $rbac = $this->rbacFixture();
+        [$id, $token] = $rbac->seedPlayer('parkofficer', true, self::PARK_ID, self::KINGDOM_ID);
+        $roleId = $rbac->seedRoleWith(
+            ['park.officer.set', 'park.officer.vacate'],
+            'park',
+            self::KINGDOM_ID
+        );
+        $rbac->assignRole($id, $roleId, ['park_id' => self::PARK_ID]);
+
+        return [$token, $id];
+    }
+
+    private function rbacFixture(): RbacRoleFixture
+    {
+        if ($this->rbac === null) {
+            $this->rbac = new RbacRoleFixture($this->pdo, self::MARKER, self::KINGDOM_ID);
+        }
+
+        return $this->rbac;
+    }
+
+    private function seedParkRow(): void
+    {
+        if ($this->parkSeeded) {
+            return;
+        }
+        $this->pdo->prepare(
+            'INSERT INTO ork_park
+                (park_id, kingdom_id, name, abbreviation, url, address, city, province,
+                 postal_code, google_geocode, latitude, longitude, location,
+                 map_url, description, directions)
+             VALUES (:pid, :kid, :name, "ZZO", "", "", "", "", "", "", 0, 0, "", "", "", "")'
+        )->execute([
+            ':pid' => self::PARK_ID,
+            ':kid' => self::KINGDOM_ID,
+            ':name' => self::MARKER . '_park',
+        ]);
+        $this->parkSeeded = true;
+    }
+
+    public function testTheParkOfficerFixtureReallyHoldsParkOccupancyAuthority(): void
+    {
+        // Guard against the two refusal tests below passing for the wrong reason. If this
+        // actor held nothing, "refused" would prove nothing about the position family.
+        [, $id] = $this->seedParkOnlyOfficer();
+
+        self::assertTrue(
+            Ork3::$Lib->authorizationgate->checkPermission($id, 'park.officer.set', 'park', self::PARK_ID),
+            'Fixture check: the actor must genuinely hold park.officer.set at their park.'
+        );
+        self::assertFalse(
+            Ork3::$Lib->authorizationgate->checkPermission(
+                $id,
+                'kingdom.officer.position.manage',
+                'kingdom',
+                self::KINGDOM_ID
+            ),
+            'Fixture check: and must NOT hold the kingdom position key by any cascade.'
+        );
+    }
+
+    public function testAParkOfficerCannotCreateAPositionThroughTheDomain(): void
+    {
+        [$token] = $this->seedParkOnlyOfficer();
+
+        $r = $this->positions->CreatePosition([
+            'Token' => $token,
+            'KingdomId' => self::KINGDOM_ID,
+            'ParkId' => self::PARK_ID,
+            'Title' => self::MARKER . ' Smuggled Office',
+            'Classification' => 'supporting',
+        ]);
+
+        self::assertSame(
+            5,
+            (int) $r['Status'],
+            'ork_officer_position is a per-KINGDOM registry. A park-scoped grant must not add '
+            . 'rows to it -- and the JSON service reaches this method without the controller '
+            . 'override that forces the kingdom key.'
+        );
+        self::assertSame(
+            0,
+            (int) $this->pdo->query(
+                "SELECT COUNT(*) FROM ork_officer_position WHERE title = '" . self::MARKER . " Smuggled Office'"
+            )->fetchColumn(),
+            'A refused create must not have written a position.'
+        );
+    }
+
+    public function testAParkOfficerCannotRetireAPositionThroughTheDomain(): void
+    {
+        [$token] = $this->seedParkOnlyOfficer();
+        $positionId = $this->seededPositions['crown_a'];
+
+        $r = $this->positions->RetirePosition([
+            'Token' => $token,
+            'KingdomId' => self::KINGDOM_ID,
+            'ParkId' => self::PARK_ID,
+            'PositionId' => $positionId,
+        ]);
+
+        self::assertSame(
+            5,
+            (int) $r['Status'],
+            'RetirePosition vacates every holder of the position across every park in the '
+            . 'kingdom, so one park officer must never be able to run it.'
+        );
+        self::assertSame(
+            1,
+            (int) $this->pdo->query(
+                'SELECT COUNT(*) FROM ork_officer_position
+                  WHERE position_id = ' . $positionId . ' AND retired_at IS NULL'
+            )->fetchColumn(),
+            'A refused retire must leave the position live.'
+        );
     }
 
     private function seedPosition(string $suffix, string $classification): int

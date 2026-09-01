@@ -391,16 +391,29 @@ final class KingdomAdminConsoleTest extends TestCase
     {
         $css = self::read(self::CSS);
 
+        // Selector-GROUP tolerant: the declarations are shared with .ka-action-card-orkadmin
+        // (one block for both inert tiles so they cannot drift apart), so the class no longer
+        // appears as a lone `.ka-action-card-deprecated {`. The invariant under test is the
+        // declaration, not the text shape -- match the class anywhere in the selector list.
+        //
+        // Light and dark are told apart by ANCHORING (/m + ^), not by a one-character
+        // lookbehind: a group-tolerant `[^{}]` run happily spans a dark selector list, so
+        // `(?<!\])` passed on `html[data-theme="dark"] .ka-...` too (the preceding character
+        // is a space) and the light assertion silently asserted against the dark rule the
+        // moment the light block was deleted. A light rule starts its own line with the bare
+        // class; a dark one cannot. `[^{}]` (not `[^{]`) keeps a selector run from crossing
+        // out of its own rule. Trade-off: indenting these rules (e.g. nesting them in an
+        // @media block) breaks the ^ anchor -- but it fails loud here, never silently green.
         self::assertMatchesRegularExpression(
-            '/\.ka-action-card-deprecated \{[^}]*cursor:\s*default/',
+            '/^\.ka-action-card-deprecated\s*(?:,\s*[^{}]+?)?\{[^}]*cursor:\s*default/m',
             $css,
             'the inert tile still shows a pointer cursor inherited from .ka-action-card'
         );
 
         foreach (
             [
-                '/(?<!\])\.ka-action-card-deprecated:hover \{([^}]*)\}/'      => 'light',
-                '/html\[data-theme="dark"\] \.ka-action-card-deprecated:hover \{([^}]*)\}/' => 'dark',
+                '/^\.ka-action-card-deprecated:hover\s*(?:,\s*[^{}]+?)?\{([^}]*)\}/m'      => 'light',
+                '/^html\[data-theme="dark"\] \.ka-action-card-deprecated:hover\s*(?:,\s*[^{}]+?)?\{([^}]*)\}/m' => 'dark',
             ] as $re => $theme
         ) {
             self::assertMatchesRegularExpression($re, $css, "no $theme hover rule for the inert tile");

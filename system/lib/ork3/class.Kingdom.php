@@ -786,8 +786,12 @@ class Kingdom extends Ork3
     public function CreateKingdom($request)
     {
         $response = array();
+        // global.kingdom.manage: creating, retiring, and re-parenting kingdoms are
+        // installation-level acts with no owning kingdom to authorize against. They were
+        // reachable only by holding an all-zero-scope admin row, which is all-or-nothing;
+        // the permission lets the ORK team delegate this without handing over everything.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.kingdom.manage', 'global', 0, AUTH_CREATE)) {
             $this->log->Write('Kingdom', $mundane_id, LOG_ADD, $request);
             $this->kingdom->clear();
             $this->kingdom->name = $request['Name'];
@@ -1068,8 +1072,12 @@ class Kingdom extends Ork3
 
     public function SetKingdomParent($request)
     {
+        // See CreateKingdom: same installation-level permission. Note the legacy arm
+        // keeps AUTH_ADMIN, which HasAuthority only satisfies from a true unscoped admin
+        // row -- re-parenting decides which kingdom's officers hold authority over
+        // another's parks, so it stays the strictest of the three.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN)) {
             $kingdom_id = (int)$request['KingdomId'];
             $parent_id  = (int)$request['ParentKingdomId'];
             // Cannot make a kingdom its own parent or create a circular reference
@@ -1579,11 +1587,16 @@ class Kingdom extends Ork3
             $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
             $DB->oh_pos   = $_ohPosId;
             $DB->oh_label = $_ohLabel;
-            $DB->Execute(
+            // ExecuteChecked, not Execute: Execute() cannot report failure (PDO runs in
+            // ERRMODE_WARNING and handle_errors() has a `default: return true`), so a
+            // rejected INSERT would return Success() to the console with nothing written.
+            if (!$DB->ExecuteChecked(
                 "INSERT INTO " . DB_PREFIX . "officer_history
 				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, notes, created_at)
 				 VALUES (:oh_kid, 0, :oh_mid, :oh_role, :oh_pos, :oh_label, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
-            );
+            )) {
+                return ProcessingError(null, 'The historical record could not be saved.');
+            }
             $response = Success();
         } else {
             $response = NoAuthorization();
@@ -1611,6 +1624,21 @@ class Kingdom extends Ork3
 
             // Bound, not concatenated -- see AddOfficerHistory for why the shim is not escaping.
             global $DB;
+            // Confirm the row is actually in THIS kingdom's roll before writing. The
+            // UPDATE is scoped on kingdom_id AND park_id = 0, so an id belonging to
+            // another kingdom (or to a park-scoped row) matches zero rows -- which a
+            // plain Execute() reports exactly like a successful edit. Checked first,
+            // in its own $DB->Clear() pass, so it cannot wipe the UPDATE bindings.
+            $DB->Clear();
+            $DB->oh_chk_id  = $ohid;
+            $DB->oh_chk_kid = $kid;
+            $_ohExists = $DB->DataSet(
+                "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history
+				 WHERE officer_history_id = :oh_chk_id AND kingdom_id = :oh_chk_kid AND park_id = 0"
+            );
+            if ($_ohExists === false || $_ohExists->Size() === 0) {
+                return InvalidParameter(null, 'That historical record was not found in this kingdom.');
+            }
             $DB->Clear();
             $DB->oh_role  = $role;
             $DB->oh_start = $start;
@@ -1618,13 +1646,15 @@ class Kingdom extends Ork3
             $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
             $DB->oh_id    = $ohid;
             $DB->oh_kid   = $kid;
-            $DB->Execute(
+            if (!$DB->ExecuteChecked(
                 "UPDATE " . DB_PREFIX . "officer_history
 				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes
 				 WHERE officer_history_id = :oh_id
 				   AND kingdom_id = :oh_kid
 				   AND park_id = 0"
-            );
+            )) {
+                return ProcessingError(null, 'The historical record could not be updated.');
+            }
             $response = Success();
         } else {
             $response = NoAuthorization();
@@ -1647,13 +1677,31 @@ class Kingdom extends Ork3
             }
 
             global $DB;
+            // Same zero-rows hazard as EditOfficerHistory: the DELETE is scoped on
+            // kingdom_id AND park_id = 0, so another kingdom's (or a park's) id deletes
+            // nothing while a plain Execute() still reports Success(). Confirm the row
+            // is in this kingdom's roll first.
             $DB->Clear();
-            $DB->Execute(
-                "DELETE FROM " . DB_PREFIX . "officer_history
-				 WHERE officer_history_id = " . $ohid . "
-				   AND kingdom_id = " . $kid . "
-				   AND park_id = 0"
+            $DB->oh_chk_id  = $ohid;
+            $DB->oh_chk_kid = $kid;
+            $_ohExists = $DB->DataSet(
+                "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history
+				 WHERE officer_history_id = :oh_chk_id AND kingdom_id = :oh_chk_kid AND park_id = 0"
             );
+            if ($_ohExists === false || $_ohExists->Size() === 0) {
+                return InvalidParameter(null, 'That historical record was not found in this kingdom.');
+            }
+            $DB->Clear();
+            $DB->oh_del_id  = $ohid;
+            $DB->oh_del_kid = $kid;
+            if (!$DB->ExecuteChecked(
+                "DELETE FROM " . DB_PREFIX . "officer_history
+				 WHERE officer_history_id = :oh_del_id
+				   AND kingdom_id = :oh_del_kid
+				   AND park_id = 0"
+            )) {
+                return ProcessingError(null, 'The historical record could not be deleted.');
+            }
             $response = Success();
         } else {
             $response = NoAuthorization();
@@ -1674,8 +1722,9 @@ class Kingdom extends Ork3
     public function WaffleKingdom($request, $waffle)
     {
         $response = array();
+        // See CreateKingdom: same installation-level permission.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.kingdom.manage', 'global', 0, AUTH_EDIT)) {
             $this->log->Write('Kingdom', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
             $this->kingdom->clear();
             $this->kingdom->kingdom_id = $request['KingdomId'];

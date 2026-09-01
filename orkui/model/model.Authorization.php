@@ -13,14 +13,21 @@ class Model_Authorization extends Model
 
     }
 
+    /**
+     * Grant / revoke go through AuthorizationGate, not straight to the Authorization
+     * service. The gate honors the *.auth.manage permissions and falls back to the
+     * legacy authority rule (KPM unit bypass included) when the actor does not hold one.
+     * Calling AddAuthorization/RemoveAuthorization directly would skip the permission
+     * entirely -- see the note on AuthorizationGate::GrantScopedAuthorization().
+     */
     public function add_auth($request)
     {
-        return $this->Authorization->AddAuthorization($request);
+        return $this->_authorization_gate()->GrantScopedAuthorization($request);
     }
 
     public function del_auth($request)
     {
-        return $this->Authorization->RemoveAuthorization($request);
+        return $this->_authorization_gate()->RevokeScopedAuthorization($request);
     }
 
     public function has_authority(int $uid, string $type, $id, ?string $role): bool

@@ -95,14 +95,11 @@ class Unit extends Ork3
     public function ConvertToHousehold($request)
     {
         logtrace('ConvertToHousehold', $request);
-        $mundane = Ork3::$Lib->player->player_info($request['Token']);
-        if (!$mundane) {
-            return NoAuthorization();
-        }
-
+        // The officer arm is resolved from the TARGET unit's roster scope, not from
+        // the requester's own kingdom record.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
             && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.convert', 'unit', $request['UnitId'], AUTH_CREATE)
-                || Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.convert', 'kingdom', $mundane['KingdomId'], AUTH_EDIT))) {
+                || Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId']))) {
 
             $this->unit->clear();
             $this->unit->unit_id = $request['UnitId'];
@@ -120,14 +117,11 @@ class Unit extends Ork3
     public function ConvertToCompany($request)
     {
         logtrace('ConvertToCompany', $request);
-        $mundane = Ork3::$Lib->player->player_info($request['Token']);
-        if (!$mundane) {
-            return NoAuthorization();
-        }
-
+        // The officer arm is resolved from the TARGET unit's roster scope, not from
+        // the requester's own kingdom record.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
             && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.convert', 'unit', $request['UnitId'], AUTH_CREATE)
-                || Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.convert', 'kingdom', $mundane['KingdomId'], AUTH_EDIT))) {
+                || Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId']))) {
 
             $this->unit->clear();
             $this->unit->unit_id = $request['UnitId'];
@@ -244,10 +238,11 @@ class Unit extends Ork3
             return InvalidParameter();
         }
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $mundane = $mundane_id > 0 ? Ork3::$Lib->player->player_info($request['Token']) : null;
+        // The officer arm is resolved from the TARGET unit's roster scope, not from
+        // the requester's own kingdom record.
         if ($mundane_id > 0
                 && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.member.manage', 'unit', $request['UnitId'], AUTH_CREATE)
-                    || ($mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)))) {
+                    || Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId']))) {
             logtrace("AddMember", $request);
             return $this->add_member_h($request);
         }
@@ -634,7 +629,7 @@ class Unit extends Ork3
         }
         $unit_id  = (int)$request['UnitId'];
 
-        $is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
+        $is_manager = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.lifecycle.manage', 'unit', $unit_id, AUTH_CREATE);
         // Officer authority is evaluated against the parks/kingdoms the unit's
         // roster actually sits in. It used to be evaluated against the
         // requester's own park/kingdom, so any park monarch anywhere could
@@ -660,8 +655,10 @@ class Unit extends Ork3
         }
         // Reactivation is monarchy-only — mirrors the KPM unit-auth bypass scope,
         // evaluated against the unit's own roster scope rather than the
-        // requester's park/kingdom.
-        if (Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId'])) {
+        // requester's park/kingdom. unit.lifecycle.manage is the delegable form of the
+        // same capability, so a role holding it reaches this too.
+        if (Ork3::$Lib->authorizationgate->checkPermission($mundane_id, 'unit.lifecycle.manage', 'unit', (int)$request['UnitId'])
+            || Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId'])) {
             return $this->WaffleUnit($request + ['ActorId' => $mundane_id], 'Active');
         }
         return NoAuthorization();
@@ -706,18 +703,18 @@ class Unit extends Ork3
         if ($mundane_id === 0) {
             return NoAuthorization();
         }
-        $mundane   = Ork3::$Lib->player->player_info($request['Token']);
         $unit_id   = (int)$request['UnitId'];
         $target_id = (int)$request['MundaneId'];
         if (!valid_id($target_id)) {
             return InvalidParameter();
         }
 
-        $is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
-        $is_officer = $mundane && (
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
-        );
+        $is_manager = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'unit.lifecycle.manage', 'unit', $unit_id, AUTH_CREATE);
+        // Officer authority is evaluated against the parks/kingdoms the unit's
+        // roster actually sits in (as RetireUnit does). It used to be evaluated
+        // against the requester's OWN park/kingdom, so a park-scope role holder
+        // in one kingdom could transfer any unit in the world to themselves.
+        $is_officer = Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, $unit_id);
         if (!$is_manager && !$is_officer) {
             return NoAuthorization();
         }

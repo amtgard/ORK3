@@ -234,7 +234,10 @@ class Event extends Ork3
             return InvalidParameter('Event occurrence not found.');
         }
         $eventId = (int) $this->detail->event_id;
-        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // Acting on someone else's RSVP is event.rsvp.manage -- the same key EventAjax
+        // delete_rsvp and EventPlanning::CanRemoveRsvp check. This arm was legacy-only,
+        // so an Event Coordinator holding the permission was refused here.
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($actorId, 'event.rsvp.manage', 'event', $eventId, AUTH_EDIT)) {
             return null;
         }
         $this->db->Clear();

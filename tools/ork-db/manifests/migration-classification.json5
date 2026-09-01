@@ -1,5 +1,37 @@
 {
   // TD-8 migration classifier — see docs/megiddo/test-database-tool/06-migration-classification.md
+  //
+  // GOLDEN HASH LOG — tests/fixtures/ork-db/golden-schema-catalogs.sha256 is one opaque
+  // line, so a re-record is unreviewable unless what moved it is written down. Every
+  // re-record gets a line here naming the tables the render's rows changed for.
+  //
+  //   2026-08-31 — RBAC coverage expansion. Rows only, no DDL: ork_permission (+22 keys,
+  //   -2 keys), ork_role (+ork_admin) and ork_role_permission (crown / ork_admin /
+  //   utility-role grants, minus the corrective delete of non-admin global-scope grants).
+  //   No other table and no column moved; the rest of the render is byte-identical.
+  //
+  //   2026-08-31 (second re-record) — same migration, section 3b added: two UPDATE
+  //   statements reconciling ork_permission.display_name/description for
+  //   kingdom.park.create and kingdom.park.claim with PermissionRegistry, which
+  //   INSERT IGNORE could not do for rows 2026-08-25-02 had already seeded. Rows in
+  //   one table only; no DDL, no other table touched.
+  //
+  //   2026-09-01 — third re-record. Same migration again, post-review: the utility-role
+  //   grants are now matched by role OWNERSHIP (kingdom_id) rather than by name across
+  //   every kingdom, and global.admin.grant's advertised capability was corrected. Rows
+  //   in ork_role_permission only; no DDL, no new file, no other table touched.
+  //
+  //   2026-09-01 — fourth re-record, after the post-review pass. Same migration; the
+  //   utility-role grants and the global.admin.grant wording were revised again and the
+  //   sandbox was rebuilt from scratch (an agent's over-broad cleanup had deleted two
+  //   render-seeded kingdoms). Rows only; no DDL, no new file.
+  //
+  //   2026-08-31 (third re-record) — same migration, section 4's ork_admin exemption
+  //   changed from `LOWER(r.name) <> 'ork_admin'` to `NOT (LOWER(r.name) = 'ork_admin'
+  //   AND r.kingdom_id = 0)` so a kingdom-created role that merely borrows the name no
+  //   longer keeps global-scope grants, plus comment-only edits. Affects which
+  //   ork_role_permission rows the corrective DELETE removes; no DDL, no other table.
+  //
   "migrations": {
     "2017-08-04-current-prod-features": { "class": "S", "render": "full" },
     "2017-10-18-set-paragon-flag": { "class": "PB", "render": "skip", "notes": "Updates real award rows" },
@@ -108,6 +140,9 @@
     "2026-08-25-07-rbac-migrate-officers.sql": { "class": "PB", "render": "skip", "notes": "Derives ork_user_role rows from real officer records (2,506 on the prod mirror). Skipped in the render like every other backfill; a rendered sandbox gets the role CATALOG from 02 but no per-player assignments. Flagged deliberately -- if sandbox RBAC coverage is wanted later this becomes an override template." },
     "2026-08-25-08-qualtest-permissions.sql": { "class": "RC", "render": "full", "notes": "Adds the qualification-test permission and its role mappings. All INSERT IGNORE." },
     "2026-08-29-officer-position-alias-sort-order.sql": { "class": "S", "render": "full", "notes": "Adds sort_order INT NULL to ork_officer_position_alias -- the per-kingdom override for a SHARED (kingdom_id=0) position's order. Without it, reordering the Core Five writes rows all 37 kingdoms read. NULL means no override; resolved by OfficerPosition::SortOrderSql(). Idempotent ADD COLUMN IF NOT EXISTS, no backfill." },
-    "2026-08-29-officer-history-backfill.sql": { "class": "PB", "render": "skip", "notes": "Opens an ork_officer_history term for every seated officer (2,507 on the prod mirror) and reopens terms closed with a future end date whose holder is still seated. No DDL -- both date columns were already nullable." }
+    "2026-08-29-officer-history-backfill.sql": { "class": "PB", "render": "skip", "notes": "Opens an ork_officer_history term for every seated officer (2,507 on the prod mirror) and reopens terms closed with a future end date whose holder is still seated. No DDL -- both date columns were already nullable." },
+    "2026-08-31-rbac-coverage-expansion.sql": { "class": "RC", "render": "full", "notes": "Brings ork_permission in line with PermissionRegistry after the coverage audit: adds 22 permissions (including the first 8 at the new 'global' scope), splits role administration out of kingdom.auth.manage onto kingdom.role.manage / kingdom.role.grant, adds the ork_admin role, and removes kingdom.park.bulk_edit and park.officer.position.manage. Reference data RBAC cannot resolve without, so it renders. INSERT IGNORE throughout; the DELETEs are keyed on `key` (or on scope_type = 'global') and re-run clean. Section 4 is corrective, not additive: it deletes any ork_role_permission row pairing a non-ork_admin role with a global-scope permission, because 2026-08-25-02 and -08 grant the crown roles every permission with an unfiltered CROSS JOIN and are both re-runnable, so applying either one after this file would hand every Monarch the installation-operator keys. Section 5 only SELECTs -- it reports which named roles the grants actually matched and any role left holding no permissions at all." }
+    // NOTE: every file in db-migrations/ needs an entry here or `drift-check --strict`
+    // fails and takes the whole unit-test run with it. Add new files above this line.
   }
 }

@@ -158,6 +158,11 @@ $mo_park_id = (int)($mo_park_id ?? 0);
 
 				<div class="ka-field" id="mo-pos-perm-wrap" style="display:none">
 					<label id="mo-pos-perm-label">Permissions in custom set</label>
+					<div class="mo-perm-toolbar">
+						<input type="search" id="mo-perm-search" class="mo-perm-search" placeholder="Filter permissions..." aria-label="Filter permissions">
+						<label class="mo-perm-selonly"><input type="checkbox" id="mo-perm-selonly"> Selected only</label>
+						<span class="mo-perm-count" id="mo-perm-count" aria-live="polite"></span>
+					</div>
 					<div class="mo-perm-grid" id="mo-pos-perm-grid" role="group" aria-labelledby="mo-pos-perm-label">
 						<div class="mo-muted" style="padding:8px">Loading permissions...</div>
 					</div>
@@ -446,6 +451,24 @@ html[data-theme="dark"] .mo-role-desc { color:var(--ork-text-secondary); }
 html[data-theme="dark"] .mo-perm-grid { border-color:var(--ork-border); background:var(--ork-bg-tertiary); }
 .mo-perm-cat { margin-bottom:12px; }
 .mo-perm-cat:last-child { margin-bottom:0; }
+/* Toolbar over the grid: the builder offers 71 keys, so finding one -- or answering
+   "what does this office grant?" -- needs a filter, a count and a selected-only view
+   rather than a scan of the whole list. */
+.mo-perm-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.mo-perm-search { flex:1 1 160px; min-width:0; font-size:12.5px; padding:5px 8px;
+	border:1px solid #e2e8f0; border-radius:6px; background:#fff; color:#2d3748; }
+html[data-theme="dark"] .mo-perm-search { border-color:var(--ork-border); background:var(--ork-bg-tertiary); color:var(--ork-text); }
+.mo-perm-selonly { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#4a5568; cursor:pointer; white-space:nowrap; }
+html[data-theme="dark"] .mo-perm-selonly { color:var(--ork-text-secondary); }
+.mo-perm-count { font-size:11.5px; font-weight:600; color:#718096; white-space:nowrap; }
+html[data-theme="dark"] .mo-perm-count { color:var(--ork-text-muted); }
+.mo-perm-cat-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.mo-perm-catbtns { display:flex; gap:6px; flex-shrink:0; }
+/* Size delta only -- these are .mo-linkbtn, which already carries the link
+   colour plus the :hover / :focus-visible states in both themes. */
+.mo-perm-catbtn { font-size:11px; font-weight:600; }
+.mo-perm-empty { font-size:12.5px; color:#718096; padding:8px 2px; }
+html[data-theme="dark"] .mo-perm-empty { color:var(--ork-text-muted); }
 /* Headings are the controller's officer-facing group labels ("Kingdom Settings",
    not the raw "config" slug), so they are NOT uppercased here. */
 .mo-perm-cat-title { font-size:12px; font-weight:700; color:#4a5568; margin-bottom:6px; }
@@ -458,6 +481,32 @@ html[data-theme="dark"] .mo-perm-label { color:var(--ork-text); }
 .mo-perm-name { font-weight:600; }
 .mo-perm-desc { font-size:11.5px; color:#718096; line-height:1.45; margin:2px 0 0 22px; }
 html[data-theme="dark"] .mo-perm-desc { color:var(--ork-text-muted); }
+/* Scope chip. The builder now offers park-, event- and unit-scope permissions, not
+   only kingdom ones -- a kingdom-held office genuinely can carry them, because a
+   kingdom-scope grant resolves downward through the RBAC cascade. The chip says which
+   things the permission reaches, so "Manage Attendance" does not read as something that
+   happens at the kingdom rather than in its parks. What it reaches depends on where the
+   console is: this partial is also included by _park_admin_modals.tpl, so the tip text is
+   built from MoConfig.parkId (see moScopeTip()) rather than asserting kingdom-wide reach
+   unconditionally. On the kingdom console, kingdom-scope keys get no chip -- marking the
+   default adds noise to two thirds of the list; on a park console they DO get one, since
+   there "no chip" would read as "park-level". */
+.mo-perm-scope { display:inline-block; margin-left:6px; padding:0 5px; border-radius:3px;
+	background:#edf2f7; color:#4a5568; font-size:9.5px; font-weight:700;
+	text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; }
+html[data-theme="dark"] .mo-perm-scope { background:var(--ork-bg-tertiary); color:var(--ork-text-secondary); }
+/* The chip's tip is a sentence, and the generic [data-tip] rule in revised.css
+   (min-width:max-content) would render it as one non-wrapping line. It also sits
+   inside .mo-perm-grid, which scrolls, so an upward tip is cut off by the
+   scroller's top edge. Force wrapping, cap the width and flip the tip downward
+   and left-anchored. !important because the generic rule's specificity beats a
+   plain class (same precedent as .kn-emod-check-label in revised.css). */
+.mo-perm-scope[data-tip]:hover::after,
+.mo-perm-scope[data-tip]:focus-visible::after {
+	min-width:0 !important; max-width:220px !important; white-space:normal !important;
+	bottom:auto !important; top:calc(100% + 6px) !important;
+	left:0 !important; transform:none !important;
+}
 .mo-perm-hint { font-size:11.5px; color:#718096; margin-top:6px; }
 html[data-theme="dark"] .mo-perm-hint { color:var(--ork-text-muted); }
 
@@ -681,6 +730,11 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		$.getJSON(base() + 'list' + (MoConfig.parkId ? '&ParkId=' + MoConfig.parkId : ''), function(resp) {
 			loadingEl.style.display = 'none';
 			if (!resp || resp.status !== 0) {
+				// Same hazard as the .fail() path below: moRender() -- the only other place
+				// the lock is released -- is not reached, so a single non-zero status here
+				// would wedge every later drag/arrow re-order until the page is reloaded.
+				moReorderBusy = false;
+				moFocusGripPid = 0;
 				errorEl.textContent = (resp && resp.error) ? resp.error : 'Failed to load positions.';
 				errorEl.style.display = '';
 				moApplyCapability();
@@ -1515,6 +1569,33 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			el.textContent = 'Choose the permissions this office grants. Anyone appointed to it receives exactly this set.';
 		}
 	}
+	// What a scope means for THIS console's office. Spelled out because "park" on an
+	// officer's permission list is otherwise ambiguous between "one park" and "every
+	// park" -- and the answer differs by console: this partial is included by the park
+	// admin modals too (MoConfig.parkId > 0), where the kingdom-wide wording would be a
+	// straight misstatement of what the office reaches.
+	var MO_SCOPE_TIPS_KINGDOM = {
+		park:  'Applies to every park in this kingdom',
+		event: 'Applies to every event in this kingdom',
+		unit:  'Applies to every unit in this kingdom'
+	};
+	var MO_SCOPE_TIPS_PARK = {
+		kingdom: 'Applies to the whole kingdom, not just this park',
+		park:    'Applies to this park',
+		event:   'Applies to this park\'s events',
+		unit:    'Applies to units at this park'
+	};
+	function moScopeTip(scope) {
+		var tips = (window.MoConfig && MoConfig.parkId) ? MO_SCOPE_TIPS_PARK : MO_SCOPE_TIPS_KINGDOM;
+		return tips[scope] || '';
+	}
+	// Kingdom-scope keys carry no chip on the kingdom console (it is the default there),
+	// but DO on a park console, where an unchipped row reads as park-level.
+	function moShowScopeChip(scope) {
+		if (!scope) return false;
+		return scope !== 'kingdom' || !!(window.MoConfig && MoConfig.parkId);
+	}
+
 	function renderPermGrid(checkedKeys) {
 		checkedKeys = checkedKeys || [];
 		var grid = document.getElementById('mo-pos-perm-grid');
@@ -1530,21 +1611,80 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			cats[c].push(p);
 		});
 		var html = '';
-		order.forEach(function(cat) {
-			html += '<div class="mo-perm-cat"><div class="mo-perm-cat-title">' + esc(cat) + '</div>';
+		order.forEach(function(cat, ci) {
+			html += '<div class="mo-perm-cat" data-cat="' + escAttr(String(ci)) + '">' +
+				'<div class="mo-perm-cat-head"><div class="mo-perm-cat-title">' + esc(cat) + '</div>' +
+				'<div class="mo-perm-catbtns">' +
+				'<button type="button" class="mo-linkbtn mo-perm-catbtn" data-catset="1" data-cat="' + escAttr(String(ci)) + '">All</button>' +
+				'<button type="button" class="mo-linkbtn mo-perm-catbtn" data-catset="0" data-cat="' + escAttr(String(ci)) + '">None</button>' +
+				'</div></div>';
 			cats[cat].forEach(function(p) {
 				var ck = checkedKeys.indexOf(p.Key) !== -1 ? ' checked' : '';
 				var cbId = 'mo-perm-' + String(p.Key).replace(/[^A-Za-z0-9]+/g, '-');
-				html += '<div class="mo-perm-item">' +
+				// Everything the filter matches on, lower-cased once at render time.
+				var hay = ((p.DisplayName || '') + ' ' + (p.Description || '') + ' ' + p.Key).toLowerCase();
+				html += '<div class="mo-perm-item" data-search="' + escAttr(hay) + '">' +
 					'<label class="mo-perm-label" for="' + escAttr(cbId) + '">' +
 					'<input type="checkbox" class="mo-perm-cb" id="' + escAttr(cbId) + '" value="' + escAttr(p.Key) + '"' + ck + '>' +
-					'<span class="mo-perm-name">' + esc(p.DisplayName || p.Key) + '</span></label>' +
+					'<span class="mo-perm-name">' + esc(p.DisplayName || p.Key) + '</span>' +
+					(moShowScopeChip(p.ScopeType)
+						? '<span class="mo-perm-scope" data-tip="' + escAttr(moScopeTip(p.ScopeType)) + '">' + esc(p.ScopeType) + '</span>'
+						: '') +
+					'</label>' +
 					(p.Description ? '<div class="mo-perm-desc">' + esc(p.Description) + '</div>' : '') +
 					'</div>';
 			});
 			html += '</div>';
 		});
+		html += '<div class="mo-perm-empty" id="mo-perm-empty" style="display:none">No permissions match that filter.</div>';
 		grid.innerHTML = html;
+		moApplyPermFilter();
+	}
+	// Filter + counter. Items are HIDDEN, never removed: currentGridKeys() reads the
+	// grid's checkboxes, so a filtered-out tick must stay in the DOM or saving while a
+	// filter is active would silently drop it.
+	function moApplyPermFilter() {
+		var grid = document.getElementById('mo-pos-perm-grid');
+		if (!grid) return;
+		var searchEl = document.getElementById('mo-perm-search');
+		var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+		var selOnlyEl = document.getElementById('mo-perm-selonly');
+		var selOnly = !!(selOnlyEl && selOnlyEl.checked);
+		var total = 0, checked = 0, shown = 0;
+		grid.querySelectorAll('.mo-perm-cat').forEach(function(cat) {
+			var visibleInCat = 0;
+			cat.querySelectorAll('.mo-perm-item').forEach(function(item) {
+				var cb = item.querySelector('.mo-perm-cb');
+				total++;
+				if (cb && cb.checked) checked++;
+				var ok = (q === '' || (item.getAttribute('data-search') || '').indexOf(q) !== -1)
+					&& (!selOnly || (cb && cb.checked));
+				item.style.display = ok ? '' : 'none';
+				if (ok) { visibleInCat++; shown++; }
+			});
+			cat.style.display = visibleInCat > 0 ? '' : 'none';
+		});
+		var emptyEl = document.getElementById('mo-perm-empty');
+		if (emptyEl) emptyEl.style.display = (total > 0 && shown === 0) ? '' : 'none';
+		var countEl = document.getElementById('mo-perm-count');
+		if (countEl) countEl.textContent = checked + ' of ' + total + ' selected';
+	}
+	// A filter left over from the last position opened would hide most of the next
+	// one's grid, so both controls are cleared whenever the modal is (re)opened.
+	function moResetPermFilter() {
+		var searchEl = document.getElementById('mo-perm-search');
+		if (searchEl) searchEl.value = '';
+		var selOnlyEl = document.getElementById('mo-perm-selonly');
+		if (selOnlyEl) selOnlyEl.checked = false;
+	}
+	// Counter only. Ticking a box does NOT re-run the filter: under "Selected only" that
+	// would make the row the user just unticked vanish from under the cursor.
+	function moUpdatePermCount() {
+		var grid = document.getElementById('mo-pos-perm-grid');
+		var countEl = document.getElementById('mo-perm-count');
+		if (!grid || !countEl) return;
+		countEl.textContent = grid.querySelectorAll('.mo-perm-cb:checked').length
+			+ ' of ' + grid.querySelectorAll('.mo-perm-cb').length + ' selected';
 	}
 	// Re-render the grid from scratch. Called on EVERY mode switch and EVERY modal
 	// open — it used to render once on first load, so opening a second position
@@ -1610,6 +1750,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		moPosKeys = [];
 		moPosIsCustom = false;
 		moPermDirty = false;
+		moResetPermFilter();
 		document.getElementById('mo-pos-title').textContent = 'Create Position';
 		document.getElementById('mo-pos-id').value = '';
 		document.getElementById('mo-pos-title-input').value = '';
@@ -1634,6 +1775,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		moPosKeys = (pos.PermissionKeys || []).slice();
 		moPosIsCustom = (pos.RbacMode === 'custom');
 		moPermDirty = false;
+		moResetPermFilter();
 		document.getElementById('mo-pos-title').textContent = 'Edit Position';
 		document.getElementById('mo-pos-id').value = pid;
 		document.getElementById('mo-pos-title-input').value = pos.Title || '';
@@ -1861,9 +2003,33 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 				if (e.target && e.target.classList && e.target.classList.contains('mo-perm-cb')) {
 					moPermDirty = true;
 					moPermHint(false);
+					moUpdatePermCount();
 				}
 			});
+			// Per-category All / None.
+			grid.addEventListener('click', function(e) {
+				var btn = e.target && e.target.closest ? e.target.closest('.mo-perm-catbtn') : null;
+				if (!btn) return;
+				e.preventDefault();
+				var cat = btn.closest('.mo-perm-cat');
+				if (!cat) return;
+				var on = btn.getAttribute('data-catset') === '1';
+				// Only rows the current filter leaves visible, so "All" under a filter
+				// cannot tick permissions the user cannot see.
+				cat.querySelectorAll('.mo-perm-item').forEach(function(item) {
+					if (item.style.display === 'none') return;
+					var cb = item.querySelector('.mo-perm-cb');
+					if (cb) cb.checked = on;
+				});
+				moPermDirty = true;
+				moPermHint(false);
+				moUpdatePermCount();
+			});
 		}
+		var permSearch = document.getElementById('mo-perm-search');
+		if (permSearch) { permSearch.addEventListener('input', moApplyPermFilter); }
+		var permSelOnly = document.getElementById('mo-perm-selonly');
+		if (permSelOnly) { permSelOnly.addEventListener('change', moApplyPermFilter); }
 	})();
 
 	// Initial load (partial HTML is present at this point since the script follows it).

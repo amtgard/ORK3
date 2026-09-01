@@ -135,39 +135,67 @@ class Controller_OfficerAdminAjax extends Controller
         $scope_id          = ($park_id > 0) ? $park_id : $kingdom_id;
         $permission_park_id = $park_id;
 
-        // SECURITY: ork_officer_position is a per-KINGDOM registry, not per-park -- but
-        // PermissionKeyFor('position', $park_id) resolves to the PARK key
-        // (park.officer.position.manage) whenever a ParkId is present, so a park-only
-        // officer's console could reach CreatePosition/EditPosition/ReorderPositions and,
-        // worst case, RetirePosition -- which vacates EVERY holder of that position ACROSS
-        // EVERY SCOPE in the kingdom. One park officer retiring a shared position would
-        // remove officers from every other park. Gate the 'position' family at KINGDOM
-        // scope always, against the DERIVED $kingdom_id (never the URL value -- see the
-        // park/kingdom derivation above), so the permission check matches what the domain
-        // actually does. Occupancy families (set/vacate/history) are genuinely per-scope
-        // and stay exactly as they were.
+        // SECURITY: ork_officer_position is a per-KINGDOM registry, not per-park.
+        // RetirePosition vacates EVERY holder of a position ACROSS EVERY SCOPE in the
+        // kingdom, so one park officer retiring a shared position would remove officers
+        // from every other park. Gate the 'position' family at KINGDOM scope always,
+        // against the DERIVED $kingdom_id (never the URL value -- see the park/kingdom
+        // derivation above). Occupancy families (set/vacate/history) are genuinely
+        // per-scope and stay exactly as they were.
+        //
+        // PermissionKeyFor() now resolves the 'position' family to the kingdom key on its
+        // own, and park.officer.position.manage no longer exists, so this block is
+        // belt-and-braces rather than the only thing holding the line -- the domain
+        // (reachable through the JSON service, which bypasses this controller entirely)
+        // enforces the same rule in OfficerPosition::authorizePositionFamily().
         if ($action_kind[$action] === 'position') {
             $scope              = 'kingdom';
             $scope_id           = $kingdom_id;
             $permission_park_id = 0;
         }
 
+        // SECURITY: the LEGACY authority tier this gate falls back to MIRRORS the tier the
+        // domain method behind each action already demands -- no looser (this gate would
+        // then be decorative) and no STRICTER (the console would refuse an officer work
+        // the same endpoint performs, since OfficerPosition is exposed on the JSON service
+        // and does not pass through this controller at all).
+        //
+        // Verified against system/lib/ork3/class.OfficerPosition.php: CreatePosition
+        // authorizes at AUTH_CREATE -- it mints a new office and binds an arbitrary RBAC
+        // permission set to it, the same weight as the role administration that
+        // KingdomAjax::rbac() and addauth/removeauth bridge at AUTH_CREATE. EditPosition
+        // (also behind 'reclassify'), ReorderPositions, RetirePosition and ReinstatePosition
+        // all authorize at AUTH_EDIT, as do the occupancy families (set/vacate/history).
+        // 'roles'/'permissions' are read-only lists feeding the position editor, so they
+        // ride at the editor's tier.
+        //
+        // That CreatePosition tier predates this branch -- so pinning it here is a cheap
+        // pre-filter and defence in depth, not the closure of a live self-escalation; the
+        // domain already refused it.
+        //
+        // KNOWN GAP, deliberately not papered over here: RetirePosition is the
+        // kingdom-wide destructive verb (it vacates every holder across every scope) and
+        // still authorizes at only AUTH_EDIT in the domain. Raising it belongs in
+        // class.OfficerPosition.php; raising it HERE alone would only hide the button
+        // while leaving the JSON service wide open.
+        $legacy_role = ($action === 'createposition') ? AUTH_CREATE : AUTH_EDIT;
+
         // edithistory/deletehistory are deliberately looser HERE and stricter in the
         // domain: their methods authorize against the ROW's own kingdom and park, which
         // this controller does not know. This gate is a cheap pre-filter, not the
         // authority. Do not "fix" the apparent inconsistency by trusting the payload.
+        $this->load_model('OfficerPosition');
         if (!$this->Authorization->has_permission_or_authority(
             $uid,
-            OfficerPosition::PermissionKeyFor($action_kind[$action], $permission_park_id),
+            $this->OfficerPosition->permission_key_for($action_kind[$action], $permission_park_id),
             $scope,
             $scope_id,
-            AUTH_EDIT
+            $legacy_role
         )) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }
 
-        $this->load_model('OfficerPosition');
         $this->load_model('RBACService');
 
         switch ($action) {
@@ -181,9 +209,9 @@ class Controller_OfficerAdminAjax extends Controller
                 break;
             case 'deletehistory': $this->actionDeleteHistory();
                 break;
-            case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid, null);
+            case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid);
                 break;
-            case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid, 'holder');
+            case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid);
                 break;
             case 'vacateall':    $this->actionVacateAll($kingdom_id, $park_id);
                 break;
@@ -404,9 +432,14 @@ class Controller_OfficerAdminAjax extends Controller
         // gate uses, so it can hide rather than disable-on-click. Kingdom console users
         // are unaffected: Admin_kingdom.tpl already requires kingdom.officer.position.manage
         // just to reach this partial at all, so this is always true there.
+        //
+        // AUTH_EDIT is deliberate: it is the LOWEST tier any 'position' action bridges at
+        // (only createposition needs AUTH_CREATE -- see the gate above), so this flag
+        // never hides controls the endpoint would honour. It is a hide-the-dead-controls
+        // hint, not the authority; the gate above still decides each request.
         $can_manage_positions = $uid > 0 && $this->Authorization->has_permission_or_authority(
             $uid,
-            OfficerPosition::PermissionKeyFor('position', 0),
+            $this->OfficerPosition->permission_key_for('position', 0),
             'kingdom',
             $kingdom_id,
             AUTH_EDIT
@@ -666,15 +699,15 @@ class Controller_OfficerAdminAjax extends Controller
      * OfficerPosition::VacateOfficer REQUIRES a MundaneId, so both routes below
      * remove exactly one person -- "clear the whole office" is not reachable
      * from this console entry point (RetirePosition still uses the all-holders
-     * path internally when a position itself is retired).
-     *   'holder' — MundaneId is required; only that person is vacated.
-     *   null     — legacy 'vacate' entry point; also requires MundaneId now.
+     * path internally when a position itself is retired). Both the 'vacate' and
+     * 'vacateholder' routes land here and behave identically -- there is no
+     * per-route parameter, because there is no per-route difference.
      *
      * The service rejects a member who does not currently hold the position
      * with its own message, which reaches the client through the normal
      * emitServiceResult path.
      */
-    private function actionVacate($kingdom_id, $park_id, $uid, $scope = null)
+    private function actionVacate($kingdom_id, $park_id, $uid)
     {
         $position_id = (int)($_POST['PositionId'] ?? 0);
         if (!valid_id($position_id)) {
@@ -970,11 +1003,42 @@ class Controller_OfficerAdminAjax extends Controller
 
     private function actionPermissions()
     {
-        // Kingdom-scope-applicable permissions for the custom-permission-set builder.
-        // Each entry carries the registry's own human description (the previous
+        // Every permission an officer position can be given, for the custom-permission-set
+        // builder. Each entry carries the registry's own human description (the previous
         // payload dropped it, leaving the grid as a wall of bare checkbox labels)
         // and an officer-facing group heading instead of the raw category slug.
-        $all = $this->RBACService->GetPermissionsByScope('kingdom'); // key => [display_name, description, scope_type, category]
+        //
+        // This used to offer GetPermissionsByScope('kingdom') only, which is 23 of the 79
+        // keys -- so the whole park scope (where every player.* permission lives), the
+        // event scope, and the unit scope could not be attached to any officer position.
+        // That restriction did not match how grants resolve: an officer position is held
+        // at kingdom scope, and RBACService::CheckPermissionCascade walks park -> kingdom
+        // and event/unit -> kingdom, so a kingdom-scope grant of player.edit or
+        // park.attendance.manage genuinely applies to every park in the kingdom. The
+        // kingdom's own role builder (Admin::roles) already offered all of them, so the
+        // two surfaces disagreed about what a role could contain.
+        //
+        // Global permissions stay out: they name installation-operator actions with no
+        // per-kingdom meaning, and CheckPermissionCascade deliberately does not route a
+        // scoped check up to global.
+        //
+        // Role-definition authority (kingdom.role.manage / kingdom.role.grant) stays out
+        // too: it is kingdom-scope, so the scope test above passes it, but
+        // OfficerPosition::ValidatePermissionKeys() rejects it on save. Offering a key
+        // the writer refuses would fail every later edit of a position whose role already
+        // carries it, so the offer is filtered from the same list the writer enforces.
+        $excluded = $this->OfficerPosition->excluded_permission_keys();
+        $all = array_filter(
+            $this->RBACService->GetAllPermissions(), // key => [display_name, description, scope_type, category]
+            function ($def, $key) use ($excluded) {
+                if (in_array((string)$key, $excluded, true)) {
+                    return false;
+                }
+
+                return ($def[2] ?? '') !== 'global';
+            },
+            ARRAY_FILTER_USE_BOTH
+        );
 
         // Bucket by slug first so the groups can be emitted in a deliberate order
         // (settings/officers/players first, access control last) rather than in
@@ -988,6 +1052,10 @@ class Controller_OfficerAdminAjax extends Controller
                 'Description'   => (string)($def[1] ?? ''),
                 'CategoryKey'   => $slug,
                 'Category'      => $this->permissionCategoryLabel($slug),
+                // Which org unit the permission acts on. The builder groups by category,
+                // not scope, so this is what tells a reader that "Manage Attendance"
+                // applies to the kingdom's parks rather than to the kingdom itself.
+                'ScopeType'     => (string)($def[2] ?? ''),
             ];
         }
 

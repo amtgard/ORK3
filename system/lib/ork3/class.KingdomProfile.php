@@ -623,7 +623,10 @@ class KingdomProfile extends Ork3
         while ($evtResult && $evtResult->Next()) {
             $evStatus = (string) ($evtResult->status ?? 'published');
             if ($evStatus !== 'published' && !$isAdmin && (int) $evtResult->event_creator !== $mundaneId) {
-                $canEditRow = ($mundaneId > 0) && Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, (int) $evtResult->event_id, AUTH_EDIT);
+                // Draft rows are visible to whoever may edit the event. Left on the legacy
+                // event grant, an Event Coordinator holding event.edit through a role could
+                // edit a draft they were never shown.
+                $canEditRow = ($mundaneId > 0) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.edit', 'event', (int) $evtResult->event_id, AUTH_EDIT);
                 if (!$canEditRow) {
                     continue;
                 }
@@ -711,7 +714,8 @@ class KingdomProfile extends Ork3
         if ($rowStatus === 'published' || $isAdmin || $creatorId === $mundaneId) {
             return true;
         }
-        $canEditRow = $mundaneId > 0 && Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT);
+        // Same rule as the calendar feed above: visibility follows the edit permission.
+        $canEditRow = $mundaneId > 0 && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.edit', 'event', $eventId, AUTH_EDIT);
         if (!$canEditRow && $mundaneId > 0) {
             $this->db->Clear();
             $_staffRow = $this->db->DataSet(

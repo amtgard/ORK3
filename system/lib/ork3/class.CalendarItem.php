@@ -8,17 +8,25 @@ class CalendarItem extends Ork3
         $this->item = new yapo($this->db, DB_PREFIX . 'calendar_item');
     }
 
-    // Permission: AUTH_CREATE on AUTH_KINGDOM or AUTH_PARK, same as events.
+    /**
+     * Permission: park.calendar.manage / kingdom.calendar.manage, with the legacy
+     * AUTH_CREATE grant as the fallback arm. A calendar item is a first-class piece of
+     * published content -- it appears on a kingdom or park calendar next to events --
+     * but it had no permission of its own, so no role could be given it.
+     *
+     * Park before kingdom: an item carrying a ParkId belongs to that park, and a
+     * kingdom-scope grant still satisfies the park check through the RBAC cascade.
+     */
     private function canManage($mundane_id, $kingdom_id, $park_id)
     {
         if (!valid_id($mundane_id)) {
             return false;
         }
         if (valid_id($park_id)) {
-            return Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_CREATE);
+            return Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.calendar.manage', 'park', $park_id, AUTH_CREATE);
         }
         if (valid_id($kingdom_id)) {
-            return Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE);
+            return Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.calendar.manage', 'kingdom', $kingdom_id, AUTH_CREATE);
         }
         return false;
     }

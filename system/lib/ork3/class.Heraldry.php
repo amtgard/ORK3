@@ -443,8 +443,12 @@ class Heraldry extends Ork3
             return InvalidParameter();
         }
 
+        // Same authority rule as SetEventHeraldry: the event.heraldry.manage permission
+        // (or its legacy event grant) OR event-staff can_manage. This used to be a bare
+        // HasAuthority call while SetEventHeraldry already honored the permission, so a
+        // Heraldry Manager could upload an event's logo and then not remove it.
         $planning = new EventPlanning();
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $eventId, AUTH_EDIT)
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.heraldry.manage', 'event', $eventId, AUTH_EDIT)
                 && !$planning->CanManageEventDetail($mundane_id, $eventId, 0, 'manage')) {
             return NoAuthorization();
         }
@@ -473,10 +477,11 @@ class Heraldry extends Ork3
     {
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $eventId = (int)($request['EventId'] ?? 0);
-        // Same authority rule as RemoveEventHeraldry below: an ork_authorization
-        // event grant OR event-staff can_manage. The staff path was missing here,
-        // so a fully-granted event staffer could remove the event's logo (and set
-        // its banner — class.Banner accepts staff) but not upload a logo.
+        // Same authority rule as RemoveEventHeraldry below: the event.heraldry.manage
+        // permission (or an ork_authorization event grant) OR event-staff can_manage.
+        // The staff path was missing here, so a fully-granted event staffer could remove
+        // the event's logo (and set its banner — class.Banner accepts staff) but not
+        // upload a logo.
         $planning = new EventPlanning();
         if ($mundane_id > 0
                 && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.heraldry.manage', 'event', $eventId, AUTH_EDIT)

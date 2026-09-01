@@ -38,7 +38,8 @@ class Report extends Ork3
     }
 
     /**
-     * Token + global AUTH_ADMIN (same gate as Administration::PurgeLogs).
+     * Token + installation-wide read access (same gate as the server-health endpoints
+     * in Administration).
      *
      * @return array|null error response, or null when authorized
      */
@@ -48,7 +49,7 @@ class Report extends Ork3
         if (!valid_id($actorId)) {
             return BadToken();
         }
-        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($actorId, 'global.health.view', 'global', 0, AUTH_CREATE)) {
             return null;
         }
 
@@ -56,65 +57,40 @@ class Report extends Ork3
     }
 
     /**
-     * Token + park CREATE, kingdom EDIT, or global admin (Controller_Reports scope gates).
+     * Does this actor hold $permission_key at the scope named by a caller-supplied
+     * legacy AUTH_* Type / Id pair?
      *
-     * @return array|null error response, or null when authorized
-     */
-    private function _authorizeKingdomParkReportScope($token, string $scopeType, int $scopeId): ?array
-    {
-        if (!valid_id($scopeId)) {
-            return InvalidParameter('Scope id is required.');
-        }
-        $actorId = Ork3::$Lib->authorization->IsAuthorized($token ?? '');
-        if (!valid_id($actorId)) {
-            return BadToken();
-        }
-        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)
-            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return null;
-        }
-        if ($scopeType === 'Park' || $scopeType === AUTH_PARK) {
-            if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
-                return null;
-            }
-        } elseif ($scopeType === 'Kingdom' || $scopeType === AUTH_KINGDOM) {
-            if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT)) {
-                return null;
-            }
-        }
-
-        return NoAuthorization();
-    }
-
-    /**
-     * Token + self or park CREATE / kingdom EDIT / admin (SetPlayerActiveStatus-style).
+     * The three roster/authorization reports below take their scope from the request
+     * rather than from a fixed entity, so the AUTH_* -> scope_type mapping lives here
+     * instead of being spelled at each call. An unrecognized Type resolves to nothing
+     * and the caller falls back to the restricted (public) view, which is what the bare
+     * HasAuthority() call did too.
      *
-     * @return array|null error response, or null when authorized
+     * @param int    $mundane_id
+     * @param string $permission_key
+     * @param mixed  $type  AUTH_PARK / AUTH_KINGDOM / AUTH_EVENT / AUTH_UNIT
+     * @param mixed  $id
+     * @return bool
      */
-    private function _authorizeReportPlayerScope(array $request, int $mundaneId): ?array
+    private function _hasScopedReportPermission($mundane_id, string $permission_key, $type, $id): bool
     {
-        if (!valid_id($mundaneId)) {
-            return InvalidParameter('MundaneId is required.');
-        }
-        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
-        if (!valid_id($actorId)) {
-            return BadToken();
-        }
-        if ((int) $actorId === (int) $mundaneId) {
-            return null;
-        }
-        $mundane = new yapo($this->db, DB_PREFIX . 'mundane');
-        $mundane->mundane_id = $mundaneId;
-        if (!$mundane->find()) {
-            return InvalidParameter('Player not found.');
-        }
-        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, (int) $mundane->park_id, AUTH_CREATE)
-            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, (int) $mundane->kingdom_id, AUTH_EDIT)
-            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_EDIT)) {
-            return null;
+        $scopes = [
+            AUTH_PARK    => 'park',
+            AUTH_KINGDOM => 'kingdom',
+            AUTH_EVENT   => 'event',
+            AUTH_UNIT    => 'unit',
+        ];
+        if (!is_string($type) || !isset($scopes[$type]) || !valid_id($id)) {
+            return false;
         }
 
-        return NoAuthorization();
+        return Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $mundane_id,
+            $permission_key,
+            $scopes[$type],
+            (int) $id,
+            AUTH_EDIT
+        );
     }
 
     public function HeraldryReport($request)
@@ -1619,7 +1595,7 @@ class Report extends Ork3
 
         if (strlen($request['Token']) > 0
                 && ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, $request['Type'], $request['Id'], AUTH_EDIT)) {
+                && $this->_hasScopedReportPermission($mundane_id, 'park.report.view', $request['Type'], $request['Id'])) {
             $restricted_access = true;
         } else {
             $restricted_access = false;
@@ -1747,7 +1723,7 @@ class Report extends Ork3
         $select_list = array_merge($select_list, array());
         if (strlen($request['Token']) > 0
                 && ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, $request['Type'], $request['Id'], AUTH_EDIT)) {
+                && $this->_hasScopedReportPermission($mundane_id, 'park.report.view', $request['Type'], $request['Id'])) {
             $restricted_access = true;
         } else {
             $restricted_access = false;
@@ -2678,7 +2654,7 @@ class Report extends Ork3
 
         if (strlen($request['Token']) > 0
             && ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, $request['Type'], $request['Id'], AUTH_EDIT)) {
+            && $this->_hasScopedReportPermission($mundane_id, 'park.dues.manage', $request['Type'], $request['Id'])) {
             // Unrestrict data when we have an authorized player
             $restrict_access = false;
         } else {

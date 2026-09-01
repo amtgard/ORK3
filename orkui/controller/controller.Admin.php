@@ -633,9 +633,16 @@ class Controller_Admin extends Controller
             $this->template = 'Admin_permissions_global.tpl';
             return;
         }
-        $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
-        $authType = $authTypeMap[$type];
-        if (!$this->Authorization->has_authority($uid, $authType, $id, AUTH_CREATE)) {
+        // Mirror Admin::permissionsgrid()/roles(): RBAC permission key first, legacy
+        // authority row as the fallback (has_permission_or_authority() runs that fallback
+        // itself). Gating on has_authority() alone shut an officer who holds *.auth.manage
+        // through an RBAC role -- and who can therefore grant and revoke these very
+        // permissions through KingdomAjax/ParkAjax/EventAjax addauth/removeauth -- out of
+        // the page that shows what those grants do. All three scopes have a registry key,
+        // so all three use the same key/scope/tier as the endpoints this page posts to.
+        $permKey = $type === 'Kingdom' ? 'kingdom.auth.manage'
+            : ($type === 'Park' ? 'park.auth.manage' : 'event.auth.manage');
+        if (!$this->Authorization->has_permission_or_authority($uid, $permKey, strtolower($type), $id, AUTH_CREATE)) {
             $backUrl = $type === 'Event'
                 ? UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '')
                 : UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id;
@@ -737,7 +744,11 @@ class Controller_Admin extends Controller
         // permission key first, legacy authority row as the fallback, global admin spelled
         // out. Gating on has_authority() alone shut an officer who holds *.auth.manage
         // through an RBAC role -- and can therefore grant these permissions -- out of the
-        // read-only grid that shows what those grants do.
+        // read-only grid that shows what those grants do. The legacy tier stays AUTH_EDIT:
+        // in HasAuthority() a CREATE row satisfies any request while an EDIT row satisfies
+        // only AUTH_EDIT, so AUTH_EDIT is the weaker request. This read-only report
+        // deliberately accepts it, where roles() -- which writes the same data -- demands
+        // AUTH_CREATE.
         $permKey = $type === 'Kingdom' ? 'kingdom.auth.manage' : 'park.auth.manage';
         if (
             !$this->Authorization->has_permission_or_authority($uid, $permKey, strtolower($type), $id, AUTH_EDIT)
@@ -746,6 +757,63 @@ class Controller_Admin extends Controller
             header('Location: ' . UIR . 'Admin');
             exit;
         }
+
+        // Breadcrumb context. Without this the theme's nav keeps whatever kingdom the
+        // viewer last visited, so the grid for Kingdom 1 rendered under "The Kingdom of
+        // Crystal Groves" while its own subtitle said Wetlands. The stale NAME is the
+        // subtle half: kingdom_route()/park_route() only refill the name when the session
+        // has none, so setting the id alone would relabel the right kingdom with the wrong
+        // name. Clearing the cached names first makes each helper take its own direct-link
+        // branch and re-read them for the kingdom this page is actually about.
+        unset($this->session->kingdom_name);
+        if ($type === 'Park') {
+            unset($this->session->kingdom_id, $this->session->park_name);
+            $this->park_route($id);
+        } else {
+            $this->kingdom_route($id);
+        }
+
+        // Roles are owned by a kingdom, so a park-scoped visit resolves to the park's
+        // kingdom -- otherwise the grid would list nothing for half its callers.
+        // A park visit is labelled with BOTH names: the park it was reached from and the
+        // kingdom that actually owns the roles. Naming only the park read as "these are
+        // the roles grantable at my park", which is the one thing the page is not saying.
+        $kingdomId = $id;
+        $scopeName = '';
+        $kingdomName = '';
+        if ($type === 'Park') {
+            $this->load_model('Park');
+            $parkInfo = $this->Park->get_park_info($id);
+            $scopeName = (string)($parkInfo['ParkInfo']['ParkName'] ?? '');
+            // The park lookup already carries the owning kingdom; a second round trip
+            // through KingdomProfile->park_kingdom_id() asked for a value in hand.
+            $kingdomId = (int)($parkInfo['ParkInfo']['KingdomId'] ?? 0);
+            if ($kingdomId <= 0) {
+                header('Location: ' . UIR . 'Admin');
+                exit;
+            }
+        }
+        $this->load_model('Kingdom');
+        $kingdomInfo = $this->Kingdom->get_kingdom_details($kingdomId);
+        $kingdomName = (string)($kingdomInfo['KingdomInfo']['KingdomName'] ?? '');
+        if ($type !== 'Park') {
+            $scopeName = $kingdomName;
+        }
+
+        // This page used to render a 1,238-line hand-written mock-up with no PHP in it:
+        // every role column and every check mark was invented, on an auth-gated page a
+        // kingdom would reasonably read as a statement about its own roles. It now shows
+        // the real registry against this kingdom's real role mappings.
+        $this->load_model('RBACService');
+        $matrix = $this->RBACService->GetPermissionMatrix($kingdomId);
+
+        $this->data['PgScopeType']  = $type;
+        $this->data['PgScopeId']    = $id;
+        $this->data['PgScopeName']  = $scopeName;
+        $this->data['PgKingdomName'] = $kingdomName;
+        $this->data['PgRoles']      = $matrix['Roles'] ?? [];
+        $this->data['PgGranted']    = $matrix['Granted'] ?? [];
+        $this->data['PgPermissions'] = $this->RBACService->GetAllPermissions();
 
         $this->template = '../revised-frontend/Admin_permissions_grid.tpl';
     }
@@ -819,6 +887,7 @@ class Controller_Admin extends Controller
         }
         $_target = $this->Player->fetch_player($id);
         $_target_park = (int)($_target['ParkId'] ?? 0);
+        $_target_kingdom = (int)($_target['KingdomId'] ?? 0);
         // Self-service exception: the Player-profile upload modal posts photo/
         // heraldry changes HERE (action 'update' + Update='Update Media'), and
         // the domain layer (SetImage/SetHeraldry) authorizes self-edits itself —
@@ -829,9 +898,18 @@ class Controller_Admin extends Controller
         $_is_self_media_post = ($_uid === $id
             && isset($action) && $action === 'update'
             && $this->request->Update === 'Update Media');
+        //
+        // The capability is player.edit, gated the same way KingdomAjax::suspendplayer
+        // gates it: the RBAC key first, the legacy authority row as the fallback. Without
+        // the key an officer whose only standing is an RBAC grant of player.edit was
+        // redirected off the whole page despite holding exactly the capability it needs.
+        // The global-admin arm is AUTH_ADMIN against AUTH_ADMIN, matching every other
+        // global-admin check in this file -- at AUTH_EDIT an EDIT-tier admin row opened
+        // any player's admin console.
         if (!$_is_self_media_post
-            && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
-            && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
+            && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+            && !(valid_id($_target_park) && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'park', $_target_park, AUTH_EDIT))
+            && !(valid_id($_target_kingdom) && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', $_target_kingdom, AUTH_EDIT))) {
             // Same reason as the logged-out gate: without this an unauthorised
             // officer's Add Award fetch() follows this redirect to the player
             // profile, gets a 200, and the modal reports "Award added!".
@@ -1932,6 +2010,12 @@ class Controller_Admin extends Controller
         // is meaningless (HasAuthority() has no scoped-admin case and falls to `return
         // false`), so spell it the way the server gate in ParkAjax::park() does.
         $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
+        // Claim Park is TransferPark, which is global-admin only for exactly the same
+        // reason as CreatePark -- it moves a park (and every player and officer in it)
+        // between kingdoms. The tile rendered unconditionally before, so a monarch could
+        // open it, name a park, submit, and only then be refused. Same flag shape as
+        // CanAddPark so the two stay in step if the policy ever changes.
+        $this->data['CanClaimPark']     = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
         // Schedule an Event. The console's tile opens the shared create-event modal,
@@ -2201,7 +2285,10 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactivekingdoms.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        // RBAC key first, legacy admin row as the fallback -- has_permission_or_authority()
+        // at global scope resolves to exactly the old HasAuthority(uid, AUTH_ADMIN, 0,
+        // AUTH_ADMIN) call when the key is absent, so no existing admin loses access.
+        if (!$this->Authorization->has_permission_or_authority($_uid, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2216,7 +2303,7 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactiveparks.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_permission_or_authority($_uid, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2436,7 +2523,7 @@ class Controller_Admin extends Controller
     {
         $this->template = 'Admin_serverhealth.tpl';
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_permission_or_authority($_uid, 'global.health.view', 'global', 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2470,7 +2557,7 @@ class Controller_Admin extends Controller
         }
         if (!$loginOnly) {
             $uid = (int)($this->session->user_id ?? 0);
-            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'global.health.view', 'global', 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -2489,7 +2576,26 @@ class Controller_Admin extends Controller
             exit;
         }
         $uid = (int)($this->session->user_id ?? 0);
-        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        // Per-arm RBAC key, legacy admin row as the fallback. One blanket AUTH_ADMIN gate
+        // made every global.* key the domain already honours unreachable from the console;
+        // keying the gate by action keeps the grants separate, so a holder of
+        // global.health.view reaches the diagnostics arms without also reaching the player
+        // and kingdom arms. An arm with no registry key of its own stays admin-only.
+        $ajaxPermKeys = [
+            'banplayer'                     => 'global.player.ban',
+            'createkingdom'                 => 'global.kingdom.manage',
+            'serverhealth_stats'            => 'global.health.view',
+            'serverhealth_fs_check'         => 'global.health.view',
+            'serverhealth_memcache_check'   => 'global.health.view',
+            'serverhealth_opcache_check'    => 'global.health.view',
+            'serverhealth_weather_refresh'  => 'global.health.view',
+            'serverhealth_weather_stats'    => 'global.health.view',
+        ];
+        $ajaxPermKey = $ajaxPermKeys[(string)$action] ?? null;
+        if (
+            (!$ajaxPermKey || !$this->Authorization->has_permission_or_authority($uid, $ajaxPermKey, 'global', 0, AUTH_ADMIN))
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }

@@ -18,6 +18,32 @@ class Model_OfficerPosition extends Model
     }
 
     /**
+     * Permission key for an officer action family, resolved per scope.
+     *
+     * Exists so a controller never has to name system/lib/ork3's OfficerPosition
+     * directly -- this model is the only membrane between the two layers.
+     *
+     * @param string $action one of set|vacate|position|history
+     * @param int    $park_id 0 for kingdom scope, otherwise park scope
+     * @return string
+     */
+    public function permission_key_for($action, $park_id): string
+    {
+        return OfficerPosition::PermissionKeyFor($action, (int)$park_id);
+    }
+
+    /**
+     * Permission keys an officer position may never be granted (the writer rejects
+     * them on save, so the builder must not offer them either).
+     *
+     * @return array
+     */
+    public function excluded_permission_keys(): array
+    {
+        return OfficerPosition::EXCLUDED_PERMISSION_KEYS;
+    }
+
+    /**
      * Role options for the officer-HISTORY selects: canonical key => display title.
      *
      * Sourced from the position REGISTRY, not from current occupants. History exists to

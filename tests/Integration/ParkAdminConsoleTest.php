@@ -782,14 +782,19 @@ final class ParkAdminConsoleTest extends TestCase
 
         // Both themes, or the muted card reads as live in whichever one was missed --
         // the exact failure this branch already shipped once with the alert banners.
+        // ANCHORED (/m + ^), not a substring: `.ka-action-card-deprecated,` is a substring of
+        // `html[data-theme="dark"] .ka-action-card-deprecated,` too, so deleting the light
+        // block left BOTH halves of this pairing guard green while the tile rendered live in
+        // light mode. A light rule opens its own line with the bare class. Indenting the
+        // rules (e.g. into an @media block) breaks the anchor -- loudly, never silently green.
         $css = self::read('orkui/template/revised-frontend/style/admin-console.css');
-        self::assertStringContainsString(
-            '.ka-action-card-deprecated {',
+        self::assertMatchesRegularExpression(
+            '/^\.ka-action-card-deprecated\s*[,{]/m',
             $css,
             'ka-action-card-deprecated has no light-theme rule'
         );
-        self::assertStringContainsString(
-            'html[data-theme="dark"] .ka-action-card-deprecated {',
+        self::assertMatchesRegularExpression(
+            '/^html\[data-theme="dark"\] \.ka-action-card-deprecated\s*[,{]/m',
             $css,
             'ka-action-card-deprecated has no dark-theme rule; it would look live in dark mode'
         );

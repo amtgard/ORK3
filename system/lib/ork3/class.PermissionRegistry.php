@@ -21,7 +21,65 @@ class PermissionRegistry extends Ork3
     private static $permissions = [
 
         // ========================================
-        // Kingdom-Scoped (15)
+        // Global-Scoped — ORK Administrator capabilities
+        // ========================================
+        // These have no org-unit scope: they act on the installation itself. Before
+        // this block every one of them was reachable only by holding an all-zero-scope
+        // `admin` row in ork_authorization, which is all-or-nothing -- a kingdom could
+        // not be handed "read server health" without also being handed "purge the logs"
+        // and "edit the shared award catalog". They are granted at scope_type 'global'
+        // with scope_id 0 (see RBACService::HasPermission), and the legacy admin row
+        // still satisfies every one of them through the IsAdmin() bypass.
+        // READ-ONLY in practice, and named for what it actually confers. It gates
+        // Administration::GetGlobalAdminGrants() -- seeing who holds installation-wide
+        // admin -- but it cannot MINT one: AuthorizationGate refuses an AUTH_ADMIN grant
+        // to anyone who is not already a true all-zero-scope admin, which
+        // testGlobalAdminGrantAloneCannotMintAnAdminAuthorization pins. The old name
+        // ("Grant ORK Administrator" / "Add and remove ...") advertised a capability the
+        // code deliberately withholds, which is worse than no key at all.
+        'global.admin.grant' => [
+            'View ORK Administrator Grants',
+            'See who holds installation-wide administrator access',
+            'global', 'auth'
+        ],
+        'global.maintenance.run' => [
+            'Run System Maintenance',
+            'Purge logs and optimize database tables',
+            'global', 'system'
+        ],
+        'global.health.view' => [
+            'View Server Health',
+            'View database status, running processes, and service diagnostics',
+            'global', 'system'
+        ],
+        'global.award_catalog.manage' => [
+            'Manage Shared Award Catalog',
+            'Create, edit, and remove the award definitions shared by every kingdom',
+            'global', 'award'
+        ],
+        'global.attendance_class.manage' => [
+            'Manage Attendance Classes',
+            'Create and edit the attendance class list shared by every park',
+            'global', 'event'
+        ],
+        'global.kingdom.manage' => [
+            'Manage Kingdoms',
+            'Create kingdoms, retire or restore them, and set principality parentage',
+            'global', 'config'
+        ],
+        'global.player.merge' => [
+            'Merge Player Records',
+            'Merge one player record into another across kingdoms',
+            'global', 'player'
+        ],
+        'global.player.ban' => [
+            'Ban Player from ORK',
+            'Set or clear an installation-wide ban on a player account',
+            'global', 'player'
+        ],
+
+        // ========================================
+        // Kingdom-Scoped
         // ========================================
         'kingdom.details.edit' => [
             'Edit Kingdom Details',
@@ -83,9 +141,33 @@ class PermissionRegistry extends Ork3
             'Add and remove kingdom-level authorizations',
             'kingdom', 'auth'
         ],
+
+        // Role administration, split out of kingdom.auth.manage. Defining what a role
+        // MEANS and handing that role to a person are different acts with different
+        // blast radii, and a kingdom that wants to delegate the upkeep of legacy
+        // authorization rows should not have to delegate the permission system with it.
+        // Escalation prevention still applies on top of both (RBACService::CheckEscalation).
+        'kingdom.role.manage' => [
+            'Manage Roles',
+            'Create, edit, and delete the kingdom\'s custom roles and their permission sets',
+            'kingdom', 'auth'
+        ],
+        'kingdom.role.grant' => [
+            'Assign Roles',
+            'Grant and revoke roles for players at kingdom, park, event, or unit scope',
+            'kingdom', 'auth'
+        ],
+
+        // ORK-ADMINISTRATOR ACTIONS, LISTED FOR VISIBILITY ONLY.
+        // Park creation and cross-kingdom park transfer are reserved to the ORK team by
+        // policy: Park::CreatePark / TransferPark / MergeParks gate on a true global
+        // admin row and deliberately do NOT consult these keys. They stay in the registry
+        // so the permissions grid can show a kingdom what those actions are and who
+        // performs them; the consoles render the corresponding tiles disabled with an
+        // explanatory tip for anyone who is not an ORK Administrator.
         'kingdom.park.create' => [
-            'Create Parks',
-            'Create new parks within the kingdom',
+            'Create Parks (ORK Administrator)',
+            'Create new parks within the kingdom — performed by the ORK team',
             'kingdom', 'config'
         ],
         'kingdom.park.retire' => [
@@ -93,15 +175,20 @@ class PermissionRegistry extends Ork3
             'Retire or restore parks within the kingdom',
             'kingdom', 'config'
         ],
-        'kingdom.park.bulk_edit' => [
-            'Bulk Edit Parks',
-            'Bulk edit park settings across the kingdom',
+        'kingdom.park.claim' => [
+            'Claim/Transfer Parks (ORK Administrator)',
+            'Claim or transfer parks between kingdoms — performed by the ORK team',
             'kingdom', 'config'
         ],
-        'kingdom.park.claim' => [
-            'Claim/Transfer Parks',
-            'Claim or transfer parks between kingdoms',
-            'kingdom', 'config'
+        'kingdom.banner.manage' => [
+            'Manage Kingdom Banner',
+            'Upload, configure, and remove the kingdom profile banner',
+            'kingdom', 'heraldry'
+        ],
+        'kingdom.calendar.manage' => [
+            'Manage Kingdom Calendar Items',
+            'Create, edit, and delete kingdom calendar entries',
+            'kingdom', 'event'
         ],
 
         // Qualification tests (Walker). Split three ways because the workflow has
@@ -129,8 +216,14 @@ class PermissionRegistry extends Ork3
         ],
 
         // ========================================
-        // Park-Scoped (12)
+        // Park-Scoped
         // ========================================
+        // NOTE: there is deliberately no park.officer.position.manage. ork_officer_position
+        // is a per-KINGDOM registry whose rows are shared by every park, and RetirePosition
+        // vacates every holder of a position across every scope in the kingdom -- so a
+        // park-scoped grant would let one park's officer strip officers from every other
+        // park. PermissionKeyFor() resolves the whole 'position' family to the kingdom key
+        // regardless of ParkId; occupancy (set/vacate/history) stays genuinely per-scope.
         'park.details.edit' => [
             'Edit Park Details',
             'Edit park name, description, and basic details',
@@ -139,11 +232,6 @@ class PermissionRegistry extends Ork3
         'park.officer.set' => [
             'Set Park Officer',
             'Appoint park-level officers',
-            'park', 'officer'
-        ],
-        'park.officer.position.manage' => [
-            'Manage Park Officer Positions',
-            'Create, edit, classify, retire, and reinstate park officer positions',
             'park', 'officer'
         ],
         'park.officer.vacate' => [
@@ -181,6 +269,16 @@ class PermissionRegistry extends Ork3
             'Record, edit, and delete attendance entries',
             'park', 'event'
         ],
+        'park.banner.manage' => [
+            'Manage Park Banner',
+            'Upload, configure, and remove the park profile banner',
+            'park', 'heraldry'
+        ],
+        'park.calendar.manage' => [
+            'Manage Park Calendar Items',
+            'Create, edit, and delete park calendar entries',
+            'park', 'event'
+        ],
         'park.report.view' => [
             'View Park Reports',
             'Access park-level reports',
@@ -196,9 +294,17 @@ class PermissionRegistry extends Ork3
             'Set reconciled credit amounts for players',
             'park', 'financial'
         ],
+        // Dues rows are a player record; the ledger is the books. park.dues.manage never
+        // reached Treasury's accounts or transactions, which left the Treasurer role with
+        // no permission covering the thing a treasurer actually keeps.
+        'park.treasury.manage' => [
+            'Manage Treasury Accounts',
+            'Open accounts and record or remove treasury transactions',
+            'park', 'financial'
+        ],
 
         // ========================================
-        // Player-Scoped at park level (11)
+        // Player-Scoped at park level
         // ========================================
         'player.create' => [
             'Create Player',
@@ -257,8 +363,12 @@ class PermissionRegistry extends Ork3
         ],
 
         // ========================================
-        // Event-Scoped (8)
+        // Event-Scoped
         // ========================================
+        // Split the same way the qualification-test keys are: writing an event and
+        // publishing it are different acts with different audiences. Editing a draft is
+        // routine staff work; flipping it to published puts it on a kingdom's calendar,
+        // and setting the fees decides what people are charged.
         'event.edit' => [
             'Edit Event',
             'Edit event name, dates, and basic details',
@@ -299,9 +409,29 @@ class PermissionRegistry extends Ork3
             'Manage event RSVPs on behalf of other players',
             'event', 'event'
         ],
+        'event.publish' => [
+            'Publish Event',
+            'Move an event between draft and published, and cancel or restore it',
+            'event', 'event'
+        ],
+        'event.fees.manage' => [
+            'Manage Event Fees & Links',
+            'Set event fees and registration links',
+            'event', 'event'
+        ],
+        'event.schedule.manage' => [
+            'Manage Event Schedule & Staff',
+            'Build the event schedule and assign staff to schedule slots',
+            'event', 'event'
+        ],
+        'event.banner.manage' => [
+            'Manage Event Banner',
+            'Upload, configure, and remove the event profile banner',
+            'event', 'heraldry'
+        ],
 
         // ========================================
-        // Unit-Scoped (5)
+        // Unit-Scoped
         // ========================================
         'unit.edit' => [
             'Edit Unit Details',
@@ -328,10 +458,29 @@ class PermissionRegistry extends Ork3
             'Add and remove unit-level authorizations',
             'unit', 'auth'
         ],
+        'unit.lifecycle.manage' => [
+            'Retire, Restore & Transfer Units',
+            'Retire or restore a unit and transfer its ownership to another player',
+            'unit', 'config'
+        ],
+        'unit.banner.manage' => [
+            'Manage Unit Banner',
+            'Upload, configure, and remove the unit profile banner',
+            'unit', 'heraldry'
+        ],
 
         // ========================================
-        // Tournament (2)
+        // Tournament
         // ========================================
+        // tournament.create is separate from bracket.manage on purpose: creating a
+        // tournament stamps it onto a kingdom, park, or event, so it is authorized
+        // against that org unit BEFORE the row exists. bracket.manage authorizes
+        // against the tournament's own recorded scope, which only works afterwards.
+        'tournament.create' => [
+            'Create Tournament',
+            'Create a tournament under a kingdom, park, or event',
+            'event', 'event'
+        ],
         'tournament.bracket.manage' => [
             'Manage Tournament Brackets',
             'Create, edit, and manage tournament brackets',
@@ -394,7 +543,18 @@ class PermissionRegistry extends Ork3
     }
 
     /**
-     * Get all permission keys for a given scope type.
+     * Get the permission keys whose DECLARED scope type is exactly $scope_type.
+     *
+     * CAVEAT -- this is almost never the list a scope-filtered UI wants. A key's
+     * scope_type is only its NARROWEST direct-check scope; RBACService's cascade lets a
+     * grant at a broader scope satisfy it, so the set of permissions meaningfully
+     * grantable at, say, kingdom scope is every key at kingdom scope AND every key
+     * below it. OfficerAdminAjax::actionPermissions() built its role-permission grid
+     * from GetPermissionsByScope('kingdom') for exactly this reason and offered 23 of
+     * 79 keys; see the note there. Use GetAll() and group by scope for display.
+     *
+     * @deprecated Kept for the category/scope grouping metadata only. No caller should
+     *             use it to decide what may be granted.
      *
      * @param string $scope_type  One of: 'kingdom', 'park', 'event', 'unit'
      * @return array  Array of permission key strings
@@ -533,10 +693,114 @@ class PermissionRegistry extends Ork3
     }
 
     /**
+     * Read the permission catalog as the database currently holds it.
+     *
+     * The single answer to "what does the database think the catalog is". The sync CLI,
+     * RbacRegistryParityTest and the migration VERIFY blocks each used to spell this
+     * query themselves, so the catalog had four readers and no owner.
+     *
+     * @return array  key => ['display_name' => , 'description' => , 'scope_type' => , 'category' => ]
+     */
+    public function GetDatabaseDefinitions()
+    {
+        global $DB;
+        $rows = [];
+
+        $DB->Clear();
+        $rs = $DB->DataSet(
+            'SELECT `key`, `display_name`, `description`, `scope_type`, `category` FROM '
+            . DB_PREFIX . 'permission ORDER BY `key`'
+        );
+        if ($rs === false) {
+            return $rows;
+        }
+
+        while ($rs->Next()) {
+            $rows[$rs->key] = [
+                'display_name' => (string) $rs->display_name,
+                'description'  => (string) $rs->description,
+                'scope_type'   => (string) $rs->scope_type,
+                'category'     => (string) $rs->category,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The permission keys the database holds, sorted.
+     *
+     * @return array
+     */
+    public function GetDatabaseKeys()
+    {
+        return array_keys($this->GetDatabaseDefinitions());
+    }
+
+    /**
+     * Compare the in-code registry with the database catalog.
+     *
+     * `drifted` matters as much as the other two: a key present on both sides with a
+     * stale scope_type still resolves, but HasPermission()'s cascade and global-scope
+     * logic then run against the wrong scope, which a key-only diff reports as agreement.
+     *
+     * @return array  ['missing' => list, 'orphans' => list, 'drifted' => key => list of columns]
+     */
+    public function DiffAgainstDatabase()
+    {
+        $database = $this->GetDatabaseDefinitions();
+
+        $registry_keys = array_keys(self::$permissions);
+        sort($registry_keys);
+        $database_keys = array_keys($database);
+        sort($database_keys);
+
+        $drifted = [];
+        foreach (self::$permissions as $key => $def) {
+            if (!isset($database[$key])) {
+                continue;
+            }
+
+            list($display_name, $description, $scope_type, $category) = $def;
+            $expected = [
+                'display_name' => (string) $display_name,
+                'description'  => (string) $description,
+                'scope_type'   => (string) $scope_type,
+                'category'     => (string) $category,
+            ];
+
+            $columns = [];
+            foreach ($expected as $column => $value) {
+                if ($database[$key][$column] !== $value) {
+                    $columns[] = $column;
+                }
+            }
+            if (count($columns) > 0) {
+                $drifted[$key] = $columns;
+            }
+        }
+
+        return [
+            'missing' => array_values(array_diff($registry_keys, $database_keys)),
+            'orphans' => array_values(array_diff($database_keys, $registry_keys)),
+            'drifted' => $drifted,
+        ];
+    }
+
+    /**
      * Sync the in-code permission registry to the ork_permission database table.
      * Uses INSERT ... ON DUPLICATE KEY UPDATE for idempotent upserts.
      *
      * Call this on deploy or when permissions change.
+     *
+     * One transaction for the whole catalog: it is 79-odd single-row upserts, and an
+     * interrupted run used to leave ork_permission half-migrated with nothing to
+     * distinguish that from a run that had not happened.
+     *
+     * Never deletes. A row in the table with no registry entry may belong to an
+     * undeployed branch, and dropping it would silently revoke it from every role that
+     * holds it; removals stay deliberate, in a migration that clears ork_role_permission
+     * first. Use DiffAgainstDatabase()['orphans'] to see them.
      *
      * @return array  ['synced' => int count, 'errors' => array]
      */
@@ -545,6 +809,8 @@ class PermissionRegistry extends Ork3
         global $DB;
         $synced = 0;
         $errors = [];
+
+        $DB->BeginTrans();
 
         foreach (self::$permissions as $key => $def) {
             list($display_name, $description, $scope_type, $category) = $def;
@@ -567,12 +833,24 @@ class PermissionRegistry extends Ork3
 					`scope_type` = :upd_scope_type,
 					`category` = :upd_category";
 
-            $result = $DB->Execute($sql);
-            if ($result === false) {
+            // ExecuteChecked(), not Execute(): Execute() reports nothing, so a failed
+            // statement was indistinguishable from a successful one and the rollback arm
+            // below could never fire -- a half-migrated ork_permission still reported
+            // "synced = 79, errors = []".
+            if ($DB->ExecuteChecked($sql) === false) {
                 $errors[] = "Failed to sync permission: " . $key;
             } else {
                 $synced++;
             }
+        }
+
+        if (count($errors) > 0) {
+            $DB->RollbackTrans();
+            return [ 'synced' => 0, 'errors' => $errors ];
+        }
+
+        if ($DB->CommitTrans() === false) {
+            return [ 'synced' => 0, 'errors' => [ 'Failed to commit the permission sync transaction.' ] ];
         }
 
         return [ 'synced' => $synced, 'errors' => $errors ];

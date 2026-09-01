@@ -185,19 +185,64 @@ html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-lbl  { color: var(--ork-text-
    So: muted surface, drained icon, an "In development" chip that says why, the
    default cursor, and NO hover response at all. A hand cursor or a hover highlight
    on an element that cannot be activated is an affordance that lies. */
-.ka-action-card-deprecated { background: #f7fafc; border-color: #edf2f7; cursor: default; }
-.ka-action-card-deprecated .ka-action-label { color: #718096; }
-.ka-action-card-deprecated .ka-action-desc  { color: #a0aec0; }
-.ka-action-card-deprecated .ka-action-icon  { filter: grayscale(1); opacity: 0.55; }
+/* ORK-Administrator-only action (-orkadmin) shares this treatment. It is a
+   different reason -- the feature is alive and someone CAN run it, just not this
+   viewer -- but the same requirement: a tile that this viewer cannot activate must
+   not wear an affordance that says it can. One set of declarations for both so the
+   two inert tiles cannot drift apart. */
+.ka-action-card-deprecated,
+.ka-action-card-orkadmin { background: #f7fafc; border-color: #edf2f7; cursor: default; }
+.ka-action-card-deprecated .ka-action-label,
+.ka-action-card-orkadmin .ka-action-label { color: #718096; }
+.ka-action-card-deprecated .ka-action-desc,
+.ka-action-card-orkadmin .ka-action-desc  { color: #a0aec0; }
+.ka-action-card-deprecated .ka-action-icon,
+.ka-action-card-orkadmin .ka-action-icon  { filter: grayscale(1); opacity: 0.55; }
 /* Restates the resting values rather than being deleted: without it the generic
    .ka-action-card:hover above would repaint the tile blue on hover. */
-.ka-action-card-deprecated:hover {
+.ka-action-card-deprecated:hover,
+.ka-action-card-orkadmin:hover {
     background: #f7fafc; border-color: #edf2f7; box-shadow: none;
 }
-.ka-dep-chip {
+.ka-dep-chip,
+.ka-admin-chip {
     display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px;
     background: #e2e8f0; color: #4a5568; font-size: 9px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* ORK-Administrator-only action, shown to everyone else as an inert tile.
+   The muted surface, drained icon, default cursor and neutralized hover come from
+   the shared -deprecated/-orkadmin rules above; only the tooltip behaviour is
+   specific to this tile. The explanation rides on data-tip (never title: native
+   tooltips are banned project-wide) and the chip names the gate at a glance for
+   anyone who never hovers.
+
+   The tile renders as a focusable <button aria-disabled="true"> carrying the
+   sentence in aria-label, so the people the gate excludes reach it by keyboard and
+   hear why. The generic [data-tip] tooltip in revised.css only matches
+   :hover::after, so the keyboard path has to restate the tip's own styling here.
+   !important on the wrap declarations: that generic rule is
+   [data-tip]:not(...) x5:hover::after -- specificity (0,7,1) -- and sets
+   min-width:max-content, which beats a plain class selector's max-width and would
+   otherwise render this 92-character sentence as one line overhanging the console.
+   Same precedent as .kn-emod-check-label in revised.css. */
+.ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+    padding: 6px 10px; border-radius: 4px;
+    pointer-events: none; z-index: var(--z-tooltip);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.ka-action-card-orkadmin[data-tip]:hover::after,
+.ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    min-width: 0 !important;
+    width: max-content;
+    max-width: 260px !important;
+    white-space: normal !important;
+    text-align: left;
 }
 /* Keyboard focus. The cards are <button>/<a> so they were focusable already, but
    the only indicator was the UA default ring on top of a fully custom card. */
@@ -312,13 +357,12 @@ html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
 .ka-modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 /* orkui.css sets a global `p { text-align: justify }` (0,0,1). In a 460-520px
    modal column that opens word-space rivers through every explanatory paragraph.
-   (0,1,1) here, so it wins on specificity regardless of stylesheet order. All
-   three modal bodies are listed: .ka-modal-body (the thirteen kingdom modals),
-   .ka-mo-body (the Manage Officers host modal) and .mo-modal-body (its
-   sub-modals, whose markup lives in partials/_manage_officers.tpl). */
+   (0,1,1) here, so it wins on specificity regardless of stylesheet order. Both
+   modal bodies are listed: .ka-modal-body (the thirteen kingdom modals, and
+   the Manage Officers sub-modals, which use the shared .ka-modal-* classes
+   exclusively) and .ka-mo-body (the Manage Officers host modal). */
 .ka-modal-body p,
-.ka-mo-body p,
-.mo-modal-body p { text-align: left; }
+.ka-mo-body p { text-align: left; }
 .ka-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
 
 /* Mobile: full-screen modals */
@@ -537,9 +581,9 @@ html[data-theme="dark"] .ka-confirm-triple #ka-confirm-ok {
    html[data-theme="dark"] at a specificity the plain-class resets below cannot
    beat, so each of these -- all real heading elements -- renders inside a grey
    slab in dark mode unless the background is cleared here as well.
-   .mo-group-title is the <h4> in partials/_manage_officers.tpl ("Crown Offices",
-   "Supporting Offices", "Retired Positions"); it lives in that partial's own
-   <style> block but the reset belongs with its siblings, here. */
+   .mo-group-title is the <h4> in partials/_manage_officers.tpl, used solely for the
+   "Retired Positions" section heading since the flat single-list refactor; it lives in
+   that partial's own <style> block but the reset belongs with its siblings, here. */
 html[data-theme="dark"] .ka-hero-title,
 html[data-theme="dark"] .ka-report-section-lbl,
 html[data-theme="dark"] .ka-modal-title,
@@ -581,13 +625,24 @@ html[data-theme="dark"] .ka-action-desc { color: var(--ork-text-secondary); }
    states cannot drift; a muted card that is not ALSO muted in dark mode reads as
    a live card there, which is the failure this branch already shipped once with
    the success/error banners. */
-html[data-theme="dark"] .ka-action-card-deprecated { background: var(--ork-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-action-card-deprecated,
+html[data-theme="dark"] .ka-action-card-orkadmin { background: var(--ork-bg); border-color: var(--ork-border); }
 /* Resting values repeated, not deleted: the dark .ka-action-card:hover two lines up
    would otherwise light the inert tile blue on hover. Same reasoning as the light rule. */
-html[data-theme="dark"] .ka-action-card-deprecated:hover { background: var(--ork-bg); border-color: var(--ork-border); box-shadow: none; }
-html[data-theme="dark"] .ka-action-card-deprecated .ka-action-label { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .ka-action-card-deprecated .ka-action-desc  { color: var(--ork-text-muted); }
-html[data-theme="dark"] .ka-dep-chip { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-card-deprecated:hover,
+html[data-theme="dark"] .ka-action-card-orkadmin:hover { background: var(--ork-bg); border-color: var(--ork-border); box-shadow: none; }
+html[data-theme="dark"] .ka-action-card-deprecated .ka-action-label,
+html[data-theme="dark"] .ka-action-card-orkadmin .ka-action-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-card-deprecated .ka-action-desc,
+html[data-theme="dark"] .ka-action-card-orkadmin .ka-action-desc  { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-dep-chip,
+html[data-theme="dark"] .ka-admin-chip { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); }
+/* ORK-admin-only action -- dark. Only its focus tooltip is its own: the surface,
+   label, desc and chip come from the shared selectors above. Inverted to match the
+   dark [data-tip] hover tooltip in revised.css. */
+html[data-theme="dark"] .ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    background: #f7fafc; color: #1a202c;
+}
 html[data-theme="dark"] .ka-action-icon-blue   { background: var(--ork-badge-blue-bg);   color: #90cdf4; }
 html[data-theme="dark"] .ka-action-icon-green  { background: var(--ork-badge-green-bg);  color: #9ae6b4; }
 html[data-theme="dark"] .ka-action-icon-orange { background: var(--ork-badge-orange-bg); color: #fbd38d; }

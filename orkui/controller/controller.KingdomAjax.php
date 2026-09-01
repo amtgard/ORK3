@@ -726,8 +726,10 @@ class Controller_KingdomAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'deletedrecommendations') {
+            // Same permission as the delete action a few branches up: reviewing and
+            // restoring what was deleted is the same capability as deleting it.
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -737,7 +739,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -822,6 +824,10 @@ class Controller_KingdomAjax extends Controller
             }
             $value = (int)($_POST['Value'] ?? 1) ? true : false;
             $this->load_model('KingdomProfile');
+            // set_award_recs_public returns void: the domain writer either updates the
+            // existing configuration row or inserts one, and exposes no failure result to
+            // check here. Status 0 reports that the write was issued, not that a row
+            // changed -- if the writer ever gains a return value, gate this echo on it.
             $this->KingdomProfile->set_award_recs_public((int)$kingdom_id, $value);
             echo json_encode(['status' => 0]);
 
@@ -967,11 +973,44 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        // All RBAC actions require kingdom.auth.manage or admin
-        if (
-            !$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)
-            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
-        ) {
+        // Each action is gated on the key the RBACService method behind it actually
+        // demands, so a role built with the split keys is not refused at the door and a
+        // holder of only one of them cannot reach the other half:
+        //
+        //   defining what a role MEANS  -> 'kingdom.role.manage'  (Create/Edit/DeleteRole)
+        //   handing a role to a person  -> 'kingdom.role.grant'   (Grant/RevokeRole)
+        //
+        // The role list and the two read-only lookups serve both consoles, so they take
+        // either. An unrecognised action needs one of the two before it is told it is
+        // unrecognised, hence the union default.
+        $rbac_action_keys = [
+            'getroles'                => ['kingdom.role.grant', 'kingdom.role.manage'],
+            'getassignments'          => ['kingdom.role.grant'],
+            'grantrole'               => ['kingdom.role.grant'],
+            'revokerole'              => ['kingdom.role.grant'],
+            'createrole'              => ['kingdom.role.manage'],
+            'editrole'                => ['kingdom.role.manage'],
+            'deleterole'              => ['kingdom.role.manage'],
+            'geteffectivepermissions' => ['kingdom.role.grant', 'kingdom.role.manage'],
+            'getrolepermissions'      => ['kingdom.role.grant', 'kingdom.role.manage'],
+        ];
+
+        // TRANSITION: 'kingdom.auth.manage' is still accepted alongside the split keys
+        // because the coverage-expansion migration back-grants both new keys to every
+        // role that held it, and no live role expresses the split yet. Removing it is a
+        // policy decision, not a mechanical one -- it revokes role administration from
+        // whatever authority rows currently confer it.
+        $required_keys = $rbac_action_keys[$action] ?? ['kingdom.role.grant', 'kingdom.role.manage'];
+        $required_keys[] = 'kingdom.auth.manage';
+
+        $rbac_authorized = false;
+        foreach ($required_keys as $required_key) {
+            if ($this->Authorization->has_permission_or_authority($uid, $required_key, 'kingdom', $kingdom_id, AUTH_CREATE)) {
+                $rbac_authorized = true;
+                break;
+            }
+        }
+        if (!$rbac_authorized && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }
@@ -998,6 +1037,10 @@ class Controller_KingdomAjax extends Controller
             if ($scope_type === 'kingdom') {
                 $scope_id = $kingdom_id;
             }
+            // Every other scope is left to RBACService::GrantRole, which runs the same
+            // belong-to-kingdom test for all four scope types (and resolves it through
+            // the kingdom ancestry) before it writes. Repeating it here would only be
+            // narrower: it would refuse the event and unit scopes the service accepts.
 
             if (!valid_id($target_id) || !valid_id($role_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Invalid player or role.']);
@@ -1117,6 +1160,13 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
                 exit;
             }
+            // Reading someone's effective permissions is a disclosure, so the scope it is
+            // read at must belong to the kingdom this request was authorized for. Without
+            // this, a holder in Kingdom A could enumerate any player's standing anywhere.
+            if (!$this->rbac_scope_in_kingdom($scope_type, $scope_id, $kingdom_id)) {
+                echo json_encode(['status' => 5, 'error' => 'That scope does not belong to this kingdom.']);
+                exit;
+            }
 
             $perms = $this->RBACService->GetEffectivePermissions($target_id, $scope_type, $scope_id);
             echo json_encode(['status' => 0, 'permissions' => $perms]);
@@ -1127,6 +1177,20 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid role.']);
                 exit;
             }
+            // A bare RoleId named another kingdom's custom role just as easily as one of
+            // this kingdom's. GetAvailableRoles is exactly "system roles plus this
+            // kingdom's own", so membership in it is the ownership test.
+            $role_visible = false;
+            foreach ((array)$this->RBACService->GetAvailableRoles($kingdom_id) as $available_role) {
+                if ((int)($available_role['RoleId'] ?? 0) === $role_id) {
+                    $role_visible = true;
+                    break;
+                }
+            }
+            if (!$role_visible) {
+                echo json_encode(['status' => 5, 'error' => 'That role does not belong to this kingdom.']);
+                exit;
+            }
             $perms = $this->RBACService->GetRolePermissions($role_id);
             echo json_encode(['status' => 0, 'permissions' => $perms]);
 
@@ -1134,6 +1198,45 @@ class Controller_KingdomAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Unknown action: ' . $action]);
         }
         exit;
+    }
+
+    /**
+     * Does a caller-supplied RBAC scope belong to the kingdom this request was
+     * authorized against?
+     *
+     * Mirrors the park -> kingdom derivation OfficerAdminAjax::officer() uses: the
+     * owning kingdom is read off the row, never taken from the request. 'event' and
+     * 'unit' return false because no kingdom derivation for them is reachable from
+     * this layer (RBACService::ScopeBelongsToKingdom is private), and the roles
+     * console never sends them -- unverifiable is refused, not trusted.
+     *
+     * Only for the read-only lookups, where the service performs no scope check of
+     * its own. Mutations go through the service's own check rather than this one.
+     *
+     * @param  string $scope_type
+     * @param  int    $scope_id
+     * @param  int    $kingdom_id
+     * @return bool
+     */
+    private function rbac_scope_in_kingdom($scope_type, $scope_id, $kingdom_id)
+    {
+        $scope_id   = (int)$scope_id;
+        $kingdom_id = (int)$kingdom_id;
+
+        if ($scope_id <= 0 || $kingdom_id <= 0) {
+            return false;
+        }
+
+        if ($scope_type === 'kingdom') {
+            return $scope_id === $kingdom_id;
+        }
+
+        if ($scope_type === 'park') {
+            $this->load_model('KingdomProfile');
+            return (int)$this->KingdomProfile->park_kingdom_id($scope_id) === $kingdom_id;
+        }
+
+        return false;
     }
 
     public function calendar($p = null)

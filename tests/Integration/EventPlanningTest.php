@@ -240,6 +240,32 @@ final class EventPlanningTest extends TestCase
         $this->assertSame('Roast beast', $row->menu);
     }
 
+    public function testUpdateScheduleRejectsForeignScheduleIdAndLeavesLeadsIntact(): void
+    {
+        $mine = $this->fixture->createPublishedEvent('idor-mine');
+        $victim = $this->fixture->createPublishedEvent('idor-victim');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $mine['park_id'], AUTH_CREATE, 'idor-admin');
+        $victimSchedule = $this->fixture->insertSchedule($victim['detail_id'], 'Victim Item');
+        $victimLead = $this->fixture->createPlayer('idor-victim-lead');
+        $this->fixture->insertScheduleLead($victimSchedule, $victimLead);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->UpdateEventSchedule([
+            'Token' => $grantor['token'],
+            'EventId' => $mine['event_id'],
+            'EventCalendarDetailId' => $mine['detail_id'],
+            'ScheduleId' => $victimSchedule,
+            'Title' => 'Hijacked',
+            'StartTime' => date('Y-m-d H:i:s', strtotime('+7 days 10:00')),
+            'EndTime' => date('Y-m-d H:i:s', strtotime('+7 days 11:00')),
+            'Category' => 'Tournament',
+            'Leads' => [],
+        ]);
+        $status = is_array($r['Status'] ?? null) ? (int) ($r['Status']['Status'] ?? 1) : (int) ($r['Status'] ?? 1);
+        $this->assertNotSame(0, $status);
+        $this->assertSame(1, $this->fixture->countScheduleLeads($victimSchedule));
+    }
+
     public function testRemoveSchedule(): void
     {
         $ctx = $this->fixture->createPublishedEvent('sched-rm');

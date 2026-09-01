@@ -229,18 +229,46 @@ _ka_queue(
 						<div class="ka-action-label">Park Titles</div>
 						<div class="ka-action-desc">Manage park type titles and requirements</div>
 					</button>
+					<?php
+                    // Create Park and Claim Park are reserved to the ORK team by policy:
+                    // Park::CreatePark / TransferPark / MergeParks authorize on a true
+                    // global admin row and nothing else. Create Park used to be hidden
+                    // outright and Claim Park was rendered live for everyone, so one
+                    // action vanished with no explanation and the other failed only after
+                    // a monarch filled in the form. Both now render for everyone: enabled
+                    // for an ORK admin, inert and explained for anyone else.
+                    $_kaOrkOnlyTip = 'This action must be completed by an ORK Administrator. Reach out to the ORK team for support.';
+                    ?>
 					<?php if (!empty($CanAddPark)): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Admin/createpark/kingdom/<?= $kid ?>">
 						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-plus-circle"></i></div>
 						<div class="ka-action-label">Create Park</div>
 						<div class="ka-action-desc">Add a new park to this <?= strtolower($entityLabel) ?></div>
 					</a>
+					<?php else: ?>
+					<button type="button" class="ka-action-card ka-action-card-orkadmin" aria-disabled="true"
+						aria-label="Create Park &mdash; <?= htmlspecialchars($_kaOrkOnlyTip, ENT_QUOTES) ?>"
+						data-tip="<?= htmlspecialchars($_kaOrkOnlyTip, ENT_QUOTES) ?>">
+						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-plus-circle"></i></div>
+						<div class="ka-action-label">Create Park <span class="ka-admin-chip">ORK Admin only</span></div>
+						<div class="ka-action-desc">Add a new park to this <?= strtolower($entityLabel) ?></div>
+					</button>
 					<?php endif; ?>
+					<?php if (!empty($CanClaimPark)): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-claimpark-overlay')">
 						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-hand-holding"></i></div>
 						<div class="ka-action-label">Claim Park</div>
 						<div class="ka-action-desc">Request a park transfer to this <?= strtolower($entityLabel) ?></div>
 					</button>
+					<?php else: ?>
+					<button type="button" class="ka-action-card ka-action-card-orkadmin" aria-disabled="true"
+						aria-label="Claim Park &mdash; <?= htmlspecialchars($_kaOrkOnlyTip, ENT_QUOTES) ?>"
+						data-tip="<?= htmlspecialchars($_kaOrkOnlyTip, ENT_QUOTES) ?>">
+						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-hand-holding"></i></div>
+						<div class="ka-action-label">Claim Park <span class="ka-admin-chip">ORK Admin only</span></div>
+						<div class="ka-action-desc">Request a park transfer to this <?= strtolower($entityLabel) ?></div>
+					</button>
+					<?php endif; ?>
 				</div>
 			</div>
 

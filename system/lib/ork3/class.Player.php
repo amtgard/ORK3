@@ -983,7 +983,9 @@ class Player extends Ork3
         }
         $thePlayer = $this->player_info($request['MundaneId']);
         $isOwn  = $uid === (int)$request['MundaneId'];
-        $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT);
+        // Same permission as AddNote/EditNote/RemoveNote. This is the bulk wipe of the
+        // same records, so gating it lower than the single-note delete made no sense.
+        $isAdmin = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT);
         if (!$isOwn && !$isAdmin) {
             return NoAuthorization();
         }
@@ -2324,7 +2326,10 @@ class Player extends Ork3
         if (!valid_id($mundane_id)) {
             return NoAuthorization();
         }
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+        // A self-registration link is a delegated CreatePlayer: whoever redeems it lands
+        // in this park's roster. Gate it on the same permission rather than on a bare
+        // park authority row.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.create', 'park', $request['ParkId'], AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -2697,9 +2702,15 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // Authority scales with how far the merge reaches: across kingdoms it is an
+        // installation-level act (global.player.merge). The two narrower arms stay on the
+        // legacy kingdom/park authority rows on purpose: a merge deletes the source record
+        // with its awards and attendance, so it must NOT be delegable by 'player.edit',
+        // the routine data-entry key that draws the Edit button. Putting these arms on
+        // RBAC needs a dedicated player.merge key, which does not exist yet.
         if (
             (($toMundane['KingdomId'] != $fromMundane['KingdomId'])
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT))
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.player.merge', 'global', 0, AUTH_EDIT))
             || (($toMundane['ParkId'] != $fromMundane['ParkId'] && $toMundane['KingdomId'] == $fromMundane['KingdomId'])
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $toMundane['KingdomId'], AUTH_EDIT))
             || (($toMundane['ParkId'] == $fromMundane['ParkId'])
@@ -3695,8 +3706,10 @@ class Player extends Ork3
 
     public function SetBan($request)
     {
+        // penalty_box is installation-wide -- a ban is not scoped to the park that set
+        // it -- so this is a global permission, satisfied by the legacy admin row too.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.player.ban', 'global', 0, AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3717,9 +3730,11 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // Same permission as SetWaiver/set_waiver. This clears every waiver in a park or
+        // kingdom at once, so gating the bulk form below the per-player form was backwards.
         $isGlobalAdmin  = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN);
-        $isParkOfficer  = valid_id($request['ParkId']    ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, (int)$request['ParkId'], AUTH_EDIT);
-        $isKingdomOfficer = valid_id($request['KingdomId'] ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, (int)$request['KingdomId'], AUTH_EDIT);
+        $isParkOfficer  = valid_id($request['ParkId']    ?? 0) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', (int)$request['ParkId'], AUTH_EDIT);
+        $isKingdomOfficer = valid_id($request['KingdomId'] ?? 0) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'kingdom', (int)$request['KingdomId'], AUTH_EDIT);
         if (!$isGlobalAdmin && !$isParkOfficer && !$isKingdomOfficer) {
             return NoAuthorization();
         }
@@ -4082,8 +4097,12 @@ class Player extends Ork3
         $awards->mundane_id = $request['MundaneId'];
         if ($awards->find() && valid_id($mundane_id)) {
             $mundane = $this->player_info($awards->mundane_id);
+            // Same permission AND same legacy role as RevokeAward: an AUTH_CREATE row
+            // satisfies any requested role while an AUTH_EDIT row satisfies only EDIT, so
+            // asking for AUTH_EDIT here would let a legacy EDIT-only holder wipe every
+            // award a player has while being unable to revoke a single one.
             if (valid_id($request['MundaneId'])
-                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 // Collect all IDs first: save() calls Clear()+Find() after each save,
                 // replacing the result set, so next() would exit the loop after one iteration.
@@ -4138,13 +4157,29 @@ class Player extends Ork3
         $awards->clear();
         $awards->awards_id = $request['AwardsId'];
         if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
+            // AUTHORIZE FIRST, then validate the award's state. The order matters: checking
+            // "is this award revoked?" before the gate answered that question for any
+            // logged-in player who could name an awards_id, which is a state disclosure to
+            // someone with no authority over the award at all. It also made the refusal
+            // code depend on the award's state -- InvalidParameter for a live award,
+            // NoAuthorization for a revoked one -- so an unauthorized caller could tell the
+            // two apart. The subject's park is resolvable in EITHER state: a revoked row
+            // parks the original recipient in stripped_from and zeroes mundane_id, a live
+            // row does the reverse.
+            $subject_id = valid_id($awards->stripped_from) ? (int)$awards->stripped_from : (int)$awards->mundane_id;
+            if (!valid_id($subject_id)) {
+                return InvalidParameter('That award has no recipient on file.');
+            }
+            $recipient = $this->player_info($subject_id);
+            // Same permission as RevokeAward, whose effect this undoes. Leaving the undo
+            // on the legacy path meant an Award Manager could revoke and not reinstate.
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $recipient['ParkId'], AUTH_CREATE)) {
+                return NoAuthorization();
+            }
+
             // Must be a currently revoked award with a valid original recipient on file.
             if ((int)$awards->revoked !== 1 || !valid_id($awards->stripped_from)) {
                 return InvalidParameter('That award is not currently revoked.');
-            }
-            $recipient = $this->player_info($awards->stripped_from);
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
-                return NoAuthorization();
             }
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->stripped_from, $this->get_award($awards));
@@ -4871,7 +4906,10 @@ class Player extends Ork3
                 if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
                     $can_delete_recommendation = true;
                 }
-                if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+                // The self-service arm compares the TOKEN-derived actor, never the
+                // client-supplied RequestedBy: trusting the request body let any
+                // authenticated caller delete someone else's recommendation by naming them.
+                if ($can_delete_recommendation || $mundane_id == $awardRec->recommended_by_id || $mundane_id == $awardRec->mundane_id) {
                     $prior_rec = [
                         'recommendations_id' => (int)$awardRec->recommendations_id,
                         'mundane_id'         => (int)$awardRec->mundane_id,
@@ -4883,13 +4921,13 @@ class Player extends Ork3
                         'reason'             => $awardRec->reason,
                     ];
                     $cascade_at = date('Y-m-d H:i:s');
-                    $awardRec->deleted_by = $request['RequestedBy'];
+                    $awardRec->deleted_by = $mundane_id;
                     $awardRec->deleted_at = $cascade_at;
                     $awardRec->save();
                     Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
                     // Cascade soft-delete to any active seconds on this recommendation.
                     $this->db->Clear();
-                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$mundane_id . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
                     $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
                     return Success('Recommendation Removed!');
                 } else {
@@ -4921,7 +4959,9 @@ class Player extends Ork3
         }
 
         $recipientInfo = $this->player_info($awardRec->mundane_id);
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+        // Officer-only by design: Delete also has a self-service arm for the giver or
+        // recipient, but restoring a withdrawn recommendation is not self-service.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -5156,7 +5196,9 @@ class Player extends Ork3
         $can_withdraw = ((int)$second->supporter_mundane_id === (int)$mundane_id);
         if (!$can_withdraw && $parent_found) {
             $recipientInfo = $this->player_info($parent->mundane_id);
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+            // The officer arm of "the supporter or an admin": same permission that governs
+            // the recommendation this second hangs off.
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
                 $can_withdraw = true;
             }
         }

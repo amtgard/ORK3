@@ -3,6 +3,8 @@
 declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
+
 /**
  * The officer admin's controller gate.
  *
@@ -18,6 +20,56 @@ use PHPUnit\Framework\TestCase;
 final class OfficerAdminGateTest extends TestCase
 {
     private const MARKER = 'zzgate';
+    private const KINGDOM_ID = 100064;
+    /** The kingdom a caller names in the URL but holds nothing in. */
+    private const FOREIGN_KINGDOM_ID = 100065;
+    private const PARK_ID = 100066;
+
+    private ?PDO $pdo = null;
+    private ?RbacRoleFixture $rbac = null;
+    private ?int $positionId = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->pdo === null) {
+            return;
+        }
+        $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
+        $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
+        if ($this->positionId !== null) {
+            $this->pdo->exec('DELETE FROM ork_officer WHERE position_id = ' . $this->positionId);
+            $this->pdo->exec('DELETE FROM ork_officer_history WHERE position_id = ' . $this->positionId);
+            $this->pdo->exec('DELETE FROM ork_officer_position WHERE position_id = ' . $this->positionId);
+            $this->positionId = null;
+        }
+        $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
+        $this->pdo->exec('DELETE FROM ork_park WHERE park_id = ' . self::PARK_ID);
+        $this->rbac?->cleanup();
+        $this->rbac = null;
+    }
+
+    private function pdoConnection(): PDO
+    {
+        if ($this->pdo === null) {
+            $this->pdo = new PDO(
+                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8', DB_HOSTNAME, DB_PORT, DB_DATABASE),
+                DB_USERNAME,
+                DB_PASSWORD,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        }
+
+        return $this->pdo;
+    }
+
+    private function rbac(): RbacRoleFixture
+    {
+        if ($this->rbac === null) {
+            $this->rbac = new RbacRoleFixture($this->pdoConnection(), self::MARKER, self::KINGDOM_ID);
+        }
+
+        return $this->rbac;
+    }
 
     public function testEveryActionHasAScopeAwarePermissionKey(): void
     {
@@ -38,7 +90,17 @@ final class OfficerAdminGateTest extends TestCase
                     PermissionRegistry::Exists($key),
                     "action {$action} (scope park={$parkId}) maps to undefined permission {$key}"
                 );
-                $expectedPrefix = $parkId > 0 ? 'park.' : 'kingdom.';
+
+                // The 'position' family is the exception, and deliberately so.
+                // ork_officer_position is a per-KINGDOM registry whose rows are shared by
+                // every park, and RetirePosition vacates every holder of a position across
+                // every scope in the kingdom -- so a park-scoped grant would let one park's
+                // officer strip officers from every other park. Those actions stay on the
+                // kingdom key whatever ParkId is supplied. Occupancy (set / vacate /
+                // history) is genuinely per-scope and is what this test was written for:
+                // the gate used to hardcode kingdom.officer.set for everything, which
+                // refused every park-only officer.
+                $expectedPrefix = ($parkId > 0 && $kind !== 'position') ? 'park.' : 'kingdom.';
                 self::assertStringStartsWith(
                     $expectedPrefix,
                     $key,
@@ -105,7 +167,7 @@ final class OfficerAdminGateTest extends TestCase
         // request's own $park_id/$scope, which is what made the buttons dead in the
         // first place.
         self::assertMatchesRegularExpression(
-            "/has_permission_or_authority\\(\\s*\\\$uid,\\s*OfficerPosition::PermissionKeyFor\\('position',\\s*0\\),\\s*'kingdom',\\s*\\\$kingdom_id,/s",
+            "/has_permission_or_authority\\(\\s*\\\$uid,\\s*\\\$this->OfficerPosition->permission_key_for\\('position',\\s*0\\),\\s*'kingdom',\\s*\\\$kingdom_id,\\s*AUTH_EDIT/s",
             $src,
             "actionList's capability check must match the position family's kingdom-scope gate exactly"
         );
@@ -172,6 +234,19 @@ final class OfficerAdminGateTest extends TestCase
             "/\\\$permission_park_id\\s*=\\s*0;/",
             $src,
             "the position family override must force PermissionKeyFor's park id to 0, i.e. a kingdom.* key"
+        );
+
+        // The LEGACY authority bridge must MIRROR the domain, action for action: only
+        // CreatePosition authorizes at AUTH_CREATE in class.OfficerPosition.php; edit,
+        // reorder, reclassify, retire and reinstate all authorize at AUTH_EDIT there, and
+        // OfficerPosition is reachable through the JSON service without this controller.
+        // Bridging the whole family at AUTH_CREATE would make the console STRICTER than
+        // the endpoint it fronts and lock legacy 'edit' officers out of work the API
+        // still performs for them.
+        self::assertMatchesRegularExpression(
+            "/\\\$legacy_role\\s*=\\s*\\(\\\$action\\s*===\\s*'createposition'\\)\\s*\\?\\s*AUTH_CREATE\\s*:\\s*AUTH_EDIT;/",
+            $src,
+            'only createposition may bridge legacy authority at AUTH_CREATE; the rest mirror the domain at AUTH_EDIT'
         );
 
         // And confirm the underlying static resolves as expected at that input --
@@ -243,6 +318,98 @@ final class OfficerAdminGateTest extends TestCase
             '/officer\([^)]*\)\s*\{.*Ork3::\$Lib/s',
             $src,
             'the officer() dispatcher body may not call Ork3::$Lib directly -- go through the model layer'
+        );
+    }
+
+    /**
+     * The behavioural half of the Blocker 1 guard above.
+     *
+     * The regex tests prove the derivation is SPELLED in the controller; they cannot
+     * prove it is WIRED. A refactor that keeps load_model('KingdomProfile') and
+     * park_kingdom_id($park_id) present while never routing the result into the write
+     * would satisfy every one of them. So drive the rule through a real park-scoped
+     * request that names a foreign kingdom and check which kingdom the write landed in.
+     *
+     * The controller's own action echoes JSON and exits, which cannot be called
+     * in-process, so this exercises the same derivation at the layer beneath it:
+     * OfficerPosition::SetOccupant, which the park console posts to and which applies
+     * the identical "never trust the request's KingdomId when a park is named" rule.
+     */
+    public function testAParkScopedWriteRecordsTheParksKingdomNotTheOneNamedInTheRequest(): void
+    {
+        $pdo = $this->pdoConnection();
+        $rbac = $this->rbac();
+
+        $pdo->prepare(
+            'INSERT INTO ork_park
+                (park_id, kingdom_id, name, abbreviation, url, address, city, province,
+                 postal_code, google_geocode, latitude, longitude, location,
+                 map_url, description, directions)
+             VALUES (:pid, :kid, :name, "ZZG", "", "", "", "", "", "", 0, 0, "", "", "", "")'
+        )->execute([
+            ':pid' => self::PARK_ID,
+            ':kid' => self::KINGDOM_ID,
+            ':name' => self::MARKER . '_park',
+        ]);
+
+        $pdo->prepare(
+            'INSERT INTO ork_officer_position
+                (kingdom_id, canonical_key, title, title_alias, classification,
+                 is_pinned, is_system, rbac_role_id, has_auth_role, sort_order,
+                 parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
+             VALUES (:kid, :key, :title, "", "supporting", 0, 0, 0, 0, 100, NULL, 0, NULL, 0, NOW())'
+        )->execute([
+            ':kid' => self::KINGDOM_ID,
+            ':key' => self::MARKER . '_derived',
+            ':title' => self::MARKER . ' Derived Office',
+        ]);
+        $this->positionId = (int) $pdo->lastInsertId();
+
+        // A park officer: park.officer.set for THIS park, and nothing at kingdom scope
+        // in either kingdom.
+        [$actorId, $token] = $rbac->seedPlayer('parkofficer', true, self::PARK_ID, self::KINGDOM_ID);
+        $roleId = $rbac->seedRoleWith('park.officer.set', 'park', self::KINGDOM_ID);
+        $rbac->assignRole($actorId, $roleId, ['park_id' => self::PARK_ID]);
+
+        $holderId = $rbac->seedUnprivilegedPlayer('holder', self::PARK_ID);
+
+        $positions = new OfficerPosition();
+        $r = $positions->SetOccupant([
+            'Token' => $token,
+            // The attacker-supplied half of the request: a kingdom this actor holds
+            // nothing in and that does not own the park.
+            'KingdomId' => self::FOREIGN_KINGDOM_ID,
+            'ParkId' => self::PARK_ID,
+            'PositionId' => $this->positionId,
+            'MundaneId' => $holderId,
+            'TermStart' => '2026-01-01',
+            'TermEnd' => '',
+            'Note' => self::MARKER,
+        ]);
+
+        self::assertSame(
+            0,
+            (int) $r['Status'],
+            'The park officer holds park.officer.set for this park and must be allowed. Error: '
+            . (string) ($r['Error'] ?? '')
+        );
+
+        $recordedKingdomId = (int) $pdo->query(
+            'SELECT kingdom_id FROM ork_officer
+              WHERE position_id = ' . $this->positionId . ' AND mundane_id = ' . $holderId . ' LIMIT 1'
+        )->fetchColumn();
+
+        self::assertSame(
+            self::KINGDOM_ID,
+            $recordedKingdomId,
+            'The kingdom must be derived from the park. Taking it from the request writes a park '
+            . "officer's roster into a kingdom nobody authorized -- the same URL-trust defect the "
+            . 'controller regexes above only prove is spelled out.'
+        );
+        self::assertNotSame(
+            self::FOREIGN_KINGDOM_ID,
+            $recordedKingdomId,
+            'The kingdom named in the request must never reach the row.'
         );
     }
 }

@@ -21,24 +21,27 @@ class EventPlanning extends Ork3
             return false;
         }
 
+        // Each capability resolves to the permission that governs the same act elsewhere,
+        // with the legacy event grant as the fallback arm and the event_staff row as the
+        // narrower per-detail delegation.
         switch ($capability) {
             case 'edit':
-                if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.edit', 'event', $eventId, AUTH_EDIT)) {
                     return true;
                 }
                 return $this->staffHasFlag($mundaneId, $eventId, $detailId, 'can_manage');
             case 'create':
-                if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.detail.manage', 'event', $eventId, AUTH_CREATE)) {
                     return true;
                 }
                 return $this->staffHasFlag($mundaneId, $eventId, $detailId, 'can_manage');
             case 'manage':
-                if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.detail.manage', 'event', $eventId, AUTH_EDIT)) {
                     return true;
                 }
                 return $this->staffHasFlag($mundaneId, $eventId, $detailId, 'can_manage');
             case 'attendance':
-                if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.attendance.manage', 'event', $eventId, AUTH_CREATE)) {
                     return true;
                 }
                 if ($detailId > 0) {
@@ -76,8 +79,13 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !in_array($status, ['published', 'draft'], true)) {
             return InvalidParameter('Invalid parameters');
         }
-        if (!$this->CanManageEventDetail($mundaneId, $eventId, 0, 'manage')
-            && !Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // event.publish, not event.detail.manage: moving an event from draft to published
+        // puts it on a kingdom's calendar for everyone, which is a different act from
+        // writing it. The split is only real if event.detail.manage cannot reach this, so
+        // the gate is event.publish (which still honours the legacy event-authority row)
+        // or the per-detail staff delegation -- not an additional OR on event.detail.manage.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.publish', 'event', $eventId, AUTH_EDIT)
+            && !$this->staffHasFlag($mundaneId, $eventId, 0, 'can_manage')) {
             return NoAuthorization();
         }
 
@@ -115,7 +123,7 @@ class EventPlanning extends Ork3
         }
 
         $eventStatus = (string) ($ev->status ?? 'published');
-        $canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $eventId, AUTH_EDIT);
+        $canEdit = $uid > 0 && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'event.edit', 'event', $eventId, AUTH_EDIT);
         if ($eventStatus !== 'published' && !$canEdit && !$isAdmin && (int) $ev->creator !== $uid) {
             return NoAuthorization();
         }
@@ -339,8 +347,12 @@ class EventPlanning extends Ork3
         if (!$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Detail does not belong to event');
         }
-        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'manage')
-            && !Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // event.fees.manage: what an attendee is charged, and where they register, is
+        // separable from editing the event's description -- so event.detail.manage is not
+        // an additional arm here, or the separation would be nominal only. The key still
+        // honours the legacy event-authority row; the staff delegation is kept alongside.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.fees.manage', 'event', $eventId, AUTH_EDIT)
+            && !$this->staffHasFlag($mundaneId, $eventId, $detailId, 'can_manage')) {
             return NoAuthorization();
         }
 
@@ -374,8 +386,11 @@ class EventPlanning extends Ork3
         if (!$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Detail does not belong to event');
         }
-        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'manage')
-            && !Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // Setting the event type is detail editing, not fee setting: it stays on
+        // event.detail.manage alone. The event.fees.manage arm this used to carry only
+        // widened the gate -- it separated nothing, since event.detail.manage already
+        // passed -- and named the wrong capability for the act.
+        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'manage')) {
             return NoAuthorization();
         }
         if ($eventType !== '' && !in_array($eventType, self::CALENDAR_DETAIL_EVENT_TYPES, true)) {
@@ -410,7 +425,11 @@ class EventPlanning extends Ork3
         if (!$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Detail does not belong to event');
         }
-        if (!Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_CREATE)) {
+        // event.reconcile finally has the enforcement site it was named for. It was
+        // granted to GMR and Event Coordinator from the first seed while this method --
+        // the only reconciliation of event attendance in the codebase -- checked the
+        // legacy event grant, so the permission granted nothing to either role.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.reconcile', 'event', $eventId, AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -1039,7 +1058,8 @@ class EventPlanning extends Ork3
 
     public function CanRemoveRsvp(int $mundaneId, int $eventId, int $detailId): bool
     {
-        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // Matches the EventAjax delete_rsvp endpoint, which already checked this key.
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.rsvp.manage', 'event', $eventId, AUTH_EDIT)) {
             return true;
         }
         if ($detailId <= 0) {
@@ -1104,6 +1124,9 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !valid_id($detailId)) {
             return InvalidParameter('Invalid Event ID.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
             return NoAuthorization();
         }
@@ -1155,7 +1178,8 @@ class EventPlanning extends Ork3
             $idrow = $this->db->DataSet(
                 'SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
                  LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-                 WHERE s.event_staff_id = ' . $staffIdIn . ' LIMIT 1'
+                 WHERE s.event_staff_id = ' . $staffIdIn . '
+                   AND s.event_calendardetail_id = ' . $detailId . ' LIMIT 1'
             );
         } else {
             $idrow = $this->db->DataSet(
@@ -1198,6 +1222,9 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($staffId)) {
             return InvalidParameter('Invalid parameters.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
             return NoAuthorization();
         }
@@ -1239,8 +1266,11 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($scheduleId)) {
             return InvalidParameter('Invalid parameters.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
 
-        if (!Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.schedule.manage', 'event', $eventId, AUTH_EDIT)) {
             $this->db->Clear();
             $catRow = $this->db->DataSet(
                 'SELECT category, secondary_category FROM ' . DB_PREFIX . 'event_schedule
@@ -1531,9 +1561,22 @@ class EventPlanning extends Ork3
         if ($isUpdate && !valid_id($scheduleId)) {
             return InvalidParameter('Invalid parameters.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
+        if ($isUpdate) {
+            $this->db->Clear();
+            $ownSchedule = $this->db->DataSet(
+                'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
+                 WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+            );
+            if (!$ownSchedule || !$ownSchedule->Next()) {
+                return InvalidParameter('Schedule item not found.');
+            }
+        }
 
         $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
-        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.schedule.manage', 'event', $eventId, AUTH_EDIT)) {
             $caps = ['can_schedule' => true, 'can_feast' => true];
         }
 
@@ -1732,7 +1775,9 @@ class EventPlanning extends Ork3
     /** @return array{can_schedule: bool, can_feast: bool} */
     private function staffScheduleCaps(int $mundaneId, int $eventId, int $detailId): array
     {
-        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+        // Whoever may build the schedule may do all of it; the event_staff row below is
+        // the narrower, per-slot delegation.
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.schedule.manage', 'event', $eventId, AUTH_EDIT)) {
             return ['can_schedule' => true, 'can_feast' => true];
         }
 

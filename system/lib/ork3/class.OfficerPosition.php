@@ -26,6 +26,18 @@ class OfficerPosition extends Ork3
     public const CROWN_LOCK_TIMEOUT = 5; // seconds for GET_LOCK on crown assignment
 
     /**
+     * Kingdom-scope permissions an officer position may never carry, on top of the
+     * global-scope filter in ValidatePermissionKeys(). Role-definition authority in an
+     * office can rewrite its way to anything.
+     *
+     * The read endpoint that offers the builder checkboxes (OfficerAdminAjax::
+     * actionPermissions) MUST filter on this same list: a key that is offered but
+     * rejected on save locks every later edit of any position whose role already
+     * carries it.
+     */
+    public const EXCLUDED_PERMISSION_KEYS = ['kingdom.role.manage', 'kingdom.role.grant'];
+
+    /**
      * The DisplayTitle resolution rule, as a SQL expression.
      *
      * A position's shown title is: the kingdom's alias if the row is a shared
@@ -53,14 +65,15 @@ class OfficerPosition extends Ork3
      * The key is scoped as well as the scope argument. checkPermissionOrAuthority()
      * maps 'park' to AUTH_PARK, so passing scope='park' with a kingdom.* key looks
      * up a kingdom permission against a park id and simply fails. PermissionRegistry
-     * has defined a full park mirror since this branch began; nothing used it.
+     * deliberately defines NO park mirror for the position family (park.officer.position.manage
+     * does not exist and must not be re-added -- see the NOTE above the Park-Scoped block in
+     * class.PermissionRegistry.php); the occupancy keys are the only ones with a park twin.
      *
      * @param string $action one of set|vacate|position|history
      * @param int    $park_id 0 for kingdom scope, otherwise park scope
      */
     public static function PermissionKeyFor($action, $park_id)
     {
-        $prefix = ((int) $park_id > 0) ? 'park' : 'kingdom';
         $map = [
             'set'      => '.officer.set',
             'vacate'   => '.officer.vacate',
@@ -70,7 +83,68 @@ class OfficerPosition extends Ork3
         if (!isset($map[$action])) {
             throw new InvalidArgumentException('Unknown officer action: ' . $action);
         }
+
+        // The 'position' family is KINGDOM-scoped no matter what ParkId is supplied.
+        // ork_officer_position is a per-kingdom registry whose rows are shared by every
+        // park in that kingdom, and RetirePosition vacates every holder of a position
+        // ACROSS EVERY SCOPE -- so a park-scoped key here would let one park's officer
+        // strip officers from every other park. OfficerAdminAjax already forced the
+        // kingdom key for the browser path; this closes the same hole for the JSON
+        // service, which exposes OfficerPosition directly. There is deliberately no
+        // park.officer.position.manage in PermissionRegistry any more.
+        //
+        // Occupancy (set / vacate / history) is genuinely per-scope and still resolves
+        // to the park key when a ParkId is present.
+        if ($action === 'position') {
+            return 'kingdom' . $map[$action];
+        }
+
+        $prefix = ((int) $park_id > 0) ? 'park' : 'kingdom';
         return $prefix . $map[$action];
+    }
+
+    /**
+     * Shared gate for the position family (create / edit / reorder / retire / reinstate).
+     *
+     * Resolves the owning kingdom FIRST -- from the park when one is named, never from
+     * the request's own KingdomId, exactly as TransitionOfficer does -- and only then
+     * authorizes, at kingdom scope. Order matters: gating before the derivation is what
+     * let a park-scoped grant reach a kingdom-wide registry.
+     *
+     * @param int    $actor_id     Proven actor from the caller's token check
+     * @param array  $request      Needs KingdomId and/or ParkId
+     * @param string $legacy_role  AUTH_CREATE or AUTH_EDIT for the legacy arm
+     * @return array  [int kingdom_id, array|null denial] -- on refusal the kingdom id is
+     *                0 and the second element is the response to return verbatim.
+     */
+    private function authorizePositionFamily($actor_id, $request, $legacy_role)
+    {
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return [0, InvalidParameter(null, 'Park not found.')];
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        if (!valid_id($kingdom_id)) {
+            return [0, InvalidParameter(null, 'A kingdom or park is required.')];
+        }
+
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', 0),
+            'kingdom',
+            $kingdom_id,
+            $legacy_role
+        )) {
+            return [0, NoAuthorization()];
+        }
+
+        return [$kingdom_id, null];
     }
 
     /**
@@ -404,7 +478,7 @@ class OfficerPosition extends Ork3
 
     /**
      * Token-gated entry point for createPositionInternal(). Gated on
-     * PermissionKeyFor('position', $park_id), legacy role AUTH_CREATE -- the
+     * authorizePositionFamily(), legacy role AUTH_CREATE -- the
      * role this action's HasAuthority() branch already used before this method
      * authorized anything at all.
      *
@@ -418,28 +492,9 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        $park_id    = (int) ($request['ParkId'] ?? 0);
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('position', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_CREATE
-        )) {
-            return NoAuthorization();
-        }
-
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_CREATE);
+        if ($denial !== null) {
+            return $denial;
         }
 
         $r = $this->createPositionInternal(
@@ -459,8 +514,8 @@ class OfficerPosition extends Ork3
             Ork3::$Lib->dangeraudit->audit(
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
-                ($park_id > 0) ? 'Park' : 'Kingdom',
-                $scope_id,
+                'Kingdom',
+                $kingdom_id,
                 null,
                 ['PositionId' => (int) ($r['Detail'] ?? 0)]
             );
@@ -521,6 +576,10 @@ class OfficerPosition extends Ork3
         $created_custom_role_id = 0; // C1: set when CreateRole runs in custom mode
         if (is_array($rbac_choice) && isset($rbac_choice['mode']) && $rbac_choice['mode'] === 'custom') {
             $permission_keys = isset($rbac_choice['permission_keys']) ? $rbac_choice['permission_keys'] : [];
+            $keys_err = $this->ValidatePermissionKeys($permission_keys);
+            if ($keys_err !== true) {
+                return $keys_err;
+            }
             if (!isset(Ork3::$Lib->rbacservice)) {
                 return ProcessingError('RBAC service unavailable; cannot create custom role.');
             }
@@ -542,6 +601,12 @@ class OfficerPosition extends Ork3
             $created_custom_role_id = $rbac_role_id;
         } elseif (is_array($rbac_choice) && isset($rbac_choice['mode']) && $rbac_choice['mode'] === 'existing') {
             $rbac_role_id = isset($rbac_choice['role_id']) ? (int) $rbac_choice['role_id'] : 0;
+            if ($rbac_role_id > 0) {
+                $bind_err = $this->ValidateRoleBinding($rbac_role_id, $kingdom_id, $creator_id);
+                if ($bind_err !== true) {
+                    return $bind_err;
+                }
+            }
         }
         // 'none' mode: rbac_role_id stays 0 (the holder gets no extra access). A 0
         // binding is valid only for explicit 'none'; otherwise a binding is required.
@@ -610,7 +675,7 @@ class OfficerPosition extends Ork3
 
     /**
      * Token-gated entry point for editPositionInternal(). Gated on
-     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT. changed_by
+     * authorizePositionFamily(), legacy role AUTH_EDIT. changed_by
      * / editor_id are forced to the token-resolved actor, never taken from the
      * request's Fields -- a caller-supplied actor id is exactly the bug this
      * conversion closes.
@@ -625,28 +690,9 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        $park_id    = (int) ($request['ParkId'] ?? 0);
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('position', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
-            return NoAuthorization();
-        }
-
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
         }
 
         $fields = is_array($request['Fields'] ?? null) ? $request['Fields'] : [];
@@ -661,8 +707,8 @@ class OfficerPosition extends Ork3
             Ork3::$Lib->dangeraudit->audit(
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
-                ($park_id > 0) ? 'Park' : 'Kingdom',
-                $scope_id,
+                'Kingdom',
+                $kingdom_id,
                 null,
                 ['PositionId' => (int) ($request['PositionId'] ?? 0)]
             );
@@ -817,22 +863,20 @@ class OfficerPosition extends Ork3
         if (!$is_pinned && isset($fields['rbac_role_id']) && (int) $fields['rbac_role_id'] > 0
             && (int) $fields['rbac_role_id'] !== (int) $position['RbacRoleId']) {
             $candidate = (int) $fields['rbac_role_id'];
-            $DB->Clear();
-            $DB->vr_rid = $candidate;
-            $vr = $DB->DataSet(
-                "SELECT kingdom_id FROM " . DB_PREFIX . "role WHERE role_id = :vr_rid LIMIT 1"
-            );
-            if ($vr === false || $vr->size() == 0 || !$vr->Next()) {
-                return InvalidParameter(null, 'The selected role does not exist.');
-            }
-            // The chosen role must be a system role (kingdom_id=0) or owned by the
-            // acting kingdom — never a foreign kingdom's custom role (which would let
-            // this position inherit that kingdom's permissions).
-            $role_kingdom_id = (int) $vr->kingdom_id;
-            if ($role_kingdom_id !== 0 && $acting_kingdom_id > 0 && $role_kingdom_id !== $acting_kingdom_id) {
-                return NoAuthorization('Role does not belong to this kingdom.');
+            $bind_err = $this->ValidateRoleBinding($candidate, $acting_kingdom_id, $editor_id);
+            if ($bind_err !== true) {
+                return $bind_err;
             }
             $rebind_to_role_id = $candidate;
+        }
+
+        // Same scope filter the create path applies, checked here (before any write) so a
+        // rejected key cannot leave a half-applied edit behind.
+        if (!$is_pinned && isset($fields['permission_keys']) && is_array($fields['permission_keys'])) {
+            $keys_err = $this->ValidatePermissionKeys($fields['permission_keys']);
+            if ($keys_err !== true) {
+                return $keys_err;
+            }
         }
 
         // Rebinding to None (rbac_role_id explicitly 0): the holder gets no extra
@@ -887,12 +931,6 @@ class OfficerPosition extends Ork3
                 $sets[] = "classification = :ep_cls";
             }
 
-            // Custom-permission upsert on the bound role.
-            if (isset($fields['permission_keys']) && is_array($fields['permission_keys'])
-                && isset(Ork3::$Lib->rbacservice) && $old_rbac_role_id > 0) {
-                Ork3::$Lib->rbacservice->edit_role_internal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
-            }
-
             // Rebinding to a different existing role (validated up-front into
             // $rebind_to_role_id before the UPDATE bindings were set).
             if ($rebind_to_role_id > 0) {
@@ -908,9 +946,28 @@ class OfficerPosition extends Ork3
         }
 
         if (count($sets) > 0) {
-            $DB->Execute(
+            // ExecuteChecked, not Execute: Execute() cannot report failure (PDO runs in
+            // ERRMODE_WARNING and handle_errors() only retries a dropped connection), so a
+            // rejected UPDATE would otherwise return Success() with the row unchanged --
+            // and the §4.4 reconciliation below would then rewrite occupants' effective
+            // permissions to match a binding the row never actually took.
+            if (!$DB->ExecuteChecked(
                 "UPDATE " . DB_PREFIX . "officer_position SET " . implode(', ', $sets) . " WHERE position_id = :ep_pid"
-            );
+            )) {
+                return ProcessingError(null, 'The position could not be updated. Please try again.');
+            }
+        }
+
+        // Custom-permission upsert on the bound role. Runs AFTER the UPDATE, never
+        // before it: edit_role_internal() issues its own $DB->Clear() plus yapo
+        // find()/save() on the same global $DB, which would wipe the :ep_* bindings
+        // set above and leave the UPDATE executing against an empty Data array
+        // (stale-PDO-binding guard, same rule ValidateParent and the role-rebind
+        // lookup follow). After the UPDATE also means a rejected row edit cannot
+        // leave rewritten role permissions behind.
+        if (!$is_pinned && isset($fields['permission_keys']) && is_array($fields['permission_keys'])
+            && isset(Ork3::$Lib->rbacservice) && $old_rbac_role_id > 0) {
+            Ork3::$Lib->rbacservice->edit_role_internal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
         }
 
         // §4.4 reconciliation: if the binding changed, revoke old role / grant new
@@ -928,7 +985,7 @@ class OfficerPosition extends Ork3
     /**
      * Token-gated entry point for reorderSiblingsInternal(). Named ReorderPositions
      * (not ReorderSiblings) to match the controller's existing 'reorderpositions'
-     * action name. Gated on PermissionKeyFor('position', $park_id), legacy role
+     * action name. Gated on authorizePositionFamily(), legacy role
      * AUTH_EDIT.
      *
      * @param array $request Token, KingdomId, ParkId, ParentPositionId, OrderedPositionIds
@@ -940,28 +997,9 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        $park_id    = (int) ($request['ParkId'] ?? 0);
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('position', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
-            return NoAuthorization();
-        }
-
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
         }
 
         $ordered_ids = $request['OrderedPositionIds'] ?? [];
@@ -978,8 +1016,8 @@ class OfficerPosition extends Ork3
             Ork3::$Lib->dangeraudit->audit(
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
-                ($park_id > 0) ? 'Park' : 'Kingdom',
-                $scope_id,
+                'Kingdom',
+                $kingdom_id,
                 null,
                 ['OrderedPositionIds' => $r['Detail'] ?? null]
             );
@@ -1174,6 +1212,103 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Validate the custom permission set an office may carry.
+     *
+     * The read endpoint that feeds the builder (OfficerAdminAjax::actionPermissions)
+     * already strips global-scope keys, but nothing enforced that on the write side, so
+     * a hand-rolled POST -- or the JSON service, which reaches these methods with no
+     * builder at all -- could put an installation-operator permission on a kingdom
+     * office. Role-definition authority is excluded on top of that: an office that can
+     * rewrite roles can rewrite its way to anything, which is a delegation the kingdom
+     * console never intends to make through the officer builder.
+     *
+     * Escalation (the actor must already hold every key) is still enforced by
+     * RBACService::create_role_internal()/edit_role_internal(); this is the scope filter
+     * those two do not apply.
+     *
+     * @return true on success, or an error response array.
+     */
+    private function ValidatePermissionKeys($permission_keys)
+    {
+        $rejected = [];
+        foreach ((array) $permission_keys as $key) {
+            $key = (string) $key;
+            if (in_array($key, self::EXCLUDED_PERMISSION_KEYS, true)) {
+                $rejected[] = $key;
+                continue;
+            }
+            $def = PermissionRegistry::Get($key);
+            if ($def !== null && (string) ($def[2] ?? '') === 'global') {
+                $rejected[] = $key;
+            }
+        }
+        if (count($rejected) > 0) {
+            return NoAuthorization(null, 'These permissions cannot be granted through an officer position: ' . implode(', ', $rejected));
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate binding a position to an EXISTING role by id (create's 'existing' mode
+     * and edit's rebind).
+     *   - Role must exist.
+     *   - Role's kingdom_id must be 0 (system) OR == the acting kingdom — never a
+     *     foreign kingdom's custom role.
+     *   - The actor must clear RBACService's escalation check for that role at kingdom
+     *     scope. Binding is a deferred grant: whoever is seated in this office receives
+     *     every permission in the role, so kingdom.officer.position.manage alone must not
+     *     be able to point an office at the system `monarch` role (kingdom_id=0, which
+     *     passes the ownership test trivially) and mint Monarch-equivalent power.
+     *
+     * @return true on success, or an error response array.
+     */
+    private function ValidateRoleBinding($role_id, $acting_kingdom_id, $actor_id)
+    {
+        global $DB;
+        $role_id = (int) $role_id;
+        $acting_kingdom_id = (int) $acting_kingdom_id;
+        $actor_id = (int) $actor_id;
+
+        $DB->Clear();
+        $DB->vr_rid = $role_id;
+        $vr = $DB->DataSet(
+            "SELECT kingdom_id FROM " . DB_PREFIX . "role WHERE role_id = :vr_rid LIMIT 1"
+        );
+        if ($vr === false || $vr->size() == 0 || !$vr->Next()) {
+            return InvalidParameter(null, 'The selected role does not exist.');
+        }
+
+        // Fail CLOSED on an unresolved kingdom or an absent RBAC service: both the
+        // ownership test and the escalation test below are meaningless without them, and
+        // this guard exists precisely to hold for callers added later.
+        // createPositionInternal() treats a missing rbacservice the same way.
+        if ($acting_kingdom_id <= 0) {
+            return NoAuthorization(null, 'The kingdom for this position could not be determined; the role cannot be bound.');
+        }
+        if (!isset(Ork3::$Lib->rbacservice)) {
+            return ProcessingError(null, 'RBAC service unavailable; cannot bind a role to this position.');
+        }
+
+        $role_kingdom_id = (int) $vr->kingdom_id;
+        if ($role_kingdom_id !== 0 && $role_kingdom_id !== $acting_kingdom_id) {
+            return NoAuthorization(null, 'Role does not belong to this kingdom.');
+        }
+
+        $missing = Ork3::$Lib->rbacservice->MissingRolePermissions(
+            $actor_id,
+            $role_id,
+            'kingdom',
+            $acting_kingdom_id
+        );
+        if (count($missing) > 0) {
+            return NoAuthorization(null, 'Escalation prevented: you lack permissions: ' . implode(', ', $missing));
+        }
+
+        return true;
+    }
+
+    /**
      * Validate a proposed parent ("Reports To") for a position.
      *   - Parent must exist.
      *   - Parent's kingdom_id must be 0 (system) OR == the position's kingdom.
@@ -1352,7 +1487,7 @@ class OfficerPosition extends Ork3
 
     /**
      * Token-gated entry point for retirePositionInternal(). Gated on
-     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT.
+     * authorizePositionFamily(), legacy role AUTH_EDIT.
      *
      * retirePositionInternal() calls the private vacateOfficerByPosition() path
      * to clear the position across EVERY park and the kingdom at once -- retire
@@ -1369,28 +1504,9 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        $park_id    = (int) ($request['ParkId'] ?? 0);
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('position', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
-            return NoAuthorization();
-        }
-
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
         }
 
         $r = $this->retirePositionInternal((int) ($request['PositionId'] ?? 0), $actor_id, $kingdom_id);
@@ -1401,8 +1517,8 @@ class OfficerPosition extends Ork3
             Ork3::$Lib->dangeraudit->audit(
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
-                ($park_id > 0) ? 'Park' : 'Kingdom',
-                $scope_id,
+                'Kingdom',
+                $kingdom_id,
                 null,
                 ['PositionId' => (int) ($request['PositionId'] ?? 0), 'Vacated' => $r['Detail'] ?? []]
             );
@@ -1473,7 +1589,7 @@ class OfficerPosition extends Ork3
 
     /**
      * Token-gated entry point for reinstatePositionInternal(). Gated on
-     * PermissionKeyFor('position', $park_id), legacy role AUTH_EDIT.
+     * authorizePositionFamily(), legacy role AUTH_EDIT.
      *
      * @param array $request Token, KingdomId, ParkId, PositionId
      * @return array
@@ -1484,28 +1600,9 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
-        $park_id    = (int) ($request['ParkId'] ?? 0);
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('position', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
-            return NoAuthorization();
-        }
-
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
         }
 
         $r = $this->reinstatePositionInternal((int) ($request['PositionId'] ?? 0), $kingdom_id);
@@ -1516,8 +1613,8 @@ class OfficerPosition extends Ork3
             Ork3::$Lib->dangeraudit->audit(
                 __CLASS__ . '::' . __FUNCTION__,
                 $safe,
-                ($park_id > 0) ? 'Park' : 'Kingdom',
-                $scope_id,
+                'Kingdom',
+                $kingdom_id,
                 null,
                 ['PositionId' => (int) ($request['PositionId'] ?? 0)]
             );
@@ -1706,6 +1803,34 @@ class OfficerPosition extends Ork3
     }
 
     /**
+     * Resolve the kingdom a scoped officer write actually acts in.
+     *
+     * SINGLE SOURCE OF TRUTH for the four gated entry points below
+     * (TransitionOfficer, SetOccupant, VacateOfficer, VacateOffice). On a
+     * park-scoped call the actor was authorized against the PARK, so the
+     * caller-supplied KingdomId is still unverified: derive it from the park
+     * (as class.Park.php GetParkKingdomId does) rather than trust the request,
+     * so a park-scoped caller cannot name a foreign kingdom, and a caller that
+     * simply omits KingdomId does not fail the membership check. A
+     * kingdom-scoped call ($park_id <= 0) keeps the id it was gated on.
+     *
+     * @param int $kingdom_id Caller-supplied kingdom id (used only when $park_id <= 0)
+     * @param int $park_id    Park the caller was authorized against, or 0
+     * @return int|array The kingdom id to act in, or an error response to return as-is
+     */
+    private function resolveActingKingdomId($kingdom_id, $park_id)
+    {
+        if ($park_id <= 0) {
+            return (int) $kingdom_id;
+        }
+        $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+        if ($park_kingdom_id === false) {
+            return InvalidParameter(null, 'Park not found.');
+        }
+        return (int) $park_kingdom_id;
+    }
+
+    /**
      * Move an office from one holder to another as a single recorded transition.
      *
      * This is the API shape every other write in the application uses
@@ -1767,17 +1892,9 @@ class OfficerPosition extends Ork3
 
         // The gate above authorized this actor against the PARK (scope_id =
         // $park_id); $kingdom_id itself is still caller-supplied and unverified.
-        // Derive it from the park rather than trust the request -- the legacy
-        // path does the same (class.Park.php, GetParkKingdomId) -- so a
-        // park-scoped caller cannot name a foreign kingdom, and a caller that
-        // simply omits KingdomId on a park-scoped request does not fail the
-        // membership check below for every valid player.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
         }
 
         if (!valid_id($position_id)) {
@@ -2084,14 +2201,11 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
         }
 
         $r = $this->setOfficerByPosition(
@@ -2158,14 +2272,11 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
         }
 
         $mundane_id = (int) ($request['MundaneId'] ?? 0);
@@ -2228,14 +2339,11 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
         }
 
         $r = $this->vacateOfficerByPosition($kingdom_id, $park_id, (int) ($request['PositionId'] ?? 0), $actor_id);
@@ -2376,14 +2484,11 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        // See SetOccupant's docblock: derive from the park rather than trust
-        // the request, exactly as TransitionOfficer does.
-        if ($park_id > 0) {
-            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
-            if ($park_kingdom_id === false) {
-                return InvalidParameter(null, 'Park not found.');
-            }
-            $kingdom_id = (int) $park_kingdom_id;
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
         }
 
         if (!valid_id($position_id)) {
@@ -2501,7 +2606,12 @@ class OfficerPosition extends Ork3
         $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
         $row = $this->getHistoryRow($history_id);
         if ($row === false) {
-            return InvalidParameter(null, 'History term not found.');
+            // Deliberately the SAME response an unauthorized caller gets. The row has
+            // to be read before the gate (its own kingdom_id/park_id pick the
+            // permission key), so a distinct 'not found' would let any authenticated
+            // caller enumerate valid OfficerHistoryId values in kingdoms and parks
+            // they administer nothing in.
+            return NoAuthorization();
         }
 
         $kingdom_id = $row['kingdom_id'];
@@ -2616,7 +2726,12 @@ class OfficerPosition extends Ork3
         $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
         $row = $this->getHistoryRow($history_id);
         if ($row === false) {
-            return InvalidParameter(null, 'History term not found.');
+            // Deliberately the SAME response an unauthorized caller gets. The row has
+            // to be read before the gate (its own kingdom_id/park_id pick the
+            // permission key), so a distinct 'not found' would let any authenticated
+            // caller enumerate valid OfficerHistoryId values in kingdoms and parks
+            // they administer nothing in.
+            return NoAuthorization();
         }
 
         $kingdom_id = $row['kingdom_id'];
