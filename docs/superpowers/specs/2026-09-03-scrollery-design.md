@@ -213,8 +213,22 @@ writing a parallel query that can drift.
 Title precedence, in order:
 
 ```
-CustomAwardName -> AliasAwardName -> KingdomAwardName -> Name
+KingdomAwardName -> Name -> AliasAwardName -> CustomAwardName
 ```
+
+*Revised 2026-09-03, during Task 3, against real award data.* The original order led
+with `CustomAwardName`, on the reasoning that a hand-typed name is the most specific.
+The data says otherwise. `awards.custom_name` is not a title field: on ladder awards it
+is overwhelmingly a short tag typed beside the real name — 19,342 rows reading `Rose`
+whose kingdomaward is `Order of the Rose`, 13,477 `Warrior`, 6,084 `Gryphon`, 89,849 of
+343,091 ladder awards in all. The certificate prints the title on its own line between
+the recipient's rank and the reason, so leading with `custom_name` would set a quarter
+of every ladder scroll to read *"with her third Rose for"*. The kingdom's own name for
+the award is the field that actually holds a whole order name, so it leads; custom and
+alias names remain last so a row missing both real names still prints something.
+
+**Per-kingdom name variants are a later phase.** Every award is designed as "Order of
+the X" and prints that way in phase 1.
 
 Arcanyst had no such concept: it computed `"Order of the " + capitalize(orderId)`, which
 is precisely why one archery award had to become four order ids (`hunter`, `bowyer`,

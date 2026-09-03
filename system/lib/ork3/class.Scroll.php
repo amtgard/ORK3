@@ -55,4 +55,43 @@ class Scroll extends Ork3
         }
         return null;
     }
+
+    /**
+     * Which of the ORK's four names for an award appears on the certificate.
+     *
+     * Arcanyst had no such concept — it computed "Order of the " . ucfirst($orderId),
+     * which is why one archery award had to become four order ids. Here the word
+     * after "Order of the" is data. The title prints on its own line, between the
+     * recipient's rank and the reason, so it has to read as a whole order name.
+     *
+     * The kingdom's own name for the award leads, because that is the field that
+     * holds one. awards.custom_name does not: on ladder awards it is overwhelmingly
+     * a short tag typed beside the real name ("Rose" against a kingdomaward of
+     * "Order of the Rose", "Warrior", "Gryphon" — 89,849 of 343,091 ladder awards),
+     * so leading with it would misprint a quarter of every ladder scroll. Custom and
+     * alias names stay in the chain as a last resort, purely so a row missing both
+     * real names still prints something.
+     *
+     * Per-kingdom name variants are a later phase; see the plan's Deferred section.
+     */
+    public static function ResolveTitle(array $awardRow): string
+    {
+        foreach (['KingdomAwardName', 'Name', 'AliasAwardName', 'CustomAwardName'] as $key) {
+            $name = trim((string) ($awardRow[$key] ?? ''));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+        return '';
+    }
+
+    public static function ClampRank(array $order, int $rank): int
+    {
+        return max($order['ranks']['from'], min($order['ranks']['to'], $rank));
+    }
+
+    public static function HasArt(array $awardRow): bool
+    {
+        return self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0)) !== null;
+    }
 }

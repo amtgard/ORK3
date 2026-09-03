@@ -75,7 +75,7 @@ No tests — this task is verified by file counts and by the browser loading an 
 - Create: `orkui/template/revised-frontend/style/fonts/AveriaSerifLibre-{Regular,Italic,Bold}.woff2`
 - Modify: `NOTICE`
 
-- [ ] **Step 1: Copy the order art**
+- [x] **Step 1: Copy the order art**
 
 ```bash
 mkdir -p assets/scrolls
@@ -83,7 +83,7 @@ cp -R /Users/averykrouse/arcanyst-clone/arc-scroll/resources/ash/. assets/scroll
 cp -R /Users/averykrouse/arcanyst-clone/arc-scroll/resources/icons assets/scrolls/icons
 ```
 
-- [ ] **Step 2: Remove the four empty alias directories**
+- [x] **Step 2: Remove the four empty alias directories**
 
 `bowyer/`, `marksman/` and `sharpshooter/` are empty in the source — Arcanyst's four archery order ids all rendered through `hunter.html`, which hardcodes the `hunter` art path. They are not missing assets.
 
@@ -94,7 +94,7 @@ ls assets/scrolls
 #           jovious lion mask owl rose smith warrior zodiac
 ```
 
-- [ ] **Step 3: Rename the three webpack content-hashed assets**
+- [x] **Step 3: Rename the three webpack content-hashed assets**
 
 Arcanyst spliced these into views as opaque hashes. They are real art and need real names.
 
@@ -109,7 +109,7 @@ ls -l assets/scrolls/common/parchment.jpg assets/scrolls/battle/arcane/wash.jpg 
 
 `63c5ea5a789bf987508d.jpg` is the Arcanyst author's photo from the About page. Do not copy it.
 
-- [ ] **Step 4: Vendor the fonts**
+- [x] **Step 4: Vendor the fonts**
 
 ```bash
 mkdir -p orkui/template/revised-frontend/style/fonts
@@ -125,7 +125,7 @@ ls orkui/template/revised-frontend/style/fonts/
 #           BlackChancery.ttf BlackChancery.woff BlackChancery.woff2
 ```
 
-- [ ] **Step 5: Record attribution in NOTICE**
+- [x] **Step 5: Record attribution in NOTICE**
 
 Append to `NOTICE`:
 
@@ -148,7 +148,7 @@ orkui/template/revised-frontend/style/fonts/AveriaSerifLibre-*.woff2
   https://fonts.google.com/specimen/Averia+Serif+Libre
 ```
 
-- [ ] **Step 6: Verify the count and commit**
+- [x] **Step 6: Verify the count and commit**
 
 ```bash
 find assets/scrolls -type f | wc -l     # Expected: 200+
@@ -172,7 +172,7 @@ git commit -m "Enhancement: Scrollery — import certificate artwork, fonts and 
   - `Scroll::OrderForAwardId(int $awardId): ?array` — the order, or `null` when no art exists.
   - Each order array: `['id' => string, 'award_id' => int, 'ranks' => ['from' => int, 'to' => int], 'variants' => string[], 'primary' => ?string, 'secondary' => ?string, 'resources' => array, 'flavour' => array<string,string>]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/Unit/ScrollOrdersTest.php`:
 
@@ -275,7 +275,7 @@ final class ScrollOrdersTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**
+- [x] **Step 2: Run it to make sure it fails**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollOrders
@@ -283,7 +283,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollOrders
 
 Expected: FAIL — `Error: Class "Scroll" not found`.
 
-- [ ] **Step 3: Generate the order data**
+- [x] **Step 3: Generate the order data**
 
 `arc-scroll/reference/award-definitions.json` is the source. Convert it with this one-off script, then delete the script — the PHP file is what ships.
 
@@ -315,7 +315,7 @@ Move it into place as `system/lib/ork3/data/scroll-orders.php`, then hand-edit t
 2. Rewrite every `resources` path from `./resources/ash/...` to `scrolls/...`.
 3. Confirm `warrior` is the only order with a non-null `ranks`.
 
-- [ ] **Step 4: Write `class.Scroll.php`**
+- [x] **Step 4: Write `class.Scroll.php`**
 
 ```php
 <?php
@@ -378,7 +378,7 @@ class Scroll extends Ork3
 }
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollOrders
@@ -386,7 +386,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollOrders
 
 Expected: PASS (7 tests).
 
-- [ ] **Step 6: Confirm the ORK still boots**
+- [x] **Step 6: Confirm the ORK still boots**
 
 `class.Scroll.php` is instantiated at startup by every page load. A constructor error here breaks the whole site, so check a real page:
 
@@ -397,7 +397,7 @@ vendor/bin/phpunit --testsuite unit
 # Expected: no new failures
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add system/lib/ork3/class.Scroll.php system/lib/ork3/data/scroll-orders.php tests/Unit/ScrollOrdersTest.php
@@ -419,7 +419,14 @@ git commit -m "Enhancement: Scrollery — order definitions and Scroll library c
   - `Scroll::ClampRank(array $order, int $rank): int`
   - `Scroll::HasArt(array $awardRow): bool`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
+
+> **Superseded during execution.** The title-precedence cases below were written for the
+> original `CustomAwardName`-first order and do NOT match what shipped — see the spec's
+> "Title precedence" note. The shipped file asserts that `KingdomAwardName` wins over
+> `CustomAwardName`, and replaces the `HasArt(6969)` case (which contradicted Task 2's
+> data, where `hunter` really is keyed 6969) with the three real archery base ids.
+> `tests/Unit/ScrollResolutionTest.php` is the running code; read it, not this block.
 
 Create `tests/Unit/ScrollResolutionTest.php`:
 
@@ -519,7 +526,7 @@ final class ScrollResolutionTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**
+- [x] **Step 2: Run it to make sure it fails**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollResolution
@@ -527,7 +534,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollResolution
 
 Expected: FAIL — `Call to undefined method Scroll::ResolveTitle()`.
 
-- [ ] **Step 3: Implement the three methods**
+- [x] **Step 3: Implement the three methods**
 
 Add to `class.Scroll.php`:
 
@@ -538,10 +545,13 @@ Add to `class.Scroll.php`:
      * Arcanyst had no such concept — it computed "Order of the " . ucfirst($orderId),
      * which is why one archery award had to become four order ids. Here the word
      * after "Order of the" is data.
+     *
+     * REVISED during Task 3 against real award data: the kingdom's own name leads,
+     * not custom_name. See the spec's "Title precedence" note.
      */
     public static function ResolveTitle(array $awardRow): string
     {
-        foreach (['CustomAwardName', 'AliasAwardName', 'KingdomAwardName', 'Name'] as $key) {
+        foreach (['KingdomAwardName', 'Name', 'AliasAwardName', 'CustomAwardName'] as $key) {
             $name = trim((string) ($awardRow[$key] ?? ''));
             if ($name !== '') {
                 return $name;
@@ -561,7 +571,7 @@ Add to `class.Scroll.php`:
     }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollResolution
@@ -569,7 +579,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollResolution
 
 Expected: PASS (8 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add system/lib/ork3/class.Scroll.php tests/Unit/ScrollResolutionTest.php
@@ -2163,5 +2173,10 @@ Recorded in the spec, deliberately out of scope here:
 - A generic certificate for the Masters, titles, non-ladder and kingdom awards that have no art
 - Zodiac's `<<MONTH>>` handling and ranks 11-12
 - The headless-Chrome PDF service
-- Resolving `hunter`'s real base `award_id` (needs the redacted database; until then the
-  order renders on request but never matches a real award, which is the safe failure)
+- Resolving `hunter`'s real base `award_id`. Confirmed during Task 3 that there is
+  nothing to resolve: archery is not one base ladder award. Real archery grants hang off
+  `award_id` 0 (no base award), 94 (Custom Award) and 131, under a dozen kingdomaward
+  names. The eventual fix is a kingdomaward-name-keyed mapping, not an id lookup. Until
+  then the order renders on request but never matches a real award — the safe failure.
+- Per-kingdom award name variants on the printed title. Phase 1 prints the kingdom's own
+  `ork_kingdomaward.name`, which is "Order of the X" throughout.
