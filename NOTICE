@@ -11,3 +11,20 @@ system/lib/ork3/data/profanity-words.txt
   Modifications: filtered to entries >= 3 characters, restricted to ASCII printable
     characters, lowercased, sorted, deduplicated. See header of vendored file for
     full provenance.
+
+assets/scrolls/**
+orkui/template/revised-frontend/scroll/**
+  Award certificate artwork, layer designs and flavour text originate in Arcanyst
+  (https://github.com/ValoryFox/Arcanyst), by Valory Fox, used with the author's
+  permission to continue the work. Flavour text credited in Arcanyst to Kisa
+  (Shelly Alexandra).
+  Modifications: art re-pathed under assets/scrolls/; three webpack
+  content-hashed files renamed (parchment.jpg, battle/arcane/wash.jpg,
+  battle/arcane/glow.png); Aurelia views transliterated to PHP partials.
+
+orkui/template/revised-frontend/style/fonts/BlackChancery.*
+  BlackChancery display face, as vendored by Arcanyst.
+
+orkui/template/revised-frontend/style/fonts/AveriaSerifLibre-*.woff2
+  Averia Serif Libre by Dan Sayers. License: SIL Open Font License 1.1.
+  https://fonts.google.com/specimen/Averia+Serif+Libre
