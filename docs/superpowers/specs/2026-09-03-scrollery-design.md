@@ -322,9 +322,11 @@ upstreaming to `amtgard/ork3`.
 
 1. **The archery award's real base `award_id`.** `6969` is Arcanyst's invention. Resolving
    it needs the redacted database; `ork.sql` carries no data. Blocks `hunter.tpl` only.
-2. **The PHPUnit invocation.** `vendor/phpunit`, `vendor/amtgard/phpunit-extensions` and
-   `build/phpunit-cache/` all exist, but there is no `phpunit.xml` at the repo root. The
-   executing session confirms how the suite is run before adding to it.
+2. **The test database must be running even for unit tests.** `tests/bootstrap.php`
+   loads the full ORK runtime through `startup.php`, which constructs a DB connection
+   unconditionally, so `vendor/bin/phpunit --testsuite unit` fails with
+   `PDOException ... Connection refused` unless `docker-compose -f docker-compose.php8.yml up -d`
+   has brought up `ork3testdb` on port 19307.
 3. **`assets/scrolls/` and `.gitignore`.** The ignore rules name `heraldry`, `players`,
    `tmp`, `waivers` and `backups` specifically, so `assets/scrolls/` is tracked by
    default. Confirm at import time.
