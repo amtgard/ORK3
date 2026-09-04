@@ -30,6 +30,77 @@ class Scroll extends Ork3
         'writing_line'    => 'scrolls/common/text/writing-line.svg',
     ];
 
+    /**
+     * The custom scroll used when an award has no design of its own.
+     *
+     * A recipe is chosen per print and travels in the URL, so nothing persists it.
+     * This constant is what every path that prints WITHOUT an explicit recipe uses —
+     * the reprint list and a bulk run both reach that state — which is what makes an
+     * uncovered award printable everywhere and a reprint deterministic.
+     */
+    public const DEFAULT_RECIPE = [
+        'ground'    => 'parchment',
+        'border'    => 'knot',
+        'primary'   => 'hsl(35, 29%, 55%)',
+        'secondary' => 'hsl(34, 72%, 78%)',
+        'rankSet'   => 'common',
+    ];
+
+    /** @var array<string, array>|null */
+    private static ?array $recipes = null;
+
+    /** @return array{grounds:array,borders:array,rankSets:array,palette:array} */
+    public static function Recipes(): array
+    {
+        if (self::$recipes !== null) {
+            return self::$recipes;
+        }
+
+        return self::$recipes = require DIR_ORK3 . 'data/scroll-recipes.php';
+    }
+
+    /**
+     * Validate a requested recipe against the vocabulary.
+     *
+     * Anything unrecognised falls back to the default rather than being passed
+     * through — these values reach an <img src> and a style attribute, and the
+     * vocabulary is a closed set, so an allowlist is the whole defence.
+     */
+    public static function NormaliseRecipe(array $requested): array
+    {
+        $v      = self::Recipes();
+        $recipe = self::DEFAULT_RECIPE;
+
+        $ground = (string) ($requested['ground'] ?? '');
+        if (isset($v['grounds'][$ground])) {
+            $recipe['ground'] = $ground;
+        }
+
+        $border = (string) ($requested['border'] ?? '');
+        if (isset($v['borders'][$border])) {
+            $recipe['border'] = $border;
+        }
+
+        $rankSet = (string) ($requested['rankSet'] ?? '');
+        if (isset($v['rankSets'][$rankSet])) {
+            $recipe['rankSet'] = $rankSet;
+        }
+
+        // Colours are only accepted as a PAIR drawn from the curated palette, so a
+        // caller cannot mix one order's primary with another's secondary.
+        $primary   = (string) ($requested['primary'] ?? '');
+        $secondary = (string) ($requested['secondary'] ?? '');
+        foreach ($v['palette'] as $pair) {
+            if ($pair[0] === $primary && $pair[1] === $secondary) {
+                $recipe['primary']   = $primary;
+                $recipe['secondary'] = $secondary;
+                break;
+            }
+        }
+
+        return $recipe;
+    }
+
     /** @var array<string, array>|null */
     private static ?array $orders = null;
 
