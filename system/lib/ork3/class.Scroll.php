@@ -126,6 +126,47 @@ class Scroll extends Ork3
         return $day . $suffix . date(' F Y', $ts);
     }
 
+    /**
+     * Expand the placeholders Arcanyst's flavour text carries.
+     *
+     * Its viewmodel did this before display, so transliterating the strings alone
+     * would print the raw markup on the certificate. Two forms exist, both only in
+     * zodiac:
+     *
+     *   <<ISSUER>>                    the issuing park or kingdom's name
+     *   <<prefix|MONTH|suffix|else>>  prefix . month . suffix when a month is
+     *                                 known, otherwise the else branch verbatim
+     *
+     * Month handling proper is a separate branch, so $month is normally null and
+     * the else branch is taken — which is exactly what those branches were written
+     * for ("for whole months", "You're a", "the"). An unrecognised << >> block is
+     * left alone rather than guessed at; ScrollFlavourTest fails if one ever
+     * reaches a certificate.
+     */
+    public static function ExpandFlavour(string $flavour, string $issuerName = '', ?string $month = null): string
+    {
+        if ($flavour === '' || !str_contains($flavour, '<<')) {
+            return $flavour;
+        }
+
+        $flavour = str_replace('<<ISSUER>>', $issuerName, $flavour);
+
+        return (string) preg_replace_callback(
+            '/<<([^<>]*)>>/',
+            static function (array $m) use ($month): string {
+                $parts = explode('|', $m[1]);
+                // prefix | MONTH | suffix | else
+                if (count($parts) !== 4 || $parts[1] !== 'MONTH') {
+                    return $m[0];
+                }
+                return $month === null || $month === ''
+                    ? $parts[3]
+                    : $parts[0] . $month . $parts[2];
+            },
+            $flavour
+        );
+    }
+
     public static function BuildScroll(array $awardRow, array $context): array
     {
         $order = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
@@ -151,6 +192,8 @@ class Scroll extends Ork3
         // ork_parktitle.title, defined per kingdom — and most parks are not baronies
         // (349 Freeholds, 274 Grand Duchies, ~90 Baronies). BuildScroll stays pure, so
         // whoever holds the row passes the real word in; Barony/Kingdom is the floor.
+        $issuerName = $parkName !== '' ? $parkName : (string) ($awardRow['KingdomName'] ?? '');
+
         $issuerTitle = trim((string) ($context['issuerTitle'] ?? ''));
         if ($issuerTitle === '') {
             $issuerTitle = $parkName !== '' ? 'Barony' : 'Kingdom';
@@ -167,11 +210,15 @@ class Scroll extends Ork3
             'date'        => self::FormatDate((string) ($awardRow['Date'] ?? '')),
             'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
             'issuerTitle' => $issuerTitle,
-            'issuerName'  => $parkName !== '' ? $parkName : (string) ($awardRow['KingdomName'] ?? ''),
+            'issuerName'  => $issuerName,
             'useThe'      => (bool) ($context['useThe'] ?? true),
             'useOf'       => (bool) ($context['useOf'] ?? true),
             'heraldry'    => (string) ($context['heraldry'] ?? ''),
-            'flavour'     => (string) ($order['flavour'][(string) $rank] ?? ''),
+            'flavour'     => self::ExpandFlavour(
+                (string) ($order['flavour'][(string) $rank] ?? ''),
+                $issuerName,
+                $context['month'] ?? null
+            ),
             'primary'     => $order['primary'],
             'secondary'   => $order['secondary'],
             'resources'   => $order['resources'],

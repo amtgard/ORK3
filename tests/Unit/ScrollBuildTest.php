@@ -106,10 +106,16 @@ final class ScrollBuildTest extends TestCase
         $s = Scroll::BuildScroll($this->row(['Rank' => 3]), $this->context());
         $this->assertSame(Scroll::Orders()['griffon']['flavour']['3'], $s['flavour']);
 
-        // Zodiac 12 clamps to 10 rather than reaching for absent art.
+        // Zodiac 12 clamps to 10 rather than reaching for absent art. Its flavour
+        // arrives EXPANDED — zodiac is the one order carrying <<ISSUER>> and
+        // <<...|MONTH|...>> placeholders, which must never reach the certificate.
         $s = Scroll::BuildScroll($this->row(['AwardId' => 30, 'Rank' => 12]), $this->context());
         $this->assertSame(10, $s['rank']);
-        $this->assertSame(Scroll::Orders()['zodiac']['flavour']['10'], $s['flavour']);
+        $this->assertSame(
+            Scroll::ExpandFlavour(Scroll::Orders()['zodiac']['flavour']['10'], 'Rising Sun Station'),
+            $s['flavour']
+        );
+        $this->assertStringNotContainsString('<<', $s['flavour']);
     }
 
     public function testVariantDefaultsToTheFirstDeclaredVariant(): void

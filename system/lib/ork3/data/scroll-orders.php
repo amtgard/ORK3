@@ -349,10 +349,15 @@ return array(
     'id' => 'owl',
     'award_id' => 24,
     'ranks' => null,
+    // Reordered from Arcanyst's data, which listed cyanotype first. Scroll::BuildScroll
+    // falls back to variants[0], and cyanotype is a full-bleed dark blue plate with
+    // white text and inverted heraldry — heavy on toner and unlike the other fifteen
+    // orders. Arcanyst always had a variant picker; the ORK will not until the live
+    // overrides land, so the default has to be the sane one. All three remain available.
     'variants' =>
     array(
-      0 => 'cyanotype',
-      1 => 'parchment',
+      0 => 'parchment',
+      1 => 'cyanotype',
       2 => 'transparency',
     ),
     'primary' => null,

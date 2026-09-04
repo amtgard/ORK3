@@ -54,7 +54,10 @@ final class ScrollOrdersTest extends TestCase
     {
         $orders = Scroll::Orders();
         $this->assertSame(['arcane', 'martial'], $orders['battle']['variants']);
-        $this->assertSame(['cyanotype', 'parchment', 'transparency'], $orders['owl']['variants']);
+        // parchment leads deliberately: BuildScroll falls back to variants[0], and
+        // Arcanyst's own ordering put cyanotype — a dark blue plate with white text
+        // and inverted heraldry — first. See the note in scroll-orders.php.
+        $this->assertSame(['parchment', 'cyanotype', 'transparency'], $orders['owl']['variants']);
         $this->assertSame([], $orders['griffon']['variants']);
     }
 
