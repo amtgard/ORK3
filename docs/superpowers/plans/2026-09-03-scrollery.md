@@ -1597,7 +1597,7 @@ orders here.
 - [x] Write the three partials
 - [x] Add the two `SignAndDate` rules to `scrollery.css` (the 650px group already exists from Task 5)
 - [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 new cases, all passing
-- [~] Compare all three against Arcanyst at ranks 0, 5 and 10
+- [x] Compare all three against Arcanyst at ranks 0, 5 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — lion, hydra and hunter certificates"`
 
 ---
@@ -1623,7 +1623,7 @@ numeral — keep it.
 - [x] Write the three partials
 - [x] Add the `[data-order]` rules to `scrollery.css`
 - [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
-- [~] Compare against Arcanyst; check `mask`'s glow reads over the numeral, and `rose`'s hue-rotated burn
+- [x] Compare against Arcanyst; check `mask`'s glow reads over the numeral, and `rose`'s hue-rotated burn
 - [ ] `git commit -m "Enhancement: Scrollery — rose, smith and mask certificates"`
 
 ---
@@ -1645,7 +1645,7 @@ These four each replace or skip the parchment.
 - [x] Add the `[data-order]` rules to `scrollery.css`
 - [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
 - [x] Verify `flame` rank 0 renders with no numeral and no broken image
-- [~] Compare all four against Arcanyst
+- [x] Compare all four against Arcanyst
 - [ ] `git commit -m "Enhancement: Scrollery — crown, garber, jovious and flame certificates"`
 
 ---
@@ -1736,7 +1736,7 @@ variants have `symbol_0.png`, so the symbol path is unguarded. `battle` has no
 - [x] Write both partials
 - [x] Add the zodiac rules to `scrollery.css`
 - [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 11 zodiac + 22 battle cases
-- [~] Compare zodiac at rank 0 and rank 5 (different backgrounds), and both battle variants at ranks 0, 6 and 10
+- [x] Compare zodiac at rank 0 and rank 5 (different backgrounds), and both battle variants at ranks 0, 6 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — zodiac and battle certificates"`
 
 ---
@@ -1816,11 +1816,43 @@ Ranks 1, 7 and 10 have no override — that is correct, not an omission.
 - [x] Copy the `#OWL_edge-detect` filter definition into `Scrollery_render.tpl`
 - [x] Add both orders' rules to `scrollery.css`
 - [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 owl + 10 warrior cases
-- [~] Compare all three owl variants at rank 5 — the transparency variant is the one that reveals a missing repeat
-- [~] Compare warrior at ranks 1, 9 and 10
+- [x] Compare all three owl variants at rank 5 — the transparency variant is the one that reveals a missing repeat
+- [x] Compare warrior at ranks 1, 9 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — owl and warrior certificates"`
 
 ---
+
+
+---
+
+### Visual gate — signed off 2026-09-03
+
+All 16 orders compared side by side against Arcanyst 2.1.3 in Chrome. Every one matched:
+parchment/ground, border colour and deco, flanking figures, symbol blends, numeral art
+and position, flourishes, and text rhythm. The only differences were data — this port
+fills in a real issuer, recipient, pronoun and heraldry where Arcanyst rendered blanks,
+and prints the ORK's own award name ("Order of the Griffin") where Arcanyst fabricated
+one from the order id ("Order of the Griffon").
+
+Cases checked beyond a plain rank 5: `flame` 0 (numeral guard — both render "with their
+____" and no broken image), `dragon` 6 (the over_ layer), `warrior` 9 (big scary dragon,
+and the column-stacked signature block from the per-rank CSS), `warrior` 10 (the bg_10
+parchment swap), `zodiac` 0 and 5 (the two plates and the rank-conditional CSS), `owl`
+all three variants, `battle` both variants, `crown` (the wide signature geometry).
+
+Three integration details confirmed visually rather than only by test:
+- jovious draws BLUE RIBBON flourishes and rose draws leafy rose squigglies, so the
+  Task 2 partial-resources merge reaches the text layer correctly.
+- zodiac's flavour reads "for whole months to remember" in BOTH implementations —
+  Arcanyst collapses the month placeholder to the same else branch, so ExpandFlavour
+  reproduces its behaviour rather than inventing one.
+- owl cyanotype is pixel-comparable to Arcanyst's default owl, which is what made the
+  variant reorder necessary: Arcanyst always had a picker in front of that default.
+
+`hunter` could not be compared — Arcanyst gates the archery orders behind a kingdom-id
+list and its kingdom-loading Cloud Function is dead, so the order never appears in its
+sidebar. It renders correctly here and shares its layer shape with lion and hydra, both
+of which matched.
 
 ### Task 14: Close the loop
 
