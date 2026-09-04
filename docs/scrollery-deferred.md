@@ -171,7 +171,21 @@ lenient parser has been hiding it, but the response is malformed JSON.
 it denies. Passing it straight through a `: bool` return type is a fatal TypeError — cast
 it. Cost one 500 during Task 16.
 
-### 3.11 Scrollery is not linked from any navigation
+### 3.11 The create flow prints a scroll but does not grant the award
+
+The plan describes Task 16 as "print one scroll while granting an award", but
+`Scrollery/create` only prints. Granting lives in `Controller_Award`, and wiring the two
+together means touching the award-creation path, which was beyond the task. An officer
+today grants the award as usual and then prints — either from the create flow by hand, or
+from the Awards-tab button once the row exists.
+
+### 3.12 Bulk selects by event id typed in by hand
+
+`Scrollery/bulk` takes an event **id** in a number field. There is no event picker, so an
+officer has to know the id (or come from a link that carries it). The date-range path
+needs no such knowledge and is the usable one today.
+
+### 3.13 Scrollery is not linked from any navigation
 
 `Scrollery` and `Scrollery/mine` are reachable only by URL, plus the per-row Print button
 on the Awards tab. No menu entry exists yet.
