@@ -605,7 +605,7 @@ git commit -m "Enhancement: Scrollery — award title precedence and rank clampi
   The scroll array keys, relied on by every partial:
   `order, rank, variant, title, player, pronoun, reason, date, givenBy, issuerTitle, issuerName, useThe, useOf, heraldry, flavour, primary, secondary, resources`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/Unit/ScrollBuildTest.php`:
 
@@ -724,7 +724,7 @@ final class ScrollBuildTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**
+- [x] **Step 2: Run it to make sure it fails**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollBuild
@@ -732,7 +732,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollBuild
 
 Expected: FAIL — `Call to undefined method Scroll::BuildScroll()`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `class.Scroll.php`:
 
@@ -799,7 +799,7 @@ Add to `class.Scroll.php`:
             'reason'      => (string) ($awardRow['Note'] ?? ''),
             'date'        => self::FormatDate((string) ($awardRow['Date'] ?? '')),
             'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
-            'issuerTitle' => $parkName !== '' ? 'Barony' : 'Kingdom',
+            'issuerTitle' => $issuerTitle,   // see the note below the code block
             'issuerName'  => $parkName !== '' ? $parkName : (string) ($awardRow['KingdomName'] ?? ''),
             'useThe'      => (bool) ($context['useThe'] ?? true),
             'useOf'       => (bool) ($context['useOf'] ?? true),
@@ -825,9 +825,18 @@ Add to `class.Scroll.php`:
     }
 ```
 
-`issuerTitle` defaults to `Barony`/`Kingdom` because ORK does not store a park's rank word. The create flow lets an officer override it (Task 16); reprints use the default.
+`issuerTitle` accepts a `$context['issuerTitle']` override and falls back to
+`Barony`/`Kingdom`.
 
-- [ ] **Step 4: Run the tests**
+**Corrected during execution:** the claim that "ORK does not store a park's rank word" is
+false. `ork_park.parktitle_id` points at `ork_parktitle.title`, defined per kingdom, and
+most parks are not baronies — 349 are Freeholds, 274 Grand Duchies, ~90 Baronies, the
+rest Shires/Outposts/Duchies/County/Burg. `BuildScroll` stays pure, so it takes the word
+through the context; supplying the real one is the model's job (Task 15). The override
+also makes good on this section's own promise of an officer override in Task 16, which
+the original code block did not actually implement.
+
+- [x] **Step 4: Run the tests**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollBuild
@@ -835,7 +844,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollBuild
 
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add system/lib/ork3/class.Scroll.php tests/Unit/ScrollBuildTest.php

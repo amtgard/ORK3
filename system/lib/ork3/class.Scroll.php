@@ -94,4 +94,100 @@ class Scroll extends Ork3
     {
         return self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0)) !== null;
     }
+
+    public static function ArtBase(): string
+    {
+        return rtrim(HTTP_ASSETS, '/') . '/scrolls';
+    }
+
+    public static function PartialPath(string $orderId): string
+    {
+        return DIR_TEMPLATE . 'revised-frontend/scroll/' . $orderId . '.tpl';
+    }
+
+    /**
+     * Certificate date, e.g. "13th May 2024". Empty for a missing/zero date so the
+     * text layer draws its writing-line blank instead of "30th Nov -0001".
+     */
+    public static function FormatDate(string $date): string
+    {
+        if ($date === '' || str_starts_with($date, '0000')) {
+            return '';
+        }
+        $ts = strtotime($date);
+        if ($ts === false) {
+            return '';
+        }
+        $day    = (int) date('j', $ts);
+        $suffix = ($day % 100 >= 11 && $day % 100 <= 13)
+            ? 'th'
+            : ['th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th'][$day % 10];
+
+        return $day . $suffix . date(' F Y', $ts);
+    }
+
+    public static function BuildScroll(array $awardRow, array $context): array
+    {
+        $order = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
+        if ($order === null) {
+            throw new InvalidArgumentException(
+                'No certificate art for award_id ' . (int) ($awardRow['AwardId'] ?? 0)
+            );
+        }
+
+        $rank = self::ClampRank($order, (int) ($awardRow['Rank'] ?? 0));
+
+        $variant = '';
+        if ($order['variants'] !== []) {
+            $requested = (string) ($context['variant'] ?? '');
+            $variant = in_array($requested, $order['variants'], true)
+                ? $requested
+                : $order['variants'][0];
+        }
+
+        $parkName = trim((string) ($awardRow['ParkName'] ?? ''));
+
+        // ORK does store each park's rank word — ork_park.parktitle_id ->
+        // ork_parktitle.title, defined per kingdom — and most parks are not baronies
+        // (349 Freeholds, 274 Grand Duchies, ~90 Baronies). BuildScroll stays pure, so
+        // whoever holds the row passes the real word in; Barony/Kingdom is the floor.
+        $issuerTitle = trim((string) ($context['issuerTitle'] ?? ''));
+        if ($issuerTitle === '') {
+            $issuerTitle = $parkName !== '' ? 'Barony' : 'Kingdom';
+        }
+
+        return [
+            'order'       => $order['id'],
+            'rank'        => $rank,
+            'variant'     => $variant,
+            'title'       => self::ResolveTitle($awardRow),
+            'player'      => (string) ($context['player'] ?? ''),
+            'pronoun'     => (string) ($context['pronoun'] ?? 'their'),
+            'reason'      => (string) ($awardRow['Note'] ?? ''),
+            'date'        => self::FormatDate((string) ($awardRow['Date'] ?? '')),
+            'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
+            'issuerTitle' => $issuerTitle,
+            'issuerName'  => $parkName !== '' ? $parkName : (string) ($awardRow['KingdomName'] ?? ''),
+            'useThe'      => (bool) ($context['useThe'] ?? true),
+            'useOf'       => (bool) ($context['useOf'] ?? true),
+            'heraldry'    => (string) ($context['heraldry'] ?? ''),
+            'flavour'     => (string) ($order['flavour'][(string) $rank] ?? ''),
+            'primary'     => $order['primary'],
+            'secondary'   => $order['secondary'],
+            'resources'   => $order['resources'],
+        ];
+    }
+
+    /** Render one certificate's markup. `$s` is the name every partial binds to. */
+    public static function Render(array $s): string
+    {
+        $path = self::PartialPath($s['order']);
+        if (!is_file($path)) {
+            throw new RuntimeException('No partial for order ' . $s['order']);
+        }
+        $art = self::ArtBase();
+        ob_start();
+        include $path;
+        return (string) ob_get_clean();
+    }
 }
