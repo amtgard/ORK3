@@ -64,4 +64,25 @@ final class ScrollPronounOverrideTest extends TestCase
         $this->assertLessThanOrEqual(20, strlen($result));
         $this->assertSame(str_repeat('x', 20), $result);
     }
+
+    /**
+     * "ze/zir" is not in the table (only "ze/zie" -> "hir" is) — a data gap,
+     * not a logic one. An unmatched slashed value is still a pronoun SET, not
+     * a single word, and a set printed on the certificate is the same class of
+     * error as printing "he/him" verbatim. The token after the first slash is
+     * the best available guess.
+     */
+    public function testUnmatchedSlashedOverrideResolvesToPostSlashToken(): void
+    {
+        $this->assertSame('zir', Scroll::ResolvePronounOverride('ze/zir', $this->rows()));
+        $this->assertSame('zir', Scroll::ResolvePronounOverride('ze/zir/zirs', $this->rows()));
+    }
+
+    /** Nothing usable survives the split — fall back to the safe default rather than a fragment. */
+    public function testSlashOnlyOverrideYieldsTheir(): void
+    {
+        $this->assertSame('their', Scroll::ResolvePronounOverride('/', $this->rows()));
+        $this->assertSame('their', Scroll::ResolvePronounOverride('//', $this->rows()));
+        $this->assertSame('their', Scroll::ResolvePronounOverride('ze/', $this->rows()));
+    }
 }

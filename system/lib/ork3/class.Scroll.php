@@ -649,6 +649,18 @@ class Scroll extends Ork3
      * already a possessive word, so it passes through unresolved rather than
      * being discarded.
      *
+     * An unmatched value that still contains a "/" is different: that shape is
+     * an officer typing a pronoun SET ("ze/zir"), not a single possessive word,
+     * and a set printed on the certificate is the same class of error the
+     * table match above exists to prevent — just for a set ork_pronoun does
+     * not carry ("ze/zie" resolves to "hir" via the table; "ze/zir" cannot,
+     * because no such row exists — a data gap, not a logic one; the fix is a
+     * row in ork_pronoun, not more parsing here). The token after the FIRST
+     * slash is the best guess for the subject/object[/possessive] shapes
+     * people actually type: "ze/zir" -> "zir", correct for that set. If
+     * nothing usable survives the split (e.g. the value is only slashes),
+     * fall back to "their" rather than print a fragment.
+     *
      * Capped at the same length the create-tool's own input enforces
      * client-side: a client-side cap is not a server-side guarantee, and this
      * value reaches a printed certificate. Lowercased unconditionally — every
@@ -667,8 +679,17 @@ class Scroll extends Ork3
 
         $capped   = mb_substr($trimmed, 0, self::PRONOUN_OVERRIDE_MAX_LENGTH);
         $resolved = self::PossessiveFromFreetext($capped, $pronounRows);
+        if ($resolved !== '') {
+            return strtolower($resolved);
+        }
 
-        return strtolower($resolved !== '' ? $resolved : $capped);
+        if (str_contains($capped, '/')) {
+            $afterSlash = trim(explode('/', $capped)[1] ?? '');
+
+            return $afterSlash !== '' ? strtolower($afterSlash) : 'their';
+        }
+
+        return strtolower($capped);
     }
 }
 
