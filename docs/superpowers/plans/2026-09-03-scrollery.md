@@ -1369,14 +1369,14 @@ Log in as that player (or an officer over their park), then open:
 
 `http://localhost:19080/orkui/index.php?Route=Scrollery/render&awards=<awards_id>`
 
-- [~] **Step 6: Compare against Arcanyst — the visual gate** (AWAITING HUMAN SIGN-OFF)
+- [x] **Step 6: Compare against Arcanyst — the visual gate** (signed off 2026-09-03)
 
 > Structure verified mechanically: the layer stack, its document order, both blend
 > modes, the duplicated soft-light layer and the rank-offset table all match
 > `griffon.html` exactly, and all 8 asset URLs resolve. Rendered against real award
 > data and screenshotted beside Arcanyst's own griffon rank 1 — every visible
 > difference was data (real issuer, real pronoun, ORK's "Griffin" spelling), not
-> rendering. Final fidelity call belongs to a person.
+> rendering. Human sign-off given: "Example looks good".
 
 Serve arc-scroll and render the same order and rank:
 
@@ -1412,7 +1412,7 @@ certificate which renders a broken image at exactly one order and rank. It walks
 **Files:**
 - Test: `tests/Unit/ScrollAssetPathsTest.php`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```php
 <?php
@@ -1521,7 +1521,7 @@ final class ScrollAssetPathsTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths
@@ -1529,7 +1529,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths
 
 Expected: PASS — 11 griffon cases (ranks 0-10) plus the two structural tests.
 
-- [ ] **Step 3: Prove it actually catches a missing file**
+- [x] **Step 3: Prove it actually catches a missing file**
 
 Temporarily break one path and confirm a red test, then restore it:
 
@@ -1542,7 +1542,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths   # Expected: PASS
 
 A test that cannot fail is not a net. Do not skip this step.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/Unit/ScrollAssetPathsTest.php
