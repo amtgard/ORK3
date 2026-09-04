@@ -15,8 +15,16 @@
  * geometry is ~47 KB, roughly half this file, and ten orders compose this partial
  * without drawing it — hiding it would put all of it in their DOM for nothing.
  */
+
+/**
+ * $style — optional extra declarations on the outer layer. dragon draws this
+ * partial twice: once normally, then again as a glow (black primary, blurred,
+ * color-dodge). Every other order leaves it unset.
+ */
+$borderStyle = 'mix-blend-mode:multiply;padding:1px;margin:-1px;'
+    . (isset($style) ? (string) $style : '');
 ?>
-    <div style="mix-blend-mode:multiply;padding:1px;margin:-1px;">
+    <div style="<?= scroll_e($borderStyle) ?>">
         <svg viewBox="0 0 2550 3300" width="2550" height="3300" style="--primary-color:<?= scroll_e($primary) ?>;--secondary-color:<?= scroll_e($secondary) ?>;fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
             <style>
         
