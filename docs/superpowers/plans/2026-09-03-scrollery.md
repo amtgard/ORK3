@@ -1858,7 +1858,7 @@ of which matched.
 
 **Files:** Modify `tests/Unit/ScrollOrdersTest.php`
 
-- [ ] **Step 1: Add the completeness assertion**
+- [x] **Step 1: Add the completeness assertion**
 
 ```php
     public function testEveryOrderHasAPartial(): void
@@ -1869,7 +1869,7 @@ of which matched.
     }
 ```
 
-- [ ] **Step 2: Run the whole suite**
+- [x] **Step 2: Run the whole suite**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
@@ -1878,7 +1878,7 @@ vendor/bin/phpunit --testsuite unit
 Expected: PASS. The asset-path matrix should now be ~190 cases (16 orders, expanded
 across ranks and variants).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/Unit/ScrollOrdersTest.php

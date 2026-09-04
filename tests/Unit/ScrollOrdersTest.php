@@ -84,6 +84,35 @@ final class ScrollOrdersTest extends TestCase
         }
     }
 
+    /**
+     * Closes the loop on the port: the data file and the partial directory must not
+     * drift apart. An order declared here with no partial reaches Scroll::Render()
+     * and throws; a partial with no order is dead art nothing can select.
+     */
+    public function testEveryOrderHasAPartial(): void
+    {
+        foreach (Scroll::Orders() as $id => $order) {
+            $this->assertFileExists(Scroll::PartialPath($id), "{$id} has no partial");
+        }
+    }
+
+    public function testNoPartialExistsWithoutAnOrderToSelectIt(): void
+    {
+        $partials = [];
+        foreach (glob(DIR_TEMPLATE . 'revised-frontend/scroll/*.tpl') as $path) {
+            $name = basename($path, '.tpl');
+            if (!str_starts_with($name, '_')) {   // _parchment, _border, _heraldry, _text
+                $partials[] = $name;
+            }
+        }
+        sort($partials);
+
+        $orders = array_keys(Scroll::Orders());
+        sort($orders);
+
+        $this->assertSame($orders, $partials);
+    }
+
     public function testFlavourTextCoversEveryRankInTheOrderRange(): void
     {
         foreach (Scroll::Orders() as $id => $order) {
