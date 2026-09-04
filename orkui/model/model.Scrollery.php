@@ -161,6 +161,143 @@ class Model_Scrollery extends Model
         return $choices;
     }
 
+    /**
+     * The bulk selection — the module's ONE new query. Everything else reuses
+     * Player::AwardsForPlayer().
+     *
+     * Public and named ...ForTest so ScrolleryBulkQueryTest can assert on the
+     * generated statement without reflection and without a database. It builds a
+     * string and touches nothing.
+     *
+     * The surrounding code interpolates rather than binds, and this codebase's
+     * mysql_real_escape_string() is a no-op shim, so what protects this is the (int)
+     * cast on every id and the ISO-date regex — not escaping.
+     */
+    public function bulkSqlForTest(string $type, string $id, string $from, string $to): string
+    {
+        $id = (int) $id;
+
+        switch ($type) {
+            case 'event':
+                $scope = 'awards.at_event_id = ' . $id;
+                break;
+            case 'kingdom':
+                $scope = 'awards.at_kingdom_id = ' . $id;
+                break;
+            case 'park':
+                $scope = 'awards.at_park_id = ' . $id;
+                break;
+            default:
+                // Never widen to "everything" on an unrecognised scope.
+                $scope = 'awards.at_park_id = 0';
+                break;
+        }
+
+        $range = '';
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+            $range .= " and awards.date >= '" . $from . "'";
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            $range .= " and awards.date <= '" . $to . "'";
+        }
+
+        return 'select awards.awards_id, awards.mundane_id, awards.rank, awards.date, awards.note,
+                       awards.custom_name, awards.at_park_id, awards.at_kingdom_id, awards.at_event_id,
+                       a.award_id, a.name,
+                       ka.name as kingdom_awardname,
+                       m.persona as recipient,
+                       gb.persona as given_by,
+                       p.name as park_name, k.name as kingdom_name
+                  from ' . DB_PREFIX . 'awards awards
+                  left join ' . DB_PREFIX . 'kingdomaward ka on ka.kingdomaward_id = awards.kingdomaward_id
+                  left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
+                  left join ' . DB_PREFIX . 'mundane m on m.mundane_id = awards.mundane_id
+                  left join ' . DB_PREFIX . 'mundane gb on gb.mundane_id = awards.given_by_id
+                  left join ' . DB_PREFIX . 'park p on p.park_id = awards.at_park_id
+                  left join ' . DB_PREFIX . 'kingdom k on k.kingdom_id = awards.at_kingdom_id
+                 where ' . $scope . $range . '
+                 order by m.persona, a.name, awards.rank';
+    }
+
+    /**
+     * Award rows for a bulk print, shaped like the reprint list.
+     *
+     * Returns both the printable rows and the ones excluded for having no artwork,
+     * so the officer is told rather than silently handed fewer scrolls than awards.
+     *
+     * @return array{Printable: array<int, array>, Excluded: array<int, array>}
+     */
+    public function awards_for_bulk(string $type, int $id, string $from = '', string $to = ''): array
+    {
+        $printable = [];
+        $excluded  = [];
+
+        if ($id <= 0) {
+            return ['Printable' => $printable, 'Excluded' => $excluded];
+        }
+
+        $rs = $this->db_query($this->bulkSqlForTest($type, (string) $id, $from, $to));
+        foreach ($rs as $row) {
+            // Shaped to the keys Scroll::HasArt() and ResolveTitle() expect.
+            $shaped = [
+                'AwardsId'         => (int) $row['awards_id'],
+                'AwardId'          => (int) $row['award_id'],
+                'MundaneId'        => (int) $row['mundane_id'],
+                'Rank'             => (int) $row['rank'],
+                'Date'             => (string) $row['date'],
+                'Recipient'        => (string) $row['recipient'],
+                'GivenBy'          => (string) $row['given_by'],
+                'Name'             => (string) $row['name'],
+                'KingdomAwardName' => (string) $row['kingdom_awardname'],
+                'CustomAwardName'  => (string) $row['custom_name'],
+                'AliasAwardName'   => '',
+                'ParkName'         => (string) $row['park_name'],
+                'KingdomName'      => (string) $row['kingdom_name'],
+            ];
+            $shaped['Title']      = Scroll::ResolveTitle($shaped);
+            $shaped['PrettyDate'] = Scroll::FormatDate($shaped['Date']);
+
+            if (Scroll::HasArt($shaped)) {
+                $printable[] = $shaped;
+            } else {
+                $excluded[] = $shaped;
+            }
+        }
+
+        return ['Printable' => $printable, 'Excluded' => $excluded];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function db_query(string $sql): array
+    {
+        $db = Ork3::$Lib->player->db;
+        $db->Clear();
+        $rs = $db->query($sql);
+
+        $rows = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->next()) {
+                $rows[] = [
+                    'awards_id'         => $rs->awards_id,
+                    'award_id'          => $rs->award_id,
+                    'mundane_id'        => $rs->mundane_id,
+                    'rank'              => $rs->rank,
+                    'date'              => $rs->date,
+                    'note'              => $rs->note,
+                    'custom_name'       => $rs->custom_name,
+                    'recipient'         => $rs->recipient,
+                    'given_by'          => $rs->given_by,
+                    'name'              => $rs->name,
+                    'kingdom_awardname' => $rs->kingdom_awardname,
+                    'park_name'         => $rs->park_name,
+                    'kingdom_name'      => $rs->kingdom_name,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
     /** Own award, or an officer with edit rights over the granting park/kingdom. */
     private function viewer_may_print(array $row, int $viewerId): bool
     {

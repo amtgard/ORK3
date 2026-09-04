@@ -71,6 +71,53 @@ class Controller_Scrollery extends Controller
         $this->template           = '../revised-frontend/Scrollery_create.tpl';
     }
 
+    /**
+     * "Print bulk scrolls" — an event's or a date range's awards, in one pass.
+     *
+     * Route is Scrollery/bulk/<park|kingdom>/<id>, with an optional event or date
+     * range in the query string.
+     */
+    public function bulk($action = null)
+    {
+        [$scopeType, $scopeId] = $this->parse_scope((string) $action);
+
+        $viewerId = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+        if ($viewerId <= 0) {
+            header('Location: ' . UIR . 'Login/login/Scrollery/bulk/' . $scopeType . '/' . $scopeId);
+            exit;
+        }
+
+        if ($scopeId <= 0 || !$this->may_issue_for($viewerId, $scopeType, $scopeId)) {
+            $this->no_authorization('Scrollery/bulk/' . $scopeType . '/' . $scopeId);
+            $this->template = '../revised-frontend/Scrollery_denied.tpl';
+            return;
+        }
+
+        $eventId = (int) ($_GET['event'] ?? 0);
+        $from    = (string) ($_GET['from'] ?? '');
+        $to      = (string) ($_GET['to'] ?? '');
+        $ran     = $eventId > 0 || $from !== '' || $to !== '';
+
+        $result = ['Printable' => [], 'Excluded' => []];
+        if ($ran) {
+            $result = $eventId > 0
+                ? $this->Scrollery->awards_for_bulk('event', $eventId)
+                : $this->Scrollery->awards_for_bulk($scopeType, $scopeId, $from, $to);
+        }
+
+        $this->data['ScopeType']  = $scopeType;
+        $this->data['ScopeId']    = $scopeId;
+        $this->data['Scope']      = $this->Scrollery->scope_context($scopeType, $scopeId);
+        $this->data['EventId']    = $eventId;
+        $this->data['From']       = $from;
+        $this->data['To']         = $to;
+        $this->data['HasRun']     = $ran;
+        $this->data['Printable']  = $result['Printable'];
+        $this->data['Excluded']   = $result['Excluded'];
+        $this->data['page_title'] = 'Print bulk scrolls';
+        $this->template           = '../revised-frontend/Scrollery_bulk.tpl';
+    }
+
     /** "park/123" -> ['park', 123]. Anything unrecognised becomes ['park', 0]. */
     private function parse_scope(string $action): array
     {
