@@ -1912,7 +1912,7 @@ git commit -m "Enhancement: Scrollery — assert every order has a partial"
 > wrapper just decorates each row. `Barony`/`Kingdom` remains the fallback for rows
 > whose park cannot be resolved.
 
-- [ ] **Step 1: Write the failing permission test**
+- [x] **Step 1: Write the failing permission test**
 
 ```php
 <?php
@@ -1945,7 +1945,7 @@ Run it: `vendor/bin/phpunit --testsuite unit --filter ScrolleryPermission`. It p
 immediately — `Scroll::HasArt()` already exists. It is here to pin the "no dead buttons"
 rule so a later change cannot quietly start offering unprintable awards.
 
-- [ ] **Step 2: Add `mine()` to the controller**
+- [x] **Step 2: Add `mine()` to the controller**
 
 ```php
     public function mine($action = null)
@@ -1962,7 +1962,7 @@ rule so a later change cannot quietly start offering unprintable awards.
     }
 ```
 
-- [ ] **Step 3: Add the model method**
+- [x] **Step 3: Add the model method**
 
 ```php
     /** @return array<int, array> the player's awards that have certificate art */
@@ -1984,7 +1984,7 @@ rule so a later change cannot quietly start offering unprintable awards.
     }
 ```
 
-- [ ] **Step 4: Write `Scrollery_mine.tpl`**
+- [x] **Step 4: Write `Scrollery_mine.tpl`**
 
 Use the existing chrome vocabulary — `adm-wrap`, `adm-page-header`, `adm-card`,
 `adm-table`, `adm-btn adm-btn-primary` — so it matches the rest of the revised frontend.
@@ -1996,14 +1996,19 @@ targeting `PrintUrl` with `target="_blank"`. Above the table, one line of copy e
 that awards without certificate artwork are not listed. Empty state: a short message and
 a link to the player's profile.
 
-- [ ] **Step 5: Write `Scrollery_index.tpl`**
+- [x] **Step 5: Write `Scrollery_index.tpl`**
 
 The landing page: three `adm-card`s, one per door, each linking to `Scrollery/mine`,
 `Scrollery/create/...` and `Scrollery/bulk/...`. Show the officer cards only when the
 viewer holds `AUTH_EDIT` on at least one park or kingdom. Add the artwork credit from
 `NOTICE` in a footer line.
 
-- [ ] **Step 6: Add the entry point to the Awards tab**
+- [x] **Step 6: Add the entry point to the Awards tab**
+
+> **Two of the three locations named below do not exist.** Line ~7428 builds the
+> ATTENDANCE table (AttendanceId, Credits, ClassId), not awards. Line ~2334 is the
+> TITLES table, and titles never have certificate art, so a button there would be
+> permanently dead. Only the awards table at ~2185 takes the button.
 
 In `Playernew_index.tpl`, inside the existing `pn-award-actions-cell` (line ~2185 and its
 twin at ~2334, plus the JS-built cell at ~7428), add a Print button styled
@@ -2011,14 +2016,14 @@ twin at ~2334, plus the JS-built cell at ~7428), add a Print button styled
 the profile owner or an officer over the park/kingdom. Reuse the same visibility flag the
 edit/delete buttons already compute rather than inventing a second check.
 
-- [ ] **Step 7: Verify in the browser**
+- [x] **Step 7: Verify in the browser**
 
 - Log in as a player with ladder awards; open `Scrollery/mine`; print one.
 - Confirm a Master award and a non-ladder award are absent from the list.
 - Log in as a different, non-officer player and request another player's `awards` id
   directly on the render route — expect a redirect, not a certificate.
 
-- [ ] **Step 8: Run the suite and commit**
+- [x] **Step 8: Run the suite and commit**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
