@@ -140,7 +140,13 @@ class Model_Scrollery extends Model
 
         $choices = [];
         foreach ($response['Awards'] ?? [] as $row) {
-            $order = Scroll::OrderForAwardId((int) ($row['AwardId'] ?? $row['award_id'] ?? 0));
+            // OrderForAwardRow(), not OrderForAwardId(): GetAwardList() already returns
+            // OfficerRole and KingdomAwardName on every row, so this list can apply the
+            // same officer-exclusion / archery-by-name / custom-eligibility precedence
+            // as every other surface. OrderForAwardId() alone would drop every
+            // custom-eligible catalog award (e.g. Master Rose) from the create dropdown,
+            // since custom's own award_id is the 0 sentinel that function always misses.
+            $order = Scroll::OrderForAwardRow($row);
             if ($order === null) {
                 continue;
             }
@@ -159,6 +165,55 @@ class Model_Scrollery extends Model
         usort($choices, static fn ($a, $b) => strcasecmp($a['Name'], $b['Name']));
 
         return $choices;
+    }
+
+    /**
+     * Which order prints a hand-composed scroll for one award id + title pair, or
+     * null when this kingdom may not compose one for it.
+     *
+     * compose() and the Ajax preview build a scroll from client-supplied fields —
+     * an award id and a hand-typed title, nothing that carries OfficerRole. Passing
+     * that bare pair straight to Scroll::OrderForAwardRow() would default the
+     * missing OfficerRole to "none" and wrongly treat every officer position as
+     * custom-eligible. Recomputing against this kingdom's own catalog — the same
+     * list the create dropdown already filtered through OrderForAwardRow() — is
+     * what keeps the officer-position exclusion in force for a hand-edited request,
+     * exactly as scroll_for_awards_id() re-resolves a hand-edited id list rather
+     * than trusting it.
+     *
+     * The title has to be part of the match, not just the id: archery's real grants
+     * carry no base award of their own, so several distinct catalog entries — some
+     * archery, some not — all share award_id 0 (also 94, 131) and are told apart
+     * only by name. Matching on id alone would let a request name one of them and
+     * silently print whichever same-id entry the search happened to reach first.
+     *
+     * Split from the DB-touching lookup above so the search itself — the part with
+     * anything to get wrong — is exercised in ScrolleryAwardOrderForComposeTest
+     * against a hand-built choice list, the same way bulkSqlForTest() keeps the
+     * bulk query testable without a database.
+     */
+    public function award_order_for_compose(int $kingdomId, int $awardId, string $title): ?array
+    {
+        if ($kingdomId <= 0) {
+            return null;
+        }
+
+        return self::orderForChoiceForTest($this->printable_award_choices($kingdomId), $awardId, $title);
+    }
+
+    /**
+     * @param array<int, array{AwardId:int, Name:string, Order:string}> $choices
+     */
+    public static function orderForChoiceForTest(array $choices, int $awardId, string $title): ?array
+    {
+        $title = trim($title);
+        foreach ($choices as $choice) {
+            if ($choice['AwardId'] === $awardId && strcasecmp(trim($choice['Name']), $title) === 0) {
+                return Scroll::Orders()[$choice['Order']] ?? null;
+            }
+        }
+
+        return null;
     }
 
     /**

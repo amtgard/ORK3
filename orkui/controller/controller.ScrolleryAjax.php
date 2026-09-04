@@ -38,8 +38,18 @@ class Controller_ScrolleryAjax extends Controller
             exit;
         }
 
+        $this->load_model('Scrollery');
+        $scope   = $this->Scrollery->scope_context($scopeType, $scopeId);
         $awardId = (int) ($_POST['awardId'] ?? 0);
-        $order   = Scroll::OrderForAwardId($awardId);
+        $title   = (string) ($_POST['title'] ?? '');
+        // award_order_for_compose(), not Scroll::OrderForAwardId(): custom's own
+        // award_id is the 0 sentinel OrderForAwardId() always returns null for, so
+        // previewing a custom-eligible choice from the create dropdown could never
+        // get past this check. Re-resolving against the kingdom's own catalog
+        // (rather than trusting a client-supplied award id + title with no
+        // OfficerRole behind it) is what still keeps an officer position from
+        // previewing a certificate.
+        $order = $this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title);
         if ($order === null) {
             echo json_encode(['Status' => ['Status' => 1, 'Error' => 'That award has no certificate artwork']]);
             exit;
@@ -52,7 +62,7 @@ class Controller_ScrolleryAjax extends Controller
                 'Date'             => (string) ($_POST['date'] ?? ''),
                 'Note'             => (string) ($_POST['reason'] ?? ''),
                 'GivenBy'          => (string) ($_POST['givenBy'] ?? ''),
-                'KingdomAwardName' => (string) ($_POST['title'] ?? ''),
+                'KingdomAwardName' => $title,
                 'ParkName'         => $scopeType === 'park' ? (string) ($_POST['issuerName'] ?? '') : '',
                 'KingdomName'      => $scopeType === 'kingdom' ? (string) ($_POST['issuerName'] ?? '') : '',
             ],

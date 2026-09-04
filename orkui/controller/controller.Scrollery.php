@@ -251,12 +251,19 @@ class Controller_Scrollery extends Controller
         }
 
         $awardId = (int) ($_GET['awardId'] ?? 0);
-        if (Scroll::OrderForAwardId($awardId) === null) {
+        $title   = (string) ($_GET['title'] ?? '');
+        $scope   = $this->Scrollery->scope_context($scopeType, $scopeId);
+        // award_order_for_compose(), not Scroll::OrderForAwardId(): custom's own
+        // award_id is the 0 sentinel OrderForAwardId() always returns null for, so a
+        // custom-eligible choice from the create dropdown could never pass this
+        // gate. Re-resolving against the kingdom's own catalog (rather than trusting
+        // a client-supplied award id + title with no OfficerRole behind it) is what
+        // still keeps an officer position from composing a certificate.
+        if ($this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title) === null) {
             header('Location: ' . UIR . 'Scrollery/create/' . $scopeType . '/' . $scopeId);
             exit;
         }
 
-        $scope    = $this->Scrollery->scope_context($scopeType, $scopeId);
         $playerId = (int) ($_GET['playerId'] ?? 0);
         $pronoun  = $playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '';
 
@@ -267,7 +274,7 @@ class Controller_Scrollery extends Controller
                 'Date'             => (string) ($_GET['date'] ?? ''),
                 'Note'             => (string) ($_GET['reason'] ?? ''),
                 'GivenBy'          => (string) ($_GET['givenBy'] ?? ''),
-                'KingdomAwardName' => (string) ($_GET['title'] ?? ''),
+                'KingdomAwardName' => $title,
                 'ParkName'         => $scopeType === 'park' ? (string) ($_GET['issuerName'] ?? '') : '',
                 'KingdomName'      => $scopeType === 'kingdom' ? (string) ($_GET['issuerName'] ?? '') : '',
             ],
