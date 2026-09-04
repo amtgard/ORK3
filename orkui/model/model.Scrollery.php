@@ -222,7 +222,7 @@ class Model_Scrollery extends Model
 
         return 'select awards.awards_id, awards.mundane_id, awards.rank, awards.date, awards.note,
                        awards.custom_name, awards.at_park_id, awards.at_kingdom_id, awards.at_event_id,
-                       a.award_id, a.name,
+                       a.award_id, a.name, a.officer_role,
                        ka.name as kingdom_awardname,
                        m.persona as recipient,
                        gb.persona as given_by,
@@ -280,7 +280,10 @@ class Model_Scrollery extends Model
         }
 
         foreach ($rs as $row) {
-            // Shaped to the keys Scroll::HasArt() and ResolveTitle() expect.
+            // Shaped to the keys Scroll::HasArt() / OrderForAwardRow() and
+            // ResolveTitle() expect. OfficerRole matters here: without it every
+            // officer-position row in a bulk selection would look custom-eligible
+            // (IsCustomEligible() defaults an absent key to 'none').
             $shaped = [
                 'AwardsId'         => (int) $row['awards_id'],
                 'AwardId'          => (int) $row['award_id'],
@@ -293,6 +296,7 @@ class Model_Scrollery extends Model
                 'KingdomAwardName' => (string) $row['kingdom_awardname'],
                 'CustomAwardName'  => (string) $row['custom_name'],
                 'AliasAwardName'   => '',
+                'OfficerRole'      => (string) ($row['officer_role'] ?? ''),
                 'ParkName'         => (string) $row['park_name'],
                 'KingdomName'      => (string) $row['kingdom_name'],
             ];
@@ -360,6 +364,7 @@ class Model_Scrollery extends Model
                     'recipient'         => $rs->recipient,
                     'given_by'          => $rs->given_by,
                     'name'              => $rs->name,
+                    'officer_role'      => $rs->officer_role,
                     'kingdom_awardname' => $rs->kingdom_awardname,
                     'park_name'         => $rs->park_name,
                     'kingdom_name'      => $rs->kingdom_name,

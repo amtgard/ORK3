@@ -71,6 +71,19 @@ final class ScrollCustomEligibilityTest extends TestCase
         $this->assertFalse(Scroll::HasArt($row));
     }
 
+    /**
+     * The archery-name match must not outrank the officer-position exclusion: a
+     * kingdom naming an officer role "Hunter" (the bare word is in ARCHERY_NAMES)
+     * must not get the hunter certificate for a job someone held.
+     */
+    public function testAnOfficerRoleNamedHunterIsStillNotPrintable(): void
+    {
+        $row = $this->row(['OfficerRole' => 'other-officer', 'KingdomAwardName' => 'Hunter']);
+
+        $this->assertNull(Scroll::OrderForAwardRow($row));
+        $this->assertFalse(Scroll::HasArt($row));
+    }
+
     /** Everything else with no specific order gets the custom scroll. */
     public function testTitlesPeeragesAndPlainAwardsGetTheCustomScroll(): void
     {

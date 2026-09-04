@@ -511,6 +511,9 @@ To say you\'ve reached the apex of your ability would be to drastically underest
     'variants' =>
     array(
     ),
+    // Matches Scroll::DEFAULT_RECIPE (system/lib/ork3/class.Scroll.php) — griffon's
+    // tan/gold — but as an independent literal, not derived from it: this file is a
+    // plain data file read before class constants exist. Change one, change both.
     'primary' => 'hsl(35, 29%, 55%)',
     'secondary' => 'hsl(34, 72%, 78%)',
     'resources' =>

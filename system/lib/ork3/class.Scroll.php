@@ -37,6 +37,12 @@ class Scroll extends Ork3
      * This constant is what every path that prints WITHOUT an explicit recipe uses —
      * the reprint list and a bulk run both reach that state — which is what makes an
      * uncovered award printable everywhere and a reprint deterministic.
+     *
+     * primary/secondary here match the `custom` order's own colour pair in
+     * system/lib/ork3/data/scroll-orders.php — but as an independent literal, not
+     * derived from it (that file is a plain data file with no access to this
+     * constant). Change one, change both, or a custom scroll's CSS and its rendered
+     * border will disagree.
      */
     public const DEFAULT_RECIPE = [
         'ground'    => 'parchment',
@@ -208,6 +214,25 @@ class Scroll extends Ork3
     }
 
     /**
+     * Whether an award row names an officer position rather than an honour.
+     *
+     * The single source of truth for that predicate — IsCustomEligible() and
+     * OrderForAwardRow() both defer to it, rather than each keeping their own copy of
+     * the `?? 'none'` expression, which is how the rule would drift between them.
+     *
+     * An absent/blank role tolerates the archery case: a real archery grant's
+     * award_id dangles (0, 94, 131 under a base id nothing else uses), so the LEFT
+     * JOIN to officer_role misses and yields NULL/''. NULL there means "unknown
+     * award", not "this is an officer position" — and must still be printable.
+     */
+    private static function IsOfficerPosition(array $awardRow): bool
+    {
+        $role = strtolower(trim((string) ($awardRow['OfficerRole'] ?? 'none')));
+
+        return $role !== '' && $role !== 'none';
+    }
+
+    /**
      * Whether an award with no design of its own may still be printed.
      *
      * Officer positions are excluded: an officer position is a job somebody held, not
@@ -215,21 +240,29 @@ class Scroll extends Ork3
      */
     public static function IsCustomEligible(array $awardRow): bool
     {
-        $role = strtolower(trim((string) ($awardRow['OfficerRole'] ?? 'none')));
-
-        return $role === '' || $role === 'none';
+        return !self::IsOfficerPosition($awardRow);
     }
 
     /**
      * THE single resolution point for "what does this award print as".
      *
-     * Order of precedence: the award's own design, then archery by name, then the
-     * custom scroll, then nothing. Every caller — the reprint list, the bulk list, the
+     * Order of precedence: an officer position first (excludes everything, by any
+     * route), then the award's own design, then archery by name, then the custom
+     * scroll, then nothing. Every caller — the reprint list, the bulk list, the
      * Awards tab, the create tool — goes through here, so coverage cannot drift
      * between surfaces.
      */
     public static function OrderForAwardRow(array $awardRow): ?array
     {
+        // An officer position is a job someone held, not an honour someone was given,
+        // and that is true whichever door resolution comes through. Checked first so
+        // a kingdom that happens to name an officer role "Hunter" cannot reach the
+        // archery branch below — the name list is matched on kingdomaward text, which
+        // nothing validates against what the row actually is.
+        if (self::IsOfficerPosition($awardRow)) {
+            return null;
+        }
+
         $specific = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
         if ($specific !== null) {
             return $specific;

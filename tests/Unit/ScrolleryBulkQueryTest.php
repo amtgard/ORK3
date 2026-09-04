@@ -124,4 +124,14 @@ final class ScrolleryBulkQueryTest extends TestCase
     {
         $this->assertStringContainsString('order by', strtolower($this->sql('event', '17')));
     }
+
+    /**
+     * Scroll::IsCustomEligible() reads OfficerRole, and without this column every
+     * officer position in a bulk selection would look custom-eligible — the query
+     * has to select it for the eligibility check to mean anything on this path.
+     */
+    public function testTheBulkQuerySelectsOfficerRole(): void
+    {
+        $this->assertStringContainsString('a.officer_role', $this->sql('event', '17', 'park', '198'));
+    }
 }

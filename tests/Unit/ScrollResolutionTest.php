@@ -136,16 +136,31 @@ final class ScrollResolutionTest extends TestCase
      * ScrollCustomEligibilityTest — so that coverage question belongs there, not here.
      * This test only pins that none of the three base ids has been given its OWN
      * (specific, by-id) order.
+     *
+     * 94 and 131 are asserted directly through OrderForAwardId(): no order in the
+     * catalogue declares either as its award_id, so a real regression would still be
+     * caught. 0 cannot be asserted the same way — OrderForAwardId() guards
+     * $awardId === 0 unconditionally as its very first statement (the custom order's
+     * own award_id sentinel would otherwise collide with it), so calling it with 0
+     * through this door proves nothing. The invariant that only `custom` may carry
+     * the 0 sentinel is asserted directly against the catalogue instead.
      */
     public function testRealArcheryAwardsResolveToNoSpecificOrder(): void
     {
         $this->assertSame('hunter', Scroll::OrderForAwardId(6969)['id']);
 
-        foreach ([0, 94, 131] as $archeryBaseId) {
+        foreach ([94, 131] as $archeryBaseId) {
             $this->assertNull(
                 Scroll::OrderForAwardId($archeryBaseId),
                 "archery base award {$archeryBaseId} unexpectedly resolved to a specific order"
             );
+        }
+
+        foreach (Scroll::Orders() as $id => $order) {
+            if ($id === 'custom') {
+                continue;
+            }
+            $this->assertNotSame(0, (int) $order['award_id'], "$id must not use the 0 sentinel");
         }
     }
 }
