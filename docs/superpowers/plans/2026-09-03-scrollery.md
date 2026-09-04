@@ -2044,7 +2044,7 @@ git commit -m "Enhancement: Scrollery — reprint my scroll"
 - Produces: `Controller_ScrolleryAjax::preview()` — returns `{ html: string }` for one
   scroll built from POSTed parameters, after the same permission check.
 
-- [ ] **Step 1: Add `create()` to the controller**
+- [x] **Step 1: Add `create()` to the controller**
 
 Route is `Scrollery/create/<kingdom|park>/<id>`. Gate on
 `HasAuthority($uid, AUTH_PARK|AUTH_KINGDOM, $id, AUTH_EDIT)`, mirroring
@@ -2055,7 +2055,7 @@ Pass to the template: the award list for that kingdom (`Award::GetAwardList()`,
 `class.Award.php:64`) filtered to awards with art; the park/kingdom name for the issuer
 fields; and the resolved heraldry URL.
 
-- [ ] **Step 2: Write `Scrollery_create.tpl`**
+- [x] **Step 2: Write `Scrollery_create.tpl`**
 
 Two columns in an `adm-card`: controls on the left, live preview on the right.
 
@@ -2069,7 +2069,7 @@ Preview: the same `<svg>`/`<foreignObject>` frame as `Scrollery_render.tpl`, fil
 the Ajax response. A Print button opens `Scrollery/render` in a new tab with the current
 parameters.
 
-- [ ] **Step 3: Write `controller.ScrolleryAjax.php`**
+- [x] **Step 3: Write `controller.ScrolleryAjax.php`**
 
 Follow `controller.WnAjax.php` — `header('Content-Type: application/json')`, a login
 check returning `['Status' => ['Status' => 1, 'Error' => ...]]`, then the work. Build the
@@ -2079,12 +2079,12 @@ permission check here too; an Ajax endpoint is not exempt.
 Add `Controller_ScrolleryAjax` to the `$_skipTokenCheck` list in
 `system/lib/system/class.Controller.php:37-48`, alongside the other `*Ajax` controllers.
 
-- [ ] **Step 4: Verify in the browser**
+- [x] **Step 4: Verify in the browser**
 
 Pick an award, change rank and variant, watch the preview re-render. Print. Confirm a
 non-officer hitting the same route is redirected.
 
-- [ ] **Step 5: Run the suite and commit**
+- [x] **Step 5: Run the suite and commit**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
