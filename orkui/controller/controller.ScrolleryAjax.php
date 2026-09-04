@@ -117,6 +117,13 @@ class Controller_ScrolleryAjax extends Controller
      */
     private function requested_pronoun(): string
     {
+        // The officer's correction wins over anything inferred. Per-print only —
+        // nothing is written back to the profile.
+        $override = trim((string) ($_POST['pronounOverride'] ?? ''));
+        if ($override !== '') {
+            return $override;
+        }
+
         $mundaneId = (int) ($_POST['playerId'] ?? 0);
         if ($mundaneId > 0) {
             $this->load_model('Scrollery');

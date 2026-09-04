@@ -287,7 +287,12 @@ class Controller_Scrollery extends Controller
         }
 
         $playerId = (int) ($_GET['playerId'] ?? 0);
-        $pronoun  = $playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '';
+
+        // The officer's correction wins over anything inferred. Per-print only —
+        // nothing is written back to the profile.
+        $override = trim((string) ($_GET['pronounOverride'] ?? ''));
+        $pronoun  = $override !== '' ? $override
+            : ($playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '');
 
         $scroll = Scroll::BuildScroll(
             [

@@ -594,6 +594,44 @@ class Scroll extends Ork3
         include $path;
         return (string) ob_get_clean();
     }
+
+    /**
+     * Possessive from a free-text pronoun string.
+     *
+     * Free text is subject/object — "he/him", "she/her", "they/them" — and the
+     * certificate needs the POSSESSIVE. Reading the second token gives "him", so the
+     * certificate would say "with him third". Match the LEADING token against the
+     * known subjects instead.
+     *
+     * Longest subject first, because "e/ey" and "ze/zie" are themselves slash-joined
+     * and would otherwise lose to the bare "e" and "ze" they begin with.
+     *
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     */
+    public static function PossessiveFromFreetext(string $freetext, array $pronounRows): string
+    {
+        $text = strtolower(trim($freetext));
+        if ($text === '') {
+            return '';
+        }
+
+        $subjects = [];
+        foreach ($pronounRows as $row) {
+            $subject = strtolower(trim((string) ($row['Subject'] ?? '')));
+            if ($subject !== '') {
+                $subjects[$subject] = (string) ($row['Possessive'] ?? '');
+            }
+        }
+        uksort($subjects, static fn ($a, $b) => strlen($b) <=> strlen($a));
+
+        foreach ($subjects as $subject => $possessive) {
+            if ($text === $subject || str_starts_with($text, $subject . '/')) {
+                return $possessive;
+            }
+        }
+
+        return '';
+    }
 }
 
 /**

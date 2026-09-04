@@ -828,6 +828,17 @@ class Model_Scrollery extends Model
             }
         }
 
+        // pronoun_freetext is populated by another branch; read it only if the key is
+        // actually present, so this works either side of that merge.
+        $freetext = trim((string) ($player['PronounFreetext'] ?? ''));
+        if ($freetext !== '') {
+            $list       = Ork3::$Lib->pronoun->GetPronounList();
+            $possessive = Scroll::PossessiveFromFreetext($freetext, $list['Pronouns'] ?? []);
+            if ($possessive !== '') {
+                return $possessive;
+            }
+        }
+
         return 'their';
     }
 
