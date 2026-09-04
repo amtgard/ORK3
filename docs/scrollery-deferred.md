@@ -157,7 +157,21 @@ itself first. Arguably the URL belongs in the template.
 nginx has no woff2 MIME mapping in this stack. Browsers accept it, but a `types` entry
 would be tidier and lets compression/caching headers be set sensibly.
 
-### 3.9 Scrollery is not linked from any navigation
+### 3.9 `Controller_WnAjax` echoes JSON and returns instead of exiting
+
+Not Scrollery's, but found while building `ScrolleryAjax`: the ORK's Ajax controllers
+`exit` after `echo json_encode(...)` (PlayerAjax 73 times, KingdomAjax 60) because
+returning lets `index.php` go on to call `$C->view()`, which appends the entire themed
+page after the JSON. `Controller_WnAjax` returns. Its callers only read `Status`, so a
+lenient parser has been hiding it, but the response is malformed JSON.
+
+### 3.10 `HasAuthority()` returns NULL on denial, not false
+
+`Ork3::$Lib->authorization->HasAuthority()` is untyped legacy and returns **null** when
+it denies. Passing it straight through a `: bool` return type is a fatal TypeError — cast
+it. Cost one 500 during Task 16.
+
+### 3.11 Scrollery is not linked from any navigation
 
 `Scrollery` and `Scrollery/mine` are reachable only by URL, plus the per-row Print button
 on the Awards tab. No menu entry exists yet.

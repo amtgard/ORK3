@@ -74,6 +74,93 @@ class Model_Scrollery extends Model
         return $printable;
     }
 
+    /**
+     * Name, kingdom and heraldry for the park or kingdom a scroll is being issued by.
+     *
+     * @return array{Type:string,Id:int,Name:string,Title:string,KingdomId:int,Heraldry:string,UseThe:bool,UseOf:bool}
+     */
+    public function scope_context(string $scopeType, int $scopeId): array
+    {
+        if ($scopeType === 'kingdom') {
+            $k    = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $scopeId]);
+            $info = $k['KingdomInfo'] ?? [];
+
+            return [
+                'Type'      => 'kingdom',
+                'Id'        => $scopeId,
+                // Kingdom names already carry their own article and rank word —
+                // "The Kingdom of the Wetlands" — so the certificate adds neither.
+                'Name'      => (string) ($info['KingdomName'] ?? ''),
+                'Title'     => '',
+                'UseThe'    => false,
+                'UseOf'     => false,
+                'KingdomId' => $scopeId,
+                'Heraldry'  => (int) ($info['HasHeraldry'] ?? 0) === 1
+                    ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Kingdom', 'Id' => $scopeId])['Url']
+                    : '',
+            ];
+        }
+
+        $park = $this->park_details($scopeId);
+
+        return [
+            'Type'      => 'park',
+            'Id'        => $scopeId,
+            'Name'      => (string) ($park['ParkName'] ?? ''),
+            'Title'     => trim((string) ($park['ParkTitle'] ?? '')) ?: 'Barony',
+            'UseThe'    => true,
+            'UseOf'     => true,
+            'KingdomId' => (int) ($park['KingdomId'] ?? 0),
+            'Heraldry'  => (int) ($park['HasHeraldry'] ?? 0) === 1
+                ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Park', 'Id' => $scopeId])['Url']
+                : '',
+        ];
+    }
+
+    /**
+     * The kingdom's own award rows that have certificate art.
+     *
+     * Goes through the kingdomaward list the ORK already uses, so a kingdom holding
+     * more than one name for a base award offers both by name and nothing has to
+     * special-case the archery spellings.
+     *
+     * @return array<int, array{KingdomAwardId:int, AwardId:int, Name:string, Order:string, MaxRank:int, Variants:array}>
+     */
+    public function printable_award_choices(int $kingdomId): array
+    {
+        if ($kingdomId <= 0) {
+            return [];
+        }
+
+        $response = Ork3::$Lib->kingdom->GetAwardList([
+            'IsLadder'  => 'Both',
+            'IsTitle'   => 'Both',
+            'KingdomId' => $kingdomId,
+        ]);
+
+        $choices = [];
+        foreach ($response['Awards'] ?? [] as $row) {
+            $order = Scroll::OrderForAwardId((int) ($row['AwardId'] ?? $row['award_id'] ?? 0));
+            if ($order === null) {
+                continue;
+            }
+
+            $choices[] = [
+                'KingdomAwardId' => (int) ($row['KingdomAwardId'] ?? $row['kingdomaward_id'] ?? 0),
+                'AwardId'        => (int) ($row['AwardId'] ?? $row['award_id'] ?? 0),
+                'Name'           => (string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? ''),
+                'Order'          => (string) $order['id'],
+                'MinRank'        => (int) $order['ranks']['from'],
+                'MaxRank'        => (int) $order['ranks']['to'],
+                'Variants'       => array_values($order['variants']),
+            ];
+        }
+
+        usort($choices, static fn ($a, $b) => strcasecmp($a['Name'], $b['Name']));
+
+        return $choices;
+    }
+
     /** Own award, or an officer with edit rights over the granting park/kingdom. */
     private function viewer_may_print(array $row, int $viewerId): bool
     {
@@ -178,6 +265,18 @@ class Model_Scrollery extends Model
         }
 
         return is_array($cache[$parkId]) ? $cache[$parkId] : [];
+    }
+
+    /** The recipient's possessive pronoun, by player id. Never blank. */
+    public function possessive_pronoun_for_player(int $mundaneId): string
+    {
+        if ($mundaneId <= 0) {
+            return '';
+        }
+
+        $player = Ork3::$Lib->player->GetPlayer(['MundaneId' => $mundaneId]);
+
+        return $this->possessive_pronoun($player['Player'] ?? []);
     }
 
     /**

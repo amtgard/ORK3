@@ -132,6 +132,11 @@ class Kingdom extends Ork3
 
     public function GetAwardList($request)
     {
+        // Both are interpolated into $sql below whatever the request says, so both must
+        // exist. $title_clause was never assigned at all, and $ladder_clause only in
+        // some branches — every call warned on at least one of them.
+        $ladder_clause = '';
+        $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
             $ladder_clause = " and ka.is_ladder = 1";
         } elseif ($request['IsLadder'] == 'NonLadder') {

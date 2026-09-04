@@ -74,6 +74,7 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_ScrolleryAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
