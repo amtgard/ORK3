@@ -20,7 +20,7 @@ Every open item was put to the maintainer with options and a recommendation. Out
 | 3.11 | Grant + print | **BUILD** — offer Print from the award-grant success path, so it prints the real row |
 | 3.12 | Bulk event picker | **BUILD** — reuse the ORK's existing event autocomplete |
 | 1.1 | Archery | **BUILD** — name-keyed mapping from `ork_kingdomaward.name` to the hunter order |
-| 1.2 | hunter never eyeballed | **BUILD** — render against real data and check against lion/hydra (Arcanyst cannot show it) |
+| 1.2 | hunter never eyeballed | **DONE 2026-09-04** — rendered against 4 real archery awards; layer shape identical to lion and hydra at ranks 1 and 10 |
 | 2.3 | Generic certificate | **BUILD** — one generic design from the existing shared layers, covering the ~136 uncovered awards |
 | 3.6 | Pronouns | **BUILD** — interpret from the profile with sensible defaults, plus an override picker in the create tool |
 | 3.9 | WnAjax malformed JSON | **BUILD** — add the missing `exit;` calls (not our bug, but 3 lines) |
@@ -71,6 +71,21 @@ asset-tested; it just cannot be reached.
 
 ### 1.2 hunter is the one order never visually compared
 
+> **DONE 2026-09-04.** Verified after archery name resolution landed (commit `58515db`),
+> which made a hunter certificate reachable for the first time. Four real archery awards
+> rendered — `awards_id` 416615 (rank 1, "Order of the Hunter"), 398837 (rank 3, "Order of
+> the Marksman"), 350492 (rank 6), 416973 (rank 10). Results:
+> - **Layer shape is identical to lion and hydra** at both rank 1 and rank 10 — 27 layers
+>   each, same tags, same classes, same document order, differing only in the
+>   order-specific `border.png` / `symbol_N.png` filenames. That is the check §1.2 asked
+>   for, and it passes exactly.
+> - All eight referenced assets return HTTP 200; nothing 404s at render time.
+> - Both kingdomaward spellings print hunter art under the kingdom's **own** title —
+>   "Order of the Hunter" and "Order of the Marksman" — which was the point of making the
+>   word after "Order of the" data.
+> - Rank motifs progress correctly (I / III / X) and the side archers are drawn in full,
+>   not clipped at the page edge.
+>
 > **DECIDED 2026-09-04 — BUILD.** Render hunter across its rank range against a real
 > archery award and check it against lion and hydra, which share its exact layer shape
 > and both matched. Arcanyst genuinely cannot display it, so no side-by-side is possible.
@@ -294,6 +309,24 @@ fail-closed, but it leaves three groups nobody can list through bulk:
   391 awards. Since the date filter's finest grain is a whole day, rows 201-391 there
   cannot be reached by narrowing. The banner now says so rather than promising a remedy
   that does not work, but paging or a park filter would actually fix it.
+
+### 3.12c Unattributed awards are printable by nobody but the recipient
+
+Found 2026-09-04 while verifying §1.2. `Model_Scrollery::viewer_may_print()` grants access
+on three conditions: the viewer **is** the recipient, or holds AUTH_EDIT on the award's
+`ParkId`, or on its `KingdomId`. An award row carrying **both** `at_park_id = 0` and
+`at_kingdom_id = 0` therefore satisfies none of them for anyone but its owner — including
+a global ORK admin, since there is no AUTH_ADMIN branch.
+
+This is the single-award analogue of §3.12b's second bullet, and it is not theoretical:
+`awards_id` 13, 119, 120 and 3575 (early Lion and Hydra grants) are all unreachable this
+way, and `Scrollery/render` redirects to the module index with an empty body rather than
+explaining why.
+
+Fail-closed is the right default and this is **not** a bug to rush. Two things would
+improve it without weakening the gate: an AUTH_ADMIN branch in `viewer_may_print()`, and
+a denial that says "this award is not attributed to a park or kingdom, so it cannot be
+printed" instead of a silent redirect.
 
 ### 3.13 Scrollery is not linked from any navigation — TOP OF THE LIST
 
