@@ -298,7 +298,10 @@
     });
 
     $('sc-print').addEventListener('click', function () {
+        // A kingdom whose awards all lack certificate art renders an empty <select>,
+        // so there may be no option to read. Guard rather than throw silently.
         var opt = selected();
+        if (!opt) { errEl.textContent = 'No printable award is selected.'; return; }
         var qs = new URLSearchParams();
         qs.set('scopeType',   cfg.scopeType);
         qs.set('scopeId',     cfg.scopeId);

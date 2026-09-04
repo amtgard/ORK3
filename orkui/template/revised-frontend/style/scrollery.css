@@ -64,6 +64,29 @@
 }
 
 /* --------------------------------------------------------------------------
+   1b. Chrome headings.
+
+   orkui.css gives every h1-h6 a grey pill box (background, border, padding,
+   radius, text-shadow), and repeats it under html[data-theme="dark"] with MORE
+   type selectors — so a plain class reset wins in light mode and loses in dark.
+   Both are reset here, at matching specificity.
+   -------------------------------------------------------------------------- */
+
+.adm-page-header h1,
+.sc-door h2,
+html[data-theme="dark"] .adm-page-header h1,
+html[data-theme="dark"] .sc-door h2 {
+    background: none;
+    background-color: transparent;
+    border: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    color: inherit;
+}
+
+/* --------------------------------------------------------------------------
    2. Layer stacking — from award-render.html
 
    Document order is z-order: every direct child of .award-template is an
@@ -120,8 +143,11 @@
    -------------------------------------------------------------------------- */
 
 .award-template {
-    font-size: var(--award-font-size);
-    opacity: var(--award-opacity);
+    /* Arcanyst's host app supplied these two; nothing in the ORK does, so both
+       carry a default here rather than resolving to invalid-at-computed-value
+       and silently falling back to the 16px document root. */
+    font-size: var(--award-font-size, 75pt);
+    opacity: var(--award-opacity, 1);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
 }

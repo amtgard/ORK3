@@ -185,10 +185,24 @@ from the Awards-tab button once the row exists.
 officer has to know the id (or come from a link that carries it). The date-range path
 needs no such knowledge and is the usable one today.
 
-### 3.13 Scrollery is not linked from any navigation
+### 3.13 Scrollery is not linked from any navigation — TOP OF THE LIST
 
-`Scrollery` and `Scrollery/mine` are reachable only by URL, plus the per-row Print button
-on the Awards tab. No menu entry exists yet.
+**This is the one gap that makes everything else moot: nothing in the ORK links to the
+module.** `Scrollery`, `Scrollery/mine`, `Scrollery/create/...` and `Scrollery/bulk/...`
+are reachable only by typing a URL. The single in-app entry point is the per-row Print
+button on a player's Awards tab, which is officer-only (see 3.1), so a player has no way
+to reach their own scrolls at all.
+
+What it needs:
+
+- A player-facing entry to `Scrollery/mine` — the Awards tab header or the player profile
+  is the natural home, since that is where someone is when they think "I want that
+  printed".
+- An officer-facing entry to `Scrollery/create/<scope>` and `Scrollery/bulk/<scope>` —
+  the Admin panel for a park or kingdom, which already has the scope in hand.
+- The nav is built in `system/lib/system/class.Controller.php` (`$this->data['menu']`,
+  which already computes park/kingdom admin entries against AUTH_EDIT), so the officer
+  gating is a check that already exists rather than a new one.
 
 ---
 

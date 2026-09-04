@@ -22,9 +22,17 @@ final class ScrollPartialsTest extends TestCase
 
     private function render(string $name, array $vars): string
     {
+        // finally: a partial that throws must not leave the buffer open, or every
+        // later assertion in the file writes into a dangling buffer and the real
+        // exception is never seen.
         ob_start();
-        scroll_partial($name, $vars);
-        return (string) ob_get_clean();
+        try {
+            scroll_partial($name, $vars);
+        } finally {
+            $html = (string) ob_get_clean();
+        }
+
+        return $html;
     }
 
     public function testPartialsDoNotLeakVariablesBetweenCalls(): void

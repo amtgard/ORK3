@@ -32,7 +32,7 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
                 <img id="TopTextFlourish" src="<?= $assetsRoot . $res['flourish_top'] ?>" class="Flourish" alt="">
                 <img id="BottomTextFlourish" src="<?= $assetsRoot . $res['flourish_bottom'] ?>" class="Flourish" alt="">
             </span>
-            <span id="IssuerTitle" data-scroll-text="issuerTitle">and<?= $s['useThe'] ? ' the' : '' ?> <?= scroll_e($s['issuerTitle']) ?><?= $s['useOf'] ? ' of' : '' ?>
+            <span id="IssuerTitle" data-scroll-text="issuerTitle">and<?= $s['useThe'] ? ' the' : '' ?> <?= scroll_e($s['issuerTitle']) ?><?= $s['useOf'] ? ' of' : '' ?></span>
             <br/>
         </p>
         <p>

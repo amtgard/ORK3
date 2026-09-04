@@ -134,7 +134,7 @@ $today   = date('Y-m-d');
                         <input type="range" data-heraldry-control="<?= $key ?>"
                                min="<?= $min ?>" max="<?= $max ?>" value="<?= $default ?>"
                                data-default="<?= $default ?>">
-                        <button type="button" class="sc-reset" data-reset="<?= $key ?>" title="Reset">
+                        <button type="button" class="sc-reset" data-reset="<?= $key ?>" data-tip="Reset">
                             <i class="fa-solid fa-rotate-left"></i>
                         </button>
                     </div>
