@@ -49,27 +49,40 @@ class Controller_ScrolleryAjax extends Controller
         // (rather than trusting a client-supplied award id + title with no
         // OfficerRole behind it) is what still keeps an officer position from
         // previewing a certificate.
-        $order = $this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title);
-        if ($order === null) {
+        //
+        // The returned CHOICE, not just a pass/fail, is what BuildScroll() gets its
+        // AwardId/KingdomAwardName from below — never the client's own strings. That
+        // fixes a cosmetic drift (matching is case/whitespace-insensitive, so
+        // "  sheriff  " would otherwise print with the submitted casing rather than
+        // the catalogue's) and guarantees BuildScroll() sees a real OfficerRole
+        // rather than an absent key, which — since Scroll::IsOfficerPosition() now
+        // fails closed on a missing key — would otherwise throw.
+        $choice = $this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title);
+        if ($choice === null) {
             echo json_encode(['Status' => ['Status' => 1, 'Error' => 'That award has no certificate artwork']]);
             exit;
         }
 
         $scroll = Scroll::BuildScroll(
             [
-                'AwardId'          => $awardId,
+                'AwardId'          => $choice['AwardId'],
+                'OfficerRole'      => 'none',
                 'Rank'             => (int) ($_POST['rank'] ?? 0),
                 'Date'             => (string) ($_POST['date'] ?? ''),
                 'Note'             => (string) ($_POST['reason'] ?? ''),
                 'GivenBy'          => (string) ($_POST['givenBy'] ?? ''),
-                'KingdomAwardName' => $title,
+                'KingdomAwardName' => $choice['Name'],
                 'ParkName'         => $scopeType === 'park' ? (string) ($_POST['issuerName'] ?? '') : '',
                 'KingdomName'      => $scopeType === 'kingdom' ? (string) ($_POST['issuerName'] ?? '') : '',
             ],
             [
                 'player'      => (string) ($_POST['player'] ?? ''),
                 'pronoun'     => $this->requested_pronoun(),
-                'heraldry'    => $this->heraldry_for($scopeType, $scopeId),
+                // Reads the $scope already resolved above rather than calling
+                // heraldry_for(), which used to re-run scope_context() — a second
+                // GetKingdomShortInfo/park_details plus GetHeraldryUrl round trip
+                // per request — exactly as compose() already reads $scope['Heraldry'].
+                'heraldry'    => (string) ($scope['Heraldry'] ?? ''),
                 'issuerTitle' => (string) ($_POST['issuerTitle'] ?? ''),
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',
                 'useOf'       => ($_POST['useOf'] ?? '') === '1',
@@ -103,13 +116,5 @@ class Controller_ScrolleryAjax extends Controller
         $typed = trim((string) ($_POST['pronoun'] ?? ''));
 
         return $typed !== '' ? $typed : 'their';
-    }
-
-    private function heraldry_for(string $scopeType, int $scopeId): string
-    {
-        $this->load_model('Scrollery');
-        $scope = $this->Scrollery->scope_context($scopeType, $scopeId);
-
-        return (string) ($scope['Heraldry'] ?? '');
     }
 }

@@ -10,6 +10,7 @@ final class ScrollBuildTest extends TestCase
     {
         return array_merge([
             'AwardId'          => 33,
+            'OfficerRole'      => 'none',
             'Rank'             => 3,
             'Date'             => '2024-05-13',
             'Note'             => 'valour in the field',

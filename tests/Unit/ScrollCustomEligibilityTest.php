@@ -110,4 +110,29 @@ final class ScrollCustomEligibilityTest extends TestCase
         $this->assertSame(0, $custom['ranks']['from']);
         $this->assertSame(10, $custom['ranks']['to']);
     }
+
+    /**
+     * A single `?? 'none'` used to serve both an ABSENT OfficerRole key and a
+     * PRESENT-but-null one identically. They need opposite treatment: an absent key
+     * means whatever built this row forgot to say what it is (fail closed — treat
+     * as an officer position, print nothing); a present null is the real archery
+     * shape (the LEFT JOIN to officer_role misses for its dangling award_id) and
+     * must stay open, or archery stops printing.
+     */
+    public function testAnAbsentOfficerRoleKeyFailsClosedButAPresentNullStaysOpen(): void
+    {
+        $noKeyAtAll = ['AwardId' => 33, 'KingdomAwardName' => 'Order of the Griffon'];
+        $this->assertFalse(Scroll::IsCustomEligible($noKeyAtAll));
+        $this->assertNull(Scroll::OrderForAwardRow($noKeyAtAll));
+        $this->assertFalse(Scroll::HasArt($noKeyAtAll));
+
+        $presentButNull = $this->row(['OfficerRole' => null, 'KingdomAwardName' => 'Order of the Hunter']);
+        $this->assertTrue(Scroll::IsCustomEligible($presentButNull));
+        $this->assertSame('hunter', Scroll::OrderForAwardRow($presentButNull)['id']);
+        $this->assertTrue(Scroll::HasArt($presentButNull));
+
+        $presentButEmptyString = $this->row(['OfficerRole' => '', 'AwardId' => 1, 'KingdomAwardName' => 'Master Rose']);
+        $this->assertTrue(Scroll::IsCustomEligible($presentButEmptyString));
+        $this->assertSame('custom', Scroll::OrderForAwardRow($presentButEmptyString)['id']);
+    }
 }

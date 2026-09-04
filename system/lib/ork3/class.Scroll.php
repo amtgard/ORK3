@@ -228,6 +228,13 @@ class Scroll extends Ork3
         return self::$orders = $orders;
     }
 
+    /**
+     * No caller outside OrderForAwardRow() should need this directly: a bare
+     * award id can never distinguish a genuine award from a job title sharing
+     * its id space, which is exactly what OrderForAwardRow()'s OfficerRole
+     * check is for. Left public only because ScrollOrdersTest and
+     * ScrolleryPermissionTest assert on it directly.
+     */
     public static function OrderForAwardId(int $awardId): ?array
     {
         // 0 is a sentinel, never a real award id (see the `custom` order's own
@@ -316,13 +323,27 @@ class Scroll extends Ork3
      * OrderForAwardRow() both defer to it, rather than each keeping their own copy of
      * the `?? 'none'` expression, which is how the rule would drift between them.
      *
-     * An absent/blank role tolerates the archery case: a real archery grant's
-     * award_id dangles (0, 94, 131 under a base id nothing else uses), so the LEFT
-     * JOIN to officer_role misses and yields NULL/''. NULL there means "unknown
-     * award", not "this is an officer position" — and must still be printable.
+     * Two holes here need OPPOSITE treatment, and a single `?? 'none'` used to serve
+     * both identically — that was itself the bug:
+     *
+     * - Key ABSENT — the caller never told us what this is — FAILS CLOSED (treated
+     *   as an officer position). A caller with a real award row always has an
+     *   OfficerRole key, even when its value is null; an absent key means something
+     *   built this row by hand and forgot the field, which is a caller bug, not a
+     *   printable award.
+     * - Key present but `null` / `''` — stays OPEN (not an officer). A real archery
+     *   grant's award_id dangles (0, 94, 131 under a base id nothing else uses), so
+     *   the LEFT JOIN to officer_role misses and yields exactly this NULL. NULL
+     *   there means "unknown award", not "this is an officer position", and archery
+     *   must still print.
+     * - Key present, non-empty, not `'none'` — an officer position. Unchanged.
      */
     private static function IsOfficerPosition(array $awardRow): bool
     {
+        if (!array_key_exists('OfficerRole', $awardRow)) {
+            return true;
+        }
+
         $role = strtolower(trim((string) ($awardRow['OfficerRole'] ?? 'none')));
 
         return $role !== '' && $role !== 'none';

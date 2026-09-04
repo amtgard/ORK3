@@ -259,7 +259,16 @@ class Controller_Scrollery extends Controller
         // gate. Re-resolving against the kingdom's own catalog (rather than trusting
         // a client-supplied award id + title with no OfficerRole behind it) is what
         // still keeps an officer position from composing a certificate.
-        if ($this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title) === null) {
+        //
+        // The returned CHOICE, not just a pass/fail, is what BuildScroll() gets its
+        // AwardId/KingdomAwardName from below — never the client's own strings. That
+        // fixes a cosmetic drift (matching is case/whitespace-insensitive, so
+        // "  sheriff  " would otherwise print with the submitted casing rather than
+        // the catalogue's) and guarantees BuildScroll() sees a real OfficerRole
+        // rather than an absent key, which — since Scroll::IsOfficerPosition() now
+        // fails closed on a missing key — would otherwise throw.
+        $choice = $this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title);
+        if ($choice === null) {
             header('Location: ' . UIR . 'Scrollery/create/' . $scopeType . '/' . $scopeId);
             exit;
         }
@@ -269,12 +278,13 @@ class Controller_Scrollery extends Controller
 
         $scroll = Scroll::BuildScroll(
             [
-                'AwardId'          => $awardId,
+                'AwardId'          => $choice['AwardId'],
+                'OfficerRole'      => 'none',
                 'Rank'             => (int) ($_GET['rank'] ?? 0),
                 'Date'             => (string) ($_GET['date'] ?? ''),
                 'Note'             => (string) ($_GET['reason'] ?? ''),
                 'GivenBy'          => (string) ($_GET['givenBy'] ?? ''),
-                'KingdomAwardName' => $title,
+                'KingdomAwardName' => $choice['Name'],
                 'ParkName'         => $scopeType === 'park' ? (string) ($_GET['issuerName'] ?? '') : '',
                 'KingdomName'      => $scopeType === 'kingdom' ? (string) ($_GET['issuerName'] ?? '') : '',
             ],

@@ -57,6 +57,7 @@ class Model_Scrollery extends Model
         $printable = [];
 
         foreach ($response['Awards'] ?? [] as $row) {
+            $row = $this->correct_dangling_officer_role($row);
             if (!Scroll::HasArt($row)) {
                 continue;
             }
@@ -138,8 +139,52 @@ class Model_Scrollery extends Model
             'KingdomId' => $kingdomId,
         ]);
 
+        return self::choicesForAwardListForTest($response['Awards'] ?? []);
+    }
+
+    /**
+     * The per-row body of printable_award_choices(), split out DB-free so a
+     * hand-built GetAwardList()-shaped fixture can exercise it directly (see
+     * ScrolleryChoicesForAwardListTest) — the same convention as bulkSqlForTest()
+     * and matchingChoiceForTest() below.
+     *
+     * GetAwardList()'s LEFT JOIN from ork_kingdomaward to ork_award misses whenever
+     * a kingdomaward's award_id points at nothing (archery's real grants live here,
+     * under base award_id 0/94/131 — no ork_award row exists for those ids at all),
+     * leaving BOTH AwardId and OfficerRole NULL on the row. Scroll::OrderForAwardRow()
+     * correctly stays open for that shape, or archery could never print — but that
+     * also means it cannot tell an actual archery row apart from an unrelated
+     * officer position whose base award has simply gone missing (kingdom 28 holds
+     * two "Sheriff" kingdomaward rows: kingdomaward_id 4935 resolves to a real
+     * award_id 70 with officer_role='park' and is correctly excluded; kingdomaward_id
+     * 5028 points at award_id 163, for which no ork_award row exists, so it dangles
+     * exactly like archery and — before this fix — was offered as a printable
+     * custom scroll).
+     *
+     * The two rows sharing the SAME NAME is what tells them apart: any dangling row
+     * whose name exactly matches a resolved sibling's is that same position, wearing
+     * its cover. Checked against kingdom 28's real data, this rule catches all 23
+     * officer positions there (including bare "Sheriff", which
+     * Kingdom::awardNameLooksLikeOfficer()'s prefix-anchored regex misses), keeps
+     * Warlord and Defender (whose resolved siblings carry officer_role='none' and
+     * are real awards), and touches no archery row anywhere — no archery name has a
+     * resolved officer sibling.
+     *
+     * @param array<int, array<string, mixed>> $awards GetAwardList()'s response rows.
+     * @return array<int, array{KingdomAwardId:int, AwardId:int, Name:string, Order:string, MaxRank:int, Variants:array}>
+     */
+    public static function choicesForAwardListForTest(array $awards): array
+    {
+        $officerNames = self::officerNamesFromForTest($awards);
+
         $choices = [];
-        foreach ($response['Awards'] ?? [] as $row) {
+        foreach ($awards as $row) {
+            $name     = strtolower(trim((string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '')));
+            $dangling = ($row['AwardId'] ?? $row['award_id'] ?? null) === null;
+            if ($dangling && $name !== '' && isset($officerNames[$name])) {
+                continue;
+            }
+
             // OrderForAwardRow(), not OrderForAwardId(): GetAwardList() already returns
             // OfficerRole and KingdomAwardName on every row, so this list can apply the
             // same officer-exclusion / archery-by-name / custom-eligibility precedence
@@ -168,18 +213,50 @@ class Model_Scrollery extends Model
     }
 
     /**
-     * Which order prints a hand-composed scroll for one award id + title pair, or
-     * null when this kingdom may not compose one for it.
+     * Award names, lower-cased, that a GetAwardList()-shaped row set says are
+     * officer positions — i.e. carry a resolved (non-null, non-'none') OfficerRole.
+     * A row with no OfficerRole key at all is skipped rather than treated as
+     * evidence either way: this is describing what the catalog actually resolved,
+     * not guessing about a malformed row.
+     *
+     * @param array<int, array<string, mixed>> $awards
+     * @return array<string, true>
+     */
+    public static function officerNamesFromForTest(array $awards): array
+    {
+        $names = [];
+        foreach ($awards as $row) {
+            if (!array_key_exists('OfficerRole', $row)) {
+                continue;
+            }
+
+            $role = strtolower(trim((string) ($row['OfficerRole'] ?? '')));
+            if ($role === '' || $role === 'none') {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '')));
+            if ($name !== '') {
+                $names[$name] = true;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Which catalog choice prints a hand-composed scroll for one award id + title
+     * pair, or null when this kingdom may not compose one for it.
      *
      * compose() and the Ajax preview build a scroll from client-supplied fields —
      * an award id and a hand-typed title, nothing that carries OfficerRole. Passing
      * that bare pair straight to Scroll::OrderForAwardRow() would default the
      * missing OfficerRole to "none" and wrongly treat every officer position as
      * custom-eligible. Recomputing against this kingdom's own catalog — the same
-     * list the create dropdown already filtered through OrderForAwardRow() — is
-     * what keeps the officer-position exclusion in force for a hand-edited request,
-     * exactly as scroll_for_awards_id() re-resolves a hand-edited id list rather
-     * than trusting it.
+     * list the create dropdown already filtered through choicesForAwardListForTest()
+     * — is what keeps the officer-position exclusion in force for a hand-edited
+     * request, exactly as scroll_for_awards_id() re-resolves a hand-edited id list
+     * rather than trusting it.
      *
      * The title has to be part of the match, not just the id: archery's real grants
      * carry no base award of their own, so several distinct catalog entries — some
@@ -187,10 +264,20 @@ class Model_Scrollery extends Model
      * only by name. Matching on id alone would let a request name one of them and
      * silently print whichever same-id entry the search happened to reach first.
      *
+     * Returns the matched CHOICE, not the resolved order: the caller builds its
+     * BuildScroll() row from the choice's own canonical AwardId / Name — never from
+     * the client's strings — which both fixes a cosmetic drift (matching is
+     * case/whitespace-insensitive, so a hand-typed "  SHERIFF  " would otherwise
+     * print with the submitted casing rather than the catalogue's) and guarantees
+     * that row always carries a real OfficerRole ('none', by construction of this
+     * list) rather than an absent key.
+     *
      * Split from the DB-touching lookup above so the search itself — the part with
      * anything to get wrong — is exercised in ScrolleryAwardOrderForComposeTest
      * against a hand-built choice list, the same way bulkSqlForTest() keeps the
      * bulk query testable without a database.
+     *
+     * @return array{KingdomAwardId:int, AwardId:int, Name:string, Order:string, MinRank:int, MaxRank:int, Variants:array}|null
      */
     public function award_order_for_compose(int $kingdomId, int $awardId, string $title): ?array
     {
@@ -198,18 +285,18 @@ class Model_Scrollery extends Model
             return null;
         }
 
-        return self::orderForChoiceForTest($this->printable_award_choices($kingdomId), $awardId, $title);
+        return self::matchingChoiceForTest($this->printable_award_choices($kingdomId), $awardId, $title);
     }
 
     /**
      * @param array<int, array{AwardId:int, Name:string, Order:string}> $choices
      */
-    public static function orderForChoiceForTest(array $choices, int $awardId, string $title): ?array
+    public static function matchingChoiceForTest(array $choices, int $awardId, string $title): ?array
     {
         $title = trim($title);
         foreach ($choices as $choice) {
             if ($choice['AwardId'] === $awardId && strcasecmp(trim($choice['Name']), $title) === 0) {
-                return Scroll::Orders()[$choice['Order']] ?? null;
+                return $choice;
             }
         }
 
@@ -334,6 +421,10 @@ class Model_Scrollery extends Model
             $rs = array_slice($rs, 0, Scroll::MAX_PRINT_RUN);
         }
 
+        // A park's scope is the park's own kingdom, not at_kingdom_id (blank for a
+        // park grant) — see kingdom_for_grant_row()'s doc for the same split.
+        $kingdomId = $scopeType === 'kingdom' ? $scopeId : (int) ($this->park_details($scopeId)['KingdomId'] ?? 0);
+
         foreach ($rs as $row) {
             // Shaped to the keys Scroll::HasArt() / OrderForAwardRow() and
             // ResolveTitle() expect. OfficerRole matters here: without it every
@@ -363,6 +454,21 @@ class Model_Scrollery extends Model
                 'ParkName'         => (string) $row['park_name'],
                 'KingdomName'      => (string) $row['kingdom_name'],
             ];
+
+            // Same dangling-award_id shape choicesForAwardListForTest() closes for
+            // the create dropdown: this query's LEFT JOIN to `award` misses for
+            // archery's real grants (base award_id 0/94/131, no matching ork_award
+            // row) — that must stay open — but also for an officer position whose
+            // base award has simply gone missing, which must not. Told apart by
+            // cross-referencing the granting kingdom's own catalog for a resolved
+            // sibling of the same name.
+            if ($row['award_id'] === null) {
+                $name = strtolower(trim($shaped['KingdomAwardName']));
+                if ($name !== '' && isset($this->officer_names_for_kingdom($kingdomId)[$name])) {
+                    $shaped['OfficerRole'] = 'other-officer';
+                }
+            }
+
             $shaped['Title']      = Scroll::ResolveTitle($shaped);
             $shaped['PrettyDate'] = Scroll::FormatDate($shaped['Date']);
 
@@ -492,11 +598,78 @@ class Model_Scrollery extends Model
 
         foreach (($response['Awards'] ?? []) as $row) {
             if ((int) $row['AwardsId'] === $awardsId) {
-                return $row;
+                return $this->correct_dangling_officer_role($row);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Corrects one Player::AwardsForPlayer() row's OfficerRole the same way
+     * choicesForAwardListForTest() corrects the create dropdown — see that
+     * method's docblock for the dangling-award_id shape this is closing.
+     *
+     * A resolved AwardId is left untouched: Player::AwardsForPlayer()'s own
+     * COALESCE(alias.officer_role, a.officer_role) already gave it a real answer.
+     * Only a dangling row (AwardId null — no ork_award match for the kingdomaward's
+     * award_id, alias or not) gets cross-referenced by name against the granting
+     * body's own catalog, so an officer position whose base award has gone missing
+     * is still excluded rather than defaulting open like a genuine archery grant.
+     */
+    private function correct_dangling_officer_role(array $row): array
+    {
+        if (($row['AwardId'] ?? null) !== null) {
+            return $row;
+        }
+
+        $name = strtolower(trim((string) ($row['KingdomAwardName'] ?? '')));
+        if ($name !== '' && isset($this->officer_names_for_kingdom($this->kingdom_for_grant_row($row))[$name])) {
+            $row['OfficerRole'] = 'other-officer';
+        }
+
+        return $row;
+    }
+
+    /**
+     * The catalog a granted award's kingdomaward belongs to. A park-granted award
+     * (ParkId set) uses its park's own kingdom, not at_kingdom_id — that column is
+     * blank for a park grant, per AwardsForPlayer()'s ParkId/KingdomId split.
+     */
+    private function kingdom_for_grant_row(array $row): int
+    {
+        $parkId = (int) ($row['ParkId'] ?? 0);
+        if ($parkId > 0) {
+            return (int) ($this->park_details($parkId)['KingdomId'] ?? 0);
+        }
+
+        return (int) ($row['KingdomId'] ?? 0);
+    }
+
+    /**
+     * Officer-position names known from one kingdom's own catalog. Cached per
+     * request: a player's award history, or a bulk run, touches at most a handful
+     * of distinct kingdoms.
+     *
+     * @return array<string, true>
+     */
+    private function officer_names_for_kingdom(int $kingdomId): array
+    {
+        static $cache = [];
+        if ($kingdomId <= 0) {
+            return [];
+        }
+
+        if (!array_key_exists($kingdomId, $cache)) {
+            $response          = Ork3::$Lib->kingdom->GetAwardList([
+                'IsLadder'  => 'Both',
+                'IsTitle'   => 'Both',
+                'KingdomId' => $kingdomId,
+            ]);
+            $cache[$kingdomId] = self::officerNamesFromForTest($response['Awards'] ?? []);
+        }
+
+        return $cache[$kingdomId];
     }
 
     /**

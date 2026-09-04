@@ -86,7 +86,7 @@ final class ScrollFlavourTest extends TestCase
     public function testBuildScrollExpandsTheFlavourItHandsToThePartial(): void
     {
         $scroll = Scroll::BuildScroll(
-            ['AwardId' => 30, 'Rank' => 10, 'KingdomAwardName' => 'Order of the Zodiac', 'ParkName' => 'Crimson Moon'],
+            ['AwardId' => 30, 'OfficerRole' => 'none', 'Rank' => 10, 'KingdomAwardName' => 'Order of the Zodiac', 'ParkName' => 'Crimson Moon'],
             ['player' => 'Testerly', 'issuerTitle' => 'Outpost']
         );
 

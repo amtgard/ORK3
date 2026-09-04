@@ -11,6 +11,7 @@ final class ScrollResolutionTest extends TestCase
     {
         return array_merge([
             'AwardId'          => 33,
+            'OfficerRole'      => 'none',
             'Rank'             => 5,
             'Name'             => 'Order of the Griffin',
             'KingdomAwardName' => 'Order of the Griffin',

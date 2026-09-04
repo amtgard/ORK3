@@ -8,12 +8,19 @@ use PHPUnit\Framework\TestCase;
  * compose() and the Ajax preview build a scroll from client-supplied fields — an
  * award id and a hand-typed title, nothing that carries OfficerRole — so they
  * cannot resolve eligibility through Scroll::OrderForAwardRow() directly (a
- * missing OfficerRole there defaults to "none" and would wrongly treat every
- * officer position as custom-eligible). Model_Scrollery::award_order_for_compose()
- * instead re-searches the kingdom's own filtered choice list, which is what keeps
- * the officer-position exclusion in force for a hand-edited request.
+ * missing OfficerRole there now fails CLOSED, but even before that fix, a missing
+ * key defaulting open would have wrongly treated every officer position as
+ * custom-eligible). Model_Scrollery::award_order_for_compose() instead re-searches
+ * the kingdom's own filtered choice list, which is what keeps the officer-position
+ * exclusion in force for a hand-edited request.
  *
- * orderForChoiceForTest() is the pure search behind that method, split out the
+ * It returns the matched CHOICE, not just the resolved order, so the caller can
+ * build its BuildScroll() row from the choice's own canonical AwardId / Name —
+ * never the client's strings — fixing a cosmetic drift (matching is
+ * case/whitespace-insensitive) and guaranteeing that row always carries a real
+ * OfficerRole.
+ *
+ * matchingChoiceForTest() is the pure search behind that method, split out the
  * same way bulkSqlForTest() keeps the bulk query testable without a database.
  */
 final class ScrolleryAwardOrderForComposeTest extends TestCase
@@ -35,18 +42,20 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
     {
         $choices = [$this->choice(['AwardId' => 33, 'Name' => 'Order of the Griffon', 'Order' => 'griffon'])];
 
-        $order = Model_Scrollery::orderForChoiceForTest($choices, 33, 'Order of the Griffon');
+        $choice = Model_Scrollery::matchingChoiceForTest($choices, 33, 'Order of the Griffon');
 
-        $this->assertSame('griffon', $order['id']);
+        $this->assertSame('griffon', $choice['Order']);
+        $this->assertSame(33, $choice['AwardId']);
+        $this->assertSame('Order of the Griffon', $choice['Name']);
     }
 
     public function testACustomEligibleAwardMatches(): void
     {
         $choices = [$this->choice(['AwardId' => 1, 'Name' => 'Master Rose', 'Order' => 'custom'])];
 
-        $order = Model_Scrollery::orderForChoiceForTest($choices, 1, 'Master Rose');
+        $choice = Model_Scrollery::matchingChoiceForTest($choices, 1, 'Master Rose');
 
-        $this->assertSame('custom', $order['id']);
+        $this->assertSame('custom', $choice['Order']);
     }
 
     /**
@@ -62,17 +71,25 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
             $this->choice(['AwardId' => 0, 'Name' => 'Some Other Title', 'Order' => 'custom']),
         ];
 
-        $this->assertSame('hunter', Model_Scrollery::orderForChoiceForTest($choices, 0, 'Order of the Hunter')['id']);
-        $this->assertSame('custom', Model_Scrollery::orderForChoiceForTest($choices, 0, 'Some Other Title')['id']);
+        $this->assertSame(
+            'hunter',
+            Model_Scrollery::matchingChoiceForTest($choices, 0, 'Order of the Hunter')['Order']
+        );
+        $this->assertSame(
+            'custom',
+            Model_Scrollery::matchingChoiceForTest($choices, 0, 'Some Other Title')['Order']
+        );
     }
 
     public function testMatchingIgnoresCaseAndSurroundingSpace(): void
     {
         $choices = [$this->choice(['AwardId' => 0, 'Name' => 'Order of the Hunter', 'Order' => 'hunter'])];
 
-        $order = Model_Scrollery::orderForChoiceForTest($choices, 0, '  ORDER of THE hunter  ');
+        $choice = Model_Scrollery::matchingChoiceForTest($choices, 0, '  ORDER of THE hunter  ');
 
-        $this->assertSame('hunter', $order['id']);
+        // The catalog's own casing survives the match, not the submitted one.
+        $this->assertSame('Order of the Hunter', $choice['Name']);
+        $this->assertSame('hunter', $choice['Order']);
     }
 
     /**
@@ -84,9 +101,9 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
     {
         $choices = [$this->choice(['AwardId' => 1, 'Name' => 'Master Rose', 'Order' => 'custom'])];
 
-        $this->assertNull(Model_Scrollery::orderForChoiceForTest($choices, 70, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::orderForChoiceForTest($choices, 1, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::orderForChoiceForTest([], 1, 'Master Rose'));
+        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 70, 'Sheriff'));
+        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 1, 'Sheriff'));
+        $this->assertNull(Model_Scrollery::matchingChoiceForTest([], 1, 'Master Rose'));
     }
 
     /** The kingdomId guard short-circuits before the model would need a database. */
