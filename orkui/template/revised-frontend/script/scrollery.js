@@ -162,29 +162,29 @@
 
     /* ---- in-place updates: no round trip ------------------------------- */
 
-    function applyText() {
-        var q = function (sel) { return mount.querySelector(sel); };
+    function field(name) { return mount.querySelector('[data-scroll-text="' + name + '"]'); }
 
-        var name = q('.AwardeeName .FormFill');
+    function applyText() {
+        var name = field('player');
         if (name) {
             var typed = playerEl.value.trim();
             // The blank writing-line is drawn only when there is no name, exactly as
-            // the text layer does server-side.
+            // the text layer does server-side. data-blank carries its URL.
             name.innerHTML = typed
                 ? esc(typed)
                 : '<img class="Underline" src="' + esc(name.dataset.blank || '') + '">';
         }
 
-        var reason = q('.Award_Reason p');
+        var reason = field('reason');
         if (reason) { reason.innerHTML = esc(reasonEl.value.trim()) || '<br><br>'; }
 
-        var date = q('.AwardDate p.Body');
+        var date = field('date');
         if (date) { date.textContent = prettyDate(dateEl.value); }
 
-        var sig = q('.AwardSignatory p.Body');
+        var sig = field('givenBy');
         if (sig) { sig.textContent = givenEl.value.trim(); }
 
-        var issuer = q('#IssuerTitle');
+        var issuer = field('issuerTitle');
         if (issuer) {
             issuer.textContent = 'and'
                 + (useTheEl.checked ? ' the' : '')
@@ -192,24 +192,23 @@
                 + (useOfEl.checked ? ' of' : '');
         }
 
-        var issuerName = q('section.IssuingTextSection > p:nth-child(2) span');
+        var issuerName = field('issuerName');
         if (issuerName) { issuerName.textContent = nameEl.value.trim(); }
-
-        var details = q('.Body.AwardDetails span');
-        if (details) {
-            var r = parseInt(rankEl.value, 10) || 0;
-            details.textContent = 'with their ' + ordinal(r);
-        }
     }
 
+    /*
+     * The heraldry adjustments are pure custom-property writes on the frame — the
+     * same two properties Arcanyst published, and only the heraldry layer consumes
+     * them. Dragging a slider costs no network request.
+     */
+    var heraldry = { brightness: 1, contrast: 1, scale: 1, x: 0, y: 0 };
+
     function applyHeraldry() {
-        var b = $('sc-bright').value / 100,
-            c = $('sc-contrast').value / 100,
-            s = $('sc-scale').value / 100;
-        // The same two custom properties Arcanyst published; only the heraldry
-        // layer consumes them.
-        frame.style.setProperty('--heraldry-filter', 'brightness(' + b + ') contrast(' + c + ')');
-        frame.style.setProperty('--heraldry-transform', 'scale(' + s + ')');
+        if (!frame) { return; }
+        frame.style.setProperty('--heraldry-filter',
+            'brightness(' + heraldry.brightness + ') contrast(' + heraldry.contrast + ')');
+        frame.style.setProperty('--heraldry-transform',
+            'translateX(' + heraldry.x + '%) translateY(' + heraldry.y + '%) scale(' + heraldry.scale + ')');
     }
 
     /* ---- recipient autocomplete ---------------------------------------- */
@@ -276,8 +275,26 @@
         el.addEventListener('input', applyText);
     });
     [useTheEl, useOfEl].forEach(function (el) { el.addEventListener('change', applyText); });
-    ['sc-bright', 'sc-contrast', 'sc-scale'].forEach(function (id) {
-        $(id).addEventListener('input', applyHeraldry);
+    // Translate is a percentage; the rest are percentages of 1x.
+    function readControl(input) {
+        var key = input.dataset.heraldryControl,
+            raw = parseFloat(input.value);
+        heraldry[key] = (key === 'x' || key === 'y') ? raw : raw / 100;
+    }
+
+    document.querySelectorAll('[data-heraldry-control]').forEach(function (input) {
+        readControl(input);
+        input.addEventListener('input', function () { readControl(input); applyHeraldry(); });
+    });
+
+    document.querySelectorAll('[data-reset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var input = document.querySelector('[data-heraldry-control="' + btn.dataset.reset + '"]');
+            if (!input) { return; }
+            input.value = input.dataset.default;
+            readControl(input);
+            applyHeraldry();
+        });
     });
 
     $('sc-print').addEventListener('click', function () {
@@ -303,5 +320,6 @@
     });
 
     syncRankAndVariant();
+    applyHeraldry();
     reload();
 }());

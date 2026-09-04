@@ -32,8 +32,11 @@ $today   = date('Y-m-d');
 .sc-actions    { display: flex; gap: 8px; margin-top: 14px; }
 .sc-err        { color: #e53e3e; font-size: 12px; min-height: 16px; margin-top: 6px; }
 .sc-sliders    { margin-top: 14px; }
-.sc-slider     { display: grid; grid-template-columns: 78px 1fr; gap: 8px; align-items: center;
+.sc-slider     { display: grid; grid-template-columns: 78px 1fr 24px; gap: 8px; align-items: center;
                  font-size: 11px; color: var(--ork-text-hint); margin-bottom: 5px; }
+.sc-reset      { background: none; border: 0; color: var(--ork-text-hint); cursor: pointer;
+                 padding: 2px; font-size: 10px; border-radius: 3px; }
+.sc-reset:hover{ color: var(--ork-text); background: rgba(128,128,128,.15); }
 @media (max-width: 900px) { .sc-cols { grid-template-columns: 1fr; } .sc-preview { position: static; } }
 </style>
 
@@ -114,9 +117,28 @@ $today   = date('Y-m-d');
             </div>
 
             <div class="sc-sliders">
-                <div class="sc-slider"><span>Brightness</span><input type="range" id="sc-bright" min="50" max="150" value="100"></div>
-                <div class="sc-slider"><span>Contrast</span><input type="range" id="sc-contrast" min="50" max="200" value="100"></div>
-                <div class="sc-slider"><span>Scale</span><input type="range" id="sc-scale" min="50" max="150" value="100"></div>
+                <?php
+                // value/default are in PERCENT for brightness, contrast and scale, and
+                // in percent-of-box for the translates — the JS divides by 100. Reset
+                // restores Arcanyst's SetupPanel defaults: 1x and no offset.
+                $sliders = [
+                    ['brightness', 'Brightness', 50, 150, 100],
+                    ['contrast',   'Contrast',   50, 200, 100],
+                    ['scale',      'Scale',      50, 150, 100],
+                    ['x',          'Move X',    -50,  50,   0],
+                    ['y',          'Move Y',    -50,  50,   0],
+                ];
+                foreach ($sliders as [$key, $label, $min, $max, $default]): ?>
+                    <div class="sc-slider">
+                        <span><?= $label ?></span>
+                        <input type="range" data-heraldry-control="<?= $key ?>"
+                               min="<?= $min ?>" max="<?= $max ?>" value="<?= $default ?>"
+                               data-default="<?= $default ?>">
+                        <button type="button" class="sc-reset" data-reset="<?= $key ?>" title="Reset">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                    </div>
+                <?php endforeach; ?>
             </div>
 
             <div class="sc-err" id="sc-err"></div>
@@ -125,8 +147,8 @@ $today   = date('Y-m-d');
         <div>
             <div class="sc-preview">
                 <div class="sc-stage" id="sc-stage">
-                    <svg viewBox="0 0 2550 3300" id="sc-frame"
-                         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;">
+                    <svg viewBox="0 0 2550 3300" id="sc-frame" data-scroll-frame
+                         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);">
                         <foreignObject x="0" y="0" width="2550" height="3300" style="overflow:visible;">
                             <div id="sc-mount"></div>
                         </foreignObject>

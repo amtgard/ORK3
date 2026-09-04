@@ -32,11 +32,11 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
                 <img id="TopTextFlourish" src="<?= $assetsRoot . $res['flourish_top'] ?>" class="Flourish" alt="">
                 <img id="BottomTextFlourish" src="<?= $assetsRoot . $res['flourish_bottom'] ?>" class="Flourish" alt="">
             </span>
-            <span id="IssuerTitle">and<?= $s['useThe'] ? ' the' : '' ?> <?= scroll_e($s['issuerTitle']) ?><?= $s['useOf'] ? ' of' : '' ?>
+            <span id="IssuerTitle" data-scroll-text="issuerTitle">and<?= $s['useThe'] ? ' the' : '' ?> <?= scroll_e($s['issuerTitle']) ?><?= $s['useOf'] ? ' of' : '' ?>
             <br/>
         </p>
         <p>
-            <span style="font-size:max(1em, calc(1em + 0.5em * (14 / <?= $issuerLen ?>)))"><?= scroll_e($s['issuerName']) ?></span>
+            <span data-scroll-text="issuerName" style="font-size:max(1em, calc(1em + 0.5em * (14 / <?= $issuerLen ?>)))"><?= scroll_e($s['issuerName']) ?></span>
             <img id="RightTextFlourish" src="<?= $assetsRoot . $res['flourish_right'] ?>" class="Flourish" alt="">
         </p>
         <p class="IssuingVerb Body">
@@ -46,12 +46,12 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
 
     <section style="flex-grow:0.4;">
         <p class="AwardeeName UnderlinedBlank KeepUnderline" style="font-size:max(1.36em, calc(2.55em + -0.374em * ((<?= $playerLen ?> / 8))));">
-            <span class="FormFill" style="margin-top:0.3em;bottom:0;position:relative;">
+            <span class="FormFill" data-scroll-text="player" data-blank="<?= $assetsRoot . $res['writing_line'] ?>" style="margin-top:0.3em;bottom:0;position:relative;">
                 <?php if ((string) $s['player'] === ''): ?><img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?><?= scroll_e($s['player']) ?>
             </span>
         </p>
         <div class="Body AwardDetails">
-            <span style="display:inline;">
+            <span style="display:inline;" data-scroll-text="rankPhrase">
                 with <?= scroll_e($s['pronoun'] ?: 'their') ?> <?= $ordinals[$rank] ?? '' ?>
                 <?php if ($rank === 0): ?><img class="Underline Keep" style="width:4em;" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?>
             </span>
@@ -67,7 +67,7 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
             <img class="Underline Cull" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
             <?php endfor; ?>
         </div>
-        <p style="display:inline-block;"><?= scroll_e($s['reason']) ?><?php if ((string) $s['reason'] === ''): ?><span><br/><br/></span><?php endif; ?></p>
+        <p data-scroll-text="reason" style="display:inline-block;"><?= scroll_e($s['reason']) ?><?php if ((string) $s['reason'] === ''): ?><span><br/><br/></span><?php endif; ?></p>
     </section>
     <div style="flex-grow:0.5;"></div>
     <section class="Body Flavour Multiline" style="margin-block-start:1em;margin-left:-0.3em;margin-right:-0.3em;font-size:0.65em;">
@@ -76,14 +76,14 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
     <div style="flex-grow:0.7;"></div>
     <section class="SignAndDate">
         <div class="AwardDate UnderlinedBlank">
-            <p style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['date']) ?></p>
+            <p data-scroll-text="date" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['date']) ?></p>
             <p style="font-size:0em">
                 <img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
             </p>
             <p class="Body" style="display:inline-block;margin-block-start:0.4em;"><b><span>On this day...</span></b></p>
         </div>
         <div class="AwardSignatory UnderlinedBlank">
-            <p style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['givenBy']) ?></p>
+            <p data-scroll-text="givenBy" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['givenBy']) ?></p>
             <p style="font-size:0em">
                 <img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
             </p>

@@ -62,7 +62,7 @@ $scrollery_css = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
 <?php foreach ($Scrolls as $s): ?>
 <div class="scroll-page">
     <svg viewBox="0 0 2550 3300"
-         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;"
+         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);"
          data-scroll-frame>
         <foreignObject x="0" y="0" width="2550" height="3300" style="overflow:visible;">
             <?= Scroll::Render($s) ?>
