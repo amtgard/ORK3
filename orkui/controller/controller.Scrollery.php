@@ -93,10 +93,22 @@ class Controller_Scrollery extends Controller
             return;
         }
 
-        $eventId = (int) ($_GET['event'] ?? 0);
-        $from    = (string) ($_GET['from'] ?? '');
-        $to      = (string) ($_GET['to'] ?? '');
-        $ran     = $eventId > 0 || $from !== '' || $to !== '';
+        // Scoped data, built only after the auth gate above so nothing here ever
+        // renders on the denied path.
+        $events = $this->Scrollery->events_with_printable_awards($scopeType, $scopeId);
+
+        // The picker <select> and the free-text fallback field cannot both be
+        // name="event" — a GET form sends the field twice and PHP keeps only the
+        // last one, silently ignoring whichever the officer actually used. The
+        // select (name="event") wins whenever it carries a value; the number field
+        // (name="event_id") is read only as a fallback, for a deep link naming an
+        // event outside the picker's 200-row list.
+        $eventFromSelect = (int) ($_GET['event'] ?? 0);
+        $eventFromNumber = (int) ($_GET['event_id'] ?? 0);
+        $eventId         = $eventFromSelect > 0 ? $eventFromSelect : $eventFromNumber;
+        $from            = (string) ($_GET['from'] ?? '');
+        $to              = (string) ($_GET['to'] ?? '');
+        $ran             = $eventId > 0 || $from !== '' || $to !== '';
 
         $result = ['Printable' => [], 'Excluded' => [], 'Failed' => false, 'Truncated' => false];
         $error  = '';
@@ -123,6 +135,7 @@ class Controller_Scrollery extends Controller
         $this->data['ScopeType']  = $scopeType;
         $this->data['ScopeId']    = $scopeId;
         $this->data['Scope']      = $this->Scrollery->scope_context($scopeType, $scopeId);
+        $this->data['Events']     = $events;
         $this->data['EventId']    = $eventId;
         $this->data['From']       = $from;
         $this->data['To']         = $to;

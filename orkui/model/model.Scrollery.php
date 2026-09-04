@@ -478,6 +478,131 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * The event list for the bulk-print picker — every event that has at least one
+     * award the bulk query above could actually return in this scope.
+     *
+     * Reuses the SAME scope predicate bulkSqlForTest()'s 'kingdom'/'park' cases
+     * apply (see eventsWithPrintableAwardsSqlForTest() below), so the picker can
+     * never offer an event whose awards the bulk query would then refuse: an event
+     * only appears here because at least one award row at it already matches that
+     * exact WHERE.
+     *
+     * @return array<int, array{EventId:int, Label:string}>
+     */
+    public function events_with_printable_awards(string $scopeType, int $scopeId): array
+    {
+        if ($scopeId <= 0) {
+            return [];
+        }
+
+        $rows = $this->event_rows($this->eventsWithPrintableAwardsSqlForTest($scopeType, (string) $scopeId));
+        if ($rows === null) {
+            return [];
+        }
+
+        $events = [];
+        foreach ($rows as $row) {
+            $eventId = (int) $row['event_id'];
+            $count   = (int) $row['award_count'];
+            $date    = (string) $row['last_date'];
+            $name    = trim((string) $row['event_name']);
+
+            $events[] = [
+                'EventId' => $eventId,
+                'Label'   => ($name !== '' ? $name : ('Event ' . $eventId))
+                    . ' — ' . $date . ' (' . $count . ' award' . ($count === 1 ? '' : 's') . ')',
+            ];
+        }
+
+        return $events;
+    }
+
+    /**
+     * Public and named ...SqlForTest() for the same reason bulkSqlForTest() is:
+     * ScrolleryEventsQueryTest can assert on the generated statement with no
+     * database. The surrounding code interpolates rather than binds, and this
+     * codebase's mysql_real_escape_string() is a no-op shim, so what protects this
+     * is the (int) cast on the scope id — never interpolate it as a string.
+     *
+     * ork_event carries no date of its own (see ork.sql) — only `event_id`,
+     * `kingdom_id`, `park_id`, `mundane_id`, `unit_id`, `name`, `has_heraldry` —
+     * dates live one join away on ork_event_calendardetail, which is one-to-many
+     * per event (multiple dated occurrences, gated by a `current` flag) and would
+     * turn this group-by into a fan-out. max(awards.date) avoids that entirely and
+     * is the date this scope's officer actually granted things on.
+     */
+    public static function eventsWithPrintableAwardsSqlForTest(string $scopeType, string $scopeId): string
+    {
+        $scopeId = (int) $scopeId;
+
+        $scope = ($scopeId > 0 && $scopeType === 'kingdom')
+            ? 'awards.at_kingdom_id = ' . $scopeId
+            : (($scopeId > 0 && $scopeType === 'park')
+                ? 'awards.at_park_id = ' . $scopeId
+                // Never widen to "everything" for an unrecognised scope type or an
+                // empty/zero scope id — mirrors bulkSqlForTest()'s default: case.
+                // at_kingdom_id and at_park_id each sit at 0 on a huge share of real
+                // award rows (a park grant never sets at_kingdom_id; a kingdom grant
+                // never sets at_park_id), so a bare "column = 0" built from an
+                // untrusted or absent scope id would hand back one whole class of
+                // body's awards rather than none. -1 can never match a real row.
+                : 'awards.at_park_id = -1');
+
+        return 'select awards.at_event_id as event_id,
+                       count(*) as award_count,
+                       max(awards.date) as last_date,
+                       e.name as event_name
+                  from ' . DB_PREFIX . 'awards awards
+                  left join ' . DB_PREFIX . 'event e on e.event_id = awards.at_event_id
+                 where awards.at_event_id > 0
+                   and ' . $scope . '
+                 group by awards.at_event_id
+                 order by last_date desc
+                 limit 200';
+    }
+
+    /**
+     * Rows for events_with_printable_awards(), or null on a query failure.
+     *
+     * A sibling to db_query() above rather than a reuse of it: db_query()'s field
+     * reads are hardcoded to the bulk row's own column set (awards_id, mundane_id,
+     * ...), so feeding it this query's different columns (event_id, award_count,
+     * ...) would silently read null for every field rather than fail loudly. The
+     * $DB->Clear()-before-query and manual-Next()-per-row shape is identical.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function event_rows(string $sql): ?array
+    {
+        $db = Ork3::$Lib->player->db;
+        $db->Clear();
+
+        try {
+            $rs = $db->query($sql);
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        if (!is_object($rs) || $this->result_failed($rs)) {
+            return null;
+        }
+
+        $rows = [];
+        if ($rs->size() > 0) {
+            while ($rs->next()) {
+                $rows[] = [
+                    'event_id'    => $rs->event_id,
+                    'award_count' => $rs->award_count,
+                    'last_date'   => $rs->last_date,
+                    'event_name'  => $rs->event_name,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
      * Rows, or null when the query itself failed.
      *
      * Null rather than [] on purpose: an empty array here used to mean both "this

@@ -7,6 +7,7 @@
  * being told which and why.
  */
 $scope     = is_array($Scope ?? null) ? $Scope : [];
+$events    = is_array($Events ?? null) ? $Events : [];
 $printable = is_array($Printable ?? null) ? $Printable : [];
 $excluded  = is_array($Excluded ?? null) ? $Excluded : [];
 $hasRun    = !empty($HasRun);
@@ -44,8 +45,25 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
         <form method="get" action="<?= HTTP_UI ?>index.php" class="sc-filters">
             <input type="hidden" name="Route" value="Scrollery/bulk/<?= ($ScopeType ?? 'park') ?>/<?= (int) ($ScopeId ?? 0) ?>">
             <div class="sc-f">
-                <label for="sc-event">Event id</label>
-                <input type="number" id="sc-event" name="event" min="0" value="<?= (int) ($EventId ?? 0) ?: '' ?>" placeholder="optional">
+                <label for="sc-event-pick">Event</label>
+                <?php if ($events !== []): ?>
+                    <select id="sc-event-pick" name="event">
+                        <option value="">All events in range</option>
+                        <?php foreach ($events as $e): ?>
+                            <option value="<?= (int) $e['EventId'] ?>"<?= (int) $e['EventId'] === (int) ($EventId ?? 0) ? ' selected' : '' ?>>
+                                <?= htmlspecialchars((string) $e['Label'], ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php else: ?>
+                    <select id="sc-event-pick" name="event" disabled>
+                        <option value="">No events with printable awards in this scope</option>
+                    </select>
+                <?php endif; ?>
+            </div>
+            <div class="sc-f">
+                <label for="sc-event">Event id (fallback)</label>
+                <input type="number" id="sc-event" name="event_id" min="0" value="<?= (int) ($EventId ?? 0) ?: '' ?>" placeholder="optional">
             </div>
             <div class="sc-f">
                 <label for="sc-from">From</label>
@@ -61,7 +79,9 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
         <p class="sc-count" style="margin:12px 0 0">
             Only awards granted by this <?= htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8') ?> are listed, whichever filters you use —
             at a shared event, another <?= htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8') ?>'s awards are not included.
-            An event id and a date range combine: give both to narrow a large event.
+            Pick from the list when the event you want appears there; the event id
+            field below it is only a fallback, for one that doesn't (yet).
+            An event and a date range combine: give both to narrow a large event.
             At most <?= $maxRun ?> awards are listed per search.
         </p>
     </div>
