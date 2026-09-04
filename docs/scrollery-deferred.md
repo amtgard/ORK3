@@ -9,9 +9,42 @@ Related: `docs/superpowers/specs/2026-09-03-scrollery-design.md` (the spec),
 
 ---
 
+## 0. Triage — decided 2026-09-04
+
+Every open item was put to the maintainer with options and a recommendation. Outcomes:
+
+| # | Item | Decision |
+|---|---|---|
+| 3.13 | Navigation | **BUILD** — player link from the Awards tab, officer links from the park/kingdom Admin panel |
+| 3.1 | Own-profile print | **BUILD** — a link above the Awards table, not a widened actions cell |
+| 3.11 | Grant + print | **BUILD** — offer Print from the award-grant success path, so it prints the real row |
+| 3.12 | Bulk event picker | **BUILD** — reuse the ORK's existing event autocomplete |
+| 1.1 | Archery | **BUILD** — name-keyed mapping from `ork_kingdomaward.name` to the hunter order |
+| 1.2 | hunter never eyeballed | **BUILD** — render against real data and check against lion/hydra (Arcanyst cannot show it) |
+| 2.3 | Generic certificate | **BUILD** — one generic design from the existing shared layers, covering the ~136 uncovered awards |
+| 3.6 | Pronouns | **BUILD** — interpret from the profile with sensible defaults, plus an override picker in the create tool |
+| 3.9 | WnAjax malformed JSON | **BUILD** — add the missing `exit;` calls (not our bug, but 3 lines) |
+| 3.7 | `UIR` in a model | **BUILD** — move `PrintUrl` construction to the template |
+| 3.8 | woff2 MIME | **BUILD** — add the nginx `types` entry |
+| 2.1 | Zodiac month, ranks 11-12 | **DEFERRED PERMANENTLY** — a dedicated branch will turn Zodiac into a real month feature; do not solve it here |
+| 2.5 | Server-side PDF | **PARKED** — the bare render route is already the seam; revisit on a concrete need |
+| 3.5 | Unreferenced art | **KEEP** — 2.6 MB of original artwork, possibly alternates; the note stops re-litigation |
+| 2.2 | Per-kingdom name variants | **CLOSED** — `ork_kingdomaward.name` is already per-kingdom and already drives the title |
+| 2.4 | Per-kingdom theming | **CLOSED** — 0 of 36 `ork_kingdom_design` rows carry a colour, and a brand palette would fight artwork designed around per-order colours |
+
+Items marked CLOSED are kept below for the reasoning, not as work.
+
+---
+
 ## 1. Blocked on data — needs a decision or a lookup nobody has yet
 
 ### 1.1 Archery has no base award to key art to
+
+> **DECIDED 2026-09-04 — BUILD.** Name-keyed mapping: match `ork_kingdomaward.name`
+> against a curated archery name list and resolve those rows to the hunter order. The
+> printed title still comes from the kingdom's own name, so all four spellings render
+> correctly. A kingdom inventing a new spelling gets no art — the same safe failure as
+> today.
 
 `hunter` keeps Arcanyst's fabricated `ork_id` **6969** in
 `system/lib/ork3/data/scroll-orders.php`. It is not an ORK award id, so
@@ -38,6 +71,10 @@ asset-tested; it just cannot be reached.
 
 ### 1.2 hunter is the one order never visually compared
 
+> **DECIDED 2026-09-04 — BUILD.** Render hunter across its rank range against a real
+> archery award and check it against lion and hydra, which share its exact layer shape
+> and both matched. Arcanyst genuinely cannot display it, so no side-by-side is possible.
+
 Every other order was compared side by side against Arcanyst 2.1.3. `hunter` could not
 be: Arcanyst gates the archery orders behind a kingdom-id list, and its kingdom-loading
 Cloud Function is dead, so the order never appears in its sidebar. It shares its layer
@@ -49,6 +86,11 @@ mapping above ever lands.
 ## 2. Deliberately out of scope for phase 1 (recorded in the spec)
 
 ### 2.1 Zodiac's month, and ranks 11–12
+
+> **DECIDED 2026-09-04 — DEFERRED PERMANENTLY.** A future branch will turn Zodiac into
+> a real month feature. Do NOT solve it here, and specifically do not derive the month
+> from the award date as a stopgap — that branch owns the whole question, ranks 11-12
+> included. `ExpandFlavour()` already accepts `$context['month']` when it lands.
 
 `Scroll::ExpandFlavour()` understands `<<prefix|MONTH|suffix|else>>` and currently always
 takes the **else** branch, which is what those branches were written for ("for whole
@@ -62,12 +104,22 @@ art and flavour stop at 10. `Scroll::ClampRank()` clamps to 10.
 
 ### 2.2 Per-kingdom name variants on the printed title
 
+> **DECIDED 2026-09-04 — CLOSED.** Already solved: the certificate prints
+> `ork_kingdomaward.name`, which is per-kingdom, and that is exactly why all four archery
+> spellings work. A separate certificate-only name would be a second title to keep in
+> sync, and nobody has asked for one.
+
 `Scroll::ResolveTitle()` prints `ork_kingdomaward.name`, which is "Order of the X"
 throughout. A kingdom that wants its own wording on the certificate has no way to say so.
 Decided 2026-09-03: every award is designed as "Order of the X" and prints that way in
 phase 1.
 
 ### 2.3 A generic certificate for everything with no art
+
+> **DECIDED 2026-09-04 — BUILD.** One generic certificate composed from the existing
+> shared layers — parchment, border, heraldry, text — with no order symbol and no rank
+> numeral. Every piece already exists and is tested; title, recipient, date and issuer
+> come from the record exactly as they do now. Turns ~136 unprintable awards printable.
 
 Ladder coverage is complete (14 ladders + Flame). **Nothing else in the catalogue has
 art**: every Master (1–12, 240, 244), every title, every non-ladder and every
@@ -76,10 +128,18 @@ elsewhere — no dead buttons. A generic certificate covering the rest is a late
 
 ### 2.4 Per-kingdom theming
 
+> **DECIDED 2026-09-04 — CLOSED.** `ork_kingdom_design` has `color_primary`,
+> `color_secondary` and `color_accent`, but 0 of 36 rows populate any of them — there is
+> nothing to theme from. The per-order colours are also deliberate artistic choices; a
+> kingdom palette would override artwork that was not designed for it.
+
 `--primary-color` / `--secondary-color` are per ORDER (from `scroll-orders.php`), not per
 kingdom. Driving them from kingdom colours is a later phase.
 
 ### 2.5 Server-side PDF
+
+> **DECIDED 2026-09-04 — PARKED.** `Scrollery_render.tpl` is already the seam. Revisit
+> on a concrete need (emailing, archiving, or a device with a poor print dialog).
 
 Output is `window.print()`. `Scrollery_render.tpl` is deliberately a bare route with no
 chrome so a headless-Chrome PDF service can attach to it later by fetching one URL. PHP
@@ -91,6 +151,10 @@ order.
 ## 3. Smaller gaps found during the build
 
 ### 3.1 The Awards-tab Print button is officer-only
+
+> **DECIDED 2026-09-04 — BUILD, but not by widening the cell.** Add a link above the
+> Awards table pointing at `Scrollery/mine`, leaving `pn-award-actions-cell` officer-only.
+> Avoids restructuring the column header and colspan of a 7,750-line shared template.
 
 In `Playernew_index.tpl` the Print button sits inside the `pn-award-actions-cell`, which
 only renders under `$canManageAwards`. A player viewing their own profile therefore does
@@ -127,12 +191,22 @@ differs from the source's at those ranks.
 
 ### 3.5 Unreferenced art shipped
 
+> **DECIDED 2026-09-04 — KEEP.** 2.6 MB against 62 MB of certificate art is noise, and
+> these are original works that may be alternate treatments. This note is what stops the
+> question being re-litigated.
+
 `assets/scrolls/rose/burn.jpg` and `assets/scrolls/smith/bg.jpg` are committed but no
 layer references them — rose uses `burn.svg`, and smith keeps the shared parchment. They
 may be leftovers from an earlier Arcanyst revision. Left in place rather than deleted;
 confirm before removing.
 
 ### 3.6 Pronouns will need revisiting when free-text lands
+
+> **DECIDED 2026-09-04 — BUILD NOW, do not wait for the other branch.** Interpret the
+> possessive from whatever the profile offers today, apply sensible defaults, and add an
+> override picker to the Scrollery create tool so an officer can correct what was
+> inferred. The free-text trap still stands: `he/him` must resolve to **his**, never
+> `him` — match the leading token against `ork_pronoun.subject`, longest-first.
 
 `Model_Scrollery::possessive_pronoun()` reads `pronoun_id` (→ `ork_pronoun.possessive`),
 then falls back to the custom-pronoun JSON's `"p"` set, then to `"their"`.
@@ -147,6 +221,10 @@ Matching the leading token against `ork_pronoun.subject` (longest first, so "e/e
 
 ### 3.7 `UIR` is a front-controller constant used from a model
 
+> **DECIDED 2026-09-04 — BUILD.** Move `PrintUrl` construction out of the model and into
+> the template; the model returns the awards id. A URL is presentation, and it keeps CLI
+> harnesses from needing a `UIR` shim.
+
 `Model_Scrollery::printable_awards_for_player()` builds `PrintUrl` with `UIR`, which
 `orkui/index.php` defines — not config. It is fine in the web path and there is precedent
 (`model.AmtgardIdp.php`), but any CLI harness touching this model has to define `UIR`
@@ -154,10 +232,17 @@ itself first. Arguably the URL belongs in the template.
 
 ### 3.8 woff2 is served as `application/octet-stream`
 
+> **DECIDED 2026-09-04 — BUILD.** Add the nginx `types` entry so woff2 serves as
+> `font/woff2`, and cache/compression rules can be reasoned about for the five font files
+> every certificate loads.
+
 nginx has no woff2 MIME mapping in this stack. Browsers accept it, but a `types` entry
 would be tidier and lets compression/caching headers be set sensibly.
 
 ### 3.9 `Controller_WnAjax` echoes JSON and returns instead of exiting
+
+> **DECIDED 2026-09-04 — BUILD.** Add the missing `exit;` after each of its three
+> `echo json_encode` calls, matching the convention every other Ajax controller follows.
 
 Not Scrollery's, but found while building `ScrolleryAjax`: the ORK's Ajax controllers
 `exit` after `echo json_encode(...)` (PlayerAjax 73 times, KingdomAjax 60) because
@@ -173,6 +258,11 @@ it. Cost one 500 during Task 16.
 
 ### 3.11 The create flow prints a scroll but does not grant the award
 
+> **DECIDED 2026-09-04 — BUILD.** Offer a Print link from the award-grant success path
+> in `Controller_Award`, so the certificate prints the row that was actually written.
+> `Scrollery/create` does NOT gain the ability to grant — that would fork the grant
+> validation, duplicate detection and ladder-rank rules.
+
 The plan describes Task 16 as "print one scroll while granting an award", but
 `Scrollery/create` only prints. Granting lives in `Controller_Award`, and wiring the two
 together means touching the award-creation path, which was beyond the task. An officer
@@ -180,6 +270,10 @@ today grants the award as usual and then prints — either from the create flow 
 from the Awards-tab button once the row exists.
 
 ### 3.12 Bulk selects by event id typed in by hand
+
+> **DECIDED 2026-09-04 — BUILD.** Reuse the ORK's existing event autocomplete, scoped to
+> the park/kingdom. Server-side scoping is already enforced by the bulk query's scope
+> predicate.
 
 `Scrollery/bulk` takes an event **id** in a number field. There is no event picker, so an
 officer has to know the id (or come from a link that carries it). The date-range path
@@ -202,6 +296,11 @@ fail-closed, but it leaves three groups nobody can list through bulk:
   that does not work, but paging or a park filter would actually fix it.
 
 ### 3.13 Scrollery is not linked from any navigation — TOP OF THE LIST
+
+> **DECIDED 2026-09-04 — BUILD, contextual placement.** Player link to `Scrollery/mine`
+> from the Awards tab; officer links to `create`/`bulk` from the park/kingdom Admin
+> panel, which already holds the scope id and already computes AUTH_EDIT. No global
+> top-nav entry.
 
 **This is the one gap that makes everything else moot: nothing in the ORK links to the
 module.** `Scrollery`, `Scrollery/mine`, `Scrollery/create/...` and `Scrollery/bulk/...`
