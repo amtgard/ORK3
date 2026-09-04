@@ -632,6 +632,44 @@ class Scroll extends Ork3
 
         return '';
     }
+
+    /** Server-side twin of the create-tool's `<input maxlength>` on the override field. */
+    private const PRONOUN_OVERRIDE_MAX_LENGTH = 20;
+
+    /**
+     * Resolve a per-print pronoun override — free text a human typed into a box,
+     * not a closed vocabulary. It goes through the exact same subject/object ->
+     * possessive resolution PossessiveFromFreetext() gives a stored
+     * pronoun_freetext value, so the certificate cannot print "with he/him
+     * third" through the override door after the profile door was closed
+     * against exactly that.
+     *
+     * A typed value that matches no known subject — "his", "eir", or any
+     * neopronoun possessive that is not itself a subject in ork_pronoun — is
+     * already a possessive word, so it passes through unresolved rather than
+     * being discarded.
+     *
+     * Capped at the same length the create-tool's own input enforces
+     * client-side: a client-side cap is not a server-side guarantee, and this
+     * value reaches a printed certificate. Lowercased unconditionally — every
+     * inferred pronoun is already lowercase, and "with His third" is wrong
+     * mid-sentence, so the override cannot be the one path that prints a
+     * capital.
+     *
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     */
+    public static function ResolvePronounOverride(string $raw, array $pronounRows): string
+    {
+        $trimmed = trim($raw);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $capped   = mb_substr($trimmed, 0, self::PRONOUN_OVERRIDE_MAX_LENGTH);
+        $resolved = self::PossessiveFromFreetext($capped, $pronounRows);
+
+        return strtolower($resolved !== '' ? $resolved : $capped);
+    }
 }
 
 /**

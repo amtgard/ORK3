@@ -795,6 +795,24 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * A per-print pronoun override, resolved rather than trusted verbatim — see
+     * Scroll::ResolvePronounOverride(). The create tool's override control is
+     * free text, not a closed vocabulary, so "he/him" typed into the box is
+     * exactly as reachable as it is from a stored profile, and needs the same
+     * subject/object -> possessive resolution or the certificate prints it raw.
+     */
+    public function resolve_pronoun_override(string $raw): string
+    {
+        if (trim($raw) === '') {
+            return '';
+        }
+
+        $list = Ork3::$Lib->pronoun->GetPronounList();
+
+        return Scroll::ResolvePronounOverride($raw, $list['Pronouns'] ?? []);
+    }
+
+    /**
      * The POSSESSIVE pronoun — the text layer reads "with <her> third".
      *
      * Never blank: an empty value makes the sentence read "with third".

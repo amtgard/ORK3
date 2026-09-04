@@ -289,9 +289,12 @@ class Controller_Scrollery extends Controller
         $playerId = (int) ($_GET['playerId'] ?? 0);
 
         // The officer's correction wins over anything inferred. Per-print only —
-        // nothing is written back to the profile.
+        // nothing is written back to the profile. The control is free text, not
+        // a closed vocabulary, so it goes through the same subject/object ->
+        // possessive resolution a stored pronoun_freetext value gets — "he/him"
+        // typed into the box is exactly as reachable as it is from a profile.
         $override = trim((string) ($_GET['pronounOverride'] ?? ''));
-        $pronoun  = $override !== '' ? $override
+        $pronoun  = $override !== '' ? $this->Scrollery->resolve_pronoun_override($override)
             : ($playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '');
 
         $scroll = Scroll::BuildScroll(
@@ -314,6 +317,19 @@ class Controller_Scrollery extends Controller
                 'useThe'      => ($_GET['useThe'] ?? '') === '1',
                 'useOf'       => ($_GET['useOf'] ?? '') === '1',
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? ''))),
+                // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
+                // allowlist for these, and it runs inside BuildScroll(). Sanitising
+                // here as well would be a second, weaker opinion about a closed
+                // vocabulary — and anything it let through would still be rejected
+                // there. BuildScroll() ignores the key entirely for every order but
+                // custom, so a recipe on a Knighthood costs nothing.
+                'recipe'      => [
+                    'ground'    => (string) ($_GET['ground'] ?? ''),
+                    'border'    => (string) ($_GET['border'] ?? ''),
+                    'primary'   => (string) ($_GET['primary'] ?? ''),
+                    'secondary' => (string) ($_GET['secondary'] ?? ''),
+                    'rankSet'   => (string) ($_GET['rankSet'] ?? ''),
+                ],
             ]
         );
 

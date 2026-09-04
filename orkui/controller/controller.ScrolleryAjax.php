@@ -118,10 +118,15 @@ class Controller_ScrolleryAjax extends Controller
     private function requested_pronoun(): string
     {
         // The officer's correction wins over anything inferred. Per-print only —
-        // nothing is written back to the profile.
+        // nothing is written back to the profile. The control is free text, not
+        // a closed vocabulary, so it goes through the same subject/object ->
+        // possessive resolution a stored pronoun_freetext value gets — "he/him"
+        // typed into the box is exactly as reachable as it is from a profile.
         $override = trim((string) ($_POST['pronounOverride'] ?? ''));
         if ($override !== '') {
-            return $override;
+            $this->load_model('Scrollery');
+
+            return $this->Scrollery->resolve_pronoun_override($override);
         }
 
         $mundaneId = (int) ($_POST['playerId'] ?? 0);
