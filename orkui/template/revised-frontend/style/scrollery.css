@@ -302,19 +302,9 @@ section.SignAndDate > div > p.Body {
 /* --------------------------------------------------------------------------
    4. Per-order rules — formerly each order view's inline <style>.
 
-   Keyed on [data-order] so a bulk page of mixed orders keeps them apart.
-
-   STILL OWED by the tasks that build those orders, transcribed here so they are
-   not lost — do not add them until the order partial exists:
-     crown  — section.SignAndDate { min-height:450px; flex-basis:450px;
-              width:2100px; margin-bottom:-50px } and
-              section.SignAndDate>div { width:auto; margin:0em 1em }   (Task 10)
-     zodiac — .Award { padding:21% 21% 12% 21% }, section.Body { width:100% },
-              section.Flavour { width:85% }                            (Task 12)
-     owl    — the award-heraldry overflow/blur/positioning rules, which need
-              translating: this port has no <award-heraldry> custom element, so
-              they must be re-anchored on the heraldry partial's own markup
-                                                                       (Task 13)
+   Keyed on [data-order] / [data-rank] / [data-variant] so a bulk page of mixed
+   orders keeps them apart. All nineteen orders are now accounted for; garber,
+   jovious and battle own no rules because their source views carry no <style>.
    -------------------------------------------------------------------------- */
 
 .award-template[data-order="griffon"] section.SignAndDate,
@@ -344,6 +334,134 @@ section.SignAndDate > div > p.Body {
 
 .award-template[data-order="griffon"] [href="#Border-Deco-1"] {
     display: none;
+}
+
+/* crown — a much wider, shallower signature block than the shared default. */
+.award-template[data-order="crown"] section.SignAndDate {
+    min-height: 450px !important;
+    flex-basis: 450px !important;
+    width: 2100px !important;
+    margin-bottom: -50px !important;
+}
+
+.award-template[data-order="crown"] section.SignAndDate > div {
+    width: auto !important;
+    margin: 0em 1em;
+}
+
+/* --------------------------------------------------------------------------
+   zodiac — its three source <style> blocks, two of which were conditional on
+   rank. The unranked plate (bg_generic.jpg) leaves far less room for the
+   signature block than the ranked one (bg_rank.jpg), hence the [data-rank] split.
+   -------------------------------------------------------------------------- */
+
+.award-template[data-order="zodiac"] .Award {
+    padding: 21% 21% 12% 21%;
+}
+
+.award-template[data-order="zodiac"] section.Body {
+    width: 100%;
+}
+
+.award-template[data-order="zodiac"] section.Flavour {
+    width: 85% !important;
+}
+
+.award-template[data-order="zodiac"][data-rank="0"] section.SignAndDate {
+    width: 90%;
+    flex-basis: 350px;
+    min-height: 350px;
+}
+
+.award-template[data-order="zodiac"]:not([data-rank="0"]) section.SignAndDate {
+    width: 130%;
+    flex-basis: 500px;
+    min-height: 500px;
+}
+
+.award-template[data-order="zodiac"]:not([data-rank="0"]) section.SignAndDate > div:first-child {
+    margin-left: 0.6em;
+}
+
+/* --------------------------------------------------------------------------
+   owl — the source targeted the <award-heraldry> CUSTOM ELEMENT, which is a
+   separate box from the .centre-top div inside it. This port has no custom
+   element, so owl.tpl wraps each heraldry pass in a .owl-heraldry div standing
+   in for that host, and these rules re-anchor on it.
+
+   They CANNOT be flattened onto .centre-top. The host is where owl's per-variant
+   blend lands, and on two of the three variants that blend is filter:invert().
+   Put both on one element and the inline filter wins, silently dropping the
+   edge-detect on the parchment and transparency variants.
+
+   The position:absolute below is load-bearing, not decorative: owl is the only
+   order whose .centre-top is not a direct child of .award-template, so it does
+   not pick up the position from `.award-template > *`. Without it the div is
+   static and all four offsets are inert.
+   -------------------------------------------------------------------------- */
+
+.award-template[data-order="owl"] .owl-heraldry {
+    overflow: hidden;
+}
+
+/* #OWL_edge-detect is defined once per page by Scrollery_render.tpl. */
+.award-template[data-order="owl"] .owl-heraldry div {
+    filter: blur(1px) url(#OWL_edge-detect);
+}
+
+.award-template[data-order="owl"] .owl-heraldry div.centre-top {
+    position: absolute;
+    bottom: 0;
+}
+
+.award-template[data-order="owl"][data-variant="parchment"] .Award {
+    opacity: 0.85;
+}
+
+.award-template[data-order="owl"][data-variant="cyanotype"] .Award img {
+    filter: invert();
+}
+
+.award-template[data-order="owl"][data-variant="cyanotype"] .Award {
+    color: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   warrior — eight per-rank <style> blocks from the source view. Ranks 1, 7 and
+   10 have no override; that is the source, not an omission.
+   -------------------------------------------------------------------------- */
+
+.award-template[data-order="warrior"][data-rank="2"] section.SignAndDate,
+.award-template[data-order="warrior"][data-rank="4"] section.SignAndDate,
+.award-template[data-order="warrior"][data-rank="6"] section.SignAndDate {
+    min-height: 500px !important;
+}
+
+.award-template[data-order="warrior"][data-rank="3"] section.SignAndDate {
+    min-height: 600px !important;
+}
+
+.award-template[data-order="warrior"][data-rank="5"] section.SignAndDate {
+    min-height: 650px !important;
+}
+
+.award-template[data-order="warrior"][data-rank="8"] section.SignAndDate {
+    min-height: 800px !important;
+}
+
+.award-template[data-order="warrior"][data-rank="9"] section.SignAndDate {
+    min-height: 750px !important;
+}
+
+/* Rank 9 stacks the signature block under the big scary dragon. */
+.award-template[data-order="warrior"][data-rank="9"] .Award {
+    padding-bottom: 18% !important;
+}
+
+.award-template[data-order="warrior"][data-rank="9"] section.SignAndDate {
+    flex-direction: column !important;
+    row-gap: 1em !important;
+    justify-content: flex-end !important;
 }
 
 /* --------------------------------------------------------------------------

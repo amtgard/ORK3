@@ -1,0 +1,62 @@
+<?php
+/**
+ * Order of Battle. Transliterated from
+ * arc-scroll/src/award/templates/ash/battle.html.
+ *
+ * Document order is z-order — every child is an absolutely-positioned full-bleed
+ * layer. Do not reorder these siblings.
+ *
+ * Two variants, `arcane` and `martial`, and they differ by more than a symbol
+ * path: arcane adds a soft-light wash and a glow plate and draws its symbol with
+ * no blend at all, while martial multiplies its symbol and stacks an `over_`
+ * plate from rank 6 up. Hence data-variant on the wrapper.
+ *
+ * battle has no <style> block of its own — no SignAndDate override, nothing to
+ * move into scrollery.css.
+ *
+ * wash.jpg and glow.png are the two files that arrived as webpack content hashes
+ * (ad39b48…jpg and 01b3c71…png) and were given real names under
+ * assets/scrolls/battle/arcane/.
+ */
+$rank    = (int) $s['rank'];
+$variant = (string) $s['variant'];
+?>
+<div class="award-template" data-order="battle" data-rank="<?= $rank ?>" data-variant="<?= scroll_e($variant) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
+    <?php scroll_partial('parchment'); ?>
+    <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary']]); ?>
+    <?php scroll_partial('heraldry', ['s' => $s]); ?>
+
+    <?php if ($variant === 'arcane'): ?>
+        <img class="bleed" src="<?= $art ?>/battle/arcane/wash.jpg" style="mix-blend-mode: soft-light; opacity:0.8" alt="">
+    <?php endif; ?>
+
+    <?php /* width="2291" is the source's own value; the file is one pixel wider
+             (2292). Kept as written — changing it would resize the layer. */ ?>
+    <div class="centre" style="margin-bottom:90px;">
+        <img width="2291" src="<?= $art ?>/battle/border_symbols.png" style="mix-blend-mode: multiply;" alt="">
+    </div>
+
+    <?php if ($variant === 'arcane'): ?>
+        <div class="centre-bottom"><img src="<?= $art ?>/battle/arcane/glow.png" style="mix-blend-mode: multiply;" alt=""></div>
+    <?php endif; ?>
+
+    <?php /* Both variants ship symbol_0.png, so this path is unguarded. Aurelia's
+             css= binding gave the symbol a blend for martial and an empty string
+             for arcane, so arcane gets no style attribute at all. */ ?>
+    <div class="centre-bottom">
+        <img src="<?= $art ?>/battle/<?= scroll_e($variant) ?>/symbol_<?= $rank ?>.png"<?= $variant === 'arcane' ? '' : ' style="mix-blend-mode:multiply"' ?> alt="">
+    </div>
+
+    <?php /* martial/over_*.png exists only for ranks 6-10. */ ?>
+    <?php if ($variant === 'martial' && $rank >= 6): ?>
+        <div class="centre-bottom"><img src="<?= $art ?>/battle/martial/over_<?= $rank ?>.png" style="mix-blend-mode:multiply" alt=""></div>
+    <?php endif; ?>
+
+    <?php if ($rank > 0): ?>
+        <div class="centre-bottom" style="bottom:<?= $rank >= 9 ? '124px' : '134px' ?>;">
+            <img src="<?= $art ?>/common/rank_<?= $rank ?>.png" alt="">
+        </div>
+    <?php endif; ?>
+
+    <?php scroll_partial('text', ['s' => $s]); ?>
+</div>

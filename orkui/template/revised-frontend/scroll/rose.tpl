@@ -1,0 +1,36 @@
+<?php
+/**
+ * Order of the Rose. Transliterated from
+ * arc-scroll/src/award/templates/ash/rose.html.
+ *
+ * Document order is z-order — every child is an absolutely-positioned full-bleed
+ * layer. Do not reorder these siblings.
+ *
+ * The source view's <style> block (SignAndDate min-height:250px) lives in
+ * scrollery.css, keyed on [data-order="rose"].
+ *
+ * rose also swaps the three text flourishes for its own squiggly-*-rose.svg.
+ * That is a resources override on $s['resources'], not a layer here — the text
+ * partial picks it up on its own.
+ */
+?>
+<div class="award-template" data-order="rose" data-rank="<?= (int) $s['rank'] ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
+    <?php scroll_partial('parchment'); ?>
+
+    <?php /* The burn sits BELOW the heraldry — unlike every other order that has
+             one. Keep it above parchment and under the device. */ ?>
+    <img src="<?= $art ?>/rose/burn.svg" style="mix-blend-mode:multiply;opacity:0.2;filter:hue-rotate(80deg);" alt="">
+
+    <?php scroll_partial('heraldry', ['s' => $s]); ?>
+
+    <?php /* Two passes of the same border: a multiply to bite into the parchment,
+             then a near-opaque normal pass to bring the ink back. DELIBERATE. */ ?>
+    <img src="<?= $art ?>/rose/border.png" style="mix-blend-mode:multiply;" alt="">
+    <img src="<?= $art ?>/rose/border.png" style="opacity:0.85;" alt="">
+
+    <?php /* rose ships symbol_0.png, so the path is unguarded — rank 0 draws the
+             unranked device, exactly as the source does. No blend mode here. */ ?>
+    <div class="centre-bottom"><img src="<?= $art ?>/rose/symbol_<?= (int) $s['rank'] ?>.png" alt=""></div>
+
+    <?php scroll_partial('text', ['s' => $s]); ?>
+</div>
