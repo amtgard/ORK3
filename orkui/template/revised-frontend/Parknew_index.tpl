@@ -1302,6 +1302,15 @@
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
 						</ul>
 					</div>
+					<?php /* Scrollery. Inside the same admin-gated block as the groups above, so
+					         it inherits that gate; both routes re-check authority server-side. */ ?>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-scroll"></i> Certificates</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Scrollery/create/park/<?= $park_id ?>">Print a Scroll</a></li>
+							<li><a href="<?= UIR ?>Scrollery/bulk/park/<?= $park_id ?>">Print Bulk Scrolls</a></li>
+						</ul>
+					</div>
 				</div>
 			</div>
 			<?php endif; ?>

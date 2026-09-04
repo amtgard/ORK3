@@ -923,6 +923,16 @@
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
 					</ul>
 				</div>
+				<?php /* Scrollery. Sits inside the CanManageKingdom block above, so it inherits
+				         the same AUTH_EDIT gate the rest of this column uses rather than
+				         computing a second one. Both routes re-check authority server-side. */ ?>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-scroll"></i> Certificates</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Scrollery/create/kingdom/<?= $kingdom_id ?>">Print a Scroll</a></li>
+						<li><a href="<?= UIR ?>Scrollery/bulk/kingdom/<?= $kingdom_id ?>">Print Bulk Scrolls</a></li>
+					</ul>
+				</div>
 				<?php endif; ?>
 				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 				<div class="kn-report-group">

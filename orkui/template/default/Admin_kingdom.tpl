@@ -33,14 +33,6 @@
 				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
 				</ul>
 		</li>
-		<?php if (!empty($CanPrintScrolls)) : ?>
-			<li>Certificates
-				<ul>
-					<li><a href='<?=UIR ?>Scrollery/create/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Print a Scroll</a></li>
-					<li><a href='<?=UIR ?>Scrollery/bulk/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Print Bulk Scrolls</a></li>
-				</ul>
-			</li>
-		<?php endif; ?>
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
 </div>
