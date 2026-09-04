@@ -26,6 +26,14 @@
 				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
 				</ul>
 		</li>
+		<?php if (!empty($CanPrintScrolls)) : ?>
+			<li>Certificates
+				<ul>
+					<li><a href='<?=UIR ?>Scrollery/create/park/<?=$ParkInfo['ParkId'] ?>'>Print a Scroll</a></li>
+					<li><a href='<?=UIR ?>Scrollery/bulk/park/<?=$ParkInfo['ParkId'] ?>'>Print Bulk Scrolls</a></li>
+				</ul>
+			</li>
+		<?php endif; ?>
 		<li><a href='<?=UIR ?>Tournament/create&ParkId=<?=$ParkInfo['ParkId'] ?>' class='unimplemented'>Create Tournament</a></li>
 	</ul>
 </div>

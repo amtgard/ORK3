@@ -75,7 +75,7 @@ class Controller_Award extends Controller
                 $r = $this->add_award();
 
                 if ($r['Status'] == 0) {
-                    $this->handle_success();
+                    $this->handle_success((int) ($r['AwardsId'] ?? 0));
                 } elseif ($r['Status'] == 5) {
                     header('Location: ' . UIR . $route);
                     exit;
@@ -119,9 +119,11 @@ class Controller_Award extends Controller
             'EventId' => valid_id($this->request->Award_addawards->EventId) ? $this->request->Award_addawards->EventId : 0
         ));
     }
-    private function handle_success()
+    private function handle_success(int $awardsId = 0)
     {
         $this->data['Message'] = 'Award recorded for ' . $this->request->Award_addawards->GivenTo;
+        $this->load_model('Scrollery');
+        $this->data['PrintAwardsId'] = $this->Scrollery->award_is_printable($awardsId) ? $awardsId : 0;
         $this->request->clear('Player_index');
         unset($_REQUEST['MundaneId']);
         unset($_REQUEST['AwardId']);

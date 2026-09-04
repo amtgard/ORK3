@@ -2098,11 +2098,16 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
-				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
+				<?php elseif ($isOwnProfile): ?>
 				<div class="pn-tab-toolbar">
+					<?php if ($hasHistoricalTip): ?>
 					<a href="<?= UIR ?>Player/reconcile/<?= (int)$Player['MundaneId'] ?>"
 					   class="pn-btn pn-btn-sm" style="background:#2b6cb0;color:#fff">
 						<i class="fas fa-history"></i> View Historical Awards
+					</a>
+					<?php endif; ?>
+					<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm">
+						<i class="fas fa-scroll"></i> Print My Certificates
 					</a>
 				</div>
 				<?php endif; ?>

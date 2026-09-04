@@ -216,7 +216,11 @@
 <?php endif; ?>
 <?php if (strlen($Message) > 0) : ?>
 	<div class='success-message'><?=$Message ?></div>
-<?php endif; ?>	
+	<?php if (!empty($PrintAwardsId)) : ?>
+		<a href='<?=UIR ?>Scrollery/render&awards=<?=(int)$PrintAwardsId ?>&print=1'
+		   target='_blank' rel='noopener'>Print this certificate</a>
+	<?php endif; ?>
+<?php endif; ?>
 	<form class='form-container' method='post' action='<?=UIR ?>Award/<?=$Call ?>/<?=$Id ?>/addaward'>
 		<div id='AwardType'>
 			<span>Type:</span>
