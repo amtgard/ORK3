@@ -1594,10 +1594,10 @@ guard. None draws a `common/rank_N.png` numeral.
 (`ork_kingdomaward.name`), which is why `bowyer`, `marksman` and `sharpshooter` are not
 orders here.
 
-- [ ] Write the three partials
-- [ ] Add the two `SignAndDate` rules to `scrollery.css` (the 650px group already exists from Task 5)
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 new cases, all passing
-- [ ] Compare all three against Arcanyst at ranks 0, 5 and 10
+- [x] Write the three partials
+- [x] Add the two `SignAndDate` rules to `scrollery.css` (the 650px group already exists from Task 5)
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 new cases, all passing
+- [~] Compare all three against Arcanyst at ranks 0, 5 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — lion, hydra and hunter certificates"`
 
 ---
@@ -1620,10 +1620,10 @@ numeral — keep it.
 
 `mask`'s numeral is guarded (`rank > 0`) at `bottom:60px; opacity:1`.
 
-- [ ] Write the three partials
-- [ ] Add the `[data-order]` rules to `scrollery.css`
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
-- [ ] Compare against Arcanyst; check `mask`'s glow reads over the numeral, and `rose`'s hue-rotated burn
+- [x] Write the three partials
+- [x] Add the `[data-order]` rules to `scrollery.css`
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
+- [~] Compare against Arcanyst; check `mask`'s glow reads over the numeral, and `rose`'s hue-rotated burn
 - [ ] `git commit -m "Enhancement: Scrollery — rose, smith and mask certificates"`
 
 ---
@@ -1641,11 +1641,11 @@ These four each replace or skip the parchment.
 | `jovious` | `jovious/bg.jpg` (**replaces parchment**); heraldry; `jovious/symbol_${rank}.png`; text | No `<style>` block. Overrides the three flourishes with `ribbon-*.png`. **The source has a duplicated nested `<div class="award-template">` — a defect. Emit one wrapper only.** |
 | `flame` | `flame/bg.jpg` (**replaces parchment**); heraldry; `flame/rank_${rank}.png` **guarded on `rank > 0`**; text | `SignAndDate` 650px. `flame` has no `rank_0.png`; the guard is what stops a broken image. Do not remove it. |
 
-- [ ] Write the four partials
-- [ ] Add the `[data-order]` rules to `scrollery.css`
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
-- [ ] Verify `flame` rank 0 renders with no numeral and no broken image
-- [ ] Compare all four against Arcanyst
+- [x] Write the four partials
+- [x] Add the `[data-order]` rules to `scrollery.css`
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths`
+- [x] Verify `flame` rank 0 renders with no numeral and no broken image
+- [~] Compare all four against Arcanyst
 - [ ] `git commit -m "Enhancement: Scrollery — crown, garber, jovious and flame certificates"`
 
 ---
@@ -1674,9 +1674,9 @@ Remaining layers, in order: `dragon/dragons.svg` `multiply`;
 `common/rank_${rank}.png` **guarded on `rank > 0`** at `bottom:50px`; text.
 `SignAndDate` 650px. `under_0.png` exists, so `under_` is unguarded.
 
-- [ ] Add the `$style` parameter to `_border.tpl`
-- [ ] Write `dragon.tpl`
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollPartials ScrollAssetPaths`
+- [x] Add the `$style` parameter to `_border.tpl`
+- [x] Write `dragon.tpl`
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollPartials ScrollAssetPaths`
 - [ ] Check ranks 5 and 6 differ (the `over_` layer appears at 6) and that the glow reads
 - [ ] `git commit -m "Enhancement: Scrollery — dragon certificate"`
 
@@ -1733,10 +1733,10 @@ else `134px`; text.
 variants have `symbol_0.png`, so the symbol path is unguarded. `battle` has no
 `SignAndDate` override. The source contains a stray empty `<div class=""></div>`; drop it.
 
-- [ ] Write both partials
-- [ ] Add the zodiac rules to `scrollery.css`
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 11 zodiac + 22 battle cases
-- [ ] Compare zodiac at rank 0 and rank 5 (different backgrounds), and both battle variants at ranks 0, 6 and 10
+- [x] Write both partials
+- [x] Add the zodiac rules to `scrollery.css`
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 11 zodiac + 22 battle cases
+- [~] Compare zodiac at rank 0 and rank 5 (different backgrounds), and both battle variants at ranks 0, 6 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — zodiac and battle certificates"`
 
 ---
@@ -1812,12 +1812,12 @@ Its per-rank CSS becomes:
 
 Ranks 1, 7 and 10 have no override — that is correct, not an omission.
 
-- [ ] Write both partials
-- [ ] Copy the `#OWL_edge-detect` filter definition into `Scrollery_render.tpl`
-- [ ] Add both orders' rules to `scrollery.css`
-- [ ] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 owl + 10 warrior cases
-- [ ] Compare all three owl variants at rank 5 — the transparency variant is the one that reveals a missing repeat
-- [ ] Compare warrior at ranks 1, 9 and 10
+- [x] Write both partials
+- [x] Copy the `#OWL_edge-detect` filter definition into `Scrollery_render.tpl`
+- [x] Add both orders' rules to `scrollery.css`
+- [x] `vendor/bin/phpunit --testsuite unit --filter ScrollAssetPaths` — expect 33 owl + 10 warrior cases
+- [~] Compare all three owl variants at rank 5 — the transparency variant is the one that reveals a missing repeat
+- [~] Compare warrior at ranks 1, 9 and 10
 - [ ] `git commit -m "Enhancement: Scrollery — owl and warrior certificates"`
 
 ---
