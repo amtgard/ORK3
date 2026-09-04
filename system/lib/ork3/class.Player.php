@@ -1125,7 +1125,11 @@ class Player extends Ork3
 
     public function AwardsForPlayer($request)
     {
-        if (valid_id($request['AwardsId'])) {
+        // Initialised, not merely assigned inside the guard: without an AwardsId this
+        // is interpolated into $sql below while still undefined, which warns on every
+        // call that fetches a whole player's awards rather than one row.
+        $player_award = '';
+        if (valid_id($request['AwardsId'] ?? 0)) {
             $player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
         }
         $sql = "select distinct awards.*, a.*,

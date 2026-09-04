@@ -188,15 +188,30 @@ class Scroll extends Ork3
 
         $parkName = trim((string) ($awardRow['ParkName'] ?? ''));
 
-        // ORK does store each park's rank word — ork_park.parktitle_id ->
-        // ork_parktitle.title, defined per kingdom — and most parks are not baronies
-        // (349 Freeholds, 274 Grand Duchies, ~90 Baronies). BuildScroll stays pure, so
-        // whoever holds the row passes the real word in; Barony/Kingdom is the floor.
-        $issuerName = $parkName !== '' ? $parkName : (string) ($awardRow['KingdomName'] ?? '');
+        // The issuer line reads: "and" [the] [title] [of] / NAME.
+        //
+        // A PARK needs all of it. Park names are bare — "Mordengaard", "Granite Spyre";
+        // only 1 of ~600 carries a rank word — so "and the Barony of / Mordengaard"
+        // reads correctly. ORK stores the real word per park (ork_park.parktitle_id ->
+        // ork_parktitle.title, defined per kingdom) and most parks are not baronies
+        // (349 Freeholds, 274 Grand Duchies, ~90 Baronies), so the model passes the
+        // true word in and Barony is only the floor.
+        //
+        // A KINGDOM supplies its own. Every kingdom name in the ORK is already a whole
+        // phrase — "The Kingdom of the Wetlands", "The Empire of the Iron Mountains",
+        // "The Freeholds of Amtgard", "The Celestial Kingdom" — so prepending an
+        // article and rank word gives "and the Kingdom of The Kingdom of the Wetlands".
+        // 159,768 ladder awards, 47% of them, are kingdom-issued.
+        //
+        // Arcanyst carried UseThe/UseOf for exactly this, toggled by hand per scroll.
+        // Here the shape is known from the data, so they are derived instead — and an
+        // explicit context value still overrides, which is what the create flow uses.
+        $isPark     = $parkName !== '';
+        $issuerName = $isPark ? $parkName : (string) ($awardRow['KingdomName'] ?? '');
 
         $issuerTitle = trim((string) ($context['issuerTitle'] ?? ''));
         if ($issuerTitle === '') {
-            $issuerTitle = $parkName !== '' ? 'Barony' : 'Kingdom';
+            $issuerTitle = $isPark ? 'Barony' : '';
         }
 
         return [
@@ -211,8 +226,8 @@ class Scroll extends Ork3
             'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
             'issuerTitle' => $issuerTitle,
             'issuerName'  => $issuerName,
-            'useThe'      => (bool) ($context['useThe'] ?? true),
-            'useOf'       => (bool) ($context['useOf'] ?? true),
+            'useThe'      => (bool) ($context['useThe'] ?? $isPark),
+            'useOf'       => (bool) ($context['useOf'] ?? $isPark),
             'heraldry'    => (string) ($context['heraldry'] ?? ''),
             'flavour'     => self::ExpandFlavour(
                 (string) ($order['flavour'][(string) $rank] ?? ''),

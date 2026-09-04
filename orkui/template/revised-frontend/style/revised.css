@@ -5971,6 +5971,9 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pn-award-action-btn:hover { color:#4a5568; background:#f7fafc; }
 .pn-award-action-btn.pn-award-edit-btn:hover { color:#0891b2; }
 .pn-award-action-btn.pn-award-del-btn:hover  { color:#e53e3e; }
+/* Scrollery print is an <a>, not a <button> — normalise it into the row of icons. */
+.pn-award-action-btn.pn-award-print-btn { display:inline-block; text-decoration:none; line-height:1.2; }
+.pn-award-action-btn.pn-award-print-btn:hover { color:#b8860b; }
 .pn-awards-action-col { white-space:nowrap; text-align:right; }
 .pn-award-actions-cell { white-space:nowrap; text-align:right; }
 .pn-edit-award-name-display { font-size:14px; font-weight:600; color:#2d3748; padding:8px 10px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; min-height:36px; }

@@ -19,7 +19,7 @@ final class ScrollBuildTest extends TestCase
             'CustomAwardName'  => '',
             'AliasAwardName'   => '',
             'ParkName'         => 'Rising Sun Station',
-            'KingdomName'      => 'Crystal Groves',
+            'KingdomName'      => 'The Kingdom of Crystal Groves',
         ], $overrides);
     }
 
@@ -78,10 +78,48 @@ final class ScrollBuildTest extends TestCase
         $s = Scroll::BuildScroll($this->row(), $this->context());
         $this->assertSame('Rising Sun Station', $s['issuerName']);
         $this->assertSame('Barony', $s['issuerTitle']);
+        $this->assertTrue($s['useThe']);
+        $this->assertTrue($s['useOf']);
+    }
 
+    /**
+     * The issuer line is built as "and" [the] [title] [of] / NAME.
+     *
+     * A park needs all of it — park names are bare ("Mordengaard", "Granite Spyre"),
+     * only 1 of ~600 carrying a rank word, so "and the Barony of / Mordengaard" reads
+     * correctly.
+     *
+     * A KINGDOM does not. Every kingdom name in the ORK is already a complete phrase
+     * with its own article and rank word: "The Kingdom of the Wetlands", "The Empire
+     * of the Iron Mountains", "The Freeholds of Amtgard", "The Celestial Kingdom".
+     * Prepending to that yields "and the Kingdom of The Kingdom of the Wetlands" —
+     * and 159,768 ladder awards, 47% of them, are kingdom-issued.
+     *
+     * Arcanyst's UseThe/UseOf flags exist precisely for this; there an officer typed
+     * the title and name apart and toggled them. Here the shape is known from the
+     * data, so the flags are set rather than asked for.
+     */
+    public function testAKingdomIssuerSuppliesItsOwnArticleAndRankWord(): void
+    {
         $s = Scroll::BuildScroll($this->row(['ParkName' => '']), $this->context());
-        $this->assertSame('Crystal Groves', $s['issuerName']);
-        $this->assertSame('Kingdom', $s['issuerTitle']);
+
+        $this->assertSame('The Kingdom of Crystal Groves', $s['issuerName']);
+        $this->assertSame('', $s['issuerTitle']);
+        $this->assertFalse($s['useThe']);
+        $this->assertFalse($s['useOf']);
+    }
+
+    /** An explicit override still wins over the shape inferred from the data. */
+    public function testTheIssuerWordingCanStillBeOverridden(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['ParkName' => '']),
+            $this->context(['issuerTitle' => 'Principality', 'useThe' => true, 'useOf' => true])
+        );
+
+        $this->assertSame('Principality', $s['issuerTitle']);
+        $this->assertTrue($s['useThe']);
+        $this->assertTrue($s['useOf']);
     }
 
     /**

@@ -2217,6 +2217,15 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
 									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
 									        title="Revoke award"><i class="fas fa-ban"></i></button>
+									<?php /* Scrollery: only where certificate artwork exists — no dead buttons.
+									          Shares $canManageAwards with the buttons above rather than computing a
+									          second visibility rule; a player prints their own from Scrollery/mine. */ ?>
+									<?php if (Scroll::HasArt($detail)): ?>
+									<a class="pn-award-action-btn pn-award-print-btn"
+									   href="<?= UIR ?>Scrollery/render&awards=<?= (int)$detail['AwardsId'] ?>&print=1"
+									   target="_blank" rel="noopener"
+									   title="Print certificate"><i class="fas fa-print"></i></a>
+									<?php endif; ?>
 								</td>
 								<?php endif; ?>
 							</tr>

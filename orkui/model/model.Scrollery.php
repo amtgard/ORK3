@@ -39,6 +39,41 @@ class Model_Scrollery extends Model
         ]);
     }
 
+    /**
+     * The player's own awards that can actually be printed.
+     *
+     * Filtered to those with certificate art — phase 1 shows a Print control only
+     * where one exists, and nothing elsewhere. No dead buttons.
+     *
+     * @return array<int, array>
+     */
+    public function printable_awards_for_player(int $mundaneId): array
+    {
+        if ($mundaneId <= 0) {
+            return [];
+        }
+
+        $response  = Ork3::$Lib->player->AwardsForPlayer(['MundaneId' => $mundaneId, 'AwardsId' => 0]);
+        $printable = [];
+
+        foreach ($response['Awards'] ?? [] as $row) {
+            if (!Scroll::HasArt($row)) {
+                continue;
+            }
+
+            $row['Title']       = Scroll::ResolveTitle($row);
+            $row['IssuerTitle'] = $this->issuer_title($row);
+            $row['IssuerName']  = trim((string) ($row['ParkName'] ?? '')) !== ''
+                ? (string) $row['ParkName']
+                : (string) ($row['KingdomName'] ?? '');
+            $row['PrettyDate']  = Scroll::FormatDate((string) ($row['Date'] ?? ''));
+            $row['PrintUrl']    = UIR . 'Scrollery/render&awards=' . (int) $row['AwardsId'] . '&print=1';
+            $printable[]        = $row;
+        }
+
+        return $printable;
+    }
+
     /** Own award, or an officer with edit rights over the granting park/kingdom. */
     private function viewer_may_print(array $row, int $viewerId): bool
     {

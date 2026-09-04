@@ -7,8 +7,53 @@
  */
 class Controller_Scrollery extends Controller
 {
+    /** The landing page: the three doors, gated on what the viewer can actually do. */
     public function index($action = null)
     {
+        $viewerId = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+        if ($viewerId <= 0) {
+            header('Location: ' . UIR . 'Login/login/Scrollery');
+            exit;
+        }
+
+        $this->data['MundaneId']  = $viewerId;
+        $this->data['IsOfficer']  = $this->viewer_is_officer($viewerId);
+        $this->data['page_title'] = 'Scrollery';
+        $this->template           = '../revised-frontend/Scrollery_index.tpl';
+    }
+
+    /** A player's own award history, filtered to what can actually be printed. */
+    public function mine($action = null)
+    {
+        $viewerId = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+        if ($viewerId <= 0) {
+            header('Location: ' . UIR . 'Login/login/Scrollery/mine');
+            exit;
+        }
+
+        $this->data['Awards']     = $this->Scrollery->printable_awards_for_player($viewerId);
+        $this->data['MundaneId']  = $viewerId;
+        $this->data['page_title'] = 'My Scrolls';
+        $this->template           = '../revised-frontend/Scrollery_mine.tpl';
+    }
+
+    /**
+     * Whether to offer the officer doors at all. The doors re-check authority
+     * against the specific park or kingdom they are given; this only decides
+     * whether to draw them.
+     */
+    private function viewer_is_officer(int $viewerId): bool
+    {
+        if ($viewerId <= 0) {
+            return false;
+        }
+
+        $auth = Ork3::$Lib->authorization;
+        $parkId    = isset($this->session->park_id) ? (int) $this->session->park_id : 0;
+        $kingdomId = isset($this->session->kingdom_id) ? (int) $this->session->kingdom_id : 0;
+
+        return ($parkId > 0 && $auth->HasAuthority($viewerId, AUTH_PARK, $parkId, AUTH_EDIT))
+            || ($kingdomId > 0 && $auth->HasAuthority($viewerId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT));
     }
 
     /**
