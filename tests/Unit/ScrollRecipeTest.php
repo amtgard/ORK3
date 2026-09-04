@@ -83,6 +83,44 @@ final class ScrollRecipeTest extends TestCase
         $this->assertSame('hsl(114, 57%, 37%)', $out['primary']);
     }
 
+    /**
+     * The guard on custom.tpl's exception handling.
+     *
+     * Six pieces of the shipped artwork do not behave the way their vocabulary slot
+     * says they do — two washes filed as grounds, a black plate and a 2292x292 band
+     * filed as borders, a dark ground, and three rank sets that are plates rather than
+     * glyphs. Scroll names them, and custom.tpl composes each one differently.
+     *
+     * Every one of those constants keys on a vocabulary NAME. Rename `arcane` to
+     * `arcanewash` in scroll-recipes.php and nothing else in this suite notices: the
+     * file still exists, so testEveryPieceInTheVocabularyExistsOnDisk passes, and the
+     * emitted src still resolves, so ScrollAssetPathsTest passes — while the
+     * certificate silently starts printing a mean-luminance-120 wash as a bare plate
+     * with the type sunk into it. Dropping `owl` gives a black page, dropping `battle`
+     * an 11x vertical smear, and both just as quietly.
+     *
+     * The [data-ground="cyanotype"] selectors in scrollery.css key on the same name as
+     * DARK_GROUNDS, so this covers them too.
+     */
+    public function testEveryRecipeExceptionStillNamesAnEntryInTheVocabulary(): void
+    {
+        $r = Scroll::Recipes();
+
+        foreach (array_keys(Scroll::GROUND_WASHES) as $ground) {
+            $this->assertArrayHasKey($ground, $r['grounds'], "GROUND_WASHES names a ground that no longer exists: {$ground}");
+        }
+        foreach (Scroll::DARK_GROUNDS as $ground) {
+            $this->assertArrayHasKey($ground, $r['grounds'], "DARK_GROUNDS names a ground that no longer exists: {$ground}");
+        }
+        foreach (array_keys(Scroll::BORDER_STYLES) as $border) {
+            $this->assertArrayHasKey($border, $r['borders'], "BORDER_STYLES names a border that no longer exists: {$border}");
+        }
+
+        $this->assertArrayHasKey(Scroll::BORDER_BAND, $r['borders'], 'BORDER_BAND names a border that no longer exists');
+        $this->assertArrayHasKey(Scroll::RANK_SET_GLYPH, $r['rankSets'], 'RANK_SET_GLYPH names a rank set that no longer exists');
+        $this->assertArrayHasKey(Scroll::RANK_SET_OVERSIZED, $r['rankSets'], 'RANK_SET_OVERSIZED names a rank set that no longer exists');
+    }
+
     /** A colour outside the curated palette is refused — free entry was rejected. */
     public function testColoursMustComeFromTheCuratedPalette(): void
     {

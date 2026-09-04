@@ -193,6 +193,69 @@ final class ScrollBuildTest extends TestCase
         $this->assertSame('custom', $s['order']);
     }
 
+    /**
+     * `ranked` decides whether the certificate prints "with <pronoun> ______" — a
+     * blank somebody writes the level into. It is right for a ladder and wrong for a
+     * Knighthood, and those are the same order id at the same rank, so nothing about
+     * the order or the rank alone can answer it.
+     */
+    public function testAnUnrankedAwardWithNoOrdinalDoesNotPrintABlankToWriteOneIn(): void
+    {
+        // Master Rose: not a ladder, rank 0. There is no first Master Rose.
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 1, 'Rank' => 0, 'IsLadder' => '0']),
+            $this->context()
+        );
+        $this->assertSame('custom', $s['order']);
+        $this->assertFalse($s['ranked']);
+    }
+
+    public function testALadderAtRankZeroKeepsItsBlank(): void
+    {
+        // award_id 31, Order of the Walker in the Middle: the one ladder with no art of
+        // its own, and 292 of its 379 grants are recorded at rank 0 (verified against
+        // the awards table) — exactly the grants the blank exists for.
+        //
+        // IsLadder arrives from Yapo as the raw column STRING, which is why BuildScroll
+        // casts rather than comparing strictly to 1. It is passed as '1' here so this
+        // test fails the moment that cast is removed.
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 31, 'Rank' => 0, 'IsLadder' => '1']),
+            $this->context()
+        );
+        $this->assertSame('custom', $s['order']);
+        $this->assertTrue($s['ranked']);
+    }
+
+    public function testANonLadderWithARealRankStillPrintsItsOrdinal(): void
+    {
+        // 8,825 grants of non-ladder, non-officer awards carry rank > 0, and the
+        // numeral is drawn on rank > 0 regardless of ladder-ness. The phrase and the
+        // numeral must not disagree.
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 1, 'Rank' => 4, 'IsLadder' => '0']),
+            $this->context()
+        );
+        $this->assertSame('custom', $s['order']);
+        $this->assertTrue($s['ranked']);
+    }
+
+    /**
+     * The create flow synthesises its award row out of $_GET/$_POST and carries no
+     * IsLadder key at all (controller.Scrollery::compose, controller.ScrolleryAjax).
+     * A blank Griffon at rank 0 is precisely the hand-writing case, so a bespoke order
+     * must never depend on that key.
+     */
+    public function testABespokeOrderAtRankZeroKeepsItsBlankWithNoIsLadderKey(): void
+    {
+        $row = $this->row(['Rank' => 0]);
+        $this->assertArrayNotHasKey('IsLadder', $row);
+
+        $s = Scroll::BuildScroll($row, $this->context());
+        $this->assertSame('griffon', $s['order']);
+        $this->assertTrue($s['ranked']);
+    }
+
     public function testArtBaseHasNoTrailingSlash(): void
     {
         $this->assertStringEndsWith('scrolls', Scroll::ArtBase());

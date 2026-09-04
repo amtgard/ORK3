@@ -68,8 +68,30 @@ final class ScrollAssetPathsTest extends TestCase
         // class="a" class="b" keeps only the first — the HTML parser drops the rest
         // silently. Two of Arcanyst's elements carry both a css= binding and a
         // style=, which is exactly how this happens on transliteration.
+        $scrolls = [];
+
         foreach (self::scrollMatrix() as [$orderId, $rank, $variant]) {
-            $html = Scroll::Render($this->scrollFor($orderId, $rank, $variant));
+            $scrolls["{$orderId} rank {$rank}"] = $this->scrollFor($orderId, $rank, $variant);
+        }
+
+        // custom.tpl branches on the recipe, and scrollMatrix() only ever renders it
+        // with DEFAULT_RECIPE — so the wash underlay, the owl invert, the battle band,
+        // the dark-ground heraldry wrapper and two of the three numeral placements are
+        // markup this guard would otherwise never see.
+        foreach (self::recipeMatrix() as $label => [$ground, $border, $rankSet]) {
+            $scroll = $this->scrollFor('custom', 5, '');
+            $scroll['recipe'] = Scroll::NormaliseRecipe([
+                'ground'    => $ground,
+                'border'    => $border,
+                'rankSet'   => $rankSet,
+                'primary'   => Scroll::DEFAULT_RECIPE['primary'],
+                'secondary' => Scroll::DEFAULT_RECIPE['secondary'],
+            ]);
+            $scrolls[$label] = $scroll;
+        }
+
+        foreach ($scrolls as $label => $scroll) {
+            $html = Scroll::Render($scroll);
             preg_match_all('/<[a-zA-Z][^>]*>/', $html, $tags);
             foreach ($tags[0] as $tag) {
                 preg_match_all('/\s([a-zA-Z-]+)=/', $tag, $attrs);
@@ -77,7 +99,7 @@ final class ScrollAssetPathsTest extends TestCase
                 $this->assertSame(
                     count($names),
                     count(array_unique($names)),
-                    "{$orderId} rank {$rank}: duplicate attribute in {$tag}"
+                    "{$label}: duplicate attribute in {$tag}"
                 );
             }
         }
@@ -87,7 +109,9 @@ final class ScrollAssetPathsTest extends TestCase
     {
         $order = Scroll::Orders()[$orderId];
         return [
-            'order' => $orderId, 'rank' => $rank, 'variant' => $variant,
+            // `ranked` true across the matrix: rank 0 then still draws its blank, which
+            // is one more writing-line.svg reference for the asset check to resolve.
+            'order' => $orderId, 'rank' => $rank, 'ranked' => true, 'variant' => $variant,
             'title' => 'Order of the Test', 'player' => 'Testerly', 'pronoun' => 'their',
             'reason' => 'testing', 'date' => '13th May 2024', 'givenBy' => 'Sir Someone',
             'issuerTitle' => 'Barony', 'issuerName' => 'Somewhere',

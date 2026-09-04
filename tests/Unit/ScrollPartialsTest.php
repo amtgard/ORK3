@@ -9,7 +9,10 @@ final class ScrollPartialsTest extends TestCase
     private function scroll(array $overrides = []): array
     {
         return array_merge([
-            'order' => 'griffon', 'rank' => 3, 'variant' => '',
+            // `ranked` is stated rather than left to _text.tpl's empty() default: an
+            // absent key omits the rank phrase, and a hand-built array silently losing
+            // "with her third" would weaken every assertion in this file that reads it.
+            'order' => 'griffon', 'rank' => 3, 'ranked' => true, 'variant' => '',
             'title' => 'Order of the Griffin', 'player' => 'Testerly',
             'pronoun' => 'her', 'reason' => 'valour', 'date' => '13th May 2024',
             'givenBy' => 'Sir Someone', 'issuerTitle' => 'Barony',
@@ -159,11 +162,45 @@ final class ScrollPartialsTest extends TestCase
         $this->assertStringContainsString('(240 / 150)', $html);
     }
 
+    /**
+     * The old form of this test asserted only that writing-line.svg appeared SOMEWHERE
+     * in the output, which is also true of the player blank and the six reason
+     * underlines — so it passed whether or not the rank phrase rendered at all. The
+     * whole phrase is the thing under test, so assert on the phrase.
+     */
     public function testRankZeroDrawsABlankRatherThanAnOrdinal(): void
     {
         $html = $this->render('text', ['s' => $this->scroll(['rank' => 0])]);
+
         $this->assertStringNotContainsString('with her first', $html);
-        $this->assertStringContainsString('writing-line.svg', $html);
+        $this->assertStringContainsString('with ', $html);
+        $this->assertStringContainsString('data-scroll-text="rankPhrase"', $html);
+    }
+
+    /**
+     * A Knighthood, a Master or a title has no ordinal at all, so it must not print a
+     * blank inviting one to be written in. A LADDER recorded at rank 0 must — 292 of
+     * Walker in the Middle's 379 grants are exactly that. Scroll::BuildScroll() draws
+     * the distinction and hands it down as `ranked`; this is the partial honouring it.
+     */
+    public function testAnUnrankedScrollPrintsNoRankPhraseAtAll(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll(['rank' => 0, 'ranked' => false])]);
+
+        $this->assertStringNotContainsString('with ', $html);
+        $this->assertStringNotContainsString('data-scroll-text="rankPhrase"', $html);
+    }
+
+    /**
+     * Dropping the phrase must not drop its box: .Award .Body.AwardDetails carries a
+     * margin-block-start, and losing it shifts the block spacing on every unranked
+     * certificate.
+     */
+    public function testTheRankPhrasesContainerSurvivesWithoutThePhrase(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll(['rank' => 0, 'ranked' => false])]);
+
+        $this->assertStringContainsString('class="Body AwardDetails"', $html);
     }
 
     /**

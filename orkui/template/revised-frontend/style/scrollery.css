@@ -329,9 +329,11 @@ section.SignAndDate > div > p.Body {
    4. Per-order rules — formerly each order view's inline <style>.
 
    Keyed on [data-order] / [data-rank] / [data-variant] / [data-ground] so a bulk
-   page of mixed orders keeps them apart. All nineteen orders are now accounted
-   for; garber, jovious and battle own no rules because their source views carry
-   no <style>, and the custom scroll owns no signature-block rule because it
+   page of mixed orders keeps them apart. All seventeen orders in
+   scroll-orders.php are accounted for (the count said nineteen before the custom
+   scroll landed and was wrong then too); garber, jovious and battle own no rules
+   because their source views carry no <style>, and the custom scroll owns no
+   signature-block rule because it
    carries no order-specific sentiment and keeps the shared default height — a
    decision, not an omission (see the custom block at the end of this section).
    -------------------------------------------------------------------------- */
@@ -499,12 +501,17 @@ section.SignAndDate > div > p.Body {
    height here would only duplicate the value it already inherits.
 
    What it does need is the one ground in the vocabulary that is dark. The
-   `cyanotype` ground is owl's plate (mean luminance ~56 against ~200 for every
-   other ground), so the certificate's dark type, its black flourish line art and
-   a multiplied heraldic device all disappear into it. These are the same three
-   moves owl's own cyanotype variant makes; they are restated rather than grouped
-   with owl's selectors so each order's rules stay in its own block, which is how
-   the rest of this section is organised.
+   `cyanotype` ground is owl's plate — rendered mean luminance 57 against 195-215
+   for every other ground — so all FOUR layers drawn over it have to be lifted,
+   not just the type: the type, the heraldic device, the rank numeral and the
+   knotwork border. Leaving any one of them multiplied leaves it a silhouette.
+   The border's lift is not here but in custom.tpl, which screens the knot rather
+   than multiplying it; a blend on that layer has to reach _border.tpl's own
+   style attribute, which CSS cannot outrank without !important on a shared
+   partial.
+
+   Selector keys on the vocabulary name; Scroll::DARK_GROUNDS holds the same name
+   for the PHP side, and ScrollRecipeTest guards it against a rename.
    -------------------------------------------------------------------------- */
 
 .award-template[data-order="custom"][data-ground="cyanotype"] .Award {
@@ -515,10 +522,52 @@ section.SignAndDate > div > p.Body {
     filter: invert();
 }
 
-/* The device carries mix-blend-mode:multiply inline, so lifting it off a dark
-   ground has to outrank that. */
-.award-template[data-order="custom"][data-ground="cyanotype"] .centre-top img {
-    mix-blend-mode: screen !important;
+/* The device is the layer that cannot simply be screened. 624 of the 626 files
+   under assets/heraldry are opaque JPEGs, most on a white field, and
+   screen(255, ground) is pure white — a 420x420 white box, worse than the
+   multiply it replaces. owl runs the device through #OWL_edge-detect first so
+   that what gets screened is line art with real transparency; these three rules
+   are that treatment, re-anchored on custom.tpl's .custom-heraldry wrapper.
+
+   The wrapper is load-bearing twice over: it is where the screen blend lands
+   (the filter has to run BEFORE the blend, so they cannot share an element), and
+   .centre-top inside it is no longer a direct child of .award-template, so it
+   does not inherit that rule's position and all four of its offsets would be
+   inert without the explicit position below. Both are exactly why owl needs its
+   own .owl-heraldry host. */
+.award-template[data-order="custom"][data-ground="cyanotype"] .custom-heraldry {
+    overflow: hidden;
+}
+
+.award-template[data-order="custom"][data-ground="cyanotype"] .custom-heraldry div {
+    filter: blur(1px) url(#OWL_edge-detect);
+}
+
+/* bottom:0 is not cosmetic — it is what stops the filter drawing its own frame.
+   #OWL_edge-detect floods its region white and then edge-detects, so the boundary
+   of the filtered element's own box registers as an edge and prints as a hairline
+   rectangle. Stretching the box to the full page (top:0 is inherited from
+   .centre-top) puts that rectangle outside the page, where the wrapper's
+   overflow:hidden clips it. Owl's rule says bottom:0 for the same reason. */
+.award-template[data-order="custom"][data-ground="cyanotype"] .custom-heraldry div.centre-top {
+    position: absolute;
+    bottom: 0;
+}
+
+/* The numeral sits in .centre-bottom, outside .Award, so none of the type rules
+   reach it. Rendered on cyanotype its ink measures mean L 77 against a ground of
+   57 — a 1.4:1 contrast, a gold glyph sunk into a navy plate.
+
+   A multiplicative lift rather than invert(): brightness() is monotone, so no
+   part of the glyph can end up darker than it started, and it keeps the numeral's
+   own gold and its own light-fill/dark-outline form. Inverting reaches a higher
+   MEAN (156 against 104) but only by swapping fill and outline, which reads as a
+   different, muddier numeral. 1.9 takes the fill from a measured 194 to the clip
+   point: strokes land at p95 243 against the ground's 57, a contrast ratio of
+   10.4:1 where they were at 6.5:1. Applies to all four rank sets, none of which
+   can be darkened by it. */
+.award-template[data-order="custom"][data-ground="cyanotype"] .custom-rank {
+    filter: brightness(1.9);
 }
 
 /* --------------------------------------------------------------------------

@@ -10,19 +10,23 @@
  * Document order is z-order, exactly as in every other order partial.
  *
  * Unlike every other partial this one draws art it did not grow up with, so it
- * cannot assume the pieces compose. Four of them do not, and each is handled below
- * against the shipped files rather than against the vocabulary's key names:
+ * cannot assume the pieces compose. Five of them do not, and each is handled against
+ * the shipped files rather than against the vocabulary's key names:
  *
  *   - owl/border.jpg is an OPAQUE black plate, not a transparent frame;
  *   - battle/border_symbols.png is a 2292x292 band, not a 2550x3300 frame;
  *   - the `forge` and `arcane` grounds are soft-light washes meant to sit OVER the
  *     parchment, not base plates that replace it;
  *   - the zodiac/garber/flame numerals are whole-page plates, not the 292x171 glyph
- *     that common/rank_N.png is.
+ *     that common/rank_N.png is;
+ *   - the `cyanotype` ground is dark, so every layer over it has to be lifted rather
+ *     than multiplied down.
  *
- * Those are properties of the artwork, so the notes stay here with the markup that
- * accounts for them. Longer term they belong in the vocabulary itself — see the
- * Task 3 report.
+ * Which names those are lives on Scroll (GROUND_WASHES, DARK_GROUNDS, BORDER_STYLES,
+ * BORDER_BAND, RANK_SET_GLYPH, RANK_SET_OVERSIZED), guarded by
+ * ScrollRecipeTest::testEveryRecipeExceptionStillNamesAnEntryInTheVocabulary — a
+ * rename in scroll-recipes.php would otherwise leave every test green while the
+ * certificate silently started printing wrong. The reasoning is on the constants.
  */
 $v = Scroll::Recipes();
 
@@ -37,17 +41,12 @@ $v = Scroll::Recipes();
 $recipe = Scroll::NormaliseRecipe(is_array($s['recipe'] ?? null) ? $s['recipe'] : []);
 $rank   = (int) $s['rank'];
 
-/*
- * 'battle' is the one entry in the border vocabulary that is not a frame:
- * battle/border_symbols.png is a 2292x292 decorative band, where the other eight
- * rasters are full 2550x3300 frames. battle.tpl draws the knotwork border and then
- * centres that band over it, which is what happens here — stretched full-bleed a
- * 292px strip becomes vertical smear down the page, and a border choice that draws
- * no frame at all reads as a broken selection.
- */
-$band  = $recipe['border'] === 'battle';
+$band  = $recipe['border'] === Scroll::BORDER_BAND;
 $knot  = $recipe['border'] === 'knot' || $band;
 $frame = !$knot;
+$dark  = in_array($recipe['ground'], Scroll::DARK_GROUNDS, true);
+
+$wash = Scroll::GROUND_WASHES[$recipe['ground']] ?? '';
 
 /*
  * Each order draws its own border with a blend pair its artist tuned for that art
@@ -55,80 +54,100 @@ $frame = !$knot;
  * one pass — the multiply all nine of them start from — because the second pass is
  * per-art tuning, not a general rule.
  *
- * owl is the exception and cannot take the default: owl/border.jpg is white line art
- * on an OPAQUE black plate, where the other eight are transparent PNGs. Multiplied
- * unfiltered it turns the whole certificate black. This is owl.tpl's own treatment
- * for its parchment variant, copied rather than reinvented.
+ * The tone is the ground's, not the border's: a frame that multiplies correctly into
+ * parchment lands DARKER than a dark ground and reads as a hole rather than a frame.
+ * BORDER_STYLES carries the per-tone defaults and owl's two exceptions.
  */
-$borderStyle = $recipe['border'] === 'owl'
-    ? 'filter:invert();mix-blend-mode:multiply;'
-    : 'mix-blend-mode:multiply;';
+$tone        = $dark ? 'dark' : 'light';
+$borderStyle = Scroll::BORDER_STYLES[$recipe['border']][$tone] ?? Scroll::BORDER_STYLE_DEFAULT[$tone];
 
 /*
- * Two entries in the ground vocabulary are not base plates either. smith/burn.jpg
- * and battle/arcane/wash.jpg are soft-light WASHES: their own orders lay them over
- * the parchment rather than instead of it (smith.tpl, battle.tpl). Drawn alone each
- * is a flat mid-grey the certificate's type sinks into — measured mean luminance
- * 118 and 120 across the text box, against ~200 for every real ground. Composited
- * the way their own orders composite them, they are the ground those certificates
- * actually print on. Blend and opacity are copied from those two partials.
+ * On a dark ground the knot has to be screened rather than multiplied. Multiplied,
+ * the default tan primary (L~150) lands at L~34 against a ground of 57 and the frame
+ * reads as a dim silhouette — which also makes the curated colour pair, the entire
+ * point of the border-colour slot, invisible. _border.tpl appends $style after its
+ * own declarations, so the later mix-blend-mode wins; dragon.tpl overrides the same
+ * way for its glow pass.
  */
-$washes = [
-    'forge'  => 'mix-blend-mode:soft-light;',
-    'arcane' => 'mix-blend-mode:soft-light;opacity:0.8',
-];
-$wash = $washes[$recipe['ground']] ?? '';
+$knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
 ?>
 <div class="award-template" data-order="custom" data-rank="<?= $rank ?>" data-ground="<?= scroll_e($recipe['ground']) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php /* Every ground is exactly 2550x3300, the foreignObject's own size, which is
              what makes any one of them a drop-in swap for any other. */ ?>
     <?php if ($wash !== ''): ?>
+        <?php /* Blend and opacity are smith.tpl's and battle.tpl's. The PLACEMENT is
+                 not theirs: both draw their wash over the heraldry, and battle over
+                 the border too, whereas this draws it under everything. That is
+                 deliberate — here the wash is filling the ground slot, so it has to
+                 finish being the ground before any layer that reads against it. */ ?>
         <?php scroll_partial('parchment'); ?>
-        <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['grounds'][$recipe['ground']]) ?>" style="<?= $wash ?>" alt="">
+        <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['grounds'][$recipe['ground']]) ?>" width="2550" height="3300" style="<?= $wash ?>" alt="">
     <?php else: ?>
         <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['grounds'][$recipe['ground']]) ?>" width="2550" height="3300" alt="">
     <?php endif; ?>
 
     <?php if ($knot): ?>
-        <?php scroll_partial('border', ['primary' => $recipe['primary'], 'secondary' => $recipe['secondary']]); ?>
+        <?php scroll_partial('border', [
+            'primary'   => $recipe['primary'],
+            'secondary' => $recipe['secondary'],
+            'style'     => $knotStyle,
+        ]); ?>
     <?php endif; ?>
 
     <?php if ($frame): ?>
         <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['borders'][$recipe['border']]) ?>" style="<?= $borderStyle ?>" alt="">
     <?php endif; ?>
 
-    <?php scroll_partial('heraldry', ['s' => $s]); ?>
+    <?php if ($dark): ?>
+        <?php /* On a dark ground the device cannot simply be screened: 624 of the 626
+                 files under assets/heraldry are opaque JPEGs and most have a white
+                 field, and screen(255, ground) is pure white — a 420x420 white box,
+                 worse than the multiply it replaces. owl.tpl solves this by running
+                 the device through #OWL_edge-detect FIRST (defined once per page by
+                 Scrollery_render.tpl) so that what gets screened is line art, not a
+                 plate. The wrapper is what that filter and its overflow clip hang
+                 off; see the [data-ground] rules in scrollery.css. */ ?>
+        <div class="custom-heraldry" style="mix-blend-mode:screen;"><?php scroll_partial('heraldry', ['s' => $s]); ?></div>
+    <?php else: ?>
+        <?php scroll_partial('heraldry', ['s' => $s]); ?>
+    <?php endif; ?>
 
     <?php if ($band): ?>
         <?php /* width="2291" is battle.tpl's own value; the file is one pixel wider
-                 (2292). Kept as written there — changing it would resize the layer. */ ?>
+                 (2292). Kept as written there — changing it would resize the layer.
+
+                 The band is dark line art on transparency like the eight raster
+                 frames, so it takes the same per-tone default they do. */ ?>
         <div class="centre" style="margin-bottom:90px;">
-            <img width="2291" src="<?= $art ?>/<?= scroll_e($v['borders']['battle']) ?>" style="mix-blend-mode:multiply;" alt="">
+            <img width="2291" src="<?= $art ?>/<?= scroll_e($v['borders'][Scroll::BORDER_BAND]) ?>" style="<?= Scroll::BORDER_STYLE_DEFAULT[$tone] ?>" alt="">
         </div>
     <?php endif; ?>
 
     <?php /* Guarded on rank > 0 for EVERY set: common, zodiac and flame ship rank_1..10
              only. garber also ships a rank_0, which is deliberately never used here so
-             the rule stays one rule. */ ?>
+             the rule stays one rule.
+
+             .custom-rank is the hook the dark-ground lift keys on — the numeral sits
+             outside .Award, so the type rules do not reach it. */ ?>
     <?php if ($rank > 0): ?>
         <?php $rankSrc = $art . '/' . scroll_e($v['rankSets'][$recipe['rankSet']]) . '/rank_' . $rank . '.png'; ?>
-        <?php if ($recipe['rankSet'] === 'common'): ?>
+        <?php if ($recipe['rankSet'] === Scroll::RANK_SET_GLYPH): ?>
             <?php /* common/rank_N.png is a 292x171 glyph, so it needs a box and an
                      offset. 85px is griffon's own baseline for its ranks 1-5. */ ?>
-            <div class="centre-bottom" style="bottom:85px;">
+            <div class="centre-bottom custom-rank" style="bottom:85px;">
                 <img src="<?= $rankSrc ?>" alt="">
             </div>
-        <?php elseif ($recipe['rankSet'] === 'zodiac'): ?>
+        <?php elseif ($recipe['rankSet'] === Scroll::RANK_SET_OVERSIZED): ?>
             <?php /* zodiac's numerals are 2625x3375 — a whole transparent plate, 75px
                      oversized on both axes. zodiac.tpl's margin:-37.5px re-centres it. */ ?>
-            <div class="centre-bottom">
+            <div class="centre-bottom custom-rank">
                 <img src="<?= $rankSrc ?>" style="margin:-37.5px" alt="">
             </div>
         <?php else: ?>
             <?php /* garber and flame ship full 2550x3300 transparent plates that place
                      their own numeral, so they are their own full-bleed layer — as in
                      garber.tpl and flame.tpl. A .centre-bottom box would shift them. */ ?>
-            <img class="bleed" src="<?= $rankSrc ?>" alt="">
+            <img class="bleed custom-rank" src="<?= $rankSrc ?>" alt="">
         <?php endif; ?>
     <?php endif; ?>
 

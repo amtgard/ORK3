@@ -134,4 +134,20 @@ final class ScrolleryBulkQueryTest extends TestCase
     {
         $this->assertStringContainsString('a.officer_role', $this->sql('event', '17', 'park', '198'));
     }
+
+    /**
+     * Scroll::BuildScroll() reads IsLadder to decide whether a certificate prints the
+     * blank ordinal somebody writes the level into — right for a ladder recorded at
+     * rank 0 (292 of Walker in the Middle's 379 grants), wrong for a Knighthood. The
+     * bulk selection shapes its rows for that contract, so it has to select the
+     * column, exactly as it has to select officer_role for the eligibility check.
+     *
+     * Base `a.is_ladder`, not the alias-coalesced value AwardsForPlayer() uses: this
+     * query has no `award alias` join. That is the same inconsistency officer_role
+     * already lives with and is deliberately not fixed by adding one here.
+     */
+    public function testTheBulkQuerySelectsIsLadder(): void
+    {
+        $this->assertStringContainsString('a.is_ladder', $this->sql('event', '17', 'park', '198'));
+    }
 }

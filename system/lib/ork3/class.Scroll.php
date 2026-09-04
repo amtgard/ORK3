@@ -52,6 +52,102 @@ class Scroll extends Ork3
         'rankSet'   => 'common',
     ];
 
+    /*
+     * ------------------------------------------------------------------------------
+     * Recipe exceptions.
+     *
+     * scroll-recipes.php stores every ground and border as a bare path, which asserts
+     * that all grounds are opaque base plates and all borders are full-page frames.
+     * Six pieces of the shipped artwork are not, and custom.tpl composes them
+     * accordingly. Those facts live here rather than in the data file because the data
+     * file's shape is not theirs to change — but they key on vocabulary NAMES, and a
+     * rename in scroll-recipes.php would leave every existing test green while the
+     * certificate silently started printing a wash as a bare plate, a black page, or a
+     * band smeared down the page. ScrollRecipeTest::testEveryRecipeExceptionStillNames
+     * AnEntryInTheVocabulary is the guard against exactly that.
+     *
+     * Task 6 (and anything else that needs to know which pieces are special) should
+     * consume these rather than re-deriving them.
+     * ------------------------------------------------------------------------------
+     */
+
+    /**
+     * Ground entries that are soft-light WASHES rather than base plates: their own
+     * orders lay them over the parchment, never instead of it. Measured mean luminance
+     * across the text box is 118 and 120, against ~200 for a genuine ground, so drawn
+     * alone each is a flat mid-grey the type sinks into. Values are the blend each
+     * file's own order uses — smith.tpl and battle.tpl respectively.
+     *
+     * @var array<string, string>
+     */
+    public const GROUND_WASHES = [
+        'forge'  => 'mix-blend-mode:soft-light;',
+        'arcane' => 'mix-blend-mode:soft-light;opacity:0.8;',
+    ];
+
+    /**
+     * Grounds dark enough that the four layers drawn over them have to be lifted
+     * rather than multiplied down. Type, device, numeral and border all get a
+     * different treatment on these; see custom.tpl and the [data-ground] rules in
+     * scrollery.css, which key on the same names.
+     *
+     * @var array<int, string>
+     */
+    public const DARK_GROUNDS = ['cyanotype'];
+
+    /**
+     * How a raster border is composited, per ground tone.
+     *
+     * On a LIGHT ground a frame multiplies into the paper, which is what all nine of
+     * them do in their own orders. On a DARK ground that buries them: the eight
+     * transparent PNGs are dark line art (opaque mean luminance 61-100), and measured
+     * on cyanotype (ground 57) they land at 22 — darker than the ground they sit on,
+     * a contrast ratio of 1.2:1. So on a dark ground the default is inverted to lift
+     * the ink, hue-rotated to give the artist's colour back, and screened so no part
+     * of it can come out darker than the ground.
+     *
+     * owl is the exception in both directions, because owl/border.jpg is white line
+     * art on an OPAQUE black plate where the other eight are transparent PNGs
+     * (measured: mean luminance 6.7, 0% transparent). On a light ground, multiplied
+     * unfiltered, it turns the whole certificate black; on a dark ground, inverted, it
+     * disappears into the plate. Both entries here are owl.tpl's own two branches —
+     * its parchment variant and its cyanotype variant — copied, not reinvented.
+     *
+     * @var array<string, array<string, string>>
+     */
+    public const BORDER_STYLES = [
+        'owl' => [
+            'light' => 'filter:invert();mix-blend-mode:multiply;',
+            'dark'  => 'mix-blend-mode:screen;',
+        ],
+    ];
+
+    /** @var array<string, string> */
+    public const BORDER_STYLE_DEFAULT = [
+        'light' => 'mix-blend-mode:multiply;',
+        'dark'  => 'filter:invert() hue-rotate(180deg);mix-blend-mode:screen;',
+    ];
+
+    /**
+     * The one border entry that is not a frame at all. battle/border_symbols.png is a
+     * 2292x292 decorative band; battle.tpl draws the parametric knotwork and centres
+     * the band over it. Full-bleed a 292px strip becomes vertical smear down the page,
+     * and a border that draws no frame reads as a broken selection.
+     */
+    public const BORDER_BAND = 'battle';
+
+    /**
+     * The one rank set whose numerals are a small glyph (292x171) rather than a
+     * whole-page plate, so it alone needs a box and a bottom offset.
+     */
+    public const RANK_SET_GLYPH = 'common';
+
+    /**
+     * The one rank set whose plates are oversized — 2625x3375 against the page's
+     * 2550x3300 — and so need zodiac.tpl's own margin to re-centre.
+     */
+    public const RANK_SET_OVERSIZED = 'zodiac';
+
     /** @var array<string, array>|null */
     private static ?array $recipes = null;
 
@@ -405,6 +501,19 @@ class Scroll extends Ork3
         return [
             'order'       => $order['id'],
             'rank'        => $rank,
+            // A blank ordinal is an invitation to write the rank in by hand. That is right
+            // for a ladder — including one recorded at rank 0, which 292 of Walker in the
+            // Middle's 379 grants are — and wrong for a Knighthood, which has no ordinal to
+            // write. Every bespoke order is a ladder, so they are excluded from the question
+            // entirely rather than made to depend on a column their synthesised rows do not
+            // carry: controller.Scrollery and controller.ScrolleryAjax build an award row
+            // out of $_GET/$_POST with no IsLadder key, and a blank Griffon at rank 0 is
+            // exactly the hand-writing case. The (int) cast is load-bearing — IsLadder
+            // arrives from Yapo as the raw column value ('1'/'0'/null), so a strict === 1
+            // would be false for every ladder and invert the rule.
+            'ranked'      => $order['id'] !== 'custom'
+                || $rank > 0
+                || (int) ($awardRow['IsLadder'] ?? 0) === 1,
             'variant'     => $variant,
             'title'       => self::ResolveTitle($awardRow),
             'player'      => (string) ($context['player'] ?? ''),

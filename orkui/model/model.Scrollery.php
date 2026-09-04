@@ -222,7 +222,7 @@ class Model_Scrollery extends Model
 
         return 'select awards.awards_id, awards.mundane_id, awards.rank, awards.date, awards.note,
                        awards.custom_name, awards.at_park_id, awards.at_kingdom_id, awards.at_event_id,
-                       a.award_id, a.name, a.officer_role,
+                       a.award_id, a.name, a.officer_role, a.is_ladder,
                        ka.name as kingdom_awardname,
                        m.persona as recipient,
                        gb.persona as given_by,
@@ -284,6 +284,13 @@ class Model_Scrollery extends Model
             // ResolveTitle() expect. OfficerRole matters here: without it every
             // officer-position row in a bulk selection would look custom-eligible
             // (IsCustomEligible() defaults an absent key to 'none').
+            //
+            // IsLadder is the same shape of dependency for BuildScroll()'s `ranked`:
+            // without it a bulk run prints all 292 of Walker in the Middle's rank-0
+            // grants with no blank to write the level into. Both read the BASE award
+            // (a.*) rather than the alias-coalesced value AwardsForPlayer() uses,
+            // because this query has no `award alias` join — the same inconsistency
+            // officer_role already lives with, deliberately not fixed here.
             $shaped = [
                 'AwardsId'         => (int) $row['awards_id'],
                 'AwardId'          => (int) $row['award_id'],
@@ -297,6 +304,7 @@ class Model_Scrollery extends Model
                 'CustomAwardName'  => (string) $row['custom_name'],
                 'AliasAwardName'   => '',
                 'OfficerRole'      => (string) ($row['officer_role'] ?? ''),
+                'IsLadder'         => (int) ($row['is_ladder'] ?? 0),
                 'ParkName'         => (string) $row['park_name'],
                 'KingdomName'      => (string) $row['kingdom_name'],
             ];
@@ -365,6 +373,7 @@ class Model_Scrollery extends Model
                     'given_by'          => $rs->given_by,
                     'name'              => $rs->name,
                     'officer_role'      => $rs->officer_role,
+                    'is_ladder'         => $rs->is_ladder,
                     'kingdom_awardname' => $rs->kingdom_awardname,
                     'park_name'         => $rs->park_name,
                     'kingdom_name'      => $rs->kingdom_name,

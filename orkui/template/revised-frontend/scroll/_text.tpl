@@ -50,11 +50,21 @@ $reasonLen   = strlen((string) $s['reason']) ?: 200;
                 <?php if ((string) $s['player'] === ''): ?><img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?><?= scroll_e($s['player']) ?>
             </span>
         </p>
+        <?php /* The div stays even when the phrase does not: it carries
+                 .Award .Body.AwardDetails { margin-block-start: 0.2em }, and dropping it
+                 would shift the block spacing on every unranked certificate.
+
+                 $s['ranked'] is false only for an award with no ordinal at all — a
+                 Knighthood, a Master, a title. A LADDER at rank 0 stays ranked and keeps
+                 its blank, which is the whole point of the blank: somebody writes the
+                 level in by hand. See Scroll::BuildScroll(). */ ?>
         <div class="Body AwardDetails">
+            <?php if (!empty($s['ranked'])): ?>
             <span style="display:inline;" data-scroll-text="rankPhrase">
                 with <?= scroll_e($s['pronoun'] ?: 'their') ?> <?= $ordinals[$rank] ?? '' ?>
                 <?php if ($rank === 0): ?><img class="Underline Keep" style="width:4em;" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?>
             </span>
+            <?php endif; ?>
         </div>
     </section>
 
