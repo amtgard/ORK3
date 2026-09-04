@@ -76,7 +76,7 @@ $mundaneId = (int) ($MundaneId ?? 0);
                         <td><?= htmlspecialchars((string) ($a['GivenBy'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                         <td class="sc-actions">
                             <a class="adm-btn adm-btn-primary"
-                               href="<?= htmlspecialchars((string) $a['PrintUrl'], ENT_QUOTES, 'UTF-8') ?>"
+                               href="<?= UIR ?>Scrollery/render&awards=<?= (int) $a['AwardsId'] ?>&print=1"
                                target="_blank" rel="noopener">
                                 <i class="fa-solid fa-print"></i> Print
                             </a>

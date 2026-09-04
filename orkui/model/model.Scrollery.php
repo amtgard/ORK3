@@ -67,7 +67,6 @@ class Model_Scrollery extends Model
                 ? (string) $row['ParkName']
                 : (string) ($row['KingdomName'] ?? '');
             $row['PrettyDate']  = Scroll::FormatDate((string) ($row['Date'] ?? ''));
-            $row['PrintUrl']    = UIR . 'Scrollery/render&awards=' . (int) $row['AwardsId'] . '&print=1';
             $printable[]        = $row;
         }
 
