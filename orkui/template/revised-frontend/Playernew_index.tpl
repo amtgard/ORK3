@@ -2924,6 +2924,11 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		<div class="pn-acct-modal-body">
 			<div class="pn-award-success" id="pn-award-success" style="display:none">
 				<i class="fas fa-check-circle"></i> <span id="pn-award-success-msg">Award saved!</span>
+				<?php /* Scrollery: printable is decided server-side per Model_Scrollery::award_is_printable()
+				          on the AwardsId the grant just wrote — populated/shown by revised.js, never a dead link. */ ?>
+				<a href="#" id="pn-award-print-link" class="pn-award-print-link" style="display:none" target="_blank" rel="noopener" data-tip="Print the certificate for the award you just granted">
+					<i class="fas fa-print"></i> Print certificate
+				</a>
 			</div>
 			<div class="pn-form-error" id="pn-award-error"></div>
 

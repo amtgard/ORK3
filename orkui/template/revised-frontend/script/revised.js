@@ -1825,7 +1825,10 @@ if (PnConfig.recError) {
     // ---- Add Award / Add Title Modal ----
     (function() {
         if (!PnConfig.canManageAwards) return;
-        var AWARD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/addaward';
+        // PlayerAjax (not Admin/player) so the JSON response carries back the
+        // new row's AwardsId + whether it has certificate art to print —
+        // Admin/player's addaward re-renders the whole admin page instead.
+        var AWARD_URL = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addaward';
         var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
         var KINGDOM_ID = PnConfig.kingdomId;
         // Player's held award ranks: canonical AwardId => max rank
@@ -2122,6 +2125,10 @@ if (PnConfig.recError) {
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
+            if (gid('pn-award-print-link')) {
+                gid('pn-award-print-link').style.display = 'none';
+                gid('pn-award-print-link').removeAttribute('href');
+            }
             gid('pn-award-note').value            = '';
             gid('pn-award-char-count').textContent = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
@@ -2198,11 +2205,28 @@ if (PnConfig.recError) {
 
         // ---- Save helpers ----
         var pnSuccessTimer = null;
-        function pnShowSuccess() {
-            var el = gid('pn-award-success');
+        // printUrl: when set, shows a "Print certificate" link alongside the
+        // success message and holds the banner open longer so there is time
+        // to click it — the award was just granted, so this is a link to the
+        // row actually written, not a re-entry of what the officer typed.
+        function pnShowSuccess(printUrl) {
+            var el      = gid('pn-award-success');
+            var linkEl  = gid('pn-award-print-link');
+            if (linkEl) {
+                if (printUrl) {
+                    linkEl.href = printUrl;
+                    linkEl.style.display = '';
+                } else {
+                    linkEl.removeAttribute('href');
+                    linkEl.style.display = 'none';
+                }
+            }
             el.style.display = '';
             clearTimeout(pnSuccessTimer);
-            pnSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+            pnSuccessTimer = setTimeout(function() {
+                el.style.display = 'none';
+                if (linkEl) linkEl.style.display = 'none';
+            }, printUrl ? 8000 : 3000);
         }
         function pnClearAward() {
             gid('pn-award-select').value             = '';
@@ -2260,7 +2284,13 @@ if (PnConfig.recError) {
             fetch(AWARD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    onSuccess();
+                    return resp.json();
+                })
+                .then(function(data) {
+                    if (!data || data.status !== 0) {
+                        throw new Error((data && data.error) || 'Save failed.');
+                    }
+                    onSuccess(data);
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
@@ -2273,7 +2303,14 @@ if (PnConfig.recError) {
         }
         // Save: add award and stay in modal for another
         gid('pn-award-save-same').addEventListener('click', function() {
-            pnDoSave(function() { pnAwardsDirty = true; pnShowSuccess(); pnClearAward(); });
+            pnDoSave(function(data) {
+                pnAwardsDirty = true;
+                var printUrl = (data && data.printable && data.awardsId)
+                    ? (PnConfig.uir + 'Scrollery/render&awards=' + data.awardsId + '&print=1')
+                    : null;
+                pnShowSuccess(printUrl);
+                pnClearAward();
+            });
         });
     })();
 

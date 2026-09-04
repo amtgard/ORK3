@@ -131,7 +131,51 @@ class Controller_PlayerAjax extends Controller
 
         $this->load_model('Player');
 
-        if ($action === 'revokeaward') {
+        if ($action === 'addaward') {
+            // Powers the Add Award modal on the CRM player profile
+            // (Playernew_index.tpl / pnOpenAwardModal). Unlike Admin/player's
+            // legacy 'addaward' case, this is a pure JSON endpoint so the modal
+            // can read back the new row's id and offer a "Print certificate"
+            // link without re-rendering the whole admin page.
+            $kingdom_award_id = (int)($_POST['KingdomAwardId'] ?? 0);
+            $given_by_id      = (int)($_POST['GivenById']      ?? 0);
+            $date             = trim($_POST['Date']            ?? '');
+            if (!valid_id($kingdom_award_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
+                exit;
+            }
+            if (!valid_id($given_by_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select who gave this award.']);
+                exit;
+            }
+            if (!strlen($date)) {
+                echo json_encode(['status' => 1, 'error' => 'Please enter the award date.']);
+                exit;
+            }
+            $r = $this->Player->add_player_award([
+                'Token'          => $this->session->token,
+                'RecipientId'    => $player_id,
+                'KingdomAwardId' => $kingdom_award_id,
+                'CustomName'     => $_POST['AwardName']     ?? '',
+                'AliasAwardId'   => (int)($_POST['AliasAwardId'] ?? 0),
+                'Rank'           => $_POST['Rank']          ?? '',
+                'Date'           => $date,
+                'GivenById'      => $given_by_id,
+                'Note'           => $_POST['Note']          ?? '',
+                'ParkId'         => valid_id($_POST['ParkId']    ?? 0) ? (int)$_POST['ParkId'] : 0,
+                'KingdomId'      => valid_id($_POST['KingdomId'] ?? 0) ? (int)$_POST['KingdomId'] : 0,
+                'EventId'        => valid_id($_POST['EventId']   ?? 0) ? (int)$_POST['EventId'] : 0,
+            ]);
+            if (($r['Status'] ?? 1) == 0) {
+                $awards_id = (int)($r['AwardsId'] ?? 0);
+                $this->load_model('Scrollery');
+                $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id);
+                echo json_encode(['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+            }
+
+        } elseif ($action === 'revokeaward') {
             $awards_id  = (int)($_POST['AwardsId']   ?? 0);
             $revocation = trim($_POST['Revocation'] ?? '');
             if (!valid_id($awards_id)) {

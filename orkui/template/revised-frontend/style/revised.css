@@ -1535,6 +1535,29 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 }
 .pn-award-success,
 .pk-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
+.pn-award-print-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 10px;
+    color: #2c5282;
+    font-weight: 600;
+    text-decoration: none;
+}
+.pn-award-print-link:hover { text-decoration: underline; }
+html[data-theme="dark"] .pn-award-print-link { color: #90cdf4; }
+/* The link sits at the very top of the modal's scrolling body
+   (.pn-acct-modal-body, overflow-y:auto), so the generic above-anchored
+   [data-tip] tooltip would clip against the scroll container's top edge —
+   anchor it below instead (see reference_data_tip_tooltips.md). */
+#pn-award-print-link[data-tip]:hover::after {
+    bottom: auto !important;
+    top: calc(100% + 6px) !important;
+    left: 0 !important;
+    transform: none !important;
+    white-space: normal !important;
+    max-width: 220px !important;
+}
 .pn-btn-ghost,
 .kn-btn-ghost { background:transparent; border:1px solid transparent; color:var(--ork-text-secondary); padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
 .pn-btn-ghost:hover { background:#f7fafc; border-color:#e2e8f0; }
@@ -6906,6 +6929,7 @@ html[data-theme="dark"] #pk-rec-overlay .pk-form-error {
   color: #feb2b2;
 }
 html[data-theme="dark"] .pk-award-success,
+html[data-theme="dark"] .pn-award-success,
 html[data-theme="dark"] .pk-att-feedback.pk-att-ok {
   background: rgba(72,187,120,0.15);
   border-color: #68d391;
