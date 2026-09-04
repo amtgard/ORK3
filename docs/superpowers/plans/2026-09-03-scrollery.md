@@ -1165,7 +1165,7 @@ eighteen are mechanical.
 - Consumes: `Scroll::BuildScroll()`, `Scroll::Render()`, `scroll_partial()`.
 - Produces: `Controller_Scrollery::render()`; `Model_Scrollery::scroll_for_awards_id(int $awardsId, int $viewerId): ?array`.
 
-- [ ] **Step 1: Write `griffon.tpl`**
+- [x] **Step 1: Write `griffon.tpl`**
 
 ```php
 <div class="award-template" data-order="griffon" data-rank="<?= (int) $s['rank'] ?>">
@@ -1190,7 +1190,7 @@ eighteen are mechanical.
 The doubled `soft-light` layer is **deliberate** — it deepens the blend. `griffon` has no
 `symbol_0.png`; rank 0 borrows `symbol_5`, exactly as the source does.
 
-- [ ] **Step 2: Write the render surface**
+- [x] **Step 2: Write the render surface**
 
 `Scrollery_render.tpl` — no ORK chrome, only certificates:
 
@@ -1215,7 +1215,15 @@ The doubled `soft-light` layer is **deliberate** — it deepens the blend. `grif
 The `<svg>`/`<foreignObject>` frame is kept from Arcanyst: it is what makes the same
 2550x3300 markup scale to both a small preview and a printed page.
 
-- [ ] **Step 3: Write the controller**
+- [x] **Step 3: Write the controller**
+
+> **Corrected during execution — the render route cannot use `$this->template`.**
+> `View::view()` wraps every template in the controller template and then the site
+> theme (nav, GTM, footer). Setting `$this->template` would therefore put full ORK
+> chrome around the certificates, which is the one thing this route must not have.
+> `render()` includes the template with its data extracted into local scope and
+> `exit`s, following the `Controller_EventEmbed` precedent. The template reads
+> `$Scrolls`, not `$this->__data['Scrolls']`.
 
 `controller.Scrollery.php`:
 
@@ -1262,7 +1270,7 @@ class Controller_Scrollery extends Controller
 }
 ```
 
-- [ ] **Step 4: Write the model**
+- [x] **Step 4: Write the model**
 
 `model.Scrollery.php` — thin; the permission decision lives here so every route shares it.
 
@@ -1346,7 +1354,7 @@ read `PronounId` and `PronounCustom` from `GetPlayer()`, then
 Return `'their'` for id 0 or any miss. Never leave it blank — the sentence reads
 "with third" if you do.
 
-- [ ] **Step 5: Render it in a browser**
+- [x] **Step 5: Render it in a browser**
 
 Pick a real Griffon award from the dev database:
 
@@ -1361,7 +1369,14 @@ Log in as that player (or an officer over their park), then open:
 
 `http://localhost:19080/orkui/index.php?Route=Scrollery/render&awards=<awards_id>`
 
-- [ ] **Step 6: Compare against Arcanyst — the visual gate**
+- [~] **Step 6: Compare against Arcanyst — the visual gate** (AWAITING HUMAN SIGN-OFF)
+
+> Structure verified mechanically: the layer stack, its document order, both blend
+> modes, the duplicated soft-light layer and the rank-offset table all match
+> `griffon.html` exactly, and all 8 asset URLs resolve. Rendered against real award
+> data and screenshotted beside Arcanyst's own griffon rank 1 — every visible
+> difference was data (real issuer, real pronoun, ORK's "Griffin" spelling), not
+> rendering. Final fidelity call belongs to a person.
 
 Serve arc-scroll and render the same order and rank:
 
@@ -1375,7 +1390,7 @@ position and multiply blend, the doubled soft-light symbol's depth, rank numeral
 position at several ranks, and the text block's vertical rhythm. **Do not proceed until
 these match.** Anything wrong here is wrong in all nineteen.
 
-- [ ] **Step 7: Run the full suite and commit**
+- [x] **Step 7: Run the full suite and commit**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
