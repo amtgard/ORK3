@@ -1842,6 +1842,16 @@ git commit -m "Enhancement: Scrollery — assert every order has a partial"
 - Produces: `Model_Scrollery::printable_awards_for_player(int $mundaneId): array` — the
   player's award rows filtered to those with certificate art, each with a `PrintUrl`.
 
+> **Decision taken during Task 4 — the model must supply the real park title.**
+> The issuer line reads "and the &lt;title&gt; of &lt;name&gt;". `AwardsForPlayer()` returns
+> `ParkName` but not the park's rank word, and `Barony` is wrong for most parks (349
+> Freeholds, 274 Grand Duchies, ~90 Baronies). So `model.Scrollery` joins
+> `ork_park -> ork_parktitle` on the award's `at_park_id` and passes the true word to
+> `BuildScroll()` as `$context['issuerTitle']`. This means wrapping `AwardsForPlayer()`
+> rather than using its rows untouched — the reuse the spec asks for still holds, the
+> wrapper just decorates each row. `Barony`/`Kingdom` remains the fallback for rows
+> whose park cannot be resolved.
+
 - [ ] **Step 1: Write the failing permission test**
 
 ```php
