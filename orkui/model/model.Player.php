@@ -46,7 +46,19 @@ class Model_Player extends Model
 
     public function fetch_player_details($mundane_id)
     {
-        return $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
+        $details = $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
+        // Scrollery: "does this award have certificate art?" is a domain question, so
+        // answer it here once per row instead of letting the profile template reach
+        // straight into Scroll.
+        if (is_array($details) && is_array($details['Awards'] ?? null)) {
+            foreach ($details['Awards'] as $i => $award) {
+                if (is_array($award)) {
+                    $details['Awards'][$i]['CanPrintScroll'] = Scroll::HasArt($award);
+                }
+            }
+        }
+
+        return $details;
     }
 
     public function fetch_player_attendance($mundane_id)

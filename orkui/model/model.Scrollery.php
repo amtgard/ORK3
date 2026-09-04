@@ -173,13 +173,32 @@ class Model_Scrollery extends Model
      * mysql_real_escape_string() is a no-op shim, so what protects this is the (int)
      * cast on every id and the ISO-date regex — not escaping.
      */
-    public function bulkSqlForTest(string $type, string $id, string $from, string $to): string
-    {
-        $id = (int) $id;
+    public function bulkSqlForTest(
+        string $type,
+        string $id,
+        string $scopeType,
+        string $scopeId,
+        string $from = '',
+        string $to = ''
+    ): string {
+        $id      = (int) $id;
+        $scopeId = (int) $scopeId;
 
         switch ($type) {
             case 'event':
-                $scope = 'awards.at_event_id = ' . $id;
+                // The scope gate belongs on the AWARD row, not on the event. An event
+                // does not reliably carry the granting body: 974 award rows sit at an
+                // event whose kingdom_id differs from the award's own at_kingdom_id,
+                // and single events (8462, 7, 15975, 14761, 11193) carry awards from
+                // three kingdoms at once. Filtering on awards.at_park_id /
+                // at_kingdom_id both closes the cross-body disclosure — the other
+                // kingdoms' rows at a shared event are no longer returned — and keeps
+                // the legitimate case working, where this body's own awards were
+                // granted at somebody else's event.
+                $scope = 'awards.at_event_id = ' . $id
+                       . ($scopeType === 'kingdom'
+                           ? ' and awards.at_kingdom_id = ' . $scopeId
+                           : ' and awards.at_park_id = ' . $scopeId);
                 break;
             case 'kingdom':
                 $scope = 'awards.at_kingdom_id = ' . $id;
@@ -216,7 +235,8 @@ class Model_Scrollery extends Model
                   left join ' . DB_PREFIX . 'park p on p.park_id = awards.at_park_id
                   left join ' . DB_PREFIX . 'kingdom k on k.kingdom_id = awards.at_kingdom_id
                  where ' . $scope . $range . '
-                 order by m.persona, a.name, awards.rank';
+                 order by m.persona, a.name, awards.rank
+                 limit ' . (Scroll::MAX_PRINT_RUN + 1);
     }
 
     /**
@@ -225,18 +245,40 @@ class Model_Scrollery extends Model
      * Returns both the printable rows and the ones excluded for having no artwork,
      * so the officer is told rather than silently handed fewer scrolls than awards.
      *
-     * @return array{Printable: array<int, array>, Excluded: array<int, array>}
+     * Failed says the query itself errored — distinct from "no awards matched", which
+     * an officer would otherwise read as "there is nothing to print". Truncated says
+     * the selection hit Scroll::MAX_PRINT_RUN and is not the whole answer.
+     *
+     * @return array{Printable: array<int, array>, Excluded: array<int, array>, Failed: bool, Truncated: bool}
      */
-    public function awards_for_bulk(string $type, int $id, string $from = '', string $to = ''): array
-    {
+    public function awards_for_bulk(
+        string $type,
+        int $id,
+        string $scopeType,
+        int $scopeId,
+        string $from = '',
+        string $to = ''
+    ): array {
         $printable = [];
         $excluded  = [];
 
-        if ($id <= 0) {
-            return ['Printable' => $printable, 'Excluded' => $excluded];
+        if ($id <= 0 || $scopeId <= 0) {
+            return ['Printable' => $printable, 'Excluded' => $excluded, 'Failed' => false, 'Truncated' => false];
         }
 
-        $rs = $this->db_query($this->bulkSqlForTest($type, (string) $id, $from, $to));
+        $rs = $this->db_query(
+            $this->bulkSqlForTest($type, (string) $id, $scopeType, (string) $scopeId, $from, $to)
+        );
+        if ($rs === null) {
+            return ['Printable' => $printable, 'Excluded' => $excluded, 'Failed' => true, 'Truncated' => false];
+        }
+
+        // The query asks for one row more than the cap purely to detect the overflow.
+        $truncated = count($rs) > Scroll::MAX_PRINT_RUN;
+        if ($truncated) {
+            $rs = array_slice($rs, 0, Scroll::MAX_PRINT_RUN);
+        }
+
         foreach ($rs as $row) {
             // Shaped to the keys Scroll::HasArt() and ResolveTitle() expect.
             $shaped = [
@@ -264,18 +306,48 @@ class Model_Scrollery extends Model
             }
         }
 
-        return ['Printable' => $printable, 'Excluded' => $excluded];
+        return [
+            'Printable' => $printable,
+            'Excluded'  => $excluded,
+            'Failed'    => false,
+            'Truncated' => $truncated,
+        ];
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function db_query(string $sql): array
+    /**
+     * Rows, or null when the query itself failed.
+     *
+     * Null rather than [] on purpose: an empty array here used to mean both "this
+     * event had no awards" and "the database errored", and the officer read the
+     * second as the first.
+     *
+     * A false return is NOT the failure signal — YapoDb::Query() delegates to
+     * DataSet(), which always hands back a YapoResultSet, and PDO runs in
+     * ERRMODE_WARNING so a bad statement neither returns false nor throws (the
+     * comment above YapoMysql::ExecuteChecked() says as much). The real signals are
+     * the SQLSTATE the result set captures at construction, and — when prepare()
+     * itself returns false — the Error raised inside DataSet() by calling
+     * execute() on a bool.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function db_query(string $sql): ?array
     {
         $db = Ork3::$Lib->player->db;
         $db->Clear();
-        $rs = $db->query($sql);
+
+        try {
+            $rs = $db->query($sql);
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        if (!is_object($rs) || $this->result_failed($rs)) {
+            return null;
+        }
 
         $rows = [];
-        if ($rs !== false && $rs->size() > 0) {
+        if ($rs->size() > 0) {
             while ($rs->next()) {
                 $rows[] = [
                     'awards_id'         => $rs->awards_id,
@@ -296,6 +368,22 @@ class Model_Scrollery extends Model
         }
 
         return $rows;
+    }
+
+    /**
+     * Whether the statement behind a result set actually failed.
+     *
+     * YapoResultSet records the statement's SQLSTATE and errorInfo in __ERROR the
+     * moment it is built. '00000' is success; anything else is a real error that
+     * would otherwise read as "no awards matched".
+     *
+     * @param object $rs
+     */
+    private function result_failed($rs): bool
+    {
+        $state = $rs->__ERROR[0][1] ?? null;
+
+        return $state !== null && $state !== '' && $state !== '00000';
     }
 
     /** Own award, or an officer with edit rights over the granting park/kingdom. */

@@ -185,6 +185,22 @@ from the Awards-tab button once the row exists.
 officer has to know the id (or come from a link that carries it). The date-range path
 needs no such knowledge and is the usable one today.
 
+### 3.12b Bulk scoping leaves three small populations unreachable
+
+Closing the cross-tenant leak (see §4) moved the bulk event filter onto the AWARD row's
+own `at_park_id` / `at_kingdom_id` rather than the event's. That is correct and
+fail-closed, but it leaves three groups nobody can list through bulk:
+
+- **336 award rows** have `at_park_id > 0` but no `at_kingdom_id`, so a *kingdom* officer
+  no longer sees them on the event path. The park officer still does. This matches how
+  the pre-existing non-event kingdom branch already behaved.
+- **135 event-attached rows** carry neither `at_park_id` nor `at_kingdom_id` and are now
+  unreachable through bulk by anyone. That is unattributable data, not a scoping bug.
+- **One event-day exceeds the 200 cap on its own**: event 12250, kingdom 4, 2020-03-07 =
+  391 awards. Since the date filter's finest grain is a whole day, rows 201-391 there
+  cannot be reached by narrowing. The banner now says so rather than promising a remedy
+  that does not work, but paging or a park filter would actually fix it.
+
 ### 3.13 Scrollery is not linked from any navigation — TOP OF THE LIST
 
 **This is the one gap that makes everything else moot: nothing in the ORK links to the
@@ -207,6 +223,26 @@ What it needs:
 ---
 
 ## 4. Fixed along the way — recorded so they are not "rediscovered"
+
+### Cross-tenant disclosure in bulk print (found by the polish panel, 2026-09-03)
+
+`Scrollery/bulk` authorised the viewer against the URL's own park/kingdom, then — when
+`?event=N` was present — ran `awards.at_event_id = N` with no scope predicate at all. Any
+officer could enumerate any event's full award list system-wide: recipient personas,
+award names, ranks, dates, given-by. The render route still re-checked per award, so
+nothing could be *printed*, but the listing itself leaked. Three review lenses flagged it
+independently, and the page's own copy ("searches this park only") proved it unintended.
+
+The first fix gated on the EVENT's `kingdom_id`/`park_id` and was rejected by the critic
+on real data: **974 awards sit at an event belonging to a different kingdom**, and event
+8462 alone spans **3 kingdoms / 747 awards**. That gate was simultaneously too strict
+(blocking a body's own awards granted at someone else's event) and still leaky (returning
+other bodies' rows at a shared event). The award row carries its own scope; the event does
+not. The predicate now filters on `awards.at_park_id` / `awards.at_kingdom_id`.
+
+Verified after the fix: a kingdom-4 officer querying event 8462 gets 741 rows across
+exactly **1** distinct `at_kingdom_id`; kingdom 1's 5 rows and kingdom 31's 1 row are
+gone. `ScrolleryBulkQueryTest` now carries the regression test.
 
 - **Title precedence.** `custom_name` is not a title field: on ladder awards it is
   overwhelmingly a bare tag ("Rose" against a kingdomaward of "Order of the Rose"),

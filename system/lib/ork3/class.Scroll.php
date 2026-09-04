@@ -14,6 +14,15 @@ class Scroll extends Ork3
 {
     public const DEFAULT_RANKS = ['from' => 0, 'to' => 10];
 
+    /**
+     * The most certificates one print run may contain.
+     *
+     * Each one costs several domain queries to build and a full 2550x3300 page to
+     * render, and the awards table holds ~391k rows, so both the bulk selection and
+     * the render route stop here rather than accepting an unbounded list.
+     */
+    public const MAX_PRINT_RUN = 200;
+
     public const DEFAULT_RESOURCES = [
         'flourish_top'    => 'scrolls/common/text/squiggly-top.svg',
         'flourish_right'  => 'scrolls/common/text/squiggly-right.svg',
@@ -240,13 +249,32 @@ class Scroll extends Ork3
         ];
     }
 
-    /** Render one certificate's markup. `$s` is the name every partial binds to. */
+    /**
+     * Render one certificate's markup. `$s` is the name every partial binds to.
+     *
+     * A missing partial file is a deploy/packaging fault, not a user error, and a
+     * bulk run may be 200 certificates deep when it surfaces — so it degrades to a
+     * visible placeholder and the rest of the batch still prints. A scroll with no
+     * order at all is a programmer error and still throws.
+     */
     public static function Render(array $s): string
     {
-        $path = self::PartialPath($s['order']);
-        if (!is_file($path)) {
-            throw new RuntimeException('No partial for order ' . $s['order']);
+        $orderId = (string) ($s['order'] ?? '');
+        if ($orderId === '') {
+            throw new RuntimeException('Scroll::Render() called with no order');
         }
+
+        $path = self::PartialPath($orderId);
+        if (!is_file($path)) {
+            return '<div xmlns="http://www.w3.org/1999/xhtml"'
+                . ' style="display:flex;align-items:center;justify-content:center;'
+                . 'width:2550px;height:3300px;border:8px dashed #999;box-sizing:border-box;'
+                . 'font:64px/1.4 serif;color:#666;text-align:center;padding:200px;">'
+                . 'This certificate could not be printed: its artwork is missing from this'
+                . ' installation (' . scroll_e($orderId) . ').'
+                . '</div>';
+        }
+
         $art = self::ArtBase();
         ob_start();
         include $path;

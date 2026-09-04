@@ -2115,7 +2115,9 @@ Test the SQL builder in isolation — assert the generated statement filters on
 `at_event_id` (or `at_park_id`/`at_kingdom_id` plus a date range), joins
 `kingdomaward`/`award`/`mundane` the same way `AwardsForPlayer()` does, and that ids are
 cast to `int` before interpolation. Do **not** hit the database; extract the SQL into a
-`public function bulkSqlForTest(string $type, string $id, string $from, string $to): string`
+`public function bulkSqlForTest(string $type, string $id, string $scopeType, string $scopeId, string $from = '', string $to = ''): string`
+(signature widened during the polish pass so the event branch can carry the authorised
+scope — see docs/scrollery-deferred.md §4)
 and assert on the string. (Named `...ForTest` rather than made private so the test needs no
 reflection; it builds SQL and touches nothing.)
 

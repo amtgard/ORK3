@@ -10,6 +10,9 @@ $scope     = is_array($Scope ?? null) ? $Scope : [];
 $printable = is_array($Printable ?? null) ? $Printable : [];
 $excluded  = is_array($Excluded ?? null) ? $Excluded : [];
 $hasRun    = !empty($HasRun);
+$error     = (string) ($Error ?? '');
+$truncated = !empty($Truncated);
+$maxRun    = (int) ($MaxRun ?? 200);
 $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($ScopeId ?? 0);
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -27,6 +30,8 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
 .sc-bar      { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
 .sc-count    { color: var(--ork-text-hint); font-size: 12px; }
 .sc-empty    { padding: 30px 16px; text-align: center; color: var(--ork-text-hint); }
+.sc-error    { border-left: 4px solid var(--ork-danger, #b3261e); }
+.sc-warn     { color: var(--ork-danger, #b3261e); }
 </style>
 
 <div class="adm-wrap sc-wrap">
@@ -54,9 +59,27 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
             <a class="adm-btn adm-btn-ghost" href="<?= UIR ?>Scrollery">Back</a>
         </form>
         <p class="sc-count" style="margin:12px 0 0">
-            An event id wins over the date range. Both search this <?= htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8') ?> only.
+            Only awards granted by this <?= htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8') ?> are listed, whichever filters you use —
+            at a shared event, another <?= htmlspecialchars((string) ($ScopeType ?? 'park'), ENT_QUOTES, 'UTF-8') ?>'s awards are not included.
+            An event id and a date range combine: give both to narrow a large event.
+            At most <?= $maxRun ?> awards are listed per search.
         </p>
     </div>
+
+    <?php if ($error !== ''): ?>
+        <div class="adm-alert sc-error" role="alert" style="margin-bottom:14px">
+            <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($truncated): ?>
+        <div class="adm-alert" role="status" style="margin-bottom:14px">
+            This selection was cut off at <?= $maxRun ?> awards — there are more that
+            match. Set a From and To date to reach the rest a stretch at a time; the
+            date range applies to an event id as well. If a single day already exceeds
+            <?= $maxRun ?> awards, print what is listed and narrow by park instead.
+        </div>
+    <?php endif; ?>
 
     <?php if ($hasRun && $excluded !== []): ?>
         <div class="adm-alert" style="margin-bottom:14px">
@@ -78,7 +101,7 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
         </div>
     <?php endif; ?>
 
-    <?php if ($hasRun): ?>
+    <?php if ($hasRun && $error === ''): ?>
     <div class="adm-card">
         <div class="adm-card-header">
             <span class="adm-card-title">Printable awards</span>
@@ -129,6 +152,7 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
 <script>
 (function () {
     'use strict';
+    var MAX_RUN = <?= $maxRun ?>;
     var all   = document.getElementById('sc-all'),
         btn   = document.getElementById('sc-print-bulk'),
         count = document.getElementById('sc-selected-count');
@@ -140,7 +164,8 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
     }
     function sync() {
         var n = picks().length;
-        count.textContent = n + (n === 1 ? ' selected' : ' selected');
+        count.textContent = n + ' selected' + (n > MAX_RUN ? ' — ' + MAX_RUN + ' max per print run' : '');
+        count.classList.toggle('sc-warn', n > MAX_RUN);
         btn.disabled = n === 0;
     }
 
@@ -155,6 +180,15 @@ $base      = UIR . 'Scrollery/bulk/' . ($ScopeType ?? 'park') . '/' . (int) ($Sc
     btn.addEventListener('click', function () {
         var ids = picks();
         if (!ids.length) { return; }
+        // One print run is capped server-side; say so here rather than let the
+        // render route silently drop the tail.
+        if (ids.length > MAX_RUN) {
+            count.textContent = ids.length + ' selected — only ' + MAX_RUN +
+                ' can be printed at once. Uncheck ' + (ids.length - MAX_RUN) + '.';
+            count.classList.add('sc-warn');
+            return;
+        }
+        count.classList.remove('sc-warn');
         // The render route re-checks permission for every id it is given, so a
         // hand-edited list cannot print someone else's award.
         window.open(<?= json_encode(UIR) ?> + 'Scrollery/render&awards=' + ids.join(',') + '&print=1',

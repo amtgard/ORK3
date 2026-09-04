@@ -98,13 +98,28 @@ class Controller_Scrollery extends Controller
         $to      = (string) ($_GET['to'] ?? '');
         $ran     = $eventId > 0 || $from !== '' || $to !== '';
 
-        $result = ['Printable' => [], 'Excluded' => []];
+        $result = ['Printable' => [], 'Excluded' => [], 'Failed' => false, 'Truncated' => false];
+        $error  = '';
+
         if ($ran) {
+            // The event filter narrows WITHIN the authorised scope rather than
+            // replacing it — the query itself requires the award's own at_park_id /
+            // at_kingdom_id to match, so a shared event yields this body's awards and
+            // nobody else's. The date range still applies on top of an event id,
+            // which is what makes the truncation notice's advice actionable.
             $result = $eventId > 0
-                ? $this->Scrollery->awards_for_bulk('event', $eventId)
-                : $this->Scrollery->awards_for_bulk($scopeType, $scopeId, $from, $to);
+                ? $this->Scrollery->awards_for_bulk('event', $eventId, $scopeType, $scopeId, $from, $to)
+                : $this->Scrollery->awards_for_bulk($scopeType, $scopeId, $scopeType, $scopeId, $from, $to);
         }
 
+        if (!empty($result['Failed'])) {
+            $error = 'The award search could not be completed — the database returned an error. '
+                . 'This is not the same as finding nothing; try again, and tell an administrator if it persists.';
+        }
+
+        $this->data['Error']      = $error;
+        $this->data['Truncated']  = !empty($result['Truncated']);
+        $this->data['MaxRun']     = Scroll::MAX_PRINT_RUN;
         $this->data['ScopeType']  = $scopeType;
         $this->data['ScopeId']    = $scopeId;
         $this->data['Scope']      = $this->Scrollery->scope_context($scopeType, $scopeId);
@@ -186,6 +201,14 @@ class Controller_Scrollery extends Controller
 
         $variant = preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? '')));
 
+        // Each id costs several domain queries and a full page of markup, so the list
+        // is capped rather than unbounded. The overflow is reported on the page.
+        $dropped = 0;
+        if (count($awardsIds) > Scroll::MAX_PRINT_RUN) {
+            $dropped   = count($awardsIds) - Scroll::MAX_PRINT_RUN;
+            $awardsIds = array_slice($awardsIds, 0, Scroll::MAX_PRINT_RUN);
+        }
+
         $scrolls = [];
         foreach ($awardsIds as $awardsId) {
             $scroll = $this->Scrollery->scroll_for_awards_id($awardsId, $viewerId, $variant);
@@ -202,6 +225,8 @@ class Controller_Scrollery extends Controller
         $this->render_bare('Scrollery_render.tpl', [
             'Scrolls'    => $scrolls,
             'AutoPrint'  => isset($_GET['print']),
+            'Dropped'    => $dropped,
+            'MaxRun'     => Scroll::MAX_PRINT_RUN,
             'PageTitle'  => count($scrolls) === 1
                 ? $scrolls[0]['title'] . ' — ' . $scrolls[0]['player']
                 : count($scrolls) . ' scrolls',

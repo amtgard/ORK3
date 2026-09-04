@@ -59,6 +59,13 @@ $scrollery_css = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
         </filter>
     </defs>
 </svg>
+<?php if (!empty($Dropped)): ?>
+<p style="max-width:60em;margin:16px auto;padding:12px 16px;border:1px solid #b58900;background:#fff8e1;
+          color:#5b4600;font:14px/1.5 system-ui,sans-serif;" role="status">
+    Only the first <?= (int) ($MaxRun ?? 0) ?> certificates of this run are shown.
+    <?= (int) $Dropped ?> more were left out — print them in a second run.
+</p>
+<?php endif; ?>
 <?php foreach ($Scrolls as $s): ?>
 <div class="scroll-page">
     <svg viewBox="0 0 2550 3300"

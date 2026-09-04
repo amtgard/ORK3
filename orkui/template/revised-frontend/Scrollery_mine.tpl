@@ -15,21 +15,17 @@ $mundaneId = (int) ($MundaneId ?? 0);
 <style>
 .sc-wrap        { max-width: 1100px; margin: 0 auto 80px; }
 .sc-lede        { color: var(--ork-text-hint); font-size: 13px; margin: 0 0 18px; line-height: 1.5; }
-.sc-table       { width: 100%; border-collapse: collapse; }
-.sc-table th    { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-                  color: var(--ork-text-hint); padding: 8px 12px; border-bottom: 2px solid var(--ork-border); }
-.sc-table td    { padding: 10px 12px; border-bottom: 1px solid var(--ork-border); vertical-align: middle; }
-.sc-table tr:last-child td { border-bottom: 0; }
 .sc-order       { font-weight: 600; }
 .sc-where       { color: var(--ork-text-hint); font-size: 12px; }
 .sc-actions     { text-align: right; white-space: nowrap; }
 .sc-empty       { padding: 34px 18px; text-align: center; color: var(--ork-text-hint); }
 .sc-credit      { margin-top: 26px; font-size: 11px; color: var(--ork-text-hint); line-height: 1.6; }
+/* .adm-table has no stacked-card mode; this table needs one on a phone. */
 @media (max-width: 640px) {
-    .sc-table thead { display: none; }
-    .sc-table tr    { display: block; border-bottom: 1px solid var(--ork-border); padding: 10px 0; }
-    .sc-table td    { display: block; border: 0; padding: 2px 12px; }
-    .sc-actions     { text-align: left; padding-top: 8px !important; }
+    .sc-wrap .adm-table thead { display: none; }
+    .sc-wrap .adm-table tr    { display: block; border-bottom: 1px solid var(--ork-border); padding: 10px 0; }
+    .sc-wrap .adm-table td    { display: block; border: 0; padding: 2px 12px; }
+    .sc-actions               { text-align: left; padding-top: 8px !important; }
 }
 </style>
 
@@ -54,7 +50,7 @@ $mundaneId = (int) ($MundaneId ?? 0);
                 Certificate artwork exists for the ladder orders and the Order of the Flame.
                 Awards without artwork are not listed here.
             </p>
-            <table class="sc-table">
+            <table class="adm-table">
                 <thead>
                     <tr>
                         <th>Order</th>

@@ -239,12 +239,21 @@
 
         function render(rows) {
             if (!rows.length) { acEl.classList.remove(OPEN); return; }
+            // Row template mirrors the canonical kn-ac renderer in revised.js so the
+            // Playersearch-v2 tier markers read the same everywhere.
             acEl.innerHTML = rows.slice(0, 10).map(function (p) {
                 var abbr = (p.KAbbr && p.PAbbr)
                     ? ' <span style="color:#a0aec0;font-size:11px">(' + esc(p.KAbbr) + ':' + esc(p.PAbbr) + ')</span>'
                     : '';
-                return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId
-                     + '" data-name="' + encodeURIComponent(p.Persona) + '">' + esc(p.Persona) + abbr + '</div>';
+                var inactive = p.Active === 0
+                    ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+                var suspended = p.Suspended === 1
+                    ? ' <span style="margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px">suspended</span>'
+                    : '';
+                return '<div class="kn-ac-item' + (p.Suspended === 1 ? ' kn-ac-suspended' : '')
+                     + '" tabindex="-1" data-id="' + p.MundaneId
+                     + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                     + esc(p.Persona) + abbr + suspended + inactive + '</div>';
             }).join('');
             if (typeof tnPositionAcFixed === 'function') { tnPositionAcFixed(playerEl, acEl); }
             acEl.classList.add(OPEN);
@@ -263,6 +272,11 @@
         document.addEventListener('click', function (e) {
             if (e.target !== playerEl && !acEl.contains(e.target)) { acEl.classList.remove(OPEN); }
         });
+
+        // Shared arrow-key/Enter navigation, same as every other kn-ac consumer.
+        if (typeof acKeyNav === 'function') {
+            acKeyNav(playerEl, acEl, OPEN, '.kn-ac-item');
+        }
     }
 
     /* ---- wiring --------------------------------------------------------- */
