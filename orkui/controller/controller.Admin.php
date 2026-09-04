@@ -1858,6 +1858,7 @@ class Controller_Admin extends Controller
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+        $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($_uid, AUTH_PARK, (int) $id);
     }
 
     public function new_player_attendance()
@@ -2083,6 +2084,7 @@ class Controller_Admin extends Controller
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
             $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
+            $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($_uid, AUTH_PARK, (int) $id);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2552,6 +2554,12 @@ class Controller_Admin extends Controller
     {
         $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
         $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
+        $this->data['CanPrintScrolls'] = $this->admin_can_print_scrolls($uid, AUTH_KINGDOM, $kingdomId);
+    }
+
+    private function admin_can_print_scrolls(int $uid, string $authType, int $scopeId): bool
+    {
+        return $uid > 0 && $this->Authorization->has_authority($uid, $authType, $scopeId, AUTH_EDIT);
     }
 
 }

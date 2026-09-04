@@ -3447,7 +3447,9 @@ class Player extends Ork3
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
 
-            return Success('');
+            $result = Success('');
+            $result['AwardsId'] = (int) $awards->awards_id;
+            return $result;
         } else {
             return NoAuthorization();
         }

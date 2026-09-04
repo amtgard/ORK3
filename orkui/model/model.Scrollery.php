@@ -623,4 +623,19 @@ class Model_Scrollery extends Model
 
         return '';
     }
+
+    /**
+     * Whether a freshly-granted award row can actually be printed — used by the
+     * award-grant success path to decide whether to offer a "Print this
+     * certificate" link. Deliberately does not check viewer authority: it is
+     * called immediately after the officer's own grant succeeds.
+     */
+    public function award_is_printable(int $awardsId): bool
+    {
+        if ($awardsId <= 0) {
+            return false;
+        }
+        $row = $this->award_row($awardsId);
+        return $row !== null && Scroll::HasArt($row);
+    }
 }
