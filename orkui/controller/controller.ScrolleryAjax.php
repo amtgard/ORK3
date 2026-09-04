@@ -87,6 +87,19 @@ class Controller_ScrolleryAjax extends Controller
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',
                 'useOf'       => ($_POST['useOf'] ?? '') === '1',
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_POST['variant'] ?? ''))),
+                // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
+                // allowlist for these, and it runs inside BuildScroll(). Sanitising
+                // here as well would be a second, weaker opinion about a closed
+                // vocabulary — and anything it let through would still be rejected
+                // there. BuildScroll() ignores the key entirely for every order but
+                // custom, so a recipe on a Knighthood costs nothing.
+                'recipe'      => [
+                    'ground'    => (string) ($_POST['ground'] ?? ''),
+                    'border'    => (string) ($_POST['border'] ?? ''),
+                    'primary'   => (string) ($_POST['primary'] ?? ''),
+                    'secondary' => (string) ($_POST['secondary'] ?? ''),
+                    'rankSet'   => (string) ($_POST['rankSet'] ?? ''),
+                ],
             ]
         );
 

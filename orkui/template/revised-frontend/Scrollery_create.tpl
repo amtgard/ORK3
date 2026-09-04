@@ -11,6 +11,54 @@ $scope   = is_array($Scope ?? null) ? $Scope : [];
 $choices = is_array($Awards ?? null) ? $Awards : [];
 $css     = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
 $today   = date('Y-m-d');
+
+/*
+ * The custom scroll's composable vocabulary. Taken from the controller when it
+ * passes one, and otherwise straight off Scroll — Recipes() is a memoised read of
+ * a plain data file with no database behind it, and scroll/custom.tpl already makes
+ * exactly this call when it renders, so the composer is not reaching anywhere the
+ * renderer does not.
+ */
+$recipes = is_array($Recipes ?? null) ? $Recipes : Scroll::Recipes();
+$default = Scroll::DEFAULT_RECIPE;
+
+/*
+ * Which grounds are dark, which are washes and which border is a band are Scroll's
+ * to say — the renderer composites per ground tone off these same constants, and a
+ * picker that re-derived any of it (by name, or by measuring the image) would be a
+ * second opinion that can disagree. Read them; never restate them.
+ *
+ * They are surfaced as per-option notes rather than as styling, because what the
+ * officer needs is the reason a choice will look different, not a decoration.
+ */
+$groundNotes = [];
+foreach (Scroll::DARK_GROUNDS as $key) {
+    $groundNotes[$key] = ucfirst($key) . ' is a dark ground: the border, the numeral and '
+        . 'the heraldic device are lifted rather than multiplied so they stay legible on it.';
+}
+foreach (array_keys(Scroll::GROUND_WASHES) as $key) {
+    $groundNotes[$key] = ucfirst($key) . ' is a soft-light wash laid over the parchment '
+        . 'rather than a plate of its own, so the paper still reads through it.';
+}
+$borderNotes = [
+    Scroll::BORDER_BAND => ucfirst(Scroll::BORDER_BAND) . ' is a decorative band centred '
+        . 'over the knotwork, not a frame around the whole page.',
+];
+
+/*
+ * Vocabulary keys are identifiers, not display text; ucfirst() is the rule and this
+ * map is the handful that read badly under it. Renaming an entry in
+ * scroll-recipes.php falls back to ucfirst() — a plainer label, never a broken one.
+ */
+$recipeLabels = [
+    'knot'       => 'Knotwork',
+    'starfield2' => 'Starfield II',
+    'rosewash'   => 'Rose wash',
+    'map'        => 'Cartography',
+];
+$recipeLabel = static function (string $key) use ($recipeLabels): string {
+    return $recipeLabels[$key] ?? ucfirst($key);
+};
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($css) ?>">
@@ -37,6 +85,20 @@ $today   = date('Y-m-d');
 .sc-reset      { background: none; border: 0; color: var(--ork-text-hint); cursor: pointer;
                  padding: 2px; font-size: 10px; border-radius: 3px; }
 .sc-reset:hover{ color: var(--ork-text); background: rgba(128,128,128,.15); }
+/* The custom scroll's design block — only ever shown for the custom order. */
+.sc-recipe     { border-top: 1px solid var(--ork-border); padding-top: 12px; margin-bottom: 4px; }
+.sc-recipe-head{ font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+                 color: var(--ork-text-muted); font-weight: 600; margin-bottom: 8px; }
+.sc-swatch     { display: inline-flex; width: 34px; height: 11px; border-radius: 2px; overflow: hidden;
+                 vertical-align: -1px; margin-left: 6px; border: 1px solid var(--ork-border); }
+.sc-swatch i   { flex: 1 1 50%; }
+/* text-align is not cosmetic here: orkui.css carries a global `p { text-align:
+   justify }`, and justified 11px prose in a 380px column stretches to gaps. */
+.sc-note       { font-size: 11px; line-height: 1.45; color: var(--ork-text-muted);
+                 margin: 0 0 12px; text-align: left; }
+.sc-note:empty { display: none; }
+.sc-field.is-inert            { opacity: .55; }
+.sc-field.is-inert select     { pointer-events: none; }
 @media (max-width: 900px) { .sc-cols { grid-template-columns: 1fr; } .sc-preview { position: static; } }
 </style>
 
@@ -77,11 +139,89 @@ $today   = date('Y-m-d');
                 </div>
             </div>
 
+            <?php /* Shown only when the chosen award resolves to the `custom` order —
+                     every other order's art is fixed by its own partial, so these
+                     controls would be inert lies anywhere else. The selected values
+                     start on Scroll::DEFAULT_RECIPE, which is what every path that
+                     prints WITHOUT a recipe (a reprint, a bulk run) already uses, so
+                     the composer opens on the same certificate those produce. */ ?>
+            <div id="sc-recipe" class="sc-recipe" style="display:none">
+                <div class="sc-recipe-head">Custom scroll design</div>
+                <div class="sc-row">
+                    <div class="sc-field">
+                        <label for="sc-ground">Ground</label>
+                        <select id="sc-ground">
+                            <?php foreach (array_keys($recipes['grounds']) as $key): ?>
+                                <option value="<?= scroll_e($key) ?>"
+                                        <?= isset($groundNotes[$key]) ? 'data-note="' . scroll_e($groundNotes[$key]) . '"' : '' ?>
+                                        <?= $key === $default['ground'] ? 'selected' : '' ?>><?= scroll_e($recipeLabel($key)) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="sc-field">
+                        <label for="sc-border">Border</label>
+                        <select id="sc-border">
+                            <?php foreach (array_keys($recipes['borders']) as $key): ?>
+                                <option value="<?= scroll_e($key) ?>"
+                                        <?= isset($borderNotes[$key]) ? 'data-note="' . scroll_e($borderNotes[$key]) . '"' : '' ?>
+                                        <?= $key === $default['border'] ? 'selected' : '' ?>><?= scroll_e($recipeLabel($key)) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="sc-row">
+                    <div class="sc-field">
+                        <label for="sc-palette">Border colours<span class="sc-swatch" id="sc-palette-swatch" aria-hidden="true"><i></i><i></i></span></label>
+                        <?php /* The pair travels as one value: Scroll::NormaliseRecipe()
+                                 only accepts primary and secondary together, so one
+                                 order's primary can never be mixed with another's. */ ?>
+                        <select id="sc-palette">
+                            <?php foreach ($recipes['palette'] as $name => $pair): ?>
+                                <option value="<?= scroll_e($pair[0]) ?>|<?= scroll_e($pair[1]) ?>"
+                                        <?= ($pair[0] === $default['primary'] && $pair[1] === $default['secondary']) ? 'selected' : '' ?>><?= scroll_e($name) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="sc-field" id="sc-rankset-field">
+                        <label for="sc-rankset">Rank numerals</label>
+                        <select id="sc-rankset">
+                            <?php foreach (array_keys($recipes['rankSets']) as $key): ?>
+                                <option value="<?= scroll_e($key) ?>"
+                                        <?= $key === $default['rankSet'] ? 'selected' : '' ?>><?= scroll_e($recipeLabel($key)) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <p class="sc-note" id="sc-recipe-note"></p>
+            </div>
+
             <div class="sc-field">
                 <label for="sc-player">Recipient</label>
                 <input type="text" id="sc-player" autocomplete="off" placeholder="Search players…">
                 <input type="hidden" id="sc-player-id">
                 <div id="sc-player-ac" class="kn-ac-results"></div>
+            </div>
+
+            <?php /* Free text, not a picker. The certificate needs the POSSESSIVE word
+                     ("with HER third"), which is not what a player's pronoun record
+                     holds — and this ORK retired the pronoun picker for free text on
+                     the profile anyway. Left blank the server infers it from the
+                     chosen recipient's profile, exactly as a reprint does; typed, the
+                     officer's correction wins. Per-print only: nothing is written
+                     back to the profile. The datalist is suggestions, not a closed
+                     set, and appears only if the controller passes any. */ ?>
+            <div class="sc-field">
+                <label for="sc-pronoun">Pronoun (possessive)</label>
+                <input type="text" id="sc-pronoun" maxlength="20" autocomplete="off"
+                       placeholder="From their profile"
+                       <?= is_array($Pronouns ?? null) && $Pronouns !== [] ? 'list="sc-pronoun-list"' : '' ?>>
+                <?php if (is_array($Pronouns ?? null) && $Pronouns !== []): ?>
+                    <datalist id="sc-pronoun-list">
+                        <?php foreach ($Pronouns as $p): ?>
+                            <option value="<?= scroll_e($p) ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php endif; ?>
             </div>
 
             <div class="sc-field">

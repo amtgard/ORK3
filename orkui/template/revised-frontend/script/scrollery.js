@@ -34,6 +34,15 @@
         nameEl    = $('sc-issuer-name'),
         useTheEl  = $('sc-use-the'),
         useOfEl   = $('sc-use-of'),
+        recipeEl  = $('sc-recipe'),
+        groundEl  = $('sc-ground'),
+        borderEl  = $('sc-border'),
+        paletteEl = $('sc-palette'),
+        swatchEl  = $('sc-palette-swatch'),
+        rankSetEl = $('sc-rankset'),
+        rankSetFd = $('sc-rankset-field'),
+        pronounEl = $('sc-pronoun'),
+        noteEl    = $('sc-recipe-note'),
         mount     = $('sc-mount'),
         stage     = $('sc-stage'),
         frame     = $('sc-frame'),
@@ -105,6 +114,79 @@
         variantFd.style.display = variants.length ? '' : 'none';
     }
 
+    /* ---- the custom scroll's design controls ---------------------------- */
+
+    /*
+     * Only the custom order composes its own art; every other order's layers are
+     * fixed by its partial, so showing these anywhere else would be an inert lie.
+     */
+    function syncRecipeVisibility() {
+        if (!recipeEl) { return; }
+        var opt = selected();
+        recipeEl.style.display = (opt && opt.dataset.order === 'custom') ? '' : 'none';
+    }
+
+    /*
+     * The explanations are authored server-side, on the options themselves, out of
+     * Scroll's own DARK_GROUNDS / GROUND_WASHES / BORDER_BAND constants — this only
+     * joins whichever of them apply. Nothing here knows a ground is dark or a
+     * border is a band, which is exactly the point: the renderer already decides
+     * that, and a second opinion in the picker is how the two drift apart.
+     */
+    function syncRecipeNote() {
+        if (!noteEl) { return; }
+
+        var notes = [],
+            rank  = parseInt(rankEl.value, 10) || 0,
+            g     = groundEl && groundEl.options[groundEl.selectedIndex],
+            b     = borderEl && borderEl.options[borderEl.selectedIndex];
+
+        if (g && g.dataset.note) { notes.push(g.dataset.note); }
+        if (b && b.dataset.note) { notes.push(b.dataset.note); }
+
+        // custom.tpl draws no numeral below rank 1, for every set — so at rank 0 the
+        // numeral control genuinely does nothing, and saying so beats letting an
+        // officer change it and see no difference.
+        if (rankSetFd) { rankSetFd.classList.toggle('is-inert', rank < 1); }
+        if (rank < 1) { notes.push('No numeral is drawn on an unranked scroll, so the numeral set has no effect.'); }
+
+        noteEl.textContent = notes.join(' ');
+    }
+
+    /* The chosen pair, shown beside its name — the colours are the point of the slot. */
+    function syncSwatch() {
+        if (!swatchEl || !paletteEl) { return; }
+        var pair = (paletteEl.value || '|').split('|'),
+            legs = swatchEl.children;
+        if (legs.length === 2) {
+            legs[0].style.background = pair[0] || 'transparent';
+            legs[1].style.background = pair[1] || 'transparent';
+        }
+    }
+
+    /*
+     * The recipient's possessive pronoun. Sent EMPTY when untouched, which is what
+     * tells the server to infer it from the chosen player's profile — a reprint of
+     * the same award reaches the same value that way. Typed, it wins outright, and
+     * it is per-print: nothing is written back to the profile. It re-fetches rather
+     * than patching the DOM because the pronoun sits inside a sentence the text
+     * layer assembles server-side.
+     */
+    function pronounOverride() {
+        return pronounEl ? pronounEl.value.trim() : '';
+    }
+
+    /* Every recipe field the server needs, on whichever body/query object is going out. */
+    function addRecipe(params) {
+        if (!groundEl) { return; }
+        var pair = (paletteEl.value || '|').split('|');
+        params.set('ground',    groundEl.value);
+        params.set('border',    borderEl.value);
+        params.set('primary',   pair[0] || '');
+        params.set('secondary', pair[1] || '');
+        params.set('rankSet',   rankSetEl.value);
+    }
+
     /* ---- the round trip: order / rank / variant ------------------------- */
 
     var inFlight = null;
@@ -129,6 +211,10 @@
         body.set('issuerName',  nameEl.value.trim());
         body.set('useThe',      useTheEl.checked ? '1' : '0');
         body.set('useOf',       useOfEl.checked ? '1' : '0');
+        // Sent on every order, not only custom: Scroll::BuildScroll() ignores the
+        // recipe for anything else, so there is nothing to branch on here.
+        addRecipe(body);
+        body.set('pronounOverride', pronounOverride());
 
         if (inFlight) { inFlight.abort(); }
         var ctl = new AbortController();
@@ -281,9 +367,27 @@
 
     /* ---- wiring --------------------------------------------------------- */
 
-    awardEl.addEventListener('change', function () { syncRankAndVariant(); reload(); });
-    rankEl.addEventListener('change', reload);
+    awardEl.addEventListener('change', function () {
+        syncRankAndVariant();
+        syncRecipeVisibility();
+        syncRecipeNote();
+        reload();
+    });
+    rankEl.addEventListener('change', function () { syncRecipeNote(); reload(); });
     variantEl.addEventListener('change', reload);
+
+    // The recipe controls change which art is drawn, so unlike the text fields they
+    // cost a round trip.
+    [groundEl, borderEl, paletteEl, rankSetEl].forEach(function (el) {
+        if (!el) { return; }
+        el.addEventListener('change', function () { syncSwatch(); syncRecipeNote(); reload(); });
+    });
+
+    if (pronounEl) {
+        // 'change', not 'input': one round trip when the officer is done typing,
+        // not one per keystroke.
+        pronounEl.addEventListener('change', reload);
+    }
 
     [reasonEl, dateEl, givenEl, titleEl, nameEl].forEach(function (el) {
         el.addEventListener('input', applyText);
@@ -332,11 +436,16 @@
         qs.set('issuerName',  nameEl.value.trim());
         qs.set('useThe',      useTheEl.checked ? '1' : '0');
         qs.set('useOf',       useOfEl.checked ? '1' : '0');
+        addRecipe(qs);
+        qs.set('pronounOverride', pronounOverride());
         qs.set('print',       '1');
         window.open(cfg.uir + 'Scrollery/compose&' + qs.toString(), '_blank', 'noopener');
     });
 
     syncRankAndVariant();
+    syncRecipeVisibility();
+    syncSwatch();
+    syncRecipeNote();
     applyHeraldry();
     reload();
 }());
