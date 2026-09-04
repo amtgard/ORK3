@@ -2109,7 +2109,7 @@ git commit -m "Enhancement: Scrollery — print a new scroll"
 This is the one genuinely new query in the module. Everything else reuses
 `AwardsForPlayer()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Test the SQL builder in isolation — assert the generated statement filters on
 `at_event_id` (or `at_park_id`/`at_kingdom_id` plus a date range), joins
@@ -2128,28 +2128,28 @@ reflection; it builds SQL and touches nothing.)
     }
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**, then implement the query and re-run to PASS.
+- [x] **Step 2: Run it to make sure it fails**, then implement the query and re-run to PASS.
 
-- [ ] **Step 3: Add `bulk()` to the controller**
+- [x] **Step 3: Add `bulk()` to the controller**
 
 Same `AUTH_EDIT` gate as `create()`. Two selection modes: by event, or by park/kingdom
 over a date range. Filter the result to rows with art and report the count that was
 excluded, so an officer is not silently handed fewer scrolls than awards.
 
-- [ ] **Step 4: Write `Scrollery_bulk.tpl`**
+- [x] **Step 4: Write `Scrollery_bulk.tpl`**
 
 An `adm-table` of matching awards with a checkbox per row and a select-all. The Print
 button opens `Scrollery/render&awards=<comma-separated ids>&print=1`. Show the excluded
 count as an `adm-alert` above the table, naming the awards that have no artwork.
 
-- [ ] **Step 5: Verify a real multi-page print**
+- [x] **Step 5: Verify a real multi-page print**
 
 Select at least six awards spanning **three different orders**, print to PDF, and check:
 one certificate per page, no blank pages, and — critically — that each certificate keeps
 its own `SignAndDate` height. If they all share one height, the per-order CSS is not
 properly `[data-order]`-scoped; go back to Task 5.
 
-- [ ] **Step 6: Run the suite and commit**
+- [x] **Step 6: Run the suite and commit**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
@@ -2169,7 +2169,7 @@ git commit -m "Enhancement: Scrollery — bulk scroll printing"
 Heraldry adjustment and the text fields are pure CSS-custom-property and text-content
 changes, so they need no round trip. Only order, rank and variant re-fetch.
 
-- [ ] **Step 1: Publish the heraldry variables on the frame**
+- [x] **Step 1: Publish the heraldry variables on the frame**
 
 In `Scrollery_render.tpl` and the create preview, put them on the `<svg>`:
 
@@ -2179,7 +2179,7 @@ style="...;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:tran
 
 `_heraldry.tpl` already consumes them (Task 5).
 
-- [ ] **Step 2: Write `scrollery.js`**
+- [x] **Step 2: Write `scrollery.js`**
 
 ```js
 (function () {
@@ -2220,18 +2220,18 @@ values — add them in this task.
 Order, rank and variant changes call the Ajax preview from Task 16 and replace the
 `<foreignObject>` contents.
 
-- [ ] **Step 3: Add the reset controls**
+- [x] **Step 3: Add the reset controls**
 
 Each slider gets a reset button restoring 1 (brightness, contrast, scale) or 0
 (translate), matching Arcanyst's `SetupPanel`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Drag each slider and confirm the heraldry responds with no network request (check the
 Network tab). Change the rank and confirm exactly one request. Print and confirm the
 adjustments survive into the printed page.
 
-- [ ] **Step 5: Run the suite and commit**
+- [x] **Step 5: Run the suite and commit**
 
 ```bash
 vendor/bin/phpunit --testsuite unit
@@ -2243,11 +2243,11 @@ git commit -m "Enhancement: Scrollery — live heraldry and text overrides"
 
 ## Done when
 
-- [ ] `vendor/bin/phpunit --testsuite unit` passes, including ~190 asset-path cases
-- [ ] All 16 orders render and have been compared against Arcanyst by eye
-- [ ] The three doors work, each with its permission check verified by trying to break it
-- [ ] A mixed-order bulk print produces one correct certificate per page
-- [ ] `NOTICE` credits Valory Fox and Kisa
+- [x] `vendor/bin/phpunit --testsuite unit` passes, including ~190 asset-path cases
+- [x] All 16 orders render and have been compared against Arcanyst by eye
+- [x] The three doors work, each with its permission check verified by trying to break it
+- [x] A mixed-order bulk print produces one correct certificate per page
+- [x] `NOTICE` credits Valory Fox and Kisa
 
 ## Deferred — not this plan
 
