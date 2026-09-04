@@ -870,7 +870,7 @@ git commit -m "Enhancement: Scrollery — scroll assembly from award rows"
 - Consumes: `Scroll::Render()`, `Scroll::ArtBase()` from Task 4.
 - Produces: global function `scroll_partial(string $name, array $vars = []): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/Unit/ScrollPartialsTest.php`:
 
@@ -983,7 +983,7 @@ final class ScrollPartialsTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run it to make sure it fails**
+- [x] **Step 2: Run it to make sure it fails**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollPartials
@@ -991,7 +991,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollPartials
 
 Expected: FAIL — `Call to undefined function scroll_partial()`.
 
-- [ ] **Step 3: Add the partial helper**
+- [x] **Step 3: Add the partial helper**
 
 At the **bottom of `class.Scroll.php`**, outside the class:
 
@@ -1011,7 +1011,20 @@ function scroll_partial(string $name, array $vars = []): void
 }
 ```
 
-- [ ] **Step 4: Write the four shared partials**
+> **Two corrections made during execution.**
+> 1. `html_encode()` is `htmlentities()` with the HTML5 tables, so it turns `#` into
+>    `&num;` — a colour reaching a style attribute renders as
+>    `--primary-color:&num;333333`. These partials put colours and length-driven
+>    `calc()` values into style attributes constantly, so they use a local
+>    `scroll_e()` (htmlspecialchars, as the rest of ORK's templates do) instead.
+> 2. Aurelia's `css=` binding MERGED into an element's existing `style=`. Two of the
+>    source elements carry both, so transliterating `css=` to a second `style=`
+>    attribute makes the browser keep the first and drop the second: the border's
+>    root `<svg>` loses `fill-rule:evenodd` (filling in every hole in the border
+>    paths) and the reason section loses its margins. Both are merged into one
+>    attribute, and `testNoElementCarriesTwoStyleAttributes` guards the class of bug.
+
+- [x] **Step 4: Write the four shared partials**
 
 `_parchment.tpl`:
 
@@ -1067,7 +1080,7 @@ only markup. Bindings map as:
 The two `css=` font-size expressions that scale with string length become inline
 `style="font-size:max(...)"` with `strlen()` substituted for `.length`.
 
-- [ ] **Step 5: Write `scrollery.css`**
+- [x] **Step 5: Write `scrollery.css`**
 
 Assemble from three sources, in this order:
 
@@ -1116,7 +1129,7 @@ but certificates:
 }
 ```
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 ```bash
 vendor/bin/phpunit --testsuite unit --filter ScrollPartials
@@ -1124,7 +1137,7 @@ vendor/bin/phpunit --testsuite unit --filter ScrollPartials
 
 Expected: PASS (8 tests).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add orkui/template/revised-frontend/scroll orkui/template/revised-frontend/style/scrollery.css \

@@ -191,3 +191,32 @@ class Scroll extends Ork3
         return (string) ob_get_clean();
     }
 }
+
+/**
+ * Escape a value for a certificate partial.
+ *
+ * NOT html_encode(): that is htmlentities() with the HTML5 tables, which turns "#"
+ * into "&num;" — so a colour reaching a style attribute renders as
+ * "--primary-color:&num;333333". A browser does decode that reference before CSS
+ * sees it, but it is fragile and unreadable in view-source, and these partials put
+ * colours and length-driven calc() values into style attributes constantly.
+ * htmlspecialchars is also what the rest of the ORK's templates use.
+ */
+function scroll_e(mixed $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Include a shared scroll partial with an isolated variable scope.
+ *
+ * A bare `include` shares the caller's scope, which lets a partial silently
+ * inherit a stray $primary from an earlier layer. extract() inside a function
+ * gives partials real parameters, the way Aurelia's `bindable` did.
+ */
+function scroll_partial(string $name, array $vars = []): void
+{
+    extract($vars, EXTR_SKIP);
+    $art = Scroll::ArtBase();
+    include DIR_TEMPLATE . 'revised-frontend/scroll/_' . $name . '.tpl';
+}
