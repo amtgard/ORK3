@@ -1,5 +1,12 @@
 <?php
 
+// There is no autoloader for orkui/model/*.php — Controller::load_model() only
+// require_once's a model when a controller explicitly asks for it, and nothing
+// guarantees a Player controller ever loads Award. Model_Award is a hard
+// dependency in fetch_player_details() below (the shared dangling-officer-row
+// correction), so it has to be required directly rather than assumed loaded.
+require_once DIR_MODEL . 'model.Award.php';
+
 class Model_Player extends Model
 {
     public function __construct()
@@ -50,10 +57,25 @@ class Model_Player extends Model
         // Scrollery: "does this award have certificate art?" is a domain question, so
         // answer it here once per row instead of letting the profile template reach
         // straight into Scroll.
+        //
+        // Awards is Player::AwardsForPlayer()'s own row shape, the same one
+        // Model_Scrollery's reprint list and bulk print consume — and the same
+        // dangling-award_id exposure applies here: a row whose own award_id join
+        // missed (archery's real grants live here on purpose, under base award_id
+        // 0/94/131) carries no OfficerRole of its own, which Scroll::HasArt() must
+        // read as open or archery could never print. correct_dangling_officer_role()
+        // is what tells an actual archery/uncovered-ladder row apart from an
+        // officer position whose base award has simply gone missing (e.g. an
+        // orphaned "Shire Champion" kingdomaward) before CanPrintScroll is decided —
+        // Model_Award, not Model_Scrollery, because neither feature model should
+        // reach into the other's to get it.
         if (is_array($details) && is_array($details['Awards'] ?? null)) {
-            foreach ($details['Awards'] as $i => $award) {
-                if (is_array($award)) {
-                    $details['Awards'][$i]['CanPrintScroll'] = Scroll::HasArt($award);
+            $award = new Model_Award();
+            foreach ($details['Awards'] as $i => $row) {
+                if (is_array($row)) {
+                    $row                    = $award->correct_dangling_officer_role($row);
+                    $row['CanPrintScroll']  = Scroll::HasArt($row);
+                    $details['Awards'][$i]  = $row;
                 }
             }
         }

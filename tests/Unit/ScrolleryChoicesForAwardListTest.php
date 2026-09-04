@@ -97,31 +97,23 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
         $this->assertContains(1, array_column($choices, 'KingdomAwardId'));
     }
 
-    public function testOfficerNamesFromForTestIgnoresRowsWithNoOfficerRoleKeyAtAll(): void
+    /**
+     * Kingdom 21's real data: "Shire Champion" (kingdomaward_id 6437, award_id 0)
+     * is the ONLY "Shire Champion" row that kingdom has — no same-kingdom sibling
+     * exists to check against — but the name matches
+     * Kingdom::awardNameLooksLikeOfficer()'s pattern unambiguously (every OTHER
+     * kingdom spelling the same position resolves to award_id 206,
+     * officer_role='principality'). A same-kingdom sibling search alone cannot
+     * catch this; Model_Award::isDanglingRowAnOfficer()'s pattern fallback must.
+     */
+    public function testADanglingRowWithNoSiblingAtAllButAMatchingNamePatternIsDropped(): void
     {
-        $names = Model_Scrollery::officerNamesFromForTest([
-            ['KingdomAwardName' => 'Mystery Row'],
-        ]);
+        $awards = [
+            $this->row(['KingdomAwardId' => 6437, 'AwardId' => null, 'KingdomAwardName' => 'Shire Champion', 'OfficerRole' => null]),
+        ];
 
-        $this->assertSame([], $names);
-    }
+        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
 
-    public function testOfficerNamesFromForTestIgnoresNoneAndBlankRoles(): void
-    {
-        $names = Model_Scrollery::officerNamesFromForTest([
-            $this->row(['KingdomAwardName' => 'Warlord', 'OfficerRole' => 'none']),
-            $this->row(['KingdomAwardName' => 'Something Blank', 'OfficerRole' => '']),
-        ]);
-
-        $this->assertSame([], $names);
-    }
-
-    public function testOfficerNamesFromForTestIsCaseAndSpaceInsensitive(): void
-    {
-        $names = Model_Scrollery::officerNamesFromForTest([
-            $this->row(['KingdomAwardName' => '  SHERIFF  ', 'OfficerRole' => 'park']),
-        ]);
-
-        $this->assertArrayHasKey('sheriff', $names);
+        $this->assertCount(0, $choices);
     }
 }

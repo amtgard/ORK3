@@ -1,5 +1,12 @@
 <?php
 
+// There is no autoloader for orkui/model/*.php — Controller::load_model() only
+// require_once's a model when a controller explicitly asks for it, and nothing
+// here guarantees Scrollery's controllers ever load Award. Model_Award is a
+// hard dependency below (the shared dangling-officer-row correction), so it has
+// to be required directly rather than assumed loaded.
+require_once DIR_MODEL . 'model.Award.php';
+
 /**
  * Award rows -> scroll data.
  *
@@ -9,6 +16,20 @@
  */
 class Model_Scrollery extends Model
 {
+    private ?Model_Award $award = null;
+
+    /**
+     * The dangling-award_id / officer-position correction (see
+     * Model_Award::isDanglingRowAnOfficer()) is shared with Model_Player, which
+     * has the identical exposure on the profile Awards tab — reached through a
+     * neutral model neither Scrollery nor Player feature code owns, rather than
+     * one reaching into the other's model.
+     */
+    private function award(): Model_Award
+    {
+        return $this->award ??= new Model_Award();
+    }
+
     /**
      * Returns the scroll data for one awards row, or null when the viewer may not
      * print it or the award has no certificate art.
@@ -57,7 +78,7 @@ class Model_Scrollery extends Model
         $printable = [];
 
         foreach ($response['Awards'] ?? [] as $row) {
-            $row = $this->correct_dangling_officer_role($row);
+            $row = $this->award()->correct_dangling_officer_role($row);
             if (!Scroll::HasArt($row)) {
                 continue;
             }
@@ -175,13 +196,13 @@ class Model_Scrollery extends Model
      */
     public static function choicesForAwardListForTest(array $awards): array
     {
-        $officerNames = self::officerNamesFromForTest($awards);
+        $officerNames = Model_Award::officerNamesFromForTest($awards);
 
         $choices = [];
         foreach ($awards as $row) {
-            $name     = strtolower(trim((string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '')));
+            $name     = (string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '');
             $dangling = ($row['AwardId'] ?? $row['award_id'] ?? null) === null;
-            if ($dangling && $name !== '' && isset($officerNames[$name])) {
+            if ($dangling && Model_Award::isDanglingRowAnOfficer($name, $officerNames)) {
                 continue;
             }
 
@@ -210,38 +231,6 @@ class Model_Scrollery extends Model
         usort($choices, static fn ($a, $b) => strcasecmp($a['Name'], $b['Name']));
 
         return $choices;
-    }
-
-    /**
-     * Award names, lower-cased, that a GetAwardList()-shaped row set says are
-     * officer positions — i.e. carry a resolved (non-null, non-'none') OfficerRole.
-     * A row with no OfficerRole key at all is skipped rather than treated as
-     * evidence either way: this is describing what the catalog actually resolved,
-     * not guessing about a malformed row.
-     *
-     * @param array<int, array<string, mixed>> $awards
-     * @return array<string, true>
-     */
-    public static function officerNamesFromForTest(array $awards): array
-    {
-        $names = [];
-        foreach ($awards as $row) {
-            if (!array_key_exists('OfficerRole', $row)) {
-                continue;
-            }
-
-            $role = strtolower(trim((string) ($row['OfficerRole'] ?? '')));
-            if ($role === '' || $role === 'none') {
-                continue;
-            }
-
-            $name = strtolower(trim((string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '')));
-            if ($name !== '') {
-                $names[$name] = true;
-            }
-        }
-
-        return $names;
     }
 
     /**
@@ -422,7 +411,7 @@ class Model_Scrollery extends Model
         }
 
         // A park's scope is the park's own kingdom, not at_kingdom_id (blank for a
-        // park grant) — see kingdom_for_grant_row()'s doc for the same split.
+        // park grant) — see Model_Award::kingdom_for_grant_row()'s doc for the same split.
         $kingdomId = $scopeType === 'kingdom' ? $scopeId : (int) ($this->park_details($scopeId)['KingdomId'] ?? 0);
 
         foreach ($rs as $row) {
@@ -460,13 +449,15 @@ class Model_Scrollery extends Model
             // archery's real grants (base award_id 0/94/131, no matching ork_award
             // row) — that must stay open — but also for an officer position whose
             // base award has simply gone missing, which must not. Told apart by
-            // cross-referencing the granting kingdom's own catalog for a resolved
-            // sibling of the same name.
-            if ($row['award_id'] === null) {
-                $name = strtolower(trim($shaped['KingdomAwardName']));
-                if ($name !== '' && isset($this->officer_names_for_kingdom($kingdomId)[$name])) {
-                    $shaped['OfficerRole'] = 'other-officer';
-                }
+            // Model_Award::isDanglingRowAnOfficer() against the granting kingdom's
+            // own catalog.
+            if ($row['award_id'] === null
+                && Model_Award::isDanglingRowAnOfficer(
+                    $shaped['KingdomAwardName'],
+                    $this->award()->officer_names_for_kingdom($kingdomId)
+                )
+            ) {
+                $shaped['OfficerRole'] = 'other-officer';
             }
 
             $shaped['Title']      = Scroll::ResolveTitle($shaped);
@@ -598,78 +589,11 @@ class Model_Scrollery extends Model
 
         foreach (($response['Awards'] ?? []) as $row) {
             if ((int) $row['AwardsId'] === $awardsId) {
-                return $this->correct_dangling_officer_role($row);
+                return $this->award()->correct_dangling_officer_role($row);
             }
         }
 
         return null;
-    }
-
-    /**
-     * Corrects one Player::AwardsForPlayer() row's OfficerRole the same way
-     * choicesForAwardListForTest() corrects the create dropdown — see that
-     * method's docblock for the dangling-award_id shape this is closing.
-     *
-     * A resolved AwardId is left untouched: Player::AwardsForPlayer()'s own
-     * COALESCE(alias.officer_role, a.officer_role) already gave it a real answer.
-     * Only a dangling row (AwardId null — no ork_award match for the kingdomaward's
-     * award_id, alias or not) gets cross-referenced by name against the granting
-     * body's own catalog, so an officer position whose base award has gone missing
-     * is still excluded rather than defaulting open like a genuine archery grant.
-     */
-    private function correct_dangling_officer_role(array $row): array
-    {
-        if (($row['AwardId'] ?? null) !== null) {
-            return $row;
-        }
-
-        $name = strtolower(trim((string) ($row['KingdomAwardName'] ?? '')));
-        if ($name !== '' && isset($this->officer_names_for_kingdom($this->kingdom_for_grant_row($row))[$name])) {
-            $row['OfficerRole'] = 'other-officer';
-        }
-
-        return $row;
-    }
-
-    /**
-     * The catalog a granted award's kingdomaward belongs to. A park-granted award
-     * (ParkId set) uses its park's own kingdom, not at_kingdom_id — that column is
-     * blank for a park grant, per AwardsForPlayer()'s ParkId/KingdomId split.
-     */
-    private function kingdom_for_grant_row(array $row): int
-    {
-        $parkId = (int) ($row['ParkId'] ?? 0);
-        if ($parkId > 0) {
-            return (int) ($this->park_details($parkId)['KingdomId'] ?? 0);
-        }
-
-        return (int) ($row['KingdomId'] ?? 0);
-    }
-
-    /**
-     * Officer-position names known from one kingdom's own catalog. Cached per
-     * request: a player's award history, or a bulk run, touches at most a handful
-     * of distinct kingdoms.
-     *
-     * @return array<string, true>
-     */
-    private function officer_names_for_kingdom(int $kingdomId): array
-    {
-        static $cache = [];
-        if ($kingdomId <= 0) {
-            return [];
-        }
-
-        if (!array_key_exists($kingdomId, $cache)) {
-            $response          = Ork3::$Lib->kingdom->GetAwardList([
-                'IsLadder'  => 'Both',
-                'IsTitle'   => 'Both',
-                'KingdomId' => $kingdomId,
-            ]);
-            $cache[$kingdomId] = self::officerNamesFromForTest($response['Awards'] ?? []);
-        }
-
-        return $cache[$kingdomId];
     }
 
     /**
