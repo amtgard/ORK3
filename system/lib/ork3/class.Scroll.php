@@ -425,6 +425,11 @@ class Scroll extends Ork3
             'primary'     => $order['primary'],
             'secondary'   => $order['secondary'],
             'resources'   => $order['resources'],
+            // Only the custom scroll composes its own art; every other order's layers
+            // are fixed by its partial.
+            'recipe'      => $order['id'] === 'custom'
+                ? self::NormaliseRecipe(is_array($context['recipe'] ?? null) ? $context['recipe'] : [])
+                : [],
         ];
     }
 

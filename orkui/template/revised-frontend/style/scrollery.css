@@ -328,9 +328,12 @@ section.SignAndDate > div > p.Body {
 /* --------------------------------------------------------------------------
    4. Per-order rules — formerly each order view's inline <style>.
 
-   Keyed on [data-order] / [data-rank] / [data-variant] so a bulk page of mixed
-   orders keeps them apart. All nineteen orders are now accounted for; garber,
-   jovious and battle own no rules because their source views carry no <style>.
+   Keyed on [data-order] / [data-rank] / [data-variant] / [data-ground] so a bulk
+   page of mixed orders keeps them apart. All nineteen orders are now accounted
+   for; garber, jovious and battle own no rules because their source views carry
+   no <style>, and the custom scroll owns no signature-block rule because it
+   carries no order-specific sentiment and keeps the shared default height — a
+   decision, not an omission (see the custom block at the end of this section).
    -------------------------------------------------------------------------- */
 
 .award-template[data-order="griffon"] section.SignAndDate,
@@ -488,6 +491,34 @@ section.SignAndDate > div > p.Body {
     flex-direction: column !important;
     row-gap: 1em !important;
     justify-content: flex-end !important;
+}
+
+/* --------------------------------------------------------------------------
+   custom — the composed scroll. It owns no SignAndDate rule: with no order
+   sentiment of its own it keeps the shared 350px default, and restating that
+   height here would only duplicate the value it already inherits.
+
+   What it does need is the one ground in the vocabulary that is dark. The
+   `cyanotype` ground is owl's plate (mean luminance ~56 against ~200 for every
+   other ground), so the certificate's dark type, its black flourish line art and
+   a multiplied heraldic device all disappear into it. These are the same three
+   moves owl's own cyanotype variant makes; they are restated rather than grouped
+   with owl's selectors so each order's rules stay in its own block, which is how
+   the rest of this section is organised.
+   -------------------------------------------------------------------------- */
+
+.award-template[data-order="custom"][data-ground="cyanotype"] .Award {
+    color: #ffffff !important;
+}
+
+.award-template[data-order="custom"][data-ground="cyanotype"] .Award img {
+    filter: invert();
+}
+
+/* The device carries mix-blend-mode:multiply inline, so lifting it off a dark
+   ground has to outrank that. */
+.award-template[data-order="custom"][data-ground="cyanotype"] .centre-top img {
+    mix-blend-mode: screen !important;
 }
 
 /* --------------------------------------------------------------------------

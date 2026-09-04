@@ -97,7 +97,72 @@ final class ScrollAssetPathsTest extends TestCase
             'primary' => $order['primary'] ?? '#000000',
             'secondary' => $order['secondary'] ?? '#ffffff',
             'resources' => $order['resources'],
+            // Only custom.tpl reads this; every other partial ignores it. Present on
+            // every row so the order matrix can render custom at all.
+            'recipe' => Scroll::DEFAULT_RECIPE,
         ];
+    }
+
+    /**
+     * The custom scroll's art is chosen at print time, so the order matrix alone does
+     * not reach it. This walks the whole vocabulary instead: every ground, every
+     * border and every rank set, each rendered once.
+     *
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function recipeMatrix(): iterable
+    {
+        $v = Scroll::Recipes();
+
+        foreach (array_keys($v['grounds']) as $ground) {
+            yield "ground/{$ground}" => [$ground, 'knot', 'common'];
+        }
+        foreach (array_keys($v['borders']) as $border) {
+            yield "border/{$border}" => ['parchment', $border, 'common'];
+        }
+        foreach (array_keys($v['rankSets']) as $set) {
+            yield "rankset/{$set}" => ['parchment', 'knot', $set];
+        }
+    }
+
+    #[DataProvider('recipeMatrix')]
+    public function testEveryRecipeRendersWithNoMissingArt(string $ground, string $border, string $rankSet): void
+    {
+        // Rank 5 deliberately: every rank set ships rank_5, and it is inside the
+        // guarded rank > 0 branch, so the numeral layer is actually exercised.
+        $scroll = $this->scrollFor('custom', 5, '');
+        $scroll['recipe'] = Scroll::NormaliseRecipe([
+            'ground'    => $ground,
+            'border'    => $border,
+            'rankSet'   => $rankSet,
+            'primary'   => Scroll::DEFAULT_RECIPE['primary'],
+            'secondary' => Scroll::DEFAULT_RECIPE['secondary'],
+        ]);
+
+        // NormaliseRecipe silently falls back to the default for anything it does not
+        // recognise, so a typo in the provider would test parchment/knot/common
+        // eleven times over and pass. Assert the recipe under test survived.
+        $this->assertSame($ground, $scroll['recipe']['ground']);
+        $this->assertSame($border, $scroll['recipe']['border']);
+        $this->assertSame($rankSet, $scroll['recipe']['rankSet']);
+
+        $html    = Scroll::Render($scroll);
+        $checked = 0;
+
+        preg_match_all('/(?:src|href)="([^"]+)"/', $html, $m);
+        foreach ($m[1] as $url) {
+            if ($url === '' || str_starts_with($url, 'data:') || str_starts_with($url, '#')) {
+                continue;
+            }
+            $path = $this->localPath($url);
+            if ($path === null) {
+                continue;
+            }
+            $this->assertFileExists($path, "recipe {$ground}/{$border}/{$rankSet} references missing {$url}");
+            $checked++;
+        }
+
+        $this->assertGreaterThan(0, $checked);
     }
 
     /** Map an emitted URL back to a file on disk, or null if it is not ours. */
