@@ -2205,28 +2205,30 @@ if (PnConfig.recError) {
 
         // ---- Save helpers ----
         var pnSuccessTimer = null;
-        // printUrl: when set, shows a "Print certificate" link alongside the
-        // success message and holds the banner open longer so there is time
-        // to click it — the award was just granted, so this is a link to the
-        // row actually written, not a re-entry of what the officer typed.
-        function pnShowSuccess(printUrl) {
-            var el      = gid('pn-award-success');
-            var linkEl  = gid('pn-award-print-link');
-            if (linkEl) {
-                if (printUrl) {
-                    linkEl.href = printUrl;
-                    linkEl.style.display = '';
-                } else {
-                    linkEl.removeAttribute('href');
-                    linkEl.style.display = 'none';
-                }
-            }
+        // The success banner is transient by design — "Add Award" keeps the modal open
+        // to grant another, and the banner resets each time. The print icon lives in the
+        // footer instead and is NOT on this timer: it stays for as long as the modal is
+        // open, pointing at the last printable award granted in this session.
+        function pnShowSuccess() {
+            var el = gid('pn-award-success');
             el.style.display = '';
             clearTimeout(pnSuccessTimer);
-            pnSuccessTimer = setTimeout(function() {
-                el.style.display = 'none';
-                if (linkEl) linkEl.style.display = 'none';
-            }, printUrl ? 8000 : 3000);
+            pnSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+        }
+        // printUrl null means the award just granted has no certificate art, so the icon
+        // is hidden rather than offering a link that would render nothing. A previously
+        // shown icon is cleared too: it would otherwise point at an earlier award while
+        // appearing to belong to the one just granted.
+        function pnSetPrintLink(printUrl) {
+            var linkEl = gid('pn-award-print-link');
+            if (!linkEl) { return; }
+            if (printUrl) {
+                linkEl.href = printUrl;
+                linkEl.style.display = '';
+            } else {
+                linkEl.removeAttribute('href');
+                linkEl.style.display = 'none';
+            }
         }
         function pnClearAward() {
             gid('pn-award-select').value             = '';
@@ -2308,7 +2310,8 @@ if (PnConfig.recError) {
                 var printUrl = (data && data.printable && data.awardsId)
                     ? (PnConfig.uir + 'Scrollery/render&awards=' + data.awardsId + '&print=1')
                     : null;
-                pnShowSuccess(printUrl);
+                pnShowSuccess();
+                pnSetPrintLink(printUrl);
                 pnClearAward();
             });
         });

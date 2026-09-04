@@ -1535,25 +1535,54 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 }
 .pn-award-success,
 .pk-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
-.pn-award-print-link {
+/* Small print icon in the Add Award modal's footer, beside the Add Award button.
+   Icon-only on purpose: it is a secondary affordance next to the primary action and
+   should not compete with it. Sized to match .pn-btn's height so the footer row does
+   not shift when it appears. */
+.pn-award-print-icon,
+.pn-award-print-icon:link,
+.pn-award-print-icon:visited {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-left: 10px;
+    justify-content: center;
+    /* Matches .pn-btn's rendered height so the footer row keeps one baseline; the
+       border is inside the box, hence 29 + 2 rather than 31. */
+    width: 29px;
+    height: 29px;
+    border-radius: 6px;
+    border: 1px solid var(--ork-border, #cbd5e0);
     color: #2c5282;
-    font-weight: 600;
+    background: transparent;
+    text-decoration: none;
+    font-size: 13px;
+}
+.pn-award-print-icon:hover {
+    background: var(--ork-surface-light, #edf2f7);
+    color: #1a365d;
     text-decoration: none;
 }
-.pn-award-print-link:hover { text-decoration: underline; }
-html[data-theme="dark"] .pn-award-print-link { color: #90cdf4; }
-/* The link sits at the very top of the modal's scrolling body
-   (.pn-acct-modal-body, overflow-y:auto), so the generic above-anchored
-   [data-tip] tooltip would clip against the scroll container's top edge —
-   anchor it below instead (see reference_data_tip_tooltips.md). */
+/* !important and the :link/:visited variants are the project's established way of
+   beating the global `html[data-theme="dark"] a { color:#63b3ed }` link tint — the
+   same pattern .pn-crumb and the .ev-table / .en-table overrides use. Without it the
+   icon renders in the generic link blue; confirmed by computed style, not by eye. */
+html[data-theme="dark"] .pn-award-print-icon,
+html[data-theme="dark"] .pn-award-print-icon:link,
+html[data-theme="dark"] .pn-award-print-icon:visited {
+    color: #90cdf4 !important;
+    border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-award-print-icon:hover {
+    background: var(--ork-bg-secondary, #2d3748);
+    color: #bee3f8 !important;
+}
+/* The icon sits at the modal's bottom edge, so the generic [data-tip] tooltip's
+   default above-anchoring is correct here — it needs only to be kept on screen and
+   allowed to wrap (see reference_data_tip_tooltips.md). Right-anchored because the
+   icon is near the right edge of the footer. */
+#pn-award-print-icon[data-tip]:hover::after,
 #pn-award-print-link[data-tip]:hover::after {
-    bottom: auto !important;
-    top: calc(100% + 6px) !important;
-    left: 0 !important;
+    left: auto !important;
+    right: 0 !important;
     transform: none !important;
     white-space: normal !important;
     max-width: 220px !important;

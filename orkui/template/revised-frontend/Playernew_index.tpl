@@ -2924,11 +2924,6 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		<div class="pn-acct-modal-body">
 			<div class="pn-award-success" id="pn-award-success" style="display:none">
 				<i class="fas fa-check-circle"></i> <span id="pn-award-success-msg">Award saved!</span>
-				<?php /* Scrollery: printable is decided server-side per Model_Scrollery::award_is_printable()
-				          on the AwardsId the grant just wrote — populated/shown by revised.js, never a dead link. */ ?>
-				<a href="#" id="pn-award-print-link" class="pn-award-print-link" style="display:none" target="_blank" rel="noopener" data-tip="Print the certificate for the award you just granted">
-					<i class="fas fa-print"></i> Print certificate
-				</a>
 			</div>
 			<div class="pn-form-error" id="pn-award-error"></div>
 
@@ -3043,7 +3038,20 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		</div>
 		<div class="pn-modal-footer" style="display:flex;align-items:center;justify-content:space-between">
 			<button class="pn-btn pn-btn-ghost" id="pn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
+			<div style="display:flex;gap:8px;align-items:center">
+				<?php /* Scrollery. Deliberately down here beside Add Award rather than in the
+				         success banner above: "Add Award" keeps the modal open to grant another,
+				         so the banner is transient and resets on the next grant, while this stays
+				         put for as long as the modal is open. It points at the LAST printable
+				         award granted in this session, and stays hidden until there is one —
+				         printability is decided server-side by Model_Scrollery::award_is_printable()
+				         on the AwardsId the grant actually wrote, so it is never a dead link. */ ?>
+				<a href="#" id="pn-award-print-link" class="pn-award-print-icon" style="display:none"
+				   target="_blank" rel="noopener"
+				   data-tip="Print the certificate for the award you just granted"
+				   aria-label="Print the certificate for the award you just granted">
+					<i class="fas fa-print"></i>
+				</a>
 				<button class="pn-btn pn-btn-primary" id="pn-award-save-same" disabled>
 					<i class="fas fa-plus"></i> Add Award
 				</button>
