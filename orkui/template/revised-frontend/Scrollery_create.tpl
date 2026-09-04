@@ -285,6 +285,11 @@ $recipeLabel = static function (string $key) use ($recipeLabels): string {
         </div>
 
         <div>
+            <?php /* The preview renders the same partials the print route does, so it needs
+                     the same filter defs: url(#id) resolves against the DOCUMENT, not the
+                     stylesheet. Without these the composer previewed a white heraldry plate
+                     on a dark ground while print produced correct line art. */ ?>
+            <?php scroll_partial('filters'); ?>
             <div class="sc-preview">
                 <div class="sc-stage" id="sc-stage">
                     <svg viewBox="0 0 2550 3300" id="sc-frame" data-scroll-frame
