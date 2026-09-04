@@ -172,10 +172,25 @@ final class ScrollBuildTest extends TestCase
         $this->assertSame('', $s['variant']);
     }
 
-    public function testBuildingAnAwardWithNoArtThrows(): void
+    /**
+     * As of Scroll::OrderForAwardRow(), an award with no design of its own (e.g.
+     * AwardId 1, Master Rose) still builds — as the custom scroll — so it no longer
+     * throws here. Only an officer position, which OrderForAwardRow() never resolves
+     * to anything, still cannot be built.
+     */
+    public function testBuildingAnOfficerPositionThrows(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        Scroll::BuildScroll($this->row(['AwardId' => 1]), $this->context());
+        Scroll::BuildScroll(
+            $this->row(['AwardId' => 189, 'OfficerRole' => 'other-officer']),
+            $this->context()
+        );
+    }
+
+    public function testAwardWithNoDesignOfItsOwnBuildsAsTheCustomScroll(): void
+    {
+        $s = Scroll::BuildScroll($this->row(['AwardId' => 1]), $this->context());
+        $this->assertSame('custom', $s['order']);
     }
 
     public function testArtBaseHasNoTrailingSlash(): void

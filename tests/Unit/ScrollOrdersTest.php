@@ -9,10 +9,22 @@ final class ScrollOrdersTest extends TestCase
     public function testEveryOrderHasArtDirectoryAndAwardId(): void
     {
         $orders = Scroll::Orders();
-        $this->assertCount(16, $orders);
+        $this->assertCount(17, $orders);
 
         foreach ($orders as $id => $order) {
             $this->assertSame($id, $order['id']);
+
+            if ($id === 'custom') {
+                // The custom scroll composes its art from the recipe vocabulary
+                // (grounds/borders in scroll-recipes.php) rather than a fixed
+                // per-order illustration set, so it deliberately carries neither
+                // its own award_id (0 — see scroll-orders.php) nor a
+                // scrolls/custom asset directory. See Scroll::OrderForAwardRow().
+                $this->assertSame(0, $order['award_id']);
+                $this->assertDirectoryDoesNotExist(DIR_ASSETS . 'scrolls/custom');
+                continue;
+            }
+
             $this->assertGreaterThan(0, $order['award_id'], "{$id} has no award_id");
             $this->assertDirectoryExists(DIR_ASSETS . 'scrolls/' . $id, "{$id} art missing");
         }

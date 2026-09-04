@@ -11,41 +11,28 @@ use PHPUnit\Framework\TestCase;
  */
 final class ScrolleryPermissionTest extends TestCase
 {
-    public function testPrintableAwardsExcludeAwardsWithNoArt(): void
+    public function testPrintableAwardsExcludeOnlyOfficerPositions(): void
     {
         $rows = [
-            ['AwardId' => 33,  'Rank' => 3],   // griffon — has art
-            ['AwardId' => 1,   'Rank' => 0],   // Master Rose — none
-            ['AwardId' => 243, 'Rank' => 7],   // battle — has art
-            ['AwardId' => 999, 'Rank' => 1],   // unknown — none
+            ['AwardId' => 33,  'OfficerRole' => 'none'],           // griffon — its own art
+            ['AwardId' => 1,   'OfficerRole' => 'none'],           // Master Rose — custom scroll
+            ['AwardId' => 189, 'OfficerRole' => 'other-officer'],  // Guildmaster — not printable
         ];
 
         $printable = array_values(array_filter($rows, fn ($r) => Scroll::HasArt($r)));
 
         $this->assertCount(2, $printable);
         $this->assertSame(33, $printable[0]['AwardId']);
-        $this->assertSame(243, $printable[1]['AwardId']);
+        $this->assertSame(1, $printable[1]['AwardId']);
     }
 
-    /**
-     * Every Master award, every title and every non-ladder award is unprintable in
-     * phase 1. Spot-check the ones most likely to be mistaken for printable: the
-     * Masters sit directly above the ladders they cap.
-     */
-    public function testMasterAwardsAreNotPrintable(): void
+    public function testEveryLadderStillHasItsOwnDesign(): void
     {
         foreach (Award::GetLadderMasterMap() as $ladderId => $meta) {
-            $this->assertTrue(
-                Scroll::HasArt(['AwardId' => $ladderId]),
-                "ladder {$ladderId} should be printable"
+            $this->assertNotNull(
+                Scroll::OrderForAwardId((int) $ladderId),
+                "ladder {$ladderId} lost its specific order"
             );
-
-            foreach ($meta['MasterAwardIds'] as $masterId) {
-                $this->assertFalse(
-                    Scroll::HasArt(['AwardId' => $masterId]),
-                    "master award {$masterId} ({$meta['MasterName']}) has no art and must not be printable"
-                );
-            }
         }
     }
 

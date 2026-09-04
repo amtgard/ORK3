@@ -500,4 +500,35 @@ To say you\'ve reached the apex of your ability would be to drastically underest
       10 => 'Your efforts have forever written <<|MONTH||new fantastical tales>> into <<ISSUER>>\'s history.',
     ),
   ),
+  'custom' =>
+  array(
+    'id' => 'custom',
+    // 0 deliberately: no award maps to the custom scroll BY ID. It is chosen by
+    // Scroll::OrderForAwardRow() when an award has no design of its own, so it must
+    // never win an id lookup.
+    'award_id' => 0,
+    'ranks' => null,
+    'variants' =>
+    array(
+    ),
+    'primary' => 'hsl(35, 29%, 55%)',
+    'secondary' => 'hsl(34, 72%, 78%)',
+    'resources' =>
+    array(
+    ),
+    'flavour' =>
+    array(
+      0 => '',
+      1 => '',
+      2 => '',
+      3 => '',
+      4 => '',
+      5 => '',
+      6 => '',
+      7 => '',
+      8 => '',
+      9 => '',
+      10 => '',
+    ),
+  ),
 );

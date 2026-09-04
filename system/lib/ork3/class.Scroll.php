@@ -128,6 +128,16 @@ class Scroll extends Ork3
 
     public static function OrderForAwardId(int $awardId): ?array
     {
+        // 0 is a sentinel, never a real award id (see the `custom` order's own
+        // award_id: 0, chosen precisely so it cannot be reached this way). Real
+        // archery grants DO carry award_id 0, so without this guard a lookup for
+        // an actual award would collide with the sentinel and wrongly resolve to
+        // the custom order by id instead of falling through to name matching in
+        // OrderForAwardRow().
+        if ($awardId === 0) {
+            return null;
+        }
+
         foreach (self::Orders() as $order) {
             if ($order['award_id'] === $awardId) {
                 return $order;
@@ -170,9 +180,74 @@ class Scroll extends Ork3
         return max($order['ranks']['from'], min($order['ranks']['to'], $rank));
     }
 
+    /**
+     * Kingdomaward names that print the archery certificate.
+     *
+     * Archery is the one order with no base award id to key on: real grants hang off
+     * award_id 0 (no base award), 94 (Custom Award) and 131, under a dozen names. The
+     * printed title still comes from ork_kingdomaward.name, so every spelling renders
+     * on its own certificate.
+     *
+     * "Master Hunter" and "Master Archer" are deliberately absent — they take the
+     * custom scroll with every other Master, because no ladder gives its Master tier
+     * the ladder's own artwork.
+     */
+    public const ARCHERY_NAMES = [
+        'order of the hunter',
+        'order of the archer',
+        'order of the marksman',
+        'order of the sharpshooter',
+        'hunter',
+    ];
+
+    public static function ArcheryOrderForName(string $name): ?array
+    {
+        $key = strtolower(trim($name));
+
+        return in_array($key, self::ARCHERY_NAMES, true) ? (self::Orders()['hunter'] ?? null) : null;
+    }
+
+    /**
+     * Whether an award with no design of its own may still be printed.
+     *
+     * Officer positions are excluded: an officer position is a job somebody held, not
+     * an honour they were given.
+     */
+    public static function IsCustomEligible(array $awardRow): bool
+    {
+        $role = strtolower(trim((string) ($awardRow['OfficerRole'] ?? 'none')));
+
+        return $role === '' || $role === 'none';
+    }
+
+    /**
+     * THE single resolution point for "what does this award print as".
+     *
+     * Order of precedence: the award's own design, then archery by name, then the
+     * custom scroll, then nothing. Every caller — the reprint list, the bulk list, the
+     * Awards tab, the create tool — goes through here, so coverage cannot drift
+     * between surfaces.
+     */
+    public static function OrderForAwardRow(array $awardRow): ?array
+    {
+        $specific = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
+        if ($specific !== null) {
+            return $specific;
+        }
+
+        foreach (['KingdomAwardName', 'Name'] as $key) {
+            $archery = self::ArcheryOrderForName((string) ($awardRow[$key] ?? ''));
+            if ($archery !== null) {
+                return $archery;
+            }
+        }
+
+        return self::IsCustomEligible($awardRow) ? (self::Orders()['custom'] ?? null) : null;
+    }
+
     public static function HasArt(array $awardRow): bool
     {
-        return self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0)) !== null;
+        return self::OrderForAwardRow($awardRow) !== null;
     }
 
     public static function ArtBase(): string
@@ -249,10 +324,10 @@ class Scroll extends Ork3
 
     public static function BuildScroll(array $awardRow, array $context): array
     {
-        $order = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
+        $order = self::OrderForAwardRow($awardRow);
         if ($order === null) {
             throw new InvalidArgumentException(
-                'No certificate art for award_id ' . (int) ($awardRow['AwardId'] ?? 0)
+                'No certificate for award_id ' . (int) ($awardRow['AwardId'] ?? 0)
             );
         }
 

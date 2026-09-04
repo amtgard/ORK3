@@ -113,11 +113,14 @@ final class ScrollResolutionTest extends TestCase
         $this->assertSame(10, Scroll::ClampRank($zodiac, 12));
     }
 
-    public function testHasArtIsFalseForAwardsWithNoOrder(): void
+    public function testHasArtIsTrueForAnythingPrintableAndFalseForOfficerPositions(): void
     {
+        // A specific order.
         $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 33])));
-        $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 1])));      // Master Rose
-        $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 999999]))); // not in the catalogue
+        // No design of its own, but printable as a custom scroll.
+        $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 1])));
+        // An officer position is not printable at all.
+        $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 189, 'OfficerRole' => 'other-officer'])));
     }
 
     /**
@@ -125,17 +128,23 @@ final class ScrollResolutionTest extends TestCase
      * does resolve — by construction, not by accident. What makes archery safe is
      * that no award in the ORK is keyed 6969 (the catalogue tops out at 246), and
      * the real archery awards hang off award_id 0, 94 (Custom Award) and 131. This
-     * test fails the day one of those is given an order, which is the moment the
-     * archery title question has to be answered properly.
+     * test fails the day one of those is given a SPECIFIC order of its own, which is
+     * the moment the archery title question has to be answered properly.
+     *
+     * As of Scroll::OrderForAwardRow(), a bare award_id 0/94/131 row (no archery name
+     * attached) is still printable — as the custom scroll, per
+     * ScrollCustomEligibilityTest — so that coverage question belongs there, not here.
+     * This test only pins that none of the three base ids has been given its OWN
+     * (specific, by-id) order.
      */
-    public function testRealArcheryAwardsResolveToNoOrder(): void
+    public function testRealArcheryAwardsResolveToNoSpecificOrder(): void
     {
         $this->assertSame('hunter', Scroll::OrderForAwardId(6969)['id']);
 
         foreach ([0, 94, 131] as $archeryBaseId) {
-            $this->assertFalse(
-                Scroll::HasArt($this->row(['AwardId' => $archeryBaseId])),
-                "archery base award {$archeryBaseId} unexpectedly has art"
+            $this->assertNull(
+                Scroll::OrderForAwardId($archeryBaseId),
+                "archery base award {$archeryBaseId} unexpectedly resolved to a specific order"
             );
         }
     }
