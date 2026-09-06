@@ -167,8 +167,15 @@ final class ScrollAssetPathsTest extends TestCase
         // recognise, so a typo in the provider would test parchment/knot/common
         // eleven times over and pass. Assert the recipe under test survived.
         $this->assertSame($ground, $scroll['recipe']['ground']);
-        $this->assertSame($border, $scroll['recipe']['border']);
         $this->assertSame($rankSet, $scroll['recipe']['rankSet']);
+        // A ground that already carries a frame has its border forced to 'none' —
+        // anything drawn over one of those plates is a second border on the first.
+        // The provider still walks every combination; what survives normalisation
+        // differs, and that IS the contract under test.
+        $this->assertSame(
+            Scroll::GroundDrawsOwnBorder($ground) ? Scroll::BORDER_NONE : $border,
+            $scroll['recipe']['border']
+        );
 
         $html    = Scroll::Render($scroll);
         $checked = 0;

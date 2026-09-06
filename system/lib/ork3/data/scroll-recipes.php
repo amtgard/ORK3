@@ -18,6 +18,23 @@ declare(strict_types=1);
  */
 
 return [
+    /*
+     * Grounds that already have a border painted INTO the image.
+     *
+     * Five of the twelve grounds are lifted from orders that draw no border layer at
+     * all — flame.tpl says so in as many words ("the only order in this group that
+     * requires no border partial") — because the frame is part of the plate. Drawing
+     * any border over one of these gives the certificate TWO borders, one on top of
+     * the other, which is what a flame ground with a knot border looked like.
+     *
+     * Confirmed by inspecting the left edge of all twelve: these five carry knotwork
+     * (and in garber's and smith's case a motif); parchment, starfield, starfield2,
+     * cyanotype, forge, rosewash and arcane are fields or washes with no frame.
+     * NormaliseRecipe() forces the border to 'none' for anything in this list, so a
+     * hand-edited URL cannot reintroduce the double either.
+     */
+    'groundsWithOwnBorder' => ['linen', 'jovious', 'flame', 'sunburst', 'map'],
+
     'grounds' => [
         'parchment'   => 'common/parchment.jpg',
         'linen'       => 'garber/linen.jpg',
@@ -36,6 +53,11 @@ return [
     // 'knot' is the parametric SVG partial (_border.tpl), recoloured through
     // --primary-color / --secondary-color. The rest are raster overlays.
     'borders' => [
+        // No border layer at all. Not the same as 'knot' (whose empty string means
+        // "drawn by _border.tpl rather than from a file") — this draws nothing.
+        // Forced for the self-bordered grounds below, and selectable on its own for a
+        // plain sheet.
+        'none'   => '',
         'knot'   => '',
         'crown'  => 'crown/border.png',
         'hunter' => 'hunter/border.png',

@@ -37,6 +37,7 @@
         recipeEl  = $('sc-recipe'),
         groundEl  = $('sc-ground'),
         borderEl  = $('sc-border'),
+        borderFd  = $('sc-border-field'),
         paletteEl = $('sc-palette'),
         paletteFd = $('sc-palette-field'),
         swatchEl  = $('sc-palette-swatch'),
@@ -467,7 +468,28 @@
         // eight raster frames the officer was changing a colour, waiting for a full
         // server round trip, and seeing no difference — which reads as a broken page
         // rather than as a constraint.
-        var knot = borderDrawsKnot();
+        /*
+         * Five of the twelve grounds — flame, linen, jovious, sunburst, map — are
+         * lifted from orders that draw no border layer, because the frame is painted
+         * into the plate. Any border over one of those is a SECOND border on top of
+         * the first, which is what a flame ground with a knot border looked like.
+         *
+         * NormaliseRecipe() already forces 'none' server-side, so the certificate is
+         * correct either way; this is the half that stops the officer wondering why
+         * the control did nothing. Read from the option's stamp, never from a copy of
+         * the list — the template stamped it from Scroll::GroundDrawsOwnBorder().
+         */
+        var ownBorder = !!(g && g.dataset.ownBorder === '1');
+        if (borderFd)  { borderFd.classList.toggle('is-inert', ownBorder); }
+        if (borderEl)  { borderEl.setAttribute('aria-disabled', ownBorder ? 'true' : 'false'); }
+        if (ownBorder) {
+            notes.push('The ' + (g ? g.textContent.trim() : 'chosen') + ' background already has its '
+                     + 'own border drawn into it, so no separate border is added — a second one '
+                     + 'would sit on top of the first.');
+        }
+
+        // The palette reaches the border, so a suppressed border makes it inert too.
+        var knot = !ownBorder && borderDrawsKnot();
         if (paletteFd) { paletteFd.classList.toggle('is-inert', !knot); }
         // The swatch is the loudest part of the lie — two colours painted beside a
         // control that reaches nothing — so it comes off entirely rather than fading.
@@ -475,7 +497,7 @@
         // .is-inert is pointer-events only, which is invisible to a screen reader;
         // aria-disabled is the same fact said in the other channel.
         if (paletteEl) { paletteEl.setAttribute('aria-disabled', knot ? 'false' : 'true'); }
-        if (!knot) {
+        if (!knot && !ownBorder) {
             notes.push('The ' + (b ? b.textContent.trim() : 'chosen') + ' border is a fixed '
                      + 'illustration, so the border colours have no effect on it. Choose Knotwork '
                      + 'or Battle to colour the border.');

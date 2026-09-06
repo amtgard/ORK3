@@ -45,8 +45,15 @@ $band  = $recipe['border'] === Scroll::BORDER_BAND;
 // Scroll::BorderDrawsKnot(), not a restatement of it: the composer needs the same
 // answer to stamp its swatches, and two copies of the predicate would drift the
 // moment the 'knot' vocabulary key were renamed in scroll-recipes.php.
-$knot  = Scroll::BorderDrawsKnot((string) $recipe['border']);
-$frame = !$knot;
+//
+// 'none' is a third state, not the absence of the other two: NormaliseRecipe() forces
+// it whenever the GROUND already carries a frame (flame, linen, jovious, sunburst,
+// map), because those plates have the border painted in and anything drawn over one
+// is a second border sitting on the first. Without this, $frame = !$knot would send
+// an empty src to <img>.
+$none  = $recipe['border'] === Scroll::BORDER_NONE;
+$knot  = !$none && Scroll::BorderDrawsKnot((string) $recipe['border']);
+$frame = !$none && !$knot;
 $dark  = in_array($recipe['ground'], Scroll::DARK_GROUNDS, true);
 
 $wash = Scroll::GROUND_WASHES[$recipe['ground']] ?? '';

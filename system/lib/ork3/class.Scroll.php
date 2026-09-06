@@ -253,6 +253,15 @@ class Scroll extends Ork3
     public const BORDER_BAND = 'battle';
 
     /**
+     * The border slot's "draw nothing" value. Distinct from BORDER_BAND and from
+     * 'knot': both of those DRAW something, they just do not come from a file.
+     *
+     * Forced by NormaliseRecipe() for any ground in groundsWithOwnBorder, and
+     * selectable on its own for a plain sheet.
+     */
+    public const BORDER_NONE = 'none';
+
+    /**
      * Whether a border draws the PARAMETRIC KNOTWORK rather than a raster frame.
      *
      * The single source of truth for that question. It was previously restated as
@@ -269,6 +278,20 @@ class Scroll extends Ork3
      * NOT to be confused with BORDER_STYLES, which is the per-tone compositing
      * exception map and holds exactly one entry (owl).
      */
+    /**
+     * Whether a ground already has its border painted into the image.
+     *
+     * Five of the twelve grounds come from orders that draw no border layer, because
+     * the frame is part of the plate. Any border drawn over one of these is a SECOND
+     * border sitting on the first. See the list's own note in scroll-recipes.php.
+     */
+    public static function GroundDrawsOwnBorder(string $ground): bool
+    {
+        $v = self::Recipes();
+
+        return in_array($ground, $v['groundsWithOwnBorder'] ?? [], true);
+    }
+
     public static function BorderDrawsKnot(string $border): bool
     {
         return $border === 'knot' || $border === self::BORDER_BAND;
@@ -319,6 +342,15 @@ class Scroll extends Ork3
         $border = (string) ($requested['border'] ?? '');
         if (isset($v['borders'][$border])) {
             $recipe['border'] = $border;
+        }
+
+        // A ground that already carries a frame takes no border layer, whatever was
+        // asked for. Enforced HERE rather than in the composer because the recipe
+        // travels in the query string: the UI going inert stops the honest mistake,
+        // this stops the hand-edited URL, and both surfaces then agree because both
+        // read the answer from the same place.
+        if (self::GroundDrawsOwnBorder($recipe['ground'])) {
+            $recipe['border'] = self::BORDER_NONE;
         }
 
         $rankSet = (string) ($requested['rankSet'] ?? '');

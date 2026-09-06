@@ -485,13 +485,18 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <label for="sc-ground">Ground</label>
                             <select id="sc-ground" class="adm-select">
                                 <?php foreach (array_keys($recipes['grounds']) as $key): ?>
+                                    <?php /* data-own-border: this plate already has a frame painted into
+                                             it, so no border layer may be drawn over it. Stamped from
+                                             Scroll::GroundDrawsOwnBorder() rather than listed again in the
+                                             JS — the same rule data-knot follows on the border options. */ ?>
                                     <option value="<?= scroll_e($key) ?>"
+                                            data-own-border="<?= Scroll::GroundDrawsOwnBorder($key) ? '1' : '0' ?>"
                                             <?= isset($groundNotes[$key]) ? 'data-note="' . scroll_e($groundNotes[$key]) . '"' : '' ?>
                                             <?= $key === $default['ground'] ? 'selected' : '' ?>><?= scroll_e($recipeLabel($key)) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="sc-field">
+                        <div class="sc-field" id="sc-border-field">
                             <label for="sc-border">Border</label>
                             <select id="sc-border" class="adm-select">
                                 <?php foreach (array_keys($recipes['borders']) as $key): ?>

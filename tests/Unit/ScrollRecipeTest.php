@@ -11,7 +11,7 @@ final class ScrollRecipeTest extends TestCase
         $r = Scroll::Recipes();
 
         $this->assertCount(12, $r['grounds'], 'expected 12 full-page grounds');
-        $this->assertCount(10, $r['borders'], 'expected the knotwork plus 9 rasters');
+        $this->assertCount(11, $r['borders'], 'expected none, the knotwork, plus 9 rasters');
         $this->assertCount(4, $r['rankSets'], 'expected common, zodiac, garber, flame');
         $this->assertCount(16, $r['palette'], "expected the 16 orders' colour pairs");
 
@@ -69,15 +69,18 @@ final class ScrollRecipeTest extends TestCase
 
     public function testNormaliseKeepsValidChoices(): void
     {
+        // parchment, not linen: linen is one of the five grounds that carry their own
+        // border, where NormaliseRecipe() deliberately overrides the requested border.
+        // That rule has its own tests below; this one is about a valid choice surviving.
         $out = Scroll::NormaliseRecipe([
-            'ground'  => 'linen',
+            'ground'  => 'parchment',
             'border'  => 'lion',
             'rankSet' => 'zodiac',
             'primary' => 'hsl(114, 57%, 37%)',
             'secondary' => 'hsl(41, 93%, 55%)',
         ]);
 
-        $this->assertSame('linen', $out['ground']);
+        $this->assertSame('parchment', $out['ground']);
         $this->assertSame('lion', $out['border']);
         $this->assertSame('zodiac', $out['rankSet']);
         $this->assertSame('hsl(114, 57%, 37%)', $out['primary']);
@@ -129,4 +132,44 @@ final class ScrollRecipeTest extends TestCase
         $this->assertSame(Scroll::DEFAULT_RECIPE['primary'], $out['primary']);
         $this->assertSame(Scroll::DEFAULT_RECIPE['secondary'], $out['secondary']);
     }
+    /**
+     * Five grounds have a border painted into the plate, so no border layer may be
+     * drawn over them — the flame ground with a knot border rendered TWO borders, one
+     * on top of the other.
+     *
+     * Enforced in NormaliseRecipe() rather than only in the composer because the
+     * recipe travels in the query string: the UI going inert stops the honest mistake,
+     * this stops the hand-edited URL.
+     */
+    public function testAGroundThatCarriesItsOwnBorderRefusesAnyOther(): void
+    {
+        foreach (['linen', 'jovious', 'flame', 'sunburst', 'map'] as $ground) {
+            $this->assertTrue(Scroll::GroundDrawsOwnBorder($ground), $ground);
+
+            foreach (['knot', 'lion', 'battle', 'owl'] as $border) {
+                $out = Scroll::NormaliseRecipe(['ground' => $ground, 'border' => $border]);
+                $this->assertSame($ground, $out['ground'], $ground);
+                $this->assertSame(Scroll::BORDER_NONE, $out['border'], "{$ground}/{$border}");
+            }
+        }
+    }
+
+    /** The other seven are fields or washes with no frame, and keep the chosen border. */
+    public function testAPlainGroundKeepsTheChosenBorder(): void
+    {
+        foreach (['parchment', 'starfield', 'starfield2', 'cyanotype', 'forge', 'rosewash', 'arcane'] as $ground) {
+            $this->assertFalse(Scroll::GroundDrawsOwnBorder($ground), $ground);
+
+            $out = Scroll::NormaliseRecipe(['ground' => $ground, 'border' => 'lion']);
+            $this->assertSame('lion', $out['border'], $ground);
+        }
+    }
+
+    /** 'none' is selectable in its own right, for a plain sheet. */
+    public function testNoneIsAValidBorderChoiceOnAPlainGround(): void
+    {
+        $out = Scroll::NormaliseRecipe(['ground' => 'parchment', 'border' => Scroll::BORDER_NONE]);
+        $this->assertSame(Scroll::BORDER_NONE, $out['border']);
+    }
+
 }
