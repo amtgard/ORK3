@@ -6,24 +6,26 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Pins the "no dead buttons" rule: a Print control appears only where certificate
- * art exists, so a later change cannot quietly start offering awards that cannot
- * be printed.
+ * art exists AND the award is one Scrollery is willing to print, so a later change
+ * cannot quietly start offering awards that cannot be printed.
  */
 final class ScrolleryPermissionTest extends TestCase
 {
-    public function testPrintableAwardsExcludeOnlyOfficerPositions(): void
+    public function testPrintableAwardsExcludeOfficerPositionsAndExcludedClasses(): void
     {
         $rows = [
             ['AwardId' => 33,  'OfficerRole' => 'none'],           // griffon — its own art
-            ['AwardId' => 1,   'OfficerRole' => 'none'],           // Master Rose — custom scroll
-            ['AwardId' => 189, 'OfficerRole' => 'other-officer'],  // Guildmaster — not printable
+            ['AwardId' => 94,  'OfficerRole' => 'none'],           // Custom Award — the custom scroll
+            ['AwardId' => 189, 'OfficerRole' => 'other-officer'],  // Guildmaster — an officer position
+            ['AwardId' => 1,   'OfficerRole' => 'none'],           // Master Rose — not on the allowlist
+            ['AwardId' => 52,  'OfficerRole' => 'none'],           // Lord — a title, no longer on it either
         ];
 
         $printable = array_values(array_filter($rows, fn ($r) => Scroll::HasArt($r)));
 
         $this->assertCount(2, $printable);
         $this->assertSame(33, $printable[0]['AwardId']);
-        $this->assertSame(1, $printable[1]['AwardId']);
+        $this->assertSame(94, $printable[1]['AwardId']);
     }
 
     public function testEveryLadderStillHasItsOwnDesign(): void

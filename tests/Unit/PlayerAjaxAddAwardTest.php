@@ -58,16 +58,20 @@ final class PlayerAjaxAddAwardTest extends TestCase
     }
 
     /**
-     * award_id 245 (a knighthood-ladder award) has a kingdomaward row in
-     * every seeded kingdom (see kingdomaward WHERE award_id = 245) and
-     * always resolves a scroll order via Scroll::OrderForAwardId(), so it is
-     * always printable — the same fact ScrolleryAwardIsPrintableTest relies
-     * on for its "real ladder grant" case.
+     * award_id 21 (Order of the Rose) has a kingdomaward row in every seeded
+     * kingdom and always resolves a scroll order via Scroll::OrderForAwardId(),
+     * so it is always printable — the same fact ScrolleryAwardIsPrintableTest
+     * relies on for its "real ladder grant" case.
+     *
+     * This used to use award_id 245, "Knight of Battle". That is the KNIGHTHOOD
+     * of the Order of Battle ladder (243), not the ladder itself, and knighthoods
+     * are refused outright by Scroll::OrderForAwardRow()'s allowlist. A genuine ladder id
+     * is what this helper was always meant to return.
      */
     private function ladderKingdomAwardId(int $kingdomId): int
     {
         $stmt = $this->pdo->prepare(
-            'SELECT kingdomaward_id FROM ' . DB_PREFIX . 'kingdomaward WHERE kingdom_id = ? AND award_id = 245 LIMIT 1'
+            'SELECT kingdomaward_id FROM ' . DB_PREFIX . 'kingdomaward WHERE kingdom_id = ? AND award_id = 21 LIMIT 1'
         );
         $stmt->execute([$kingdomId]);
 
@@ -80,7 +84,7 @@ final class PlayerAjaxAddAwardTest extends TestCase
         $kingdomId = $this->playerFixture->kingdomIdForPark($parkId);
         $kingdomAwardId = $this->ladderKingdomAwardId($kingdomId);
         if ($kingdomAwardId <= 0) {
-            $this->markTestSkipped('No kingdomaward row for award_id 245 in this kingdom.');
+            $this->markTestSkipped('No kingdomaward row for award_id 21 in this kingdom.');
         }
 
         $recipient = $this->playerFixture->createPlayer($parkId, 'addaward-recipient');
@@ -127,7 +131,7 @@ final class PlayerAjaxAddAwardTest extends TestCase
         $kingdomId = $this->playerFixture->kingdomIdForPark($parkId);
         $kingdomAwardId = $this->ladderKingdomAwardId($kingdomId);
         if ($kingdomAwardId <= 0) {
-            $this->markTestSkipped('No kingdomaward row for award_id 245 in this kingdom.');
+            $this->markTestSkipped('No kingdomaward row for award_id 21 in this kingdom.');
         }
 
         $recipient = $this->playerFixture->createPlayer($parkId, 'printable-recipient');
@@ -155,7 +159,7 @@ final class PlayerAjaxAddAwardTest extends TestCase
         $scrollery = new Model_Scrollery();
         $this->assertTrue(
             $scrollery->award_is_printable($awardsId),
-            'A fresh grant of a knighthood-ladder award (245) must be printable.'
+            'A fresh grant of a ladder award (21, Order of the Rose) must be printable.'
         );
     }
 
@@ -172,7 +176,7 @@ final class PlayerAjaxAddAwardTest extends TestCase
         $kingdomId = $this->playerFixture->kingdomIdForPark($parkId);
         $kingdomAwardId = $this->ladderKingdomAwardId($kingdomId);
         if ($kingdomAwardId <= 0) {
-            $this->markTestSkipped('No kingdomaward row for award_id 245 in this kingdom.');
+            $this->markTestSkipped('No kingdomaward row for award_id 21 in this kingdom.');
         }
 
         $recipient = $this->playerFixture->createPlayer($parkId, 'noauth-recipient');

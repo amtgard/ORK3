@@ -118,10 +118,16 @@ final class ScrollResolutionTest extends TestCase
     {
         // A specific order.
         $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 33])));
-        // No design of its own, but printable as a custom scroll.
-        $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 1])));
+        // No design of its own, but printable as a custom scroll — and under the
+        // allowlist that is Custom Award (94) and Custom Title (246) alone. Lord (52)
+        // used to stand here and no longer does; see ScrollExcludedAwardsTest.
+        $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 94])));
+        $this->assertTrue(Scroll::HasArt($this->row(['AwardId' => 246])));
         // An officer position is not printable at all.
         $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 189, 'OfficerRole' => 'other-officer'])));
+        // Neither is anything the allowlist does not admit — a masterhood, a title.
+        $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 1])));
+        $this->assertFalse(Scroll::HasArt($this->row(['AwardId' => 52])));
     }
 
     /**
@@ -132,11 +138,11 @@ final class ScrollResolutionTest extends TestCase
      * test fails the day one of those is given a SPECIFIC order of its own, which is
      * the moment the archery title question has to be answered properly.
      *
-     * As of Scroll::OrderForAwardRow(), a bare award_id 0/94/131 row (no archery name
-     * attached) is still printable — as the custom scroll, per
-     * ScrollCustomEligibilityTest — so that coverage question belongs there, not here.
-     * This test only pins that none of the three base ids has been given its OWN
-     * (specific, by-id) order.
+     * As of the allowlist, a bare award_id 94 row (no archery name attached) is still
+     * printable — as the custom scroll, per ScrollCustomEligibilityTest — while bare
+     * 0 and 131 rows are not, because they are neither an order nor a custom entry.
+     * That coverage question belongs there, not here. This test only pins that none
+     * of the three base ids has been given its OWN (specific, by-id) order.
      *
      * 94 and 131 are asserted directly through OrderForAwardId(): no order in the
      * catalogue declares either as its award_id, so a real regression would still be

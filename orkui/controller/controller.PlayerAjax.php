@@ -152,6 +152,18 @@ class Controller_PlayerAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Please enter the award date.']);
                 exit;
             }
+            // "Where given" is required, server-side, on every grant path. A blank pair
+            // used to be written as at_park_id = 0 / at_kingdom_id = 0 -- the state
+            // 120,284 existing rows (30.7% of ork_awards) are stuck in, printable and
+            // reportable by nobody but the recipient. The modal defaults the field and
+            // blocks its own submit, but a client that skipped that is refused here
+            // rather than silently writing the unattributed pair.
+            $at_park_id    = valid_id($_POST['ParkId']    ?? 0) ? (int)$_POST['ParkId'] : 0;
+            $at_kingdom_id = valid_id($_POST['KingdomId'] ?? 0) ? (int)$_POST['KingdomId'] : 0;
+            if ($at_park_id <= 0 && $at_kingdom_id <= 0) {
+                echo json_encode(['status' => 1, 'error' => 'Please choose where this award was given.']);
+                exit;
+            }
             $r = $this->Player->add_player_award([
                 'Token'          => $this->session->token,
                 'RecipientId'    => $player_id,
@@ -162,8 +174,8 @@ class Controller_PlayerAjax extends Controller
                 'Date'           => $date,
                 'GivenById'      => $given_by_id,
                 'Note'           => $_POST['Note']          ?? '',
-                'ParkId'         => valid_id($_POST['ParkId']    ?? 0) ? (int)$_POST['ParkId'] : 0,
-                'KingdomId'      => valid_id($_POST['KingdomId'] ?? 0) ? (int)$_POST['KingdomId'] : 0,
+                'ParkId'         => $at_park_id,
+                'KingdomId'      => $at_kingdom_id,
                 'EventId'        => valid_id($_POST['EventId']   ?? 0) ? (int)$_POST['EventId'] : 0,
             ]);
             if (($r['Status'] ?? 1) == 0) {

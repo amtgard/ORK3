@@ -23,6 +23,115 @@ class Scroll extends Ork3
      */
     public const MAX_PRINT_RUN = 200;
 
+    /**
+     * How many certificates one BROWSER print job should contain.
+     *
+     * MAX_PRINT_RUN is the server's hard guard on a single render URL; this is the
+     * separate, smaller number a bulk run should chunk itself into, because the
+     * limit that actually bites is the print rasteriser's, not the database's. Named
+     * here as a domain constant so the page and any future PDF service agree on one
+     * value rather than each hard-coding its own.
+     *
+     * Front end, not domain, decides whether to use it — see the handoff note in
+     * Model_Scrollery::awards_for_bulk().
+     */
+    public const PRINT_CHUNK = 25;
+
+    /**
+     * THE ALLOWLIST'S ONLY NON-ORDER MEMBERS — the two catalogue entries that are not
+     * an award at all, but the placeholder a kingdom hangs its own honour from:
+     * Custom Award (94) and Custom Title (246).
+     *
+     * Scrollery prints an award if and only if it resolves to a real, art-backed
+     * order in scroll-orders.php, or its id is one of these two. Everything else —
+     * every title, master, paragon, knighthood, associate title, noble title,
+     * Defender, Weaponmaster, Dragonmaster, Warmaster, Esquire, bare Master, and
+     * Order of the Walker in the Middle (31) — does not print. See OrderForAwardRow().
+     *
+     * Maintainer's words: "remove all awards from the drop-down other than Order of X
+     * awards (the ladders). No titles, no masters, etc. Leave Custom Award and Custom
+     * Title but specifically give a space for that to be typed in to replace the
+     * 'Custom Title' or 'Custom Award' wording."
+     *
+     * WHY AN ALLOWLIST AND NOT THE 74-ID DENYLIST IT REPLACED: the denylist enumerated
+     * what must not print, so anything the catalogue grew that nobody thought about —
+     * a new title, a kingdom's orphan id, a class the buckets could not express — was
+     * printable by default. It failed OPEN. This rule fails CLOSED: an award has to
+     * earn its way in by having artwork, and the artwork is a file somebody drew.
+     *
+     * The old denylist is not gone in spirit — every one of its 74 ids is still
+     * refused, and ScrollExcludedAwardsTest keeps that as an explicit regression
+     * guard so a later loosening of the allowlist cannot quietly re-admit a
+     * knighthood.
+     *
+     * ON AWARD 31 — "Order of the Walker in the Middle" is a genuine is_ladder award
+     * with 379 grants and it is dropped anyway, by explicit decision, because
+     * Scrollery has no artwork for it: it is the ONE ladder in the catalogue with no
+     * entry in scroll-orders.php. That also drops Crystal Groves' "Master Reeve"
+     * (a kingdomaward on base 31) as a side effect, with no name-matching heuristic —
+     * 31 is the only ladder in the whole catalogue carrying off-pattern kingdom
+     * names, exactly three of them, 33 grants.
+     *
+     * @var list<int>
+     */
+    public const CUSTOM_AWARD_IDS = [94, 246];
+
+    /**
+     * Custom Title, specifically — the half of CUSTOM_AWARD_IDS that is a title
+     * rather than an award, and the only entry that takes an interstitial phrase.
+     * See TitlePhrase().
+     */
+    public const CUSTOM_TITLE_AWARD_ID = 246;
+
+    /**
+     * The interstitial line between the recipient's name and the title, for the two
+     * custom entries only. A ranked award already has one — "with her third" — built
+     * from the ordinal, and the template renders exactly one of the two.
+     *
+     * Different defaults because the two entries are different parts of speech.
+     * A Custom Title names what someone IS ("with the title of / Fantastic Beast");
+     * a Custom Award names a thing granted, and its custom_name values are frequently
+     * already order-shaped in the real data — "Order of the Raider", "Order of the
+     * Facade" — so "with the / Order of the Raider" reads as a sentence where the
+     * title wording would not.
+     *
+     * Both are DEFAULTS, not fixed: the composer offers a "With phrase" field, and an
+     * officer can reword or clear it per print. PHRASE_UNSET distinguishes "no override
+     * supplied" from "overridden to empty", which is a real and different choice —
+     * see TitlePhrase().
+     */
+    public const DEFAULT_TITLE_PHRASE = 'with the title of';
+
+    public const DEFAULT_AWARD_PHRASE = 'with the';
+
+    /** Sentinel: no override supplied. Any string, including '', is an override. */
+    public const PHRASE_UNSET = "\0unset";
+
+    /**
+     * The catalogue names those two entries carry. They are placeholders — the ORK's
+     * internal word for "this kingdom made something up" — never the honour's name,
+     * so ResolveTitle() must not print them on a certificate.
+     *
+     * @var list<string>
+     */
+    private const CUSTOM_PLACEHOLDER_NAMES = ['custom award', 'custom title'];
+
+    /**
+     * The longest custom title Scrollery will print.
+     *
+     * ork_awards.custom_name is varchar(64) and is the natural precedent: it is where
+     * this value comes from on an existing grant, so a typed override that could not
+     * have been stored is not a value the module should print either. The longest
+     * ork_kingdomaward.name in the ORK is 35 characters ("Guildmaster of Reeves,
+     * Principality"), so 64 is roughly double the real-world worst case.
+     *
+     * It matters because `.Order` in scrollery.css is a FLAT 1.5em with no
+     * length-scaling in _text.tpl at all — only scrollery-autofit.js shrinks it, in
+     * the browser, after layout — so an unbounded value is a layout break, not a
+     * small font.
+     */
+    public const CUSTOM_NAME_MAX_LENGTH = 64;
+
     public const DEFAULT_RESOURCES = [
         'flourish_top'    => 'scrolls/common/text/squiggly-top.svg',
         'flourish_right'  => 'scrolls/common/text/squiggly-right.svg',
@@ -72,17 +181,24 @@ class Scroll extends Ork3
      */
 
     /**
-     * Ground entries that are soft-light WASHES rather than base plates: their own
-     * orders lay them over the parchment, never instead of it. Measured mean luminance
-     * across the text box is 118 and 120, against ~200 for a genuine ground, so drawn
-     * alone each is a flat mid-grey the type sinks into. Values are the blend each
-     * file's own order uses — smith.tpl and battle.tpl respectively.
+     * Ground entries that are WASHES rather than base plates: their own orders lay
+     * them over the parchment, never instead of it. Measured mean luminance across
+     * the text box is 118 and 120 for forge and arcane, against ~200 for a genuine
+     * ground, so drawn alone each is a flat mid-grey the type sinks into. rosewash
+     * fails the same way from the opposite end — 88.5% of its pixels are >= 250 and
+     * its mean luminance is 0.939, so drawn alone it is a sheet of near-white with
+     * no parchment beneath it.
+     *
+     * Values are the blend each file's own order uses — smith.tpl, battle.tpl and
+     * rose.tpl respectively. rose.tpl's genuinely includes the hue-rotate, which is
+     * why this is the first entry carrying a filter:.
      *
      * @var array<string, string>
      */
     public const GROUND_WASHES = [
-        'forge'  => 'mix-blend-mode:soft-light;',
-        'arcane' => 'mix-blend-mode:soft-light;opacity:0.8;',
+        'forge'    => 'mix-blend-mode:soft-light;',
+        'arcane'   => 'mix-blend-mode:soft-light;opacity:0.8;',
+        'rosewash' => 'mix-blend-mode:multiply;opacity:0.2;filter:hue-rotate(80deg);',
     ];
 
     /**
@@ -135,6 +251,28 @@ class Scroll extends Ork3
      * and a border that draws no frame reads as a broken selection.
      */
     public const BORDER_BAND = 'battle';
+
+    /**
+     * Whether a border draws the PARAMETRIC KNOTWORK rather than a raster frame.
+     *
+     * The single source of truth for that question. It was previously restated as
+     * `$border === 'knot' || $border === Scroll::BORDER_BAND` in custom.tpl, and the
+     * composer needed the same answer to stamp its swatches — so the predicate
+     * existed twice and a rename of the 'knot' vocabulary key in scroll-recipes.php
+     * would have broken one copy silently, exactly the drift the recipe-exception
+     * block above exists to prevent.
+     *
+     * BORDER_BAND is included because battle/border_symbols.png is a 292px decorative
+     * band, not a frame: battle.tpl draws the knotwork and centres the band over it,
+     * so the band border draws a knot too.
+     *
+     * NOT to be confused with BORDER_STYLES, which is the per-tone compositing
+     * exception map and holds exactly one entry (owl).
+     */
+    public static function BorderDrawsKnot(string $border): bool
+    {
+        return $border === 'knot' || $border === self::BORDER_BAND;
+    }
 
     /**
      * The one rank set whose numerals are a small glyph (292x171) rather than a
@@ -272,9 +410,63 @@ class Scroll extends Ork3
      * real names still prints something.
      *
      * Per-kingdom name variants are a later phase; see the plan's Deferred section.
+     *
+     * ---------------------------------------------------------------------------
+     * THE TWO CUSTOM ENTRIES INVERT THAT ORDER, and only they do.
+     *
+     * The reasoning above is measured against LADDER grants, where custom_name is a
+     * junk tag typed beside the real name. It does not hold for Custom Award (94) and
+     * Custom Title (246), where custom_name IS the title and there is no other name
+     * to have: 12,213 of award 94's 18,077 grants carry one, and 203 of award 246's
+     * 206. Under the ladder order those all print the literal words "Custom Award".
+     *
+     * So for 94/246 only:
+     *
+     *   1. $customName — what an officer typed at print time. See BuildScroll().
+     *   2. CustomAwardName — the per-grant ork_awards.custom_name.
+     *   3. KingdomAwardName, but only when the kingdom actually named the row.
+     *      Most kingdoms leave it literally "Custom Award"/"Custom Title" (37 rows
+     *      each, one per kingdom), but some created real ones on base 94 —
+     *      Dreamkeeper, Order of the Hellrider, Grand Marquis, Order of the Hardcore,
+     *      Mistress, Order of the Emerald — and those are the award's real name.
+     *   4. Nothing. See below.
+     *
+     * A BLANK CUSTOM TITLE PRINTS BLANK, deliberately — 5,864 grants on 94 and 3 on
+     * 246 have neither a custom_name nor a distinct kingdomaward name, and the ORK
+     * genuinely does not know what those awards were called. "Custom Award" is the
+     * ORK's internal placeholder; lettering it onto a certificate states something
+     * false about the honour. A blank line states nothing and can be completed by
+     * hand, which is the convention this certificate already uses everywhere else:
+     * FormatDate() returns '' for a zero date so the writing-line draws blank rather
+     * than "30th Nov -0001", and BuildScroll()'s `ranked` leaves the ordinal blank as
+     * "an invitation to write the rank in by hand". Since the composer now carries a
+     * customName box, the blank case is also fixable at print time rather than a dead
+     * end — which is what makes blank the better of two imperfect answers.
+     * ---------------------------------------------------------------------------
+     *
+     * @param string $customName A title typed at print time; honoured ONLY for 94/246.
      */
-    public static function ResolveTitle(array $awardRow): string
+    public static function ResolveTitle(array $awardRow, string $customName = ''): string
     {
+        if (self::IsCustomAward($awardRow)) {
+            $typed = self::SanitiseCustomName($customName);
+            if ($typed !== '') {
+                return $typed;
+            }
+
+            $granted = trim((string) ($awardRow['CustomAwardName'] ?? ''));
+            if ($granted !== '') {
+                return $granted;
+            }
+
+            $kingdom = trim((string) ($awardRow['KingdomAwardName'] ?? ''));
+            if ($kingdom !== '' && !in_array(strtolower($kingdom), self::CUSTOM_PLACEHOLDER_NAMES, true)) {
+                return $kingdom;
+            }
+
+            return '';
+        }
+
         foreach (['KingdomAwardName', 'Name', 'AliasAwardName', 'CustomAwardName'] as $key) {
             $name = trim((string) ($awardRow[$key] ?? ''));
             if ($name !== '') {
@@ -282,6 +474,115 @@ class Scroll extends Ork3
             }
         }
         return '';
+    }
+
+    /**
+     * Clean a hand-typed custom title down to something that can be lettered onto a
+     * certificate. Sanitising happens HERE, in the domain, not in the controller: it
+     * is free text landing on a printed page, and every door into BuildScroll() has
+     * to get the same treatment.
+     *
+     * - Control characters (newlines included) collapse to a space. `.Order` is one
+     *   line; `.Multiline`'s `white-space: pre-line` is not applied to it, so an
+     *   embedded newline is either invisible or a layout surprise depending on the
+     *   partial.
+     * - Runs of whitespace collapse, and the result is trimmed. A pasted value
+     *   carrying a trailing tab must not change the rendered width.
+     * - TRUNCATED at CUSTOM_NAME_MAX_LENGTH, not refused. Refusing silently prints a
+     *   blank line and loses what the officer typed; truncating prints as much of it
+     *   as the page can carry. ResolvePronounOverride() caps the same way, for the
+     *   same reason.
+     * - Invalid UTF-8 yields '' — preg_replace returns null on a bad subject with the
+     *   /u modifier, and the fail-closed answer for a value bound for a printed page
+     *   is to print nothing.
+     *
+     * Escaping is NOT done here: every partial passes the title through scroll_e()
+     * (_text.tpl:128). Escaping twice would print "&amp;" on the certificate.
+     */
+    public static function SanitiseCustomName(string $raw): string
+    {
+        $clean = preg_replace('/\p{C}+/u', ' ', $raw);
+        if ($clean === null) {
+            return '';
+        }
+
+        $clean = preg_replace('/\s+/u', ' ', $clean);
+        if ($clean === null) {
+            return '';
+        }
+
+        return trim(mb_substr(trim($clean), 0, self::CUSTOM_NAME_MAX_LENGTH, 'UTF-8'));
+    }
+
+    /** Whether a bare award id is one of the two custom placeholder entries. */
+    public static function IsCustomAwardId(int $awardId): bool
+    {
+        return in_array($awardId, self::CUSTOM_AWARD_IDS, true);
+    }
+
+    /**
+     * Whether an award ROW is a grant of one of the two custom placeholder entries —
+     * the rows whose real title lives in custom_name rather than in the catalogue.
+     *
+     * Reads AliasAwardId as well as AwardId for the same reason the printability rule
+     * does: AwardsForPlayer() resolves an alias into AliasAwardId and leaves AwardId
+     * on the base award.
+     */
+    public static function IsCustomAward(array $awardRow): bool
+    {
+        foreach (['AwardId', 'AliasAwardId'] as $key) {
+            if (self::IsCustomAwardId((int) ($awardRow[$key] ?? 0))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The line that introduces the title, printed between the recipient's name and
+     * the title itself.
+     *
+     * A ranked award already has one — "with her third" — rendered from the ordinal.
+     * A Custom Title had nothing, so the certificate ran the recipient's name straight
+     * into a bare phrase and read as two unrelated lines:
+     *
+     *     Haliax Duskstrider
+     *     Fantastic Beast
+     *
+     * Returns '' for everything else, and the template renders nothing when it is
+     * empty — so this cannot introduce a phrase on an order that already has one.
+     *
+     * ON CUSTOM AWARD (94): deliberately NOT given a phrase. It is the far larger
+     * population (18,077 grants against 246's 206) and its custom_name values are
+     * frequently already order-shaped — "Order of the Raider", "Order of the Facade" —
+     * where any introducing phrase would read worse than the bare name, not better.
+     * A parallel "with the award of" is a live option if the maintainer wants it;
+     * it was not asked for, and applying the title wording to ninety times more
+     * certificates on inference would be the wrong way round.
+     */
+    public static function TitlePhrase(array $awardRow, string $override = self::PHRASE_UNSET): string
+    {
+        if (!self::IsCustomAward($awardRow)) {
+            // Every other order already has the ordinal phrase, and the template renders
+            // exactly one of the two. An override must not be able to give an award both.
+            return '';
+        }
+
+        if ($override !== self::PHRASE_UNSET) {
+            // Deliberately allows ''. Clearing the box is a real choice — it prints the
+            // title with no introducing line, which is what the certificate did before
+            // this existed and is still right for some wordings.
+            return self::SanitiseCustomName($override);
+        }
+
+        foreach (['AwardId', 'AliasAwardId'] as $key) {
+            if ((int) ($awardRow[$key] ?? 0) === self::CUSTOM_TITLE_AWARD_ID) {
+                return self::DEFAULT_TITLE_PHRASE;
+            }
+        }
+
+        return self::DEFAULT_AWARD_PHRASE;
     }
 
     public static function ClampRank(array $order, int $rank): int
@@ -350,10 +651,63 @@ class Scroll extends Ork3
     }
 
     /**
+     * Every award id the allowlist admits, as a flat list — for the one caller that
+     * has to state the rule in SQL rather than row by row
+     * (Model_Scrollery::bulkFromWhere(), which must filter BEFORE the LIMIT or its
+     * total and its paging both lie).
+     *
+     * Derived from scroll-orders.php rather than restated, so adding an order cannot
+     * leave the bulk query behind. hunter's fabricated award_id 6969 is included and
+     * that is correct, not a leak: no ork_award row carries it, and if one ever did,
+     * OrderForAwardId() would resolve it in PHP too — the SQL and the PHP agree.
+     * custom's own 0 sentinel is skipped, because 0 means "no base award" on a real
+     * row and would open the gate to every dangling kingdomaward in the ORK.
+     *
+     * @return list<int>
+     */
+    public static function PrintableAwardIds(): array
+    {
+        $ids = self::CUSTOM_AWARD_IDS;
+        foreach (self::Orders() as $order) {
+            if ((int) $order['award_id'] > 0) {
+                $ids[] = (int) $order['award_id'];
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+        sort($ids);
+
+        return $ids;
+    }
+
+    /**
+     * Whether Scrollery's award-class policy refuses this row.
+     *
+     * The INVERSE of the allowlist, kept under the name every caller already uses.
+     * It no longer consults an id denylist: a row is excluded exactly when
+     * OrderForAwardRow() can find nothing to print it as, which is the same question
+     * asked from the other side. Officer positions answer true here too — they are
+     * refused, and by the time a caller is choosing a refusal message the distinction
+     * between "job, not an honour" and "off the menu" is one it does not act on.
+     *
+     * @see CUSTOM_AWARD_IDS for the policy and its reasoning.
+     */
+    public static function IsExcludedFromScrollery(array $awardRow): bool
+    {
+        return self::OrderForAwardRow($awardRow) === null;
+    }
+
+    /**
      * Whether an award with no design of its own may still be printed.
      *
      * Officer positions are excluded: an officer position is a job somebody held, not
      * an honour they were given.
+     *
+     * This answers ONLY that question — it is not the award-class gate and must never
+     * become one. The gate is the allowlist inside OrderForAwardRow(), which every
+     * surface goes through; an excluded award that happened to have artwork of its
+     * own would sail straight past a gate placed here, because OrderForAwardId()
+     * resolves before the custom fallback is ever consulted.
      */
     public static function IsCustomEligible(array $awardRow): bool
     {
@@ -361,13 +715,23 @@ class Scroll extends Ork3
     }
 
     /**
-     * THE single resolution point for "what does this award print as".
+     * THE single resolution point for "what does this award print as", and THE
+     * ALLOWLIST — a row that does not leave this function with an order does not
+     * print anywhere. One gate here is inherited by mine, bulk, create, compose,
+     * render, the profile Awards and Titles print buttons and the post-grant link,
+     * because HasArt() and BuildScroll() both resolve through it.
      *
-     * Order of precedence: an officer position first (excludes everything, by any
-     * route), then the award's own design, then archery by name, then the custom
-     * scroll, then nothing. Every caller — the reprint list, the bulk list, the
-     * Awards tab, the create tool — goes through here, so coverage cannot drift
-     * between surfaces.
+     * A row is printable if and only if it reaches one of exactly three returns:
+     *
+     *   1. its award id names a real, art-backed order in scroll-orders.php;
+     *   2. it is an archery grant, which has no base award of its own to key on and
+     *      is recognised by kingdomaward name (see ARCHERY_NAMES);
+     *   3. its award id is Custom Award (94) or Custom Title (246), and it takes the
+     *      custom scroll.
+     *
+     * Everything else falls off the end and returns null. There is no denylist to
+     * keep current: a class nobody anticipated is refused because it was never
+     * admitted, not because somebody remembered to name it.
      */
     public static function OrderForAwardRow(array $awardRow): ?array
     {
@@ -380,19 +744,48 @@ class Scroll extends Ork3
             return null;
         }
 
-        $specific = self::OrderForAwardId((int) ($awardRow['AwardId'] ?? 0));
+        $awardId = (int) ($awardRow['AwardId'] ?? 0);
+        $aliasId = (int) ($awardRow['AliasAwardId'] ?? 0);
+
+        // An alias RE-POINTS the grant at a different catalogue entry, and that entry
+        // is what was really given. Every one of the ORK's 11 alias rows sits on
+        // Custom Title (246) and points at a real title — Lord, Lady, Baronet,
+        // Countess, Baron, Archduke, Paragon Anti-Paladin — so without this the
+        // allowlist would admit all 11 through their harmless-looking base id and
+        // print the very titles the policy removed. AwardsForPlayer() resolves the
+        // alias into AliasAwardId and leaves AwardId on the base award, which is why
+        // both have to be read.
+        if ($aliasId > 0 && self::OrderForAwardId($aliasId) === null && !self::IsCustomAwardId($aliasId)) {
+            return null;
+        }
+
+        $specific = self::OrderForAwardId($awardId);
         if ($specific !== null) {
             return $specific;
         }
 
-        foreach (['KingdomAwardName', 'Name'] as $key) {
-            $archery = self::ArcheryOrderForName((string) ($awardRow[$key] ?? ''));
-            if ($archery !== null) {
-                return $archery;
+        // Archery is the one order matched by NAME, so the match is confined to the
+        // rows that can legitimately be archery: its real grants carry no resolvable
+        // base award (award_id 0 — the LEFT JOIN missed) or hang off Custom Award.
+        // Without that confinement the name list would be a second, weaker door into
+        // the allowlist — a knighthood a kingdom happened to call "Order of the
+        // Hunter" would print. No such row exists today; the gate is what keeps that
+        // true.
+        if ($awardId === 0 || self::IsCustomAwardId($awardId)) {
+            foreach (['KingdomAwardName', 'Name'] as $key) {
+                $archery = self::ArcheryOrderForName((string) ($awardRow[$key] ?? ''));
+                if ($archery !== null) {
+                    return $archery;
+                }
             }
         }
 
-        return self::IsCustomEligible($awardRow) ? (self::Orders()['custom'] ?? null) : null;
+        // The custom scroll is no longer the catch-all it was: only the two custom
+        // catalogue entries reach it. A dangling kingdomaward, an orphan noble id, a
+        // title, a masterhood — all of which used to land here — now return null.
+        return self::IsCustomAwardId($awardId) && self::IsCustomEligible($awardRow)
+            ? (self::Orders()['custom'] ?? null)
+            : null;
     }
 
     public static function HasArt(array $awardRow): bool
@@ -472,6 +865,15 @@ class Scroll extends Ork3
         );
     }
 
+    /**
+     * @param array $context Recognised keys include:
+     *   - customName (string) the title an officer typed at print time. Honoured ONLY
+     *     when the award resolves to a custom entry (Custom Award 94 / Custom Title
+     *     246), where it beats the stored custom_name and the kingdomaward name;
+     *     IGNORED entirely for every other award, whose name comes from the
+     *     catalogue and is not the officer's to retype. Sanitised and capped here —
+     *     see SanitiseCustomName() and CUSTOM_NAME_MAX_LENGTH.
+     */
     public static function BuildScroll(array $awardRow, array $context): array
     {
         $order = self::OrderForAwardRow($awardRow);
@@ -519,7 +921,48 @@ class Scroll extends Ork3
             $issuerTitle = $isPark ? 'Barony' : '';
         }
 
+        // PROVENANCE — who this certificate is for and which body issued it.
+        //
+        // Nothing on the certificate draws these; they exist so a caller that records
+        // the print (ScrollPrintLog::RecordPrint()) does not have to re-derive facts
+        // this function already resolved, and cannot disagree with it about them.
+        // Without them the print log answers neither "has this player already had a
+        // scroll?" nor "which kingdoms actually use this module?" — and for a
+        // composed scroll, which has no awards_id at all, mundaneId is the ONLY link
+        // back to a person.
+        //
+        // Derived from the award row where there is one, overridable from context
+        // where there is not — the same pattern issuerTitle / useThe / useOf already
+        // follow. An award-backed print (Model_Scrollery::scroll_for_awards_id())
+        // needs no context at all: MundaneId / ParkId / KingdomId are on the row.
+        // Scrollery/compose builds its row out of $_GET and carries none of the
+        // three, so its controller passes them in context.
+        //
+        // Park beats kingdom, matching Model_Award::kingdom_for_grant_row(): a park
+        // grant leaves at_kingdom_id blank, and the park is the narrower truth.
+        $rowParkId    = (int) ($awardRow['ParkId'] ?? 0);
+        $rowKingdomId = (int) ($awardRow['KingdomId'] ?? 0);
+        $scopeType    = $rowParkId > 0 ? 'park' : ($rowKingdomId > 0 ? 'kingdom' : '');
+        $scopeId      = $rowParkId > 0 ? $rowParkId : $rowKingdomId;
+
+        // A zero is "the row does not say", not "the row says zero" — 120,284 award
+        // rows carry neither scope id — so the fallback tests the VALUE, not just key
+        // presence. ?? would keep a present-but-zero row value and never reach context.
+        if ($scopeType === '') {
+            $fromContext = (string) ($context['scopeType'] ?? '');
+            $scopeType   = in_array($fromContext, ['park', 'kingdom'], true) ? $fromContext : '';
+            $scopeId     = $scopeType === '' ? 0 : (int) ($context['scopeId'] ?? 0);
+        }
+
+        $mundaneId = (int) ($awardRow['MundaneId'] ?? 0);
+        if ($mundaneId <= 0) {
+            $mundaneId = (int) ($context['mundaneId'] ?? 0);
+        }
+
         return [
+            'mundaneId'   => max(0, $mundaneId),
+            'scopeType'   => $scopeType,
+            'scopeId'     => max(0, $scopeId),
             'order'       => $order['id'],
             'rank'        => $rank,
             // A blank ordinal is an invitation to write the rank in by hand. That is right
@@ -536,7 +979,18 @@ class Scroll extends Ork3
                 || $rank > 0
                 || (int) ($awardRow['IsLadder'] ?? 0) === 1,
             'variant'     => $variant,
-            'title'       => self::ResolveTitle($awardRow),
+            'title'       => self::ResolveTitle($awardRow, (string) ($context['customName'] ?? '')),
+            // Introduces the title on the two custom entries, where 'ranked' is false and
+            // the ordinal phrase above renders nothing. '' everywhere else, so the two can
+            // never both appear. array_key_exists, not ??, because '' is a legitimate
+            // override meaning "print no phrase" and must not fall back to the default.
+            // See TitlePhrase().
+            'titlePhrase' => self::TitlePhrase(
+                $awardRow,
+                array_key_exists('titlePhrase', $context)
+                    ? (string) $context['titlePhrase']
+                    : self::PHRASE_UNSET
+            ),
             'player'      => (string) ($context['player'] ?? ''),
             'pronoun'     => (string) ($context['pronoun'] ?? 'their'),
             'reason'      => (string) ($awardRow['Note'] ?? ''),

@@ -389,6 +389,83 @@ class Award extends Ork3
     }
 
     /**
+     * Which section of an award dropdown one catalog row belongs in.
+     *
+     * The buckets themselves are a UI concern, but the RULE is not: it reads
+     * is_ladder / peerage / is_title / title_class off a GetAwardList()-shaped row,
+     * and two surfaces now need the same answer — the grant/recommend pickers (via
+     * GetAwardOptionGroups() below) and the Scrollery composer, whose own printable
+     * list is filtered by Scroll::OrderForAwardRow() long before it gets here.
+     * Restating the ladder in the second caller would be a second opinion that can
+     * drift, so both read this.
+     *
+     * Returns 'Custom' for the two custom entries, which every caller renders
+     * OUTSIDE the groups (they are standalone options, not a section).
+     *
+     * @param array<string, mixed> $award  A GetAwardList() row.
+     * @param list<int>            $pseudoLadderIds  pseudoLadderKingdomAwardIds().
+     */
+    public static function OptionGroupLabelFor(array $award, array $pseudoLadderIds): string
+    {
+        $sysName = $award['AwardName'] ?? $award['KingdomAwardName'] ?? '';
+
+        if (in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true)) {
+            return 'Ladder Awards';
+        }
+        if ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
+            return 'Custom';
+        }
+        if (!empty($award['IsLadder'])) {
+            return 'Ladder Awards';
+        }
+        if (in_array($sysName, ['Defender', 'Master'], true)) {
+            return 'Noble Titles';
+        }
+        if ($sysName === 'Weaponmaster') {
+            return 'Other';
+        }
+        if (($award['Peerage'] ?? '') === 'Knight') {
+            return 'Knighthoods';
+        }
+        if (($award['Peerage'] ?? '') === 'Paragon') {
+            return 'Paragons';
+        }
+        if (($award['Peerage'] ?? '') === 'Master'
+            || (!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) == 10)) {
+            return 'Masterhoods';
+        }
+        if (in_array($award['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Page', 'Lords-Page'], true)
+            || $sysName === 'Apprentice') {
+            return 'Associate Titles';
+        }
+        if ((!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) >= 30)
+            || $sysName === 'Esquire') {
+            return 'Noble Titles';
+        }
+
+        return 'Other';
+    }
+
+    /**
+     * The section order every award dropdown renders in. 'Custom' is deliberately
+     * absent: those entries are standalone options below the groups.
+     *
+     * @return list<string>
+     */
+    public static function OptionGroupOrder(): array
+    {
+        return [
+            'Ladder Awards',
+            'Knighthoods',
+            'Masterhoods',
+            'Paragons',
+            'Noble Titles',
+            'Associate Titles',
+            'Other',
+        ];
+    }
+
+    /**
      * Structured award dropdown groups for UI rendering (T-AWD-01).
      *
      * @return array<string, mixed>
@@ -424,60 +501,26 @@ class Award extends Ork3
         });
 
         $pseudoLadderIds = self::pseudoLadderKingdomAwardIds();
-        $custom = $ladder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
 
+        $buckets = ['Custom' => []];
+        foreach (self::OptionGroupOrder() as $label) {
+            $buckets[$label] = [];
+        }
         foreach ($items as $award) {
-            $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            $isPseudoLadder = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-            if ($isPseudoLadder) {
-                $ladder[] = $award;
-            } elseif ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
-                $custom[] = $award;
-            } elseif (!empty($award['IsLadder'])) {
-                $ladder[] = $award;
-            } elseif (in_array($sysName, ['Defender', 'Master'], true)) {
-                $nobles[] = $award;
-            } elseif ($sysName === 'Weaponmaster') {
-                $other[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Knight') {
-                $knighthoods[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Paragon') {
-                $paragons[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Master'
-                || (!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) == 10)) {
-                $masterhoods[] = $award;
-            } elseif (in_array($award['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Page', 'Lords-Page'], true)
-                || $sysName === 'Apprentice') {
-                $associates[] = $award;
-            } elseif ((!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) >= 30)
-                || $sysName === 'Esquire') {
-                $nobles[] = $award;
-            } else {
-                $other[] = $award;
-            }
+            $buckets[self::OptionGroupLabelFor($award, $pseudoLadderIds)][] = $award;
         }
 
         $groups = [];
-        if ($ladder !== []) {
-            $groups[] = ['Label' => 'Ladder Awards', 'Items' => $ladder];
-        }
-        foreach ([
-            'Knighthoods' => $knighthoods,
-            'Masterhoods' => $masterhoods,
-            'Paragons' => $paragons,
-            'Noble Titles' => $nobles,
-            'Associate Titles' => $associates,
-            'Other' => $other,
-        ] as $label => $groupItems) {
-            if ($groupItems !== []) {
-                $groups[] = ['Label' => $label, 'Items' => $groupItems];
+        foreach (self::OptionGroupOrder() as $label) {
+            if ($buckets[$label] !== []) {
+                $groups[] = ['Label' => $label, 'Items' => $buckets[$label]];
             }
         }
 
         return [
             'Status' => Success(),
             'Groups' => $groups,
-            'StandaloneOptions' => $custom,
+            'StandaloneOptions' => $buckets['Custom'],
             'PseudoLadderIds' => $pseudoLadderIds,
         ];
     }

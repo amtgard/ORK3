@@ -1139,8 +1139,16 @@ var KnBannerConfig = {
 
 			<!-- Rank Picker -->
 			<div class="kn-acct-field" id="kn-award-rank-row" style="display:none">
-				<label>Rank <span id="kn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-				<div class="kn-rank-pills-wrap" id="kn-rank-pills"></div>
+				<label><span id="kn-rank-label">Rank</span> <span id="kn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="kn-rank-pills-wrap" id="kn-rank-pills" role="group"
+				     aria-labelledby="kn-rank-label" aria-describedby="kn-rank-hint"></div>
 				<input type="hidden" id="kn-award-rank-val" value="" />
 			</div>
 
@@ -1231,8 +1239,16 @@ var KnBannerConfig = {
 				<div id="kn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="kn-rec-rank-row" style="display:none">
-				<label>Rank <span id="kn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<div class="kn-rank-pills-wrap" id="kn-rec-rank-pills"></div>
+				<label><span id="kn-rec-rank-label">Rank</span> <span id="kn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="kn-rank-pills-wrap" id="kn-rec-rank-pills" role="group"
+				     aria-labelledby="kn-rec-rank-label" aria-describedby="kn-rec-rank-hint"></div>
 				<input type="hidden" id="kn-rec-rank-val" value="" />
 			</div>
 			<div class="pk-acct-field">

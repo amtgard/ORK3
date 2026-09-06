@@ -1090,15 +1090,28 @@ class Controller_Admin extends Controller
                         break;
                     case 'addaward':
                         if (!valid_id($id)) {
-                            $this->data['Error'] = 'You must choose a recipient. Award not added!';
+                            $this->reject_award_grant('You must choose a recipient. Award not added!');
                             break;
                         }
                         if (!valid_id($this->request->Admin_player->KingdomAwardId)) {
-                            $this->data['Error'] = 'You must choose an award. Award not added!';
+                            $this->reject_award_grant('You must choose an award. Award not added!');
                             break;
                         }
                         if (!valid_id($this->request->Admin_player->GivenById)) {
-                            $this->data['Error'] = 'Who gave this award? Award not added!';
+                            $this->reject_award_grant('Who gave this award? Award not added!');
+                            break;
+                        }
+                        // "Where given" is required, server-side, on every grant path.
+                        // A blank pair used to be written as at_park_id = 0 /
+                        // at_kingdom_id = 0 -- the state 120,284 existing rows (30.7% of
+                        // ork_awards) are stuck in, printable and reportable by nobody
+                        // but the recipient. This is the endpoint the kingdom and park
+                        // Enter Awards modals post to (knDoSave / pkDoSave), and they
+                        // block their own submit on the same rule; a client that skipped
+                        // that is refused here rather than writing the unattributed pair.
+                        if (!valid_id($this->request->Admin_player->ParkId)
+                            && !valid_id($this->request->Admin_player->KingdomId)) {
+                            $this->reject_award_grant('Where was this award given? Choose a location from the list. Award not added!');
                             break;
                         }
                         $r = $this->Player->add_player_award(array(
@@ -2560,6 +2573,26 @@ class Controller_Admin extends Controller
     private function admin_can_print_scrolls(int $uid, string $authType, int $scopeId): bool
     {
         return $uid > 0 && $this->Authorization->has_authority($uid, $authType, $scopeId, AUTH_EDIT);
+    }
+
+    /**
+     * Refuse an award grant so BOTH clients of Admin/player/<id>/addaward can see it.
+     *
+     * The legacy page reads $this->data['Error']. The CRM's kingdom and park Enter
+     * Awards modals (knDoSave / pkDoSave in revised.js) fetch this route and never
+     * look at the body -- it is a whole rendered admin page -- so every rejection
+     * here used to be reported to the officer as a successful grant. The header is a
+     * machine-readable echo of the same message; it costs nothing on the page render
+     * and is same-origin, so the modals can read it.
+     */
+    private function reject_award_grant(string $message): void
+    {
+        $this->data['Error'] = $message;
+        if (!headers_sent()) {
+            // Header values are a single line of ASCII; the messages here are literals,
+            // but strip control characters rather than trusting that to stay true.
+            header('X-Award-Error: ' . preg_replace('/[^\x20-\x7E]/', ' ', $message));
+        }
     }
 
 }

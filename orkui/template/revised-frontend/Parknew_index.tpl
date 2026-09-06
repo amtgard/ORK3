@@ -1597,8 +1597,16 @@ var PkBannerConfig = {
 
 			<!-- Rank Picker -->
 			<div class="pk-acct-field" id="pk-award-rank-row" style="display:none">
-				<label>Rank <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
-				<div class="pk-rank-pills-wrap" id="pk-rank-pills"></div>
+				<label><span id="pk-rank-label">Rank</span> <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="pk-rank-pills-wrap" id="pk-rank-pills" role="group"
+				     aria-labelledby="pk-rank-label" aria-describedby="pk-rank-hint"></div>
 				<input type="hidden" id="pk-award-rank-val" value="" />
 			</div>
 
@@ -1900,8 +1908,16 @@ var PkBannerConfig = {
 				<div id="pk-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-rec-rank-row" style="display:none">
-				<label>Rank <span id="pk-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<div class="pk-rank-pills-wrap" id="pk-rec-rank-pills"></div>
+				<label><span id="pk-rec-rank-label">Rank</span> <span id="pk-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<?php /* `for` cannot point at a <div> — it is only valid on a labelable element,
+				         so this bare <label> named nothing and the pill group had no accessible
+				         name: a screen reader met a row of ten (twelve, on zodiac) unrelated toggle buttons. role="group" named
+				         through aria-labelledby is the shape that works, with aria-describedby
+				         carrying the hint. Same pattern as #sc-rank-pills in Scrollery_create.tpl.
+				         The label text is split into its own span so the hint is a DESCRIPTION and
+				         not swallowed into the group's NAME. */ ?>
+				<div class="pk-rank-pills-wrap" id="pk-rec-rank-pills" role="group"
+				     aria-labelledby="pk-rec-rank-label" aria-describedby="pk-rec-rank-hint"></div>
 				<input type="hidden" id="pk-rec-rank-val" value="" />
 			</div>
 			<div class="pk-acct-field">

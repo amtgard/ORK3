@@ -256,6 +256,38 @@ section.IssuingTextSection > p:nth-child(2) {
     margin-block-start: 0.25em;
 }
 
+/* --------------------------------------------------------------------------
+   Never justify certificate text.
+
+   .Award sets text-align:center, but that only INHERITS. orkui.css:788 carries a
+   global `p { text-align: justify }`, and a rule that matches an element directly
+   always beats a value inherited from its parent — regardless of how specific the
+   parent's rule was. Every <p> in the certificate therefore justified, and it is
+   invisible until a line actually wraps: a persona long enough to break onto two
+   lines rendered as "Highmarshal        Haliax" with the words shoved to opposite
+   margins. Large display text is exactly where justification looks worst, because
+   there are too few words per line to absorb the slack.
+
+   This is preview-only in effect today — Scrollery_render.tpl is a bare route that
+   loads scrollery.css and nothing else, so the printed page never saw orkui.css.
+   That makes it the same class of defect as the dark-ground preview lie (1e19545d):
+   the composer showed the officer something the print would not do. Fixed here
+   rather than in the composer so it holds on both surfaces and cannot regress if
+   the render route ever gains the theme.
+
+   Specificity: .Award p is (0,1,1) and beats the global p (0,0,1). The two
+   deliberately-aligned lines in the issuing block are
+   `section.IssuingTextSection > p:first-child` / `:nth-child(2)` at (0,1,3), so
+   they keep their left and right alignment. SignIn_index.tpl fights the same
+   global rule the same way.
+   -------------------------------------------------------------------------- */
+.Award p,
+.Award div,
+.Award span,
+.Award section {
+    text-align: center;
+}
+
 .AwardeeName {
     font-size: 1.7em;
     /* Em Size Changes */
@@ -263,6 +295,22 @@ section.IssuingTextSection > p:nth-child(2) {
     min-height: 0.8em;
     margin-bottom: 0.1em;
     padding: 0em 0.05em 0em 0.05em;
+
+    /* A forced second line is a real outcome here — the longest persona in the ORK
+       is 100 characters and no font size that stays legible puts that on one line.
+       `balance` makes the two lines even rather than leaving one word stranded.
+
+       `overflow-wrap: anywhere` is the safety net under scrollery-autofit.js, for
+       the 71 personas longer than 24 characters that contain NO space at all
+       ("*Michael_Anthony_Wilder_III"). Nothing can wrap those, so without it the
+       word simply runs past the content column and the certificate's own
+       <svg style="overflow:hidden"> trims it off the printed page. `anywhere` (not
+       `break-word`) is deliberate: it is the one value that also shrinks the
+       element's min-content width, so the flex item stops growing past its column.
+       The autofit pass runs first and prefers a smaller size on one line, so this
+       only fires where no size in range would have fitted. */
+    text-wrap: balance;
+    overflow-wrap: anywhere;
 }
 
 .Award .Body.AwardDetails {
@@ -293,6 +341,35 @@ section.IssuingTextSection > p:nth-child(2) {
 .Award .Order {
     font-size: 1.5em;
     margin-block-start: 0.2em;
+
+    /* The order line has no length scaling in _text.tpl at all — it is a flat 1.5em
+       whatever the catalogue name is. 195 of 4,870 ork_kingdomaward.name rows are
+       over 24 characters and 71 over 28 ("Guildmaster of Reeves, Principality" is
+       35), so a second line is normal, not exceptional; balance it. No
+       `overflow-wrap: anywhere` here: every one of those names contains spaces, so
+       there is always a legal break, and allowing a mid-word one would only make an
+       already-breakable name uglier. scrollery-autofit.js shrinks this line too. */
+    text-wrap: balance;
+}
+
+/* --------------------------------------------------------------------------
+   .Multiline — 230 ork_awards.note rows contain newlines.
+
+   This class arrived from Arcanyst on both the reason and the flavour block with
+   no rule behind it anywhere in the repo, so a hand-formatted citation printed as
+   one run-on paragraph. The flavour block carried an inline `white-space:pre-line`
+   of its own; the reason block, which is where the real newlines live, did not.
+
+   Applied to the TEXT CHILDREN, not to .Multiline itself. The reason section also
+   contains the absolutely-positioned holder for its six ruled underline images, and
+   those <img> tags are separated by newlines in the template — `pre-line` on the
+   section would turn each of those into a line break and double the spacing of the
+   ruled lines. Keep this selector on the children.
+   -------------------------------------------------------------------------- */
+
+.Award .Multiline > p,
+.Award .Multiline > span {
+    white-space: pre-line;
 }
 
 section.IssuingTextSection {
@@ -578,6 +655,134 @@ section.SignAndDate > div > p.Body {
    nothing but certificates, so there is nothing to hide.
    -------------------------------------------------------------------------- */
 
+/* --------------------------------------------------------------------------
+   5a. The render route's own chrome — toolbar, advisory, overflow notice.
+
+   This page loads no orkui.css and nothing on it sets html[data-theme], so the
+   theme has to come from the media query as well as the attribute. Both are
+   honoured: the attribute wins where something does set it (an embed, a future
+   shell), and prefers-color-scheme covers the bare page.
+
+   The certificates themselves never theme. A scroll is a sheet of parchment and it
+   is the same sheet in either mode; only the surround changes.
+
+   Tokens are defined once, in light, on :root — the dark blocks redefine nothing
+   but the tokens, so there is no rule that only exists inside a media query.
+   -------------------------------------------------------------------------- */
+
+:root {
+    --sc-ground: #f2f2f2;
+    --sc-ink: #2b3440;
+    --sc-ink-dim: #6b7684;
+    --sc-panel: #ffffff;
+    --sc-line: #c9d3e0;
+    --sc-accent: #16325c;
+    --sc-accent-ink: #ffffff;
+    --sc-hover: #eef2f7;
+    --sc-notice-bg: #fff8e1;
+    --sc-notice-line: #b58900;
+    --sc-notice-ink: #5b4600;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --sc-ground: #14181d;
+        --sc-ink: #dbe2ea;
+        --sc-ink-dim: #97a3b2;
+        --sc-panel: #1e242b;
+        --sc-line: #333d49;
+        --sc-accent: #c9a227;
+        --sc-accent-ink: #14181d;
+        --sc-hover: #2a323b;
+        --sc-notice-bg: #2a2416;
+        --sc-notice-line: #c9a227;
+        --sc-notice-ink: #f0e2b8;
+    }
+}
+
+:root[data-theme="dark"] {
+    --sc-ground: #14181d;
+    --sc-ink: #dbe2ea;
+    --sc-ink-dim: #97a3b2;
+    --sc-panel: #1e242b;
+    --sc-line: #333d49;
+    --sc-accent: #c9a227;
+    --sc-accent-ink: #14181d;
+    --sc-hover: #2a323b;
+    --sc-notice-bg: #2a2416;
+    --sc-notice-line: #c9a227;
+    --sc-notice-ink: #f0e2b8;
+}
+
+.scroll-surface {
+    background: var(--sc-ground);
+    color: var(--sc-ink);
+}
+
+/* --------------------------------------------------------------------------
+   The Print / Back toolbar.
+
+   `render` and `compose` are reached WITHOUT auto-print on the module's main
+   paths, so this is the only way off the page: without it a preview is a dead end
+   with no print and no way back but the browser's own button. It is chrome, not
+   content — it lives outside .scroll-page (so it cannot affect a certificate's
+   page-break-inside) and is display:none under @media print.
+   -------------------------------------------------------------------------- */
+
+.sc-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--sc-line);
+    background: var(--sc-panel);
+    color: var(--sc-ink);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.sc-toolbar-title {
+    margin-right: auto;
+    font-weight: 600;
+    color: var(--sc-ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sc-btn {
+    display: inline-block;
+    padding: 7px 16px;
+    border: 1px solid var(--sc-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sc-ink);
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sc-btn:hover,
+.sc-btn:focus-visible {
+    background: var(--sc-hover);
+}
+
+.sc-btn-primary {
+    border-color: var(--sc-accent);
+    background: var(--sc-accent);
+    color: var(--sc-accent-ink);
+    font-weight: 600;
+}
+
+.sc-btn-primary:hover,
+.sc-btn-primary:focus-visible {
+    background: var(--sc-accent);
+    filter: brightness(1.12);
+}
+
 .scroll-page {
     width: 8.5in;
     max-width: 100%;
@@ -585,10 +790,98 @@ section.SignAndDate > div > p.Body {
     margin: 0 auto;
 }
 
+/* --------------------------------------------------------------------------
+   5b. The print advisory.
+
+   Three things about printing this page cannot be asserted from the page, so they
+   are said out loud instead of silently mis-printing:
+
+     - Chrome and Edge print headers and footers ON by default and stamp the URL
+       and the date across the margin. No CSS property suppresses them.
+     - Firefox routes printing through the platform backend and has a long history
+       of flattening or dropping mix-blend-mode; the owl's filter: url(#...) is a
+       likelier casualty still.
+     - Safari rasterises HTML inside <foreignObject> unreliably at print scale.
+
+   Advisory ONLY. It never gates the print, it is dismissible, and it is
+   display:none in @media print so it can never reach the paper. It is deliberately
+   NOT gated on user-agent: sniffing would hide the warning from exactly the
+   browsers that get it wrong in ways sniffing does not predict.
+   -------------------------------------------------------------------------- */
+
+.sc-advisory {
+    max-width: 8.5in;
+    margin: 16px auto;
+    padding: 12px 40px 12px 16px;
+    position: relative;
+    border: 1px solid var(--sc-line);
+    border-left: 4px solid var(--sc-accent);
+    border-radius: 4px;
+    background: var(--sc-panel);
+    color: var(--sc-ink);
+    font: 13px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.sc-advisory b {
+    color: var(--sc-accent);
+}
+
+.sc-advisory ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+
+.sc-advisory li + li {
+    margin-top: 4px;
+}
+
+.sc-advisory-dismiss {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sc-ink-dim);
+    font: 18px/1 system-ui, sans-serif;
+    cursor: pointer;
+}
+
+.sc-advisory-dismiss:hover,
+.sc-advisory-dismiss:focus-visible {
+    background: var(--sc-hover);
+    color: var(--sc-accent);
+}
+
+.sc-overflow-notice {
+    max-width: 8.5in;
+    margin: 16px auto;
+    padding: 12px 16px;
+    border: 1px solid var(--sc-notice-line);
+    border-radius: 4px;
+    background: var(--sc-notice-bg);
+    color: var(--sc-notice-ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
 @media print {
     @page {
         size: letter;
-        margin: 0.125in;
+
+        /* 0.25in, not the 0.125in this started at. Consumer inkjets and lasers have
+           a hard unprintable margin of roughly 0.16in to 0.25in; ask for less than
+           the device can do and the driver answers with shrink-to-fit — a second,
+           unplanned reduction on top of whatever autofit already did, plus
+           asymmetric margins because the hard margin is rarely symmetric.
+
+           It costs nothing. The certificate is an <svg aspect-ratio:8.5/11;
+           width:100%> inside .scroll-page, so it is already inset by exactly the
+           @page margin and never bleeds: at 0.125in it drew 8.25 x 10.68in inside a
+           10.75in-tall page box, and at 0.25in it draws 8.0 x 10.35in inside a
+           10.5in one. Both fit; only the second one fits on the actual hardware. */
+        margin: 0.25in;
     }
 
     html,
@@ -597,14 +890,43 @@ section.SignAndDate > div > p.Body {
         padding: 0 !important;
     }
 
+    .scroll-surface {
+        background: none;
+    }
+
+    /* None of these is a certificate, and each would otherwise print on the first
+       sheet, ahead of and pushing the first certificate. Measured: with the overflow
+       notice left visible, three certificates paginate to FOUR sheets and sheet one
+       is blank but for the notice. */
+    .sc-toolbar,
+    .sc-advisory,
+    .sc-overflow-notice {
+        display: none !important;
+    }
+
     .scroll-page {
         width: auto;
         margin: 0;
+        /* page-break-* is the legacy alias; break-* is the CSS Fragmentation
+           property every current engine actually implements it in terms of. Both
+           are declared rather than swapped, because the legacy pair is what this
+           print path has been verified against and dropping it buys nothing. */
         page-break-inside: avoid;
+        break-inside: avoid;
     }
 
     .scroll-page + .scroll-page {
         page-break-before: always;
+        break-before: page;
+    }
+
+    /* The LAST certificate must not ask for a page after itself. Chrome will not
+       emit a trailing blank sheet for this on its own, but an `always` on the
+       wrong side of the selector is the classic way to get one, so state the
+       intent: nothing breaks after a page, only before the next one. */
+    .scroll-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
     }
 
     .award-template,

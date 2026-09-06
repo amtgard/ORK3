@@ -86,6 +86,35 @@ class Controller_ScrolleryAjax extends Controller
                 'issuerTitle' => (string) ($_POST['issuerTitle'] ?? ''),
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',
                 'useOf'       => ($_POST['useOf'] ?? '') === '1',
+                // Carried for parity with compose(), so the preview and the print it
+                // previews build the same scroll. This path never reaches the print
+                // log — it renders a preview and exits — but a shape that diverges
+                // from compose()'s is exactly how the two drift apart later.
+                'mundaneId'   => (int) ($_POST['playerId'] ?? 0),
+                'scopeType'   => $scopeType,
+                'scopeId'     => $scopeId,
+                // The printed name for a Custom Award / Custom Title, whose catalogue
+                // name is the slot rather than the award. Passed through RAW for the
+                // same reason the recipe below is: BuildScroll() is the one place that
+                // decides whether this award may be renamed at all, and it caps and
+                // sanitises the string there. A second, weaker opinion here would let
+                // nothing extra through and could only disagree about the length.
+                //
+                // Unlike compose(), the preview does NOT refuse an empty one: an
+                // unnamed custom entry resolves to a BLANK award line, and the stage
+                // showing that blank is exactly how the officer learns the field is
+                // not optional. Refusing here would replace the picture with an error
+                // and tell them less.
+                'customName'  => (string) ($_POST['customName'] ?? ''),
+                // The "With phrase" box — the interstitial line between the recipient's
+                // name and the title, offered only for the two custom entries. Passed
+                // with array_key_exists semantics all the way down: an ABSENT parameter
+                // takes the per-entry default, a PRESENT but empty one means "print no
+                // phrase", and those are different choices. isset() would collapse them.
+                // Sanitising is BuildScroll()'s, for the same reason as customName above.
+            ] + (array_key_exists('titlePhrase', $_POST)
+                ? ['titlePhrase' => (string) $_POST['titlePhrase']]
+                : []) + [
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_POST['variant'] ?? ''))),
                 // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
                 // allowlist for these, and it runs inside BuildScroll(). Sanitising

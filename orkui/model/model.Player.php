@@ -74,7 +74,13 @@ class Model_Player extends Model
             foreach ($details['Awards'] as $i => $row) {
                 if (is_array($row)) {
                     $row                    = $award->correct_dangling_officer_role($row);
-                    $row['CanPrintScroll']  = Scroll::HasArt($row);
+                    // Revoked is Player::AwardsForPlayer()'s own key (ork_awards.revoked,
+                    // NOT NULL DEFAULT 0) — read here rather than recomputed so the
+                    // profile's Print anchor and Model_Scrollery's server-side gate have
+                    // exactly one source of truth. Revocation normally nulls mundane_id,
+                    // so most stripped rows never reach this tab; 59 still carry a live
+                    // mundane_id and DO, and those must not offer a Print control.
+                    $row['CanPrintScroll']  = (int) ($row['Revoked'] ?? 0) !== 1 && Scroll::HasArt($row);
                     $details['Awards'][$i]  = $row;
                 }
             }

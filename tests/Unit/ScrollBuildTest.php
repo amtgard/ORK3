@@ -33,6 +33,85 @@ final class ScrollBuildTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * PROVENANCE. Nothing on the certificate draws these three, but the print log
+     * (ScrollPrintLog::RecordPrint()) is written straight from this array, and
+     * without them it can answer neither "has this player already had a scroll?"
+     * nor "which kingdoms actually use this module?". They went missing once
+     * already: the first logged rows carried mundane_id 0, scope_type '' and
+     * scope_id 0 on every row because BuildScroll() did not return them.
+     */
+    public function testTheScrollCarriesItsRecipientAndIssuingBody(): void
+    {
+        $s = Scroll::BuildScroll($this->row(['MundaneId' => 11956, 'ParkId' => 435]), $this->context());
+
+        $this->assertSame(11956, $s['mundaneId']);
+        $this->assertSame('park', $s['scopeType']);
+        $this->assertSame(435, $s['scopeId']);
+    }
+
+    /**
+     * Park beats kingdom, matching Model_Award::kingdom_for_grant_row(): a park
+     * grant leaves at_kingdom_id blank, so when both are set the park is the
+     * narrower truth.
+     */
+    public function testAParkGrantScopesToTheParkAndAKingdomGrantToTheKingdom(): void
+    {
+        $both = Scroll::BuildScroll($this->row(['ParkId' => 435, 'KingdomId' => 4]), $this->context());
+        $this->assertSame('park', $both['scopeType']);
+        $this->assertSame(435, $both['scopeId']);
+
+        $kingdom = Scroll::BuildScroll($this->row(['ParkId' => 0, 'KingdomId' => 4]), $this->context());
+        $this->assertSame('kingdom', $kingdom['scopeType']);
+        $this->assertSame(4, $kingdom['scopeId']);
+    }
+
+    /**
+     * Scrollery/compose builds its award row out of $_GET and carries none of the
+     * three, so its controller passes them in context — the same override pattern
+     * issuerTitle / useThe / useOf already follow.
+     */
+    public function testAComposedScrollTakesItsProvenanceFromContext(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['ParkName' => '', 'KingdomName' => 'The Kingdom of Goldenvale']),
+            $this->context(['mundaneId' => 54527, 'scopeType' => 'kingdom', 'scopeId' => 4])
+        );
+
+        $this->assertSame(54527, $s['mundaneId']);
+        $this->assertSame('kingdom', $s['scopeType']);
+        $this->assertSame(4, $s['scopeId']);
+    }
+
+    /**
+     * A zero is "the row does not say", not "the row says zero" — 120,284 award rows
+     * carry neither scope id — so the context fallback has to test the VALUE. A bare
+     * ?? would keep a present-but-zero row value and never reach context.
+     */
+    public function testAPresentButZeroRowValueStillFallsThroughToContext(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['MundaneId' => 0, 'ParkId' => 0, 'KingdomId' => 0, 'ParkName' => '', 'KingdomName' => 'K']),
+            $this->context(['mundaneId' => 99, 'scopeType' => 'park', 'scopeId' => 7])
+        );
+
+        $this->assertSame(99, $s['mundaneId']);
+        $this->assertSame('park', $s['scopeType']);
+        $this->assertSame(7, $s['scopeId']);
+    }
+
+    /** scope_type is a closed vocabulary; junk from a URL becomes "unknown", not echoed. */
+    public function testAnUnknownContextScopeTypeIsRefusedRatherThanEchoed(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['ParkName' => '', 'KingdomName' => 'K']),
+            $this->context(['scopeType' => "kingdom'; DROP TABLE x; --", 'scopeId' => 4])
+        );
+
+        $this->assertSame('', $s['scopeType']);
+        $this->assertSame(0, $s['scopeId'], 'a refused scope type must not keep its id');
+    }
+
     public function testBuildsTheScrollContractFromAnAwardRow(): void
     {
         $s = Scroll::BuildScroll($this->row(), $this->context());
@@ -174,10 +253,13 @@ final class ScrollBuildTest extends TestCase
     }
 
     /**
-     * As of Scroll::OrderForAwardRow(), an award with no design of its own (e.g.
-     * AwardId 1, Master Rose) still builds — as the custom scroll — so it no longer
-     * throws here. Only an officer position, which OrderForAwardRow() never resolves
-     * to anything, still cannot be built.
+     * Under Scroll::OrderForAwardRow()'s ALLOWLIST the custom scroll is no longer the
+     * catch-all it was: only Custom Award (94) and Custom Title (246) reach it. An
+     * award with no design of its own that is NOT one of those two — Lord (52),
+     * Master Rose (1), Walker in the Middle (31) — no longer builds at all, which is
+     * why every case below uses 94. An officer position, which OrderForAwardRow()
+     * never resolves to anything by any route, still cannot be built either. See
+     * ScrollExcludedAwardsTest.
      */
     public function testBuildingAnOfficerPositionThrows(): void
     {
@@ -188,10 +270,24 @@ final class ScrollBuildTest extends TestCase
         );
     }
 
-    public function testAwardWithNoDesignOfItsOwnBuildsAsTheCustomScroll(): void
+    public function testACustomAwardBuildsAsTheCustomScroll(): void
     {
-        $s = Scroll::BuildScroll($this->row(['AwardId' => 1]), $this->context());
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 94, 'Name' => 'Custom Award', 'KingdomAwardName' => 'Order of the Emerald']),
+            $this->context()
+        );
         $this->assertSame('custom', $s['order']);
+    }
+
+    /**
+     * The other half of the allowlist, stated here because BuildScroll() is the door
+     * every print goes through: an award that resolves to nothing throws rather than
+     * quietly falling back to the custom scroll. Lord used to build; it does not now.
+     */
+    public function testAnAwardOutsideTheAllowlistThrows(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Scroll::BuildScroll($this->row(['AwardId' => 52, 'KingdomAwardName' => 'Lord']), $this->context());
     }
 
     /**
@@ -202,9 +298,9 @@ final class ScrollBuildTest extends TestCase
      */
     public function testAnUnrankedAwardWithNoOrdinalDoesNotPrintABlankToWriteOneIn(): void
     {
-        // Master Rose: not a ladder, rank 0. There is no first Master Rose.
+        // A kingdom's own Custom Award: not a ladder, rank 0. There is no first one.
         $s = Scroll::BuildScroll(
-            $this->row(['AwardId' => 1, 'Rank' => 0, 'IsLadder' => '0']),
+            $this->row(['AwardId' => 94, 'Rank' => 0, 'IsLadder' => '0']),
             $this->context()
         );
         $this->assertSame('custom', $s['order']);
@@ -213,15 +309,20 @@ final class ScrollBuildTest extends TestCase
 
     public function testALadderAtRankZeroKeepsItsBlank(): void
     {
-        // award_id 31, Order of the Walker in the Middle: the one ladder with no art of
-        // its own, and 292 of its 379 grants are recorded at rank 0 (verified against
-        // the awards table) — exactly the grants the blank exists for.
+        // A kingdom's own ladder built on Custom Award — Award::pseudoLadderKingdomAwardIds()
+        // is exactly this shape — takes the custom scroll while carrying is_ladder, and a
+        // rank-0 grant of one is precisely the case the blank exists for.
+        //
+        // This used to be award_id 31, Order of the Walker in the Middle (292 of its 379
+        // grants sit at rank 0). 31 no longer prints at all: it is the one ladder in the
+        // catalogue with no entry in scroll-orders.php, and the allowlist admits nothing
+        // it has no artwork for. See ScrollExcludedAwardsTest.
         //
         // IsLadder arrives from Yapo as the raw column STRING, which is why BuildScroll
         // casts rather than comparing strictly to 1. It is passed as '1' here so this
         // test fails the moment that cast is removed.
         $s = Scroll::BuildScroll(
-            $this->row(['AwardId' => 31, 'Rank' => 0, 'IsLadder' => '1']),
+            $this->row(['AwardId' => 94, 'Rank' => 0, 'IsLadder' => '1']),
             $this->context()
         );
         $this->assertSame('custom', $s['order']);
@@ -234,7 +335,7 @@ final class ScrollBuildTest extends TestCase
         // numeral is drawn on rank > 0 regardless of ladder-ness. The phrase and the
         // numeral must not disagree.
         $s = Scroll::BuildScroll(
-            $this->row(['AwardId' => 1, 'Rank' => 4, 'IsLadder' => '0']),
+            $this->row(['AwardId' => 94, 'Rank' => 4, 'IsLadder' => '0']),
             $this->context()
         );
         $this->assertSame('custom', $s['order']);
@@ -260,5 +361,107 @@ final class ScrollBuildTest extends TestCase
     public function testArtBaseHasNoTrailingSlash(): void
     {
         $this->assertStringEndsWith('scrolls', Scroll::ArtBase());
+    }
+
+    /**
+     * A Custom Title gets an interstitial line, because it has no ordinal phrase and
+     * without one the certificate reads as two unrelated lines — the recipient's name
+     * running straight into a bare title.
+     */
+    public function testACustomTitleIsIntroducedByAPhrase(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 246, 'Rank' => 0, 'IsLadder' => '0']),
+            $this->context() + ['customName' => 'Fantastic Beast']
+        );
+
+        $this->assertSame('with the title of', $s['titlePhrase']);
+        $this->assertSame('Fantastic Beast', $s['title']);
+        // 'ranked' is what gates the ordinal phrase, and the two must never both render.
+        $this->assertFalse($s['ranked']);
+    }
+
+    /**
+     * Custom Award takes a SHORTER phrase than Custom Title, because the two entries
+     * are different parts of speech: a title names what someone is, an award names a
+     * thing granted, and award custom_names are frequently already order-shaped in the
+     * real data ("Order of the Raider") — where "with the" reads as a sentence and the
+     * title wording would not.
+     */
+    public function testACustomAwardTakesTheShorterDefaultPhrase(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 94, 'Rank' => 0, 'IsLadder' => '0']),
+            $this->context() + ['customName' => 'Order of the Raider']
+        );
+
+        $this->assertSame('with the', $s['titlePhrase']);
+        $this->assertSame('Order of the Raider', $s['title']);
+    }
+
+    /** Both defaults are per-print overridable from the composer's "With phrase" box. */
+    public function testTheWithPhraseIsOverridable(): void
+    {
+        foreach ([94, 246] as $awardId) {
+            $s = Scroll::BuildScroll(
+                $this->row(['AwardId' => $awardId, 'Rank' => 0, 'IsLadder' => '0']),
+                $this->context() + ['customName' => 'Gladius', 'titlePhrase' => 'bearing the style of']
+            );
+            $this->assertSame('bearing the style of', $s['titlePhrase'], "award {$awardId}");
+        }
+    }
+
+    /**
+     * An empty override is a real choice — print the title with no introducing line —
+     * and must NOT fall back to the default. This is why the context key is read with
+     * array_key_exists rather than ??, and why the JS omits the parameter entirely
+     * rather than sending ''.
+     */
+    public function testAnEmptyWithPhraseOverrideSuppressesTheLine(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => 94, 'Rank' => 0, 'IsLadder' => '0']),
+            $this->context() + ['customName' => 'Gladius', 'titlePhrase' => '']
+        );
+
+        $this->assertSame('', $s['titlePhrase']);
+    }
+
+    /** An override must never give a ranked award a second phrase beside its ordinal. */
+    public function testAnOverrideCannotAddAPhraseToARankedAward(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['Rank' => 3]),
+            $this->context() + ['titlePhrase' => 'with the']
+        );
+
+        $this->assertSame('', $s['titlePhrase']);
+        $this->assertTrue($s['ranked']);
+    }
+
+    /**
+     * An award that already carries the ordinal phrase must never also take the title
+     * phrase — they occupy the same slot in _text.tpl.
+     */
+    public function testARankedAwardTakesNoTitlePhrase(): void
+    {
+        $s = Scroll::BuildScroll($this->row(['Rank' => 3]), $this->context());
+
+        $this->assertSame('', $s['titlePhrase']);
+        $this->assertTrue($s['ranked']);
+    }
+
+    /**
+     * AwardsForPlayer() resolves an alias into AliasAwardId and leaves AwardId on the
+     * base award, so the phrase has to read both — the same reason the printability
+     * rule and IsCustomAward() do.
+     */
+    public function testAnAliasedCustomTitleStillTakesThePhrase(): void
+    {
+        $this->assertSame(
+            'with the title of',
+            Scroll::TitlePhrase(['AwardId' => 21, 'AliasAwardId' => 246])
+        );
+        $this->assertSame('', Scroll::TitlePhrase(['AwardId' => 21]));
     }
 }

@@ -21,9 +21,13 @@ final class ScrolleryBulkQueryTest extends TestCase
         string $scopeType = 'park',
         string $scopeId = '42',
         string $from = '',
-        string $to = ''
+        string $to = '',
+        array $officerNames = [],
+        string $cursor = '',
+        int $limit = 0
     ): string {
-        return (new Model_Scrollery())->bulkSqlForTest($type, $id, $scopeType, $scopeId, $from, $to);
+        return (new Model_Scrollery())
+            ->bulkSqlForTest($type, $id, $scopeType, $scopeId, $from, $to, $officerNames, $cursor, $limit);
     }
 
     public function testEventQueryFiltersOnAtEventIdAndCastsTheId(): void
@@ -123,6 +127,225 @@ final class ScrolleryBulkQueryTest extends TestCase
     public function testResultsAreOrdered(): void
     {
         $this->assertStringContainsString('order by', strtolower($this->sql('event', '17')));
+    }
+
+    /**
+     * The sort has to be a TOTAL order or a keyset cursor cannot work: m.persona is
+     * not unique (a player has many awards, and two players can share a persona), so
+     * without awards_id as the final tiebreaker paging would either skip rows or
+     * loop on them.
+     */
+    public function testTheSortIsTotalAndEndsWithTheAwardsIdTiebreaker(): void
+    {
+        $sql = strtolower($this->sql('event', '17'));
+        $order = substr($sql, strpos($sql, 'order by'));
+
+        $this->assertStringContainsString('awards.awards_id', $order);
+        $this->assertStringEndsWith('awards.awards_id', trim(substr($order, 0, strpos($order, 'limit'))));
+    }
+
+    /**
+     * The nullable sort terms are COALESCEd in the ORDER BY, because they are also
+     * COALESCEd in the cursor's row-value comparison — a NULL anywhere inside a
+     * row-value comparison makes the whole comparison NULL, which silently drops the
+     * row from the page. m.persona and a.name are both nullable.
+     */
+    public function testNullableSortTermsAreCoalesced(): void
+    {
+        $sql = $this->sql('event', '17');
+
+        $this->assertStringContainsString("coalesce(m.persona, '')", $sql);
+        $this->assertStringContainsString("coalesce(a.name, ka.name, '')", $sql);
+    }
+
+    /**
+     * ITEM 1. ork_awards.revoked is NOT NULL DEFAULT 0 and 2,856 rows carry a 1.
+     * 2,287 of those carry a park/kingdom scope, so they matched the old bulk
+     * predicate and arrived PRE-CHECKED; 2,797 have had mundane_id nulled by
+     * revocation and would have printed a blank recipient.
+     */
+    public function testRevokedAndRecipientlessRowsAreExcludedByTheQueryItself(): void
+    {
+        $sql = $this->sql('event', '12250', 'kingdom', '4');
+
+        $this->assertStringContainsString('awards.revoked = 0', $sql);
+        $this->assertStringContainsString('awards.mundane_id > 0', $sql);
+    }
+
+    /**
+     * ITEMS 5 + 26. The cap used to be applied to RAW rows, with the
+     * printable/excluded split happening in PHP afterwards — so the officer got the
+     * alphabetically-first 200 of whatever matched, and the rest were unreachable.
+     * The officer-position and allowlist filters now sit in the WHERE, so the cap
+     * counts printable rows.
+     */
+    public function testThePrintableFiltersArePushedIntoTheWhere(): void
+    {
+        $sql = $this->sql('event', '12250', 'kingdom', '4');
+
+        // Scroll::IsOfficerPosition(): a resolved non-'none' role is excluded, but a
+        // NULL must stay open — that is the dangling-archery shape.
+        $this->assertStringContainsString("a.officer_role is null or a.officer_role = 'none'", $sql);
+        // The ALLOWLIST, on the base award AND the alias. An `in`, not a `not in`:
+        // that inversion is the whole change, and a regression to a denylist would
+        // fail open on every award the catalogue grows.
+        $this->assertStringContainsString('coalesce(a.award_id, 0) in (', $sql);
+        $this->assertStringContainsString('coalesce(awards.alias_award_id, 0) in (0,', $sql);
+        $this->assertStringNotContainsString('not in (', $sql);
+        // Archery has no base award to key on, so it is admitted by NAME — and only
+        // for a row whose base award resolved to nothing, exactly as the PHP does.
+        $this->assertStringContainsString(
+            "a.award_id is null and lower(trim(coalesce(ka.name, ''))) in (",
+            $sql
+        );
+        $this->assertStringContainsString("'order of the sharpshooter'", $sql);
+        // 11 ork_awards rows carry an alias, every one of them a Custom Title
+        // pointing at a real title (Lord, Baronet, Countess, Paragon Anti-Paladin),
+        // and the base AwardId does not see any of them.
+        $this->assertStringContainsString(DB_PREFIX . 'award alias on alias.award_id = awards.alias_award_id', $sql);
+    }
+
+    /**
+     * The id list in the query is Scroll::PrintableAwardIds(), derived from
+     * scroll-orders.php — never a restatement. A restatement is how the bulk run
+     * would silently keep printing something the domain had stopped printing.
+     */
+    public function testTheAdmittedIdListIsTheDomainConstantNotARestatement(): void
+    {
+        $sql = $this->sql('event', '17');
+
+        // Every ladder with artwork, plus the two custom entries.
+        foreach (Scroll::PrintableAwardIds() as $admitted) {
+            $this->assertMatchesRegularExpression(
+                '/[(,]' . $admitted . '[,)]/',
+                $sql,
+                "admitted award id {$admitted} is missing from the query"
+            );
+        }
+        $this->assertContains(94, Scroll::PrintableAwardIds());
+        $this->assertContains(246, Scroll::PrintableAwardIds());
+
+        // Nothing else gets in. Lord (52) and Lady (53) used to survive the denylist
+        // and no longer do; 31 is a real is_ladder award with no artwork; 17 is a
+        // knighthood; 226/209 are the bare Master and Esquire the last round kept.
+        foreach ([17, 1, 37, 13, 54, 147, 35, 52, 53, 31, 36, 207, 226, 209, 231] as $refused) {
+            $this->assertNotContains($refused, Scroll::PrintableAwardIds(), "award {$refused} must not be admitted");
+        }
+    }
+
+    /**
+     * The dangling-award correction, pushed into SQL. A kingdomaward whose award_id
+     * resolves to nothing is either a real archery grant (must print) or an officer
+     * position whose base award went missing (must not), told apart by whether a
+     * resolved sibling in the same catalog shares its name.
+     */
+    public function testOfficerNamesAreExcludedForDanglingRowsOnly(): void
+    {
+        $sql = $this->sql('event', '17', 'park', '198', '', '', ['sheriff' => true, 'champion' => true]);
+
+        $this->assertStringContainsString("a.award_id is not null or coalesce(ka.name, '') not in ('sheriff', 'champion')", $sql);
+
+        // With no name set the correction is left entirely to the PHP pass rather
+        // than emitting a `not in ()`, which is a syntax error.
+        $this->assertStringNotContainsString('not in ()', $this->sql('event', '17', 'park', '198'));
+    }
+
+    /**
+     * mysql_real_escape_string() is a no-op shim, so an award name reaching the
+     * statement is protected by quote-doubling and backslash removal, not escaping.
+     */
+    public function testOfficerNamesCannotCarryInjection(): void
+    {
+        $sql = $this->sql('event', '17', 'park', '198', '', '', ["o'brien') or (1=1" => true]);
+
+        $this->assertStringContainsString("'o''brien'') or (1=1'", $sql);
+        $this->assertStringNotContainsString("'o'brien'", $sql);
+    }
+
+    public function testTheCountQueryUsesTheExactSamePredicate(): void
+    {
+        $model = new Model_Scrollery();
+        $page  = $model->bulkSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
+        $count = $model->bulkCountSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
+
+        $this->assertStringStartsWith('select count(*) as total', $count);
+        // Everything from FROM onwards is byte-identical, so the total can never be a
+        // count of a different population than the page.
+        $fromPage  = substr($page, strpos($page, 'from ' . DB_PREFIX . 'awards'));
+        $fromPage  = substr($fromPage, 0, strpos($fromPage, 'order by'));
+        $fromCount = substr($count, strpos($count, 'from ' . DB_PREFIX . 'awards'));
+        $this->assertSame(trim($fromPage), trim($fromCount));
+        // The count must not carry the page's cursor.
+        $this->assertStringNotContainsString('limit', $count);
+    }
+
+    public function testACursorNarrowsTheQueryWithARowValueComparison(): void
+    {
+        $cursor = Model_Scrollery::bulkCursorForTest([
+            'Recipient' => 'Grym Blackwell III',
+            'SortName'  => 'Custom Award',
+            'Rank'      => 0,
+            'AwardsId'  => 248671,
+        ]);
+
+        $sql = $this->sql('event', '12250', 'kingdom', '4', '', '', [], $cursor);
+
+        $this->assertStringContainsString(
+            "(coalesce(m.persona, ''), coalesce(a.name, ka.name, ''), awards.rank, awards.awards_id) > "
+                . "('Grym Blackwell III', 'Custom Award', 0, 248671)",
+            $sql
+        );
+    }
+
+    public function testCursorsRoundTripAndRejectJunk(): void
+    {
+        $row = ['Recipient' => "O'Malley", 'SortName' => 'Order of the Rose', 'Rank' => 4, 'AwardsId' => 99];
+        $decoded = Model_Scrollery::decodeBulkCursorForTest(Model_Scrollery::bulkCursorForTest($row));
+
+        $this->assertSame("O'Malley", $decoded['Persona']);
+        $this->assertSame('Order of the Rose', $decoded['Name']);
+        $this->assertSame(4, $decoded['Rank']);
+        $this->assertSame(99, $decoded['AwardsId']);
+
+        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(''));
+        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest('not base64 at all !!'));
+        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(base64_encode('{"a":0}')));
+        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(base64_encode('[]')));
+    }
+
+    /**
+     * A cursor is client-visible, so it has to survive being hostile — an injected
+     * persona must land inside quotes, not outside them.
+     */
+    public function testAHostileCursorCannotEscapeItsQuotes(): void
+    {
+        $cursor = Model_Scrollery::bulkCursorForTest([
+            'Recipient' => "x' or '1'='1",
+            'SortName'  => 'y',
+            'Rank'      => 0,
+            'AwardsId'  => 1,
+        ]);
+
+        $sql = $this->sql('event', '17', 'kingdom', '4', '', '', [], $cursor);
+
+        $this->assertStringContainsString("'x'' or ''1''=''1'", $sql);
+        $this->assertStringNotContainsString("'1'='1'", $sql);
+    }
+
+    /**
+     * Scroll::MAX_PRINT_RUN stays the hard server-side guard: a caller asking for
+     * more than the cap gets the cap, not what it asked for.
+     */
+    public function testTheServerCapCannotBeRaisedByACaller(): void
+    {
+        $this->assertStringEndsWith(
+            'limit ' . (Scroll::MAX_PRINT_RUN + 1),
+            $this->sql('event', '17', 'kingdom', '4', '', '', [], '', 5000)
+        );
+        $this->assertStringEndsWith(
+            'limit 26',
+            $this->sql('event', '17', 'kingdom', '4', '', '', [], '', Scroll::PRINT_CHUNK)
+        );
     }
 
     /**

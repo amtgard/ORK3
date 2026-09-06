@@ -626,6 +626,79 @@ class Player extends Ork3
         return ['IsOrkAdmin' => $isOrkAdmin, 'AdminGrants' => $badges];
     }
 
+    /**
+     * The park and kingdom scopes a player holds an office over, from their
+     * AUTHORIZATION rows rather than their home record.
+     *
+     * The distinction is the whole point. Resolving an officer's scopes from
+     * ork_mundane.park_id / kingdom_id cannot see an office held outside the
+     * viewer's own home: mundane 54527 holds kingdom-4 authority while their home
+     * park 32 sits in kingdom 3, so a home-derived lookup finds no candidate scope
+     * and offers them nothing at all.
+     *
+     * CANDIDATES ONLY — this does not decide authority. It answers "which scopes are
+     * worth asking HasAuthority() about", and the caller still runs that check per
+     * scope (see Model_Scrollery::issuable_scopes_for()). A scopeless row is skipped:
+     * role='create' with every scope id at 0 confers nothing, and a TRUE global admin
+     * (role='admin', all scopes 0) has no particular body to act as, so it is not a
+     * door either — an admin reaches an individual award through the admin branch in
+     * Model_Scrollery::print_decision(), not through a scope chooser.
+     *
+     * Kingdoms first, then parks, each ascending, so a chooser renders in a stable
+     * order.
+     *
+     * @return list<array{Type: string, Id: int, Name: string}>
+     */
+    public function GetIssuableScopes(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT a.park_id, a.kingdom_id,
+                    p.name AS park_name, k.name AS kingdom_name
+               FROM ' . DB_PREFIX . 'authorization a
+               LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = a.park_id
+               LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = a.kingdom_id
+              WHERE a.mundane_id = ' . (int) $mundaneId . '
+                AND a.unit_id = 0
+                AND a.event_id = 0
+                AND (a.park_id > 0 OR a.kingdom_id > 0)'
+        );
+        if (!is_object($rs) || $rs->Size() < 1) {
+            return [];
+        }
+
+        $kingdoms = [];
+        $parks = [];
+        while ($rs->Next()) {
+            $kingdomId = (int) $rs->kingdom_id;
+            $parkId = (int) $rs->park_id;
+            // A row carrying both is a park grant inside a kingdom; the park is the
+            // narrower, truthful scope.
+            if ($parkId > 0) {
+                $parks[$parkId] = (string) ($rs->park_name ?? '');
+            } elseif ($kingdomId > 0) {
+                $kingdoms[$kingdomId] = (string) ($rs->kingdom_name ?? '');
+            }
+        }
+
+        ksort($kingdoms);
+        ksort($parks);
+
+        $scopes = [];
+        foreach ($kingdoms as $id => $name) {
+            $scopes[] = ['Type' => 'kingdom', 'Id' => $id, 'Name' => $name];
+        }
+        foreach ($parks as $id => $name) {
+            $scopes[] = ['Type' => 'park', 'Id' => $id, 'Name' => $name];
+        }
+
+        return $scopes;
+    }
+
     public function AddOneShotFaceImage($request)
     {
         $mundane = $this->player_info($request['MundaneId']);
@@ -895,6 +968,64 @@ class Player extends Ork3
         }
     }
 
+    /**
+     * The three facts a certificate needs about its recipient: persona, and enough
+     * pronoun state for Model_Scrollery::possessive_pronoun() to resolve a
+     * possessive.
+     *
+     * Scrollery used to reach for GetPlayer() here, which for a persona and a
+     * pronoun also runs TWO GetDues() passes and sorts both, a heraldry URL build,
+     * an authorization check, a pronoun-table find, a mundane_design find and (for
+     * recent joiners) an attendance aggregate — none of which a scroll reads. On a
+     * bulk run that cost is paid once per certificate, up to Scroll::MAX_PRINT_RUN
+     * times.
+     *
+     * Deliberately NOT a narrowing of GetPlayer(): that response is a public SOAP
+     * contract with per-field privacy gating (given_name / surname / email honour
+     * the design-modal opt-ins). This returns only fields GetPlayer() exposes
+     * unconditionally to every viewer, so it can skip the gate rather than restate
+     * it — persona is public on every profile in the ORK.
+     *
+     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string}
+     */
+    public function GetScrollRecipient(int $mundaneId): array
+    {
+        $empty = [
+            'MundaneId' => 0,
+            'Persona' => '',
+            'PronounId' => 0,
+            'PronounCustom' => '',
+            'PronounFreetext' => '',
+        ];
+        if (!valid_id($mundaneId)) {
+            return $empty;
+        }
+
+        $this->mundane->clear();
+        $this->mundane->mundane_id = $mundaneId;
+        if (!$this->mundane->find()) {
+            return $empty;
+        }
+
+        // pronoun_freetext ships on another branch and is absent from the rendered
+        // test schema, so read it defensively — the same "either side of that merge"
+        // treatment Model_Scrollery::possessive_pronoun() already gives the key.
+        $freetext = '';
+        try {
+            $freetext = trim((string) $this->mundane->pronoun_freetext);
+        } catch (Throwable $e) {
+            $freetext = '';
+        }
+
+        return [
+            'MundaneId' => (int) $this->mundane->mundane_id,
+            'Persona' => (string) $this->mundane->persona,
+            'PronounId' => (int) $this->mundane->pronoun_id,
+            'PronounCustom' => (string) $this->mundane->pronoun_custom,
+            'PronounFreetext' => $freetext,
+        ];
+    }
+
     public function GetPlayer($request)
     {
         $fetchprivate = true;
@@ -1123,15 +1254,59 @@ class Player extends Ork3
         return $response;
     }
 
+    /**
+     * The WHERE predicate for AwardsForPlayer(), split out so
+     * PlayerAwardsForPlayerWhereTest can pin it without a database.
+     *
+     * The single-row branch is the point of this function. This method used to build
+     * an UNPARENTHESISED `awards.mundane_id = '0' or awards.awards_id = 'N'` whenever
+     * a caller asked for one award row by id (Model_Scrollery::award_row(),
+     * SearchService, and — since the Scrollery print link landed — every award grant
+     * in the ORK). 3,075 rows carry mundane_id = 0, so that OR made a 9-table
+     * SELECT DISTINCT return 3,076 rows, sort them on a 6-term ORDER BY and hydrate
+     * 3,076 PHP arrays to keep exactly one. Measured on the dev mirror: 124.4 ms for
+     * the OR form against 0.25 ms for `awards.awards_id = N` alone.
+     *
+     * No caller passes a real MundaneId AND an AwardsId together — the SOAP contract
+     * (orkservice/Player/PlayerService.definitions.php) does not even declare
+     * AwardsId — so the OR is only ever the "0 or this id" shape. The combined branch
+     * is kept anyway, now parenthesised, so a future caller that does pass both is
+     * not silently broken by operator precedence once anything is ANDed on.
+     *
+     * mysql_real_escape_string() is a no-op shim in this codebase; the (int) casts are
+     * what actually protect the interpolation.
+     */
+    public static function awardsForPlayerWhereForTest($mundaneId, $awardsId): string
+    {
+        $hasMundane = valid_id($mundaneId);
+        $hasAward   = valid_id($awardsId);
+
+        if ($hasAward && !$hasMundane) {
+            return 'awards.awards_id = ' . (int) $awardsId;
+        }
+        if ($hasAward) {
+            return '(awards.mundane_id = ' . (int) $mundaneId . ' or awards.awards_id = ' . (int) $awardsId . ')';
+        }
+        if ($hasMundane) {
+            return 'awards.mundane_id = ' . (int) $mundaneId;
+        }
+
+        // Neither id is usable. The predicate is kept — a MundaneId of 0 used to
+        // match the 3,075 rows that carry mundane_id = 0, and this branch preserves
+        // that — but the value is now CAST rather than interpolated raw. It used to
+        // go through mysql_real_escape_string(), which is a no-op shim in this
+        // codebase, so a non-numeric MundaneId (valid_id() is is_numeric && > 0, so
+        // "42 UNION SELECT ..." fails it) reached the statement verbatim. No caller
+        // in the tree passes a non-numeric id, but nothing stopped one.
+        return 'awards.mundane_id = ' . (int) $mundaneId;
+    }
+
     public function AwardsForPlayer($request)
     {
-        // Initialised, not merely assigned inside the guard: without an AwardsId this
-        // is interpolated into $sql below while still undefined, which warns on every
-        // call that fetches a whole player's awards rather than one row.
-        $player_award = '';
-        if (valid_id($request['AwardsId'] ?? 0)) {
-            $player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
-        }
+        $player_where = self::awardsForPlayerWhereForTest(
+            $request['MundaneId'] ?? 0,
+            $request['AwardsId'] ?? 0
+        );
         $sql = "select distinct awards.*, a.*,
 						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
@@ -1151,7 +1326,7 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
-					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
+					where $player_where
 					order by
 						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
@@ -1167,6 +1342,14 @@ class Player extends Ork3
                         'AwardId' => $r->award_id,
                         'KingdomAwardId' => $r->kingdomaward_id,
                         'MundaneId' => $r->mundane_id,
+                        // ork_awards.revoked is NOT NULL DEFAULT 0. Surfaced here so a
+                        // consumer never has to re-query to answer "is this award still
+                        // held?" — Model_Player's CanPrintScroll and
+                        // Model_Scrollery::viewer_may_print() both read it. Revocation
+                        // nulls mundane_id on most rows (2,797 of 2,856), but 59 revoked
+                        // rows still carry a live mundane_id and DO come back on the
+                        // recipient's own Awards tab.
+                        'Revoked' => (int) $r->revoked,
                         'Rank' => $r->rank,
                         'Date' => $r->date,
                         'GivenById' => $r->given_by_id,

@@ -42,7 +42,10 @@ $recipe = Scroll::NormaliseRecipe(is_array($s['recipe'] ?? null) ? $s['recipe'] 
 $rank   = (int) $s['rank'];
 
 $band  = $recipe['border'] === Scroll::BORDER_BAND;
-$knot  = $recipe['border'] === 'knot' || $band;
+// Scroll::BorderDrawsKnot(), not a restatement of it: the composer needs the same
+// answer to stamp its swatches, and two copies of the predicate would drift the
+// moment the 'knot' vocabulary key were renamed in scroll-recipes.php.
+$knot  = Scroll::BorderDrawsKnot((string) $recipe['border']);
 $frame = !$knot;
 $dark  = in_array($recipe['ground'], Scroll::DARK_GROUNDS, true);
 

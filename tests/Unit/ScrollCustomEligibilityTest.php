@@ -50,13 +50,24 @@ final class ScrollCustomEligibilityTest extends TestCase
     }
 
     /**
-     * Master Hunter and Master Archer deliberately fall through to the custom scroll:
-     * no other ladder gives its Master tier the ladder's own artwork.
+     * Master Hunter and Master Archer are deliberately absent from ARCHERY_NAMES: no
+     * ladder gives its Master tier the ladder's own artwork.
+     *
+     * They used to fall through to the custom scroll. Under the allowlist that
+     * depends on what they are hung from: base 131 is not an admitted id and no
+     * ork_award row carries it, so it prints nothing at all; a kingdom that built one
+     * on Custom Award still gets the CUSTOM scroll — never the hunter art, which is
+     * the assertion that actually matters here.
      */
-    public function testArcheryMastersFallThroughToTheCustomScroll(): void
+    public function testArcheryMastersNeverGetTheHunterArtwork(): void
     {
         foreach (['Master Hunter', 'Master Archer'] as $name) {
-            $order = Scroll::OrderForAwardRow($this->row(['AwardId' => 131, 'KingdomAwardName' => $name]));
+            $this->assertNull(
+                Scroll::OrderForAwardRow($this->row(['AwardId' => 131, 'KingdomAwardName' => $name])),
+                "{$name} on an unadmitted base id should not print"
+            );
+
+            $order = Scroll::OrderForAwardRow($this->row(['AwardId' => 94, 'KingdomAwardName' => $name]));
             $this->assertSame('custom', $order['id'], "{$name} should get the custom scroll, not hunter art");
         }
     }
@@ -84,25 +95,45 @@ final class ScrollCustomEligibilityTest extends TestCase
         $this->assertFalse(Scroll::HasArt($row));
     }
 
-    /** Everything else with no specific order gets the custom scroll. */
-    public function testTitlesPeeragesAndPlainAwardsGetTheCustomScroll(): void
+    /**
+     * ONLY the two custom catalogue entries take the custom scroll.
+     *
+     * This test used to say the opposite — that everything with no specific order got
+     * the custom scroll, and it listed Lord, Master, Esquire and Walker in the Middle
+     * as proof. The allowlist reverses that: the custom scroll is not a fallback, it
+     * is the artwork for Custom Award (94) and Custom Title (246), and nothing else
+     * reaches it.
+     *
+     * IsCustomEligible() still says TRUE for all four of the refused rows — that
+     * function answers only "is this an honour rather than a job", and deliberately
+     * does not carry the policy — but OrderForAwardRow() refuses them, which is the
+     * gate every surface actually goes through. See ScrollExcludedAwardsTest.
+     */
+    public function testOnlyTheTwoCustomEntriesTakeTheCustomScroll(): void
     {
+        foreach ([94 => 'Custom Award', 246 => 'Custom Title'] as $id => $name) {
+            $row = $this->row(['AwardId' => $id, 'KingdomAwardName' => $name]);
+            $this->assertSame('custom', Scroll::OrderForAwardRow($row)['id'], "{$name} should print");
+            $this->assertTrue(Scroll::HasArt($row));
+        }
+
         foreach ([
-            ['AwardId' => 17, 'KingdomAwardName' => 'Knight of the Flame'],
-            ['AwardId' => 1,  'KingdomAwardName' => 'Master Rose'],
-            ['AwardId' => 38, 'KingdomAwardName' => 'Paragon Archer'],
-            ['AwardId' => 31, 'KingdomAwardName' => 'Order of the Walker in the Middle'],
+            ['AwardId' => 52,  'KingdomAwardName' => 'Lord'],
+            ['AwardId' => 226, 'KingdomAwardName' => 'Master'],
+            ['AwardId' => 209, 'KingdomAwardName' => 'Esquire'],
+            ['AwardId' => 31,  'KingdomAwardName' => 'Order of the Walker in the Middle'],
         ] as $o) {
             $row = $this->row($o);
-            $this->assertTrue(Scroll::IsCustomEligible($row), "{$o['KingdomAwardName']} should be eligible");
-            $this->assertSame('custom', Scroll::OrderForAwardRow($row)['id']);
-            $this->assertTrue(Scroll::HasArt($row));
+            $this->assertTrue(Scroll::IsCustomEligible($row), "{$o['KingdomAwardName']} is still an honour, not a job");
+            $this->assertNull(Scroll::OrderForAwardRow($row), "{$o['KingdomAwardName']} must not print");
+            $this->assertFalse(Scroll::HasArt($row));
         }
     }
 
     /**
-     * Award 31 is a genuine RANKED ladder Arcanyst never drew, so its custom scroll
-     * must still be able to carry a numeral.
+     * The custom scroll must still be able to carry a numeral: a kingdom's own ladder
+     * built on Custom Award (Award::pseudoLadderKingdomAwardIds() is exactly that
+     * shape) is ranked, and prints on this scroll.
      */
     public function testTheUncoveredLadderIsRankedNotFlat(): void
     {
@@ -131,7 +162,10 @@ final class ScrollCustomEligibilityTest extends TestCase
         $this->assertSame('hunter', Scroll::OrderForAwardRow($presentButNull)['id']);
         $this->assertTrue(Scroll::HasArt($presentButNull));
 
-        $presentButEmptyString = $this->row(['OfficerRole' => '', 'AwardId' => 1, 'KingdomAwardName' => 'Master Rose']);
+        // Award 94 (Custom Award), because this case is about the OfficerRole key and
+        // not the policy: it needs a row the allowlist admits, and 52/1 are no longer
+        // among them.
+        $presentButEmptyString = $this->row(['OfficerRole' => '', 'AwardId' => 94, 'KingdomAwardName' => 'Custom Award']);
         $this->assertTrue(Scroll::IsCustomEligible($presentButEmptyString));
         $this->assertSame('custom', Scroll::OrderForAwardRow($presentButEmptyString)['id']);
     }

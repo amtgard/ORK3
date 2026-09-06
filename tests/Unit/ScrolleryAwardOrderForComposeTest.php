@@ -51,9 +51,13 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
 
     public function testACustomEligibleAwardMatches(): void
     {
-        $choices = [$this->choice(['AwardId' => 1, 'Name' => 'Master Rose', 'Order' => 'custom'])];
+        // Lord (52), not Master Rose (1): the choice list this searches is already
+        // filtered by Scroll::OrderForAwardRow(), which now refuses masterhoods
+        // outright, so a Master Rose entry could never appear in one. The search
+        // itself is unchanged — this fixture just stops describing an impossible list.
+        $choices = [$this->choice(['AwardId' => 52, 'Name' => 'Lord', 'Order' => 'custom'])];
 
-        $choice = Model_Scrollery::matchingChoiceForTest($choices, 1, 'Master Rose');
+        $choice = Model_Scrollery::matchingChoiceForTest($choices, 52, 'Lord');
 
         $this->assertSame('custom', $choice['Order']);
     }
@@ -99,17 +103,17 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
      */
     public function testAnUnlistedPairMatchesNothing(): void
     {
-        $choices = [$this->choice(['AwardId' => 1, 'Name' => 'Master Rose', 'Order' => 'custom'])];
+        $choices = [$this->choice(['AwardId' => 52, 'Name' => 'Lord', 'Order' => 'custom'])];
 
         $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 70, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 1, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::matchingChoiceForTest([], 1, 'Master Rose'));
+        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 52, 'Sheriff'));
+        $this->assertNull(Model_Scrollery::matchingChoiceForTest([], 52, 'Lord'));
     }
 
     /** The kingdomId guard short-circuits before the model would need a database. */
     public function testAwardOrderForComposeRejectsAMissingKingdom(): void
     {
-        $this->assertNull((new Model_Scrollery())->award_order_for_compose(0, 1, 'Master Rose'));
-        $this->assertNull((new Model_Scrollery())->award_order_for_compose(-1, 1, 'Master Rose'));
+        $this->assertNull((new Model_Scrollery())->award_order_for_compose(0, 52, 'Lord'));
+        $this->assertNull((new Model_Scrollery())->award_order_for_compose(-1, 52, 'Lord'));
     }
 }
