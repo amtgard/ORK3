@@ -64,6 +64,167 @@
 }
 
 /* --------------------------------------------------------------------------
+   1a. The alternate hands.
+
+   Four faces added, all SIL OFL 1.1 and all SELF-HOSTED — see NOTICE for the
+   upstream source of each. Not linked from Google's CDN, and that is a decision
+   rather than an oversight: these are font-display:block on a print path, so a
+   slow or blocked CDN does not degrade the certificate, it prints it in a system
+   serif or with the text missing entirely, and nobody finds out until it is on
+   paper.
+                                                    glyphs  Latin-1  Lat Ext-A
+     MedievalSharp    display, hand-cut quill          404   100%      100%
+     Pirata One       display, angular blackletter     386   100%     99.2%
+     Cinzel           display, Trajan roman caps       548   100%     80.5%
+     Grenze           text companion, 4 weights        794  99.5%      100%
+
+   Coverage is the reason these four and not the obvious ones. Measured against
+   the 155 ORK personas that contain a non-ASCII character:
+
+     BlackChancery (shipped) breaks 24 of them — it carries 217 glyphs and 3.1%
+     of Latin Extended-A, so `Juna Šumski`, `Hāno`, `Neacșu` and `Sigurð` are
+     rendered in whatever the browser falls back to, mid-word.
+     Averia Serif Libre breaks 18, and has NO GSUB table at all.
+     Grenze breaks 6 — the only Latin character in the whole ORK it misses is the
+     `ḩ` in one persona; the rest are Hangul, runic, Greek and enclosed-alphanumeric
+     "emoji" that no Latin display face was ever going to draw.
+
+   UnifrakturMaguntia, UnifrakturCook and IM Fell English were evaluated and
+   rejected. The Unifrakturs cover 6.2% of Latin Extended-A (12 broken personas)
+   and Maguntia additionally ships `rlig`, which is always-on and CANNOT be turned
+   off with font-variant-ligatures — its required ligatures fuse ch/ck/ll/tt, so a
+   recipient's name would print with letterforms nobody chose. IM Fell English is
+   186 KB for the pair, more than all four of these together, for the worst Latin
+   Extended-A of the serifs and no oldstyle figures.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'MedievalSharp';
+    src: url('fonts/MedievalSharp-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Pirata One';
+    src: url('fonts/PirataOne-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Cinzel';
+    src: url('fonts/Cinzel-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Grenze ships upstream only as a variable font; these are static instances cut
+   at wght 400 and 600 from Grenze[wght] and Grenze-Italic[wght]. All four are
+   declared because .Award .Body is ITALIC and .AwardDetails is bold — a hand with
+   only an upright regular would have the browser synthesise both, which slants and
+   smears a face that has real drawn italics. */
+@font-face {
+    font-family: 'Grenze';
+    src: url('fonts/Grenze-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Grenze';
+    src: url('fonts/Grenze-Italic.woff2') format('woff2');
+    font-weight: 400;
+    font-style: italic;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Grenze';
+    src: url('fonts/Grenze-SemiBold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Grenze';
+    src: url('fonts/Grenze-SemiBoldItalic.woff2') format('woff2');
+    font-weight: 700;
+    font-style: italic;
+    font-display: block;
+}
+
+/* --------------------------------------------------------------------------
+   1a-ii. The hand: a per-print typeface choice.
+
+   Four tokens, set once per certificate, consumed by the type rules in section 3.
+   A "hand" is a pair — a display face for the recipient's name and the order
+   line, and a text companion for everything set in .Body — because those two jobs
+   have opposite requirements and picking them independently produces mismatches
+   nobody wants to look at.
+
+   The default hand is the one the module has always drawn: BlackChancery over
+   Averia Serif Libre. It stays the default so that every certificate printed
+   before this existed reprints identically.
+
+   The switch is an attribute on ANY ancestor, so the surface decides where to put
+   it: Scrollery_render.tpl reads &face= and stamps it on <body>, and the
+   composer can stamp it on its preview mount without either knowing about the
+   other. The selector is (0,2,0) against .award-template's (0,1,0), so an
+   ancestor override always wins and no !important is needed.
+
+   --sc-display-track exists because tracking is a property of the FACE, not of
+   the design: BlackChancery and Pirata One are calligraphic and want the display
+   sizes pulled in, MedievalSharp ships no kerning table at all so pulling it in
+   further only collides letterforms, and Cinzel is Trajan capitals, which want
+   MORE space, not less — letterspacing caps is the one place the rule reverses.
+
+   --sc-figures is gated on evidence rather than taste. `font-variant-numeric:
+   oldstyle-nums` needs an `onum` feature in the face to do anything at all, and
+   Averia Serif Libre has NO GSUB table whatsoever — the property is a guaranteed
+   no-op on the default hand, so it is not asserted there. Grenze and Cinzel both
+   carry onum, so the three Grenze-companion hands turn it on and the date line
+   actually gets text figures.
+   -------------------------------------------------------------------------- */
+
+.award-template {
+    --sc-display-face: "BlackChancery";
+    --sc-text-face: "Averia Serif Libre";
+    --sc-display-track: -0.01em;
+    --sc-figures: normal;
+}
+
+[data-scroll-face="sharp"] .award-template {
+    --sc-display-face: "MedievalSharp";
+    --sc-text-face: "Grenze";
+    /* No kern table in MedievalSharp; do not tighten what nothing is spacing. */
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+[data-scroll-face="pirata"] .award-template {
+    --sc-display-face: "Pirata One";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Cinzel has no true lowercase — its minuscules are small capitals. That letters
+   a persona as DEALAN-DÉ ENWI, which is a deliberate look and not for everyone,
+   so it is an opt-in hand and never a fallback. */
+[data-scroll-face="cinzel"] .award-template {
+    --sc-display-face: "Cinzel";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0.02em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* --------------------------------------------------------------------------
    1b. Chrome headings.
 
    orkui.css gives every h1-h6 a grey pill box (background, border, padding,
@@ -136,6 +297,45 @@ html[data-theme="dark"] .sc-door h2 {
 }
 
 /* --------------------------------------------------------------------------
+   2b. The knotwork border — formerly _border.tpl's own inline <style>.
+
+   These four rules used to be a <style> element inside the border's <svg>, which
+   meant they were emitted once per certificate. That never scoped anything: a
+   <style> inside an <svg> is document-scoped exactly like one in <head>, so the
+   rules were always global and the extra copies were pure weight on a bulk page.
+   They sit here now for the same reason text.html's block does.
+
+   The two colour rules are what the whole knot border is FOR: _border.tpl sets
+   --primary-color / --secondary-color on each certificate's own <svg> root, and
+   the symbols — which now live once per page in _border_defs.tpl — pick the pair
+   up through the <use> that references them. That inheritance is what makes one
+   shared symbol library able to draw sixteen different colour pairs on one page.
+
+   `use[href*="Deco-Special"]` hides every special deco by default; griffon turns
+   its own back on in section 4 below.
+   -------------------------------------------------------------------------- */
+
+use.border-primary,
+path.border-primary {
+    fill: var(--primary-color);
+}
+
+use.border-secondary,
+path.border-secondary {
+    fill: var(--secondary-color);
+}
+
+use[href*="Deco-Special"] {
+    display: none;
+}
+
+/* The symbols are drawn well outside their own viewport boxes — a <symbol> clips
+   to its viewport by default and every corner piece would lose its overhang. */
+symbol {
+    overflow: visible;
+}
+
+/* --------------------------------------------------------------------------
    3. Typography — the whole <style> block from text.html.
 
    Its :root became .award-template: in a shadow root :root matched the host,
@@ -160,7 +360,30 @@ html[data-theme="dark"] .sc-door h2 {
 
 .Award {
     font-size: 75pt;
-    font-family: "BlackChancery";
+
+    /* A REAL fallback stack, which this rule did not have: it was
+       `font-family: "BlackChancery"` and nothing else, so the first character
+       BlackChancery could not draw dropped to the browser's default UI font
+       mid-word. That is not hypothetical — BlackChancery carries 217 glyphs and
+       3.1% of Latin Extended-A, and 24 of the ORK's 155 non-ASCII personas
+       contain a character it has no glyph for. `Juna Šumski` printed the Š in
+       Helvetica.
+
+       The order of the fallbacks is the point. Grenze comes second because it is
+       self-hosted here and covers all of Latin Extended-A, so the odd caron or
+       macron in a persona lands in a medieval-flavoured serif we chose rather
+       than in the UI font. Averia is third for the same reason, and the system
+       serifs are last, for the case where nothing loaded at all. */
+    font-family: var(--sc-display-face, "BlackChancery"), "Grenze",
+                 "Averia Serif Libre", Georgia, "Times New Roman", serif;
+
+    /* Common ligatures only — never `discretionary`, which on a face that has them
+       would decide on its own to fuse letters in somebody's name. optimizeLegibility
+       turns on kerning and standard ligatures where the face carries them; on a face
+       with no GSUB (BlackChancery, Averia) it is simply inert. */
+    font-variant-ligatures: common-ligatures;
+    text-rendering: optimizeLegibility;
+
     text-align: center;
     color: #000000;
 
@@ -187,7 +410,12 @@ html[data-theme="dark"] .sc-door h2 {
 .Award .Body {
     margin-block-end: 0.5em;
     font-size: 0.8em;
-    font-family: 'Averia Serif Libre';
+    /* Same fallback reasoning as .Award above. Averia has no GSUB and 2.3% of
+       Latin Extended-A, so Grenze standing behind it is what keeps a caron or a
+       macron in a reason or a signatory's name inside the certificate's own
+       typography. */
+    font-family: var(--sc-text-face, "Averia Serif Libre"), "Grenze",
+                 Georgia, "Times New Roman", serif;
     font-style: italic;
 }
 
@@ -311,6 +539,13 @@ section.IssuingTextSection > p:nth-child(2) {
        only fires where no size in range would have fitted. */
     text-wrap: balance;
     overflow-wrap: anywhere;
+
+    /* Display-size calligraphic caps want the tracking pulled in — at 1.7em of
+       75pt the default spacing was set for text sizes and reads loose. Negative,
+       so it can only ever make the line NARROWER, which is the safe direction
+       next to scrollery-autofit.js: it can free a line, never force one. The
+       value is per-face; see --sc-display-track in section 1a-ii. */
+    letter-spacing: var(--sc-display-track, -0.01em);
 }
 
 .Award .Body.AwardDetails {
@@ -329,7 +564,15 @@ section.IssuingTextSection > p:nth-child(2) {
     margin-block-start: 0em;
     font-size: 0.8em;
     font-style: normal;
-    line-height: 2em;
+
+    /* Unitless, not 2em. An `em` line-height computes once, against THIS element's
+       font-size, and every descendant then inherits that fixed pixel value — so
+       the inner <p> that actually holds the reason was leading itself against a
+       size it no longer had once scrollery-autofit.js shrank the box. Unitless
+       inherits as the ratio it is and recomputes per element. The ruled underline
+       images are inline, so their spacing IS this line-height; verified unchanged
+       at the unshrunk size, which is what the six rules were spaced against. */
+    line-height: 2;
 
     position: relative;
     padding: 0.1em;
@@ -338,9 +581,41 @@ section.IssuingTextSection > p:nth-child(2) {
     overflow: hidden; /* culls the excess underlines */
 }
 
+/* --------------------------------------------------------------------------
+   Rubrication.
+
+   Red for the title is the one manuscript signal everybody recognises without
+   being told, and the order line is the certificate's second-loudest element, so
+   this is where it goes. print-color-adjust:exact is already set on
+   .award-template and again in @media print, so it survives the printer.
+
+   The colour is a single rubric vermilion and NOT the order's own primary,
+   which is what was originally proposed. That proposal does not survive
+   measurement. The order/palette primaries are BORDER colours, tuned to multiply
+   into parchment, and as ink on parchment they are far too light. Contrast
+   measured against the parchment plate's mean under the order line, rgb(220,195,170):
+
+     Crown gold 1.33:1 · Griffon tan 1.74:1 · Hydra teal 2.02:1 · Jovious rose
+     2.07:1 · Battle red 2.16:1 · Flame ember 2.23:1 · Dragon green 2.30:1 ·
+     Lion purple 2.56:1 · Garber blue 2.77:1 · Smith steel 2.93:1 · Rose crimson
+     3.17:1 · Walker slate 3.30:1 · Warrior violet 3.82:1 · Mask ivory 4.86:1 ·
+     Owl indigo 5.01:1 · Zodiac night 7.13:1
+
+   Eleven of the sixteen fail 3:1, the floor for large text, and all four orders
+   that actually carry a primary (griffon, battle, dragon, and custom's default
+   pair) are among them. Crown gold at 1.33:1 would be an award name you cannot
+   read. The rubric below measures 5.06:1 on the same ground, against 12.43:1 for
+   the black ink it replaces.
+
+   It is a token so a future recipe key can override it per certificate; nothing
+   sets it today.
+   -------------------------------------------------------------------------- */
+
 .Award .Order {
     font-size: 1.5em;
     margin-block-start: 0.2em;
+    color: var(--sc-rubric, hsl(0, 65%, 35%));
+    letter-spacing: var(--sc-display-track, -0.01em);
 
     /* The order line has no length scaling in _text.tpl at all — it is a flat 1.5em
        whatever the catalogue name is. 195 of 4,870 ork_kingdomaward.name rows are
@@ -398,8 +673,45 @@ section.SignAndDate > div > p.Body {
     margin-block-start: 0.75em;
 }
 
+/* Text figures on the date. "16th August 2026" set in lining figures puts four
+   cap-height digits inside a lowercase line; oldstyle figures have ascenders and
+   descenders and sit in running text the way a scribe would have written them.
+
+   Asserted through a token rather than directly, because the property only does
+   anything if the face carries an `onum` feature and the default text face does
+   not carry ANY OpenType feature — Averia Serif Libre has no GSUB table at all,
+   verified with fontTools, so on the default hand this resolves to `normal` and
+   the rule is honest about being inert. The Grenze hands set it to oldstyle-nums;
+   Grenze carries onum, lnum, pnum and tnum. */
+.Award .AwardDate .Body {
+    font-variant-numeric: var(--sc-figures, normal);
+}
+
+/* The versal. The enlarged initial was already here at 1.25em; rubricating it is
+   what makes it read as a versal rather than as a font-size accident, and it pairs
+   the opening initial with the order line below it. No image, no markup, and the
+   size is untouched so nothing in the issuing block moves. */
 .IssuingTextSection > p:first-child::first-letter {
     font-size: 1.25em;
+    color: var(--sc-rubric, hsl(0, 65%, 35%));
+}
+
+/* --------------------------------------------------------------------------
+   Rubrication is a LIGHT-GROUND treatment and has to be switched off on a dark
+   one. On cyanotype the type is lifted to white (see the custom block in section
+   4); a dark red on a navy plate measures under 2:1 and would be the one line on
+   the certificate nobody can read.
+
+   `inherit` rather than a colour, so this picks up whatever .Award resolved to —
+   the #ffffff !important there today, and anything a future dark ground sets.
+
+   The selector list is Scroll::DARK_GROUNDS, spelled out. Keep the two in step:
+   a ground added to that constant needs a line here, and ScrollRecipeTest guards
+   the name itself against a rename in scroll-recipes.php.
+   -------------------------------------------------------------------------- */
+.award-template[data-ground="cyanotype"] .Award .Order,
+.award-template[data-ground="cyanotype"] .IssuingTextSection > p:first-child::first-letter {
+    color: inherit;
 }
 
 /* --------------------------------------------------------------------------
@@ -435,7 +747,10 @@ section.SignAndDate > div > p.Body {
 }
 
 /* griffon swaps the border's standard deco for the griffon-specific one. The
-   border partial's own <style> hides every Deco-Special by default. */
+   `use[href*="Deco-Special"]` rule in section 2b hides every Deco-Special by
+   default; this is the one order that draws one. Both selectors key on the <use>
+   in the certificate itself, not on the symbol it points at, so they keep working
+   now that the symbol library is hoisted to the page. */
 .award-template[data-order="griffon"] [href="#Border-Deco-Special-Griffon"] {
     display: unset !important;
 }
@@ -855,6 +1170,13 @@ section.SignAndDate > div > p.Body {
     color: var(--sc-accent);
 }
 
+/* Crop marks are print furniture and have no business on screen. They are given
+   their geometry only inside @media print (section 5c); this is the off switch
+   everywhere else, including on a trim-mode page being previewed. */
+.sc-crop {
+    display: none;
+}
+
 .sc-overflow-notice {
     max-width: 8.5in;
     margin: 16px auto;
@@ -933,5 +1255,186 @@ section.SignAndDate > div > p.Body {
     .award-template * {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+
+    /* ----------------------------------------------------------------------
+       5c. Trim mode — &trim=1. FOR PRINT SHOPS ONLY.
+
+       A consumer printer must never see this page box: it is 9 x 11.5in, larger
+       than the paper in the tray, so a desktop driver answers with shrink-to-fit
+       and prints a smaller certificate inside a white frame — the exact failure
+       the 0.25in default margin above was chosen to avoid. It is opt-in per URL
+       and nothing links to it from the module.
+
+       The geometry, stated once so it can be checked:
+
+         media box   9 x 11.5in     the sheet the shop loads
+         bleed box   8.75 x 11.25   the artwork, 0.125in beyond trim on all sides
+         trim box    8.5 x 11in     where the guillotine lands
+         crop marks  in the outer 0.125in ring, aligned to the trim lines
+
+       The certificate keeps its own 8.5:11 aspect, so inside the 8.75 x 11.25
+       bleed box the viewBox letterboxes to 8.727 x 11.25 and leaves a 0.023in
+       sliver of white at each side. That sliver is 0.102in OUTSIDE the trim line
+       and is cut off with the rest of the bleed; the alternative (a `slice`
+       preserveAspectRatio, which would fill the box by cropping 0.037in off the
+       top and bottom of the artwork) trades a defect nobody can see for one that
+       reaches the printed page.
+
+       Named @page rather than a second stylesheet: @page cannot be scoped by a
+       selector, but the `page` property can, so the whole mode is one attribute.
+       Chromium implements named pages from 118; older engines fall back to the
+       default page box, which prints a correct — merely un-bled — certificate.
+       ---------------------------------------------------------------------- */
+
+    @page trim {
+        size: 9in 11.5in;
+        margin: 0;
+    }
+
+    [data-scroll-trim="1"] .scroll-page {
+        page: trim;
+        width: 8.75in;
+        height: 11.25in;
+        /* The aspect-ratio the base rule sets would fight the explicit height. */
+        aspect-ratio: auto;
+        margin: 0.125in;
+    }
+
+    /* Crop marks. position:fixed is how a print sheet gets furniture: Chromium
+       paints a fixed-position element once per printed page, so four corners here
+       mark every sheet in the run. It also puts them at body level, outside every
+       .scroll-page — which is what keeps them clear of that element's
+       page-break-inside: avoid, where they would have counted as part of the
+       certificate's unbreakable box.
+
+       Each corner is one element drawing two hairlines with its pseudo-elements:
+       0.125in long, running from the media edge inward, stopping at the bleed box
+       so they never cross the artwork. */
+    [data-scroll-trim="1"] .sc-crop {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 9in;
+        height: 11.5in;
+        pointer-events: none;
+        z-index: 10;
+    }
+
+    [data-scroll-trim="1"] .sc-crop i {
+        position: absolute;
+        width: 0.125in;
+        height: 0.125in;
+    }
+
+    [data-scroll-trim="1"] .sc-crop i::before,
+    [data-scroll-trim="1"] .sc-crop i::after {
+        content: "";
+        position: absolute;
+        background: #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* The vertical arm sits on the trim line's x, the horizontal arm on its y. */
+    [data-scroll-trim="1"] .sc-crop i::before {
+        width: 0.25pt;
+        height: 0.125in;
+        top: 0;
+    }
+
+    [data-scroll-trim="1"] .sc-crop i::after {
+        height: 0.25pt;
+        width: 0.125in;
+        left: 0;
+    }
+
+    [data-scroll-trim="1"] .sc-crop .tl { left: 0; top: 0; }
+    [data-scroll-trim="1"] .sc-crop .tr { right: 0; top: 0; }
+    [data-scroll-trim="1"] .sc-crop .bl { left: 0; bottom: 0; }
+    [data-scroll-trim="1"] .sc-crop .br { right: 0; bottom: 0; }
+
+    /* Trim x = 0.25in from the media edge; the arm is the 0.125in from the media
+       edge to the bleed box, so it is offset within its own 0.125in corner box. */
+    [data-scroll-trim="1"] .sc-crop .tl::before,
+    [data-scroll-trim="1"] .sc-crop .bl::before { left: 0.25in; }
+    [data-scroll-trim="1"] .sc-crop .tr::before,
+    [data-scroll-trim="1"] .sc-crop .br::before { right: 0.25in; }
+    [data-scroll-trim="1"] .sc-crop .tl::after,
+    [data-scroll-trim="1"] .sc-crop .tr::after { top: 0.25in; }
+    [data-scroll-trim="1"] .sc-crop .bl::after,
+    [data-scroll-trim="1"] .sc-crop .br::after { bottom: 0.25in; }
+
+    [data-scroll-trim="1"] .sc-crop .bl::before,
+    [data-scroll-trim="1"] .sc-crop .br::before { top: auto; bottom: 0; }
+    [data-scroll-trim="1"] .sc-crop .tr::after,
+    [data-scroll-trim="1"] .sc-crop .br::after { left: auto; right: 0; }
+
+    /* ----------------------------------------------------------------------
+       5d. Multi-up — &up=2 and &up=4.
+
+       The 2550x3300 viewBox is what makes this nearly free: the certificate is
+       one scalable frame, so putting four on a sheet is a width and a grid and
+       nothing else. Only the flow changes; no layer, no type rule and no order
+       partial knows this mode exists.
+
+       The page box at the default 0.25in margin is 8 x 10.5in. At width 4in the
+       certificate is 4 x 5.176in, so two rows are 10.35in and fit.
+
+       An honest note on &up=2, because the numbers are not what the name
+       suggests: a certificate is 8.5:11, and two of those do not tile an 8.5:11
+       sheet at any larger size than four do. Both modes therefore print the SAME
+       4 x 5.18in certificate; up=2 simply leaves the bottom half of the sheet
+       blank. It exists for a run of exactly two, and for the officer who wants
+       the pair on one sheet with a single cut between them. If a bigger half-sheet
+       certificate is ever wanted, the way to get it is to ROTATE each one 90deg
+       into an 8 x 5.25in cell, which fits 6.79 x 5.25in — a 30% larger
+       certificate — and that is a different change with its own print testing.
+
+       break-before moves from "between every pair of siblings" to "before the
+       first cell of each sheet". :first-child is reset explicitly: it matches
+       :nth-child(4n+1) too, and an `always` on the very first certificate is the
+       classic way to print a leading blank sheet.
+       ---------------------------------------------------------------------- */
+
+    [data-scroll-up="2"] .scroll-flow,
+    [data-scroll-up="4"] .scroll-flow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        justify-items: center;
+        align-content: start;
+    }
+
+    [data-scroll-up="2"] .scroll-page,
+    [data-scroll-up="4"] .scroll-page {
+        width: 4in;
+        margin: 0;
+
+        /* The hairline trim guide. It is an outline, not a border, so it takes no
+           layout and cannot move the artwork it is marking; 0.25pt is the
+           thinnest a printer will resolve. */
+        outline: 0.25pt solid rgba(0, 0, 0, 0.45);
+        outline-offset: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    [data-scroll-up="2"] .scroll-page + .scroll-page,
+    [data-scroll-up="4"] .scroll-page + .scroll-page {
+        page-break-before: auto;
+        break-before: auto;
+    }
+
+    [data-scroll-up="2"] .scroll-page:nth-child(2n+1),
+    [data-scroll-up="4"] .scroll-page:nth-child(4n+1) {
+        page-break-before: always;
+        break-before: page;
+    }
+
+    [data-scroll-up="2"] .scroll-page:first-child,
+    [data-scroll-up="4"] .scroll-page:first-child {
+        page-break-before: auto;
+        break-before: auto;
     }
 }

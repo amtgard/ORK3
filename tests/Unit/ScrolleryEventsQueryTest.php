@@ -19,7 +19,7 @@ final class ScrolleryEventsQueryTest extends TestCase
 {
     private function sql(string $scopeType, string $scopeId): string
     {
-        return Model_Scrollery::eventsWithPrintableAwardsSqlForTest($scopeType, $scopeId);
+        return ScrollQuery::eventsWithPrintableAwardsSqlForTest($scopeType, $scopeId);
     }
 
     public function testParkScopeFiltersOnAtParkIdOnly(): void

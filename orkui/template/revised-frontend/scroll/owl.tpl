@@ -48,7 +48,7 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
 ?>
 <div class="award-template" data-order="owl" data-rank="<?= (int) $s['rank'] ?>" data-variant="<?= scroll_e($s['variant']) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php if ($variant === 'cyanotype'): ?>
-        <img class="bleed" src="<?= $art ?>/owl/cyanotype.jpg" alt="">
+        <img class="bleed" src="<?= scroll_art('owl/cyanotype.jpg') ?>" alt="">
     <?php endif; ?>
     <?php if ($variant === 'parchment'): ?>
         <?php scroll_partial('parchment'); ?>
@@ -71,12 +71,12 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
     <?php endif; ?>
 
     <?php /* Border pass 1 of 2/1/3 — always drawn. */ ?>
-    <img src="<?= $art ?>/owl/border.jpg" style="<?= $blend ?>" alt="">
+    <img src="<?= scroll_art('owl/border.jpg') ?>" style="<?= $blend ?>" alt="">
     <?php if ($variant === 'transparency' || $variant === 'parchment'): ?>
-        <img src="<?= $art ?>/owl/border.jpg" style="<?= $blend ?>" alt="">
+        <img src="<?= scroll_art('owl/border.jpg') ?>" style="<?= $blend ?>" alt="">
     <?php endif; ?>
     <?php if ($variant === 'transparency'): ?>
-        <img src="<?= $art ?>/owl/border.jpg" style="<?= $blend ?>" alt="">
+        <img src="<?= scroll_art('owl/border.jpg') ?>" style="<?= $blend ?>" alt="">
     <?php endif; ?>
 
     <?php /* owl ships its own rank_0.png, so the rank layer is UNGUARDED — an
@@ -84,11 +84,11 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
              The source <img> carried both style= and css=; Aurelia merged them, so
              they are one attribute here. */ ?>
     <div class="centre-bottom">
-        <img src="<?= $art ?>/owl/rank_<?= (int) $s['rank'] ?>.png" style="margin-bottom:75px;<?= $blend ?>" alt="">
+        <img src="<?= scroll_art('owl/rank_' . (int) $s['rank'] . '.png') ?>" style="margin-bottom:75px;<?= $blend ?>" alt="">
     </div>
     <?php if ($variant === 'transparency'): ?>
         <div class="centre-bottom">
-            <img src="<?= $art ?>/owl/rank_<?= (int) $s['rank'] ?>.png" style="margin-bottom:75px;<?= $blend ?>" alt="">
+            <img src="<?= scroll_art('owl/rank_' . (int) $s['rank'] . '.png') ?>" style="margin-bottom:75px;<?= $blend ?>" alt="">
         </div>
     <?php endif; ?>
 

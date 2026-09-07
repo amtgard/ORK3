@@ -28,14 +28,14 @@ $rank = (int) $s['rank'];
              source's <img> had none, and .award-template > * already full-bleeds
              it. */ ?>
     <?php if ($rank === 10): ?>
-        <img src="<?= $art ?>/warrior/bg_10.jpg" style="mix-blend-mode:soft-light" alt="">
+        <img src="<?= scroll_art('warrior/bg_10.jpg') ?>" style="mix-blend-mode:soft-light" alt="">
     <?php endif; ?>
 
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* All but tenth level have a separate border; there is no border_10.jpg. */ ?>
     <?php if ($rank !== 10): ?>
-        <img src="<?= $art ?>/warrior/border_<?= $rank ?>.jpg" style="mix-blend-mode:multiply;" alt="">
+        <img src="<?= scroll_art('warrior/border_' . $rank . '.jpg') ?>" style="mix-blend-mode:multiply;" alt="">
     <?php endif; ?>
 
     <?php /* Ninth level Big Scary Dragon. The source interpolated the rank into the
@@ -43,7 +43,7 @@ $rank = (int) $s['rank'];
              symbol_9.png — the only symbol warrior ships. */ ?>
     <?php if ($rank === 9): ?>
         <div class="centre-bottom">
-            <img src="<?= $art ?>/warrior/symbol_<?= $rank ?>.png" alt="">
+            <img src="<?= scroll_art('warrior/symbol_' . $rank . '.png') ?>" alt="">
         </div>
     <?php endif; ?>
 

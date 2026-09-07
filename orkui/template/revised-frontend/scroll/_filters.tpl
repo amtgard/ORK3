@@ -34,3 +34,19 @@
         </filter>
     </defs>
 </svg>
+<?php /*
+    The knotwork border's symbol library, hoisted onto the page beside the filters.
+
+    Same rule, same seam, a much larger number: the library is ~48 KB and every
+    `custom` scroll references it — custom being the generic fallback, so the worst
+    real event (391 awards, all Custom Award) used to carry it once per certificate.
+
+    It rides along HERE rather than as a second page-level call because every page
+    that renders a scroll already calls this partial exactly once, at page level,
+    which is precisely the guarantee the border defs need — and one seam is one
+    thing to remember rather than two. It is not merely an optimisation to hoist
+    them: Scroll::Render() caches composed certificates, so a certificate partial
+    that decided for itself whether to include the library would cache that decision
+    and serve it to pages where it was wrong. See _border_defs.tpl.
+*/ ?>
+<?php scroll_partial('border_defs'); ?>

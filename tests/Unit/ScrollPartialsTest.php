@@ -23,6 +23,16 @@ final class ScrollPartialsTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * _border_defs.tpl emits once per request and remembers in $GLOBALS that it has.
+     * Every case in a run shares one process, so the flag is cleared here rather
+     * than left to whichever test happened to render a page first.
+     */
+    protected function setUp(): void
+    {
+        unset($GLOBALS['scroll_border_defs']);
+    }
+
     private function render(string $name, array $vars): string
     {
         // finally: a partial that throws must not leave the buffer open, or every
@@ -53,21 +63,153 @@ final class ScrollPartialsTest extends TestCase
         $with    = $this->render('border', ['primary' => '#111', 'secondary' => '#222', 'griffons' => true]);
         $without = $this->render('border', ['primary' => '#111', 'secondary' => '#222']);
 
-        $this->assertStringContainsString('id="Griffons"', $with);
-        $this->assertStringNotContainsString('id="Griffons"', $without);
+        $this->assertStringContainsString('href="#Border-Griffons"', $with);
+        $this->assertStringNotContainsString('Border-Griffons', $without);
     }
 
     /**
-     * The griffon geometry is roughly half the border partial. Omitting it must
-     * actually omit it — hiding it in CSS would put ~47 KB of unused paths into the
-     * DOM of all ten orders that compose this partial.
+     * The certificate carries the REFERENCE; _border_defs.tpl carries the geometry.
+     * Ten orders compose the border without drawing griffons, so a CSS
+     * display:none on the plate would put ~47 KB of unused paths in their DOM.
      */
-    public function testOmittingGriffonsOmitsTheirGeometryNotJustTheirVisibility(): void
+    public function testTheGriffonGeometryLivesInTheHoistedDefsNotInTheCertificate(): void
     {
-        $with    = $this->render('border', ['primary' => '#111', 'secondary' => '#222', 'griffons' => true]);
-        $without = $this->render('border', ['primary' => '#111', 'secondary' => '#222']);
+        $fragment = $this->render('border', ['primary' => '#111', 'secondary' => '#222', 'griffons' => true]);
 
-        $this->assertGreaterThan(40000, strlen($with) - strlen($without));
+        $this->assertStringNotContainsString('<clipPath', $fragment);
+        $this->assertLessThan(4096, strlen($fragment));
+
+        ob_start();
+        try {
+            scroll_partial('border_defs');
+        } finally {
+            $defs = (string) ob_get_clean();
+        }
+
+        $this->assertStringContainsString('id="Border-Griffons"', $defs);
+        $this->assertStringContainsString('<clipPath', $defs);
+    }
+
+    /**
+     * The hoist, asserted as a contract rather than as a byte count nobody can read.
+     *
+     * A <use href="#Border-A"> resolves against the DOCUMENT, so the 32 symbols only
+     * ever need to exist once on a page. They used to be inline in every border,
+     * which meant a 200-certificate bulk run of custom scrolls — 391 of the 391
+     * awards on event 12250 are Custom Award, so that is a real run — carried 200
+     * copies of a 48 KB block and ~6,400 duplicate element ids.
+     */
+    public function testNoCertificateCarriesTheSymbolLibrary(): void
+    {
+        $first  = $this->render('border', ['primary' => '#111', 'secondary' => '#222']);
+        $second = $this->render('border', ['primary' => '#333', 'secondary' => '#444']);
+
+        foreach ([$first, $second] as $html) {
+            $this->assertSame(0, substr_count($html, '<symbol '));
+            $this->assertSame(8, substr_count($html, '<use href="#Border-'));
+            $this->assertLessThan(4096, strlen($html));
+        }
+
+        // Each certificate still carries its own colour pair.
+        $this->assertStringContainsString('--primary-color:#111', $first);
+        $this->assertStringContainsString('--primary-color:#333', $second);
+    }
+
+    /**
+     * WHY the border partial must not emit the defs itself, stated as a test so the
+     * "just include them if nobody else has" version cannot come back.
+     *
+     * Scroll::Render() caches a composed certificate for an hour, keyed on the
+     * scroll array and the partials' mtime — and on nothing about the page. A
+     * partial that emitted the library only when it was the first on the page would
+     * therefore cache whichever answer happened to be true when that certificate was
+     * first composed, and serve it everywhere: a fragment cached from the print
+     * route (which emits the library at page level) would draw no border at all in
+     * the composer. Byte-identical output whatever else is on the page is what makes
+     * the cache safe.
+     */
+    public function testTheBorderFragmentIsIdenticalWhetherOrNotTheDefsAreOnThePage(): void
+    {
+        $beforeAnyPage = $this->render('border', ['primary' => '#111', 'secondary' => '#222']);
+
+        ob_start();
+        try {
+            scroll_partial('border_defs');
+        } finally {
+            ob_end_clean();
+        }
+
+        $afterThePageEmittedThem = $this->render('border', ['primary' => '#111', 'secondary' => '#222']);
+
+        $this->assertSame($beforeAnyPage, $afterThePageEmittedThem);
+    }
+
+    /**
+     * _filters.tpl is the one page-level seam, so the library rides along with it
+     * rather than needing a second call every new surface has to remember.
+     */
+    public function testTheSharedFiltersPartialCarriesTheBorderLibrary(): void
+    {
+        ob_start();
+        try {
+            scroll_partial('filters');
+        } finally {
+            $page = (string) ob_get_clean();
+        }
+
+        $this->assertStringContainsString('OWL_edge-detect', $page);
+        $this->assertSame(32, substr_count($page, '<symbol '));
+        $this->assertStringContainsString('id="Border-Griffons"', $page);
+    }
+
+    /** A page that includes the seam twice pays for the library once. */
+    public function testTheLibraryIsEmittedOncePerRequest(): void
+    {
+        ob_start();
+        try {
+            scroll_partial('filters');
+            scroll_partial('filters');
+        } finally {
+            $page = (string) ob_get_clean();
+        }
+
+        $this->assertSame(32, substr_count($page, '<symbol '));
+    }
+
+    /**
+     * Every plate a certificate draws resolves through scroll_art(), never through
+     * the raw $art base.
+     *
+     * That helper is the only thing that consults assets/scrolls/renditions.json,
+     * and the manifest is the only correct source for a rendition's filename: 17 of
+     * the 244 masters have no `print` entry because WebP genuinely lost to them
+     * (garber/linen.jpg is +119% as WebP), so a partial that built a URL by
+     * appending an extension would 404 on exactly the largest files. A partial that
+     * kept composing off $art would silently keep drawing the 300 dpi master, and
+     * the composer's preview would keep pulling ~4 MB for a postcard.
+     *
+     * Asserted on the source text rather than the output because it is a rule about
+     * how the partials are written, and a new order partial copied from an old one
+     * is exactly how it would come back.
+     */
+    public function testEveryPartialResolvesItsArtThroughTheRenditionHelper(): void
+    {
+        $offenders = [];
+        foreach (glob(DIR_TEMPLATE . 'revised-frontend/scroll/*.tpl') ?: [] as $file) {
+            $body = (string) file_get_contents($file);
+            // Strip comments first: the rule is explained in prose in several of
+            // these files, and an explanation is not a violation.
+            $code = preg_replace('~/\*.*?\*/~s', '', $body);
+            if (preg_match('/\$art\b/', (string) $code)) {
+                $offenders[] = basename($file);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'these partials still build an art URL from $art instead of scroll_art()'
+        );
     }
 
     /**

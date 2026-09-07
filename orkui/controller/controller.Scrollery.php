@@ -41,10 +41,64 @@ class Controller_Scrollery extends Controller
             exit;
         }
 
-        $this->data['Awards']     = $this->Scrollery->printable_awards_for_player($viewerId);
+        // 278 printable awards on one player is the measured maximum, and 1,045
+        // players hold more than 60 — the page filters, sorts and reveals in
+        // batches rather than dropping a wall of rows on them. All three are done
+        // in the browser over the whole list, so nothing here pages the query: the
+        // set is bounded and small, and a server page would put the sort behind a
+        // round trip for no gain.
+        $this->data['Awards']     = $this->decorate_for_reprint(
+            $this->Scrollery->printable_awards_for_player($viewerId)
+        );
         $this->data['MundaneId']  = $viewerId;
+        // The same two caps bulk carries: the server refuses more than MAX_PRINT_RUN
+        // ids in one render URL, and a browser's print rasteriser gives up well
+        // before that, so a long selection opens in windows of PRINT_CHUNK.
+        $this->data['MaxRun']     = Scroll::MAX_PRINT_RUN;
+        $this->data['PrintChunk'] = Scroll::PRINT_CHUNK;
         $this->data['page_title'] = 'My Scrolls';
         $this->template           = '../revised-frontend/Scrollery_mine.tpl';
+    }
+
+    /**
+     * Name the ORDER behind each printable row, and the variants it offers.
+     *
+     * Two things the reprint list could not say before. The DESIGN — whether the
+     * certificate carries that order's own artwork or the generic composed scroll —
+     * is the difference between the two things this module prints, and the page
+     * listed them identically. And the VARIANT: Owl ships three plates
+     * (parchment / cyanotype / transparency) and Battle two (arcane / martial), but
+     * Scrollery_mine.tpl never set &variant=, so a reprint could only ever reach
+     * variants[0] even though render() has always read the parameter.
+     *
+     * Scroll::OrderForAwardRow() is the module's single allowlist and the model has
+     * already run it (inside Scroll::HasArt()) to decide the row belongs on this
+     * list at all, so this is a second resolution of an answer that was already
+     * computed. It belongs on the model row — reported to the model's owner rather
+     * than written there, since Model_Scrollery is another workstream's this round.
+     * Until then this keeps the read here, where at least it is one call per row on
+     * a list already capped by the player's own award history.
+     *
+     * @param  array<int, array<string, mixed>> $awards
+     * @return array<int, array<string, mixed>>
+     */
+    private function decorate_for_reprint(array $awards): array
+    {
+        $decorated = [];
+        foreach ($awards as $row) {
+            $order    = Scroll::OrderForAwardRow($row);
+            $orderId  = (string) ($order['id'] ?? '');
+            $variants = is_array($order['variants'] ?? null) ? $order['variants'] : [];
+
+            $row['OrderId']  = $orderId;
+            $row['Variants'] = array_values(array_filter(array_map('strval', $variants)));
+            // 'custom' is the composed scroll — a ground, a border and a numeral
+            // rather than the order's own plates. Everything else is real artwork.
+            $row['HasOrderArt'] = $orderId !== '' && $orderId !== 'custom';
+            $decorated[] = $row;
+        }
+
+        return $decorated;
     }
 
     /**
@@ -81,6 +135,21 @@ class Controller_Scrollery extends Controller
         // URL to move between them; the header chip becomes a switcher when there is
         // somewhere else to switch to.
         $this->data['OtherScopes'] = $this->other_scopes($viewerId, $scopeType, $scopeId);
+        /*
+         * The pronoun override's suggestions.
+         *
+         * Scrollery_create.tpl has always rendered list="sc-pronoun-list" and the
+         * <datalist> behind it under `if ($Pronouns)`, and nothing ever set
+         * $Pronouns — so the branch was false on every request and the control was a
+         * bare 20-character box labelled "Pronoun (possessive)" with no vocabulary
+         * at all. That is the one control on the page whose whole purpose is getting
+         * a player's own word right on their keepsake.
+         *
+         * The list is a DATALIST, not a closed set: it is a prompt, and anything
+         * typed still goes through Scroll::ResolvePronounOverride(), so an officer
+         * with a word the table does not carry is no worse off than before.
+         */
+        $this->data['Pronouns'] = $this->Scrollery->possessive_suggestions();
         $this->data['page_title'] = 'Print a new scroll';
         $this->template           = '../revised-frontend/Scrollery_create.tpl';
     }
@@ -300,49 +369,68 @@ class Controller_Scrollery extends Controller
      * Rendered and exited here rather than through $this->template. View() wraps
      * every template in the controller template and then the site theme — nav,
      * GTM, footer — and this page must contain nothing but certificates.
+     *
+     * The response carries Cache-Control: private, no-store (see render_bare).
      */
     public function render($action = null)
     {
-        $viewerId  = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
-        $awardsIds = array_values(array_unique(array_filter(
-            array_map('intval', explode(',', (string) ($_GET['awards'] ?? '')))
-        )));
+        $awardsIds = $this->requested_awards_ids();
+        $variant   = $this->requested_variant();
 
-        $variant = preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? '')));
+        // Identity, never authorisation — see print_viewer(). The per-award gate
+        // below runs unchanged against whichever viewer this resolves to.
+        $viewerId = $this->print_viewer($awardsIds);
 
-        // Each id costs several domain queries and a full page of markup, so the list
+        // Each id costs a page of markup and a share of the batch query, so the list
         // is capped rather than unbounded. The overflow is reported on the page.
+        //
+        // AFTER the token check, deliberately: the token signs the set the request
+        // asks for, and the cap is this route's own rendering policy. Verifying the
+        // truncated list would make a >MAX_RUN token fail as 'bad-signature' — a
+        // security-shaped error for what is really "that is too many to print".
         $dropped = 0;
         if (count($awardsIds) > Scroll::MAX_PRINT_RUN) {
             $dropped   = count($awardsIds) - Scroll::MAX_PRINT_RUN;
             $awardsIds = array_slice($awardsIds, 0, Scroll::MAX_PRINT_RUN);
         }
 
+        // One pass for the whole run, not one call per id. The old loop re-ran
+        // AwardsForPlayer() — a nine-table SELECT DISTINCT over 391k rows — plus a
+        // recipient lookup and one or two pronoun-table reads for every certificate;
+        // at MAX_PRINT_RUN that is several hundred statements before any markup
+        // exists. Measured by workstream 1 at 21.1 ms -> 6.8 ms for 50 certificates.
+        //
+        // The permission decision is still per (viewer, award) inside the model, and
+        // still uncached. Only the READ is batched.
+        $run     = $this->Scrollery->scrolls_for_awards_ids($awardsIds, $viewerId, $variant);
         $scrolls = [];
-        $refused = 0;
-        foreach ($awardsIds as $awardsId) {
-            $scroll = $this->Scrollery->scroll_for_awards_id($awardsId, $viewerId, $variant);
-            if ($scroll === null) {
-                // Remember the FIRST refusal only. With a bulk list the officer needs
-                // one honest reason, not one per id, and the first is the one they
-                // will recognise.
-                if ($refused === 0) {
-                    $refusedId = $awardsId;
-                }
-                $refused++;
-                continue;
-            }
-
+        foreach ($run['Scrolls'] as $awardsId => $scroll) {
             $scrolls[] = $scroll;
-            $this->record_print($awardsId, $scroll, $viewerId);
+            $this->record_print((int) $awardsId, $scroll, $viewerId);
         }
 
         // A redirect with an empty body is the most confusing thing this module could
-        // do — the officer assumes they clicked wrong. print_decision() runs the same
-        // gate scroll_for_awards_id() just ran, so it can name the actual reason.
+        // do — the officer assumes they clicked wrong. Refused is keyed by awards id
+        // with the reason already decided, so the message can name WHICH award was
+        // refused rather than reporting the first failure generically. print_decision()
+        // is re-run only to turn that reason into its officer-facing sentence, which
+        // the model keeps private; it runs the identical gate, so the two can never
+        // disagree, and it happens only on the path where nothing printed at all.
         if ($scrolls === []) {
-            $decision = $this->Scrollery->print_decision($refusedId ?? 0, $viewerId);
-            $this->deny($decision['Message'], 'Scrollery/render');
+            $refusedIds = array_map('intval', array_keys($run['Refused']));
+            $firstId    = $refusedIds[0] ?? 0;
+            $decision   = $this->Scrollery->print_decision($firstId, $viewerId);
+            $message    = $decision['Message'];
+
+            if ($firstId > 0) {
+                $message .= ' (Award record ' . $firstId . '.'
+                    . (count($refusedIds) > 1
+                        ? ' The other ' . (count($refusedIds) - 1) . ' in this run were refused too.'
+                        : '')
+                    . ')';
+            }
+
+            $this->deny($message, 'Scrollery/render');
             return;
         }
 
@@ -355,6 +443,119 @@ class Controller_Scrollery extends Controller
                 ? $scrolls[0]['title'] . ' — ' . $scrolls[0]['player']
                 : count($scrolls) . ' scrolls',
         ]);
+    }
+
+    /**
+     * The same print run as DATA — item 41's other half.
+     *
+     * `render` is a page, so anything that wants the FACTS about a run — a PDF
+     * service, an archiver, a mail merge — has to scrape them back out of SVG. This
+     * answers the same resolution as JSON: order, rank, variant, title, recipient,
+     * pronoun, reason, date, issuer, heraldry and recipe, plus the refusals, keyed by
+     * awards id. Model_Scrollery::print_manifest() builds it from
+     * scrolls_for_awards_ids() — literally the call render() above makes — so a
+     * manifest can never disclose a certificate the same viewer could not print, and
+     * the two surfaces cannot drift apart about what a run contains.
+     *
+     * Same identity rules and the same cap as render(). Nothing is written to the
+     * print log: reading the facts about a certificate is not printing one, and a
+     * log that cannot tell those apart is worth less than one that can.
+     */
+    public function manifest($action = null)
+    {
+        $awardsIds = $this->requested_awards_ids();
+        $variant   = $this->requested_variant();
+        $viewerId  = $this->print_viewer($awardsIds);
+
+        header('Content-Type: application/json; charset=utf-8');
+        // A manifest names a person and their award history exactly as the
+        // certificate does. Same rule, same reason — see render_bare().
+        header('Cache-Control: private, no-store, max-age=0');
+
+        $dropped = 0;
+        if (count($awardsIds) > Scroll::MAX_PRINT_RUN) {
+            $dropped   = count($awardsIds) - Scroll::MAX_PRINT_RUN;
+            $awardsIds = array_slice($awardsIds, 0, Scroll::MAX_PRINT_RUN);
+        }
+
+        if ($viewerId <= 0 || $awardsIds === []) {
+            http_response_code($viewerId <= 0 ? 403 : 400);
+            // Deliberately one sentence for both an absent session and a token that
+            // failed: Scroll::VerifyPrintToken()'s reasons are for a log, not for the
+            // requester — telling an unauthenticated caller apart 'expired' from
+            // 'bad-signature' is free information about the secret.
+            echo json_encode([
+                'Status' => [
+                    'Status' => 1,
+                    'Error'  => $viewerId <= 0
+                        ? 'A manifest needs a signed-in session or a valid print token.'
+                        : 'No award ids were given.',
+                ],
+            ]);
+            // index.php appends the whole themed page to anything that does not stop
+            // here, which would make this valid JSON followed by an HTML document.
+            exit;
+        }
+
+        echo json_encode(
+            ['Status' => ['Status' => 0], 'Dropped' => $dropped]
+            + $this->Scrollery->print_manifest($awardsIds, $viewerId, $variant)
+        );
+        exit;
+    }
+
+    /** The `awards=1,2,3` list, unique and positive, in the order the URL gave them. */
+    private function requested_awards_ids(): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map('intval', explode(',', (string) ($_GET['awards'] ?? '')))
+        )));
+    }
+
+    /** Lower-case letters only; Scroll::BuildScroll() rejects anything not the order's own. */
+    private function requested_variant(): string
+    {
+        return preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? '')));
+    }
+
+    /**
+     * WHO is asking for this print run — a signed token if there is a valid one,
+     * otherwise the session.
+     *
+     * ⚠️ IDENTITY, NEVER AUTHORISATION. The token answers "who", and the ordinary
+     * per-award gate then runs against that viewer exactly as it does for a session:
+     * Model_Scrollery::scrolls_for_awards_ids() re-decides every id. Nothing here
+     * says "let this through", and a token can therefore never reach a certificate
+     * the viewer it names could not have printed by logging in.
+     *
+     * IN PLACE OF the session, not in addition to it — that is the whole point. A
+     * headless fetcher (a PDF sidecar, a print worker) has no session to read an
+     * identity out of; requiring one as well would make the token pointless.
+     *
+     * The id set is signed but not carried, so a token minted for one run cannot be
+     * widened or narrowed to another, and the token itself discloses nothing about
+     * which awards it covers.
+     *
+     * An invalid, expired or forged token FALLS BACK to the session rather than
+     * refusing outright. That direction is the safe one: the session can only reach
+     * what it could always reach, and a stale link in a browser tab then behaves
+     * exactly as it did before tokens existed instead of becoming a denial an
+     * officer cannot explain. VerifyPrintToken()'s Reason is deliberately not
+     * surfaced — it is for a log, not for the requester.
+     *
+     * @param array<int, int> $awardsIds the ids the request actually carries
+     */
+    private function print_viewer(array $awardsIds): int
+    {
+        $token = trim((string) ($_GET['token'] ?? ''));
+        if ($token !== '') {
+            $verdict = Scroll::VerifyPrintToken($token, $awardsIds);
+            if (!empty($verdict['Valid'])) {
+                return (int) $verdict['ViewerId'];
+            }
+        }
+
+        return isset($this->session->user_id) ? (int) $this->session->user_id : 0;
     }
 
     /**
@@ -601,6 +802,19 @@ class Controller_Scrollery extends Controller
     private function render_bare(string $template, array $data): void
     {
         header('Content-Type: text/html; charset=utf-8');
+        /*
+         * A certificate names a person and one line of their award history, and this
+         * route is the one surface in the module that answers with nothing else — no
+         * nav, no theme, just the document. The response set only a content type, so
+         * a shared proxy or a browser back/forward cache was free to keep it and hand
+         * it to whoever asked next.
+         *
+         * private, no-store rather than no-cache: no-cache still permits a stored
+         * copy that is merely revalidated, and there is nothing here worth storing.
+         * This is also what keeps the future signed-token seam honest — a URL that a
+         * PDF service may fetch on someone's behalf must not leave a copy behind it.
+         */
+        header('Cache-Control: private, no-store, max-age=0');
         (static function (string $__path, array $__data): void {
             extract($__data, EXTR_SKIP);
             include $__path;

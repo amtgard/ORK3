@@ -71,10 +71,25 @@ html[data-theme="dark"] .sc-door h2 { color: var(--ork-text); background: none;
         </div>
     </div>
 
+    <?php /* This paragraph is the module's only statement of what it covers, so it
+             names both halves of the scope rather than only the flattering one. It
+             said "Artwork exists for the ladder orders and the Order of the Flame",
+             which was written for phase 1 and is now wrong in both directions: the
+             Flame is one of the ladders, and the two custom entries print as well.
+             The exclusions are named because the alternative is a knight looking for
+             a Print button that policy removed and concluding the tool is broken. */ ?>
     <div class="rp-context sc-lede">
         Print award certificates straight from the record — the recipient, rank, date,
         giver and issuing park all come from the award itself, so nothing is typed twice.
-        Artwork exists for the ladder orders and the Order of the Flame.
+        Scrollery prints the <strong>ladder orders</strong> — Battle, Crown, Dragon, Flame,
+        Garber, Griffin, Hydra, Jovius, Lion, Mask, Owl, Rose, Smith, Warrior, Zodiac and
+        archery — and a kingdom's own <strong>Custom Award</strong> and
+        <strong>Custom Title</strong>, which take a composed scroll you design here.
+        Nothing else prints. Knighthoods, masterhoods, paragons, associate titles and every
+        noble title are deliberately left out: those are documents for a scribe, not a
+        generated certificate. Officer positions are jobs somebody held rather than honours
+        they were given, so they are out too. An award with no Print button is one of those,
+        not a fault.
     </div>
 
     <div class="sc-doors">

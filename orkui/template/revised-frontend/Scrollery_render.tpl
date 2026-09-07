@@ -37,12 +37,84 @@ $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
  * BoldItalic, and preloading a face nothing asks for just spends bandwidth on the
  * critical path.
  */
-$scrollery_preload_fonts = [
-    'BlackChancery.woff2',
-    'AveriaSerifLibre-Regular.woff2',
-    'AveriaSerifLibre-Italic.woff2',
-    'AveriaSerifLibre-BoldItalic.woff2',
+
+/*
+ * The hand — &face=.
+ *
+ * A typeface is a per-PRINT choice rather than part of the composed artwork: the
+ * same certificate is legitimately printed in a different hand for a different
+ * court, and it changes nothing about what the award IS. So it travels as a page
+ * parameter next to &print= and &up=, not as a recipe key, and a shipped reprint
+ * URL that omits it keeps drawing exactly what it drew before.
+ *
+ * The keys and the faces they select are in scrollery.css (section 1a-ii); this
+ * array is the allowlist and the preload manifest, and nothing else. It is an
+ * allowlist rather than a sanitiser because the value lands in an HTML attribute
+ * and selects a font: an unknown key falls back to the default hand rather than
+ * reaching either.
+ *
+ * WHERE THIS BELONGS: the vocabulary itself should live beside the grounds and
+ * borders in system/lib/ork3/data/scroll-recipes.php, so the composer, the bulk
+ * page and this page all read one list. That file is another workstream's; when
+ * it grows a 'hands' block this array becomes Scroll::Hands() and the four keys
+ * below are what it needs to contain.
+ *
+ * Preloading is per-hand and not a union. All of these faces are
+ * font-display:block, which paints NOTHING where the text goes until the face
+ * lands, and the print gate waits on document.fonts.ready — so a preload of a
+ * face this page will not paint is bandwidth spent on the critical path of a
+ * print job. Averia's upright Bold is absent for the same reason: .Award .Body is
+ * italic, so every bold thing on the certificate resolves to BoldItalic.
+ */
+$scrollery_hands = [
+    'chancery' => [
+        'BlackChancery.woff2',
+        'AveriaSerifLibre-Regular.woff2',
+        'AveriaSerifLibre-Italic.woff2',
+        'AveriaSerifLibre-BoldItalic.woff2',
+    ],
+    'sharp' => [
+        'MedievalSharp-Regular.woff2',
+        'Grenze-Regular.woff2',
+        'Grenze-Italic.woff2',
+        'Grenze-SemiBoldItalic.woff2',
+    ],
+    'pirata' => [
+        'PirataOne-Regular.woff2',
+        'Grenze-Regular.woff2',
+        'Grenze-Italic.woff2',
+        'Grenze-SemiBoldItalic.woff2',
+    ],
+    'cinzel' => [
+        'Cinzel-Regular.woff2',
+        'Grenze-Regular.woff2',
+        'Grenze-Italic.woff2',
+        'Grenze-SemiBoldItalic.woff2',
+    ],
 ];
+
+$scrollery_face = strtolower(preg_replace('/[^a-z]/i', '', (string) ($_GET['face'] ?? '')));
+if (!isset($scrollery_hands[$scrollery_face])) {
+    $scrollery_face = 'chancery';
+}
+$scrollery_preload_fonts = $scrollery_hands[$scrollery_face];
+
+/*
+ * Sheet geometry — &trim=1 and &up=2|4.
+ *
+ * Both are print-shop and bulk affordances that a normal print must never see, so
+ * both are opt-in per URL and both default off. The CSS is in scrollery.css
+ * sections 5c and 5d; all this does is decide whether to say so on <body>.
+ *
+ * &up is read as an int against a fixed set rather than clamped, because 3-up and
+ * 8-up are not "nearly 2" — they are layouts that do not exist, and rounding an
+ * officer's typo into a layout they did not ask for prints the wrong thing.
+ */
+$scrollery_trim = isset($_GET['trim']) && (string) $_GET['trim'] === '1';
+$scrollery_up   = (int) ($_GET['up'] ?? 0);
+if (!in_array($scrollery_up, [2, 4], true)) {
+    $scrollery_up = 0;
+}
 
 /*
  * Where "Back" goes.
@@ -78,7 +150,38 @@ if ($scrollery_ref !== ''
 <?php endforeach; ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($scrollery_css) ?>">
 </head>
-<body class="scroll-surface">
+<body class="scroll-surface"
+      data-scroll-face="<?= scroll_e($scrollery_face) ?>"
+      <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
+      <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
+<?php /*
+    The page-level shared defs: the owl's edge-detect filter and the knotwork
+    border's 32-symbol library, emitted once here and referenced by every certificate
+    below. Both sit outside every .scroll-page, so neither is caught up in that
+    element's page-break-inside: avoid.
+
+    The border defs are asked for FIRST, and told whether this run needs the ~47 KB
+    griffon plate. _filters.tpl asks for them too — that is the general seam, shared
+    with the composer — but it cannot know what is coming, so it has to assume the
+    plate is wanted; this page holds the whole run and can answer honestly. The call
+    below is idempotent, so whichever runs first decides and the other costs nothing.
+
+    This is a page-level decision about what is ON the page, never a per-certificate
+    one: every certificate's markup is byte-identical either way, which is what keeps
+    Scroll::Render()'s cache from baking one page's answer into another page.
+*/ ?>
+<?php
+// Not $s: that is the name every partial binds the certificate to, and the
+// certificate loop below uses it. A separate name here keeps the two apart.
+$scrollery_needs_griffons = false;
+foreach ($Scrolls as $scrollery_scan) {
+    if (($scrollery_scan['order'] ?? '') === 'griffon') {
+        $scrollery_needs_griffons = true;
+        break;
+    }
+}
+?>
+<?php scroll_partial('border_defs', ['griffons' => $scrollery_needs_griffons]); ?>
 <?php scroll_partial('filters'); ?>
 <?php /*
     Print / Back. Chrome, not content: it sits OUTSIDE .scroll-page so it cannot
@@ -134,6 +237,31 @@ if ($scrollery_ref !== ''
     <?= (int) $Dropped ?> more were left out — print them in a second run.
 </p>
 <?php endif; ?>
+<?php if ($scrollery_trim): ?>
+<?php /*
+    Crop marks. Four corners, each drawing two hairlines with its own
+    pseudo-elements — the geometry is entirely in scrollery.css section 5c, which
+    is also where they are switched on; on screen and on a non-trim print they are
+    display:none.
+
+    Emitted at body level rather than inside a certificate on purpose: they are
+    fixed-position furniture that Chromium repeats on every printed sheet, and a
+    crop mark inside .scroll-page would be inside that element's
+    page-break-inside: avoid, counting as part of the box it is marking.
+*/ ?>
+<div class="sc-crop" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+<?php endif; ?>
+<?php /*
+    The certificate flow.
+
+    A wrapper rather than the certificates sitting straight on <body>, because
+    multi-up turns exactly this element into a grid and the toolbar, the advisory
+    and the overflow notice must not be cells in it. It also makes
+    `.scroll-page:first-child` and `:last-child` mean what they say: on <body>
+    those two selectors matched nothing at all, because the toolbar preceded the
+    first certificate and the autofit <script> followed the last.
+*/ ?>
+<div class="scroll-flow">
 <?php foreach ($Scrolls as $s): ?>
 <div class="scroll-page">
     <?php /* `image-resolution: 300dpi` used to lead this style attribute. No shipping
@@ -150,6 +278,7 @@ if ($scrollery_ref !== ''
     </svg>
 </div>
 <?php endforeach; ?>
+</div>
 <?php /*
     The measured autofit. It self-runs once on document.fonts.ready and exposes
     window.ScrolleryAutofit for anything that needs to re-fit after the DOM changes

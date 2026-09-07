@@ -6564,6 +6564,12 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Footer / buttons */
 .adm-form-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; background: #f7fafc; }
 .adm-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; transition: opacity 0.15s; white-space: nowrap; }
+/* An author `display` rule beats the UA's `[hidden] { display: none }`, so setting the
+   hidden attribute on an .adm-btn did nothing at all — the button stayed on screen.
+   Restated here rather than locally in each template: every .adm-btn in the CRM has
+   this, and the alternative is each caller discovering it the hard way. Found when a
+   "Show more" button refused to disappear after the last row. */
+.adm-btn[hidden] { display: none; }
 .adm-btn:hover:not(:disabled) { opacity: 0.85; }
 .adm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .adm-btn-primary { background: #3182ce; color: #fff; }

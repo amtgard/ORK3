@@ -26,8 +26,7 @@ final class ScrolleryBulkQueryTest extends TestCase
         string $cursor = '',
         int $limit = 0
     ): string {
-        return (new Model_Scrollery())
-            ->bulkSqlForTest($type, $id, $scopeType, $scopeId, $from, $to, $officerNames, $cursor, $limit);
+        return ScrollQuery::bulkSqlForTest($type, $id, $scopeType, $scopeId, $from, $to, $officerNames, $cursor, $limit);
     }
 
     public function testEventQueryFiltersOnAtEventIdAndCastsTheId(): void
@@ -264,9 +263,8 @@ final class ScrolleryBulkQueryTest extends TestCase
 
     public function testTheCountQueryUsesTheExactSamePredicate(): void
     {
-        $model = new Model_Scrollery();
-        $page  = $model->bulkSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
-        $count = $model->bulkCountSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
+        $page  = ScrollQuery::bulkSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
+        $count = ScrollQuery::bulkCountSqlForTest('event', '12250', 'kingdom', '4', '2024-01-01', '2024-06-30');
 
         $this->assertStringStartsWith('select count(*) as total', $count);
         // Everything from FROM onwards is byte-identical, so the total can never be a
@@ -281,7 +279,7 @@ final class ScrolleryBulkQueryTest extends TestCase
 
     public function testACursorNarrowsTheQueryWithARowValueComparison(): void
     {
-        $cursor = Model_Scrollery::bulkCursorForTest([
+        $cursor = ScrollQuery::bulkCursorForTest([
             'Recipient' => 'Grym Blackwell III',
             'SortName'  => 'Custom Award',
             'Rank'      => 0,
@@ -300,17 +298,17 @@ final class ScrolleryBulkQueryTest extends TestCase
     public function testCursorsRoundTripAndRejectJunk(): void
     {
         $row = ['Recipient' => "O'Malley", 'SortName' => 'Order of the Rose', 'Rank' => 4, 'AwardsId' => 99];
-        $decoded = Model_Scrollery::decodeBulkCursorForTest(Model_Scrollery::bulkCursorForTest($row));
+        $decoded = ScrollQuery::decodeBulkCursorForTest(ScrollQuery::bulkCursorForTest($row));
 
         $this->assertSame("O'Malley", $decoded['Persona']);
         $this->assertSame('Order of the Rose', $decoded['Name']);
         $this->assertSame(4, $decoded['Rank']);
         $this->assertSame(99, $decoded['AwardsId']);
 
-        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(''));
-        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest('not base64 at all !!'));
-        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(base64_encode('{"a":0}')));
-        $this->assertNull(Model_Scrollery::decodeBulkCursorForTest(base64_encode('[]')));
+        $this->assertNull(ScrollQuery::decodeBulkCursorForTest(''));
+        $this->assertNull(ScrollQuery::decodeBulkCursorForTest('not base64 at all !!'));
+        $this->assertNull(ScrollQuery::decodeBulkCursorForTest(base64_encode('{"a":0}')));
+        $this->assertNull(ScrollQuery::decodeBulkCursorForTest(base64_encode('[]')));
     }
 
     /**
@@ -319,7 +317,7 @@ final class ScrolleryBulkQueryTest extends TestCase
      */
     public function testAHostileCursorCannotEscapeItsQuotes(): void
     {
-        $cursor = Model_Scrollery::bulkCursorForTest([
+        $cursor = ScrollQuery::bulkCursorForTest([
             'Recipient' => "x' or '1'='1",
             'SortName'  => 'y',
             'Rank'      => 0,
@@ -372,5 +370,72 @@ final class ScrolleryBulkQueryTest extends TestCase
     public function testTheBulkQuerySelectsIsLadder(): void
     {
         $this->assertStringContainsString('a.is_ladder', $this->sql('event', '17', 'park', '198'));
+    }
+
+    /**
+     * Item 42. model.Scrollery.php was the ONE file of the 33 under orkui/model/
+     * that named DB_PREFIX or reached Ork3::$Lib->player->db — ten references. The
+     * project rule is that DB work lives in system/lib/ork3/ and orkui/model/ is
+     * the membrane, so the statements and their fetchers are ScrollQuery's now and
+     * the model keeps the shaping.
+     */
+    public function testTheModelNoLongerBuildsOrRunsSql(): void
+    {
+        // Comments stripped: the model's own docblocks explain what moved and why,
+        // and they name DB_PREFIX to say so. Only real code counts.
+        $model = php_strip_whitespace(dirname(__DIR__, 2) . '/orkui/model/model.Scrollery.php');
+
+        $this->assertStringNotContainsString('DB_PREFIX', $model);
+        $this->assertStringNotContainsString('Ork3::$Lib->player->db', $model);
+        $this->assertStringNotContainsString('->query(', $model);
+        $this->assertStringNotContainsString('->DataSet(', $model);
+    }
+
+    /**
+     * The $DB->Clear()-before-every-raw-query and manual ->next()-per-row shape had
+     * to survive the move VERBATIM: stale PDO bindings cause silent failures, and
+     * DataSet() returns null fields without the Next(). Three readers, three
+     * Clear()s — and they stay separate because their field reads are hardcoded per
+     * query shape, so a shared reader would silently read null rather than fail.
+     */
+    public function testTheDomainReadersStillClearBeforeEveryStatement(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.ScrollQuery.php');
+
+        $this->assertSame(3, substr_count($src, '$db->Clear();'));
+        $this->assertSame(3, substr_count($src, '$db->query($sql);'));
+        $this->assertSame(3, substr_count($src, '$db = $this->db;'));
+        $this->assertStringContainsString('while ($rs->next())', $src);
+    }
+
+    /**
+     * The cross-tenant fix (docs/scrollery-deferred.md §4): an event is not a
+     * scope, so the gate sits on the AWARD's own at_park_id / at_kingdom_id. Pinned
+     * again here after the move, because relocating a predicate is exactly how one
+     * gets softened.
+     */
+    public function testTheScopePredicateSurvivedTheMoveOntoTheAwardRow(): void
+    {
+        $sql = $this->sql('event', '8462', 'kingdom', '9');
+
+        $this->assertStringContainsString('awards.at_event_id = 8462', $sql);
+        $this->assertStringContainsString('awards.at_kingdom_id = 9', $sql);
+    }
+
+    /**
+     * Item 46, third part. A suspended or inactive recipient is MARKED, never
+     * filtered — a suspended member's past award is still theirs — so the columns
+     * come back on the row and nothing about them appears in the WHERE.
+     */
+    public function testRecipientStandingIsSelectedButNeverFiltered(): void
+    {
+        $sql = $this->sql('kingdom', '4', 'kingdom', '4');
+
+        $this->assertStringContainsString('m.suspended as recipient_suspended', $sql);
+        $this->assertStringContainsString('m.active as recipient_active', $sql);
+
+        $where = substr($sql, (int) strpos($sql, ' where '));
+        $this->assertStringNotContainsString('suspended', $where);
+        $this->assertStringNotContainsString('m.active', $where);
     }
 }

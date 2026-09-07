@@ -20,16 +20,16 @@
 
     <?php /* Two passes of the same border: a multiply, then a half-opacity plain
              pass over it. DELIBERATE — never "deduplicate" this. */ ?>
-    <img src="<?= $art ?>/crown/border.png" style="mix-blend-mode:multiply;" alt="">
-    <img src="<?= $art ?>/crown/border.png" style="opacity:0.5;" alt="">
+    <img src="<?= scroll_art('crown/border.png') ?>" style="mix-blend-mode:multiply;" alt="">
+    <img src="<?= scroll_art('crown/border.png') ?>" style="opacity:0.5;" alt="">
 
     <?php /* Same two-pass treatment for the phoenix. It sits in .centre — vertically
              centred — not .centre-bottom like the rank symbol below. */ ?>
-    <div class="centre"><img src="<?= $art ?>/crown/phoenix.png" style="mix-blend-mode:multiply;" alt=""></div>
-    <div class="centre"><img src="<?= $art ?>/crown/phoenix.png" style="opacity:0.5;" alt=""></div>
+    <div class="centre"><img src="<?= scroll_art('crown/phoenix.png') ?>" style="mix-blend-mode:multiply;" alt=""></div>
+    <div class="centre"><img src="<?= scroll_art('crown/phoenix.png') ?>" style="opacity:0.5;" alt=""></div>
 
     <?php /* crown ships symbol_0.png, so the path is unguarded — as in the source. */ ?>
-    <div class="centre-bottom"><img src="<?= $art ?>/crown/symbol_<?= (int) $s['rank'] ?>.png" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('crown/symbol_' . (int) $s['rank'] . '.png') ?>" alt=""></div>
 
     <?php scroll_partial('text', ['s' => $s]); ?>
 </div>

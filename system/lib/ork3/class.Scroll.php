@@ -825,9 +825,145 @@ class Scroll extends Ork3
         return self::OrderForAwardRow($awardRow) !== null;
     }
 
+    /**
+     * The 300 dpi print plates — the masters, and the default.
+     */
+    public const ART_MASTER = 'master';
+
+    /**
+     * A screen-sized rendition of every plate — one third of the master's linear
+     * size (850x1100 for a page plate), for the composer's ~600px preview stage.
+     *
+     * WHY. The preview downloads the print plates today: a lion rank-1 preview
+     * pulls 3.83 MB and warrior rank 9 pulls 4.60 MB, to be drawn into a box about
+     * 600 px wide. Nothing on that page needs 300 dpi.
+     */
+    public const ART_DISPLAY = 'display';
+
+    /** @var list<string> */
+    public const ART_SIZES = [self::ART_MASTER, self::ART_DISPLAY];
+
+    /**
+     * The base URL every certificate partial builds its plate URLs on.
+     *
+     * DELIBERATELY SIZE-FREE. The renditions are SIBLINGS of their masters, not a
+     * parallel tree — bin/build-scroll-renditions.sh emits `<name>.webp` and
+     * `<name>_display.webp` beside `<name>.png`, matching the naming the heraldry
+     * masters/renditions pipeline already established. So a size is a FILENAME
+     * concern, not a directory one, and ArtUrl() is where it is resolved. An
+     * ArtBase('display') returning a /display directory would be a path nothing
+     * writes to.
+     */
     public static function ArtBase(): string
     {
         return rtrim(HTTP_ASSETS, '/') . '/scrolls';
+    }
+
+    /**
+     * One plate's URL at a given size — THE seam for the rendition pass.
+     *
+     * Driven by assets/scrolls/renditions.json, which
+     * bin/build-scroll-renditions.sh writes, rather than by guessing a filename:
+     * a rendition is only emitted when it actually beats its master, so 17 of the
+     * 244 masters have `"print": null` (WebP LOSES on garber/linen.jpg,
+     * flame/bg.jpg, warrior/bg_10.jpg and both zodiac plates — lossless inflates
+     * an already-lossy JPEG). Constructing `<name>.webp` blindly would 404 on
+     * exactly those, and they are the biggest files in the set.
+     *
+     * Resolution, per size:
+     *   display — the display rendition; falls back to the print rendition, then
+     *             to the master, so a plate the pass skipped still draws.
+     *   master  — the print rendition when one exists, else the master itself.
+     *             PNG masters are re-encoded LOSSLESS, so those are bit-identical
+     *             (RMSE 0 / PAE 0, measured through both blend paths). JPEG masters
+     *             are q90 LOSSY, so "same pixels" is true of the PNGs only — the
+     *             error there is a fraction of a level and was validated on the
+     *             composited certificate, not on the file.
+     *             Never a display rendition: only render/compose ask for master,
+     *             and they print at 300 dpi.
+     *
+     * An unknown size is treated as the master. A preview heavier than it should
+     * be is a performance bug; a blank preview is a broken feature.
+     *
+     * @param string $relative e.g. 'warrior/bg_10.jpg', relative to assets/scrolls/
+     */
+    public static function ArtUrl(string $relative, string $size = self::ART_MASTER): string
+    {
+        $relative = ltrim(trim($relative), '/');
+        if ($relative === '') {
+            return self::ArtBase();
+        }
+
+        // Strip any cache-buster or fragment before the lookup and re-attach it,
+        // so a caller that already appended one is not silently un-busted.
+        $suffix = '';
+        $cut    = strcspn($relative, '?#');
+        if ($cut < strlen($relative)) {
+            $suffix   = substr($relative, $cut);
+            $relative = substr($relative, 0, $cut);
+        }
+
+        $entry = self::renditionManifest()[$relative] ?? null;
+        if (is_array($entry)) {
+            $order = $size === self::ART_DISPLAY ? ['display', 'print'] : ['print'];
+            foreach ($order as $key) {
+                $file = $entry[$key]['file'] ?? null;
+                if (is_string($file) && $file !== '') {
+                    return self::ArtBase() . '/' . ltrim($file, '/') . $suffix;
+                }
+            }
+        }
+
+        return self::ArtBase() . '/' . $relative . $suffix;
+    }
+
+    /**
+     * assets/scrolls/renditions.json, read once per process.
+     *
+     * Absent or unreadable is not an error: an installation that has not run
+     * bin/build-scroll-renditions.sh has only masters, and ArtUrl() then returns
+     * exactly the URLs it always did. That is also what makes this change safe to
+     * land before the generated files do.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private static function renditionManifest(): array
+    {
+        static $manifest = null;
+        if ($manifest !== null) {
+            return $manifest;
+        }
+
+        $manifest = [];
+        $path     = (defined('DIR_ASSETS') ? DIR_ASSETS : '') . 'scrolls/renditions.json';
+        if (!is_file($path)) {
+            return $manifest;
+        }
+
+        $decoded = json_decode((string) @file_get_contents($path), true);
+        if (is_array($decoded) && is_array($decoded['files'] ?? null)) {
+            $manifest = $decoded['files'];
+        }
+
+        return $manifest;
+    }
+
+    /**
+     * The art size the partial currently being rendered should use.
+     *
+     * A static rather than a parameter because scroll_partial() is called from
+     * INSIDE the order partials, which take no arguments of their own — there is
+     * nothing to thread a size through. Render() sets it and restores the previous
+     * value, so a nested render cannot leak a display size into a master print.
+     *
+     * The partials reach it through the scroll_art() helper at the foot of this
+     * file rather than reading the static themselves.
+     */
+    private static string $artSize = self::ART_MASTER;
+
+    public static function CurrentArtSize(): string
+    {
+        return self::$artSize;
     }
 
     public static function PartialPath(string $orderId): string
@@ -1057,7 +1193,7 @@ class Scroll extends Ork3
      * visible placeholder and the rest of the batch still prints. A scroll with no
      * order at all is a programmer error and still throws.
      */
-    public static function Render(array $s): string
+    public static function Render(array $s, string $artSize = self::ART_MASTER): string
     {
         $orderId = (string) ($s['order'] ?? '');
         if ($orderId === '') {
@@ -1075,10 +1211,147 @@ class Scroll extends Ork3
                 . '</div>';
         }
 
+        $cacheKey = self::renderCacheKey($s, $artSize);
+        $cached   = self::cacheGet($cacheKey);
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        // Restored rather than reset: a partial that renders another scroll inside
+        // itself must not silently change this one's plate size.
+        $previousSize  = self::$artSize;
+        self::$artSize = in_array($artSize, self::ART_SIZES, true) ? $artSize : self::ART_MASTER;
+
+        // $art stays the bare base, byte-for-byte what every partial already binds
+        // to. A partial that wants the rendition for the size in force calls
+        // scroll_art() instead; one that has not been converted yet keeps drawing
+        // masters, which is correct rather than broken.
         $art = self::ArtBase();
         ob_start();
-        include $path;
-        return (string) ob_get_clean();
+        try {
+            include $path;
+            $html = (string) ob_get_clean();
+        } finally {
+            self::$artSize = $previousSize;
+        }
+
+        self::cachePut($cacheKey, $html);
+
+        return $html;
+    }
+
+    /**
+     * How long a composed certificate stays cached. One hour: long enough that a
+     * bulk run's reprint, a re-paginate and a "that one came out wrong, print it
+     * again" are all hits, short enough that nothing is stale for a working day.
+     */
+    public const RENDER_CACHE_TTL = 3600;
+
+    /**
+     * Refuse to cache anything approaching memcached's 1 MB per-item limit.
+     *
+     * An oversized set() fails SILENTLY — no exception, no false that anything
+     * checks — so a page-sized entry would look cached and never be. That is also
+     * exactly why this cache is per CERTIFICATE and never per page: 200 certificates
+     * is megabytes, one certificate is kilobytes.
+     */
+    private const RENDER_CACHE_MAX_BYTES = 900000;
+
+    /**
+     * The cache key for one composed certificate.
+     *
+     * `$s` IS the whole input. Render() is a pure function of it and the partial
+     * files, so hashing it wholesale is both the cheapest correct key and the only
+     * one that cannot forget a field: the recipe, the variant, the resolved pronoun
+     * (including a per-print override), the custom name and the title phrase are all
+     * inside it, so two prints that differ in any of them cannot collide. A key
+     * hand-assembled from awards_id + variant would have made a reprint with a
+     * different recipe serve the first one's markup.
+     *
+     * The partial generation stamp is the second half. Markup composed before a
+     * deploy that edits a .tpl must not survive it, and the .tpl files are the other
+     * input Render() has.
+     *
+     * ⚠️ NO VIEWER IS IN THIS KEY, AND NONE MAY BE. That is safe only because `$s`
+     * carries no authority decision: by the time Render() sees it, the (viewer,
+     * award) gate in Model_Scrollery::print_permission() has already said yes, and
+     * that gate is deliberately never cached on anything less than the pair. This
+     * caches the ARTEFACT, not the permission to have it.
+     */
+    private static function renderCacheKey(array $s, string $artSize): string
+    {
+        return hash('sha256', (string) json_encode([
+            'art'  => in_array($artSize, self::ART_SIZES, true) ? $artSize : self::ART_MASTER,
+            'tpl'  => self::partialGeneration(),
+            'data' => $s,
+        ]));
+    }
+
+    /**
+     * The newest mtime across every scroll partial, memoised per process.
+     *
+     * One directory scan per request buys a key that invalidates itself on deploy.
+     * A per-order stamp would be cheaper still and would be wrong: an order partial
+     * pulls in the shared `_border.tpl` / `_text.tpl` / `_heraldry.tpl` layers, so
+     * editing a shared one must invalidate all sixteen.
+     */
+    private static function partialGeneration(): int
+    {
+        static $stamp = null;
+        if ($stamp !== null) {
+            return $stamp;
+        }
+
+        $stamp = 0;
+        foreach (glob(DIR_TEMPLATE . 'revised-frontend/scroll/*.tpl') ?: [] as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $mtime > $stamp) {
+                $stamp = $mtime;
+            }
+        }
+
+        return $stamp;
+    }
+
+    /**
+     * GhettoCache, or nothing at all.
+     *
+     * Never throws and never fails a render: memcached may be absent (the unit-test
+     * bootstrap stubs the extension with a get() that always misses), and a cache
+     * that is down must cost a rebuild, not a blank certificate.
+     */
+    private static function cacheGet(string $key): ?string
+    {
+        $cache = Ork3::$Lib->ghettocache ?? null;
+        if (!is_object($cache)) {
+            return null;
+        }
+
+        try {
+            $hit = $cache->get('Scroll.Render', $key, self::RENDER_CACHE_TTL);
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        return is_string($hit) ? $hit : null;
+    }
+
+    private static function cachePut(string $key, string $html): void
+    {
+        if ($html === '' || strlen($html) > self::RENDER_CACHE_MAX_BYTES) {
+            return;
+        }
+
+        $cache = Ork3::$Lib->ghettocache ?? null;
+        if (!is_object($cache)) {
+            return;
+        }
+
+        try {
+            $cache->cache('Scroll.Render', $key, $html);
+        } catch (Throwable $e) {
+            // A cache write failing is not a print failing.
+        }
     }
 
     /**
@@ -1092,18 +1365,28 @@ class Scroll extends Ork3
      * Longest subject first, because "e/ey" and "ze/zie" are themselves slash-joined
      * and would otherwise lose to the bare "e" and "ze" they begin with.
      *
+     * BOTH SIDES ARE NORMALISED before matching — see NormalisePronounText(). The
+     * match used to require an exact string or a bare `subject/` prefix, so the two
+     * commonest shapes people actually type missed: "she / her" (spaces around the
+     * slash) and "They." (trailing punctuation) both fell through to "their",
+     * silently, for a recipient who had stated otherwise. "He/Him." already worked —
+     * the `he/` prefix test never looked past the slash — so the punctuation half of
+     * this only ever bit slash-less values.
+     *
      * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
      */
     public static function PossessiveFromFreetext(string $freetext, array $pronounRows): string
     {
-        $text = strtolower(trim($freetext));
+        $text = self::NormalisePronounText($freetext);
         if ($text === '') {
             return '';
         }
 
         $subjects = [];
         foreach ($pronounRows as $row) {
-            $subject = strtolower(trim((string) ($row['Subject'] ?? '')));
+            // The stored subjects are normalised the same way rather than merely
+            // lowercased, so the two sides can never disagree about a space.
+            $subject = self::NormalisePronounText((string) ($row['Subject'] ?? ''));
             if ($subject !== '') {
                 $subjects[$subject] = (string) ($row['Possessive'] ?? '');
             }
@@ -1119,8 +1402,32 @@ class Scroll extends Ork3
         return '';
     }
 
+    /**
+     * A free-text pronoun string reduced to the form the subject table is in.
+     *
+     * Lowercased; whitespace runs collapsed to one space and then removed from
+     * either side of a slash ("she / her" -> "she/her"); leading and trailing
+     * punctuation trimmed ("They." -> "they", "(he/him)" -> "he/him").
+     *
+     * The slash itself is NEVER removed — the pronoun table's own subjects include
+     * "e/ey" and "ze/zie", and the prefix rule in PossessiveFromFreetext() depends
+     * on it.
+     */
+    public static function NormalisePronounText(string $raw): string
+    {
+        $text = mb_strtolower(trim($raw));
+        // \s and the non-breaking space people paste out of documents.
+        $text = (string) preg_replace('/[\s\x{00a0}]+/u', ' ', $text);
+        $text = (string) preg_replace('/\s*\/\s*/u', '/', $text);
+
+        return trim($text, " \t\n\r\0\x0B.,;:!?\"'()[]{}<>");
+    }
+
     /** Server-side twin of the create-tool's `<input maxlength>` on the override field. */
-    private const PRONOUN_OVERRIDE_MAX_LENGTH = 20;
+    public const PRONOUN_OVERRIDE_MAX_LENGTH = 20;
+
+    /** The width of ork_mundane.pronoun_freetext — the profile door's own input cap. */
+    public const PRONOUN_FREETEXT_MAX_LENGTH = 40;
 
     /**
      * Resolve a per-print pronoun override — free text a human typed into a box,
@@ -1158,24 +1465,269 @@ class Scroll extends Ork3
      */
     public static function ResolvePronounOverride(string $raw, array $pronounRows): string
     {
+        return self::ResolvePossessive($raw, $pronounRows, self::PRONOUN_OVERRIDE_MAX_LENGTH);
+    }
+
+    /**
+     * How long a minted print token stays good.
+     *
+     * FIVE MINUTES, and the reasoning is worth keeping. The token exists so a
+     * headless renderer, an archiver or a PDF sidecar can fetch Scrollery/render
+     * without a session — it is a hand-off from a page that has ALREADY passed the
+     * per-(viewer, award) gate, not a second way to earn permission. The whole
+     * hand-off is a fetch that starts immediately, so anything longer is a window
+     * with no use for it. Long enough to survive a slow rasteriser and a retry;
+     * short enough that a token in an access log or a Referer header is worthless
+     * by the time anyone reads it.
+     */
+    public const PRINT_TOKEN_TTL = 300;
+
+    /**
+     * The token format's own version, so a future change to what is signed can be
+     * rejected rather than silently mis-verified.
+     */
+    private const PRINT_TOKEN_VERSION = 'v1';
+
+    /**
+     * A short-lived signed grant to print an EXACT set of awards, as one viewer.
+     *
+     * ⚠️ NOT SINGLE-USE, deliberately. Recorded because it is the first thing a
+     * reviewer will ask.
+     *
+     * Single use needs server-side state, and the surface it would guard is a GET:
+     * Scrollery/render is refreshed, back-buttoned, prefetched by the browser, and
+     * re-requested when a print dialog is cancelled and reopened. A one-shot token
+     * turns every one of those into a denial an officer cannot explain. Against
+     * that, replay buys an attacker nothing new — the token authorises exactly the
+     * id set someone was already entitled to print, for at most five minutes, and
+     * the print log records every fetch either way.
+     *
+     * If single use is later wanted, the shape is: add a random `jti` to the signed
+     * payload, write it to memcached with PRINT_TOKEN_TTL on first verify, and
+     * refuse a token whose jti is already present. That is a real change in
+     * behaviour for refresh, so it should be a decision, not a tightening.
+     *
+     * THE ID SET IS PART OF THE SIGNATURE AND IS NOT CARRIED IN THE TOKEN. The
+     * verifier re-derives it from the ids the request actually asks for, so a token
+     * minted for awards 1,2,3 cannot be replayed against 1,2,3,4 — the signed
+     * string differs and the MAC fails. Narrowing fails for the same reason, which
+     * is stricter than it needs to be and is left that way: "this token is for this
+     * run" is a rule with no edges.
+     *
+     * The viewer id and the expiry ARE carried, because a headless fetch has no
+     * session to read an identity out of — the token is the identity.
+     *
+     * @param array<int, mixed> $awardsIds the exact ids this token may print
+     */
+    public static function MintPrintToken(array $awardsIds, int $viewerId, int $ttl = self::PRINT_TOKEN_TTL): string
+    {
+        if ($viewerId <= 0) {
+            return '';
+        }
+
+        $canonical = self::canonicalPrintIds($awardsIds);
+        if ($canonical === '') {
+            return '';
+        }
+
+        // $ttl is taken as given rather than clamped: a non-positive TTL mints a
+        // token that is already expired, which is refused on arrival — fail-closed,
+        // useless to a caller, and the only way to exercise the expiry branch in a
+        // test without sleeping through it.
+        $expires = time() + $ttl;
+        $sig     = self::printTokenSignature($canonical, $viewerId, $expires);
+
+        return self::PRINT_TOKEN_VERSION . '.' . $viewerId . '.' . $expires . '.' . $sig;
+    }
+
+    /**
+     * Verify a print token against the ids the request is actually asking for.
+     *
+     * Returns the viewer the token speaks for, or 0 with a reason. A controller
+     * uses it IN PLACE OF the session read, then runs the ordinary per-award
+     * permission gate with that viewer id — the token says "this is who is asking",
+     * never "let this through".
+     *
+     * Reasons are for logging, not for the requester: telling an unauthenticated
+     * caller the difference between "expired" and "bad signature" is free
+     * information about the secret.
+     *
+     * @param array<int, mixed> $awardsIds the ids the request carries
+     * @return array{Valid: bool, ViewerId: int, Reason: string}
+     */
+    public static function VerifyPrintToken(string $token, array $awardsIds): array
+    {
+        $bad = static fn (string $why): array => ['Valid' => false, 'ViewerId' => 0, 'Reason' => $why];
+
+        $parts = explode('.', trim($token));
+        if (count($parts) !== 4 || $parts[0] !== self::PRINT_TOKEN_VERSION) {
+            return $bad('malformed');
+        }
+
+        [, $viewer, $expires, $sig] = $parts;
+
+        $viewerId = (int) $viewer;
+        $expiry   = (int) $expires;
+        // Only the CANONICAL decimal form of each number is accepted. " 7", "07"
+        // and "7e2" all survive (int) as 7 and would otherwise let one grant be
+        // presented under several spellings — the signature would still verify,
+        // because it is recomputed from the parsed value, so this is the check that
+        // makes the token's text and its meaning the same thing.
+        if ((string) $viewerId !== $viewer || (string) $expiry !== $expires || $viewerId <= 0) {
+            return $bad('malformed');
+        }
+
+        $canonical = self::canonicalPrintIds($awardsIds);
+        if ($canonical === '') {
+            return $bad('no-ids');
+        }
+
+        // The MAC is checked BEFORE the clock. An expired token and a forged one
+        // must take the same path, and hash_equals is what keeps the comparison
+        // constant-time.
+        if (!hash_equals(self::printTokenSignature($canonical, $viewerId, $expiry), $sig)) {
+            return $bad('bad-signature');
+        }
+
+        if ($expiry < time()) {
+            return $bad('expired');
+        }
+
+        return ['Valid' => true, 'ViewerId' => $viewerId, 'Reason' => ''];
+    }
+
+    /**
+     * The id set as one canonical string: unique, ascending, comma-joined.
+     *
+     * Sorted so the same SET signs identically however the caller ordered it —
+     * a render URL's ids are a selection, not a sequence — and de-duplicated so
+     * "1,1,2" and "1,2" cannot be two different grants for the same run.
+     *
+     * @param array<int, mixed> $awardsIds
+     */
+    private static function canonicalPrintIds(array $awardsIds): string
+    {
+        $ids = [];
+        foreach ($awardsIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        if ($ids === []) {
+            return '';
+        }
+
+        $ids = array_keys($ids);
+        sort($ids, SORT_NUMERIC);
+
+        return implode(',', $ids);
+    }
+
+    /**
+     * hmac_sha256 over `version|ids|viewer|expiry`, hex.
+     *
+     * The pipe-joined layout matters: every field is either digits or a
+     * comma-joined digit list, so no value can contain the separator and shift a
+     * boundary — "1,2|3" is unreachable, and with it the class of attack where two
+     * different (ids, viewer) pairs produce one signed string.
+     */
+    private static function printTokenSignature(string $canonicalIds, int $viewerId, int $expires): string
+    {
+        return hash_hmac(
+            'sha256',
+            self::PRINT_TOKEN_VERSION . '|' . $canonicalIds . '|' . $viewerId . '|' . $expires,
+            self::printTokenSecret()
+        );
+    }
+
+    /**
+     * The signing key.
+     *
+     * `SCROLL_PRINT_SECRET` in config is the intended source and a deployment
+     * SHOULD define one (any long random string; it never leaves the server and
+     * rotating it only invalidates tokens minted in the last five minutes).
+     *
+     * Without it the key is DERIVED from server-side configuration that is already
+     * secret and already stable across a request — never generated per process,
+     * which would break the moment PHP-FPM answered the render with a different
+     * worker than minted the token. The derivation is a floor so the feature works
+     * on an installation that has not been told about the constant, not a
+     * substitute for setting one: on an install still carrying config.dist.php's
+     * placeholder DB_PASSWORD the derived key is guessable, which is why the
+     * constant exists.
+     */
+    private static function printTokenSecret(): string
+    {
+        if (defined('SCROLL_PRINT_SECRET') && trim((string) SCROLL_PRINT_SECRET) !== '') {
+            return (string) SCROLL_PRINT_SECRET;
+        }
+
+        return hash(
+            'sha256',
+            'scrollery-print-token|'
+            . (defined('DB_PASSWORD') ? DB_PASSWORD : '')
+            . '|' . (defined('DB_USERNAME') ? DB_USERNAME : '')
+            . '|' . (defined('DB_DATABASE') ? DB_DATABASE : '')
+        );
+    }
+
+    /**
+     * THE possessive resolver. Both doors go through it, which is the point.
+     *
+     * The two doors used to disagree. A stored profile value that missed the
+     * subject table fell straight to "their"; the SAME STRING typed into the
+     * officer's override box got the post-slash fallback documented above. So
+     * "ze/zir" on a recipient's own profile printed "their", while an officer
+     * retyping it verbatim printed "zir" — the recipient's own statement about
+     * themselves was the one the certificate ignored. There is no reading of that
+     * which is correct, so there is now one function and no second opinion.
+     *
+     * $maxLength is each door's own input width, not a policy difference: the
+     * override box is `maxlength=20` and ork_mundane.pronoun_freetext is
+     * varchar(40). A client-side cap is not a server-side guarantee and this value
+     * reaches a printed certificate, so it is re-applied here either way.
+     *
+     * Order, and why:
+     *   1. the subject table — "he/him" -> "his";
+     *   2. the post-slash token for a SET the table does not carry — "ze/zir" ->
+     *      "zir", and "their" if nothing usable survives the split;
+     *   3. otherwise the value itself, which for a slash-less string is already a
+     *      possessive word ("his", "eir", a neopronoun that is not a subject row).
+     *
+     * Lowercased unconditionally — every inferred pronoun is already lowercase and
+     * "with His third" is wrong mid-sentence, so neither door may be the one path
+     * that prints a capital.
+     *
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     */
+    public static function ResolvePossessive(string $raw, array $pronounRows, int $maxLength): string
+    {
         $trimmed = trim($raw);
         if ($trimmed === '') {
             return '';
         }
 
-        $capped   = mb_substr($trimmed, 0, self::PRONOUN_OVERRIDE_MAX_LENGTH);
+        $capped   = $maxLength > 0 ? mb_substr($trimmed, 0, $maxLength) : $trimmed;
         $resolved = self::PossessiveFromFreetext($capped, $pronounRows);
         if ($resolved !== '') {
-            return strtolower($resolved);
+            return mb_strtolower($resolved);
         }
 
-        if (str_contains($capped, '/')) {
-            $afterSlash = trim(explode('/', $capped)[1] ?? '');
-
-            return $afterSlash !== '' ? strtolower($afterSlash) : 'their';
+        // Normalised BEFORE the split, so "ze / zir" and "ze/zir." reach the same
+        // token the table lookup above already agreed to read.
+        $normalised = self::NormalisePronounText($capped);
+        if ($normalised === '') {
+            return '';
         }
 
-        return strtolower($capped);
+        if (str_contains($normalised, '/')) {
+            $afterSlash = trim(explode('/', $normalised)[1] ?? '');
+
+            return $afterSlash !== '' ? mb_strtolower($afterSlash) : 'their';
+        }
+
+        return mb_strtolower($normalised);
     }
 }
 
@@ -1206,4 +1758,22 @@ function scroll_partial(string $name, array $vars = []): void
     extract($vars, EXTR_SKIP);
     $art = Scroll::ArtBase();
     include DIR_TEMPLATE . 'revised-frontend/scroll/_' . $name . '.tpl';
+}
+
+/**
+ * One plate's URL at whatever size the render in progress asked for.
+ *
+ * THE ONE-LINE CHANGE A CERTIFICATE PARTIAL NEEDS. `<?= $art ?>/lion/border.png`
+ * becomes `<?= scroll_art('lion/border.png') ?>`, and that URL is then the display
+ * rendition on the composer's preview stage and the print rendition (or the master,
+ * where WebP lost to it) on render and compose. The size comes from the static
+ * Scroll::Render() sets, because these partials take no arguments.
+ *
+ * Not applied to the partials here: those are .tpl files another workstream owns.
+ * Until they are converted, every partial keeps composing off $art and keeps
+ * drawing masters — correct, just not yet cheap.
+ */
+function scroll_art(string $relative): string
+{
+    return Scroll::ArtUrl($relative, Scroll::CurrentArtSize());
 }

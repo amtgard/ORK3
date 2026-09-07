@@ -15,7 +15,7 @@
 ?>
 <div class="award-template" data-order="flame" data-rank="<?= (int) $s['rank'] ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php /* Replaces the parchment partial. */ ?>
-    <img src="<?= $art ?>/flame/bg.jpg" alt="">
+    <img src="<?= scroll_art('flame/bg.jpg') ?>" alt="">
 
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
@@ -24,7 +24,7 @@
              guard is load-bearing, not defensive. The numeral is a bare full-bleed
              layer here, not a .centre-bottom box. */ ?>
     <?php if ((int) $s['rank'] > 0): ?>
-        <img src="<?= $art ?>/flame/rank_<?= (int) $s['rank'] ?>.png" alt="">
+        <img src="<?= scroll_art('flame/rank_' . (int) $s['rank'] . '.png') ?>" alt="">
     <?php endif; ?>
 
     <?php scroll_partial('text', ['s' => $s]); ?>

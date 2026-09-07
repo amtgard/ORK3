@@ -485,6 +485,18 @@ composed markup, two composite indexes) · 39 palette changes shouldn't round-tr
 40 bleed, trim marks, multi-up · 41 the render route is a page, not a seam (signed token +
 manifest) · 42 the module's raw queries sit in `orkui/model/`.
 
+**Accessibility findings outside Scrollery, measured 2026-09-06** — real, and not this
+module's to fix alone:
+
+- **The shared `inactive` chip fails WCAG AA in both themes.** `#e53e3e` measures **4.13:1**
+  on white and **3.96:1** on the dark body, at 10px bold. It is the autocomplete's own chip
+  (`revised.js:~14487` and its twin in `scrollery.js`), so it appears wherever a player is
+  searched for. Bulk got a dark-mode lift to `#fc8181` (6.68:1); light mode was deliberately
+  left matching the shared chip rather than split the treatment. The real fix is the shared
+  chip.
+- **`--rp-text-muted` (`#718096`) is 4.02:1 on white** — that is the muted text on *every*
+  `.rp-*` tool page in the CRM, not just Scrollery's.
+
 **Found along the way, not from the panel:** four native `title` attributes on the profile's
 attendance and notes tables still need converting to `data-tip` (the right-anchor CSS rule
 already covers them, so it is four attributes and no CSS work) · **nobody — not even a global

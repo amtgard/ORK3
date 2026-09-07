@@ -23,12 +23,12 @@
     ?>
     <?php /* Two identical soft-light layers. DELIBERATE — stacking them deepens the
              blend. Never "deduplicate" this. */ ?>
-    <div class="centre-bottom"><img src="<?= $art ?>/griffon/symbol_<?= $sym ?>.png" style="mix-blend-mode:soft-light;" alt=""></div>
-    <div class="centre-bottom"><img src="<?= $art ?>/griffon/symbol_<?= $sym ?>.png" style="mix-blend-mode:soft-light;" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('griffon/symbol_' . $sym . '.png') ?>" style="mix-blend-mode:soft-light;" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('griffon/symbol_' . $sym . '.png') ?>" style="mix-blend-mode:soft-light;" alt=""></div>
 
     <?php if ((int) $s['rank'] > 0): $offsets = [85, 85, 85, 85, 85, 440, 440, 440, 235, 185]; ?>
         <div class="centre-bottom" style="bottom:<?= $offsets[(int) $s['rank'] - 1] ?>px;">
-            <img src="<?= $art ?>/common/rank_<?= (int) $s['rank'] ?>.png" alt="">
+            <img src="<?= scroll_art('common/rank_' . (int) $s['rank'] . '.png') ?>" alt="">
         </div>
     <?php endif; ?>
 

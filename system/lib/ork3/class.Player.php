@@ -1026,6 +1026,99 @@ class Player extends Ork3
         ];
     }
 
+    /**
+     * GetScrollRecipient() for a whole print run, in ONE statement.
+     *
+     * A bulk render resolved its recipients one yapo find() at a time — 200
+     * round trips for a full run. This is the same five fields for every id at
+     * once, keyed by mundane_id, and returns exactly the shape
+     * GetScrollRecipient() returns per row so a caller can use either.
+     *
+     * Two columns beyond the certificate's own needs come back as well:
+     * `suspended` and `active`. A suspended member's past award is still theirs
+     * and is still printable — nothing here filters on them — but an officer
+     * running a court list is entitled to see which recipients are flagged before
+     * they print 200 sheets. Both are NOT NULL in ork_mundane.
+     *
+     * `pronoun_freetext` ships on another branch and is genuinely absent from
+     * some rendered schemas (the test database has no such column), so the column
+     * list is PROBED rather than assumed — naming a missing column would fail the
+     * whole statement and take the personas down with it. The probe is memoised
+     * per process.
+     *
+     * An id missing from the result (deleted mundane row) is simply absent from
+     * the returned map; the caller decides what a missing recipient means.
+     *
+     * @param array<int, mixed> $mundaneIds
+     * @return array<int, array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string,
+     *                          PronounFreetext:string, Suspended:int, Active:int}>
+     */
+    public function GetScrollRecipients(array $mundaneIds): array
+    {
+        $ids = [];
+        foreach ($mundaneIds as $id) {
+            if (valid_id($id)) {
+                $ids[(int) $id] = true;
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+
+        $hasFreetext = $this->mundaneHasPronounFreetext();
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT mundane_id, persona, pronoun_id, pronoun_custom, suspended, active'
+            . ($hasFreetext ? ', pronoun_freetext' : '')
+            . ' FROM ' . DB_PREFIX . 'mundane
+              WHERE mundane_id IN (' . implode(',', array_keys($ids)) . ')'
+        );
+        if (!is_object($rs) || $rs->Size() < 1) {
+            return [];
+        }
+
+        $out = [];
+        while ($rs->Next()) {
+            $mundaneId = (int) $rs->mundane_id;
+            $out[$mundaneId] = [
+                'MundaneId' => $mundaneId,
+                'Persona' => (string) $rs->persona,
+                'PronounId' => (int) $rs->pronoun_id,
+                'PronounCustom' => (string) $rs->pronoun_custom,
+                'PronounFreetext' => $hasFreetext ? trim((string) $rs->pronoun_freetext) : '',
+                'Suspended' => (int) $rs->suspended,
+                'Active' => (int) $rs->active,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether ork_mundane carries pronoun_freetext on THIS installation.
+     *
+     * Memoised for the life of the process: it is a schema fact, it cannot change
+     * mid-request, and GetScrollRecipients() would otherwise ask once per batch.
+     */
+    private function mundaneHasPronounFreetext(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+
+        try {
+            $this->db->Clear();
+            $rs = $this->db->DataSet("SHOW COLUMNS FROM " . DB_PREFIX . "mundane LIKE 'pronoun_freetext'");
+            $has = is_object($rs) && $rs->Size() > 0;
+        } catch (Throwable $e) {
+            $has = false;
+        }
+
+        return $has;
+    }
+
     public function GetPlayer($request)
     {
         $fetchprivate = true;
@@ -1301,12 +1394,87 @@ class Player extends Ork3
         return 'awards.mundane_id = ' . (int) $mundaneId;
     }
 
+    /**
+     * The award-row WHERE for a BATCH of awards_id values.
+     *
+     * Split out beside awardsForPlayerWhereForTest() and named the same way so
+     * PlayerAwardsForPlayerWhereTest can pin it without a database.
+     *
+     * Fails CLOSED on an empty or entirely invalid list: `awards.awards_id in ()`
+     * is a syntax error and `1=1` would return the whole 391k-row table, so the
+     * unsatisfiable `awards.awards_id = 0` is the safe floor (awards_id is an
+     * auto-increment primary key, so no row carries 0).
+     *
+     * mysql_real_escape_string() is a no-op shim in this codebase; the (int) casts
+     * through valid_id() are what actually protect the interpolation.
+     *
+     * @param array<int, mixed> $awardsIds
+     */
+    public static function awardsForIdsWhereForTest(array $awardsIds): string
+    {
+        $ids = [];
+        foreach ($awardsIds as $id) {
+            if (valid_id($id)) {
+                $ids[(int) $id] = true;
+            }
+        }
+
+        if ($ids === []) {
+            return 'awards.awards_id = 0';
+        }
+
+        return 'awards.awards_id in (' . implode(',', array_keys($ids)) . ')';
+    }
+
+    /**
+     * Every award row in one batch, for a list of awards_id values.
+     *
+     * WHY. Scrollery's render route looped one AwardsForPlayer() per id — at
+     * Scroll::MAX_PRINT_RUN that is 200 round trips through a 9-table SELECT
+     * DISTINCT with a 6-term ORDER BY, before a byte of certificate is composed.
+     * The rows are identical in shape; only the predicate differs, so one IN ()
+     * does the same work once.
+     *
+     * Returns the SAME row shape AwardsForPlayer() does — same keys, same
+     * hydration — because it runs the same statement builder and the same
+     * hydrator. A consumer must be able to move between the two without a second
+     * row shape to reason about.
+     *
+     * This is a READ of award rows and decides nothing about authority. Every
+     * caller still runs its own per-(viewer, award) permission gate; see
+     * Model_Scrollery::print_permission(), which is deliberately never cached or
+     * batched.
+     *
+     * @param array<int, mixed> $awardsIds
+     * @return array{Awards: array<int, array<string, mixed>>, Status: mixed}
+     */
+    public function AwardsForIds(array $awardsIds)
+    {
+        return $this->awardRowsWhere(self::awardsForIdsWhereForTest($awardsIds));
+    }
+
     public function AwardsForPlayer($request)
     {
         $player_where = self::awardsForPlayerWhereForTest(
             $request['MundaneId'] ?? 0,
             $request['AwardsId'] ?? 0
         );
+
+        return $this->awardRowsWhere($player_where);
+    }
+
+    /**
+     * The award-row statement and its hydration, shared by AwardsForPlayer() and
+     * AwardsForIds() so the two can never drift into different row shapes.
+     *
+     * $player_where is built by awardsForPlayerWhereForTest() or
+     * awardsForIdsWhereForTest() — both of which cast every id — and is the only
+     * part of this statement that varies.
+     *
+     * @return array{Awards: array<int, array<string, mixed>>, Status: mixed}
+     */
+    private function awardRowsWhere(string $player_where)
+    {
         $sql = "select distinct awards.*, a.*,
 						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,

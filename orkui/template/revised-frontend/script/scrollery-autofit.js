@@ -107,6 +107,40 @@
         }
     };
 
+    /*
+     * Multi-up raises every floor.
+     *
+     * Every measurement in this file happens inside a 2550x3300 viewBox, which is
+     * scale-free by construction — the whole point of the frame. That is normally a
+     * feature and here it is the bug: at &up=2 or &up=4 the same certificate prints
+     * at half its linear size, so 0.6em, which the policy comments justify as "about
+     * 14pt on paper", is 7pt on paper and nothing in the measurement can see the
+     * difference.
+     *
+     * The floors are therefore lifted when the page says it is a multi-up sheet.
+     * NOT by the full 2x that would restore the physical size: the recipient's
+     * one-line tier is 1.15em, so a 2x floor of 1.20em is above it, and the effect
+     * would be that no name ever shrinks and every long one is clipped instead.
+     * 1.5x lands the name floor at 0.90em (about 10.5pt at half scale), which is
+     * small but legible, and leaves the ladder intact.
+     *
+     * Raising a floor can only ever REFUSE a size, never choose a bigger one than
+     * the server's guess: every use is guarded by Math.min against the base.
+     *
+     * Read from the document, so a surface opts in by saying what it is printing
+     * rather than by calling into this file. Scrollery_render.tpl stamps
+     * data-scroll-up on <body> from &up=.
+     */
+    var FLOOR_SCALE = (function () {
+        var el = doc.querySelector('[data-scroll-up]');
+        var up = el ? parseInt(el.getAttribute('data-scroll-up'), 10) : 0;
+        return (up === 2 || up === 4) ? 1.5 : 1;
+    }());
+
+    function floorOf(em) {
+        return em * FLOOR_SCALE;
+    }
+
     /* Two lines of prose rarely break at exactly half. Assume a line packs to about
        92% before the ragged edge, so "fits in n lines" is not solved as if the text
        could be poured perfectly. */
@@ -281,13 +315,13 @@
                    this block sits against the ones above and below it. */
                 return;
             }
-            if (want >= tier.floor && want >= policy.minEm) {
+            if (want >= floorOf(tier.floor) && want >= floorOf(policy.minEm)) {
                 setEm(el, want);
                 return;
             }
         }
 
-        setEm(el, Math.min(base, policy.minEm));
+        setEm(el, Math.min(base, floorOf(policy.minEm)));
     }
 
     /*
@@ -324,7 +358,7 @@
         setEm(el, base);
         if (!reasonClipped(el, p)) { return; }
 
-        var lo = Math.min(POLICY.reason.minEm, base);
+        var lo = Math.min(floorOf(POLICY.reason.minEm), base);
         var hi = base;
         var best = null;
 
@@ -397,7 +431,10 @@
         var over = columnOverflow(award);
         if (over <= COLUMN_SLACK) { return false; }
 
-        var floor = base * 0.6;
+        /* Pass 3's own floor moves with the others: scaling the whole certificate
+           down is the last thing that should happen on a sheet that is already
+           printing it at half size. Capped below 1 so a search range survives. */
+        var floor = base * Math.min(0.95, 0.6 * FLOOR_SCALE);
 
         /*
          * Ask the floor first, and be willing to walk away.

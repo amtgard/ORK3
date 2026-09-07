@@ -28,3 +28,29 @@ orkui/template/revised-frontend/style/fonts/BlackChancery.*
 orkui/template/revised-frontend/style/fonts/AveriaSerifLibre-*.woff2
   Averia Serif Libre by Dan Sayers. License: SIL Open Font License 1.1.
   https://fonts.google.com/specimen/Averia+Serif+Libre
+
+orkui/template/revised-frontend/style/fonts/MedievalSharp-Regular.woff2
+  MedievalSharp by Wojciech Kalinowski (wmk69). License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/medievalsharp (MedievalSharp.ttf)
+  Modifications: converted from TTF to WOFF2 with fonttools; not subset.
+  Note: the font's embedded name table claims Reserved Font Name "NovaRound" while
+    the family's OFL.txt claims "MedievalSharp". Upstream discrepancy, carried as-is.
+
+orkui/template/revised-frontend/style/fonts/PirataOne-Regular.woff2
+  Pirata One by Rodrigo Fuenzalida and Nicolas Massi. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/pirataone (PirataOne-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fonttools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Cinzel-Regular.woff2
+  Cinzel by Natanael Gama. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/cinzel (Cinzel[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/Grenze-*.woff2
+  Grenze by Renata Polastri / The Grenze Project Authors.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/grenze
+    (Grenze[wght].ttf, Grenze-Italic[wght].ttf)
+  Modifications: static instances cut at wght 400 and 600 from the variable fonts
+    with fontTools.varLib.instancer, then converted to WOFF2; not subset.

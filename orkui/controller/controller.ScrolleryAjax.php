@@ -134,7 +134,23 @@ class Controller_ScrolleryAjax extends Controller
 
         echo json_encode([
             'Status' => ['Status' => 0],
-            'Html'   => Scroll::Render($scroll),
+            /*
+             * ART_DISPLAY, not the master. The composer's preview stage is about
+             * 600 px wide and was downloading 300 dpi print plates to fill it — a
+             * lion rank-1 certificate is 3.83 MB — on every award, rank, variant and
+             * recipe change. Scroll::ArtUrl() prefers a `display` rendition at this
+             * size and falls back to `print`, so the preview is correct either way.
+             *
+             * render() and compose() stay on ART_MASTER: those are the surfaces that
+             * reach paper, and a print must never be served the small plate.
+             *
+             * ⚠️ This is a no-op until the certificate partials move from $art to the
+             * scroll_art() helper (workstream 2) — every size resolves to the master
+             * until they do. Wired now because it is correct now, and because the
+             * saving arrives on its own once their pass lands rather than needing a
+             * second visit here.
+             */
+            'Html'   => Scroll::Render($scroll, Scroll::ART_DISPLAY),
             'Rank'   => $scroll['rank'],
         ]);
         exit;

@@ -91,9 +91,9 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
                  deliberate — here the wash is filling the ground slot, so it has to
                  finish being the ground before any layer that reads against it. */ ?>
         <?php scroll_partial('parchment'); ?>
-        <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['grounds'][$recipe['ground']]) ?>" width="2550" height="3300" style="<?= $wash ?>" alt="">
+        <img class="bleed" src="<?= scroll_e(scroll_art($v['grounds'][$recipe['ground']])) ?>" width="2550" height="3300" style="<?= $wash ?>" alt="">
     <?php else: ?>
-        <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['grounds'][$recipe['ground']]) ?>" width="2550" height="3300" alt="">
+        <img class="bleed" src="<?= scroll_e(scroll_art($v['grounds'][$recipe['ground']])) ?>" width="2550" height="3300" alt="">
     <?php endif; ?>
 
     <?php if ($knot): ?>
@@ -105,7 +105,7 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
     <?php endif; ?>
 
     <?php if ($frame): ?>
-        <img class="bleed" src="<?= $art ?>/<?= scroll_e($v['borders'][$recipe['border']]) ?>" style="<?= $borderStyle ?>" alt="">
+        <img class="bleed" src="<?= scroll_e(scroll_art($v['borders'][$recipe['border']])) ?>" style="<?= $borderStyle ?>" alt="">
     <?php endif; ?>
 
     <?php if ($dark): ?>
@@ -129,7 +129,7 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
                  The band is dark line art on transparency like the eight raster
                  frames, so it takes the same per-tone default they do. */ ?>
         <div class="centre" style="margin-bottom:90px;">
-            <img width="2291" src="<?= $art ?>/<?= scroll_e($v['borders'][Scroll::BORDER_BAND]) ?>" style="<?= Scroll::BORDER_STYLE_DEFAULT[$tone] ?>" alt="">
+            <img width="2291" src="<?= scroll_e(scroll_art($v['borders'][Scroll::BORDER_BAND])) ?>" style="<?= Scroll::BORDER_STYLE_DEFAULT[$tone] ?>" alt="">
         </div>
     <?php endif; ?>
 
@@ -140,7 +140,12 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
              .custom-rank is the hook the dark-ground lift keys on — the numeral sits
              outside .Award, so the type rules do not reach it. */ ?>
     <?php if ($rank > 0): ?>
-        <?php $rankSrc = $art . '/' . scroll_e($v['rankSets'][$recipe['rankSet']]) . '/rank_' . $rank . '.png'; ?>
+        <?php /* scroll_art(), not $art . '/…': the URL resolves through
+                 assets/scrolls/renditions.json, so this is the print rendition on the
+                 print route and the display rendition on the composer's preview stage,
+                 and the master wherever WebP lost to it. The escaping moved outward to
+                 cover the whole URL rather than the vocabulary segment alone. */ ?>
+        <?php $rankSrc = scroll_e(scroll_art($v['rankSets'][$recipe['rankSet']] . '/rank_' . $rank . '.png')); ?>
         <?php if ($recipe['rankSet'] === Scroll::RANK_SET_GLYPH): ?>
             <?php /* common/rank_N.png is a 292x171 glyph, so it needs a box and an
                      offset. 85px is griffon's own baseline for its ranks 1-5. */ ?>

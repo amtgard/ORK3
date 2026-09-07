@@ -67,6 +67,25 @@ class Model_Scrollery extends Model
         return $this->award ??= new Model_Award();
     }
 
+    private ?ScrollQuery $scrollQuery = null;
+
+    /**
+     * Scrollery's own SQL, which lives in the domain.
+     *
+     * This model used to be the only one of the 33 under orkui/model/ that named
+     * DB_PREFIX or reached Ork3::$Lib->player->db. The statements and their
+     * fetchers are now ScrollQuery's (system/lib/ork3/class.ScrollQuery.php) and
+     * this model keeps only the shaping.
+     *
+     * startup.php instantiates every class in system/lib/ork3/, so the container
+     * copy is the one to use; the `new` is a floor for a caller that booted the
+     * library differently, not an expected path.
+     */
+    private function scroll_query(): ScrollQuery
+    {
+        return $this->scrollQuery ??= (Ork3::$Lib->scrollquery ?? new ScrollQuery());
+    }
+
     /**
      * Returns the scroll data for one awards row, or null when the viewer may not
      * print it or the award has no certificate art.
@@ -77,28 +96,182 @@ class Model_Scrollery extends Model
             return null;
         }
 
-        $row = $this->award_row($awardsId);
-        if ($row === null || !Scroll::HasArt($row)) {
-            return null;
+        // Delegated rather than duplicated: one id is the degenerate batch, and two
+        // implementations of "which award rows may this viewer print" would be two
+        // chances for the gate to drift.
+        $run = $this->scrolls_for_awards_ids([$awardsId], $viewerId, $variant);
+
+        return $run['Scrolls'][$awardsId] ?? null;
+    }
+
+    /**
+     * A WHOLE PRINT RUN, in a bounded number of queries.
+     *
+     * WHAT THIS REPLACES. The render route looped scroll_for_awards_id() per id, and
+     * each pass ran AwardsForPlayer() (a 9-table SELECT DISTINCT over a 391k-row
+     * table) plus a per-recipient lookup, plus one or two GetPronounList() calls. At
+     * Scroll::MAX_PRINT_RUN that is several hundred statements before a byte of
+     * certificate exists. This is: one award-rows query, one recipients query, one
+     * pronoun-table read, and then park/kingdom lookups that were already memoised.
+     *
+     * ⚠️ THE PERMISSION GATE IS STILL PER (VIEWER, AWARD) AND IS STILL NOT CACHED.
+     * print_permission() runs once per row below, exactly as it did per call before.
+     * Batching the READ is safe; batching or caching the DECISION is how a
+     * cross-tenant disclosure happens, and this surface has leaked once already.
+     *
+     * Returns both halves so a caller can report honestly rather than silently
+     * printing fewer sheets than were asked for:
+     *   Scrolls  — awards_id => BuildScroll() output, only for ids that passed;
+     *   Refused  — awards_id => a Model_Scrollery::DENIED_* reason, for ids that did not.
+     * Order follows the ids as given.
+     *
+     * @param array<int, mixed> $awardsIds
+     * @return array{Scrolls: array<int, array>, Refused: array<int, string>}
+     */
+    public function scrolls_for_awards_ids(array $awardsIds, int $viewerId, string $variant = ''): array
+    {
+        $ids = [];
+        foreach ($awardsIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        $ids = array_keys($ids);
+
+        if ($ids === [] || $viewerId <= 0) {
+            return ['Scrolls' => [], 'Refused' => []];
         }
 
-        if (!$this->print_permission($row, $viewerId)['Allowed']) {
-            return null;
+        $rows = $this->award_rows_by_id($ids);
+
+        // Two passes. The first decides, per (viewer, award), what may print; only
+        // then is the recipient set known, and only then is it worth one query.
+        // Resolving recipients first would fetch personas for rows the viewer is
+        // not allowed to see — cheap, but it is exactly the habit that leaks.
+        $allowed    = [];
+        $refused    = [];
+        $mundaneIds = [];
+        foreach ($ids as $id) {
+            $row = $rows[$id] ?? null;
+            if ($row === null) {
+                $refused[$id] = self::DENIED_MISSING;
+                continue;
+            }
+            if (!Scroll::HasArt($row)) {
+                $refused[$id] = self::DENIED_EXCLUDED;
+                continue;
+            }
+
+            $permission = $this->print_permission($row, $viewerId);
+            if (!$permission['Allowed']) {
+                $refused[$id] = $permission['Reason'];
+                continue;
+            }
+
+            $allowed[$id] = $row;
+            $mundaneId    = (int) ($row['MundaneId'] ?? 0);
+            if ($mundaneId > 0) {
+                $mundaneIds[$mundaneId] = true;
+            }
         }
 
-        // GetScrollRecipient(), not GetPlayer(): a certificate needs a persona and a
+        // GetScrollRecipients(), not GetPlayer(): a certificate needs a persona and a
         // pronoun, and GetPlayer() would additionally run two GetDues() passes, a
         // heraldry build, a design-row find, an authorization check and (for recent
         // joiners) an attendance aggregate — per certificate, up to 200 times a run.
-        $player = Ork3::$Lib->player->GetScrollRecipient((int) $row['MundaneId']);
+        $recipients = $mundaneIds === []
+            ? []
+            : Ork3::$Lib->player->GetScrollRecipients(array_keys($mundaneIds));
 
-        return Scroll::BuildScroll($row, [
-            'player'      => $player['Persona'],
-            'pronoun'     => $this->possessive_pronoun($player),
-            'heraldry'    => $this->heraldry_url($row),
-            'issuerTitle' => $this->issuer_title($row),
-            'variant'     => $variant,
-        ]);
+        $scrolls = [];
+        foreach ($allowed as $id => $row) {
+            $player = $recipients[(int) ($row['MundaneId'] ?? 0)] ?? [];
+
+            $scrolls[$id] = Scroll::BuildScroll($row, [
+                'player'      => (string) ($player['Persona'] ?? ''),
+                'pronoun'     => $this->possessive_pronoun($player),
+                'heraldry'    => $this->heraldry_url($row),
+                'issuerTitle' => $this->issuer_title($row),
+                'variant'     => $variant,
+            ]);
+        }
+
+        return ['Scrolls' => $scrolls, 'Refused' => $refused];
+    }
+
+    /**
+     * A print run as DATA — everything Scrollery knows about a set of certificates,
+     * with no markup anywhere in it.
+     *
+     * WHY. Scrollery/render is a page, so a renderer, an archiver or a mail-merge
+     * that wants the facts has to scrape them back out of SVG. This is the same
+     * BuildScroll() output the render surface draws from, keyed by awards id, plus
+     * the refusals — so a consumer knows which of the ids it asked for did not come
+     * back, and why, instead of counting the answers.
+     *
+     * BuildScroll()'s output is already markup-free: it is order, rank, variant,
+     * title, phrase, player, pronoun, reason, date, issuer, heraldry, palette,
+     * resources and recipe. Scroll::Render() is what turns that into a certificate,
+     * and it is not called here.
+     *
+     * The gate is identical to the render route's, because it IS the render route's
+     * — scrolls_for_awards_ids(), one call, one set of decisions. A manifest can
+     * therefore never disclose a certificate the same viewer could not print.
+     *
+     * @param array<int, mixed> $awardsIds
+     * @return array{Generated:string, ViewerId:int, Variant:string, Requested:int, Returned:int,
+     *               Scrolls:array<int, array>, Refused:array<int, array{AwardsId:int, Reason:string, Message:string}>}
+     */
+    public function print_manifest(array $awardsIds, int $viewerId, string $variant = ''): array
+    {
+        $run = $this->scrolls_for_awards_ids($awardsIds, $viewerId, $variant);
+
+        $refused = [];
+        foreach ($run['Refused'] as $awardsId => $reason) {
+            $refused[] = [
+                'AwardsId' => (int) $awardsId,
+                'Reason'   => $reason,
+                'Message'  => self::DENIAL_MESSAGES[$reason] ?? self::DENIAL_MESSAGES[self::DENIED_AUTH],
+            ];
+        }
+
+        $scrolls = [];
+        foreach ($run['Scrolls'] as $awardsId => $scroll) {
+            $scrolls[] = ['awardsId' => (int) $awardsId] + $scroll;
+        }
+
+        return [
+            // ISO 8601 with an offset: a manifest that outlives the request has to
+            // say which clock it was written by, and PHP's is five hours off the
+            // database's in this deployment (see ScrollPrintLog::printedRecently()).
+            'Generated' => date('c'),
+            'ViewerId'  => $viewerId,
+            'Variant'   => $variant,
+            'Requested' => count($run['Scrolls']) + count($run['Refused']),
+            'Returned'  => count($run['Scrolls']),
+            'Scrolls'   => $scrolls,
+            'Refused'   => $refused,
+        ];
+    }
+
+    /**
+     * Award rows for a list of ids, keyed by awards_id, corrected the way
+     * award_row() corrects one.
+     *
+     * @param list<int> $ids
+     * @return array<int, array<string, mixed>>
+     */
+    private function award_rows_by_id(array $ids): array
+    {
+        $response = Ork3::$Lib->player->AwardsForIds($ids);
+
+        $rows = [];
+        foreach (($response['Awards'] ?? []) as $row) {
+            $rows[(int) $row['AwardsId']] = $this->award()->correct_dangling_officer_role($row);
+        }
+
+        return $rows;
     }
 
     /**
@@ -194,8 +367,7 @@ class Model_Scrollery extends Model
     public function scope_context(string $scopeType, int $scopeId): array
     {
         if ($scopeType === 'kingdom') {
-            $k    = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $scopeId]);
-            $info = $k['KingdomInfo'] ?? [];
+            $info = $this->kingdom_short_info($scopeId);
 
             return [
                 'Type'      => 'kingdom',
@@ -208,7 +380,12 @@ class Model_Scrollery extends Model
                 'UseOf'     => false,
                 'KingdomId' => $scopeId,
                 'Heraldry'  => (int) ($info['HasHeraldry'] ?? 0) === 1
-                    ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Kingdom', 'Id' => $scopeId])['Url']
+                    ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                        // See heraldry_url(): inert today, and the guard against the
+                        // renditions branch silently serving a 256px thumbnail onto a
+                        // 300 dpi certificate once it merges.
+                        ['Type' => 'Kingdom', 'Id' => $scopeId, 'Size' => 'master']
+                    )['Url']
                     : '',
             ];
         }
@@ -224,7 +401,9 @@ class Model_Scrollery extends Model
             'UseOf'     => true,
             'KingdomId' => (int) ($park['KingdomId'] ?? 0),
             'Heraldry'  => (int) ($park['HasHeraldry'] ?? 0) === 1
-                ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Park', 'Id' => $scopeId])['Url']
+                ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Park', 'Id' => $scopeId, 'Size' => 'master']
+                )['Url']
                 : '',
         ];
     }
@@ -256,8 +435,8 @@ class Model_Scrollery extends Model
     /**
      * The per-row body of printable_award_choices(), split out DB-free so a
      * hand-built GetAwardList()-shaped fixture can exercise it directly (see
-     * ScrolleryChoicesForAwardListTest) — the same convention as bulkSqlForTest()
-     * and matchingChoiceForTest() below.
+     * ScrolleryChoicesForAwardListTest) — the same convention as
+     * ScrollQuery::bulkSqlForTest() and matchingChoiceForTest() below.
      *
      * GetAwardList()'s LEFT JOIN from ork_kingdomaward to ork_award misses whenever
      * a kingdomaward's award_id points at nothing (archery's real grants live here,
@@ -367,8 +546,8 @@ class Model_Scrollery extends Model
      *
      * Split from the DB-touching lookup above so the search itself — the part with
      * anything to get wrong — is exercised in ScrolleryAwardOrderForComposeTest
-     * against a hand-built choice list, the same way bulkSqlForTest() keeps the
-     * bulk query testable without a database.
+     * against a hand-built choice list, the same way ScrollQuery::bulkSqlForTest()
+     * keeps the bulk query testable without a database.
      *
      * @return array{KingdomAwardId:int, AwardId:int, Name:string, Order:string, MinRank:int, MaxRank:int, Variants:array}|null
      */
@@ -394,310 +573,6 @@ class Model_Scrollery extends Model
         }
 
         return null;
-    }
-
-    /**
-     * The sort key, as SQL expressions, in order.
-     *
-     * m.persona and a.name are both nullable — a recipient row can be missing and a
-     * dangling kingdomaward has no base award — and a NULL anywhere inside a
-     * row-value comparison makes the whole comparison NULL, which silently drops the
-     * row from a keyset page. COALESCE keeps both the ORDER BY and the cursor
-     * predicate total.
-     *
-     * awards.awards_id is the tiebreaker and is what makes the sort a TOTAL order:
-     * m.persona is not unique (a player has many awards, and two players can share a
-     * persona), so without it a keyset cursor would either skip rows or loop.
-     */
-    private const BULK_SORT = [
-        "coalesce(m.persona, '')",
-        "coalesce(a.name, ka.name, '')",
-        'awards.rank',
-        'awards.awards_id',
-    ];
-
-    /**
-     * The FROM and WHERE shared by the page query and the count query, so the total
-     * can never be a count of a different population than the page.
-     *
-     * $officerNames is the granting kingdom's own set of resolved officer-position
-     * names, from Model_Award::officer_names_for_kingdom(). It exists to push the
-     * dangling-award correction into SQL: a kingdomaward whose award_id resolves to
-     * nothing is either a real archery grant (must print) or an officer position
-     * whose base award has gone missing (must not), and the only thing telling them
-     * apart is whether a resolved sibling in the same catalog carries the same name.
-     * Passing [] leaves that correction to the PHP pass, which still runs.
-     *
-     * The surrounding code interpolates rather than binds, and this codebase's
-     * mysql_real_escape_string() is a no-op shim, so what protects this is the (int)
-     * cast on every id, the ISO-date regex, and sqlString() on the two places a real
-     * string reaches the statement — not escaping.
-     *
-     * @param array<string, true>|list<string> $officerNames
-     */
-    private static function bulkFromWhere(
-        string $type,
-        string $id,
-        string $scopeType,
-        string $scopeId,
-        string $from,
-        string $to,
-        array $officerNames,
-        string $cursor
-    ): string {
-        $id      = (int) $id;
-        $scopeId = (int) $scopeId;
-
-        switch ($type) {
-            case 'event':
-                // The scope gate belongs on the AWARD row, not on the event. An event
-                // does not reliably carry the granting body: 974 award rows sit at an
-                // event whose kingdom_id differs from the award's own at_kingdom_id,
-                // and single events (8462, 7, 15975, 14761, 11193) carry awards from
-                // three kingdoms at once. Filtering on awards.at_park_id /
-                // at_kingdom_id both closes the cross-body disclosure — the other
-                // kingdoms' rows at a shared event are no longer returned — and keeps
-                // the legitimate case working, where this body's own awards were
-                // granted at somebody else's event.
-                $scope = 'awards.at_event_id = ' . $id
-                       . ($scopeType === 'kingdom'
-                           ? ' and awards.at_kingdom_id = ' . $scopeId
-                           : ' and awards.at_park_id = ' . $scopeId);
-                break;
-            case 'kingdom':
-                $scope = 'awards.at_kingdom_id = ' . $id;
-                break;
-            case 'park':
-                $scope = 'awards.at_park_id = ' . $id;
-                break;
-            default:
-                // Never widen to "everything" on an unrecognised scope.
-                $scope = 'awards.at_park_id = 0';
-                break;
-        }
-
-        $range = '';
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
-            $range .= " and awards.date >= '" . $from . "'";
-        }
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
-            $range .= " and awards.date <= '" . $to . "'";
-        }
-
-        // The printable filter, in SQL rather than after the LIMIT. This is the whole
-        // point of the rewrite: the cap used to be applied to RAW rows and the
-        // printable/excluded split happened in PHP afterwards, so an officer asking
-        // for event 12250 in kingdom 4 (495 rows, every one printable) got the
-        // alphabetically-first 200 and could not reach the other 295 by any
-        // narrowing — the date filter's finest grain is one day and that event is one
-        // day. 24 event/kingdom pairs exceed the cap; the largest is 741.
-        $printable = "\n                   and awards.revoked = 0"
-            // A revoked grant normally has its mundane_id nulled, which would print a
-            // blank recipient; a bulk run must not offer those even before the
-            // revoked filter above catches them.
-            . "\n                   and awards.mundane_id > 0"
-            // Scroll::IsOfficerPosition(): a resolved officer_role that is neither
-            // NULL nor 'none' is a job someone held, not an honour. NULL stays open —
-            // that is the dangling-archery shape.
-            . "\n                   and (a.officer_role is null or a.officer_role = 'none')"
-            // Scroll::OrderForAwardRow()'s ALLOWLIST, in SQL. It has to be here rather
-            // than in the PHP pass below because it runs BEFORE the LIMIT: filtering
-            // afterwards is what made a 495-row court silently become its
-            // alphabetically-first 200, and it would make Total a lie again.
-            //
-            // Three branches, matching the three returns in OrderForAwardRow():
-            // a real art-backed order or a custom entry by id; archery by
-            // kingdomaward name, confined (as the PHP is) to rows with no resolvable
-            // base award; and the alias, which re-points the grant at a different
-            // catalogue entry and must itself be admitted — all 11 of the ORK's
-            // alias rows sit on Custom Title and point at a real title.
-            . "\n                   and (coalesce(a.award_id, 0) in (" . implode(',', Scroll::PrintableAwardIds()) . ')'
-            . "\n                        or (a.award_id is null and lower(trim(coalesce(ka.name, ''))) in ("
-                . self::sqlStringList(Scroll::ARCHERY_NAMES) . ')))'
-            . "\n                   and coalesce(awards.alias_award_id, 0) in (0,"
-                . implode(',', Scroll::PrintableAwardIds()) . ')';
-
-        $names = self::officerNameList($officerNames);
-        if ($names !== '') {
-            $printable .= "\n                   and (a.award_id is not null or coalesce(ka.name, '') not in (" . $names . '))';
-        }
-
-        $keyset = '';
-        $after  = self::decodeBulkCursorForTest($cursor);
-        if ($after !== null) {
-            $keyset = "\n                   and (" . implode(', ', self::BULK_SORT) . ') > ('
-                . self::sqlString($after['Persona']) . ', '
-                . self::sqlString($after['Name']) . ', '
-                . (int) $after['Rank'] . ', '
-                . (int) $after['AwardsId'] . ')';
-        }
-
-        return 'from ' . DB_PREFIX . 'awards awards
-                  left join ' . DB_PREFIX . 'kingdomaward ka on ka.kingdomaward_id = awards.kingdomaward_id
-                  left join ' . DB_PREFIX . 'award a on a.award_id = ka.award_id
-                  left join ' . DB_PREFIX . 'award alias on alias.award_id = awards.alias_award_id
-                  left join ' . DB_PREFIX . 'mundane m on m.mundane_id = awards.mundane_id
-                  left join ' . DB_PREFIX . 'mundane gb on gb.mundane_id = awards.given_by_id
-                  left join ' . DB_PREFIX . 'park p on p.park_id = awards.at_park_id
-                  left join ' . DB_PREFIX . 'kingdom k on k.kingdom_id = awards.at_kingdom_id
-                 where ' . $scope . $range . $printable . $keyset;
-    }
-
-    /**
-     * The bulk selection — the module's ONE new query. Everything else reuses
-     * Player::AwardsForPlayer().
-     *
-     * Public and named ...ForTest so ScrolleryBulkQueryTest can assert on the
-     * generated statement without reflection and without a database. It builds a
-     * string and touches nothing.
-     *
-     * @param array<string, true>|list<string> $officerNames see bulkFromWhere()
-     * @param string $cursor an opaque keyset cursor from bulkCursorForTest()
-     */
-    public function bulkSqlForTest(
-        string $type,
-        string $id,
-        string $scopeType,
-        string $scopeId,
-        string $from = '',
-        string $to = '',
-        array $officerNames = [],
-        string $cursor = '',
-        int $limit = 0
-    ): string {
-        $limit = $limit > 0 ? min($limit, Scroll::MAX_PRINT_RUN) : Scroll::MAX_PRINT_RUN;
-
-        // The alias join exists for the exclusion predicate above; alias.award_id is
-        // selected as well so the PHP-side Scroll::IsExcludedFromScrollery() check on
-        // the shaped row sees the same thing the WHERE did. It is deliberately NOT
-        // coalesced into officer_role / is_ladder / the title — that inconsistency
-        // with AwardsForPlayer() predates this change and is not fixed here.
-        return 'select awards.awards_id, awards.mundane_id, awards.rank, awards.date, awards.note,
-                       awards.custom_name, awards.at_park_id, awards.at_kingdom_id, awards.at_event_id,
-                       a.award_id, a.name, a.officer_role, a.is_ladder,
-                       alias.award_id as alias_award_id,
-                       ka.name as kingdom_awardname,
-                       m.persona as recipient,
-                       gb.persona as given_by,
-                       p.name as park_name, k.name as kingdom_name
-                  ' . self::bulkFromWhere($type, $id, $scopeType, $scopeId, $from, $to, $officerNames, $cursor) . '
-                 order by ' . implode(', ', self::BULK_SORT) . '
-                 limit ' . ($limit + 1);
-    }
-
-    /**
-     * The TRUE number of printable rows the filter matches, so the page can say
-     * "200 of 495" rather than quietly hand back 200 and call it the answer.
-     *
-     * Same predicate as the page query with the cursor dropped — a count of the whole
-     * filter, not of the current page.
-     *
-     * @param array<string, true>|list<string> $officerNames see bulkFromWhere()
-     */
-    public function bulkCountSqlForTest(
-        string $type,
-        string $id,
-        string $scopeType,
-        string $scopeId,
-        string $from = '',
-        string $to = '',
-        array $officerNames = []
-    ): string {
-        return 'select count(*) as total
-                  ' . self::bulkFromWhere($type, $id, $scopeType, $scopeId, $from, $to, $officerNames, '');
-    }
-
-    /**
-     * The cursor for "everything after this row", built from a shaped bulk row.
-     *
-     * Opaque and base64'd so nothing downstream is tempted to parse or hand-edit it,
-     * but its contents are re-validated on decode rather than trusted: the two string
-     * members go through sqlString() and the two ids through (int).
-     *
-     * @param array<string, mixed> $row a row from awards_for_bulk()
-     */
-    public static function bulkCursorForTest(array $row): string
-    {
-        return base64_encode((string) json_encode([
-            'p' => (string) ($row['Recipient'] ?? ''),
-            'n' => (string) ($row['SortName'] ?? ''),
-            'r' => (int) ($row['Rank'] ?? 0),
-            'a' => (int) ($row['AwardsId'] ?? 0),
-        ]));
-    }
-
-    /**
-     * @return array{Persona: string, Name: string, Rank: int, AwardsId: int}|null
-     */
-    public static function decodeBulkCursorForTest(string $cursor): ?array
-    {
-        if (trim($cursor) === '') {
-            return null;
-        }
-
-        $json = base64_decode(strtr($cursor, ' ', '+'), true);
-        if ($json === false) {
-            return null;
-        }
-
-        $data = json_decode($json, true);
-        if (!is_array($data) || (int) ($data['a'] ?? 0) <= 0) {
-            return null;
-        }
-
-        return [
-            'Persona'  => (string) ($data['p'] ?? ''),
-            'Name'     => (string) ($data['n'] ?? ''),
-            'Rank'     => (int) ($data['r'] ?? 0),
-            'AwardsId' => (int) ($data['a'] ?? 0),
-        ];
-    }
-
-    /**
-     * A quoted, comma-separated SQL list of officer-position names, or ''.
-     *
-     * Accepts either officer_names_for_kingdom()'s name => true map or a plain list.
-     *
-     * @param array<string, true>|list<string> $officerNames
-     */
-    private static function officerNameList(array $officerNames): string
-    {
-        $quoted = [];
-        foreach ($officerNames as $key => $value) {
-            $name = is_string($key) ? $key : (string) $value;
-            $name = trim($name);
-            if ($name !== '') {
-                $quoted[self::sqlString($name)] = true;
-            }
-        }
-
-        return implode(', ', array_keys($quoted));
-    }
-
-    /**
-     * A single-quoted SQL string literal.
-     *
-     * mysql_real_escape_string() is a NO-OP SHIM in this codebase, so it is not used.
-     * Doubling the quote is standard SQL and holds whether or not NO_BACKSLASH_ESCAPES
-     * is set; the backslash and control characters are removed outright rather than
-     * escaped, because nothing that legitimately reaches here — a persona, an award
-     * name — contains them.
-     */
-    private static function sqlString(string $value): string
-    {
-        $value = str_replace(["\\", "\0", "\n", "\r", "\x1a"], '', $value);
-
-        return "'" . str_replace("'", "''", $value) . "'";
-    }
-
-    /**
-     * A comma-separated list of SQL string literals, for an IN () clause.
-     *
-     * @param list<string> $values
-     */
-    private static function sqlStringList(array $values): string
-    {
-        return implode(', ', array_map(static fn (string $v): string => self::sqlString($v), $values));
     }
 
     /**
@@ -758,26 +633,24 @@ class Model_Scrollery extends Model
 
         $pageSize = $limit > 0 ? min($limit, Scroll::MAX_PRINT_RUN) : Scroll::MAX_PRINT_RUN;
 
-        $rs = $this->db_query(
-            $this->bulkSqlForTest(
-                $type,
-                (string) $id,
-                $scopeType,
-                (string) $scopeId,
-                $from,
-                $to,
-                $officerNames,
-                $cursor,
-                $pageSize
-            )
+        $query = $this->scroll_query();
+
+        $rs = $query->BulkAwardRows(
+            $type,
+            $id,
+            $scopeType,
+            $scopeId,
+            $from,
+            $to,
+            $officerNames,
+            $cursor,
+            $pageSize
         );
         if ($rs === null) {
             return array_merge($empty, ['Failed' => true]);
         }
 
-        $total = $this->count_query(
-            $this->bulkCountSqlForTest($type, (string) $id, $scopeType, (string) $scopeId, $from, $to, $officerNames)
-        );
+        $total = $query->BulkAwardCount($type, $id, $scopeType, $scopeId, $from, $to, $officerNames);
 
         // The query asks for one row more than the page purely to detect that another
         // page exists.
@@ -807,6 +680,15 @@ class Model_Scrollery extends Model
                 'Rank'             => (int) $row['rank'],
                 'Date'             => (string) $row['date'],
                 'Recipient'        => (string) $row['recipient'],
+                // The recipient's standing, for the bulk list to MARK — not to
+                // filter on. A suspended or inactive member's past award is still
+                // theirs, so these rows stay selected by default; the officer is
+                // simply told before they commit 200 sheets to paper. Coalesced
+                // because the mundane join is a LEFT one: a row whose recipient
+                // record is gone reads as neither suspended nor inactive rather
+                // than as a null the template has to guess about.
+                'Suspended'        => (int) ($row['recipient_suspended'] ?? 0),
+                'Active'           => (int) ($row['recipient_active'] ?? 1),
                 'GivenBy'          => (string) $row['given_by'],
                 'Name'             => (string) $row['name'],
                 'KingdomAwardName' => (string) $row['kingdom_awardname'],
@@ -820,8 +702,9 @@ class Model_Scrollery extends Model
                 // row anyway so a template never has to guess, and so the key means the
                 // same thing here as on an AwardsForPlayer() row.
                 'Revoked'          => 0,
-                // The second ORDER BY term, verbatim, so bulkCursorForTest() can build
-                // a keyset from a shaped row without re-deriving the SQL's COALESCE.
+                // The second ORDER BY term, verbatim, so ScrollQuery::bulkCursorForTest()
+                // can build a keyset from a shaped row without re-deriving the
+                // SQL's COALESCE.
                 'SortName'         => (string) ($row['name'] ?? '') !== ''
                     ? (string) $row['name']
                     : (string) ($row['kingdom_awardname'] ?? ''),
@@ -870,7 +753,7 @@ class Model_Scrollery extends Model
             // an art-less row still consumed a slot in the sort, so skipping it would
             // make the next page start before it and repeat rows.
             'NextCursor' => $hasMore && is_array($last)
-                ? self::bulkCursorForTest([
+                ? ScrollQuery::bulkCursorForTest([
                     'Recipient' => (string) ($last['recipient'] ?? ''),
                     'SortName'  => (string) ($last['name'] ?? '') !== ''
                         ? (string) $last['name']
@@ -883,39 +766,15 @@ class Model_Scrollery extends Model
     }
 
     /**
-     * A single scalar `total` from a count query, or 0.
-     *
-     * A sibling to db_query()/event_rows() for the same reason those are siblings of
-     * each other: the field reads are hardcoded per query shape, so a shared reader
-     * would silently return null rather than fail.
-     */
-    private function count_query(string $sql): int
-    {
-        $db = Ork3::$Lib->player->db;
-        $db->Clear();
-
-        try {
-            $rs = $db->query($sql);
-        } catch (Throwable $e) {
-            return 0;
-        }
-
-        if (!is_object($rs) || $this->result_failed($rs) || $rs->size() < 1 || !$rs->next()) {
-            return 0;
-        }
-
-        return (int) $rs->total;
-    }
-
-    /**
      * The event list for the bulk-print picker — every event that has at least one
      * award the bulk query above could actually return in this scope.
      *
-     * Reuses the SAME scope predicate bulkSqlForTest()'s 'kingdom'/'park' cases
-     * apply (see eventsWithPrintableAwardsSqlForTest() below), so the picker can
-     * never offer an event whose awards the bulk query would then refuse: an event
-     * only appears here because at least one award row at it already matches that
-     * exact WHERE.
+     * Reuses the SAME scope predicate ScrollQuery::bulkSqlForTest()'s
+     * 'kingdom'/'park' cases apply (see
+     * ScrollQuery::eventsWithPrintableAwardsSqlForTest()), so the picker can never
+     * offer an event whose awards the bulk query would then refuse: an event only
+     * appears here because at least one award row at it already matches that exact
+     * WHERE.
      *
      * @return array<int, array{EventId:int, Label:string}>
      */
@@ -925,7 +784,7 @@ class Model_Scrollery extends Model
             return [];
         }
 
-        $rows = $this->event_rows($this->eventsWithPrintableAwardsSqlForTest($scopeType, (string) $scopeId));
+        $rows = $this->scroll_query()->EventsWithPrintableAwards($scopeType, $scopeId);
         if ($rows === null) {
             return [];
         }
@@ -945,172 +804,6 @@ class Model_Scrollery extends Model
         }
 
         return $events;
-    }
-
-    /**
-     * Public and named ...SqlForTest() for the same reason bulkSqlForTest() is:
-     * ScrolleryEventsQueryTest can assert on the generated statement with no
-     * database. The surrounding code interpolates rather than binds, and this
-     * codebase's mysql_real_escape_string() is a no-op shim, so what protects this
-     * is the (int) cast on the scope id — never interpolate it as a string.
-     *
-     * ork_event carries no date of its own (see ork.sql) — only `event_id`,
-     * `kingdom_id`, `park_id`, `mundane_id`, `unit_id`, `name`, `has_heraldry` —
-     * dates live one join away on ork_event_calendardetail, which is one-to-many
-     * per event (multiple dated occurrences, gated by a `current` flag) and would
-     * turn this group-by into a fan-out. max(awards.date) avoids that entirely and
-     * is the date this scope's officer actually granted things on.
-     */
-    public static function eventsWithPrintableAwardsSqlForTest(string $scopeType, string $scopeId): string
-    {
-        $scopeId = (int) $scopeId;
-
-        $scope = ($scopeId > 0 && $scopeType === 'kingdom')
-            ? 'awards.at_kingdom_id = ' . $scopeId
-            : (($scopeId > 0 && $scopeType === 'park')
-                ? 'awards.at_park_id = ' . $scopeId
-                // Never widen to "everything" for an unrecognised scope type or an
-                // empty/zero scope id — mirrors bulkSqlForTest()'s default: case.
-                // at_kingdom_id and at_park_id each sit at 0 on a huge share of real
-                // award rows (a park grant never sets at_kingdom_id; a kingdom grant
-                // never sets at_park_id), so a bare "column = 0" built from an
-                // untrusted or absent scope id would hand back one whole class of
-                // body's awards rather than none. -1 can never match a real row.
-                : 'awards.at_park_id = -1');
-
-        return 'select awards.at_event_id as event_id,
-                       count(*) as award_count,
-                       max(awards.date) as last_date,
-                       e.name as event_name
-                  from ' . DB_PREFIX . 'awards awards
-                  left join ' . DB_PREFIX . 'event e on e.event_id = awards.at_event_id
-                 where awards.at_event_id > 0
-                   and ' . $scope . '
-                   -- Same two guards the bulk query applies. Without them an event
-                   -- whose only awards were revoked still appears in the picker with
-                   -- a count, and choosing it returns nothing — 2,287 revoked rows
-                   -- carry a park/kingdom scope, so this is not hypothetical.
-                   and awards.revoked = 0
-                   and awards.mundane_id > 0
-                 group by awards.at_event_id
-                 order by last_date desc
-                 limit 200';
-    }
-
-    /**
-     * Rows for events_with_printable_awards(), or null on a query failure.
-     *
-     * A sibling to db_query() above rather than a reuse of it: db_query()'s field
-     * reads are hardcoded to the bulk row's own column set (awards_id, mundane_id,
-     * ...), so feeding it this query's different columns (event_id, award_count,
-     * ...) would silently read null for every field rather than fail loudly. The
-     * $DB->Clear()-before-query and manual-Next()-per-row shape is identical.
-     *
-     * @return array<int, array<string, mixed>>|null
-     */
-    private function event_rows(string $sql): ?array
-    {
-        $db = Ork3::$Lib->player->db;
-        $db->Clear();
-
-        try {
-            $rs = $db->query($sql);
-        } catch (Throwable $e) {
-            return null;
-        }
-
-        if (!is_object($rs) || $this->result_failed($rs)) {
-            return null;
-        }
-
-        $rows = [];
-        if ($rs->size() > 0) {
-            while ($rs->next()) {
-                $rows[] = [
-                    'event_id'    => $rs->event_id,
-                    'award_count' => $rs->award_count,
-                    'last_date'   => $rs->last_date,
-                    'event_name'  => $rs->event_name,
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * Rows, or null when the query itself failed.
-     *
-     * Null rather than [] on purpose: an empty array here used to mean both "this
-     * event had no awards" and "the database errored", and the officer read the
-     * second as the first.
-     *
-     * A false return is NOT the failure signal — YapoDb::Query() delegates to
-     * DataSet(), which always hands back a YapoResultSet, and PDO runs in
-     * ERRMODE_WARNING so a bad statement neither returns false nor throws (the
-     * comment above YapoMysql::ExecuteChecked() says as much). The real signals are
-     * the SQLSTATE the result set captures at construction, and — when prepare()
-     * itself returns false — the Error raised inside DataSet() by calling
-     * execute() on a bool.
-     *
-     * @return array<int, array<string, mixed>>|null
-     */
-    private function db_query(string $sql): ?array
-    {
-        $db = Ork3::$Lib->player->db;
-        $db->Clear();
-
-        try {
-            $rs = $db->query($sql);
-        } catch (Throwable $e) {
-            return null;
-        }
-
-        if (!is_object($rs) || $this->result_failed($rs)) {
-            return null;
-        }
-
-        $rows = [];
-        if ($rs->size() > 0) {
-            while ($rs->next()) {
-                $rows[] = [
-                    'awards_id'         => $rs->awards_id,
-                    'award_id'          => $rs->award_id,
-                    'alias_award_id'    => $rs->alias_award_id,
-                    'mundane_id'        => $rs->mundane_id,
-                    'rank'              => $rs->rank,
-                    'date'              => $rs->date,
-                    'note'              => $rs->note,
-                    'custom_name'       => $rs->custom_name,
-                    'recipient'         => $rs->recipient,
-                    'given_by'          => $rs->given_by,
-                    'name'              => $rs->name,
-                    'officer_role'      => $rs->officer_role,
-                    'is_ladder'         => $rs->is_ladder,
-                    'kingdom_awardname' => $rs->kingdom_awardname,
-                    'park_name'         => $rs->park_name,
-                    'kingdom_name'      => $rs->kingdom_name,
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * Whether the statement behind a result set actually failed.
-     *
-     * YapoResultSet records the statement's SQLSTATE and errorInfo in __ERROR the
-     * moment it is built. '00000' is success; anything else is a real error that
-     * would otherwise read as "no awards matched".
-     *
-     * @param object $rs
-     */
-    private function result_failed($rs): bool
-    {
-        $state = $rs->__ERROR[0][1] ?? null;
-
-        return $state !== null && $state !== '' && $state !== '00000';
     }
 
     /**
@@ -1270,6 +963,15 @@ class Model_Scrollery extends Model
      * GetHeraldryUrl() never returns an empty string: it falls through to a .jpg
      * URL whether or not a file exists, so an issuer with no heraldry would render
      * a broken image. has_heraldry is what actually answers the question.
+     *
+     * `'Size' => 'master'` is INERT TODAY and correct later. GetHeraldryUrl()
+     * currently ignores every key but Type and Id (class.Heraldry.php:30) — it
+     * resolves one path and appends a filemtime cache-buster. The masters + WebP
+     * renditions branch (feature/high-res-images) gives it renditions, and its
+     * default is a 256 px thumbnail. This heraldry is drawn onto a 2550x3300
+     * certificate; without the key, the day that branch merges is the day every
+     * scroll silently starts printing a thumbnail, with nothing failing and nobody
+     * told. Asking for the master now costs nothing and closes that.
      */
     private function heraldry_url(array $row): string
     {
@@ -1277,15 +979,18 @@ class Model_Scrollery extends Model
         if ($parkId > 0) {
             $park = $this->park_details($parkId);
             if ((int) ($park['HasHeraldry'] ?? 0) === 1) {
-                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Park', 'Id' => $parkId])['Url'];
+                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Park', 'Id' => $parkId, 'Size' => 'master']
+                )['Url'];
             }
         }
 
         $kingdomId = (int) ($row['KingdomId'] ?? 0);
         if ($kingdomId > 0) {
-            $kingdom = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $kingdomId]);
-            if ((int) ($kingdom['KingdomInfo']['HasHeraldry'] ?? 0) === 1) {
-                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Kingdom', 'Id' => $kingdomId])['Url'];
+            if ((int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
+                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Kingdom', 'Id' => $kingdomId, 'Size' => 'master']
+                )['Url'];
             }
         }
 
@@ -1326,6 +1031,26 @@ class Model_Scrollery extends Model
         return is_array($cache[$parkId]) ? $cache[$parkId] : [];
     }
 
+    /**
+     * GetKingdomShortInfo() costs a yapo find() PLUS a second banner query, and
+     * heraldry_url() asks it once per certificate — so a 200-certificate run of
+     * kingdom-issued awards was 400 statements for what is, at most, a handful of
+     * distinct kingdoms. Held for the same reason park_details() is, and for a
+     * much bigger win: 47% of ladder grants are kingdom-issued.
+     *
+     * @return array<string, mixed>
+     */
+    private function kingdom_short_info(int $kingdomId): array
+    {
+        static $cache = [];
+        if (!array_key_exists($kingdomId, $cache)) {
+            $response = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $kingdomId]);
+            $cache[$kingdomId] = is_array($response['KingdomInfo'] ?? null) ? $response['KingdomInfo'] : [];
+        }
+
+        return $cache[$kingdomId];
+    }
+
     /** The recipient's possessive pronoun, by player id. Never blank. */
     public function possessive_pronoun_for_player(int $mundaneId): string
     {
@@ -1349,10 +1074,63 @@ class Model_Scrollery extends Model
             return '';
         }
 
-        $list = Ork3::$Lib->pronoun->GetPronounList();
-
-        return Scroll::ResolvePronounOverride($raw, $list['Pronouns'] ?? []);
+        return Scroll::ResolvePronounOverride($raw, $this->pronoun_rows());
     }
+
+    /**
+     * The possessive forms the composer's "pronoun" datalist offers.
+     *
+     * THE DATALIST WAS DEAD CODE. Scrollery_create.tpl renders
+     * `list="sc-pronoun-list"` only `if ($Pronouns)` and no controller ever set
+     * `Pronouns` — verified, zero occurrences — so the input has advertised a
+     * datalist that was never emitted. This is the missing half.
+     *
+     * De-duplicated and in table order (ork_pronoun.pronoun_id asc, which
+     * GetPronounList() is documented as depending on): rows 4 and 12 both give
+     * "her", 2 and 11 both give "his". Twelve rows collapse to
+     * eir, his, pers, her, their, vis, xyr, hir, aer, faer.
+     *
+     * @return list<string>
+     */
+    public function possessive_suggestions(): array
+    {
+        $seen = [];
+        foreach ($this->pronoun_rows() as $row) {
+            $possessive = trim((string) ($row['Possessive'] ?? ''));
+            if ($possessive !== '') {
+                $seen[mb_strtolower($possessive)] = true;
+            }
+        }
+
+        return array_keys($seen);
+    }
+
+    /**
+     * ork_pronoun, read once per request.
+     *
+     * Twelve rows, and every certificate in a print run needs them — the render
+     * loop used to re-run GetPronounList() once per recipient (twice, for a
+     * recipient with custom pronouns), which is 200-400 statements a run for a
+     * table that fits in a cache line.
+     *
+     * The WHOLE list, never a filtered one: possessive_for_ids() used to pass an
+     * id filter, so the same twelve rows were fetched under a different WHERE for
+     * every distinct pronoun id in the run.
+     *
+     * @return array<int, array{Subject:string, Possessive:string}>
+     */
+    private function pronoun_rows(): array
+    {
+        if ($this->pronounRows === null) {
+            $list = Ork3::$Lib->pronoun->GetPronounList();
+            $this->pronounRows = is_array($list['Pronouns'] ?? null) ? $list['Pronouns'] : [];
+        }
+
+        return $this->pronounRows;
+    }
+
+    /** @var array<int, array<string, mixed>>|null */
+    private ?array $pronounRows = null;
 
     /**
      * The POSSESSIVE pronoun — the text layer reads "with <her> third".
@@ -1390,10 +1168,21 @@ class Model_Scrollery extends Model
 
         // pronoun_freetext is populated by another branch; read it only if the key is
         // actually present, so this works either side of that merge.
+        //
+        // Scroll::ResolvePossessive(), NOT a bare PossessiveFromFreetext() with a
+        // fall to "their". This branch used to give up the moment the subject table
+        // missed, while the officer's override box — the same free text, typed by
+        // someone else — got a post-slash fallback. So a recipient whose profile
+        // said "ze/zir" printed "their", and an officer retyping it verbatim printed
+        // "zir". One resolver now serves both doors; the cap is this door's own
+        // column width rather than the override input's maxlength.
         $freetext = trim((string) ($player['PronounFreetext'] ?? ''));
         if ($freetext !== '') {
-            $list       = Ork3::$Lib->pronoun->GetPronounList();
-            $possessive = Scroll::PossessiveFromFreetext($freetext, $list['Pronouns'] ?? []);
+            $possessive = Scroll::ResolvePossessive(
+                $freetext,
+                $this->pronoun_rows(),
+                Scroll::PRONOUN_FREETEXT_MAX_LENGTH
+            );
             if ($possessive !== '') {
                 return $possessive;
             }
@@ -1405,9 +1194,9 @@ class Model_Scrollery extends Model
     /** @param int[] $ids */
     private function possessive_for_ids(array $ids): string
     {
-        $list = Ork3::$Lib->pronoun->GetPronounList($ids);
+        $rows = $this->pronoun_rows();
         foreach ($ids as $id) {
-            $possessive = trim((string) ($list['Pronouns'][$id]['Possessive'] ?? ''));
+            $possessive = trim((string) ($rows[$id]['Possessive'] ?? ''));
             if ($possessive !== '') {
                 return $possessive;
             }

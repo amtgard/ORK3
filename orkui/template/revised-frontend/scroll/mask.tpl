@@ -20,22 +20,22 @@ $glow = 'filter:sepia(1) contrast(0.5) hue-rotate(200deg) saturate(5) blur(200px
 
     <?php /* Two passes of the same border: screen at .6 lifts it, multiply then
              sets the ink back down. DELIBERATE. */ ?>
-    <img src="<?= $art ?>/mask/border.png" style="mix-blend-mode:screen;opacity:0.6;" alt="">
-    <img src="<?= $art ?>/mask/border.png" style="mix-blend-mode:multiply;opacity:1;" alt="">
+    <img src="<?= scroll_art('mask/border.png') ?>" style="mix-blend-mode:screen;opacity:0.6;" alt="">
+    <img src="<?= scroll_art('mask/border.png') ?>" style="mix-blend-mode:multiply;opacity:1;" alt="">
 
     <?php /* mask's symbol is UNRANKED — one mask/symbol.png, drawn THREE times:
              glow, plain, then glow AGAIN after the rank numeral. That last pass is
              what puts the bloom over the numeral. Never deduplicate or reorder. */ ?>
-    <div class="centre-bottom" style="<?= $glow ?>"><img src="<?= $art ?>/mask/symbol.png" alt=""></div>
-    <div class="centre-bottom"><img src="<?= $art ?>/mask/symbol.png" alt=""></div>
+    <div class="centre-bottom" style="<?= $glow ?>"><img src="<?= scroll_art('mask/symbol.png') ?>" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('mask/symbol.png') ?>" alt=""></div>
 
     <?php if ((int) $s['rank'] > 0): ?>
         <div class="centre-bottom" style="bottom:60px;opacity:1;">
-            <img src="<?= $art ?>/common/rank_<?= (int) $s['rank'] ?>.png" alt="">
+            <img src="<?= scroll_art('common/rank_' . (int) $s['rank'] . '.png') ?>" alt="">
         </div>
     <?php endif; ?>
 
-    <div class="centre-bottom" style="<?= $glow ?>"><img src="<?= $art ?>/mask/symbol.png" alt=""></div>
+    <div class="centre-bottom" style="<?= $glow ?>"><img src="<?= scroll_art('mask/symbol.png') ?>" alt=""></div>
 
     <?php scroll_partial('text', ['s' => $s]); ?>
 </div>

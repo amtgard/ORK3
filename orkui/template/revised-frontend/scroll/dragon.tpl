@@ -26,19 +26,19 @@
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* Bare <img>, not wrapped in .centre-bottom — a full-bleed multiply layer. */ ?>
-    <img src="<?= $art ?>/dragon/dragons.svg" style="mix-blend-mode:multiply;" alt="">
+    <img src="<?= scroll_art('dragon/dragons.svg') ?>" style="mix-blend-mode:multiply;" alt="">
 
     <?php /* under_0.png ships, so this path is unguarded across the whole rank range. */ ?>
-    <div class="centre-bottom"><img src="<?= $art ?>/dragon/under_<?= (int) $s['rank'] ?>.png" style="mix-blend-mode:multiply;" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('dragon/under_' . (int) $s['rank'] . '.png') ?>" style="mix-blend-mode:multiply;" alt=""></div>
 
     <?php /* over_ art only exists from rank 6 up; the guard is what stops a broken image. */ ?>
     <?php if ((int) $s['rank'] >= 6): ?>
-        <div class="centre-bottom"><img src="<?= $art ?>/dragon/over_<?= (int) $s['rank'] ?>.png" alt=""></div>
+        <div class="centre-bottom"><img src="<?= scroll_art('dragon/over_' . (int) $s['rank'] . '.png') ?>" alt=""></div>
     <?php endif; ?>
 
     <?php if ((int) $s['rank'] > 0): ?>
         <div class="centre-bottom" style="bottom:50px;">
-            <img src="<?= $art ?>/common/rank_<?= (int) $s['rank'] ?>.png" alt="">
+            <img src="<?= scroll_art('common/rank_' . (int) $s['rank'] . '.png') ?>" alt="">
         </div>
     <?php endif; ?>
 

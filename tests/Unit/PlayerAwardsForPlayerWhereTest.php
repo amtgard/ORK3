@@ -136,4 +136,63 @@ final class PlayerAwardsForPlayerWhereTest extends TestCase
         $this->assertStringContainsString("'Revoked' => (int) \$r->revoked", $body);
         $this->assertStringNotContainsString('revoked = 0', $body, 'the shared method must not filter revoked rows');
     }
+
+    /**
+     * Item 38. The render route looped one AwardsForPlayer() per id — 200 round
+     * trips through a 9-table SELECT DISTINCT before a byte of certificate exists.
+     * AwardsForIds() is the batch, and it must FAIL CLOSED: `awards_id in ()` is a
+     * syntax error and `1=1` would hand back all 391k rows, so an empty or entirely
+     * invalid list becomes the unsatisfiable `awards_id = 0` (awards_id is an
+     * auto-increment primary key, so no row carries 0).
+     */
+    public function testTheBatchWhereIsAnInListOfCastIds(): void
+    {
+        $this->assertSame('awards.awards_id in (1,2,3)', Player::awardsForIdsWhereForTest([1, 2, 3]));
+        $this->assertSame('awards.awards_id in (7)', Player::awardsForIdsWhereForTest(['7']));
+    }
+
+    public function testTheBatchWhereFailsClosedOnNothingUsable(): void
+    {
+        $this->assertSame('awards.awards_id = 0', Player::awardsForIdsWhereForTest([]));
+        $this->assertSame('awards.awards_id = 0', Player::awardsForIdsWhereForTest([0, -4, 'x', null]));
+    }
+
+    /**
+     * mysql_real_escape_string() is a no-op shim in this codebase, so the casting
+     * is what protects the interpolation — not escaping.
+     */
+    public function testTheBatchWhereCannotCarryAnInjection(): void
+    {
+        $sql = Player::awardsForIdsWhereForTest(['1 OR 1=1', "2); DROP TABLE ork_awards; --", 3]);
+
+        $this->assertStringNotContainsString('1=1', $sql);
+        $this->assertStringNotContainsString('DROP', $sql);
+        // Stricter than a cast: valid_id() is is_numeric && > 0, so "1 OR 1=1"
+        // is DROPPED rather than truncated to 1. Only the real id survives.
+        $this->assertSame('awards.awards_id in (3)', $sql);
+    }
+
+    public function testTheBatchWhereDeduplicatesAndPreservesFirstSeenOrder(): void
+    {
+        $this->assertSame('awards.awards_id in (5,9)', Player::awardsForIdsWhereForTest([5, 9, 5, 9, 5]));
+    }
+
+    /**
+     * The batch and the single-row read must return ONE row shape, or a consumer
+     * has two to reason about. Both run the same private statement builder, which
+     * is what this pins.
+     */
+    public function testBothReadersShareOneStatementBuilder(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.Player.php');
+
+        $this->assertStringContainsString('private function awardRowsWhere(string $player_where)', $src);
+        $this->assertStringContainsString(
+            'return $this->awardRowsWhere(self::awardsForIdsWhereForTest($awardsIds));',
+            $src
+        );
+        $this->assertStringContainsString('return $this->awardRowsWhere($player_where);', $src);
+        // Exactly one copy of the statement.
+        $this->assertSame(1, substr_count($src, 'select distinct awards.*, a.*,'));
+    }
 }

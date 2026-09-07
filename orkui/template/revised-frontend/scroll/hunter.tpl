@@ -26,13 +26,13 @@
     <?php /* Border drawn twice: a multiply pass, then an un-blended pass at 0.7.
              DELIBERATE — the second pass restores the linework the multiply ate.
              mix-blend-mode:normal is written out because the source writes it. */ ?>
-    <img src="<?= $art ?>/hunter/border.png" style="mix-blend-mode:multiply;" alt="">
-    <img src="<?= $art ?>/hunter/border.png" style="mix-blend-mode:normal;opacity:0.7;" alt="">
+    <img src="<?= scroll_art('hunter/border.png') ?>" style="mix-blend-mode:multiply;" alt="">
+    <img src="<?= scroll_art('hunter/border.png') ?>" style="mix-blend-mode:normal;opacity:0.7;" alt="">
 
     <?php /* hunter ships symbol_0.png, so the symbol path is UNGUARDED. Same two-pass
              treatment as the border — multiply, then a normal pass at 0.7. */ ?>
-    <div class="centre-bottom"><img src="<?= $art ?>/hunter/symbol_<?= (int) $s['rank'] ?>.png" style="mix-blend-mode:multiply;" alt=""></div>
-    <div class="centre-bottom"><img src="<?= $art ?>/hunter/symbol_<?= (int) $s['rank'] ?>.png" style="mix-blend-mode:normal;opacity:0.7;" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('hunter/symbol_' . (int) $s['rank'] . '.png') ?>" style="mix-blend-mode:multiply;" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('hunter/symbol_' . (int) $s['rank'] . '.png') ?>" style="mix-blend-mode:normal;opacity:0.7;" alt=""></div>
 
     <?php /* No common/rank_N.png numeral — hunter's symbol art carries the rank. */ ?>
     <?php scroll_partial('text', ['s' => $s]); ?>

@@ -73,6 +73,29 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
 .sc-empty    { padding: 30px 16px; text-align: center; color: var(--rp-text-muted); }
 .sc-warn     { color: #c05621; font-weight: 600; }
 
+/* The recipient's standing, in the SAME chip the composer's own player
+   autocomplete draws (scrollery.js render(), and revised.js's canonical kn-ac
+   renderer behind it). The declarations are that chip's, moved off the inline
+   style and onto a class because this one is emitted in a PHP loop; a second
+   visual treatment for the same fact is how two surfaces start disagreeing about
+   who is suspended.
+
+   MEASURED, not assumed. "suspended" carries its own ground, so white on #c53030 is
+   5.47:1 in either theme and needs nothing. "inactive" is bare text on the table, and
+   #e53e3e falls to 3.96:1 against the dark body — so it gets the dark lift every other
+   red on this page already has (.sc-warn does the same two lines below). #fc8181 is
+   6.68:1 there, and is the tone revised.css already uses for dark-mode red text.
+
+   Left alone in LIGHT mode on purpose, at the autocomplete's own #e53e3e — which is
+   4.13:1 and therefore short of AA for 10px bold. Changing it here would make the
+   bulk table a visibly different red from the composer's dropdown, which is the split
+   this class exists to avoid; the fix belongs to the shared chip (revised.js's kn-ac
+   renderer and its twin in scrollery.js), and is reported rather than made in one
+   table. */
+.sc-chip-suspended { margin-left: 6px; background: #c53030; color: #fff; font-size: 10px;
+                     font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+.sc-chip-inactive  { margin-left: 6px; color: #e53e3e; font-size: 10px; font-weight: 600; }
+
 /* reports.css carries no alert; these are the two tones this page needs. */
 .sc-alert    { border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-accent);
                background: var(--rp-bg-light); border-radius: 6px; padding: 10px 14px;
@@ -87,6 +110,7 @@ html[data-theme="dark"] .sc-table th,
 html[data-theme="dark"] .sc-table td { border-bottom-color: #4a5568; }
 html[data-theme="dark"] .sc-alert    { background: #2d3748; border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .sc-warn     { color: #f6ad55; }
+html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
 
 @media (max-width: 1000px) {
     .rp-body { flex-direction: column; }
@@ -281,12 +305,40 @@ html[data-theme="dark"] .sc-warn     { color: #f6ad55; }
                         </thead>
                         <tbody>
                         <?php foreach ($printable as $r): ?>
+                            <?php
+                            /*
+                             * Standing markers. The row prints the recipient plain
+                             * otherwise, while the composer's own autocomplete has
+                             * always marked these — so an officer could see that a
+                             * name was suspended while choosing it by hand and not
+                             * while printing two hundred of them.
+                             *
+                             * NOT a filter, and NOT unchecked by default: a suspended
+                             * member's past award is still theirs and the record is
+                             * still true. This is only so the officer sees it before
+                             * the paper does.
+                             *
+                             * Read with array_key_exists rather than a truthiness
+                             * test. Absent is a third state: a row shape that does
+                             * not carry the columns must draw NO chip, which is not
+                             * the same as drawing an "active" one. `Active` in
+                             * particular defaults to 1 in the model, so a plain
+                             * `(int) ($r['Active'] ?? 1) === 0` would read the same
+                             * either way and hide the distinction.
+                             */
+                            $suspended = array_key_exists('Suspended', $r) && (int) $r['Suspended'] === 1;
+                            $inactive  = array_key_exists('Active', $r) && (int) $r['Active'] === 0;
+                            ?>
                             <tr>
                                 <td class="sc-check">
                                     <input type="checkbox" class="sc-pick" value="<?= (int) $r['AwardsId'] ?>"
                                            aria-label="Print <?= htmlspecialchars((string) $r['Recipient'], ENT_QUOTES, 'UTF-8') ?>">
                                 </td>
-                                <td><?= htmlspecialchars((string) $r['Recipient'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td>
+                                    <?= htmlspecialchars((string) $r['Recipient'], ENT_QUOTES, 'UTF-8') ?>
+                                    <?php if ($suspended): ?><span class="sc-chip-suspended">suspended</span><?php endif; ?>
+                                    <?php if ($inactive): ?><span class="sc-chip-inactive">inactive</span><?php endif; ?>
+                                </td>
                                 <td><?= htmlspecialchars((string) $r['Title'], ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int) $r['Rank'] > 0 ? (int) $r['Rank'] : '&mdash;' ?></td>
                                 <td><?= htmlspecialchars((string) $r['PrettyDate'], ENT_QUOTES, 'UTF-8') ?></td>

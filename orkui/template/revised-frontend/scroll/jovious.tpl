@@ -20,12 +20,12 @@
 ?>
 <div class="award-template" data-order="jovious" data-rank="<?= (int) $s['rank'] ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php /* Replaces the parchment partial. */ ?>
-    <img src="<?= $art ?>/jovious/bg.jpg" alt="">
+    <img src="<?= scroll_art('jovious/bg.jpg') ?>" alt="">
 
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* jovious ships symbol_0.png, so the path is unguarded — as in the source. */ ?>
-    <div class="centre-bottom"><img src="<?= $art ?>/jovious/symbol_<?= (int) $s['rank'] ?>.png" alt=""></div>
+    <div class="centre-bottom"><img src="<?= scroll_art('jovious/symbol_' . (int) $s['rank'] . '.png') ?>" alt=""></div>
 
     <?php scroll_partial('text', ['s' => $s]); ?>
 </div>

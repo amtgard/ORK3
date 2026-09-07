@@ -24,9 +24,9 @@
              foreignObject's size — so, as in the source, they carry no class and
              no dimensions and still fill the certificate at their intrinsic size. */ ?>
     <?php if ((int) $s['rank'] === 0): ?>
-        <img src="<?= $art ?>/zodiac/bg_generic.jpg" alt="">
+        <img src="<?= scroll_art('zodiac/bg_generic.jpg') ?>" alt="">
     <?php else: ?>
-        <img src="<?= $art ?>/zodiac/bg_rank.jpg" alt="">
+        <img src="<?= scroll_art('zodiac/bg_rank.jpg') ?>" alt="">
     <?php endif; ?>
 
     <?php scroll_partial('heraldry', ['s' => $s, 'top' => 100, 'width' => 360, 'height' => 360]); ?>
@@ -35,7 +35,7 @@
              numeral, which is what the source's if.bind does. */ ?>
     <?php if ((int) $s['rank'] > 0): ?>
         <div class="centre-bottom">
-            <img src="<?= $art ?>/zodiac/rank_<?= (int) $s['rank'] ?>.png" style="margin:-37.5px" alt="">
+            <img src="<?= scroll_art('zodiac/rank_' . (int) $s['rank'] . '.png') ?>" style="margin:-37.5px" alt="">
         </div>
     <?php endif; ?>
 

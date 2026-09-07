@@ -566,6 +566,45 @@
         summaryEl.textContent = parts.join(', ') + '.';
     }
 
+    /*
+     * The border's colour pair, applied in place.
+     *
+     * scroll/_border.tpl writes --primary-color and --secondary-color as an inline
+     * style on the border <svg>, and the only two rules that read them —
+     * use.border-primary / use.border-secondary, in scrollery.css — resolve them
+     * through that element. Nothing else in the certificate consumes either. So a
+     * palette change is two custom property writes, exactly like the heraldry
+     * sliders, and used to cost a POST that re-ran BuildScroll() and re-serialised
+     * the whole certificate to produce a page differing in two strings.
+     *
+     * The elements are found by the property rather than by a selector, deliberately:
+     * _border.tpl belongs to another workstream this round, so there is no class to
+     * key on, and "the elements that declare this property" is a truer description of
+     * the consumers than any hook would be. dragon draws the partial twice (its glow
+     * pass overrides the primary); recolouring every declaring element keeps them in
+     * step, and the composer's design controls exist only for `custom`, which draws
+     * one.
+     *
+     * Returns false when the preview holds no such element — a raster border, or
+     * markup from a cached older template — and the caller then falls back to the
+     * round trip, which is the behaviour this replaces.
+     */
+    function applyPalette() {
+        if (!mount || !paletteEl) { return false; }
+
+        var pair    = (paletteEl.value || '|').split('|'),
+            applied = false;
+
+        Array.prototype.forEach.call(mount.querySelectorAll('svg'), function (el) {
+            if (el.style.getPropertyValue('--primary-color') === '') { return; }
+            el.style.setProperty('--primary-color', pair[0] || '');
+            el.style.setProperty('--secondary-color', pair[1] || '');
+            applied = true;
+        });
+
+        return applied;
+    }
+
     /* The chosen pair, shown beside its name — the colours are the point of the slot. */
     function syncSwatch() {
         if (!swatchEl || !paletteEl) { return; }
@@ -887,16 +926,30 @@
         el.addEventListener('change', function () { syncSwatch(); syncRecipeNote(); reload(); });
     });
 
-    // The palette is the exception: on a raster border the pair reaches nothing
-    // (scroll/_border.tpl is its only consumer and renders only for the knot and the
-    // band), so re-rendering the whole certificate to produce an identical page is a
-    // round trip spent to show the officer no difference. The control is inert in
-    // that state anyway; this is the guard behind it, not instead of it.
+    // The palette is the exception, twice over.
+    //
+    // On a raster border the pair reaches nothing (scroll/_border.tpl is its only
+    // consumer and renders only for the knot and the band), so there is nothing to
+    // redraw at all. The control is inert in that state anyway; this is the guard
+    // behind it, not instead of it.
+    //
+    // On a KNOT border — the case that actually matters, and the control an officer
+    // exercises most — the change is two custom properties on an element already in
+    // the preview, so it is applied in place for the same reason the heraldry sliders
+    // are. It used to POST, re-run BuildScroll() and re-render the whole certificate
+    // to redraw a page that differed in two colour strings; instant feedback is
+    // what makes a design space explorable, and this was the slowest control on it.
+    // The pair still travels on every later reload() and on the print URL through
+    // addRecipe(), so the server never sees a colour the preview did not.
     if (paletteEl) {
         paletteEl.addEventListener('change', function () {
             syncSwatch();
             syncRecipeNote();
-            if (borderDrawsKnot()) { reload(); } else { syncSummary(); }
+            if (!borderDrawsKnot()) { syncSummary(); return; }
+            // Falls back to the round trip only when the preview holds no element
+            // declaring the properties — nothing drawn yet, or a border partial that
+            // stopped writing them.
+            if (applyPalette()) { syncSummary(); } else { reload(); }
         });
     }
 
