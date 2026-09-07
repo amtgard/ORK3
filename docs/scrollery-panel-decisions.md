@@ -393,6 +393,80 @@ continue the work.
 
 ---
 
+## Batch 2 — decided 2026-09-06
+
+| # | Decision | Reading |
+|---|---|---|
+| **21** | *"what are you suggesting here? We do like 'Anno Amtgardia XLII' or whatnot?"* | **Answered below — awaiting your call on the wording.** My recommendation is *not* pseudo-Latin. |
+| **23** | *"what do you suggest here?"* | **Answered below.** Recommend the CSS-only half plus rubrication now; defer the notificatio line. |
+| **24** | *"go ahead and add a few additional medieval fonts from Google Fonts"* | Self-hosted, not CDN-linked — the phase-1 spec chose self-hosting deliberately, because a print path that silently falls back to a system serif when Google is slow is a bad failure mode. Offered as a per-print typeface choice. |
+| **29** | fix | Filter/sort/paginate `Scrollery/mine`, and carry `&variant=` so an Owl or Battle reprint can reach its other variants. |
+| **32** | *"we did this via Custom Titles, no?"* | **Correct — CLOSED.** Verified: all 27 active kingdoms carry Custom Award and Custom Title, the recipient name is free text, and `playerId` is optional, so compose already prints an arbitrary title to an arbitrary name. Only the Tournament hook ("print champion scrolls" off `Tournament/export`) remains, and that is its own feature. |
+| **35–42** | fix all | The whole performance and pipeline tier. |
+| **43** | fix | Rewrite both lede strings for the **new** ladders-only scope, not the panel's original wording. |
+| **45** | fix | Ground-contrast guard, CI asset-path check, written upstreaming gate. |
+| **46** | fix | Dead pronoun datalist, the profile/override asymmetry, suspended-recipient chips. |
+
+### 21 — the Amtgard Year: what I actually suggest
+
+**Not "Anno Amtgardia".** That is pseudo-Latin, and it is the exact thing the project's own
+rule warns against — *ORK flavour is context, not LARP cosplay; real terminology*. The
+manuscript lens said the same in stronger terms: no Latin, no "Hear ye", no invented
+orthography; where more formality is wanted, take it from Amtgard's own vocabulary, which
+is already real.
+
+Recommended form, appended to the existing date line:
+
+> 13th May 2024, in the XLII year of Amtgard
+
+Roman, to rhyme with the rank numeral artwork (verified: `common/rank_4.png` is **IV**).
+Pure `floor()` arithmetic against one epoch constant — no query, unit-testable.
+
+**Two things are yours to decide**, because you know the convention and I do not:
+1. **The wording.** "in the XLII year of Amtgard" is my suggestion; if the game has a
+   canonical form, use that instead. I am not confident one exists and would rather ask
+   than invent one and have it read wrong to every herald in the game.
+2. **The epoch.** 25 Feb 1983 is the commonly cited founding. Pick it once and record the
+   reasoning on the constant.
+
+Make it **opt-out per print** — a bulk reprint of 1998 grants should not be forced to carry
+a modern reckoning if that reads oddly.
+
+Also in this item and much cheaper: `AwardsForPlayer()` already returns `EventName` and
+`BuildScroll()` never reads it. **20,930 awards carry a named event** — "given at Midreign"
+is the one piece of provenance a framed scroll wants.
+
+### 23 — type craft: what I actually suggest
+
+Four things were bundled here. They are not equal, and one is materially riskier than the
+rest.
+
+**Do now — pure CSS, no layout risk:**
+- `line-height: 2` unitless on the reason. It is `2em` today, which compounds badly as the
+  autofit shrinks the font size, and `em` line-height does not inherit as a ratio.
+- Negative tracking on `.Order` and `.AwardeeName` — display-size calligraphic caps want
+  it, and the order line is the certificate's second-loudest element.
+- `font-variant-ligatures: common-ligatures` and `text-rendering: optimizeLegibility`.
+- Old-style numerals on the date **if** Averia carries the feature — check, do not assume.
+
+**Do now — rubrication, one CSS variable, high payoff:** pipe the order's primary colour
+onto the `.Order` line. Red-for-the-title is *the* recognisable manuscript signal, and it
+finally makes the per-order colour pair visible on the orders whose border is raster rather
+than knotwork. `print-color-adjust: exact` is already set, so it survives printing.
+⚠️ Seven orders have `primary => null` and need a default, and it must **not** apply on a
+dark ground — gate on `Scroll::DARK_GROUNDS`, which the composer already consults.
+
+**Optional — a versal:** enlarge and colour the first letter with `::first-letter`. No
+image, no markup.
+
+**Defer — the notificatio line** ("Know all who read these words that"). It is the one
+clause every real charter has and its absence is why the text reads as a template. But
+`.Award` is a flex column with `padding: 20% 17% 13%` and hand-tuned per-order
+`SignAndDate` overrides running to `min-height: 800px`. Adding a line shifts the block on
+all 16 orders, and warrior rank 9 (which is `flex-direction: column`) and crown (which
+resets `> div { width: auto !important }`) are the two that will break first. Worth doing —
+but as its own change, with all 16 orders eyeballed, not bundled into a CSS pass.
+
 ## Not yet ruled on — items 27–46
 
 Carried forward unchanged for a later batch.
