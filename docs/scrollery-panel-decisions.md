@@ -344,6 +344,47 @@ Three behaviours worth keeping:
 - **The officer's wording survives an award switch.** Changing between Custom Award and Custom
   Title re-defaults the box only until they type — the `rankTouched` idiom already in the file.
 
+### Can the baked-in borders be separated from their plates? — investigated 2026-09-06
+
+Asked after the fix above locked five grounds to their own frames. Recorded so nobody
+re-runs the analysis.
+
+**Three of the five are not "ground + border" at all.** `flame`, `sunburst`
+(`warrior/bg_10.jpg`) and `map` (`smith/bg.jpg`) are illustrated scenes — a fire and a
+landscape silhouette, a phoenix, a map with a castle. Separating the frame off those
+leaves **order-identity artwork**, not a neutral ground, which is the same reason phase 2
+excluded order symbols from the composer. Even a perfect extraction is the wrong thing to
+want here.
+
+**Automated matte extraction does not work on any of the five.** Measured, not assumed:
+
+- The plate's texture is overlaid **on the knot as well**. Linen's weave texture energy is
+  15.25 in the open interior and 15.29 inside the knot's flat fills — identical, so texture
+  cannot discriminate fill from ground.
+- Linen's knot contains **white strands the same colour as its ground**, so colour cannot
+  either.
+- They are **JPEGs**, so every hard black outline carries ringing that would fringe an
+  alpha matte.
+- The black outline IS a clean seed — the centre block is 0.0000–0.0002 dark against
+  5–11% overall, i.e. the outline exists only in the frame — but a seed is not a matte: the
+  knot is an open lattice, so filling from the outline also fills the openings the ground
+  shows through.
+
+**What does work, losslessly, for the two that really are a plain field:** crop the
+untouched interior of `linen` and `jovious` and mirror-tile it. No matte, no inpainting, no
+invented pixels. Auto-detect the largest motif-free rectangle rather than eyeballing an
+inset — linen's needle-and-thread cartouche sits at the vertical midpoint and two
+hand-picked insets clipped it and tiled it four times. Clean rects found: linen
+1399x2727 at x[707,2106] y[308,3035]; jovious 2098x2860 at x[227,2325] y[222,3082].
+That yields two new plain grounds usable with all eleven borders. **Not built** — it adds
+derived artwork to the repo and widens the vocabulary, which is a decision, not a fix.
+
+**The actual recommendation: ask Valory Fox whether the layered sources still exist.** If
+they do, all five separate perfectly in minutes — borders as transparent PNGs, grounds as
+clean plates — with no reconstruction and no derived-artwork question at all. One email
+against hours of imperfect pixel archaeology. NOTICE already records permission to
+continue the work.
+
 ### Tier 3 — Officer workflow
 
 | # | Finding | Decision | Reading |
