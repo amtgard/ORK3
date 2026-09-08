@@ -103,11 +103,14 @@ export function largestRun(m: Mask): number {
  * how dark that ink is. Zero when there is no type at all (an empty certificate
  * cannot have text-over-art), which is a real case and not a division by zero.
  */
-export function severity(glyph: Mask, interferer: Mask) {
+export function severity(glyph: Mask, interferer: Mask, area?: number) {
   const g = erode1(glyph);
   const i = erode1(interferer);
   const hit = intersect(g, i);
-  const glyphPx = count(g);
+  /* `area` overrides the divisor for the text-on-text case, where `glyph` is only ONE
+     parity of the type and dividing by it would score C n C on half the area the other
+     two pairs are scored on — making the three columns of the report incomparable. */
+  const glyphPx = area ?? count(g);
   if (glyphPx === 0) return { score: 0, overlapPx: 0, worstRun: 0 };
   let sum = 0;
   for (let p = 0; p < hit.bits.length; p++) if (hit.bits[p]) sum += hit.ink[p];

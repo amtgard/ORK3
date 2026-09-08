@@ -2,7 +2,7 @@ import type { Axes } from './axes';
 import { PROFILE_NAMES, type TextProfile } from './text';
 
 export type Surface = 'print' | 'preview';
-export type Stage = 'A' | 'B' | 'C' | 'D';
+export type Stage = 'A' | 'B' | 'C' | 'D' | 'N';
 
 export type SweepCase = {
   id: string;
@@ -142,4 +142,62 @@ export function enumerateExhaustiveC(a: Axes): SweepCase[] {
     }
   }
   return dedupe(cases);
+}
+
+/**
+ * The named cases: case zero and every previously-reported instance.
+ *
+ * These are swept ALWAYS, whatever stages are selected, because the acceptance
+ * criteria name them individually and a cross product is not guaranteed to contain any
+ * particular point of itself. Case zero is battle/arcane at rank 4 in Cinzel; stage B
+ * sweeps battle/arcane in Cinzel but at whatever rank stage A found tightest, and
+ * stage A sweeps rank 4 but in Chancery. Neither is the reported reproduction.
+ *
+ * Pinning them also means a regression in one of them fails loudly under its own name
+ * rather than as one row among sixteen hundred.
+ */
+export const NAMED_CASES: { name: string; c: Omit<SweepCase, 'id'> }[] = [
+  {
+    /* THE reproduction from the report: composer, kingdom scope, Order of Battle,
+       Arcane, Cinzel, "Kingdom" + "Crystal Groves" with both the and of, rank 4, no
+       recipient. The issuing line wraps to three and the left flourish runs through
+       the second. */
+    name: 'case-zero',
+    c: { stage: 'N', order: 'battle', variant: 'arcane', rank: 4, hand: 'cinzel',
+         text: 'caseZero', surface: 'print' },
+  },
+  /* The same reproduction on the other surface. The composer is where it was seen. */
+  {
+    name: 'case-zero-preview',
+    c: { stage: 'N', order: 'battle', variant: 'arcane', rank: 4, hand: 'cinzel',
+         text: 'caseZero', surface: 'preview' },
+  },
+  /* Uncial wraps the issuing line on the same content as Cinzel — measured, 320px
+     against Chancery's 163px — so it is the second member of the same family and not
+     a duplicate of the first. */
+  {
+    name: 'case-zero-uncial',
+    c: { stage: 'N', order: 'battle', variant: 'arcane', rank: 4, hand: 'uncial',
+         text: 'caseZero', surface: 'print' },
+  },
+  /* The sign-and-date family, as the four prior fixes left it. Each of these is a
+     case that HAS been fixed; they are here so that Task 11's constant-by-constant
+     retirement has a named guard rather than a row in a table. The date and signer
+     are driven long by the `max` profile, which is what made these visible at all:
+     crown clears its corner ornament on "9th August 2019" and does not on
+     "27th September 2026". */
+  { name: 'crown-signdate',   c: { stage: 'N', order: 'crown',   variant: '', rank: 5,  hand: 'chancery', text: 'max', surface: 'print' } },
+  { name: 'dragon-signdate',  c: { stage: 'N', order: 'dragon',  variant: '', rank: 10, hand: 'chancery', text: 'max', surface: 'print' } },
+  { name: 'garber-signdate',  c: { stage: 'N', order: 'garber',  variant: '', rank: 10, hand: 'chancery', text: 'max', surface: 'print' } },
+  { name: 'griffon-signdate', c: { stage: 'N', order: 'griffon', variant: '', rank: 7,  hand: 'chancery', text: 'max', surface: 'print' } },
+  /* The issuer-name-on-the-knotwork case: the longest real issuer name in the ORK, in
+     the widest hand, against the tightest frame (rose's head-band ink starts at 2243,
+     the tightest of the seventeen). */
+  { name: 'issuer-on-knotwork', c: { stage: 'N', order: 'rose', variant: '', rank: 5, hand: 'uncial', text: 'max', surface: 'print' } },
+  /* Light type on a dark ground — the surface a darkness metric silently passed. */
+  { name: 'cyanotype-white-type', c: { stage: 'N', order: 'owl', variant: 'cyanotype', rank: 9, hand: 'chancery', text: 'max', surface: 'print' } },
+];
+
+export function namedCases(): SweepCase[] {
+  return NAMED_CASES.map(({ name, c }) => ({ ...c, id: 'N_' + name }));
 }

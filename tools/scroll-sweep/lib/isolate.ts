@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type Layer = 'full' | 'G' | 'A' | 'B' | 'C' | 'Codd' | 'Ceven';
+export type Layer = 'full' | 'G' | 'A' | 'B' | 'C';
 
 const STYLE_ID = 'sweep-isolate';
 const GROUND_ATTR = 'data-sweep-ground';
@@ -41,9 +41,25 @@ const HIDE_GLYPHS = `.Award, .Award * {
   -webkit-text-fill-color: transparent !important;
   text-shadow: none !important; }`;
 
-const parityOff = (p: '0' | '1') => `[data-sweep-parity="${p}"], [data-sweep-parity="${p}"] * {
-  color: transparent !important; -webkit-text-fill-color: transparent !important; }`;
-
+/*
+ * ONE BLOCK ONLY — how text-on-text is measured.
+ *
+ * The first version of this partitioned the ten text blocks by parity and intersected
+ * the odd raster with the even one, on the reasoning that text-on-text can only happen
+ * between ADJACENT blocks and two rasters therefore cover all ten. Both halves of that
+ * were wrong, and a real defect proved it: on garber at rank 10 with a long signer, the
+ * flavour line runs into the signature. `.Flavour` is block 8 and `.AwardSignatory` is
+ * block 10 — the SAME parity — so their overlap appears in one raster and never in an
+ * intersection. The union guard could not see it either: same-parity ink is still in
+ * the union, so `Codd u Ceven == C` held while the collision sat there in the image.
+ *
+ * Blocks are not adjacent-only, and a guard that cannot fail is not a guard.
+ *
+ * So: screen on painted boxes, which OVER-report and therefore cannot miss a pair, then
+ * confirm each candidate pair on real pixels by rendering the two blocks alone. Boxes
+ * decide what to look at; only pixels decide the verdict. Typically no pairs at all, and
+ * never more than a handful, so this is cheaper than the six rasters it replaces.
+ */
 export const LAYER_CSS: Record<Layer, string> = {
   full: '',
   /* G — the ground alone. The base every other layer is differenced against. */
@@ -54,12 +70,6 @@ export const LAYER_CSS: Record<Layer, string> = {
   B: `${HIDE_OVERLAYS} ${HIDE_GLYPHS}`,
   /* C — ground + glyph ink. */
   C: `${HIDE_OVERLAYS} ${HIDE_ORNAMENT}`,
-  /* C by parity. Adjacent-block text-on-text is exactly odd n even, which is how two
-     rasters cover all ten blocks' pairwise adjacency instead of ten. The runner also
-     checks that Codd u Ceven reconstructs C, which is what catches a same-parity
-     (non-adjacent) overlap the parity trick cannot see. */
-  Codd: `${HIDE_OVERLAYS} ${HIDE_ORNAMENT} ${parityOff('0')}`,
-  Ceven: `${HIDE_OVERLAYS} ${HIDE_ORNAMENT} ${parityOff('1')}`,
 };
 
 /**
@@ -82,6 +92,12 @@ export const BLOCK_SEL = [
   '.AwardeeName',
   '.AwardDetails',
   '.Order',
+  /* The bare "for" between the order line and the citation. It has no hook of its own
+     — it is `section.Body` with inline styles — and leaving it out of the partition is
+     what made every case report a phantom 2.3 ppt of text-on-text: unpartitioned text
+     is hidden by NEITHER parity rule, so it appears in both rasters and intersects
+     itself. */
+  '.Award > section.Body:not(.Award_Reason):not(.Flavour)',
   '.Award_Reason',
   '.Flavour',
   '.AwardDate',
@@ -156,8 +172,24 @@ export async function applyLayer(page: Page, layer: Layer): Promise<void> {
     /* Partition in DOCUMENT order, per certificate, so one certificate's parity
        cannot leak into the next on a multi-up sheet. */
     document.querySelectorAll('.Award').forEach(award => {
+      award.querySelectorAll('[data-sweep-orphan]').forEach(el => el.removeAttribute('data-sweep-orphan'));
       Array.from(award.querySelectorAll(sel)).forEach((el, i) => {
         el.setAttribute('data-sweep-parity', String(i % 2));
+      });
+      /* Anything that paints type and sits under no partitioned block. Zero of these
+         today; the stamp exists so that a block added to _text.tpl and forgotten here
+         shows up as a parity LEAK in the report rather than as a phantom collision. */
+      award.querySelectorAll('*').forEach(el => {
+        if (el.children.length) return;
+        if (!(el.textContent || '').trim()) return;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        let p: Element | null = el;
+        while (p && p !== award) {
+          if (p.hasAttribute('data-sweep-parity')) return;
+          p = p.parentElement;
+        }
+        el.setAttribute('data-sweep-orphan', '1');
       });
     });
     let s = document.getElementById(id) as HTMLStyleElement | null;
@@ -168,4 +200,87 @@ export async function applyLayer(page: Page, layer: Layer): Promise<void> {
     }
     s.textContent = css;
   }, { css: LAYER_CSS[layer], id: STYLE_ID, sel: BLOCK_SEL });
+}
+
+/**
+ * Hide every glyph in the certificate except those inside block index `i`.
+ *
+ * Hides the OTHER blocks rather than hiding everything and restoring one: `color` is
+ * inherited, so a blanket `transparent !important` on .Award reaches into the block
+ * being isolated and there is no value to restore it to — `inherit` would resolve to
+ * the transparent parent. Hiding the complement leaves the wanted block's own cascade
+ * completely untouched, which is the point: it must render exactly as it does in C.
+ */
+export async function showOnlyBlock(page: Page, i: number): Promise<void> {
+  await page.evaluate(({ id, sel, idx }) => {
+    document.querySelectorAll('.Award').forEach(award => {
+      award.querySelectorAll('[data-sweep-orphan]').forEach(el => el.removeAttribute('data-sweep-orphan'));
+      Array.from(award.querySelectorAll(sel)).forEach((el, n) => {
+        el.setAttribute('data-sweep-block', String(n));
+      });
+      award.querySelectorAll('*').forEach(el => {
+        if (el.children.length) return;
+        if (!(el.textContent || '').trim()) return;
+        let p: Element | null = el;
+        while (p && p !== award) {
+          if (p.hasAttribute('data-sweep-block')) return;
+          p = p.parentElement;
+        }
+        el.setAttribute('data-sweep-orphan', '1');
+      });
+    });
+    const off = `color: transparent !important; -webkit-text-fill-color: transparent !important;`;
+    const css = `.award-template > *:not(.Award):not([data-sweep-ground]) { visibility: hidden !important; }
+      .Award img { visibility: hidden !important; }
+      [data-sweep-block]:not([data-sweep-block="${idx}"]),
+      [data-sweep-block]:not([data-sweep-block="${idx}"]) * { ${off} }
+      [data-sweep-orphan], [data-sweep-orphan] * { ${off} }`;
+    let st = document.getElementById(id) as HTMLStyleElement | null;
+    if (!st) { st = document.createElement('style'); st.id = id; document.head.appendChild(st); }
+    st.textContent = css;
+  }, { id: STYLE_ID, sel: BLOCK_SEL, idx: i });
+}
+
+/**
+ * The painted, clip-clamped box of each text block, in viewport px.
+ *
+ * PAINTED: the citation's surplus ruled lines are laid out 145px below the text and cut
+ * off by its own overflow:hidden, so an unclamped rect says the citation reaches the
+ * bottom of the page and every block below it looks overlapped. Same clamp as
+ * paintedBottom() in scrollery-autofit.js, in all four directions.
+ *
+ * This is a SCREEN, not a verdict. It over-reports — a box is not ink — so it cannot
+ * miss a pair, and every pair it proposes is then settled on pixels.
+ */
+export async function blockBoxes(page: Page) {
+  return page.evaluate((sel) => {
+    const award = document.querySelector('.Award') as HTMLElement;
+    const out: { i: number; top: number; bottom: number; left: number; right: number }[] = [];
+    Array.from(award.querySelectorAll(sel)).forEach((block, i) => {
+      let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+      const leaves = block.querySelectorAll('*').length ? block.querySelectorAll('*') : [block];
+      Array.from(leaves).forEach(el => {
+        if (el.children.length) return;
+        if (el.tagName === 'IMG') return;              // ornament, not glyph ink
+        if (!(el.textContent || '').trim()) return;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        let t = r.top, b = r.bottom, l = r.left, rt = r.right;
+        let p = el.parentElement;
+        while (p && p !== award.parentElement) {
+          if (getComputedStyle(p).overflow !== 'visible') {
+            const pr = p.getBoundingClientRect();
+            t = Math.max(t, pr.top); b = Math.min(b, pr.bottom);
+            l = Math.max(l, pr.left); rt = Math.min(rt, pr.right);
+          }
+          p = p.parentElement;
+        }
+        if (b <= t || rt <= l) return;
+        top = Math.min(top, t); bottom = Math.max(bottom, b);
+        left = Math.min(left, l); right = Math.max(right, rt);
+      });
+      if (Number.isFinite(top)) out.push({ i, top, bottom, left, right });
+    });
+    return out;
+  }, BLOCK_SEL);
 }

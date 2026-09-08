@@ -7,7 +7,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  /* The scroll sweep shards across workers; everything else in this repo is serial and
+     stays that way. ORK3_SWEEP_WORKERS is what the sweep npm script sets. */
+  workers: Number(process.env.ORK3_SWEEP_WORKERS ?? 1),
   reporter: 'list',
   use: {
     baseURL,
@@ -39,12 +41,23 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // One login, shared by every shard. See tools/scroll-sweep/auth.setup.ts: the app
+      // keeps a single-valued ork_mundane.token pointer beside the multi-device
+      // ork_session store, so six workers each logging in as the same officer knock
+      // each other out and half the matrix silently fails to render.
+      name: 'scroll-sweep-setup',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'auth.setup.ts',
+    },
+    {
       // deviceScaleFactor 1 and a 2550-wide viewport are load-bearing: the certificate
       // SVG is width:100% inside viewBox="0 0 2550 3300", so this puts one CSS pixel on
       // one frame pixel and makes every measurement scale-free.
       name: 'scroll-sweep',
       testDir: './tools/scroll-sweep',
       testMatch: 'sweep.spec.ts',
+      fullyParallel: true,
+      dependencies: ['scroll-sweep-setup'],
       timeout: 0,
       use: {
         ...devices['Desktop Chrome'],
@@ -53,7 +66,18 @@ export default defineConfig({
         // lower band and every sign-and-date measurement would read clean.
         viewport: { width: 2550, height: 3400 },
         deviceScaleFactor: 1,
+        storageState: (process.env.ORK3_SWEEP_OUT ?? './tools/scroll-sweep/out') + '/.auth.json',
       },
+    },
+    {
+      // Joins the shards. A dependency, not an afterAll hook: two workers writing one
+      // results file race, and a project dependency is the only thing that orders work
+      // across workers.
+      name: 'scroll-sweep-merge',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'merge.spec.ts',
+      dependencies: ['scroll-sweep'],
+      timeout: 0,
     },
   ],
 });

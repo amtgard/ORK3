@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { applyLayer, markGround, type Layer } from './isolate';
 
-export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C', 'Codd', 'Ceven'];
+export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C'];
 
 export type Clip = { x: number; y: number; width: number; height: number };
 
