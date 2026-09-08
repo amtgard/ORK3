@@ -1,0 +1,7 @@
+{
+  "_comment": "Order partials that no route can reach, with the reason. The sweep cannot cover these; ScrollSweepCoverageTest requires each to be declared here rather than silently skipped.",
+  "unreachable": ["hunter"],
+  "reasons": {
+    "hunter": "award_id 6969 is Arcanyst's invention and is not an ORK award id — system/lib/ork3/data/scroll-orders.php says so in as many words. No ork_kingdomaward row can resolve to it (verified against kingdom 1, which carries all sixteen other orders), so Scrollery/compose and Scrollery/render can never select hunter.tpl as an ORDER. hunter/border.png IS live as a custom-recipe border and stage C sweeps it."
+  }
+}

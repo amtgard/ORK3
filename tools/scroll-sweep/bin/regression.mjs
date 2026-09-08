@@ -14,7 +14,7 @@ const T = { ca: 300, cb: 500, cc: 95 };      // must match lib/report.ts THRESHO
 const dirty = r => r.ca > T.ca || r.cb > T.cb || r.cc > T.cc;
 const worst = r => Math.max(r.ca / T.ca, r.cb / T.cb, r.cc / T.cc);
 
-const base = JSON.parse(readFileSync(process.argv[2] ?? 'tools/scroll-sweep/baseline/results.json', 'utf8'));
+const base = JSON.parse(readFileSync(process.argv[2] ?? 'tools/scroll-sweep/baseline/results-1to1-NA.json', 'utf8'));
 const cur = JSON.parse(readFileSync(process.argv[3] ?? 'tools/scroll-sweep/out/results.json', 'utf8'));
 
 const norm = rs => Object.fromEntries(rs.map(r => [r.id, r.ca !== undefined ? r : {

@@ -17,6 +17,16 @@ const EXHAUSTIVE = process.env.ORK3_SWEEP_EXHAUSTIVE === '1';
 const ONLY = process.env.ORK3_SWEEP_ONLY;      // substring filter on case id, for iteration
 const LIMIT = Number(process.env.ORK3_SWEEP_LIMIT ?? 0);
 /*
+ * How many full renders each shard writes.
+ *
+ * At 1:1 a full-page PNG is 5.9 MB, so saving one per dirty case is ten gigabytes and
+ * it dominates the run — the first 1:1 baseline attempt spent more time encoding
+ * images than measuring. Nobody looks at seventeen hundred certificates; the worst
+ * dozen and the named cases are what get looked at, and every case's NUMBERS are in
+ * results.json either way. Raise it when you want a wider look.
+ */
+const MAX_PNG = Number(process.env.ORK3_SWEEP_MAX_PNG ?? 12);
+/*
  * SHARDS. The sweep is re-run after every single fix — that is the whole discipline,
  * since moving something to fix one collision creates another — so a one-hour serial
  * run would be ten hours across this piece of work. Each shard takes every Nth case
@@ -26,6 +36,16 @@ const LIMIT = Number(process.env.ORK3_SWEEP_LIMIT ?? 0);
  * hands: a run that dies halfway still has representative partial results.
  */
 const SHARDS = Math.max(1, Number(process.env.ORK3_SWEEP_SHARDS ?? 4));
+
+/** FNV-1a. Any stable string hash does; it only has to agree across workers. */
+function idHash(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0);
+}
 const STAGES = (process.env.ORK3_SWEEP_STAGES ?? 'NABCD').toUpperCase();
 
 /**
@@ -54,7 +74,7 @@ function baselineDParents(): Set<string> {
   const out = new Set<string>();
   try {
     const file = process.env.ORK3_SWEEP_BASELINE
-      ?? join(__dirname, 'baseline', 'results.json');
+      ?? join(__dirname, 'baseline', 'results-1to1-NA.json');
     const base = JSON.parse(readFileSync(file, 'utf8')) as { results: { id: string }[] };
     for (const r of base.results) {
       if (!r.id.startsWith('D_')) continue;
@@ -140,6 +160,7 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
 
   const results: Result[] = [];
   const failures: string[] = [];
+  let saved = 0;
 
   const measure = async (c: SweepCase): Promise<Result> => {
     const ch = byOrder[c.order];
@@ -213,7 +234,10 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
         results.push(r);
         /* Keep the full render only where somebody has to look. Every case would be
            gigabytes; the ones over threshold are the ones a person must see. */
-        if (isDirty(r)) {
+        /* Named cases always — they are the ones the acceptance criteria require
+           someone to have looked at. Everything else up to the cap. */
+        if (isDirty(r) && (c.stage === 'N' || saved < MAX_PNG)) {
+          if (c.stage !== 'N') { saved++; }
           const shots = await captureLayers(page);
           writeFileSync(join(OUT, `${c.id}.png`), shots.full);
         }
@@ -244,15 +268,23 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
          is not what a sheet-geometry axis is going to teach us anything about. */
       .sort((a, b) => worst(b) - worst(a))
       .slice(0, Number(process.env.ORK3_SWEEP_D_CAP ?? 150));
-    /* Sharded like the main list. stageD's FIXED representative set is identical in
-       every shard by construction, so without this each of those cases is run once per
-       shard — 475 duplicate runs in the first full sweep, and duplicate ids in the
-       merged results, which silently collapse when anything keys by id. The
-       near-threshold half is already per-shard because each shard only sees its own
-       results. */
+    /*
+     * Sharded BY ID, not by index.
+     *
+     * Two things have to hold at once: a case identical across shards must not run six
+     * times (475 duplicates in the first full sweep), and a case present in only some
+     * shards' lists must still run somewhere. Index sharding gives the first and not
+     * the second — each shard's D list is a different length because half of it comes
+     * from that shard's own near-threshold results, so `i % SHARDS` partitions six
+     * different lists and drops whatever falls between them. That is how 180
+     * baseline-dirty cases went unverified while the diff reported zero regressions.
+     *
+     * Hashing the id makes every shard reach the same verdict about a given case, so
+     * the union is exactly the set, once each, however the lists differ.
+     */
     const d = stageD(near, axes)
       .filter(reachable)
-      .filter((c, i) => (c.stage === 'D' && SHARDS > 1) ? i % SHARDS === shard : true);
+      .filter(c => SHARDS <= 1 || idHash(c.id) % SHARDS === shard);
     await run(d, 'D');
   }
 
