@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { loadCatalogue, type Choice } from './lib/catalogue';
 import { openPrint, openPreview } from './lib/drive';
 import { loadAxes } from './lib/axes';
@@ -37,6 +37,46 @@ const STAGES = (process.env.ORK3_SWEEP_STAGES ?? 'NABCD').toUpperCase();
  * geometry. The fixed set is what keeps the OTHER surface covered when nothing is near
  * the line at all, so a clean run still says something about the composer.
  */
+/**
+ * Every stage-D case the frozen baseline holds, as parent ids.
+ *
+ * Without this, stage D expands whatever is near threshold NOW — so a fix that moves
+ * cases away from the line shrinks stage D, and the before/after comparison silently
+ * runs on two different populations. The first run after the ornament fix compared
+ * 1,531 of 2,813 cases and quietly did not re-run 448 that the baseline had recorded as
+ * DIRTY. "No case that was clean became dirty" is not a claim you can make about a case
+ * you did not re-run.
+ *
+ * So the baseline's own D population is always re-expanded, on top of whatever is near
+ * the line now. The comparison population can then only grow.
+ */
+function baselineDParents(): Set<string> {
+  const out = new Set<string>();
+  try {
+    const file = process.env.ORK3_SWEEP_BASELINE
+      ?? join(__dirname, 'baseline', 'results.json');
+    const base = JSON.parse(readFileSync(file, 'utf8')) as { results: { id: string }[] };
+    for (const r of base.results) {
+      if (!r.id.startsWith('D_')) continue;
+      /*
+       * Recover the stage-A seed a D case was expanded FROM. A D id is the seed's with
+       * three things changed, and all three have to be undone:
+       *   D_        <- the stage prefix, which was A_
+       *   _preview  <- the surface, which on the seed is always _print
+       *   _up2 etc  <- the sheet suffix, appended
+       * Getting only the last of those was why 166 baseline-dirty cases still went
+       * unverified after the first attempt at this: every _preview case failed to
+       * match any seed and was silently dropped.
+       */
+      out.add('A_' + r.id
+        .replace(/^D_/, '')
+        .replace(/(_up[24]|_trim|_nolines)$/, '')
+        .replace(/_preview$/, '_print'));
+    }
+  } catch (e) { /* no baseline yet: the first run has nothing to preserve */ }
+  return out;
+}
+
 function stageD(near: Result[], axes: ReturnType<typeof loadAxes>): SweepCase[] {
   const out: SweepCase[] = [];
   const seed = enumerate(axes, 'A').filter(c => c.text !== 'empty');
@@ -47,9 +87,12 @@ function stageD(near: Result[], axes: ReturnType<typeof loadAxes>): SweepCase[] 
     { surface: 'preview' }, { up: 2 }, { up: 4 }, { trim: true }, { lines: false },
   ];
 
+  const keep = baselineDParents();
   const sources = [
     ...fixed,
     ...near.map(r => seed.find(c => c.id === r.id)).filter(Boolean) as SweepCase[],
+    /* Everything the baseline expanded, so the comparison population cannot shrink. */
+    ...seed.filter(c => keep.has(c.id)),
   ];
   const seen = new Set<string>();
   for (const src of sources) {
