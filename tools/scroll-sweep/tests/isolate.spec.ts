@@ -11,7 +11,7 @@ import { diffMask, count } from '../lib/mask';
 /* Same geometry as the sweep itself: 2550 wide puts one CSS pixel on one frame
    pixel, and 3400 tall is what lets a clipped screenshot reach the bottom of the
    certificate — screenshot({ clip }) is clamped to the viewport. */
-test.use({ viewport: { width: 2550, height: 3400 }, deviceScaleFactor: 1 });
+test.use({ viewport: { width: 2600, height: 3400 }, deviceScaleFactor: 1 });
 
 const KINGDOM = Number(process.env.ORK3_SWEEP_KINGDOM ?? 1);
 const pick = (order: string, text: string) =>
@@ -29,17 +29,17 @@ test('isolating a layer does not move the type', async ({ page }) => {
   });
 
   const before = await boxOf();
-  for (const layer of ['G', 'A', 'B', 'C', 'Codd', 'Ceven', 'full'] as const) {
+  for (const layer of ['G', 'A', 'B', 'C', 'full'] as const) {
     await applyLayer(page, layer);
     expect(await boxOf(), `layer ${layer} reflowed the page`).toEqual(before);
   }
 });
 
-test('the six rasters are produced, share a clip, and differ', async ({ page }) => {
+test('the five rasters are produced, share a clip, and differ', async ({ page }) => {
   const { byOrder } = await loadCatalogue(page, KINGDOM);
   await openPrint(page, pick('crown', 'max'), byOrder['crown'], KINGDOM);
   const shots = await captureLayers(page);
-  expect(Object.keys(shots).sort()).toEqual(['A', 'B', 'C', 'Ceven', 'Codd', 'G', 'full']);
+  expect(Object.keys(shots).sort()).toEqual(['A', 'B', 'C', 'G', 'full']);
   expect(shots.C.equals(shots.A), 'glyph layer is identical to the plate layer').toBe(false);
   expect(shots.C.equals(shots.full)).toBe(false);
 });
@@ -105,4 +105,31 @@ test('the type band is inside the frame and not the whole page', async ({ page }
   expect(band.width).toBeGreaterThan(100);
   expect(band.width).toBeLessThanOrEqual(Math.ceil(frame.w));
   expect(band.x).toBeGreaterThanOrEqual(Math.floor(frame.x));
+});
+
+test('a full-page wash is excluded, and a screen-blended border is not', async ({ page }) => {
+  const { byOrder } = await loadCatalogue(page, KINGDOM);
+
+  /* smith/burn.webp is a full-frame OPAQUE townscape at mix-blend-mode: soft-light. It
+     tints the whole page — a ground in everything but the compositing operator — and
+     before the wash test smith measured 179 of 179 cases dirty with an 848px "worst
+     run", describing the artwork the certificate is made of. */
+  await openPrint(page, pick('smith', 'max'), byOrder['smith'], KINGDOM);
+  const smith = await captureLayers(page);
+  const smithA = diffMask(smith.A, smith.G);
+  const smithBand = smithA.w * smithA.h;
+  expect(count(smithA) / smithBand,
+    'smith still reports its full-page wash as overlay artwork').toBeLessThan(0.5);
+
+  /* owl/border is ALSO full-frame and opaque and non-normal-blend — `screen` — but it
+     paints knotwork, not a tint, and the type really can collide with it. It must
+     survive the same test that removes smith's wash, or the test is just "ignore
+     anything big". */
+  const owl = { ...pick('owl', 'max'), variant: 'cyanotype' };
+  await openPrint(page, owl, byOrder['owl'], KINGDOM);
+  const owlShots = await captureLayers(page);
+  const owlA = diffMask(owlShots.A, owlShots.G);
+  expect(count(owlA), 'owl lost its border to the wash test').toBeGreaterThan(5000);
+  expect(count(owlA) / (owlA.w * owlA.h),
+    'owl/border should be localised knotwork, not a full-band tint').toBeLessThan(0.9);
 });

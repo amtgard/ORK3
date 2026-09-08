@@ -17,33 +17,41 @@ export const ZERO: Score = { score: 0, overlapPx: 0, worstRun: 0 };
  * DAMAGE IN INK PIXELS, NOT AS A FRACTION OF THE TYPE.
  *
  * `severity()` reports parts per thousand of the glyph area, and that ratio has a
- * confound this baseline made obvious: **68% of certificates with EMPTY optional
+ * confound an early baseline made obvious: **68% of certificates with EMPTY optional
  * fields came back dirty**, and an empty certificate should be the cleanest thing the
  * module can print.
  *
  * The cause is that the one DESIGNED overlap is a fixed AREA, not a fixed fraction.
- * Every certificate carries the same 26 px of #BottomTextFlourish sweeping around the
- * "Amtgard" versal. On a full certificate that is 26 of ~24,000 glyph pixels and
- * scores 0.9; on a blank one it is 26 of ~3,000 and scores 8 — over any threshold that
- * catches real defects. The ratio was measuring how much text the certificate had.
+ * Every certificate carries the same swash sweeping around the "Amtgard" versal. On a
+ * full certificate that is a small share of ~24,000 glyph pixels; on a blank one it is
+ * a large share of ~3,000, and it clears any threshold that catches real defects. The
+ * ratio was measuring how much text the certificate had.
  *
  * So the verdict is on ABSOLUTE damage: glyph pixels struck through, weighted by how
- * dark the thing striking them is. Derived from what severity() already returns rather
- * than measured separately, so an existing results.json can be re-scored without
- * re-running the sweep — which is how this correction was made without discarding a
- * 31-minute baseline.
+ * dark the thing striking them is. It is derived from what severity() already returns,
+ * so an existing results.json can be re-scored without re-running the sweep —
+ * rescore.spec.ts is that seam.
  *
- * Calibrated on the named cases, every one of which was rendered and LOOKED AT:
+ * THESE NUMBERS ARE IN FRAME PIXELS AND ONLY MEAN ANYTHING AT 1:1. The harness
+ * rasterises the certificate at its own 2550x3300 size (see forceFullScale); an
+ * earlier version downsampled to about a third of that, and every figure here was
+ * roughly twelve times smaller. If the rasterisation scale is ever changed again,
+ * these have to be re-derived and the baseline re-captured, or before and after are
+ * comparing resolutions rather than code.
  *
- *   C∩A  clean 0.0, 0.8, 20.6  |  defects 41 (garber's flavour over the tape measure),
- *                                 72 (dragon's signer over the knotwork),
- *                                 153 (crown's signature across the laurel)   -> 30
- *   C∩B  designed 21 (the versal, on every certificate in the module)
- *                                | defects 59 (case zero), 128, 137, 224      -> 40
- *   C∩C  clean 0 — there is no designed text-on-text at all
- *                                | defects 10.5 (garber flavour into signature), 35  -> 8
+ * Calibrated at 1:1 against the named cases, each of which was rendered and LOOKED AT,
+ * with the module's own layout reverted (ORK3_SWEEP_REVERT=1) to get the "before":
+ *
+ *   C∩A  clean 0 (griffon), 34 (dragon), 172 (issuer-on-knotwork)
+ *        defects 508 (cyanotype), 927 (garber), 1368 (crown across the laurel)
+ *        -> 300, which is 1.7x above the highest clean and 1.7x below the lowest defect
+ *   C∩B  designed 238-262 — the versal swash, on every certificate in the module
+ *        defects 974 (case zero), 975, 1877 (uncial), 3121 (issuer on the knotwork)
+ *        -> 500, 1.9x above the designed contact and 1.9x below the smallest defect
+ *   C∩C  no designed text-on-text exists at all, so the floor is a true zero
+ *        -> 95, the 0.32x-derived 8 carried across by the measured 11.9x scale ratio
  */
-export const THRESHOLDS = { CA: 30, CB: 40, CC: 8 };
+export const THRESHOLDS = { CA: 300, CB: 500, CC: 95 };
 
 /** Absolute weighted ink pixels: the ratio scaled back up by the area it was over. */
 export const ink = (s: Score, glyphPx: number) => (s.score * glyphPx) / 1000;

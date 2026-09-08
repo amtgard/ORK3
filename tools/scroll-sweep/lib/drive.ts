@@ -64,6 +64,51 @@ export function printUrl(c: SweepCase, ch: Choice, kingdomId: number): string {
  *             baseline is recorded in data-af-base and restored before each run), so
  *             calling it again here cannot compound.
  */
+/*
+ * MEASURE THE STATE BEFORE THIS WORK, AT THE SAME RESOLUTION.
+ *
+ * A baseline is only evidence if the before and the after were measured the same way,
+ * and this harness's rasterisation changed mid-flight — it was downsampling the
+ * certificate to about a third of frame size until forceFullScale() landed. Comparing
+ * a 1:1 run against a 0.32x baseline would compare resolutions, not code.
+ *
+ * Re-capturing the baseline means running the OLD layout behaviour, and the old
+ * behaviour is not recoverable from git: these files carry unrelated in-flight work
+ * that the "before" must keep. So the four changes are undone from OUTSIDE instead,
+ * after the autofit pass has run — which needs no hook in production code and leaves
+ * the working tree untouched:
+ *
+ *   1. fitTitle()          -> restore #IssuerTitle to the size the server wrote
+ *   2. anchorOrnaments()   -> drop the measured `top` back to the CSS default
+ *   3. date/signer fits    -> restore both to the size the server wrote
+ *   4. overflow-wrap       -> back to `normal` on the signature block
+ *
+ * Set ORK3_SWEEP_REVERT=1 to capture a baseline. It is not a supported way to render a
+ * certificate; it exists so that "no case that was clean became dirty" is a measured
+ * claim rather than an asserted one.
+ */
+const REVERT = process.env.ORK3_SWEEP_REVERT === '1';
+
+async function revertToBefore(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const restore = (sel: string) => {
+      document.querySelectorAll<HTMLElement>(sel).forEach(el => {
+        el.style.fontSize = el.getAttribute('data-af-inline') || '';
+      });
+    };
+    restore('#IssuerTitle');
+    restore('[data-scroll-text="date"]');
+    restore('[data-scroll-text="givenBy"]');
+    document.querySelectorAll<HTMLElement>('#BottomTextFlourish')
+      .forEach(el => el.style.removeProperty('top'));
+
+    const id = 'sweep-revert';
+    let st = document.getElementById(id) as HTMLStyleElement | null;
+    if (!st) { st = document.createElement('style'); st.id = id; document.head.appendChild(st); }
+    st.textContent = 'section.SignAndDate > div > p.Body { overflow-wrap: normal !important; }';
+  });
+}
+
 export async function settle(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(async () => {
@@ -75,6 +120,7 @@ export async function settle(page: Page): Promise<void> {
     const A = (window as unknown as { ScrolleryAutofit?: { fit?: (d: Document) => number } }).ScrolleryAutofit;
     if (A && typeof A.fit === 'function') A.fit(document);
   });
+  if (REVERT) { await revertToBefore(page); }
   await page.waitForTimeout(120);
 }
 

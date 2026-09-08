@@ -64,7 +64,7 @@ export default defineConfig({
         // Tall enough to hold the whole 2550x3300 certificate. screenshot({ clip })
         // is clamped to the VIEWPORT, so a short viewport silently truncates the
         // lower band and every sign-and-date measurement would read clean.
-        viewport: { width: 2550, height: 3400 },
+        viewport: { width: 2600, height: 3400 },
         deviceScaleFactor: 1,
         storageState: (process.env.ORK3_SWEEP_OUT ?? './tools/scroll-sweep/out') + '/.auth.json',
       },

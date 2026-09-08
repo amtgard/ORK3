@@ -5,7 +5,7 @@ import { openPrint, openPreview, printUrl } from '../lib/drive';
 import { loadAxes } from '../lib/axes';
 import { enumerate } from '../lib/cases';
 
-test.use({ viewport: { width: 2550, height: 3400 }, deviceScaleFactor: 1 });
+test.use({ viewport: { width: 2600, height: 3400 }, deviceScaleFactor: 1 });
 
 const KINGDOM = Number(process.env.ORK3_SWEEP_KINGDOM ?? 1);
 const caseZero = () => {

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import { applyLayer, markGround, type Layer } from './isolate';
+import { applyLayer, markGround, washCandidates, showOnlyPlate, markAsGround, forceFullScale, type Layer } from './isolate';
+import { diffMask, count } from './mask';
 
 export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C'];
 
@@ -24,6 +25,7 @@ export type Clip = { x: number; y: number; width: number; height: number };
  * its own measurement.
  */
 export async function typeBand(page: Page): Promise<Clip> {
+  await forceFullScale(page);
   return page.evaluate(() => {
     const award = document.querySelector('.Award') as HTMLElement | null;
     const frame = document.querySelector('svg[data-scroll-frame]') as SVGElement | null;
@@ -87,10 +89,12 @@ export async function typeBand(page: Page): Promise<Clip> {
  * be off by the difference.
  */
 export async function captureLayers(page: Page, clip?: Clip): Promise<Record<Layer, Buffer>> {
+  await forceFullScale(page);
   const band = clip ?? (await typeBand(page));
   /* Classify the grounds ONCE, on the unmodified page. Doing it per layer would ask
      an already-hidden image whether it is opaque. */
   await markGround(page);
+  await classifyWashes(page, band);
   const out = {} as Record<Layer, Buffer>;
   for (const layer of LAYERS) {
     await applyLayer(page, layer);
@@ -98,4 +102,66 @@ export async function captureLayers(page: Page, clip?: Clip): Promise<Record<Lay
   }
   await applyLayer(page, 'full');
   return out;
+}
+
+/**
+ * A FULL-PAGE WASH IS NOT A COLLISION, and only the pixels can say which is which.
+ *
+ * markGround() classifies a ground as full-frame, opaque, `mix-blend-mode: normal`.
+ * The blend condition is what keeps owl/border — a full-frame OPAQUE image drawn at
+ * `screen`, whose dark field vanishes and whose knotwork does not — on the overlay
+ * side where it belongs. But it also puts smith/burn there: a full-frame opaque
+ * townscape drawn at `soft-light`, which tints the entire page and is a ground in
+ * everything but the compositing operator. Every glyph on a smith certificate sits on
+ * it, so smith came back 179 of 179 dirty with a "worst run" of 848 px — describing
+ * the artwork the certificate is MADE of.
+ *
+ * No element property separates the two: both are full-frame, opaque, non-normal
+ * blends. What separates them is what they actually paint. So each candidate is drawn
+ * alone over the ground and measured: a layer that covers essentially the whole type
+ * band changes the page uniformly and cannot be avoided by moving type anywhere, which
+ * makes it a wash; a layer that covers part of it is artwork the type can collide with.
+ *
+ * Cached per plate signature: the plates are a function of order, variant, rank and
+ * recipe, and are the same for every hand and every string, so this costs a handful of
+ * rasters per certificate DESIGN rather than per case.
+ */
+const WASH_COVERAGE = 0.9;
+const washCache = new Map<string, number[]>();
+
+async function plateSignature(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const t = document.querySelector('.award-template') as HTMLElement | null;
+    if (!t) return '';
+    return [t.dataset.order, t.dataset.variant, t.dataset.rank, t.dataset.ground, t.dataset.border]
+      .join('|');
+  });
+}
+
+export async function classifyWashes(page: Page, band: Clip): Promise<void> {
+  const sig = await plateSignature(page);
+  const cached = washCache.get(sig);
+  if (cached) {
+    for (const i of cached) await markAsGround(page, i);
+    await applyLayer(page, 'full');
+    return;
+  }
+
+  const candidates = await washCandidates(page);
+  if (!candidates.length) { washCache.set(sig, []); return; }
+
+  await applyLayer(page, 'G');
+  const ground = await page.screenshot({ clip: band, type: 'png', animations: 'disabled' });
+  const area = band.width * band.height;
+
+  const washes: number[] = [];
+  for (const i of candidates) {
+    await showOnlyPlate(page, i);
+    const shot = await page.screenshot({ clip: band, type: 'png', animations: 'disabled' });
+    if (count(diffMask(shot, ground)) / area > WASH_COVERAGE) washes.push(i);
+  }
+
+  washCache.set(sig, washes);
+  for (const i of washes) await markAsGround(page, i);
+  await applyLayer(page, 'full');
 }

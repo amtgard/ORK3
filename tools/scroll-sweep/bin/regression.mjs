@@ -10,7 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 
-const T = { ca: 30, cb: 40, cc: 8 };          // must match lib/report.ts THRESHOLDS
+const T = { ca: 300, cb: 500, cc: 95 };      // must match lib/report.ts THRESHOLDS
 const dirty = r => r.ca > T.ca || r.cb > T.cb || r.cc > T.cc;
 const worst = r => Math.max(r.ca / T.ca, r.cb / T.cb, r.cc / T.cc);
 

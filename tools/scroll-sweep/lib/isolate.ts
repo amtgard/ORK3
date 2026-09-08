@@ -3,6 +3,36 @@ import type { Page } from '@playwright/test';
 export type Layer = 'full' | 'G' | 'A' | 'B' | 'C';
 
 const STYLE_ID = 'sweep-isolate';
+const SCALE_ID = 'sweep-scale';
+
+/*
+ * RASTERISE AT 1:1 WITH THE FRAME.
+ *
+ * The certificate is `<svg viewBox="0 0 2550 3300" width="100%">`, and on the print
+ * page that resolves to about 816 CSS px — so every raster was a 0.32x DOWNSAMPLE of
+ * the thing being measured, and a hairline swash stroke is the first casualty of that.
+ * Measuring painted pixels is the whole premise of this harness; measuring a third of
+ * them is a quieter version of measuring boxes.
+ *
+ * Forcing the SVG to its own intrinsic size is free of side effects, which is what
+ * makes this safe: the foreignObject's contents are ALWAYS laid out in the frame's
+ * 2550x3300 coordinate space whatever the SVG is displayed at. Only the visual scale
+ * changes, never the layout — so no line rewraps and no fitted size moves.
+ */
+const SCALE_CSS = `svg[data-scroll-frame] {
+    width: 2550px !important; height: 3300px !important;
+    max-width: none !important; max-height: none !important; }
+  .scroll-page, .sc-stage, .sc-preview, .scroll-flow, body {
+    max-width: none !important; overflow: visible !important; }`;
+
+/** Force 1:1 rasterisation. Idempotent; call before measuring anything. */
+export async function forceFullScale(page: Page): Promise<void> {
+  await page.evaluate(({ id, css }) => {
+    let st = document.getElementById(id) as HTMLStyleElement | null;
+    if (!st) { st = document.createElement('style'); st.id = id; document.head.appendChild(st); }
+    st.textContent = css;
+  }, { id: SCALE_ID, css: SCALE_CSS });
+}
 const GROUND_ATTR = 'data-sweep-ground';
 
 /*
@@ -283,4 +313,46 @@ export async function blockBoxes(page: Page) {
     });
     return out;
   }, BLOCK_SEL);
+}
+
+/**
+ * The full-frame layers that are NOT already classified as ground, with their index.
+ * Candidates for the wash test in raster.ts.
+ */
+export async function washCandidates(page: Page): Promise<number[]> {
+  return page.evaluate((attr) => {
+    const out: number[] = [];
+    document.querySelectorAll('.award-template').forEach(tpl => {
+      const r0 = tpl.getBoundingClientRect();
+      Array.from(tpl.children).forEach((el, i) => {
+        el.setAttribute('data-sweep-plate', String(i));
+        if (el.classList.contains('Award')) return;
+        if (el.hasAttribute(attr)) return;
+        if (el.tagName !== 'IMG') return;
+        const r = el.getBoundingClientRect();
+        if (r.width < r0.width * 0.95 || r.height < r0.height * 0.95) return;
+        out.push(i);
+      });
+    });
+    return out;
+  }, GROUND_ATTR);
+}
+
+/** Show the ground plus exactly one plate, so that plate's own contribution can be seen. */
+export async function showOnlyPlate(page: Page, i: number): Promise<void> {
+  await page.evaluate(({ id, idx, attr }) => {
+    const css = `.award-template > *:not([data-sweep-plate="${idx}"]):not([${attr}]) {
+        visibility: hidden !important; }
+      .Award { visibility: hidden !important; }`;
+    let st = document.getElementById(id) as HTMLStyleElement | null;
+    if (!st) { st = document.createElement('style'); st.id = id; document.head.appendChild(st); }
+    st.textContent = css;
+  }, { id: STYLE_ID, idx: i, attr: GROUND_ATTR });
+}
+
+/** Promote a plate to ground for the rest of this page's measurement. */
+export async function markAsGround(page: Page, i: number): Promise<void> {
+  await page.evaluate(({ idx, attr }) => {
+    document.querySelectorAll(`[data-sweep-plate="${idx}"]`).forEach(el => el.setAttribute(attr, '1'));
+  }, { idx: i, attr: GROUND_ATTR });
 }
