@@ -117,3 +117,41 @@ export function severity(glyph: Mask, interferer: Mask) {
     worstRun: largestRun(hit),
   };
 }
+
+/**
+ * A layer's mask, measured as its DIFFERENCE FROM THE GROUND.
+ *
+ * WHY NOT DARKNESS. `inkMask` above scores ink as (1 - L) * alpha, which is a
+ * DARKNESS metric, and darkness is the wrong question on half this module's surfaces:
+ *
+ *   .award-template[data-order="owl"][data-variant="cyanotype"] .Award { color: #ffffff }
+ *
+ * Cyanotype certificates set the type WHITE, on a ground whose rendered mean
+ * luminance is 57. Measured against a white base every glyph on them scores zero and
+ * the sweep calls all of them clean — the same shape of error as the earlier probe
+ * calling owl's opaque blueprint plate an overlay and reporting 100% false ink on
+ * every owl certificate. Wrong in the other direction, equally worthless.
+ *
+ * Against the certificate's own ground the question becomes "how much does this layer
+ * change the page here", which is colour-blind, blend-mode-blind and ground-blind:
+ * black knotwork on parchment and a white numeral on cyanotype both come out strong,
+ * and a pale wash comes out weak — which is exactly the contrast weighting the spec
+ * asks for, arrived at by arithmetic rather than by a special case.
+ *
+ * Rec.709 luminance difference, because the question is perceptual.
+ */
+export function diffMask(layer: Buffer, ground: Buffer, floor = INK_FLOOR): Mask {
+  const a = PNG.sync.read(layer);
+  const g = PNG.sync.read(ground);
+  if (a.width !== g.width || a.height !== g.height) throw new Error('raster size mismatch');
+  const n = a.width * a.height;
+  const bits = new Uint8Array(n);
+  const ink = new Float32Array(n);
+  const lum = (d: Buffer | Uint8Array, i: number) =>
+    (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+  for (let p = 0, i = 0; p < n; p++, i += 4) {
+    const v = Math.abs(lum(a.data, i) - lum(g.data, i));
+    if (v > floor) { bits[p] = 1; ink[p] = v; }
+  }
+  return { w: a.width, h: a.height, bits, ink };
+}

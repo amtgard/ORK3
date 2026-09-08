@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { inkMask, erode1, intersect, count, largestRun, severity } from '../lib/mask';
+import { inkMask, diffMask, erode1, intersect, count, largestRun, severity } from '../lib/mask';
 
 /** A w x h PNG, white, with `paint` allowed to darken pixels. */
 function synth(w: number, h: number, paint: (x: number, y: number) => [number, number, number] | null): Buffer {
@@ -58,4 +58,34 @@ test('two antialiasing fringes touching is not a collision', () => {
   const a = erode1(inkMask(synth(20, 20, (x, y) => (y === 10 ? [40, 40, 40] : null))));
   const b = erode1(inkMask(synth(20, 20, (x, y) => (y === 11 ? [40, 40, 40] : null))));
   expect(count(intersect(a, b))).toBe(0);
+});
+
+test('diffMask finds white ink on a dark ground, which inkMask cannot', () => {
+  // The cyanotype case: white type on a dark blueprint plate.
+  const dark  = synth(20, 20, () => [20, 30, 60]);
+  const white = synth(20, 20, (x, y) => (y >= 8 && y <= 12 ? [255, 255, 255] : [20, 30, 60]));
+  /* inkMask gets this exactly INVERTED: it finds the 15 rows of dark GROUND and
+     scores the 5 rows of white TYPE at zero. Not merely blind — it would report the
+     ground as the ink and the type as blank paper. */
+  const viaInk = inkMask(white);
+  expect(count(viaInk)).toBe(20 * 15);
+  expect(viaInk.bits[10 * 20 + 10], 'inkMask sees no type where the type is').toBe(0);
+  const viaDiff = diffMask(white, dark);
+  expect(count(viaDiff)).toBe(20 * 5);            // exactly the five white rows
+  expect(viaDiff.ink[10 * 20 + 10]).toBeGreaterThan(0.8);
+});
+
+test('diffMask scores a pale wash weakly and dark knotwork strongly', () => {
+  const parchment = synth(20, 20, () => [222, 205, 170]);
+  const wash  = synth(20, 20, (x, y) => (y === 10 ? [205, 190, 158] : [222, 205, 170]));
+  const knot  = synth(20, 20, (x, y) => (y === 10 ? [20, 18, 15] : [222, 205, 170]));
+  const w = diffMask(wash, parchment);
+  const k = diffMask(knot, parchment);
+  expect(count(k)).toBeGreaterThan(0);
+  expect(k.ink[10 * 20 + 10]).toBeGreaterThan(w.ink[10 * 20 + 10] * 5);
+});
+
+test('diffMask sees nothing where a layer changed nothing', () => {
+  const g = synth(20, 20, () => [222, 205, 170]);
+  expect(count(diffMask(g, g))).toBe(0);
 });

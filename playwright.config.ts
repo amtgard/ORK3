@@ -48,7 +48,10 @@ export default defineConfig({
       timeout: 0,
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 2550, height: 1400 },
+        // Tall enough to hold the whole 2550x3300 certificate. screenshot({ clip })
+        // is clamped to the VIEWPORT, so a short viewport silently truncates the
+        // lower band and every sign-and-date measurement would read clean.
+        viewport: { width: 2550, height: 3400 },
         deviceScaleFactor: 1,
       },
     },
