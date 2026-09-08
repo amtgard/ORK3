@@ -33,5 +33,24 @@ export default defineConfig({
       testDir: './tools/fuzzy-validator/playwright',
       testMatch: '*.unit.spec.ts',
     },
+    {
+      name: 'scroll-sweep-unit',
+      testDir: './tools/scroll-sweep/tests',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // deviceScaleFactor 1 and a 2550-wide viewport are load-bearing: the certificate
+      // SVG is width:100% inside viewBox="0 0 2550 3300", so this puts one CSS pixel on
+      // one frame pixel and makes every measurement scale-free.
+      name: 'scroll-sweep',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'sweep.spec.ts',
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2550, height: 1400 },
+        deviceScaleFactor: 1,
+      },
+    },
   ],
 });

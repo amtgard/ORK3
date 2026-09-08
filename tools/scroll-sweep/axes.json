@@ -1,0 +1,152 @@
+{
+    "orderVariants": [
+        {
+            "order": "battle",
+            "variant": "arcane"
+        },
+        {
+            "order": "battle",
+            "variant": "martial"
+        },
+        {
+            "order": "crown",
+            "variant": ""
+        },
+        {
+            "order": "dragon",
+            "variant": ""
+        },
+        {
+            "order": "flame",
+            "variant": ""
+        },
+        {
+            "order": "garber",
+            "variant": ""
+        },
+        {
+            "order": "griffon",
+            "variant": ""
+        },
+        {
+            "order": "jovious",
+            "variant": ""
+        },
+        {
+            "order": "lion",
+            "variant": ""
+        },
+        {
+            "order": "hunter",
+            "variant": ""
+        },
+        {
+            "order": "hydra",
+            "variant": ""
+        },
+        {
+            "order": "mask",
+            "variant": ""
+        },
+        {
+            "order": "owl",
+            "variant": "parchment"
+        },
+        {
+            "order": "owl",
+            "variant": "cyanotype"
+        },
+        {
+            "order": "owl",
+            "variant": "transparency"
+        },
+        {
+            "order": "rose",
+            "variant": ""
+        },
+        {
+            "order": "smith",
+            "variant": ""
+        },
+        {
+            "order": "warrior",
+            "variant": ""
+        },
+        {
+            "order": "zodiac",
+            "variant": ""
+        },
+        {
+            "order": "custom",
+            "variant": ""
+        }
+    ],
+    "ranks": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+    ],
+    "hands": [
+        "chancery",
+        "sharp",
+        "pirata",
+        "cinzel",
+        "gotisch",
+        "uncial",
+        "fondamento",
+        "garamond",
+        "unicase",
+        "metamorphous"
+    ],
+    "grounds": [
+        "parchment",
+        "linen",
+        "jovious",
+        "flame",
+        "starfield",
+        "starfield2",
+        "cyanotype",
+        "sunburst",
+        "map",
+        "forge",
+        "rosewash",
+        "arcane"
+    ],
+    "borders": [
+        "none",
+        "knot",
+        "crown",
+        "hunter",
+        "hydra",
+        "lion",
+        "mask",
+        "owl",
+        "rose",
+        "smith",
+        "battle"
+    ],
+    "groundsWithOwnBorder": [
+        "linen",
+        "jovious",
+        "flame",
+        "sunburst",
+        "map"
+    ],
+    "rankSets": [
+        "common",
+        "zodiac",
+        "garber",
+        "flame"
+    ],
+    "caps": {
+        "customName": 64
+    }
+}
