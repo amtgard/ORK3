@@ -38,14 +38,24 @@
  * guessed a size for a 37-character name and shrank to the floor.
  */
 $res         = $s['resources'];
-$assetsRoot  = rtrim(HTTP_ASSETS, '/') . '/';
-$ordinals    = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
-$rank        = (int) $s['rank'];
+$ordinals    =['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
+
+/*
+ * `ordinalRank`, not `rank`. They are the same number for every grant up to the
+ * tenth and differ above it: `rank` is clamped to the art the order ships (there is
+ * no eleventh numeral to draw), while `ordinalRank` is what the row actually says.
+ * Writing the word from the art's number is what made 79 live grants — rank 11 to
+ * rank 22 — all letter "tenth". See Scroll::OrdinalRank().
+ *
+ * ?? for a scroll array built before that key existed (Render() is reachable with
+ * any such array, and a reprint route or a test may hand in an old one).
+ */
+$rank        = (int) ($s['ordinalRank'] ?? $s['rank']);
 
 /*
  * Past the last named ordinal, print the NUMERAL rather than nothing. The old
- * `$ordinals[$rank] ?? ''` printed "with their " and stopped — a silent, invisible
- * failure the moment anything lifts Scroll::ClampRank() past its current ceiling.
+ * `$ordinals[$rank] ?? ''` printed "with their " and stopped. This branch is live
+ * now rather than defensive: ranks 13 and up exist in the data and reach here.
  * Rank 0 keeps its empty string on purpose: the ordinal is a hand-written blank
  * there, drawn as the writing-line image below.
  */
@@ -86,15 +96,22 @@ $reasonFormula = '0.55,0.8,-0.15,150,200';
     <section class="IssuingTextSection">
         <p>
             <span style="font-size:1.15em;margin-right:-10px;position:relative;">Amtgard
-                <img id="TopTextFlourish" src="<?= $assetsRoot . $res['flourish_top'] ?>" class="Flourish" alt="">
-                <img id="BottomTextFlourish" src="<?= $assetsRoot . $res['flourish_bottom'] ?>" class="Flourish" alt="">
+                <img id="TopTextFlourish" src="<?= scroll_resource($res['flourish_top']) ?>" class="Flourish" alt="">
+                <img id="BottomTextFlourish" src="<?= scroll_resource($res['flourish_bottom']) ?>" class="Flourish" alt="">
             </span>
             <span id="IssuerTitle" data-scroll-text="issuerTitle">and<?= $s['useThe'] ? ' the' : '' ?> <?= scroll_e($s['issuerTitle']) ?><?= $s['useOf'] ? ' of' : '' ?></span>
             <br/>
         </p>
         <p>
-            <span data-scroll-text="issuerName" style="font-size:max(1em, calc(1em + 0.5em * (14 / <?= $issuerLen ?>)))"><?= scroll_e($s['issuerName']) ?></span>
-            <img id="RightTextFlourish" src="<?= $assetsRoot . $res['flourish_right'] ?>" class="Flourish" alt="">
+            <?php /* data-af-inv is this same formula as data, for scrollery-autofit.js —
+                     the reciprocal counterpart of data-af-len above and emitted for the
+                     same reason: the composer types a new issuer name into a preview the
+                     server sized for the old one, so the client has to be able to
+                     re-derive the ceiling rather than read a stale computed style. The
+                     five numbers are floor, intercept, coefficient, numerator and the
+                     max(10, ...) clamp $issuerLen already applies. */ ?>
+            <span data-scroll-text="issuerName" data-af-inv="1,1,0.5,14,10" style="font-size:max(1em, calc(1em + 0.5em * (14 / <?= $issuerLen ?>)))"><?= scroll_e($s['issuerName']) ?></span>
+            <img id="RightTextFlourish" src="<?= scroll_resource($res['flourish_right']) ?>" class="Flourish" alt="">
         </p>
         <p class="IssuingVerb Body">
             <span>presents</span>
@@ -103,8 +120,8 @@ $reasonFormula = '0.55,0.8,-0.15,150,200';
 
     <section style="flex-grow:0.4;">
         <p class="AwardeeName" data-af-len="<?= $nameFormula ?>" style="font-size:max(1.36em, calc(2.55em + -0.374em * ((<?= $playerLen ?> / 8))));">
-            <span data-scroll-text="player" data-blank="<?= $assetsRoot . $res['writing_line'] ?>" style="margin-top:0.3em;bottom:0;position:relative;">
-                <?php if ((string) $s['player'] === ''): ?><img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?><?= scroll_e($s['player']) ?>
+            <span data-scroll-text="player" data-blank="<?= scroll_resource($res['writing_line']) ?>" style="margin-top:0.3em;bottom:0;position:relative;">
+                <?php if ((string) $s['player'] === ''): ?><img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt=""><?php endif; ?><?= scroll_e($s['player']) ?>
             </span>
         </p>
         <?php /* The div stays even when the phrase does not: it carries
@@ -119,7 +136,7 @@ $reasonFormula = '0.55,0.8,-0.15,150,200';
             <?php if (!empty($s['ranked'])): ?>
             <span style="display:inline;" data-scroll-text="rankPhrase">
                 with <?= scroll_e($s['pronoun'] ?: 'their') ?> <?= scroll_e($ordinalWord) ?>
-                <?php if ($rank === 0): ?><img class="Underline" style="width:4em;" src="<?= $assetsRoot . $res['writing_line'] ?>" alt=""><?php endif; ?>
+                <?php if ($rank === 0): ?><img class="Underline" style="width:4em;" src="<?= scroll_resource($res['writing_line']) ?>" alt=""><?php endif; ?>
             </span>
             <?php /* A Custom Title has no ordinal, so the branch above renders nothing and
                      the recipient's name used to run straight into a bare phrase — two
@@ -139,7 +156,7 @@ $reasonFormula = '0.55,0.8,-0.15,150,200';
     <section class="Body Award_Reason Multiline" data-af-len="<?= $reasonFormula ?>" style="font-size:max(0.55em, calc(0.8em - 0.15em * (<?= $reasonLen ?> / 150)));margin-left:0.5em;margin-right:0.5em;margin-bottom:0.5em;flex-grow:0;">
         <div style="padding-top:0.42em;position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;">
             <?php for ($i = 0; $i < 6; $i++): ?>
-            <img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
+            <img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt="">
             <?php endfor; ?>
         </div>
         <p data-scroll-text="reason" style="display:inline-block;"><?= scroll_e($s['reason']) ?><?php if ((string) $s['reason'] === ''): ?><span><br/><br/></span><?php endif; ?></p>
@@ -153,14 +170,14 @@ $reasonFormula = '0.55,0.8,-0.15,150,200';
         <div class="AwardDate">
             <p data-scroll-text="date" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['date']) ?></p>
             <p style="font-size:0em">
-                <img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
+                <img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt="">
             </p>
             <p class="Body" style="display:inline-block;margin-block-start:0.4em;"><b><span>On this day...</span></b></p>
         </div>
         <div class="AwardSignatory">
             <p data-scroll-text="givenBy" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['givenBy']) ?></p>
             <p style="font-size:0em">
-                <img class="Underline" src="<?= $assetsRoot . $res['writing_line'] ?>" alt="">
+                <img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt="">
             </p>
             <p class="Body" style="display:inline-block;margin-block-start:0.4em;"><b><span>By my hand...</span></b></p>
         </div>

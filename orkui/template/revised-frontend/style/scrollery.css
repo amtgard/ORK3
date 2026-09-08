@@ -160,6 +160,95 @@
 }
 
 /* --------------------------------------------------------------------------
+   1a-iii. Six more display faces.
+
+   All SIL OFL 1.1, all self-hosted, all cut and converted the same way as the
+   four above — see NOTICE for the upstream source of each.
+
+   Every one of them is a DISPLAY face only. Grenze stays the text companion for
+   all six, which is not laziness: it is already vendored, it is the companion
+   three of the first four hands use, and it has the best Latin coverage in the
+   set (it misses one character in the whole ORK). Pairing each new display face
+   with a text face of its own would have cost about 500 KB of woff2 to change
+   the body copy of a certificate in ways nobody asked for.
+
+                                     glyphs  Latin-1  Lat Ext-A  breaks
+     Grenze Gotisch    blackletter     1111   100%       100%       1
+     Uncial Antiqua    insular uncial   371   100%      99.2%       3
+     EB Garamond       old-style        2271  100%       100%       0
+     Cormorant Unicase high contrast    1762   99%       100%       1
+     Metamorphous      storybook        425   100%      98.4%       2
+     Fondamento        running hand     372   100%      99.2%       3
+
+   `breaks` is the count of the 154 ORK personas containing a non-ASCII
+   character that this face cannot draw in full, counting only LATIN characters
+   — the Hangul, runic and enclosed-alphanumeric personas are not something any
+   Latin display face was ever going to render, and the fallback chain in section
+   3 covers them. Measured with fontTools against the live persona list, the same
+   way the first four were.
+
+   EB Garamond carries an `rlig` feature and was checked rather than assumed,
+   because a required ligature is exactly why UnifrakturMaguntia was rejected
+   above. All 28 of its required ligatures are gated on a leading `*` or `^` —
+   a scholarly annotation system — and none of them fuses letters, so no
+   recipient's name can be reshaped by it.
+
+   Two of the six are subset; the rest are not. EB Garamond and Cormorant Unicase
+   ship 3,247 and 3,203 glyphs including full Cyrillic, which no ORK persona uses.
+   Dropping the scripts nothing needs took them from 154 KB to 101 KB and 116 KB
+   to 58 KB with the persona breakage UNCHANGED (verified before and after, 4->4
+   and 6->6). The kept ranges are in NOTICE.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'Grenze Gotisch';
+    src: url('fonts/GrenzeGotisch-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Uncial Antiqua';
+    src: url('fonts/UncialAntiqua-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'EB Garamond';
+    src: url('fonts/EBGaramond-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Cormorant Unicase';
+    src: url('fonts/CormorantUnicase-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Metamorphous';
+    src: url('fonts/Metamorphous-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Fondamento';
+    src: url('fonts/Fondamento-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* --------------------------------------------------------------------------
    1a-ii. The hand: a per-print typeface choice.
 
    Four tokens, set once per certificate, consumed by the type rules in section 3.
@@ -221,6 +310,82 @@
     --sc-display-face: "Cinzel";
     --sc-text-face: "Grenze";
     --sc-display-track: 0.02em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* The six from section 1a-iii. All take Grenze as their text companion, so all
+   six set --sc-figures: oldstyle-nums — Grenze carries onum, which is what makes
+   that property do anything at all. The token is asserted on the TEXT face for
+   that reason: it is consumed by .Award .AwardDate .Body, which is set in the
+   companion and not in the display face.
+
+   --sc-display-track is per face and gated on evidence, exactly as above. Five of
+   the six carry GPOS kerning; Metamorphous carries none at all, so it takes 0 for
+   the same reason MedievalSharp does. */
+
+/* Textura. The gothic the module did not have: Pirata One is angular but light
+   and open, and this is the dense vertical texture that "blackletter" usually
+   means. Tightened like Pirata One, its nearest neighbour in the set — the
+   strokes are what make the colour, and space between them dilutes it. */
+[data-scroll-face="gotisch"] .award-template {
+    --sc-display-face: "Grenze Gotisch";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Insular uncial — the round majuscule hand of the Book of Kells, and the one
+   letterform that actually belongs beside the knotwork borders the module draws.
+   NOT tightened: uncial bowls are wide and nearly circular, and pulling them in
+   collides the o/c/e shapes that give the hand its whole character. */
+[data-scroll-face="uncial"] .award-template {
+    --sc-display-face: "Uncial Antiqua";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* The restrained hand. A real old-style book face rather than a costume one, for
+   a certificate that wants to read as a document — and the only face in the whole
+   set that draws every Latin character in the ORK. Tracked like the other text
+   face used at display size. */
+[data-scroll-face="garamond"] .award-template {
+    --sc-display-face: "EB Garamond";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* High-contrast Renaissance display. Its lowercase is drawn at small-capital
+   proportion (x-height 48% of the em against a 64% cap, a 75% ratio), so a
+   persona letters in one even band rather than with ascenders and descenders.
+   That is the same caveat Cinzel carries and a completely different look —
+   Cinzel is inscriptional Trajan, this is a pen-drawn Garamond. Letterspaced
+   positively for the same reason Cinzel is: caps want air, not less of it. */
+[data-scroll-face="unicase"] .award-template {
+    --sc-display-face: "Cormorant Unicase";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0.02em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* The storybook hand — the most overtly fantasy face in the set, and the one an
+   officer reaches for when the certificate is meant to look like a prop rather
+   than a record. No kern table at all, so it is not tightened; see MedievalSharp. */
+[data-scroll-face="metamorphous"] .award-template {
+    --sc-display-face: "Metamorphous";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* A running chancery hand — the one face here that reads as WRITTEN rather than
+   lettered, with entry and exit strokes that nearly join. Not tightened: those
+   strokes are the join, and negative tracking overlaps them into a smear. */
+[data-scroll-face="fondamento"] .award-template {
+    --sc-display-face: "Fondamento";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
     --sc-figures: oldstyle-nums;
 }
 
@@ -389,7 +554,12 @@ symbol {
 
     display: flex;
     align-items: center;
-    padding: 20% 17% 13% 17%;
+    /* 17% of 2550 is 433px, the flat side inset this design has always used. It is now
+       a FLOOR rather than the answer: --sc-safe-inset carries the measured inner
+       boundary of whatever border is actually drawn, and four of the nine intrude past
+       433 (hunter to 592). Only custom.tpl sets it — the sixteen fixed orders had their
+       art and their text drawn together and are left exactly as they were. */
+    padding: 20% max(17%, var(--sc-safe-inset, 0px)) 13% max(17%, var(--sc-safe-inset, 0px));
     justify-content: center;
 
     position: absolute;
@@ -447,32 +617,99 @@ symbol {
     bottom: 0.9em;
 }
 
+/* The swash beside the issuing body's NAME.
+
+   `top: 0.95em` is measured against the "Amtgard" span — the FIRST line — and this
+   ornament decorates the SECOND. Those are the same place only while the title line
+   takes one line, which in a wide hand it does not: measured on "Kingdom" with both
+   connectives, that line is 163px in Chancery and 318px in Cinzel, and its second line
+   drops straight into this swash's band.
+
+   The value stays because it is right for the one-line case and is what a render with
+   no JavaScript gets. scrollery-autofit.js's anchorOrnaments() measures where the name
+   paragraph actually ended up and overwrites `top` from it, clamped to
+   --sc-orn-travel-max. Same contract --sc-sign-lift-want has with --sc-sign-lift: the
+   declaration is the fallback and the ceiling, the measurement is the truth. */
 #BottomTextFlourish {
     width: 3.3em;
     left: -0.6em;
     top: 0.95em;
 }
 
+/* How far the right swash may hang past the type column.
+
+   ONE value rather than a per-order table. A table was on offer, but five of the
+   seventeen frames only have their head-band edge read off a crop rather than off
+   alpha, and shipping seventeen numbers of which five are unverified is worse than
+   shipping one that is safe for all of them.
+
+   0.9em is what the TIGHTEST frame allows. Rose's head-band ink starts at 2243; the
+   swash's tail tip lands at 2217 with 1.0em and 2207 with 0.9em — measured, not
+   derived — so 0.9em clears the tightest frame by 36px and every other by more. It was
+   -1.5em, which put the tip at 2259: inside rose, inside warrior and zodiac, and on
+   the knot band at 2316 within a hair.
+
+   Per-order widening is a real improvement to make later — it buys back issuer column
+   on the roomier frames — but it needs the five painted grounds measured properly
+   first. */
+.award-template {
+    --sc-swash-hang: 0.9em;
+
+    /* How far anchorOrnaments() may move an ornament from where it was drawn, in the
+       ornament's own em. A measured offset without a ceiling is how a pathological
+       block flings a flourish across the certificate; past this the composition is
+       asking for more than the ornament can give and the answer has to come from the
+       type instead, which is what the title ladder is for. 2.2em is a little over one
+       wrapped line of the issuing block, which is the case this exists to absorb. */
+    --sc-orn-travel-max: 2.2em;
+}
+
 #RightTextFlourish {
     width: 4.5em;
-    right: -1.5em;
+    right: calc(-1 * var(--sc-swash-hang, 1em));
     bottom: -1.2em;
 }
 
 /* Text content */
 section.IssuingTextSection > p:first-child {
     font-size: 1.3em;
-    left: -0.3em;
+    /* Was `left: -0.3em`. Its justification here read "against the knot (ink starts at
+       92px) that is 300px of clear parchment" — built entirely on the wrong 92. Against
+       the real 233 it put the versal's stem at x=226, on the knotwork, on all sixteen
+       fixed orders and not only on the composable scroll. */
+    left: 0;
     text-align: left;
     position: relative;
     line-height: 1.1em;
 }
 
+/* Line 2 carries the two ornament gutters, because the two swashes that reach into it
+   are positioned against IT and against the line above it. Putting the reserve here is
+   what makes the type yield to the ornament rather than the other way round — padding
+   the type while leaving the ornament's own offsets alone is what dragged the bottom
+   swash onto this line on an earlier attempt.
+
+   Both numbers come from the ornament's INK, not its box. Rasterising the SVGs and
+   scanning the alpha:
+
+     squiggly-bottom  ink stops at 0.890 of its box   (box 424x161)
+     squiggly-right   ink runs the full width through this line's own y band
+
+   which is the whole reason a bounding-box test kept reporting these as clear. */
 section.IssuingTextSection > p:nth-child(2) {
     text-align: right;
     position: relative;
-    margin-left: 3.5em;
     margin-top: -0.1em;
+
+    /* LEFT gutter. The bottom swash's ink reaches span_left + 3.50em (0.890 of a 3.3em
+       box offset -0.6em, in the span's own 1.495em type). `3.5em` was therefore the ink
+       edge with a ZERO gutter — it only ever looked right because line 1's -0.3em nudge
+       happened to add 40px, and that nudge is now gone. 4.4em leaves real air. */
+    margin-left: 4.4em;
+
+    /* RIGHT gutter, paired with --sc-swash-hang below so that the distance from the
+       type to the swash's ink is a constant rather than a function of the order. */
+    padding-right: max(0px, calc(1.9em - var(--sc-swash-hang, 1em)));
 }
 
 #IssuerTitle {
@@ -556,6 +793,24 @@ section.IssuingTextSection > p:nth-child(2) {
 .Body.Award_Reason {
     min-height: 2em;
     justify-self: stretch;
+}
+
+/* Reason lines off — the "Reason lines" switch on every Scrollery surface.
+
+   Scoped to .Award_Reason, so the date, the signature, the rank blank and the
+   empty-recipient blank keep their own rules; those are different affordances and
+   the switch does not claim them.
+
+   Hiding rather than not emitting is deliberate. The six rules live in a div that is
+   `position:absolute; inset:0` inside the reason box, so they are OUT OF FLOW: display:none
+   removes nothing the autofit measures, and the citation's fitted size and line count are
+   identical either way. Not emitting them would put a server-side condition in the middle
+   of the one text layer all seventeen orders share, for no visual gain.
+
+   Applies to every order for the same reason: the lines are in _text.tpl, which all
+   seventeen render. Nothing here keys on [data-order]. */
+[data-scroll-lines="0"] .Award .Body.Award_Reason .Underline {
+    display: none;
 }
 
 .Award .Body.Award_Reason {
@@ -647,10 +902,81 @@ section.IssuingTextSection > p:nth-child(2) {
     white-space: pre-line;
 }
 
+/* The issuing block: a definite width, and TEXT THAT STAYS INSIDE THE TEXT AREA.
+
+   The -10% margins are what put the issuer name on top of the knotwork. They exist so
+   #RightTextFlourish can hang past the type, and for a decorative curl that is right;
+   for the kingdom's name it is not, and the two were sharing one box. So the box keeps
+   its overhang for the ornament's sake and the text is padded back off it — every
+   line, not only a wrapped one, because a single right-aligned line that ends flush is
+   exactly the case in the report.
+
+   Padding rather than a narrower box, because #RightTextFlourish is positioned against
+   this element's PADDING box: the text moves and the flourish does not.
+
+   A DEFINITE width, where this used to be `min-width: 60%`.
+
+   .Award is `display:flex; align-items:center`, so this section was a shrink-to-fit
+   flex item: its width tracked its own contents. That makes the issuing line
+   unfittable, because the box shrinks in lockstep with the type inside it. Measured
+   on "The Kingdom of Crystal Groves" in Uncial Antiqua — as the issuer name was taken
+   down from 1.24em to 0.5em, the section went 2020 -> 1846 -> 1568 -> 1394 -> 1291px
+   and the text stayed on two lines the whole way down. Shrinking bought nothing; the
+   same "box that shrinks with you" trap fitReason() documents for the citation.
+
+   The box is the .Award text area and NOTHING MORE. It used to be 120% with -10%
+   margins each side, which is how the issuer name came to sit on the knotwork: the
+   overhang exists for the flourishes that hang off this block's corners, and the text
+   was sharing their box.
+
+   Padding the text back off that overhang was the obvious fix and the wrong one — the
+   three flourishes are positioned against the text's own boxes, so padding moved the
+   ornament along with the type and the swash landed across "The Kingdom of Crystal
+   Groves". The overhang belongs to the ornament, so it lives on the ornament: the
+   .Flourish offsets in section 3 reach outside this box, and this box holds only type.
+
+   A DEFINITE width, where this used to be `min-width: 60%`. .Award is
+   `display:flex; align-items:center`, so the section was a shrink-to-fit flex item and
+   its width tracked its own contents — which makes the issuing line unfittable, because
+   the box shrinks in lockstep with the type inside it. Measured on "The Kingdom of
+   Crystal Groves" in Uncial Antiqua: taking the issuer from 1.24em to 0.5em walked the
+   section 2020 -> 1846 -> 1568 -> 1394 -> 1291px and the text stayed on two lines the
+   whole way down. The same "box that shrinks with you" trap fitReason() documents. */
+/* THE HEADING BLOCK IS THE TEXT AREA. No overhang, on any order.
+
+   This was `width:120%; margin:0 -10%`, and a comment here asserted that was the drawn
+   composition and that removing it regressed correct art. Both claims were false, and
+   they were built on a measurement of mine that was wrong: I recorded the knotwork's
+   inner edge as 92px by reading element bounding boxes. 92 is the OUTER edge of the
+   braid. Rasterising the border and scanning it shows a ~141px woven band at x 92..233
+   and 2316..2458 — and across all seventeen surfaces, in the band the heading occupies
+   (y 300..1050), frame ink ends at 206..318 on the left and starts at 2243..2343 on the
+   right.
+
+   The overhang put type at x=2285. That is INSIDE the frame on rose (2243), warrior and
+   zodiac, and within 24..58px of it on the rest. There is no order for which 2285 was
+   correct — which is why the defect survived being "scoped away" from the sixteen fixed
+   orders twice.
+
+   Nothing is lost by clamping. .Award's own content box is 433.5..2116.5, already inside
+   every frame in this band by 115px (rose) to 227px (smith). The room the ornament needs
+   comes out of that, not out of the frame. */
 section.IssuingTextSection {
-    min-width: 60%;
-    margin-left: -10%;
-    margin-right: -10%;
+    width: 100%;
+}
+
+/* The signature block spreads wider than the text column on purpose — `width: 115%`
+   below — so the date and the signature sit out toward the corners. On the sixteen
+   fixed orders that is the drawn design and their art accommodates it: the widest
+   overhang measured across real data is 77px past the column, against a knot border
+   whose own inner edge is a further 340px out.
+
+   The custom scroll is the exception, because there the border is chosen rather than
+   drawn to fit. With hunter (inner edge 592px) the 115% spread reaches 2060 against a
+   frame that starts at 1958 — the signature line on the knotwork. So it is squared off
+   to the text column for that order only, and the sixteen keep their overhang. */
+.award-template[data-order="custom"] section.SignAndDate {
+    width: 100%;
 }
 
 section.SignAndDate {
@@ -671,6 +997,112 @@ section.SignAndDate > div {
 section.SignAndDate > div > p.Body {
     margin-block-end: 0em;
     margin-block-start: 0.75em;
+
+    /* The same safety net .AwardeeName carries, and for a sharper reason than there.
+       These two boxes are a fixed 7em wide, and a signature is a persona — 71 of them
+       are over 24 characters with NO space in them, so there is nothing to wrap at and
+       the word simply runs out of its box across the middle of the page. On crown that
+       is straight over the laurel wreath.
+
+       It is also what makes the fitting pass WORK. scrollery-autofit.js sizes these by
+       counting line boxes, and an unbreakable token that overflows its box is still
+       exactly one line box — so the ladder saw a name that "fitted" at full size and
+       never shrank it, while the name lay across the artwork. With `anywhere` the
+       overflow becomes a second line, the count becomes honest, and the ladder does
+       what it was written to do.
+
+       `anywhere` rather than `break-word` for the same reason as .AwardeeName: it is
+       the value that also shrinks min-content width, so the box stops being pushed
+       wider than the column by its own contents. */
+    overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+   Keeping the signature block off the plate.
+
+   The date and the signature are the last thing on the page and they sit lowest,
+   which is exactly where the bottom-corner ornaments of a border and the whole of a
+   centred rank badge also are. Nothing kept them apart: the block is pinned to the
+   bottom of .Award's content box, and .Award's bottom padding is a flat 13% that
+   never consulted --sc-safe-inset. So on some orders the date printed straight
+   through the artwork.
+
+   Found by rasterising it rather than by reading the CSS. A one-off browser probe
+   (not committed) loaded all 198 fixed order/rank/variant certificates in turn, read
+   the five text boxes of the signature block off the DOM in frame pixels, composited
+   every overlay plate that reaches that band into an alpha mask, and reported the
+   share of each box that lands on dark, opaque ink. Two things it did deliberately:
+
+     - it forced the longest date this app can print ("27th September 2026") and a
+       long real signer name into the block before measuring, because the collision
+       is DATA-dependent. Order of the Crown with "9th August 2019" clears its corner
+       ornament and with "7th September 2026" does not, which is why this read as
+       intermittent and survived every earlier pass;
+     - it judged a layer by its pixels, not its filename. ArtUrl() serves the print
+       rendition, so a .jpg master arrives as .webp and an extension test would have
+       called owl's opaque blueprint plate an overlay (it did: 100% "ink" on every owl
+       certificate, all of it false). A ground is opaque and covers the page by
+       design; only a layer with transparency is a candidate. Element opacity is read
+       off the computed style too — rose/burn.svg is drawn at 0.2 and cannot make a
+       date unreadable.
+
+   21 of the 198 came back dirty, in four families, and the lift below is the smallest
+   5px step that takes each of them under 0.5% coverage, plus a margin:
+
+     crown       all ranks   19.5% -> border corner ornaments + the laurel
+     dragon      r8 r9 r10    3.3-9.8% -> under_N knotwork
+     garber      r9 r10       1.1% -> the tape measure
+     griffon     r0 r5-r8     7.4-11.9% -> symbol_N, drawn twice
+
+   position/bottom rather than more padding: padding-bottom shortens .Award's content
+   box, and .Award centres its column, so a pad of X moves the block up by X/2 and
+   drags every line above it along. This moves the one block and nothing else. The
+   room it moves into is the block's own reserved height — min-height is 650px on
+   dragon and griffon against roughly 250px of content — so the lift is absorbed
+   above the date, not taken out of the citation.
+   -------------------------------------------------------------------------- */
+section.SignAndDate {
+    position: relative;
+    /* --sc-sign-lift-want is the ceiling, declared below and, for the composed
+       scroll, inline by custom.tpl. --sc-sign-lift is what scrollery-autofit.js
+       writes once it has measured how much room the citation actually left; with
+       the script off the ceiling applies unclamped, which is the old collision at
+       worst and never something new. */
+    bottom: var(--sc-sign-lift, var(--sc-sign-lift-want, 0px));
+}
+
+/* crown's ornaments are in the border, so every rank is affected equally. It also
+   carries margin-bottom:-50px from its source view, pushing the block a further 50px
+   INTO them; the measured lift already accounts for that. */
+.award-template[data-order="crown"] {
+    --sc-sign-lift-want: 340px;
+}
+
+/* griffon draws symbol_N twice at soft-light. Ranks 1-4, 9 and 10 measure clean and
+   are left where they are; rank 0 draws symbol_5. */
+.award-template[data-order="griffon"][data-rank="0"],
+.award-template[data-order="griffon"][data-rank="5"],
+.award-template[data-order="griffon"][data-rank="6"],
+.award-template[data-order="griffon"][data-rank="7"],
+.award-template[data-order="griffon"][data-rank="8"] {
+    --sc-sign-lift-want: 235px;
+}
+
+/* garber's plates only reach the block at the top of the ladder — the tape measure
+   grows with the rank. r9 and r10 are the same plate geometry. */
+.award-template[data-order="garber"][data-rank="9"],
+.award-template[data-order="garber"][data-rank="10"] {
+    --sc-sign-lift-want: 250px;
+}
+
+/* dragon's knotwork widens with the rank; r10 needs noticeably more than r8/r9. */
+.award-template[data-order="dragon"][data-rank="8"],
+.award-template[data-order="dragon"][data-rank="9"] {
+    --sc-sign-lift-want: 355px;
+}
+
+.award-template[data-order="dragon"][data-rank="10"] {
+    --sc-sign-lift-want: 425px;
 }
 
 /* Text figures on the date. "16th August 2026" set in lining figures puts four
@@ -708,9 +1140,19 @@ section.SignAndDate > div > p.Body {
    The selector list is Scroll::DARK_GROUNDS, spelled out. Keep the two in step:
    a ground added to that constant needs a line here, and ScrollRecipeTest guards
    the name itself against a rename in scroll-recipes.php.
+
+   The owl block below is not a duplicate. cyanotype reaches a certificate by two
+   different routes: as a GROUND on the composed scroll (data-ground), and as one of
+   owl's three VARIANTS (data-variant), which is the older of the two and the one
+   the sixteen fixed orders use. Only the ground was listed here, so an Order of the
+   Owl printed cyanotype kept the dark red on navy — measured 1.06:1 against the
+   plate, the one line on the certificate nobody could read — while the composed
+   scroll on the same plate was correctly lifted to white. Found by rendering it.
    -------------------------------------------------------------------------- */
 .award-template[data-ground="cyanotype"] .Award .Order,
-.award-template[data-ground="cyanotype"] .IssuingTextSection > p:first-child::first-letter {
+.award-template[data-ground="cyanotype"] .IssuingTextSection > p:first-child::first-letter,
+.award-template[data-order="owl"][data-variant="cyanotype"] .Award .Order,
+.award-template[data-order="owl"][data-variant="cyanotype"] .IssuingTextSection > p:first-child::first-letter {
     color: inherit;
 }
 
@@ -832,6 +1274,16 @@ section.SignAndDate > div > p.Body {
     filter: blur(1px) url(#OWL_edge-detect);
 }
 
+/* top:0 comes from .centre-top and bottom:0 is added here, so this box is
+   STRETCHED to the full 3300 rather than moved anywhere — which is not what the
+   note two rules up used to claim, and the claim mattered because it was the
+   stated reason for the declaration. What it actually buys is the same result by a
+   different mechanism: #OWL_edge-detect floods its region and then detects edges,
+   so the region's own boundary registers as one, and a boundary that coincides
+   with the page edges is a hairline nobody can see. Shrink this box back to its
+   content and the hairline reappears as a rectangle around the heraldry. Verified
+   by rendering with the filter forced off: the grid and the crossed box on an owl
+   certificate are painted into owl/border.jpg, not drawn by this. */
 .award-template[data-order="owl"] .owl-heraldry div.centre-top {
     position: absolute;
     bottom: 0;
@@ -962,6 +1414,31 @@ section.SignAndDate > div > p.Body {
     filter: brightness(1.9);
 }
 
+/* The mirror of the rule above, and the more common case.
+
+   Two of the four rank sets are painted in LIGHT ink because their home order's
+   plate is dark — zodiac's numeral is a pale constellation for a night sky, flame's
+   a bright numeral for its own fire. The custom scroll lets either sit on any of the
+   twelve grounds, and ten of those grounds are pale. Measured over the numeral's own
+   solid ink: zodiac on parchment and starfield is 1.50:1, on linen 1.52, on map
+   1.59; flame on parchment and jovious 1.58:1. A rank numeral at 1.5:1 is not a
+   subtle numeral, it is an absent one.
+
+   Darkening rather than outlining, to match how cyanotype is handled one rule up:
+   brightness() is monotone, so no part of the glyph can end up LIGHTER than it
+   started and the numeral keeps its own drawn form. 0.32 takes zodiac's pale fill
+   from a measured relative luminance of 0.686 to about 0.07, which against
+   parchment's 0.58 is 5.0:1 — comfortably past the 3:1 that non-text needs, without
+   reaching the flat black that would read as a different numeral.
+
+   Scoped to a NON-dark ground: on cyanotype the pale numeral is already at 10.67:1
+   and is the one thing there that must not be darkened. :not() is on the ground
+   attribute rather than a `dark` class because DARK_GROUNDS is the list custom.tpl
+   already keys on, and there is exactly one entry in it. */
+.award-template[data-order="custom"][data-rank-ink="pale"]:not([data-ground="cyanotype"]) .custom-rank {
+    filter: brightness(0.32);
+}
+
 /* --------------------------------------------------------------------------
    5. The print surface.
 
@@ -1066,6 +1543,34 @@ section.SignAndDate > div > p.Body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* The hand picker. A labelled control rather than a bare <select>: "Cinzel — Roman
+   capitals" in a toolbar with a Back and a Print button needs to say what it is. */
+.sc-toolbar-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--sc-ink-dim);
+    white-space: nowrap;
+}
+
+.sc-select {
+    /* Wide enough for "Cormorant Unicase Scroll Font" set in Cormorant Unicase — the
+       longest label in the widest of the ten faces. The labels are specimens now, so
+       they are set in the face they name and a box sized for UI type clips them. */
+    max-width: 22rem;
+    padding: 6px 10px;
+    border: 1px solid var(--sc-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sc-ink);
+    font: inherit;
+}
+
+.sc-select:hover,
+.sc-select:focus-visible {
+    background: var(--sc-hover);
 }
 
 .sc-btn {
@@ -1177,7 +1682,8 @@ section.SignAndDate > div > p.Body {
     display: none;
 }
 
-.sc-overflow-notice {
+.sc-overflow-notice,
+.sc-clip-notice {
     max-width: 8.5in;
     margin: 16px auto;
     padding: 12px 16px;
@@ -1222,7 +1728,8 @@ section.SignAndDate > div > p.Body {
        is blank but for the notice. */
     .sc-toolbar,
     .sc-advisory,
-    .sc-overflow-notice {
+    .sc-overflow-notice,
+    .sc-clip-notice {
         display: none !important;
     }
 

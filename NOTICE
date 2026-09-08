@@ -54,3 +54,57 @@ orkui/template/revised-frontend/style/fonts/Grenze-*.woff2
     (Grenze[wght].ttf, Grenze-Italic[wght].ttf)
   Modifications: static instances cut at wght 400 and 600 from the variable fonts
     with fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/GrenzeGotisch-Regular.woff2
+  Grenze Gotisch by The Grenze Gotisch Project Authors (Omnibus-Type).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/grenzegotisch
+    (GrenzeGotisch[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/UncialAntiqua-Regular.woff2
+  Uncial Antiqua by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/uncialantiqua
+    (UncialAntiqua-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Fondamento-Regular.woff2
+  Fondamento by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/fondamento
+    (Fondamento-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Metamorphous-Regular.woff2
+  Metamorphous by Sorkin Type Co. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/metamorphous
+    (Metamorphous-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/EBGaramond-Regular.woff2
+  EB Garamond by the EB Garamond Project Authors (Georg Duffner, Octavio Pardo).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/ebgaramond
+    (EBGaramond[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then SUBSET to the ranges below and converted to
+    WOFF2. Subsetting dropped 976 of 3,247 glyphs — full Cyrillic and assorted
+    symbol blocks that no ORK persona uses — taking the file from 154 KB to 101 KB
+    with the certificate's own coverage unchanged (verified: the same 4 personas
+    fail to render before and after, all of them Hangul/runic/enclosed-alphanumeric).
+    All OpenType layout features and all name records are retained.
+    Kept: U+0020-007E, U+00A0-024F, U+0250-02FF, U+0300-036F, U+0370-03FF,
+    U+1E00-1EFF, U+2000-206F, U+20A0-20BF, U+2100-214F, U+2190-21FF, U+2212.
+
+orkui/template/revised-frontend/style/fonts/CormorantUnicase-Regular.woff2
+  Cormorant Unicase by the Cormorant Project Authors (Christian Thalmann,
+  Catharsis Fonts).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/cormorantunicase
+    (CormorantUnicase-Regular.ttf)
+  Modifications: SUBSET to the same ranges as EB Garamond above and converted to
+    WOFF2. Dropped 1,441 of 3,203 glyphs, taking the file from 116 KB to 58 KB with
+    coverage unchanged (the same 6 personas fail before and after). All OpenType
+    layout features and all name records are retained.

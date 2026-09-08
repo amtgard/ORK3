@@ -204,6 +204,12 @@ final class ScrollAssetPathsTest extends TestCase
             return null;
         }
         $rel = substr($url, strlen($assets));
+
+        /* ArtUrl() appends ?v=<master sha> so a corrected plate can get past the
+           `immutable` cache header on assets/. It is part of the URL and not part of
+           the path, so it comes off before the file is looked for. */
+        $rel = strtok($rel, '?') ?: $rel;
+
         if (str_starts_with($rel, 'heraldry/')) {
             return null;   // player data, not shipped art
         }

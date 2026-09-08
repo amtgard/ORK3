@@ -114,6 +114,57 @@ final class ScrollResolutionTest extends TestCase
         $this->assertSame(10, Scroll::ClampRank($zodiac, 12));
     }
 
+    /**
+     * The ordinal is NOT clamped to the art, which is the whole point of it being a
+     * separate number. 79 live grants sit above rank 10 — 35 at 11, 19 at 12, out to
+     * one at 22 — and every one of them lettered "with their tenth" while its
+     * numeral, correctly, stayed at rank_10.
+     */
+    public function testOrdinalRankIsNotClampedToTheArtCeiling(): void
+    {
+        $griffon = Scroll::Orders()['griffon'];
+        $zodiac  = Scroll::Orders()['zodiac'];
+
+        $this->assertSame(10, Scroll::OrdinalRank($griffon, 10));
+        $this->assertSame(11, Scroll::OrdinalRank($griffon, 11), 'an eleventh grant is the eleventh');
+        $this->assertSame(22, Scroll::OrdinalRank($griffon, 22));
+        $this->assertSame(12, Scroll::OrdinalRank($zodiac, 12));
+
+        // Where the two differ is exactly and only above the ceiling.
+        foreach ([0, 1, 5, 9, 10] as $rank) {
+            $this->assertSame(
+                Scroll::ClampRank($griffon, $rank),
+                Scroll::OrdinalRank($griffon, $rank),
+                "art and ordinal must agree at rank $rank"
+            );
+        }
+    }
+
+    /**
+     * The LOWER bound is kept. warrior's art starts at rank 1 and a row recorded at
+     * 0 has always printed "first"; unclamping that would silently turn those into
+     * blank hand-write lines, which is a different decision than this one.
+     */
+    public function testOrdinalRankKeepsTheLowerBound(): void
+    {
+        $warrior = Scroll::Orders()['warrior'];
+
+        $this->assertSame(1, Scroll::OrdinalRank($warrior, 0));
+        $this->assertSame(1, Scroll::OrdinalRank($warrior, -3));
+    }
+
+    /**
+     * And the two numbers actually reach the certificate separately: `rank` drives
+     * the art, `ordinalRank` the word.
+     */
+    public function testBuildScrollCarriesBothRanks(): void
+    {
+        $scroll = Scroll::BuildScroll($this->row(['Rank' => 14]), ['player' => 'Testerly']);
+
+        $this->assertSame(10, $scroll['rank'], 'art clamps — there is no rank_14 plate');
+        $this->assertSame(14, $scroll['ordinalRank'], 'the word does not');
+    }
+
     public function testHasArtIsTrueForAnythingPrintableAndFalseForOfficerPositions(): void
     {
         // A specific order.

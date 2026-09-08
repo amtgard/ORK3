@@ -81,7 +81,20 @@ $borderStyle = Scroll::BORDER_STYLES[$recipe['border']][$tone] ?? Scroll::BORDER
  */
 $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
 ?>
-<div class="award-template" data-order="custom" data-rank="<?= $rank ?>" data-ground="<?= scroll_e($recipe['ground']) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
+<?php /* data-rankset is here for the same reason data-ground is: the numeral's
+         legibility is a property of the PAIR, and only the pair is known here.
+         scrollery.css reads both. */ ?>
+<?php /* --sc-sign-lift-want: how far to raise the date and signature so they are
+         not printed on the border's corner ornaments or on a full-page rank plate's
+         own furniture. Measured per (border, rank set, rank) — see
+         Scroll::SignLiftFor(). It is a ceiling; scrollery-autofit.js clamps it to
+         whatever room the citation left. */ ?>
+<?php /* --sc-safe-inset: where THIS border's art stops. The custom scroll is the one
+         place any border meets any ground with nobody having composed the pair by
+         hand, and four of the nine frames intrude past the flat padding .Award used
+         to rely on — hunter by 159px. Scroll::SafeInsetFor() never returns less than
+         that padding, so this can only ever move text further from the frame. */ ?>
+<div class="award-template" data-order="custom" data-rank="<?= $rank ?>" data-ground="<?= scroll_e($recipe['ground']) ?>" data-rankset="<?= scroll_e($recipe['rankSet']) ?>"<?= in_array($recipe['rankSet'], Scroll::PALE_RANK_SETS, true) ? ' data-rank-ink="pale"' : '' ?> style="position:absolute;top:0;left:0;right:0;bottom:0;--sc-safe-inset:<?= Scroll::SafeInsetFor((string) $recipe['border']) ?>px;--sc-sign-lift-want:<?= Scroll::SignLiftFor((string) $recipe['border'], (string) $recipe['rankSet'], $rank) ?>px;">
     <?php /* Every ground is exactly 2550x3300, the foreignObject's own size, which is
              what makes any one of them a drop-in swap for any other. */ ?>
     <?php if ($wash !== ''): ?>
@@ -105,7 +118,7 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
     <?php endif; ?>
 
     <?php if ($frame): ?>
-        <img class="bleed" src="<?= scroll_e(scroll_art($v['borders'][$recipe['border']])) ?>" style="<?= $borderStyle ?>" alt="">
+        <img class="bleed" <?= scroll_art_attrs($v['borders'][$recipe['border']]) ?> style="<?= $borderStyle ?>" alt="">
     <?php endif; ?>
 
     <?php if ($dark): ?>
@@ -145,24 +158,30 @@ $knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
                  print route and the display rendition on the composer's preview stage,
                  and the master wherever WebP lost to it. The escaping moved outward to
                  cover the whole URL rather than the vocabulary segment alone. */ ?>
-        <?php $rankSrc = scroll_e(scroll_art($v['rankSets'][$recipe['rankSet']] . '/rank_' . $rank . '.png')); ?>
+        <?php /* The numeral's own path, and the BOX it has to be drawn in. The box is
+                 the point: ArtUrl() may serve a display rendition a third the size of
+                 the master this layout was built against, and an <img> with no
+                 width/height then draws a third of the size — which is what put the
+                 whole of Order of the Flame's ground in the corner of the page. */ ?>
+        <?php $rankRel  = $v['rankSets'][$recipe['rankSet']] . '/rank_' . $rank . '.png'; ?>
+        <?php $rankAttr = scroll_art_attrs($rankRel); ?>
         <?php if ($recipe['rankSet'] === Scroll::RANK_SET_GLYPH): ?>
             <?php /* common/rank_N.png is a 292x171 glyph, so it needs a box and an
                      offset. 85px is griffon's own baseline for its ranks 1-5. */ ?>
             <div class="centre-bottom custom-rank" style="bottom:85px;">
-                <img src="<?= $rankSrc ?>" alt="">
+                <img <?= $rankAttr ?> alt="">
             </div>
         <?php elseif ($recipe['rankSet'] === Scroll::RANK_SET_OVERSIZED): ?>
             <?php /* zodiac's numerals are 2625x3375 — a whole transparent plate, 75px
                      oversized on both axes. zodiac.tpl's margin:-37.5px re-centres it. */ ?>
             <div class="centre-bottom custom-rank">
-                <img src="<?= $rankSrc ?>" style="margin:-37.5px" alt="">
+                <img <?= $rankAttr ?> style="margin:-37.5px" alt="">
             </div>
         <?php else: ?>
             <?php /* garber and flame ship full 2550x3300 transparent plates that place
                      their own numeral, so they are their own full-bleed layer — as in
                      garber.tpl and flame.tpl. A .centre-bottom box would shift them. */ ?>
-            <img class="bleed custom-rank" src="<?= $rankSrc ?>" alt="">
+            <img class="bleed custom-rank" <?= $rankAttr ?> alt="">
         <?php endif; ?>
     <?php endif; ?>
 

@@ -964,6 +964,20 @@
     });
 
     /*
+     * The date needs 'change' as well, and only the date.
+     *
+     * It is the one field here that is not typed into. A value chosen from a picker
+     * arrives as 'change' — that is true of the native date control on several
+     * browsers and it is true of Flatpickr, which sets the value and fires 'change'
+     * without firing 'input' at all. Bound to 'input' alone, picking a date left the
+     * preview showing the old one until some other field was touched.
+     *
+     * applyText is idempotent, so the extra fire when a typed date also blurs costs
+     * one re-fit and changes nothing on the page.
+     */
+    dateEl.addEventListener('change', applyText);
+
+    /*
      * Live, like the recipient and the reason beside it — the name is written into the
      * preview's own order line and re-fitted, with no round trip. It is not sent to the
      * server until the next reload() or the print, which is the same deal every other
@@ -1075,6 +1089,20 @@
         var wpq = withPhrase();
         if (wpq !== null) { qs.set('titlePhrase', wpq); }
         qs.set('print',       '1');
+        /*
+         * The hand goes with it, so the sheet that prints is lettered like the preview
+         * the officer just approved. It is a page parameter rather than one of the
+         * composed values above — see script/scrollery-hand.js — but it has to be ON
+         * the URL: the print window is a fresh document, and compose() renders through
+         * Scrollery_render.tpl, which reads &face= server-side to pick what to preload.
+         *
+         * Left off entirely when the module is missing, rather than defaulted here:
+         * the render page's own fallback is the one that should decide.
+         */
+        if (window.ScrolleryHand) { qs.set('face', window.ScrolleryHand.get()); }
+        /* Only when OFF — an absent parameter already means on, so the common case
+           keeps a clean URL. Same rule the server applies reading it back. */
+        if (window.ScrolleryLines && !window.ScrolleryLines.get()) { qs.set('lines', '0'); }
         window.open(cfg.uir + 'Scrollery/compose&' + qs.toString(), '_blank', 'noopener');
     }); }
 

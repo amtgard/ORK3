@@ -65,6 +65,7 @@ $haystack = static function (array $a) use ($displayTitle): string {
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 .sc-wrap        { max-width: 1100px; margin: 0 auto 60px; }
 /* .rp-context supplies surface, border, size and colour. */
@@ -222,6 +223,26 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                         <option value="order-asc">Order — A to Z</option>
                         <option value="order-desc">Order — Z to A</option>
                     </select>
+                </div>
+                <?php /* The hand. Here rather than only on the print page because this is
+                         the list an officer works through, and the choice has to be made
+                         BEFORE the links are followed — every View and Print href below is
+                         rewritten to carry it. Same list and same remembered value as the
+                         picker on the print page; see script/scrollery-hand.js. */ ?>
+                <div class="sc-tool">
+                    <label for="sc-face">Hand</label>
+                    <select id="sc-face" class="adm-select">
+                        <?php foreach (Scroll::Hands() as $handKey => $handDef): ?>
+                        <option value="<?= scroll_e($handKey) ?>" data-face-family="<?= scroll_e($handDef['family']) ?>"<?= $handKey === Scroll::DEFAULT_HAND ? ' selected' : '' ?>><?= scroll_e($handDef['label']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php /* The ruled lines behind the citation, carried onto every View and
+                         Print link below. Works for any award on this list — the rules
+                         are in the layer all seventeen orders share. */ ?>
+                <div class="sc-tool">
+                    <label class="sc-check" for="sc-lines">Reason lines</label>
+                    <input type="checkbox" id="sc-lines" checked>
                 </div>
                 <?php /* role="status", not "alert": it changes on every keystroke and an
                          assertive region would interrupt the typing that caused it. */ ?>
@@ -386,6 +407,18 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
 <?php /* revised.js carries the CRM's own themed confirm (window.orkConfirm) and its
          .ork-confirm-* styles are already in revised.css, which this page links.
          Native confirm() is not an option — it freezes the browser automation. */ ?>
+<?php /* The ten display faces, so each <option> in the hand picker draws in the face
+         it names. This page does not load scrollery.css and should not — see
+         Scroll::HandSpecimenStyles(), which generates these from the same 'hands'
+         data the picker reads.
+
+         Inside a <template> so the rules are INERT until scrollery-hand.js adopts
+         them on first contact with the control. A plain <style> here would declare
+         the families, the options' own font-family would reference them, and Chrome
+         would fetch all ten on page load — measured, ~290 KB on a page that is a
+         list of awards and has no other use for them. */ ?>
+<template id="sc-face-fonts"><style><?= Scroll::HandSpecimenStyles(HTTP_TEMPLATE . 'revised-frontend/style/fonts/') ?></style></template>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script>
 (function () {
@@ -441,10 +474,20 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         return sel ? sel.value : '';
     }
 
+    /* The hand rides on every outgoing link rather than being read by the print page
+       from storage, so that a link copied out of this table prints what the officer
+       was looking at when they copied it. Hand.decorate() is a no-op when the module
+       did not load. */
+    function withHand(url) {
+        var out = window.ScrolleryHand ? window.ScrolleryHand.decorate(url, window.ScrolleryHand.get()) : url;
+        if (window.ScrolleryLines) { out = window.ScrolleryLines.decorate(out, window.ScrolleryLines.get()); }
+        return out;
+    }
+
     function syncRowLinks(row) {
         var v    = variantOf(row),
-            base = UIR_SC + 'Scrollery/render&awards=' + row.dataset.id
-                 + (v ? '&variant=' + encodeURIComponent(v) : ''),
+            base = withHand(UIR_SC + 'Scrollery/render&awards=' + row.dataset.id
+                 + (v ? '&variant=' + encodeURIComponent(v) : '')),
             view  = row.querySelector('[data-sc-view]'),
             print = row.querySelector('[data-sc-print]');
         if (view)  { view.href  = base; }
@@ -455,6 +498,45 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         var sel = row.querySelector('[data-sc-variant]');
         if (sel) { sel.addEventListener('change', function () { syncRowLinks(row); }); }
     });
+
+    /*
+     * The hand picker. Nothing on THIS page is set in a certificate face — it is a
+     * table — so unlike the print page and the composer there is nothing to
+     * re-letter. All it does is rewrite where the links go, which is why every row
+     * has to be re-synced when it changes rather than only the one being edited.
+     */
+    (function () {
+        var faceEl = document.getElementById('sc-face');
+        if (!faceEl || !window.ScrolleryHand) { return; }
+
+        window.ScrolleryHand.init(<?= json_encode(array_keys(Scroll::Hands())) ?>, <?= json_encode(Scroll::DEFAULT_HAND) ?>);
+        /* Same re-sync as the hand: every row's href is rebuilt, because both settings
+           are carried by the link rather than read by the page it opens. */
+        if (window.ScrolleryLines) {
+            window.ScrolleryLines.bind(document.getElementById('sc-lines'), function () {
+                rows.forEach(syncRowLinks);
+            });
+        }
+
+        window.ScrolleryHand.bind(faceEl, function (face) {
+            rows.forEach(syncRowLinks);
+
+            /* The "open the rest one at a time" links, if a long run left some on the
+               page, were built with the previous hand. batchUrl() reads the hand at
+               call time, so anything built AFTER this is already right; these are the
+               ones already in the DOM, and they are re-decorated in place rather than
+               re-rendered because nothing here still knows what the batches were. */
+            if (batchBar) {
+                Array.prototype.forEach.call(batchBar.querySelectorAll('a[href]'), function (a) {
+                    a.href = window.ScrolleryHand.decorate(a.href, face);
+                });
+            }
+        });
+
+        /* The rows were rendered server-side with no face on them, so bring them into
+           line with the remembered hand before anything is clicked. */
+        rows.forEach(syncRowLinks);
+    }());
 
     /* ---- filter, sort, reveal ------------------------------------------ */
 
@@ -611,8 +693,8 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
     }
 
     function batchUrl(ids, variant) {
-        return UIR_SC + 'Scrollery/render&awards=' + ids.join(',')
-             + (variant ? '&variant=' + encodeURIComponent(variant) : '');
+        return withHand(UIR_SC + 'Scrollery/render&awards=' + ids.join(',')
+             + (variant ? '&variant=' + encodeURIComponent(variant) : ''));
     }
 
     function renderBatches(batches, variant) {

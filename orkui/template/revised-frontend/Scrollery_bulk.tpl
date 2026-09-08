@@ -49,6 +49,7 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 .sc-wrap     { max-width: 1300px; margin: 0 auto 60px; }
 /* The filters stack in the sidebar; each is a labelled .adm-input / .adm-select. */
@@ -193,6 +194,28 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
                                 <input type="date" id="sc-to" name="to" class="adm-input"
                                        value="<?= htmlspecialchars((string) ($To ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                             </div>
+                        </div>
+
+                        <?php /* The hand. In the search card because the choice has to be
+                                 made before the run is opened — batchUrl() carries it onto
+                                 every tab it opens. Same list and same remembered value as
+                                 the picker on the print page and the composer; see
+                                 script/scrollery-hand.js. */ ?>
+                        <div class="sc-f">
+                            <label for="sc-face">Hand (lettering)</label>
+                            <select id="sc-face" class="adm-select">
+                                <?php foreach (Scroll::Hands() as $handKey => $handDef): ?>
+                                <option value="<?= scroll_e($handKey) ?>" data-face-family="<?= scroll_e($handDef['family']) ?>"<?= $handKey === Scroll::DEFAULT_HAND ? ' selected' : '' ?>><?= scroll_e($handDef['label']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <?php /* Carried onto every tab the run opens. Any award, not only
+                                 a composed one. */ ?>
+                        <div class="sc-f">
+                            <label class="sc-check" for="sc-lines">
+                                <input type="checkbox" id="sc-lines" checked> Reason lines
+                            </label>
                         </div>
 
                         <div class="sc-f">
@@ -388,6 +411,65 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
 <?php /* revised.js carries the CRM's own themed confirm (window.orkConfirm) and its
          .ork-confirm-* styles are already in revised.css, which this page links.
          Native confirm() is not an option — it freezes the browser automation. */ ?>
+<?php /*
+    Date fields.
+
+    Flatpickr with altInput, as on Eventcreate/Eventnew/Kingdomnew/Parknew: the
+    officer reads "September 7, 2026" while the hidden real input keeps the Y-m-d
+    the route parses. A native <input type="date"> renders as `mm/dd/yyyy` on a US
+    locale and `dd/mm/yyyy` elsewhere, which on a form about award DATES is exactly
+    the field you do not want ambiguous.
+
+    No time component here, so altFormat is date-only rather than the module's usual
+    'F j, Y  h:i K' — an award is granted on a day, not at an hour.
+
+    Guarded on `window.flatpickr`: the CDN is third party, and a date field that
+    falls back to the native picker is a cosmetic loss, not a broken form.
+*/ ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function () {
+    if (!window.flatpickr) { return; }
+    var opts = {
+        dateFormat: 'Y-m-d',
+        altInput:   true,
+        altFormat:  'F j, Y',
+        allowInput: true
+    };
+    ['#sc-from', '#sc-to'].forEach(function (sel) {
+        if (document.querySelector(sel)) { flatpickr(sel, opts); }
+    });
+}());
+</script>
+<?php /* The ten display faces, so each <option> in the hand picker draws in the face
+         it names. This page does not load scrollery.css and should not — see
+         Scroll::HandSpecimenStyles(), which generates these from the same 'hands'
+         data the picker reads.
+
+         Inside a <template> so the rules are INERT until scrollery-hand.js adopts
+         them on first contact with the control. A plain <style> here would declare
+         the families, the options' own font-family would reference them, and Chrome
+         would fetch all ten on page load — measured, ~290 KB on a page that is a
+         list of awards and has no other use for them. */ ?>
+<template id="sc-face-fonts"><style><?= Scroll::HandSpecimenStyles(HTTP_TEMPLATE . 'revised-frontend/style/fonts/') ?></style></template>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js') ?>"></script>
+<script>
+/*
+ * Nothing on this page is set in a certificate face — it is a search form and a list
+ * of checkboxes — so the picker only has to remember the choice and let batchUrl()
+ * read it. No re-lettering and no link rewriting: every URL here is built at the
+ * moment the run is opened.
+ */
+(function () {
+    if (!window.ScrolleryHand) { return; }
+    window.ScrolleryHand.init(<?= json_encode(array_keys(Scroll::Hands())) ?>, <?= json_encode(Scroll::DEFAULT_HAND) ?>);
+    window.ScrolleryHand.bind(document.getElementById('sc-face'));
+    /* No callback: batchUrl() reads the store when the run is opened, so nothing on
+       this page needs rebuilding when the box changes. */
+    if (window.ScrolleryLines) { window.ScrolleryLines.bind(document.getElementById('sc-lines')); }
+}());
+</script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script>
 (function () {
@@ -480,7 +562,14 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
      * hand-edited list cannot print someone else's award.
      */
     function batchUrl(ids) {
-        return <?= json_encode(UIR) ?> + 'Scrollery/render&awards=' + ids.join(',');
+        var url = <?= json_encode(UIR) ?> + 'Scrollery/render&awards=' + ids.join(',');
+
+        /* Read at call time, not captured: the officer may change the hand between
+           finding the awards and opening the run. A no-op if the module did not load,
+           in which case the render page falls back to its own default. */
+        if (window.ScrolleryHand) { url = window.ScrolleryHand.decorate(url, window.ScrolleryHand.get()); }
+        if (window.ScrolleryLines) { url = window.ScrolleryLines.decorate(url, window.ScrolleryLines.get()); }
+        return url;
     }
 
     function openRun(ids) {

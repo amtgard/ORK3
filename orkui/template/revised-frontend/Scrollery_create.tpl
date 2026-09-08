@@ -167,6 +167,7 @@ $awardOption = static function (array $c) use ($customKind): string {
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime($reports) ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($css) ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 /* Page layout only. Every control is .adm-input / .adm-select / .adm-textarea and
    every container is .rp-*; what is left here is the preview stage, the slider
@@ -369,6 +370,28 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                 <div class="rp-filter-card-header"><i class="fa-solid fa-feather-pointed"></i> Wording</div>
                 <div class="rp-filter-card-body">
 
+                    <?php /* The hand. In Wording rather than in Scroll design, and that is
+                             the whole point: "Scroll design" is display:none for every order
+                             but the two custom entries, so a picker in there would be
+                             invisible on fifteen of the seventeen. The hand applies to all
+                             of them.
+
+                             It is also not a recipe key. The grounds and borders below are
+                             the composed ARTWORK and travel with the award; a hand is how one
+                             officer likes their certificates lettered, changes nothing about
+                             what the award is, and is remembered per browser. Same control,
+                             same list and same store as the one on the print page — see
+                             script/scrollery-hand.js. */ ?>
+                    <div class="sc-field">
+                        <label for="sc-face">Hand (lettering)</label>
+                        <select id="sc-face" class="adm-select">
+                            <?php foreach (Scroll::Hands() as $handKey => $handDef): ?>
+                            <option value="<?= scroll_e($handKey) ?>" data-face-family="<?= scroll_e($handDef['family']) ?>"<?= $handKey === Scroll::DEFAULT_HAND ? ' selected' : '' ?>><?= scroll_e($handDef['label']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="sc-hint">Applies to this print and is remembered for the next one. It is not stored on the award.</p>
+                    </div>
+
                     <div class="sc-row">
                         <div class="sc-field">
                             <label for="sc-issuer-title">Issuer title</label>
@@ -448,6 +471,18 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                     <div class="sc-field">
                         <label for="sc-reason">Reason</label>
                         <textarea id="sc-reason" class="adm-textarea" rows="2" placeholder="Left blank to hand-write"></textarea>
+                    </div>
+
+                    <?php /* The ruled writing lines behind the citation. Next to the
+                             Reason box because that is what it rules, and offered on
+                             EVERY award rather than only a composed one — the six rules
+                             live in the text layer all seventeen orders share. */ ?>
+                    <div class="sc-field">
+                        <label class="sc-check">
+                            <input type="checkbox" id="sc-lines" checked>
+                            <span>Reason lines</span>
+                        </label>
+                        <p class="sc-hint">The ruled lines behind the citation, for finishing a certificate by hand. Per print, and remembered — not stored on the award.</p>
                     </div>
 
                     <div class="sc-row">
@@ -589,9 +624,19 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                      #sc-summary is the composed sentence — the module's entire non-visual
                      channel. It is filled from the SAME option labels the selects show, so
                      it can never describe a different certificate than the one drawn. */ ?>
+            <?php /* data-scroll-face on the stage, not on <body>: scrollery.css switches
+                     hands off this attribute on ANY ancestor (section 1a-ii), and the
+                     stage is the only part of this page set in a certificate hand — the
+                     sidebar and the chrome are the CRM's own type and must stay that way.
+
+                     Emitted as the default and then corrected client-side from the
+                     officer's remembered choice, so the composer previews in the hand
+                     their last print used rather than always in Chancery. The render
+                     page is where the choice is MADE; this only honours it. */ ?>
             <div class="sc-preview">
                 <p class="rp-sr-only" id="sc-summary" aria-live="polite"></p>
                 <div class="sc-stage" id="sc-stage" role="img" aria-busy="false"
+                     data-scroll-face="chancery"
                      aria-label="Certificate preview">
                     <svg viewBox="0 0 2550 3300" id="sc-frame" data-scroll-frame
                          style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);">
@@ -622,5 +667,79 @@ window.ScConfig = {
     scopeId:    <?= (int) ($ScopeId ?? 0) ?>,
     kingdomId:  <?= (int) ($scope['KingdomId'] ?? 0) ?>
 };
+</script>
+
+<?php /*
+    Date fields.
+
+    Flatpickr with altInput, as on Eventcreate/Eventnew/Kingdomnew/Parknew: the
+    officer reads "September 7, 2026" while the hidden real input keeps the Y-m-d
+    the route parses. A native <input type="date"> renders as `mm/dd/yyyy` on a US
+    locale and `dd/mm/yyyy` elsewhere, which on a form about award DATES is exactly
+    the field you do not want ambiguous.
+
+    No time component here, so altFormat is date-only rather than the module's usual
+    'F j, Y  h:i K' — an award is granted on a day, not at an hour.
+
+    Guarded on `window.flatpickr`: the CDN is third party, and a date field that
+    falls back to the native picker is a cosmetic loss, not a broken form.
+*/ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js') ?>"></script>
+<script>
+/*
+ * The hand picker on the composer.
+ *
+ * Runs BEFORE scrollery.js so the stage carries the right attribute for its first
+ * fit — otherwise the composer opens in Chancery and silently re-letters a moment
+ * later, which reads as a flicker rather than as a choice.
+ *
+ * The attribute goes on #sc-stage, not on <body>: scrollery.css switches hands off
+ * [data-scroll-face] on ANY ancestor (section 1a-ii), and the stage is the only part
+ * of this page set in a certificate hand. The sidebar and the chrome are the CRM's
+ * own type and must stay that way.
+ */
+(function () {
+    var stage = document.getElementById('sc-stage');
+    var sel   = document.getElementById('sc-face');
+    if (!stage || !window.ScrolleryHand) { return; }
+
+    var Hand = window.ScrolleryHand;
+    Hand.init(<?= json_encode(array_keys(Scroll::Hands())) ?>, <?= json_encode(Scroll::DEFAULT_HAND) ?>);
+
+    /* Set the attribute directly for the opening render — Hand.apply() would also
+       ask ScrolleryAutofit to re-fit, and on first paint there is nothing mounted in
+       the stage yet for it to measure. */
+    stage.setAttribute('data-scroll-face', Hand.get());
+
+    Hand.bind(sel, function (face) {
+        Hand.apply(stage, face, stage);
+    });
+
+    /* The reason lines, on the preview stage. No re-fit: the rules are out of flow, so
+       hiding them changes nothing the autofit measures. */
+    var Lines = window.ScrolleryLines;
+    if (Lines) {
+        Lines.apply(stage, Lines.get());
+        Lines.bind(document.getElementById('sc-lines'), function (on) {
+            Lines.apply(stage, on);
+        });
+    }
+}());
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function () {
+    if (!window.flatpickr) { return; }
+    var opts = {
+        dateFormat: 'Y-m-d',
+        altInput:   true,
+        altFormat:  'F j, Y',
+        allowInput: true
+    };
+    ['#sc-date'].forEach(function (sel) {
+        if (document.querySelector(sel)) { flatpickr(sel, opts); }
+    });
+}());
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery.js') ?>"></script>

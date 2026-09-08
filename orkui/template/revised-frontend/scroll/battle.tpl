@@ -27,34 +27,34 @@ $variant = (string) $s['variant'];
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php if ($variant === 'arcane'): ?>
-        <img class="bleed" src="<?= scroll_art('battle/arcane/wash.jpg') ?>" style="mix-blend-mode: soft-light; opacity:0.8" alt="">
+        <img class="bleed" <?= scroll_art_attrs('battle/arcane/wash.jpg') ?> style="mix-blend-mode: soft-light; opacity:0.8" alt="">
     <?php endif; ?>
 
     <?php /* width="2291" is the source's own value; the file is one pixel wider
              (2292). Kept as written — changing it would resize the layer. */ ?>
     <div class="centre" style="margin-bottom:90px;">
-        <img width="2291" src="<?= scroll_art('battle/border_symbols.png') ?>" style="mix-blend-mode: multiply;" alt="">
+        <img width="2291" height="292" src="<?= scroll_art('battle/border_symbols.png') ?>" style="mix-blend-mode: multiply;" alt="">
     </div>
 
     <?php if ($variant === 'arcane'): ?>
-        <div class="centre-bottom"><img src="<?= scroll_art('battle/arcane/glow.png') ?>" style="mix-blend-mode: multiply;" alt=""></div>
+        <div class="centre-bottom"><img <?= scroll_art_attrs('battle/arcane/glow.png') ?> style="mix-blend-mode: multiply;" alt=""></div>
     <?php endif; ?>
 
     <?php /* Both variants ship symbol_0.png, so this path is unguarded. Aurelia's
              css= binding gave the symbol a blend for martial and an empty string
              for arcane, so arcane gets no style attribute at all. */ ?>
     <div class="centre-bottom">
-        <img src="<?= scroll_e(scroll_art('battle/' . $variant . '/symbol_' . $rank . '.png')) ?>"<?= $variant === 'arcane' ? '' : ' style="mix-blend-mode:multiply"' ?> alt="">
+        <img <?= scroll_art_attrs('battle/' . $variant . '/symbol_' . $rank . '.png') ?><?= $variant === 'arcane' ? '' : ' style="mix-blend-mode:multiply"' ?> alt="">
     </div>
 
     <?php /* martial/over_*.png exists only for ranks 6-10. */ ?>
     <?php if ($variant === 'martial' && $rank >= 6): ?>
-        <div class="centre-bottom"><img src="<?= scroll_art('battle/martial/over_' . $rank . '.png') ?>" style="mix-blend-mode:multiply" alt=""></div>
+        <div class="centre-bottom"><img <?= scroll_art_attrs('battle/martial/over_' . $rank . '.png') ?> style="mix-blend-mode:multiply" alt=""></div>
     <?php endif; ?>
 
     <?php if ($rank > 0): ?>
         <div class="centre-bottom" style="bottom:<?= $rank >= 9 ? '124px' : '134px' ?>;">
-            <img src="<?= scroll_art('common/rank_' . $rank . '.png') ?>" alt="">
+            <img <?= scroll_art_attrs('common/rank_' . $rank . '.png') ?> alt="">
         </div>
     <?php endif; ?>
 

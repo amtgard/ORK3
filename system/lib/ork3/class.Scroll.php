@@ -309,6 +309,259 @@ class Scroll extends Ork3
      */
     public const RANK_SET_OVERSIZED = 'zodiac';
 
+    /**
+     * Where each border's art STOPS — the inner boundary of the frame, in frame px
+     * on the 2550x3300 page.
+     *
+     * The certificate had no notion of this. `.Award` carried one flat 17% side
+     * padding (433px) for every order, and the issuing section then deliberately
+     * broke out of even that by 10%, which is how the issuer name came to sit on top
+     * of the knotwork.
+     *
+     * Measured rather than guessed: each plate is scanned inward from both sides
+     * along 25 lines spanning the vertical band the text actually occupies (30%-72%
+     * of the page), skipping the transparent margin outside the frame, then the
+     * frame's own ink, and taking the first sustained clear run after it. The number
+     * kept is the DEEPER of the two sides, because a text area has to clear the whole
+     * frame and not its thinnest part. Scanning the full height instead picks up the
+     * corner devices and answers a different question.
+     *
+     *   hunter 592   crown 453   lion 485   hydra 480   mask 414
+     *   rose   350   smith 351   battle 112
+     *
+     * Four of the eight intrude PAST the 433px padding — hunter by 159px. On the
+     * fixed orders that has always been survivable because each one's own artwork and
+     * text were drawn together. On the custom scroll it is not: an officer can put
+     * any of these borders on any of the twelve grounds, and nothing in that pairing
+     * was ever composed by hand.
+     *
+     * 'knot' is the parametric SVG border drawn by _border.tpl rather than a file. It is
+     * 233, and it was 92 here until a review caught it: 92 is the braid's OUTER edge,
+     * which is what reading the <use> elements' bounding boxes gives you. Rasterising
+     * the border and scanning the alpha shows a ~141px woven band at x 92..233 and
+     * 2316..2458. The wrong number is what made "the type at 2285 is clear of the
+     * frame" look true when it never was.
+     *
+     * A CAVEAT ON THIS WHOLE TABLE. These are body-band numbers, scanned through
+     * y 30%..72% where the citation sits. The frames are not uniform in y: at the
+     * HEADING (y 300..1050) every one of them is thinner, ending at 206..318 on the
+     * left and starting at 2243..2343 on the right, and hunter's 592 in particular is
+     * its mid-height medallion and not anything the heading has to clear. The heading
+     * does not read this table for that reason — it clamps to the text area instead.
+     * If a caller ever wants a head-band inset, it needs its own measured table.
+     */
+    public const BORDER_INSETS = [
+        'none'   => 0,
+        'knot'   => 233,
+        'crown'  => 453,
+        'hunter' => 592,
+        'hydra'  => 480,
+        'lion'   => 485,
+        'mask'   => 414,
+        'owl'    => 433,
+        'rose'   => 350,
+        'smith'  => 351,
+        'battle' => 112,
+    ];
+
+    /**
+     * The text area's inset for a recipe, in frame px — the border's own inner
+     * boundary, never less than the flat padding the design already used.
+     */
+    public static function SafeInsetFor(string $border): int
+    {
+        return max(433, self::BORDER_INSETS[$border] ?? 0);
+    }
+
+    /**
+     * How far a COMPOSED certificate has to raise its signature block, in frame px,
+     * so the date and the signature are not printed on top of the artwork.
+     *
+     * The block is the last thing on the page and sits lowest, which is where a
+     * border's bottom corner ornaments and a full-page rank plate's own furniture
+     * also are. On the sixteen fixed orders the art and the text were drawn together
+     * and only four needed adjusting (those live in scrollery.css, keyed on
+     * [data-order]/[data-rank]). The composed scroll is the case nobody composed: any
+     * border, any rank set, and the pairing decides whether they collide.
+     *
+     * Measured, not guessed. A one-off browser probe (not committed) renders each
+     * pairing, reads the five
+     * text boxes of the block off the DOM in frame px, composites every transparent
+     * plate that reaches that band, and reports the share of each box sitting on dark
+     * ink. The number below is the smallest 5px step that takes the worst box under
+     * 0.5%, plus a margin. Two axes came out of it:
+     *
+     *   the BORDER    only crown intrudes - 18.3% of the block, at every rank set,
+     *                 from the corner ornaments. The other ten measure clean.
+     *   the RANK SET  garber at every border (its tape measure and scissors are
+     *                 full-page furniture drawn for garber's OWN wider block),
+     *                 zodiac and flame only against the deepest inset. `common` is a
+     *                 292x171 glyph and never reaches.
+     *
+     * And it depends on the inset, because the inset is what pushes the two columns
+     * inward toward a centred plate: .Award's padding is max(17%, --sc-safe-inset),
+     * so anything past 433 moves the date further under the artwork. Hence the
+     * shallow/deep split rather than one number.
+     *
+     * This is a CEILING. scrollery-autofit.js clamps it to the room the citation
+     * actually left, so a six-line citation keeps its space and gets no lift at all.
+     */
+    public const SIGN_LIFT_BORDER = ['crown' => 290];
+
+    public static function SignLiftFor(string $border, string $rankSet, int $rank): int
+    {
+        $lift = self::SIGN_LIFT_BORDER[$border] ?? 0;
+
+        /* Where the columns actually sit, which is the padding and not the border's
+           own edge — a shallow border still gets the 433px flat padding. */
+        $deep = self::SafeInsetFor($border) > 433;
+
+        if ($rankSet === 'garber') {
+            /* r3 measured 155 shallow / 250 at hunter; r7 300/375; r10 325/380. The
+               plate grows with the rank, so the bands are by rank as well as inset. */
+            if ($rank <= 3) {
+                $lift = max($lift, $deep ? 270 : 175);
+            } elseif ($rank <= 7) {
+                $lift = max($lift, $deep ? 395 : 320);
+            } else {
+                $lift = max($lift, $deep ? 400 : 345);
+            }
+        } elseif ($rankSet === 'zodiac' && self::SafeInsetFor($border) >= 592) {
+            /* Only against hunter's 592: 125-175 across the ranks. */
+            $lift = max($lift, 195);
+        } elseif ($rankSet === 'flame' && self::SafeInsetFor($border) >= 592) {
+            /* A glyph tip grazing the signer's box at r7, 1.9%. */
+            $lift = max($lift, 35);
+        }
+
+        return $lift;
+    }
+
+    /**
+     * The rank sets painted in LIGHT ink, because their home order's plate is dark.
+     *
+     * zodiac's numeral is a pale constellation for a night sky; flame's is a bright
+     * numeral for the fire at the foot of its own ground. Both are correct on the
+     * plate they were drawn for and invisible on a pale one — and the custom scroll
+     * lets an officer put either on any of the twelve grounds.
+     *
+     * Measured by compositing each set's rank_7 over each ground and taking the mean
+     * WCAG contrast over the numeral's own solid ink. Nine pairs came back under
+     * 2:1, all of them one of these two sets on a light ground: zodiac on parchment
+     * and starfield at 1.50:1, linen 1.52, map 1.59, jovious 1.81; flame on
+     * parchment and jovious at 1.58:1, map 1.60, linen 1.68. For scale, the darkest
+     * pairing in the set is 14.51:1 and the ink-on-ground rule the text uses never
+     * drops below 11.35:1.
+     *
+     * garber is deliberately NOT here. Its numerals are outlined — solid ink from
+     * L 0 to L 0.892 in the same glyph — so they carry their own contrast onto any
+     * ground; its worst pairing is 2.58:1 on `arcane`, and darkening a plate that is
+     * already half dark would flatten the outline that is doing the work.
+     *
+     * Consumed by custom.tpl (which stamps data-rankset) and the [data-rankset]
+     * rules in scrollery.css. Sits beside the other recipe exceptions and is guarded
+     * the same way — see ScrollRecipeTest.
+     */
+    public const PALE_RANK_SETS = ['zodiac', 'flame'];
+
+    /**
+     * The hand every surface falls back to.
+     *
+     * BlackChancery over Averia Serif Libre — what the module drew before the
+     * alternates existed, so every certificate printed then reprints identically.
+     */
+    public const DEFAULT_HAND = 'chancery';
+
+    /**
+     * The hands, keyed by the value that goes in &face= and [data-scroll-face].
+     *
+     * @return array<string, array{label:string, fonts:list<string>}>
+     */
+    public static function Hands(): array
+    {
+        return self::Recipes()['hands'];
+    }
+
+    /**
+     * A requested hand reduced to one this installation actually ships.
+     *
+     * An ALLOWLIST rather than a sanitiser, because the value lands in an HTML
+     * attribute and selects a font: an unknown key has to fall back to the default
+     * hand rather than reaching either. Case and stray characters are stripped first
+     * so a hand-typed `&face=Cinzel ` still resolves rather than silently reverting.
+     */
+    public static function NormaliseHand(string $face): string
+    {
+        $key = strtolower(preg_replace('/[^a-z]/i', '', $face) ?? '');
+
+        return isset(self::Hands()[$key]) ? $key : self::DEFAULT_HAND;
+    }
+
+    /**
+     * The woff2 filenames one hand needs preloaded. Empty for an unknown key, which
+     * cannot happen through NormaliseHand() and is not worth throwing over.
+     *
+     * @return list<string>
+     */
+    public static function HandFonts(string $face): array
+    {
+        return self::Hands()[self::NormaliseHand($face)]['fonts'] ?? [];
+    }
+
+    /**
+     * Whether the citation's ruled writing lines are drawn.
+     *
+     * Six ruled rules sit behind the reason on every one of the seventeen orders —
+     * they are in the SHARED text layer, not in any order's own art — and they exist
+     * so a certificate can be finished by hand. When the citation is typed they are
+     * just ruling, and some heralds want a clean sheet.
+     *
+     * A per-PRINT choice, like the hand: it changes nothing about what the award is,
+     * so it is not stored on the award and a reprint is free to differ. Default ON,
+     * so every certificate printed before this existed reprints identically.
+     *
+     * Only the literal string '0' turns them off. Anything else — absent, empty,
+     * 'banana' — is on, because the failure mode of a typo has to be the certificate
+     * people already know rather than a silently different one.
+     */
+    public const SHOW_LINES_DEFAULT = true;
+
+    public static function NormaliseShowLines(?string $value): bool
+    {
+        return trim((string) $value) !== '0';
+    }
+
+    /**
+     * @font-face rules for the ten display faces, for a page that shows the hand
+     * picker but does NOT load scrollery.css.
+     *
+     * `mine` and `bulk` are ordinary CRM pages: they carry the picker, but the
+     * certificate stylesheet has no business on them and the CSS-boundary discipline
+     * says so. Without the declarations, though, each <option>'s font-family names a
+     * family the document has never heard of, so every specimen renders in the
+     * fallback serif and the whole point of the picker is lost — measured, 10 of 10
+     * unloaded on `mine` against 0 of 10 on the composer, which does load the sheet.
+     *
+     * Generated from the same 'hands' data the picker itself reads, rather than
+     * copied into a second stylesheet that could drift from section 1a.
+     *
+     * font-display: swap, NOT the `block` the certificate uses. Opposite jobs: on a
+     * certificate a face arriving late means the wrong letterforms on paper, so it is
+     * worth painting nothing until it lands. In a dropdown, painting nothing means an
+     * empty list. Swap shows the readable label immediately and upgrades it in place.
+     */
+    public static function HandSpecimenStyles(string $fontBase): string
+    {
+        $css = '';
+        foreach (self::Hands() as $hand) {
+            $css .= "@font-face{font-family:'" . $hand['family'] . "';"
+                . "src:url('" . $fontBase . $hand['file'] . "') format('woff2');"
+                . 'font-weight:400;font-style:normal;font-display:swap}';
+        }
+
+        return $css;
+    }
+
     /** @var array<string, array>|null */
     private static ?array $recipes = null;
 
@@ -623,6 +876,32 @@ class Scroll extends Ork3
     }
 
     /**
+     * The rank the certificate's WORD is written from — which is NOT the rank its
+     * art is drawn from.
+     *
+     * Art clamps and has to: the numerals ship as rank_1..10 and nothing draws an
+     * eleventh, so ClampRank() above stays exactly as it was. The ordinal has no
+     * such limit, and clamping it printed the wrong sentence. 79 live grants sit
+     * above the ceiling — 35 at rank 11, 19 at 12, and a tail out to 22 — and every
+     * one of them lettered "with their tenth" onto a certificate that was in fact
+     * the eleventh or the twenty-second.
+     *
+     * _text.tpl has always been ready for this: it names ordinals through "twelfth"
+     * and falls back to "13th"/"22nd" past that. Its own comment anticipated "the
+     * moment anything lifts Scroll::ClampRank() past its current ceiling" — the data
+     * had already lifted it, so that branch was unreachable rather than unnecessary.
+     *
+     * The LOWER bound is kept deliberately. `from` is 1 only on warrior, whose art
+     * starts at rank 1, and a warrior row recorded at 0 has always printed "first".
+     * That is an existing reading of a data gap; changing it is not this fix's to
+     * make, and unclamping it would silently turn those into blank hand-write lines.
+     */
+    public static function OrdinalRank(array $order, int $rank): int
+    {
+        return max($order['ranks']['from'], $rank);
+    }
+
+    /**
      * Kingdomaward names that print the archery certificate.
      *
      * Archery is the one order with no base award id to key on: real grants hang off
@@ -904,17 +1183,92 @@ class Scroll extends Ork3
         }
 
         $entry = self::renditionManifest()[$relative] ?? null;
+
+        /*
+         * The cache-buster.
+         *
+         * assets/ is served `Cache-Control: public, max-age=31536000, immutable`, and
+         * `immutable` means a browser that already holds a plate will not so much as
+         * revalidate it for a year. So a correction to the ARTWORK never reaches
+         * anyone who has printed that certificate before — which is not hypothetical:
+         * owl/rank_9.png printed the numeral XI where IX belongs, and the redrawn
+         * plate was invisible in a browser that had the old one.
+         *
+         * The manifest already carries the answer. Its `sha` is of the MASTER and
+         * changes whenever the art does, and both renditions are rebuilt from that
+         * master, so one token is correct for all three URLs. This is what
+         * bin/build-scroll-renditions.sh's own note means by "sha doubles as the ?v=
+         * cache-busting token for the immutable nginx block" — it was written down
+         * and never wired up.
+         *
+         * A plate with no manifest entry gets no token: there is nothing to key on,
+         * and that is exactly the pre-rendition behaviour. A caller that appended its
+         * own query keeps it and gets no second one.
+         */
+        $bust = '';
+        if ($suffix === '' && is_string($entry['sha'] ?? null) && $entry['sha'] !== '') {
+            $bust = '?v=' . $entry['sha'];
+        }
+
         if (is_array($entry)) {
             $order = $size === self::ART_DISPLAY ? ['display', 'print'] : ['print'];
             foreach ($order as $key) {
                 $file = $entry[$key]['file'] ?? null;
                 if (is_string($file) && $file !== '') {
-                    return self::ArtBase() . '/' . ltrim($file, '/') . $suffix;
+                    return self::ArtBase() . '/' . ltrim($file, '/') . $suffix . $bust;
                 }
             }
         }
 
-        return self::ArtBase() . '/' . $relative . $suffix;
+        return self::ArtBase() . '/' . $relative . $suffix . $bust;
+    }
+
+    /**
+     * A plate's MASTER pixel box, for the width/height an <img> has to declare.
+     *
+     * The renditions pass swaps a smaller file in behind the same URL, and nothing in
+     * the markup told the browser what box that file was standing in for. An <img>
+     * with no width/height draws at its own intrinsic size — so on the composer, where
+     * ArtUrl() serves display renditions at a third scale, every unsized plate drew a
+     * third of the size it was laid out for. Order of the Flame rendered its whole
+     * ground 850x1100 in the corner of a 2550x3300 page; Order of the Crown drew a
+     * quarter-size border and a third-size phoenix. On the print surface the masters
+     * ARE 2550x3300, so the same markup looked correct there by luck.
+     *
+     * Derived rather than stored: the manifest records each display rendition's
+     * dimensions and the single displayScale they were cut at, so the master is the
+     * one divided by the other. Nothing new has to be generated.
+     *
+     * ACCURATE TO +/-1px, not exactly. The rendition pass rounded when it cut the
+     * display file, so the master is not always recoverable from it: common/rank_7.png
+     * is 292 wide and its 97px display rendition divides back to 291. On a 2550px page
+     * that is 0.04% of the frame and invisible at 300 dpi — and it is the aspect ratio
+     * that matters here, which survives. Reading the true size would mean a
+     * getimagesize() per plate per certificate, which is a real cost for a pixel.
+     *
+     * Null when the manifest has no entry, no display rendition, or an unreadable
+     * scale — an installation that has never run the renditions pass serves masters
+     * for everything, where declaring nothing is exactly right.
+     *
+     * @return array{0:int,1:int}|null
+     */
+    public static function ArtBox(string $relative): ?array
+    {
+        $entry = self::renditionManifest()[ltrim(trim($relative), '/')] ?? null;
+        $dims  = $entry['display']['dimensions'] ?? null;
+        if (!is_string($dims) || !preg_match('/^(\d+)x(\d+)$/', $dims, $m)) {
+            return null;
+        }
+
+        $scale = (float) rtrim((string) (self::renditionMeta()['displayScale'] ?? ''), '%');
+        if ($scale <= 0.0 || $scale >= 100.0) {
+            return null;
+        }
+
+        return [
+            (int) round((int) $m[1] * 100.0 / $scale),
+            (int) round((int) $m[2] * 100.0 / $scale),
+        ];
     }
 
     /**
@@ -943,9 +1297,26 @@ class Scroll extends Ork3
         $decoded = json_decode((string) @file_get_contents($path), true);
         if (is_array($decoded) && is_array($decoded['files'] ?? null)) {
             $manifest = $decoded['files'];
+            self::$renditionMeta = array_diff_key($decoded, ['files' => true]);
         }
 
         return $manifest;
+    }
+
+    /** @var array<string,mixed> */
+    private static array $renditionMeta = [];
+
+    /**
+     * The manifest's own top matter — printQuality, displayQuality, displayScale.
+     * Populated by renditionManifest(), so reading it primes the same one-time load.
+     *
+     * @return array<string,mixed>
+     */
+    private static function renditionMeta(): array
+    {
+        self::renditionManifest();
+
+        return self::$renditionMeta;
     }
 
     /**
@@ -1051,7 +1422,9 @@ class Scroll extends Ork3
             );
         }
 
-        $rank = self::ClampRank($order, (int) ($awardRow['Rank'] ?? 0));
+        $rawRank     = (int) ($awardRow['Rank'] ?? 0);
+        $rank        = self::ClampRank($order, $rawRank);
+        $ordinalRank = self::OrdinalRank($order, $rawRank);
 
         $variant = '';
         if ($order['variants'] !== []) {
@@ -1132,7 +1505,11 @@ class Scroll extends Ork3
             'scopeType'   => $scopeType,
             'scopeId'     => max(0, $scopeId),
             'order'       => $order['id'],
+            // The ART rank. Every order partial keys its numeral off this, so it stays
+            // clamped to what the plates actually ship. See OrdinalRank() for why the
+            // word beside it is written from a different number.
             'rank'        => $rank,
+            'ordinalRank' => $ordinalRank,
             // A blank ordinal is an invitation to write the rank in by hand. That is right
             // for a ladder — including one recorded at rank 0, which 292 of Walker in the
             // Middle's 379 grants are — and wrong for a Knighthood, which has no ordinal to
@@ -1283,8 +1660,32 @@ class Scroll extends Ork3
         return hash('sha256', (string) json_encode([
             'art'  => in_array($artSize, self::ART_SIZES, true) ? $artSize : self::ART_MASTER,
             'tpl'  => self::partialGeneration(),
+            /*
+             * The ARTWORK's generation, which is not the templates'. Redrawing a plate
+             * changes no .tpl, so partialGeneration() does not move and the cached HTML
+             * keeps serving the URL it was built with. That is how a corrected
+             * owl/rank_9 stayed invisible after the file on disk was already right.
+             * The manifest is rewritten by bin/build-scroll-renditions.sh on every art
+             * change — and its `sha` entries are what ArtUrl() now puts in the URL —
+             * so its own mtime is the right stamp for "the art moved".
+             */
+            'gen'  => self::artGeneration(),
             'data' => $s,
         ]));
+    }
+
+    /** renditions.json's mtime: the stamp that moves when the artwork does. */
+    private static function artGeneration(): int
+    {
+        static $stamp = null;
+        if ($stamp !== null) {
+            return $stamp;
+        }
+
+        $mtime = @filemtime((defined('DIR_ASSETS') ? DIR_ASSETS : '') . 'scrolls/renditions.json');
+        $stamp = $mtime === false ? 0 : $mtime;
+
+        return $stamp;
     }
 
     /**
@@ -1776,4 +2177,48 @@ function scroll_partial(string $name, array $vars = []): void
 function scroll_art(string $relative): string
 {
     return Scroll::ArtUrl($relative, Scroll::CurrentArtSize());
+}
+
+/**
+ * The same, for a path out of an order's `resources` set.
+ *
+ * Those paths carry their own `scrolls/` prefix — they were re-rooted from
+ * Arcanyst's ./resources/ash/ and kept whole — while ArtUrl() keys the rendition
+ * manifest on the path BELOW that directory. _text.tpl bridged the two by
+ * concatenating HTTP_ASSETS onto the raw value, which reaches the file but never
+ * the manifest, and _text.tpl is the only scroll partial with no scroll_art() call
+ * in it at all.
+ *
+ * That was invisible for fifteen orders, whose flourishes are the shared SVGs and
+ * have no renditions to miss. jovious is the exception: it overrides all three with
+ * rasters, so every jovious certificate served ribbon-top/right/bottom.png — 309 KB
+ * of masters — including on the composer's preview stage, where the display
+ * renditions of the same three come to about 24 KB.
+ *
+ * Stripping the prefix rather than storing the paths without it: the `resources`
+ * values are also read by callers that want the asset path itself, and re-rooting
+ * the data would move the problem rather than fix it.
+ */
+/**
+ * A plate's src AND the box it must be drawn in, as attributes.
+ *
+ * `<img <?= scroll_art_attrs('crown/border.png') ?> alt="">` rather than
+ * `<img src="<?= scroll_art('crown/border.png') ?>" alt="">`. The difference is the
+ * width and height, and they matter because ArtUrl() may serve a rendition a third
+ * the size of the master the layout was drawn against — see Scroll::ArtBox().
+ *
+ * Emits no dimensions when the master box is unknown, which reproduces the old
+ * behaviour exactly for an installation that has not run the renditions pass.
+ */
+function scroll_art_attrs(string $relative): string
+{
+    $out = 'src="' . scroll_e(scroll_art($relative)) . '"';
+    $box = Scroll::ArtBox($relative);
+
+    return $box === null ? $out : $out . ' width="' . $box[0] . '" height="' . $box[1] . '"';
+}
+
+function scroll_resource(string $relative): string
+{
+    return scroll_art(preg_replace('#^scrolls/#', '', ltrim(trim($relative), '/')) ?? '');
 }

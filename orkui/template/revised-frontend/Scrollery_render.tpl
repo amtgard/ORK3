@@ -20,23 +20,9 @@
  * 2550x3300 markup scale to both a thumbnail preview and a printed page.
  */
 $scrollery_css = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
-$scrollery_fit = DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js';
+$scrollery_fit  = DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js';
+$scrollery_hand = DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js';
 $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
-
-/*
- * The faces this page actually paints, for <link rel=preload>.
- *
- * All five in scrollery.css are font-display:block, which means the browser paints
- * NOTHING where the text goes until the face lands — and the print used to fire on
- * `load`, which waits on ~4 MB of certificate art but not on a webfont at all. The
- * font could and did arrive after the print dialog, so the certificate printed in
- * Times, or blank.
- *
- * Averia's non-italic Bold is deliberately absent: .Award .Body is italic, so every
- * bold thing on the certificate ("On this day...", the rank phrase) resolves to
- * BoldItalic, and preloading a face nothing asks for just spends bandwidth on the
- * critical path.
- */
 
 /*
  * The hand — &face=.
@@ -47,57 +33,29 @@ $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
  * parameter next to &print= and &up=, not as a recipe key, and a shipped reprint
  * URL that omits it keeps drawing exactly what it drew before.
  *
- * The keys and the faces they select are in scrollery.css (section 1a-ii); this
- * array is the allowlist and the preload manifest, and nothing else. It is an
- * allowlist rather than a sanitiser because the value lands in an HTML attribute
- * and selects a font: an unknown key falls back to the default hand rather than
- * reaching either.
+ * The vocabulary moved to scroll-recipes.php ('hands') and Scroll::Hands(), which
+ * is where the note that used to sit here said it belonged. It had to: this page
+ * held the only copy of the list and that is exactly why it held the only picker.
+ * Four surfaces read it now — this one, the composer, `mine` and `bulk`.
  *
- * WHERE THIS BELONGS: the vocabulary itself should live beside the grounds and
- * borders in system/lib/ork3/data/scroll-recipes.php, so the composer, the bulk
- * page and this page all read one list. That file is another workstream's; when
- * it grows a 'hands' block this array becomes Scroll::Hands() and the four keys
- * below are what it needs to contain.
- *
- * Preloading is per-hand and not a union. All of these faces are
- * font-display:block, which paints NOTHING where the text goes until the face
- * lands, and the print gate waits on document.fonts.ready — so a preload of a
- * face this page will not paint is bandwidth spent on the critical path of a
- * print job. Averia's upright Bold is absent for the same reason: .Award .Body is
- * italic, so every bold thing on the certificate resolves to BoldItalic.
+ * NormaliseHand() is the allowlist. It is an allowlist rather than a sanitiser
+ * because the value lands in an HTML attribute and selects a font: an unknown key
+ * falls back to the default hand rather than reaching either.
  */
-$scrollery_hands = [
-    'chancery' => [
-        'BlackChancery.woff2',
-        'AveriaSerifLibre-Regular.woff2',
-        'AveriaSerifLibre-Italic.woff2',
-        'AveriaSerifLibre-BoldItalic.woff2',
-    ],
-    'sharp' => [
-        'MedievalSharp-Regular.woff2',
-        'Grenze-Regular.woff2',
-        'Grenze-Italic.woff2',
-        'Grenze-SemiBoldItalic.woff2',
-    ],
-    'pirata' => [
-        'PirataOne-Regular.woff2',
-        'Grenze-Regular.woff2',
-        'Grenze-Italic.woff2',
-        'Grenze-SemiBoldItalic.woff2',
-    ],
-    'cinzel' => [
-        'Cinzel-Regular.woff2',
-        'Grenze-Regular.woff2',
-        'Grenze-Italic.woff2',
-        'Grenze-SemiBoldItalic.woff2',
-    ],
-];
+$scrollery_hands = Scroll::Hands();
+$scrollery_face  = Scroll::NormaliseHand((string) ($_GET['face'] ?? ''));
 
-$scrollery_face = strtolower(preg_replace('/[^a-z]/i', '', (string) ($_GET['face'] ?? '')));
-if (!isset($scrollery_hands[$scrollery_face])) {
-    $scrollery_face = 'chancery';
-}
-$scrollery_preload_fonts = $scrollery_hands[$scrollery_face];
+$scrollery_preload_fonts = Scroll::HandFonts($scrollery_face);
+
+/*
+ * The citation's ruled lines — &lines=0.
+ *
+ * A per-print presentation choice like the hand, and applied the same way: an
+ * attribute the stylesheet reads, never a change to what the certificate emits. The
+ * six rules are in the shared text layer that all seventeen orders render, so this
+ * works on any award and not only on a composed one.
+ */
+$scrollery_lines = Scroll::NormaliseShowLines($_GET['lines'] ?? null);
 
 /*
  * Sheet geometry — &trim=1 and &up=2|4.
@@ -149,9 +107,11 @@ if ($scrollery_ref !== ''
 <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= $fontBase . $f ?>">
 <?php endforeach; ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($scrollery_css) ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 </head>
 <body class="scroll-surface"
       data-scroll-face="<?= scroll_e($scrollery_face) ?>"
+      <?php if (!$scrollery_lines): ?>data-scroll-lines="0"<?php endif; ?>
       <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
       <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
 <?php /*
@@ -195,6 +155,44 @@ foreach ($Scrolls as $scrollery_scan) {
 */ ?>
 <div class="sc-toolbar" role="toolbar" aria-label="Certificate actions">
     <span class="sc-toolbar-title"><?= scroll_e($PageTitle ?? 'Scroll') ?></span>
+    <?php /*
+        The hand picker.
+
+        One of four — the composer, `mine` and `bulk` carry the same control off the
+        same list. This one is the last chance to change it, with the certificate
+        already on screen, which is why it is the only one that re-letters in place
+        rather than handing the choice to a page that has not loaded yet.
+
+        Each option is drawn in the face it names, so the list is a specimen sheet
+        rather than a list of adjectives. Chrome and Firefox honour font-family on an
+        <option>; Safari and the mobile pickers do not, and there the label still
+        reads as the font's name, which is the fallback being asked for.
+
+        It changes the attribute rather than reloading. scrollery.css switches hands on
+        `[data-scroll-face]` on ANY ancestor (section 1a-ii says so in as many words),
+        so swapping it on <body> re-letters the page with no round trip, and the URL is
+        rewritten underneath so a copied link still carries the choice.
+    */ ?>
+    <label class="sc-toolbar-field" for="sc-face">
+        <span>Hand</span>
+        <select id="sc-face" class="sc-select">
+            <?php /* Not $scrollery_hand as the loop variable: that name is the PATH to
+                     scrollery-hand.js, and filemtime() on it further down would get a
+                     hand definition instead of a file. */ ?>
+            <?php foreach ($scrollery_hands as $scrollery_key => $scrollery_def): ?>
+            <option value="<?= scroll_e($scrollery_key) ?>" data-face-family="<?= scroll_e($scrollery_def['family']) ?>"<?= $scrollery_key === $scrollery_face ? ' selected' : '' ?>><?= scroll_e($scrollery_def['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <?php /* The reason-lines switch. Beside the hand because it is the same kind of
+             thing — a per-print presentation choice that changes nothing about the
+             award — and on this page rather than only in the composer because a
+             REPRINT of an existing award is exactly when somebody wants a clean sheet
+             or a ruled one. */ ?>
+    <label class="sc-toolbar-check">
+        <input type="checkbox" id="sc-lines"<?= $scrollery_lines ? ' checked' : '' ?>>
+        <span>Reason lines</span>
+    </label>
     <a class="sc-btn" href="<?= scroll_e($scrollery_back) ?>">&larr; Back</a>
     <button type="button" class="sc-btn sc-btn-primary" onclick="window.print();">Print</button>
 </div>
@@ -237,6 +235,20 @@ foreach ($Scrolls as $scrollery_scan) {
     <?= (int) $Dropped ?> more were left out — print them in a second run.
 </p>
 <?php endif; ?>
+<?php /*
+    Citations that still do not fit.
+
+    Emitted empty and hidden; scrollery-autofit.js fills it in after its measured
+    pass, because whether a citation fits is not knowable server-side — it depends on
+    the face, the sheet layout and the browser's own line breaking. Hidden with the
+    `hidden` attribute rather than a class so that a page whose script never runs
+    shows nothing rather than an empty box.
+
+    It is chrome, so it sits outside .scroll-page and scrollery.css hides it at print
+    time with the toolbar and the advisory. The officer needs it BEFORE the print
+    dialog, not on the paper.
+*/ ?>
+<p class="sc-clip-notice" id="sc-clip-notice" role="status" hidden></p>
 <?php if ($scrollery_trim): ?>
 <?php /*
     Crop marks. Four corners, each drawing two hairlines with its own
@@ -289,6 +301,96 @@ foreach ($Scrolls as $scrollery_scan) {
     first pass is inside a promise on document.fonts.ready.
 */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-autofit.js?v=<?= filemtime($scrollery_fit) ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime($scrollery_hand) ?>"></script>
+<script>
+/*
+ * The hand picker's behaviour, on the surface that OWNS the choice.
+ *
+ * Everything shared with the composer, `mine` and `bulk` is in scrollery-hand.js;
+ * this is only the part that is true here — that the certificate is already on the
+ * page, so switching re-letters it in place rather than handing the choice to a
+ * page that has not loaded yet.
+ */
+(function () {
+    var sel = document.getElementById('sc-face');
+    if (!sel || !window.ScrolleryHand) { return; }
+
+    var Hand = window.ScrolleryHand;
+    Hand.init(<?= json_encode(array_keys($scrollery_hands)) ?>, <?= json_encode(Scroll::DEFAULT_HAND) ?>);
+
+    /* An explicit &face= in the URL is somebody's stated intent for THIS print and
+       always wins over the remembered default — a link shipped to a herald has to
+       print what it says. It is not written back to the store either: following
+       somebody else's link should not silently change your own preference. */
+    var urlFace = (window.location.search.match(/[?&]face=([a-z]+)/i) || [])[1];
+
+    function repaint(face) {
+        Hand.apply(document.body, face, document);
+
+        /* Keep the URL honest, so a link copied off this page prints the hand the
+           officer is looking at. replaceState, not a navigation: nothing needs
+           reloading and a history entry per fiddle with a <select> is noise. */
+        try {
+            var next = Hand.decorate(window.location.search || '?', face);
+            window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+        } catch (e) { /* older browser: the attribute swap still worked */ }
+    }
+
+    if (urlFace && Hand.known(urlFace)) {
+        sel.value = urlFace;
+        Hand.paint(sel);
+        Hand.armSpecimens(sel);
+        sel.addEventListener('change', function () {
+            Hand.paint(sel);
+            repaint(Hand.set(sel.value));
+        });
+        return;
+    }
+
+    Hand.bind(sel, repaint);
+
+    /* The reason lines. Re-letters nothing and re-fits nothing — the rules are out of
+       flow, so this is a pure repaint — but the URL is kept honest for the same reason
+       the hand's is: this page's link gets copied. */
+    var Lines = window.ScrolleryLines;
+    if (Lines) {
+        var box = document.getElementById('sc-lines');
+        var urlLines = /[?&]lines=/.test(window.location.search);
+
+        Lines.bind(box, function (on) {
+            Lines.apply(document.body, on);
+            try {
+                var next = Lines.decorate(window.location.search || '?', on);
+                /* decorate() only ever ADDS lines=0, so turning them back on has to
+                   clear the parameter rather than set it to 1 — otherwise the URL
+                   accumulates a value that means "the default" and reads as a choice. */
+                if (on) { next = next.replace(/([?&])lines=[^&]*&?/, '$1').replace(/[?&]$/, ''); }
+                window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+            } catch (e) { /* older browser: the attribute swap still worked */ }
+        });
+
+        /* An explicit &lines= in the URL is this print's stated intent and beats the
+           remembered default, exactly as &face= does. */
+        if (urlLines) {
+            if (box) { box.checked = !document.body.hasAttribute('data-scroll-lines'); }
+        } else {
+            var remembered = Lines.get();
+            if (box) { box.checked = remembered; }
+            Lines.apply(document.body, remembered);
+        }
+    }
+
+    /* The remembered hand is applied in place rather than by redirecting on load: a
+       page that bounces itself to a different URL before the officer has done
+       anything is worse than one that re-letters. It costs the <link rel=preload>,
+       which was emitted for the URL's hand — a real cost, paid once, and only by an
+       officer who has expressed a preference. */
+    var stored = Hand.get();
+    if (stored !== document.body.getAttribute('data-scroll-face')) {
+        Hand.apply(document.body, stored, document);
+    }
+}());
+</script>
 <?php if (!empty($AutoPrint)): ?>
 <script>
 /*

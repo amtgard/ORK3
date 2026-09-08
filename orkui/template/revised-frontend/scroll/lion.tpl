@@ -19,13 +19,13 @@
 
     <?php /* Border drawn twice: a multiply pass, then a soft-light wash over it.
              DELIBERATE — the second pass lifts the first. Never merge these. */ ?>
-    <img src="<?= scroll_art('lion/border.png') ?>" style="mix-blend-mode:multiply;" alt="">
-    <img src="<?= scroll_art('lion/border.png') ?>" style="mix-blend-mode:soft-light;opacity:0.3;" alt="">
+    <img <?= scroll_art_attrs('lion/border.png') ?> style="mix-blend-mode:multiply;" alt="">
+    <img <?= scroll_art_attrs('lion/border.png') ?> style="mix-blend-mode:soft-light;opacity:0.3;" alt="">
 
     <?php /* lion ships symbol_0.png, so the symbol path is UNGUARDED. Same two-pass
              treatment as the border — multiply, then a screen wash. */ ?>
-    <div class="centre-bottom"><img src="<?= scroll_art('lion/symbol_' . (int) $s['rank'] . '.png') ?>" style="mix-blend-mode:multiply;" alt=""></div>
-    <div class="centre-bottom"><img src="<?= scroll_art('lion/symbol_' . (int) $s['rank'] . '.png') ?>" style="mix-blend-mode:screen;opacity:0.3;" alt=""></div>
+    <div class="centre-bottom"><img <?= scroll_art_attrs('lion/symbol_' . (int) $s['rank'] . '.png') ?> style="mix-blend-mode:multiply;" alt=""></div>
+    <div class="centre-bottom"><img <?= scroll_art_attrs('lion/symbol_' . (int) $s['rank'] . '.png') ?> style="mix-blend-mode:screen;opacity:0.3;" alt=""></div>
 
     <?php /* No common/rank_N.png numeral — lion's symbol art carries the rank. */ ?>
     <?php scroll_partial('text', ['s' => $s]); ?>

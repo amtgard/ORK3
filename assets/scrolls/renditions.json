@@ -1223,10 +1223,10 @@
       "display": { "file": "owl/rank_8_display.webp", "bytes": 7188, "dimensions": "217x150" }
     },
     "owl/rank_9.png": {
-      "sha": "fc1d98ba809499eb",
-      "bytes": 68503,
-      "print": { "file": "owl/rank_9.webp", "bytes": 36292 },
-      "display": { "file": "owl/rank_9_display.webp", "bytes": 6016, "dimensions": "217x150" }
+      "sha": "9ab5fb3eccee4bba",
+      "bytes": 63048,
+      "print": { "file": "owl/rank_9.webp", "bytes": 36906 },
+      "display": { "file": "owl/rank_9_display.webp", "bytes": 5944, "dimensions": "217x150" }
     },
     "rose/border.png": {
       "sha": "ab815314e54f3ebb",
