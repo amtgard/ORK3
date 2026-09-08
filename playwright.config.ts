@@ -70,6 +70,13 @@ export default defineConfig({
       },
     },
     {
+      // Re-emits the report from an existing results.json. See rescore.spec.ts.
+      name: 'scroll-sweep-rescore',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'rescore.spec.ts',
+      timeout: 0,
+    },
+    {
       // Joins the shards. A dependency, not an afterAll hook: two workers writing one
       // results file race, and a project dependency is the only thing that orders work
       // across workers.

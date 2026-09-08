@@ -201,7 +201,15 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
          is not what a sheet-geometry axis is going to teach us anything about. */
       .sort((a, b) => worst(b) - worst(a))
       .slice(0, Number(process.env.ORK3_SWEEP_D_CAP ?? 150));
-    const d = stageD(near, axes).filter(reachable);
+    /* Sharded like the main list. stageD's FIXED representative set is identical in
+       every shard by construction, so without this each of those cases is run once per
+       shard — 475 duplicate runs in the first full sweep, and duplicate ids in the
+       merged results, which silently collapse when anything keys by id. The
+       near-threshold half is already per-shard because each shard only sees its own
+       results. */
+    const d = stageD(near, axes)
+      .filter(reachable)
+      .filter((c, i) => (c.stage === 'D' && SHARDS > 1) ? i % SHARDS === shard : true);
     await run(d, 'D');
   }
 
