@@ -2722,7 +2722,9 @@ class Player extends Ork3
 
         if (trimlen($request['UserName']) > 0) {
             $this->mundane->clear();
-            $this->mundane->username = $request['UserName'];
+            // Trim before the uniqueness check so it is asking about the same
+            // value that will actually be stored below.
+            $this->mundane->username = trim($request['UserName']);
             if ($this->mundane->find()) {
                 if ($this->mundane->mundane_id != $request['MundaneId']) {
                     return InvalidParameter('This username is already in use.');
@@ -2749,7 +2751,15 @@ class Player extends Ork3
                 $this->mundane->given_name = is_null($request['GivenName']) ? $this->mundane->given_name : $request['GivenName'];
                 $this->mundane->surname = is_null($request['Surname']) ? $this->mundane->surname : $request['Surname'];
                 $this->mundane->other_name = is_null($request['OtherName']) ? $this->mundane->other_name : $request['OtherName'];
-                $this->mundane->username = is_null($request['UserName']) ? $this->mundane->username : $request['UserName'];
+                // Trim on write. An untrimmed username is a self-inflicted
+                // lockout: a player renaming themselves in the account-details
+                // modal who leaves a trailing space stores it, and every later
+                // login has to match it. Player 170872 did exactly that on
+                // 2026-07-22 and could not log in again -- see the note on the
+                // username lookup in Authorization::Authorize_h. The lookup now
+                // forgives it; trimming here stops the bad data being created.
+                // Matches the self-registration path, which already trims.
+                $this->mundane->username = is_null($request['UserName']) ? $this->mundane->username : trim($request['UserName']);
                 // Profanity check on persona (display name) before save.
                 if (!is_null($request['Persona']) && trim($request['Persona']) !== '') {
                     require_once(__DIR__ . '/class.ProfanityFilter.php');
