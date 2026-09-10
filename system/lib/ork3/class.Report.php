@@ -5263,6 +5263,24 @@ class Report extends Ork3
         $qualQActive   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE status = 'active'");
         $qualQArchived = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE status = 'archived'");
         $qualImported  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE source_question_id IS NOT NULL");
+        // The pool others can actually import from. Mirrors the joins in
+        // QualTest::getLibraryQuestions() so the tile and the library agree:
+        // sharing turned on AND the question sits in a PUBLISHED set (a draft
+        // must never leak) AND it is active. Reeve-only, because the library
+        // itself is — Corpora questions are never shared. This is the global
+        // pool; no single kingdom sees all of it, since the library excludes
+        // your own kingdom and dedups against what you already hold.
+        $qualShared    = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT q.qual_question_id) AS c
+			   FROM `{$p}qual_question` q
+			   JOIN `{$p}qual_config` c
+			     ON c.kingdom_id = q.kingdom_id AND c.test_type = 'reeve' AND c.share_questions = 1
+			   JOIN `{$p}qual_set_question` sq ON sq.qual_question_id = q.qual_question_id
+			   JOIN `{$p}qual_question_set` s
+			     ON s.qual_question_set_id = sq.qual_question_set_id
+			    AND s.kingdom_id = q.kingdom_id AND s.test_type = 'reeve' AND s.status = 'published'
+			  WHERE q.test_type = 'reeve' AND q.status = 'active'"
+        );
         $qualSets      = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question_set`");
         $qualSetsLive  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question_set` WHERE status = 'published'");
         $qualFlagged   = $this->_rfuScalar("SELECT COUNT(DISTINCT qual_question_id) AS c FROM `{$p}qual_report`");
@@ -5293,6 +5311,7 @@ class Report extends Ork3
                 $this->_rfuKpi('Questions created', $qualQuestions, null, null, 'rows in qual question'),
                 $this->_rfuKpi('Active questions', $qualQActive, null, null, 'questions available to be drawn into a test'),
                 $this->_rfuKpi('Archived questions', $qualQArchived, null, null, 'questions retired from the bank'),
+                $this->_rfuKpi('Available in the shared library', $qualShared, null, null, "active Reeve's-test questions offered by kingdoms that both share AND have a published version — the pool others can import from (Corpora questions are never shared)"),
                 $this->_rfuKpi('Imported from the shared library', $qualImported, null, null, 'questions copied from another kingdom rather than written locally'),
                 $this->_rfuKpi('Test versions created', $qualSets, null, null, 'rows in qual question set'),
                 $this->_rfuKpi('Published (live) versions', $qualSetsLive, null, null, "versions with status 'published' — one per kingdom and test type"),
