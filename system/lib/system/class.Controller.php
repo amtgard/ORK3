@@ -75,13 +75,17 @@ class Controller
             'Controller_AdminAjax',
             'Controller_WnAjax',
         ]);
+        // Loaded before the token check because that check needs it; the nav's
+        // admin flag below reuses the same instance.
+        $this->load_model('Authorization');
+
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
             // Multi-device: per-request validation runs against ork_session (up to 3
             // concurrent device sessions), not the single vestigial ork_mundane.token
             // slot. ValidateSessionByToken also enforces expiry and slides last_seen.
-            $_owner = Ork3::$Lib->authorization->ValidateSessionByToken($_tok_check);
+            $_owner = $this->Authorization->validate_session_by_token($_tok_check);
             if ($_owner === 0 || $_owner !== $_uid_check) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
                 unset($_SESSION['is_authorized_mundane_id']);
@@ -120,12 +124,23 @@ class Controller
             }
         }
 
+        // The viewer's live device sessions, for the nav's "Log Out Everywhere"
+        // dialog. Computed here rather than in the theme because a template's
+        // $this is the View, which holds no models. Lazy: the *Ajax controllers
+        // (the $_skipTokenCheck list) never render the nav, so they would pay
+        // this query for markup they do not emit.
+        $this->data['NavSessions'] = array();
+        if ($_uid > 0 && !$_skipTokenCheck && isset($this->session->token)) {
+            $this->data['NavSessions'] = $this->Authorization->list_sessions_for_token(
+                (string) $this->session->token
+            );
+        }
+
         $this->data[ 'controller_title' ] = get_class($this);
         $this->data[ 'path' ] = [ get_class($this), $method ];
 
         $this->data[ 'menu' ] = [ ];
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-        $this->load_model('Authorization');
         $this->data['NavIsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, null, null)) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
