@@ -201,6 +201,45 @@ final class EventRsvpTest extends TestCase
         $this->assertNotContains($past['detail_id'], $detailIds);
     }
 
+    public function testGetUpcomingRsvpsKeepsInProgressEvent(): void
+    {
+        $ctx = $this->fixture->createInProgressOccurrence('upcoming-inprogress');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+
+        $list = $this->model->get_upcoming_rsvps($ctx['mundane_id']);
+
+        $this->assertContains($ctx['detail_id'], array_column($list, 'EventCalendarDetailId'));
+    }
+
+    public function testGetUpcomingRsvpsKeepsMultiDayEventEndingAtMidnightToday(): void
+    {
+        $ctx = $this->fixture->createMidnightEndTodayOccurrence('upcoming-midnight');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+
+        $list = $this->model->get_upcoming_rsvps($ctx['mundane_id']);
+
+        $this->assertContains($ctx['detail_id'], array_column($list, 'EventCalendarDetailId'));
+    }
+
+    public function testGetUpcomingRsvpsFallsBackToStartWhenEndIsZero(): void
+    {
+        $today = $this->fixture->createZeroEndOccurrence(
+            date('Y-m-d H:i:s', strtotime('-3 hours')),
+            'upcoming-zeroend-today'
+        );
+        $past = $this->fixture->createZeroEndOccurrence(
+            date('Y-m-d H:i:s', strtotime('-30 days')),
+            'upcoming-zeroend-past'
+        );
+        $this->fixture->insertRsvp($today['detail_id'], $today['mundane_id'], 'going');
+        $this->fixture->insertRsvp($past['detail_id'], $today['mundane_id'], 'going');
+
+        $detailIds = array_column($this->model->get_upcoming_rsvps($today['mundane_id']), 'EventCalendarDetailId');
+
+        $this->assertContains($today['detail_id'], $detailIds);
+        $this->assertNotContains($past['detail_id'], $detailIds);
+    }
+
     public function testGetKingdomUpcomingEventsExcludesExistingRsvp(): void
     {
         $ctx = $this->fixture->createFutureOccurrence('kingdom-exclude');
