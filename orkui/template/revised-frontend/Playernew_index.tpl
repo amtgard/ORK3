@@ -5725,7 +5725,7 @@ html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-tex
                          max-width: 100%; min-width: 0; box-sizing: border-box; }
 #pn-quiz-report-submit { margin-left: 6px; font-size: 0.82rem; }
 #pn-quiz-report-cancel { margin-left: 4px; font-size: 0.82rem; }
-#pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; margin-left: 8px; }
+#pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; }
 html[data-theme="dark"] #pn-quiz-report-reason {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
@@ -5739,7 +5739,6 @@ html[data-theme="dark"] #pn-quiz-report-thanks { color: #68d391; }
 	#pn-quiz-report-reason { width: 100%; font-size: 16px; min-height: 44px; }
 	#pn-quiz-report-submit,
 	#pn-quiz-report-cancel { margin: 8px 6px 0 0; min-height: 44px; }
-	#pn-quiz-report-thanks { margin-left: 0; }
 }
 
 /* Non-visual answer markers (item 18) — correct/incorrect must not be colour-only. */
@@ -6065,8 +6064,9 @@ function pnOpenTestChooser() {
 						</select>
 						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit">Submit</button>
 						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel">Cancel</button>
-						<span id="pn-quiz-report-thanks" style="display:none;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 					</div>
+					<!-- Outside the form: a successful submit hides the form. -->
+					<span id="pn-quiz-report-thanks" style="display:none;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 				</div>
 				<div class="pn-quiz-nav">
 					<span></span>
@@ -6266,6 +6266,8 @@ function pnOpenTestChooser() {
 		if (navEl) navEl.classList.remove('pn-quiz-nav-pinned');
 		reportArea.style.display = 'none';
 		reportForm.style.display = 'none';
+		// A report submitted on the previous question leaves the button hidden.
+		reportBtn.style.display  = 'inline-block';
 		reportReason.value = '';
 		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 		reportThanks.style.display = 'none';

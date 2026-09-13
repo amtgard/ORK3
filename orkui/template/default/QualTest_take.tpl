@@ -1240,8 +1240,9 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 								</select>
 								<button class="qt-report-submit" id="qt-report-submit">Submit</button>
 								<button class="qt-report-cancel" id="qt-report-cancel">Cancel</button>
-								<span class="qt-report-thanks" id="qt-report-thanks"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 							</div>
+							<!-- Outside the form: a successful submit hides the form. -->
+							<span class="qt-report-thanks" id="qt-report-thanks"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 						</div>
 						<div class="qt-nav-row">
 							<button class="qt-nav-btn" id="qt-next-btn" style="display:none;">Next <i class="fas fa-chevron-right"></i></button>
@@ -1591,6 +1592,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			submitBtn.style.display  = 'none';
 			reportArea.style.display = 'none';
 			reportForm.style.display = 'none';
+			// A report submitted on the previous question leaves the button hidden.
+			reportBtn.style.display  = 'inline-flex';
 			reportThanks.style.display = 'none';
 			reportReason.value = '';
 			if (reportCorrectOpt) reportCorrectOpt.hidden = false;
