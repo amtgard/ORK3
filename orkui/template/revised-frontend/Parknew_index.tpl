@@ -1639,16 +1639,23 @@ var PkBannerConfig = {
 				<span class="pk-char-count" id="pk-award-char-count">400 characters remaining</span>
 			</div>
 		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn-ghost" id="pk-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
-				<button class="pk-btn pk-btn-secondary" id="pk-award-save-same" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
+		<div class="pk-modal-footer award-save-footer">
+			<div class="award-save-heading">Save this award and&hellip;</div>
+			<div class="award-save-grid">
+				<button class="pk-btn pk-btn-secondary" id="pk-award-save-rank" disabled>
+					<i class="fas fa-save"></i> Add Next Rank
 				</button>
-				<button class="pk-btn pk-btn-primary" id="pk-award-save-new" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
+				<button class="pk-btn pk-btn-secondary" id="pk-award-save-same" disabled>
+					<i class="fas fa-save"></i> Add More Awards
+				</button>
+				<button class="pk-btn pk-btn-secondary" id="pk-award-save-new" disabled>
+					<i class="fas fa-save"></i> Go to New Player
+				</button>
+				<button class="pk-btn pk-btn-primary" id="pk-award-save-close" disabled>
+					<i class="fas fa-save"></i> Save and Close
 				</button>
 			</div>
+			<button class="pk-btn-ghost award-save-cancel" id="pk-award-cancel">Close Without Saving</button>
 		</div>
 	</div>
 </div>
