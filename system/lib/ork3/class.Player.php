@@ -3009,39 +3009,74 @@ class Player extends Ork3
         return $request;
     }
 
+    // Returns a REAL Status. This used to return Success() on every path --
+    // oversized, wrong mime, undecodable bytes, failed write -- so mORK and the
+    // website were both told an upload worked when nothing had been written and
+    // no error was shown anywhere. Same class as the F004/F013/F015/F016/F018/
+    // F019/F023 "reported work it had not done" batch; set_image was missed.
+    //
+    // The detail strings are deliberately specific: they are the only signal a
+    // client gets, and distinguishing "wrong mime" from "bytes would not decode"
+    // is what identifies e.g. an iOS photo picker handing over HEIC labelled
+    // image/jpeg (GD cannot decode HEIC, so decode fails while the mime gate
+    // passes).
     public function set_image($request)
     {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
-        if (strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
-            $playerimage = imagecreatefromstring(base64_decode($request['Image']));
-            if ($playerimage !== false) {
-                $base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
-                $use_png = Common::gd_has_transparency($playerimage);
 
-                if (file_exists($base . '.jpg')) {
-                    unlink($base . '.jpg');
-                }
-                if (file_exists($base . '.png')) {
-                    unlink($base . '.png');
-                }
+        $payload = (string) ($request['Image'] ?? '');
+        $mime     = (string) ($request['ImageMimeType'] ?? '');
 
-                if ($use_png) {
-                    imagealphablending($playerimage, false);
-                    imagesavealpha($playerimage, true);
-                    imagepng($playerimage, $base . '.png');
-                } else {
-                    imagejpeg($playerimage, $base . '.jpg');
-                }
-                $this->mundane->has_image = 1;
-            } else {
-                $notices .= "Image could not be decoded.";
-            }
-        } else {
-            $notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 1MB.<br />';
+        // No image in this request at all. UpdatePlayer calls set_image() on
+        // every profile save, image or not, so "nothing supplied" must stay a
+        // success -- otherwise every ordinary edit would report a failure.
+        if (strlen($payload) === 0) {
+            return Success();
         }
-        logtrace("set_image() complete", array($request, $notices));
-        return Success($notices);
+
+        if (strlen($payload) >= 1365334) {
+            return InvalidParameter('Image is too large (limit is about 1MB; received ' . strlen($payload) . ' base64 characters).');
+        }
+
+        if (!Common::supported_mime_types($mime) || Common::is_pdf_mime_type($mime)) {
+            return InvalidParameter('Unsupported image type "' . $mime . '". Images must be jpeg, gif, or png.');
+        }
+
+        $playerimage = @imagecreatefromstring(base64_decode($payload));
+        if ($playerimage === false) {
+            return InvalidParameter('Image data could not be decoded (declared ' . $mime . ', ' . strlen($payload) . ' base64 characters). The file may not really be a jpeg/gif/png.');
+        }
+
+        $base    = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
+        $use_png = Common::gd_has_transparency($playerimage);
+        $target  = $base . ($use_png ? '.png' : '.jpg');
+
+        if (file_exists($base . '.jpg')) {
+            unlink($base . '.jpg');
+        }
+        if (file_exists($base . '.png')) {
+            unlink($base . '.png');
+        }
+
+        if ($use_png) {
+            imagealphablending($playerimage, false);
+            imagesavealpha($playerimage, true);
+            $written = imagepng($playerimage, $target);
+        } else {
+            $written = imagejpeg($playerimage, $target);
+        }
+
+        // GD returns false on a failed write, but also check the file landed --
+        // both old files were just unlinked, so a silent write failure would
+        // leave the player with no image at all while reporting success.
+        if ($written === false || !file_exists($target) || filesize($target) === 0) {
+            return ProcessingError('Image could not be written to storage.');
+        }
+
+        $this->mundane->has_image = 1;
+        logtrace("set_image() complete", array('target' => $target, 'bytes' => filesize($target)));
+        return Success();
     }
 
     private function resolve_player_image_url($mundane_id, $modified)
