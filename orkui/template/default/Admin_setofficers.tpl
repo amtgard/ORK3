@@ -59,15 +59,15 @@
 	background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
 }
 #vacate-confirm-box {
-	background: #fff; border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
+	background: var(--ork-card-bg); border-radius: 8px; padding: 28px 32px; max-width: 380px; width: 90%;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
-#vacate-confirm-box h4 { margin: 0 0 10px; font-size: 17px; color: #1a202c; }
-#vacate-confirm-box p  { margin: 0 0 20px; font-size: 14px; color: #4a5568; }
+#vacate-confirm-box h4 { margin: 0 0 10px; font-size: 17px; color: var(--ork-text); background: none; border: 0; padding: 0; text-shadow: none; }
+#vacate-confirm-box p  { margin: 0 0 20px; font-size: 14px; color: var(--ork-text-secondary); }
 .vacate-confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .vacate-confirm-actions button {
-	padding: 7px 18px; border-radius: 5px; border: 1px solid #cbd5e0;
-	font-size: 14px; cursor: pointer; background: #fff; color: #2d3748;
+	padding: 7px 18px; border-radius: 5px; border: 1px solid var(--ork-input-border);
+	font-size: 14px; cursor: pointer; background: var(--ork-card-bg); color: var(--ork-text);
 }
 .vacate-confirm-actions button.vacate-ok {
 	background: #c53030; color: #fff; border-color: #c53030;

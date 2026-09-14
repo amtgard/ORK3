@@ -112,7 +112,7 @@
 	padding: 8px 18px;
 	background: transparent;
 	border: none;
-	border-right: 1px solid var(--ork-border);
+	border-right: 1px solid var(--ork-divider);
 	border-radius: 0;
 	font-size: 0;
 	line-height: 0;
@@ -144,7 +144,7 @@
 	justify-content: center;
 	padding: 11px 12px;
 	gap: 3px;
-	border-right: 1px solid var(--ork-border);
+	border-right: 1px solid var(--ork-divider);
 }
 .hm-stat-item:last-child { border-right: none; }
 .hm-stat-item-link { text-decoration: none; color: inherit; transition: background 0.15s; }
@@ -178,7 +178,7 @@
 	color: var(--ork-text);
 }
 .hm-section-title i { margin-right: 7px; color: var(--ork-text-secondary); }
-.hm-section-hint { font-size: 12px; color: var(--ork-text-muted); font-style: italic; }
+.hm-section-hint { font-size: 12px; color: var(--ork-text-on-ground); font-style: italic; }
 .hm-view-all {
 	font-size: 13px;
 	color: var(--ork-link);
@@ -469,10 +469,10 @@
 	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
 	.hm-stats-bar { flex-direction: column; }
 	/* Logo keeps its full 110px height here — the stacked layout has the room. */
-	.hm-logo-cell { padding: 10px 16px; border-right: none; border-bottom: 1px solid var(--ork-border); }
+	.hm-logo-cell { padding: 10px 16px; border-right: none; border-bottom: 1px solid var(--ork-divider); }
 	.hm-stats-cells { display: grid; grid-template-columns: 1fr 1fr; }
-	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-border); }
-	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-border); }
+	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-divider); }
+	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-divider); }
 	.hm-stat-item:last-child { border-bottom: none; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 	/* Last item spanning both columns when count is odd */
