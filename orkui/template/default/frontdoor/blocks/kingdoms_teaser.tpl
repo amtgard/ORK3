@@ -1,7 +1,7 @@
 <?php
 /**
  * Partial: kingdoms_teaser.tpl
- * Receives: $blockFields (kicker, heading, limit, more_href), $ActiveKingdomSummary (array), UIR
+ * Receives: $blockFields (kicker, heading, limit, more_href, show_provinces), $ActiveKingdomSummary (array), UIR
  * Row keys: KingdomId, ParentKingdomId, KingdomName, ParkCount
  * Only renders parent kingdoms (ParentKingdomId === 0).
  */
@@ -17,6 +17,7 @@ $limit    = fdClampLimit(
 );
 $moreHref = $blockFields['more_href'] ?? '';
 $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl($moreHref)) ? $moreHref : '';
+$showProvinces = !empty($blockFields['show_provinces']);
 
 // Resolve the parent-kingdom teaser list — filter → slice → resolve each
 // heraldry URL (a per-row file_exists() disk probe via resolve_image_ext) — ONCE,
@@ -24,7 +25,10 @@ $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl
 // (mirrors kingdom_parks.tpl $kpResolved/$kpCache). The kingdom set is global and
 // safe to share across viewers; a short TTL keeps it fresh. Cached hits skip the
 // per-row disk probes entirely.
-// $ktResolved = ['shown' => [ ['id','name','heraldry'], … ], 'total' => int].
+// $ktResolved = ['shown' => [ ['id','name','heraldry','provinces'], … ], 'total' => int].
+// 'provinces' is the comma-joined distinct states/provinces of the kingdom's
+// active parks (principality parks folded in) — '' unless show_provinces is on,
+// which also selects its own cache key so the two variants never collide.
 //
 // This is the ONE cached block whose key carries no org id — it is the global
 // front door's own. That is why it was invisible to CmsAjax::clearrendercache
@@ -35,9 +39,9 @@ $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl
 $ktSummary = (isset($ActiveKingdomSummary) && is_array($ActiveKingdomSummary)) ? $ActiveKingdomSummary : [];
 $ktResolved = fdBlockCache(
     CmsRenderCache::NS_KINGDOMS_TEASER,
-    CmsRenderCache::TeaserKey($limit),
+    CmsRenderCache::TeaserKey($limit, $showProvinces),
     CmsRenderCache::TTL,
-    function () use ($limit, $ktSummary) {
+    function () use ($limit, $ktSummary, $showProvinces) {
         // Filter to parent kingdoms only.
         $allKingdoms = [];
         if (is_array($ktSummary['ActiveKingdomsSummaryList'] ?? null)) {
@@ -48,6 +52,22 @@ $ktResolved = fdBlockCache(
             }
         }
         $totalParent = count($allKingdoms);
+
+        // One grouped query for every kingdom, only when the author asked for it.
+        $provinceMap = [];
+        if ($showProvinces && $totalParent > 0 && class_exists('APIModel')) {
+            try {
+                $provinceMap = (array) (new APIModel('Report'))->GetActiveKingdomProvinces();
+            } catch (\Throwable $e) {
+                $provinceMap = [];
+            }
+        }
+
+        // The Freeholds (kingdom 8) is a scattered, landless realm with parks in
+        // dozens of states and provinces — a list would be noise, so it gets a
+        // fixed label instead.
+        $provinceOverrides = [8 => 'Various Locations around US and Canada'];
+
         $shownRows   = [];
         foreach (array_slice($allKingdoms, 0, $limit) as $r) {
             $kid = (int)$r['KingdomId'];
@@ -55,6 +75,9 @@ $ktResolved = fdBlockCache(
                 'id'       => $kid,
                 'name'     => stripslashes($r['KingdomName'] ?? ''),
                 'heraldry' => HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', $kid)),
+                'provinces' => $showProvinces
+                    ? ($provinceOverrides[$kid] ?? implode(', ', (array) ($provinceMap[$kid] ?? [])))
+                    : '',
             ];
         }
         return ['shown' => $shownRows, 'total' => $totalParent];
@@ -97,6 +120,7 @@ $moreCount    = (int)$ktResolved['total'] - count($shown);
                 $kingdomId   = (int)$row['id'];
                 $kingdomName = htmlspecialchars($row['name'], ENT_QUOTES);
                 $heraldryUrl = htmlspecialchars($row['heraldry'], ENT_QUOTES);
+                $provinces   = $showProvinces ? (string) ($row['provinces'] ?? '') : '';
                 ?>
                 <a class="fd-card" href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"
                    style="padding:12px;text-align:center;text-decoration:none;color:inherit;display:block;">
@@ -109,6 +133,10 @@ $moreCount    = (int)$ktResolved['total'] - count($shown);
                     <div style="font-size:11px;font-weight:600;margin-top:6px;">
                         <?= $kingdomName ?>
                     </div>
+                    <?php if ($provinces !== ''): ?>
+                        <?php $provincesEsc = htmlspecialchars($provinces, ENT_QUOTES); ?>
+                        <div class="fd-kingdom-provinces" title="<?= $provincesEsc ?>"><?= $provincesEsc ?></div>
+                    <?php endif; ?>
                 </a>
             <?php endforeach; ?>
 

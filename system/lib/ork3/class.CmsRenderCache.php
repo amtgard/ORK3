@@ -156,10 +156,13 @@ class CmsRenderCache
         return self::PREFIX_PARK . (int)$parkId;
     }
 
-    /** kingdoms_teaser: 'l12' — global, so no org id in the key. */
-    public static function TeaserKey($limit)
+    /**
+     * kingdoms_teaser: 'l12' / 'l12.s1' — global, so no org id in the key. The
+     * '.s1' variant carries each card's states/provinces line.
+     */
+    public static function TeaserKey($limit, $showProvinces = false)
     {
-        return 'l' . (int)$limit;
+        return 'l' . (int)$limit . ($showProvinces ? '.s1' : '');
     }
 
     /* ------------------------------------------------------------------ *
@@ -257,10 +260,12 @@ class CmsRenderCache
     {
         $out = array();
         for ($l = 1; $l <= self::TEASER_LIMIT_MAX; $l++) {
-            $out[] = array(
-                'ns'  => self::NS_KINGDOMS_TEASER,
-                'key' => self::TeaserKey($l),
-            );
+            foreach (array(false, true) as $showProvinces) {
+                $out[] = array(
+                    'ns'  => self::NS_KINGDOMS_TEASER,
+                    'key' => self::TeaserKey($l, $showProvinces),
+                );
+            }
         }
         return $out;
     }

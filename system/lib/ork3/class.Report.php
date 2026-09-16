@@ -2140,6 +2140,96 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
+    /**
+     * The distinct states/provinces each active kingdom plays in, derived from
+     * the province column of its active parks — the front door's Kingdoms Teaser
+     * "show states/provinces" line.
+     *
+     * One grouped scan for every kingdom at once (no per-kingdom queries). A
+     * principality's parks fold into its parent kingdom, since the teaser lists
+     * parent kingdoms only and the principality is part of that realm's footprint.
+     * Uncached here: the only caller renders inside a CMS block cache.
+     *
+     * @return array<int,string[]> kingdom_id => sorted distinct province names
+     */
+    public function GetActiveKingdomProvinces()
+    {
+        $sql = "SELECT IF(k.parent_kingdom_id > 0, k.parent_kingdom_id, k.kingdom_id) AS realm_id,
+                       TRIM(p.province) AS province
+                  FROM " . DB_PREFIX . "park p
+                  INNER JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+                 WHERE p.active = 'Active' AND k.active = 'Active' AND TRIM(p.province) <> ''
+                 GROUP BY realm_id, province";
+        $this->db->Clear();
+        $rs = $this->db->DataSet($sql);
+
+        $raw = array();
+        if ($rs && $rs->Size() > 0) {
+            while ($rs->Next()) {
+                $raw[(int) $rs->realm_id][] = (string) $rs->province;
+            }
+        }
+
+        $out = array();
+        foreach ($raw as $kingdomId => $names) {
+            $out[$kingdomId] = self::NormalizeProvinceList($names);
+        }
+        return $out;
+    }
+
+    /**
+     * Clean a free-text province list into distinct, sorted display names.
+     *
+     * ork_park.province mostly holds full names, but some rows carry a US/Canadian
+     * postal code ("OH" beside "Ohio") or blanks. Codes expand to full names so the
+     * two spellings collapse; distinctness is case-insensitive (first spelling
+     * wins); anything unrecognized passes through verbatim.
+     *
+     * @param array $names raw province values
+     * @return string[]
+     */
+    public static function NormalizeProvinceList(array $names)
+    {
+        static $codes = array(
+            'AL' => 'Alabama', 'AK' => 'Alaska', 'AZ' => 'Arizona', 'AR' => 'Arkansas', 'CA' => 'California',
+            'CO' => 'Colorado', 'CT' => 'Connecticut', 'DE' => 'Delaware', 'DC' => 'District of Columbia',
+            'FL' => 'Florida', 'GA' => 'Georgia', 'HI' => 'Hawaii', 'ID' => 'Idaho', 'IL' => 'Illinois',
+            'IN' => 'Indiana', 'IA' => 'Iowa', 'KS' => 'Kansas', 'KY' => 'Kentucky', 'LA' => 'Louisiana',
+            'ME' => 'Maine', 'MD' => 'Maryland', 'MA' => 'Massachusetts', 'MI' => 'Michigan', 'MN' => 'Minnesota',
+            'MS' => 'Mississippi', 'MO' => 'Missouri', 'MT' => 'Montana', 'NE' => 'Nebraska', 'NV' => 'Nevada',
+            'NH' => 'New Hampshire', 'NJ' => 'New Jersey', 'NM' => 'New Mexico', 'NY' => 'New York',
+            'NC' => 'North Carolina', 'ND' => 'North Dakota', 'OH' => 'Ohio', 'OK' => 'Oklahoma', 'OR' => 'Oregon',
+            'PA' => 'Pennsylvania', 'RI' => 'Rhode Island', 'SC' => 'South Carolina', 'SD' => 'South Dakota',
+            'TN' => 'Tennessee', 'TX' => 'Texas', 'UT' => 'Utah', 'VT' => 'Vermont', 'VA' => 'Virginia',
+            'WA' => 'Washington', 'WV' => 'West Virginia', 'WI' => 'Wisconsin', 'WY' => 'Wyoming',
+            'PR' => 'Puerto Rico',
+            'AB' => 'Alberta', 'BC' => 'British Columbia', 'MB' => 'Manitoba', 'NB' => 'New Brunswick',
+            'NL' => 'Newfoundland and Labrador', 'NS' => 'Nova Scotia', 'NT' => 'Northwest Territories',
+            'NU' => 'Nunavut', 'ON' => 'Ontario', 'PE' => 'Prince Edward Island', 'QC' => 'Québec',
+            'SK' => 'Saskatchewan', 'YT' => 'Yukon',
+        );
+
+        $distinct = array();
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+            if ($name === '') {
+                continue;
+            }
+            $upper = strtoupper($name);
+            if (isset($codes[$upper])) {
+                $name = $codes[$upper];
+            }
+            $fold = mb_strtolower($name, 'UTF-8');
+            if (!isset($distinct[$fold])) {
+                $distinct[$fold] = $name;
+            }
+        }
+
+        $list = array_values($distinct);
+        usort($list, 'strcasecmp');
+        return $list;
+    }
+
     public function GetDistinctPlayerStats($request)
     {
         $where = '';

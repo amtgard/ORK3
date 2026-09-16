@@ -1246,7 +1246,7 @@ window.CmsBlockEditor = (function () {
      *   'mono'      monospace multi-line input (raw_html, table rows)
      *   'richtext'  TinyMCE editor
      *   'select'    dropdown (needs options:[{value,label}])
-     *   'bool'      Yes/No dropdown (stored as 1/0)
+     *   'bool'      Yes/No dropdown (stored as 1/0); default?: 0|1 when absent (1)
      *   'number'    numeric input
      *   'url'       single-line input (semantic alias of text)
      *   'image'     media-library picker
@@ -1312,6 +1312,8 @@ window.CmsBlockEditor = (function () {
             { key: 'heading', type: 'text', label: 'Heading' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max kingdoms shown', placeholder: '12' },
+            { key: 'show_provinces', type: 'bool', label: 'Show states / provinces', default: 0,
+              help: 'Lists the states or provinces each kingdom’s active parks are in, under its name.' },
             { key: 'more_href', type: 'url', label: 'Where “Browse all” goes', placeholder: 'https://…' }
         ],
         events_feed: [
@@ -1500,8 +1502,11 @@ window.CmsBlockEditor = (function () {
                 // unconditional write-back — silently overwrite the author's
                 // prior choice just by opening the block. Coercion mirrors PHP's
                 // !empty() (null/'' read as No). Only an ABSENT/null value is
-                // seeded, so the model matches what the select shows.
-                var cur = (obj[spec.key] === undefined) ? 1
+                // seeded, so the model matches what the select shows. An absent
+                // value takes spec.default (Yes unless the spec says otherwise) —
+                // a field added to an existing block type must default to No, or
+                // merely opening an already-saved block would switch it on.
+                var cur = (obj[spec.key] === undefined) ? (spec.default === undefined ? 1 : (spec.default ? 1 : 0))
                     : ((!obj[spec.key] || obj[spec.key] === '0') ? 0 : 1);
                 boolOpts.forEach(function (o) {
                     var op = el('option'); op.value = o.value; op.textContent = o.label;

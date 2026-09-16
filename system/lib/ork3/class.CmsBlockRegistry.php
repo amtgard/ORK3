@@ -156,7 +156,7 @@ class CmsBlockRegistry
                 'description'    => 'Live grid of active parent kingdoms with heraldry, linking to each kingdom profile.',
                 'addable'        => true,
                 'scopes'         => null,
-                'starter_fields' => array('kicker' => '', 'heading' => '', 'limit' => 12, 'more_href' => ''),
+                'starter_fields' => array('kicker' => '', 'heading' => '', 'limit' => 12, 'more_href' => '', 'show_provinces' => 0),
             ),
             'cta_band' => array(
                 'label'          => 'Call-to-Action Band',

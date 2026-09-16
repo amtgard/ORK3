@@ -392,6 +392,23 @@ html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
 }
 html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
 
+/* kingdoms_teaser "show states/provinces" line under each kingdom name. Reads
+   --fd-text-muted, which the dark .fd-page block remaps, so no dark override.
+   Clamped to 4 lines: a realm with parks in many states would otherwise
+   stretch its whole grid row. The clamp is visual only — the
+   full list stays in the DOM for screen readers and in the title for hover. */
+.fd-kingdom-provinces {
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--fd-text-muted);
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+}
+
 /* ---- Hero Carousel ----------------------------------------- */
 .fd-carousel {
     position: relative;
