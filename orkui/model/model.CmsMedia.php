@@ -25,9 +25,21 @@ class Model_CmsMedia extends Model
         return $this->CmsMedia->ToMediaRef($mediaRow);
     }
 
-    public function list_media($scope = null, $limit = 200, $search = null, $offset = 0)
+    public function list_media(
+        $scope = null,
+        $limit = 200,
+        $search = null,
+        $offset = 0,
+        $sort = null,
+        $dir = null,
+        $noAltOnly = false
+    ) {
+        return $this->CmsMedia->ListMedia($scope, $limit, $search, $offset, $sort, $dir, $noAltOnly);
+    }
+
+    public function count_media($scope = null, $search = null)
     {
-        return $this->CmsMedia->ListMedia($scope, $limit, $search, $offset);
+        return $this->CmsMedia->CountMedia($scope, $search);
     }
 
     /**

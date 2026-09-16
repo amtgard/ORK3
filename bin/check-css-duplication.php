@@ -105,7 +105,7 @@
 // Each such rule carries a comment at its own site saying so.
 // ---------------------------------------------------------------------------
 const MAX_GROUPS_2PLUS = 25;
-const MAX_GROUPS_ANY   = 88;
+const MAX_GROUPS_ANY   = 87;
 
 // The CMS CSS set — the same glob pair `npm run lint:css` passes to stylelint.
 const CSS_GLOBS = array(

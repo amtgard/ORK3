@@ -588,14 +588,14 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
     white-space: nowrap;
     transition: background .12s, border-color .12s, opacity .12s;
 }
-/* Grouped with the link chooser's page-row hover and the block-card head's
-   (same declaration body — the duplication gate wants one rule, not two
-   copies). All three are :hover, so the grouped rule outranks any of their
-   base rules wherever it sits. */
+/* Grouped with the link chooser's page-row hover, the block-card head's and the
+   media picker's table rows (same declaration body — the duplication gate wants
+   one rule, not several copies). All are :hover, so the grouped rule outranks
+   any of their base rules wherever it sits. */
 .cms-btn:hover,
 .cms-linkpick-opt:hover,
 .cms-recent-item:hover,
-.cms-block-collapsible > .cms-block-head:hover { background: var(--ork-bg-tertiary); }
+.cms-block-collapsible > .cms-block-head:hover,
 .cms-btn:disabled,
 .cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
 .cms-btn-primary {
@@ -1467,59 +1467,472 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
     border-top: 1px solid var(--ork-border);
 }
 
-/* media library grid */
+/* ============================================================================
+ * Media picker (cms/_block_editor.tpl) — two views over one library.
+ *
+ * Grid is for recognising an image by sight; List is for auditing and fixing
+ * descriptions. They share the toolbar, the paging state and the "needs a
+ * description" signal, so only the results region swaps.
+ *
+ * The one new token is --cms-field: the surface a thumbnail is letterboxed on.
+ * Thumbnails are `contain`, not `cover` — aspect ratio is the fact an author
+ * most needs (is this a 6276x2437 banner or a 150x194 icon?) and cropping
+ * destroys it. That means a white-background logo needs a ground that is not
+ * also white, which is what this token is for. --cms-*, never --ork-* (C2).
+ * ========================================================================== */
+
+:root {
+    --cms-field: #dfe6f0;
+}
+
+html[data-theme="dark"] {
+    --cms-field: #20262f;
+}
+
+/* (0,2,0) to match .cms-modal.cms-modal-sm/-wide, which would otherwise win on
+   specificity and clamp this back to 840px. The List view wants the width: six
+   grid columns, or a table with dimensions, weight and date all legible. */
+.cms-modal.cms-media-modal { max-width: 1060px; }
+
+/* ---- view toggle (modal head) ------------------------------------------ */
+.cms-viewtoggle {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    margin-left: 4px;
+    background: var(--ork-bg-tertiary);
+    border-radius: 8px;
+}
+.cms-viewtoggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--ork-text-secondary);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-viewtoggle-btn:hover { color: var(--ork-text); }
+.cms-viewtoggle-btn:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 1px; }
+.cms-viewtoggle-btn.cms-is-on {
+    background: var(--ork-card-bg);
+    color: var(--ork-text);
+    font-weight: 600;
+}
+
+/* ---- toolbar ------------------------------------------------------------
+   Lives OUTSIDE .cms-modal-body so it stays put while the results scroll and
+   lazy-load beneath it — the old toolbar scrolled away with the grid. */
 .cms-media-toolbar {
     display: flex;
     gap: 10px;
     align-items: center;
-    margin-bottom: 14px;
     flex-wrap: wrap;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--ork-border);
+    flex: 0 0 auto;
 }
-.cms-media-toolbar .cms-input { max-width: 240px; }
-.cms-media-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
+.cms-media-search { position: relative; flex: 1 1 220px; min-width: 150px; }
+.cms-media-search > i {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ork-text-lighter, #9aa2ad);
+    font-size: 13px;
+    pointer-events: none;
 }
-.cms-media-tile {
-    border: 2px solid var(--ork-border);
-    border-radius: 9px;
-    overflow: hidden;
-    cursor: pointer;
-    background: var(--ork-bg-secondary);
-    transition: border-color .12s, transform .08s;
+.cms-media-search .cms-input { width: 100%; padding-left: 32px; }
+/* Safari paints its own clear affordance on type=search; ours is Escape. */
+.cms-media-search .cms-input::-webkit-search-decoration,
+.cms-media-search .cms-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.cms-media-count {
+    font-size: 12.5px;
+    color: var(--ork-text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
-.cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); transform: translateY(-1px); }
-.cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
-.cms-media-tile:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
-.cms-media-tile img {
-    width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
-}
-/* Broken-thumbnail fallback for picker tiles — same 92px footprint as the
-   image, centered fa-image, sitting above the caption so nothing overlaps. */
-.cms-media-tile-fallback {
-    width: 100%; height: 92px; display: flex; align-items: center; justify-content: center;
-    background: var(--ork-bg-tertiary); color: var(--ork-text-lighter, #9aa2ad); font-size: 24px;
-}
-.cms-media-tile .cms-media-cap {
-    font-size: 11px; padding: 6px 8px; color: var(--ork-text-secondary);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.cms-media-empty { padding: 30px; text-align: center; color: var(--ork-text-muted); grid-column: 1 / -1; }
 
+.cms-chip {
+    border: 1px solid var(--ork-border-dark);
+    background: var(--ork-card-bg);
+    color: var(--ork-text-secondary);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+/* Same hover edge on both of the picker's pickable surfaces. */
+.cms-chip:hover,
+/* One focus ring for the picker's two click targets. */
+.cms-chip:focus-visible,
+.cms-chip[aria-pressed="true"] {
+    background: var(--cms-gold, #f0b429);
+    border-color: var(--cms-gold, #f0b429);
+    color: #1a1205;
+    font-weight: 600;
+}
+/* One colour carries "no description" everywhere it appears — chip, tile,
+   row — so the signal is learned once. */
+.cms-dot-warn {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--cms-warn, #9c4221);
+    flex: 0 0 auto;
+    display: inline-block;
+}
+.cms-chip[aria-pressed="true"] .cms-dot-warn { background: #1a1205; }
+.cms-media-needs {
+    color: var(--cms-warn, #9c4221);
+    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* ---- upload panel (collapsed by default) --------------------------------
+   Titled, and separated from the results, because the description field in
+   here writes to the NEXT UPLOAD while the fields below write to an existing
+   media row. Previously the two were adjacent and identically styled. */
+.cms-upload-panel {
+    padding: 16px 18px;
+    background: var(--ork-bg-tertiary);
+    border-bottom: 1px solid var(--ork-border);
+    flex: 0 0 auto;
+}
+.cms-upload-panel-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
 .cms-upload-drop {
     display: block;
     box-sizing: border-box;
     border: 2px dashed var(--ork-border-dark);
     border-radius: 9px;
-    padding: 18px;
+    padding: 16px;
     text-align: center;
     color: var(--ork-text-muted);
-    margin-bottom: 16px;
+    background: var(--ork-card-bg);
+    margin-bottom: 12px;
     font-size: 13px;
+    cursor: pointer;
 }
+.cms-upload-drop:hover { border-color: var(--cms-gold-deep, #caa23a); color: var(--ork-text-secondary); }
+.cms-upload-drop > i { font-size: 19px; display: block; margin-bottom: 5px; }
 .cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-upload-drop input[type="file"] { display: none; }
+.cms-check-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--ork-text-secondary);
+}
+.cms-check-inline input[type="checkbox"] { accent-color: var(--cms-gold, #f0b429); }
+
+/* ---- results region -----------------------------------------------------
+   Deliberately NOT .cms-modal-body: the grid and the table carry their own
+   padding, so inheriting 18px only to reset it would be a rule that exists to
+   undo another rule. */
+.cms-media-body { overflow-y: auto; }
+
+/* An author `display` beats the UA sheet's [hidden] { display: none }, and
+   .cms-media-grid sets one — without this the view toggle hides nothing and
+   both views render at once. (.cms-media-listwrap sets no display, so the
+   attribute works on it unaided.) */
+.cms-media-grid[hidden] { display: none; }
+
+/* ---- grid view ---------------------------------------------------------- */
+.cms-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+    gap: 14px;
+    padding: 18px;
+    align-content: start;
+}
+.cms-media-tile {
+    border: 1px solid var(--ork-border);
+    border-radius: 8px;
+    background: var(--ork-bg-secondary);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .12s, box-shadow .12s;
+}
+.cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
+.cms-media-tile.cms-is-editing {
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 2px rgba(240, 180, 41, .3);
+}
+/* The PICK target is a real button wrapping the image + name. The tile itself
+   is a plain container, so the description editor inside it is not swallowed by
+   a button's accessible name (a role="button" flattens its contents). */
+.cms-media-pick {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 7px 7px 0 0;
+}
+.cms-media-pick:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
+
+.cms-media-thumbbox {
+    background: var(--cms-field);
+    border-radius: 7px 7px 0 0;
+    height: 118px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.cms-media-thumbbox img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+/* A file that is not on disk gets the admin's existing missing-image treatment
+   (.cms-empty-thumb.cms-missing-thumb, at the end of this file) rather than a
+   third private one — this box already centres its content, so all it owes the
+   shared modifier is an icon size. */
+.cms-media-thumbbox.cms-empty-thumb { font-size: 18px; }
+
+.cms-media-tile-body { padding: 8px 10px 10px; }
+.cms-media-fn {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ork-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-media-dim {
+    font-size: 11.5px;
+    color: var(--ork-text-muted);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+.cms-media-desc {
+    font-size: 11.5px;
+    color: var(--ork-text-secondary);
+    margin-top: 3px;
+    min-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Describing an image is rare; choosing one is constant. The editor opens on
+   demand instead of occupying every tile permanently. */
+.cms-media-editbtn {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(26, 32, 44, .82);
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    transition: opacity .12s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* "This control is now the gold primary action" — shared with the dev toolbar's
+   active toggle, which had the identical body. Grouped rather than copied. Both
+   members beat their own base rule on specificity, not on order, so the shared
+   rule is safe at this position. */
+.cms-media-editbtn:hover,
+.cms-devbtn-active { background: var(--cms-gold, #f0b429); color: #1a1205; }
+.cms-media-editbtn:focus-visible { opacity: 1; outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 1px; }
+
+.cms-media-alt {
+    padding: 9px 10px 10px;
+    border-top: 1px solid var(--ork-border);
+}
+.cms-media-alt .cms-input { font-size: 12px; padding: 6px 8px; margin-bottom: 7px; }
+.cms-media-alt-row {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+.cms-media-alt-row .cms-check-inline { font-size: 11.5px; }
+.cms-media-alt-btns { display: flex; gap: 6px; }
+
+/* ---- list view ---------------------------------------------------------- */
+/* .cms-media-listwrap carries NO overflow on purpose. .cms-media-body is the
+   scrollport (an overflow-y:auto with a visible overflow-x computes to auto on
+   both axes), and the sticky header below sticks to the NEAREST one — giving the
+   wrapper its own overflow would anchor the header to a box that never scrolls
+   vertically, and it would not stick at all. */
+.cms-media-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.cms-media-list thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--ork-bg-tertiary);
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ork-text-secondary);
+    padding: 0;
+    border-bottom: 1px solid var(--ork-border);
+    white-space: nowrap;
+}
+.cms-media-list thead th.cms-media-list-thumb { width: 72px; }
+.cms-media-list thead th.cms-media-list-act { width: 74px; }
+.cms-media-list th.cms-ta-r .cms-sort-btn { text-align: right; padding-right: 12px; }
+/* The header cell is a button so sorting is reachable from the keyboard. */
+.cms-sort-btn {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    padding: 9px 12px;
+    cursor: pointer;
+}
+.cms-sort-btn:hover { color: var(--ork-text); }
+.cms-sort-btn:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: -2px; }
+.cms-sort-btn > i { margin-left: 5px; color: var(--ork-text-lighter, #9aa2ad); font-size: 10px; }
+.cms-media-list th[aria-sort="ascending"] .cms-sort-btn,
+.cms-media-list th[aria-sort="descending"] .cms-sort-btn { color: var(--ork-text); }
+.cms-media-list th[aria-sort="ascending"] .cms-sort-btn > i,
+.cms-media-list th[aria-sort="descending"] .cms-sort-btn > i { color: var(--cms-gold-deep, #caa23a); }
+
+.cms-media-list tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--ork-border);
+    vertical-align: middle;
+}
+.cms-media-list tbody tr:hover { background: var(--ork-bg-tertiary); }
+.cms-media-list td.cms-ta-r {
+    text-align: right;
+    color: var(--ork-text-secondary);
+    font-size: 12.5px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.cms-media-list .cms-media-thumbbox {
+    width: 60px;
+    height: 44px;
+    border-radius: 5px;
+}
+.cms-media-list .cms-media-thumbbox.cms-empty-thumb { font-size: 14px; }
+.cms-media-list-name {
+    font-weight: 600;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.cms-media-list-sub { font-size: 11.5px; color: var(--ork-text-muted); font-weight: 400; }
+/* Every description is editable in place — the audit is the reason List exists,
+   so it must not take a click to open each one. */
+.cms-media-list-alt {
+    width: 100%;
+    min-width: 140px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--ork-text-secondary);
+    text-overflow: ellipsis;
+}
+/* orkui.css paints every `#theme_container input[type="text"]` with the standard
+   filled field at (1,2,2) — above anything a class in this stylesheet can reach
+   without an absurd selector. .cms-input never has to fight it because it sets
+   the SAME background; this control wants the opposite, so background and
+   border-colour are forced here and nothing else is. Quiet-until-touched is the
+   point: two dozen filled boxes read as a form to complete rather than a list to
+   skim, and skimming for the gaps is why this view exists. */
+.cms-media-list-alt {
+    background: transparent !important;
+    border-color: transparent !important;
+}
+.cms-media-list-alt:hover {
+    background: var(--ork-bg-secondary) !important;
+    border-color: var(--ork-border-dark) !important;
+}
+.cms-media-list-alt:focus {
+    background: var(--ork-card-bg) !important;
+    border-color: var(--cms-gold, #f0b429) !important;
+    outline: 2px solid var(--cms-gold, #f0b429);
+}
+.cms-media-list-alt::placeholder { color: var(--cms-warn, #9c4221); font-style: italic; }
+.cms-media-list-alt:disabled { opacity: .55; cursor: progress; }
+.cms-media-list-use { transition: opacity .12s; }
+
+/* Both of the picker's secondary controls are revealed on hover so the results
+   read as images and names rather than as rows of competing buttons — but ONLY
+   where hovering exists. On a touch screen there is no hover, so hiding them
+   there makes them unreachable; outside this query they are simply always shown.
+   That is also why the two `opacity: 0` rules are one rule, not two copies. */
+@media (hover: hover) {
+    .cms-media-editbtn,
+    .cms-media-list-use { opacity: 0; }
+
+    .cms-media-tile:hover .cms-media-editbtn,
+    .cms-media-tile:focus-within .cms-media-editbtn,
+    .cms-media-tile.cms-is-editing .cms-media-editbtn,
+    .cms-media-list tr:hover .cms-media-list-use,
+    .cms-media-list tr:focus-within .cms-media-list-use { opacity: 1; }
+}
+
+.cms-media-empty {
+    padding: 44px 20px;
+    text-align: center;
+    color: var(--ork-text-muted);
+    grid-column: 1 / -1;
+}
+.cms-media-empty > i { font-size: 26px; display: block; margin-bottom: 10px; color: var(--ork-text-lighter, #9aa2ad); }
+.cms-media-more { margin: 0 18px 18px; }
+
+@media (max-width: 720px) {
+    .cms-hide-sm { display: none; }
+}
 
 /* ---- Shared confirm dialog body (cms/_confirm_modal.tpl) ---------------- */
 .cms-confirm-body {
@@ -2074,10 +2487,6 @@ html[data-theme="dark"] a.cms-sites-slug:hover {
 }
 .cms-devbtn + .cms-devbtn { border-left: 1px solid var(--ork-border-dark); }
 .cms-devbtn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-.cms-devbtn-active {
-    background: var(--cms-gold, #f0b429);
-    color: #1a1205;
-}
 /* The live preview's status line, between the pane head and the frame.
    The base state is the quiet "Updating…" tick. .cms-preview-note-error is a
    refresh that FAILED, and it deliberately does not look like an editor error:
@@ -3111,29 +3520,6 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-nav-target-arrow { font-size: 10px; opacity: .6; margin-right: 5px; flex: 0 0 auto; }
 .cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
 .cms-nav-addchild-row { margin: 0 0 16px 28px; }
-
-/* ---- Block-editor media picker: inline alt editor + Load-more -----------
-   Uses ORK theme vars so light/dark are handled without extra overrides. Scoped
-   to #cmsMediaGrid so it only affects THAT picker. ---- */
-/* Widen picker tiles enough to hold the inline alt editor comfortably. */
-#cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-#cmsMediaGrid .cms-media-tile { cursor: default; }
-#cmsMediaGrid .cms-media-tile img,
-#cmsMediaGrid .cms-media-tile .cms-media-cap { cursor: pointer; }
-.cms-media-alt {
-    padding: 7px 8px;
-    border-top: 1px solid var(--ork-border);
-    background: var(--ork-bg-tertiary);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.cms-media-alt-row { display: flex; gap: 6px; align-items: center; }
-.cms-media-alt-input { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 4px 6px; }
-.cms-media-alt-save { flex: 0 0 auto; }
-.cms-media-alt-deco { font-size: 11px; color: var(--ork-text-secondary); display: flex; align-items: center; gap: 4px; }
-.cms-media-alt-deco input { margin: 0; }
-.cms-media-more { display: block; margin: 12px auto 2px; }
 
 /* ---- Block-editor columns visual splitter — theme-aware via ORK
    vars. ---- */

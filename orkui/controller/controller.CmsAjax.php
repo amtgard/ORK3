@@ -1169,16 +1169,30 @@ class Controller_CmsAjax extends Controller
             $offset = 0;
         }
 
+        // Sort + the no-description filter drive the List view of the picker.
+        // Both are passed through unvalidated ON PURPOSE: the lib whitelists the
+        // sort key against its own table (an unknown key falls back to newest
+        // first) rather than trusting a check made up here, so there is one
+        // authority for what is sortable instead of two that can drift apart.
+        $sort = trim((string)($_GET['sort'] ?? $_POST['sort'] ?? ''));
+        $dir  = trim((string)($_GET['dir'] ?? $_POST['dir'] ?? ''));
+        $noAltOnly = !empty($_GET['no_alt'] ?? $_POST['no_alt'] ?? null);
+
         $this->load_model('CmsMedia');
         // SQL-level windowed paging: fetch limit+1 rows AT the offset (not a giant
         // over-fetch), so a scope with >1000 media stays fully reachable and the +1
         // sentinel reports has_more correctly. list_media applies LIMIT offset,count.
-        $rows = $this->CmsMedia->list_media($scope, $limit + 1, $search, $offset);
+        $rows = $this->CmsMedia->list_media($scope, $limit + 1, $search, $offset, $sort, $dir, $noAltOnly);
         if (!is_array($rows)) {
             $rows = array();
         }
         $hasMore = count($rows) > $limit;
         $page    = array_slice($rows, 0, $limit);
+
+        // Library-wide totals for the picker header. Counted on every page so the
+        // numbers stay true after an upload or a description saved from the grid;
+        // it is one indexed COUNT over the same WHERE the page already ran.
+        $totals = $this->CmsMedia->count_media($scope, $search);
 
         $this->_ok(array(
             'media'    => $page,
@@ -1186,6 +1200,8 @@ class Controller_CmsAjax extends Controller
             'offset'   => $offset,
             'limit'    => $limit,
             'has_more' => $hasMore,
+            'total'    => (int)($totals['total'] ?? 0),
+            'no_alt'   => (int)($totals['no_alt'] ?? 0),
         ));
     }
 

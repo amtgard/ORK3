@@ -467,6 +467,14 @@ class CmsMedia extends CmsBase
         $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
         $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
         $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
+        // The intrinsic facts about the file. The SELECT has always carried these
+        // and the mapper always dropped them, so the picker could not tell a
+        // 6276x2437 banner from a 150x194 icon, or warn before a 3 MB PNG went
+        // into a page. Null stays null: "not recorded" is not "zero pixels".
+        $ref['width']      = isset($row['width']) && $row['width'] !== null ? (int)$row['width'] : null;
+        $ref['height']     = isset($row['height']) && $row['height'] !== null ? (int)$row['height'] : null;
+        $ref['bytes']      = isset($row['bytes']) && $row['bytes'] !== null ? (int)$row['bytes'] : null;
+        $ref['mime']       = isset($row['mime']) ? (string)$row['mime'] : '';
         return $ref;
     }
 
@@ -475,22 +483,28 @@ class CmsMedia extends CmsBase
      * ------------------------------------------------------------------ */
 
     /**
-     * Newest-first media rows for the picker, returned as media refs enriched
-     * with id/filename/alt and raw paths.
+     * The WHERE clauses shared by ListMedia and CountMedia, binding their
+     * parameters onto $DB as a side effect.
      *
-     * @param array|null  $scope  optional ['type'=>...,'id'=>...] filter
-     * @param int         $limit  max rows (default 200)
-     * @param string|null $search optional LIKE over filename/alt/title
-     * @return array list of media-ref + {media_id,filename,alt,created_at}
+     * Shared deliberately: the chip in the picker reads "N need a description"
+     * from CountMedia while the rows come from ListMedia, so the two have to
+     * agree about what is being counted. Duplicating this would let the count
+     * and the list drift apart the first time either grew a filter.
+     *
+     * The CALLER must have called $DB->Clear() first — binds set here are lost
+     * if Clear() runs afterwards.
+     *
+     * @param array|null  $scope     optional ['type'=>...,'id'=>...] filter
+     * @param string|null $search    optional LIKE over filename/alt/title
+     * @param bool        $noAltOnly restrict to rows with no alt text
+     * @return array list of SQL fragments to join with AND
      */
-    public function ListMedia($scope = null, $limit = 200, $search = null, $offset = 0)
+    private function _listWhere($scope, $search, $noAltOnly)
     {
         global $DB;
 
         // Never list trashed media.
         $where = array('deleted_at IS NULL');
-
-        $DB->Clear();
 
         if (is_array($scope) && isset($scope['type'])) {
             $where[] = 'scope_type = :scope_type';
@@ -512,6 +526,107 @@ class CmsMedia extends CmsBase
             $DB->search_alt = $like;
             $DB->search_ti  = $like;
         }
+        // The accessibility audit: rows the public site will render with no
+        // description. A row deliberately marked decorative is stored as '' and
+        // is indistinguishable from one never described, so both are listed —
+        // the author is the one who can tell them apart.
+        if ($noAltOnly) {
+            $where[] = "(alt IS NULL OR alt = '')";
+        }
+
+        return $where;
+    }
+
+    /**
+     * How many media rows match a scope + search, and how many of those carry no
+     * description. One pass, so the picker's header ("64 images", "3 need a
+     * description") is true of the WHOLE library rather than of the rows that
+     * happen to have lazy-loaded so far.
+     *
+     * $noAltOnly is intentionally NOT a parameter: this reports on the unfiltered
+     * set so the chip can still say how many need attention while the chip's own
+     * filter is switched on.
+     *
+     * @param array|null  $scope  optional ['type'=>...,'id'=>...] filter
+     * @param string|null $search optional LIKE over filename/alt/title
+     * @return array{total:int,no_alt:int}
+     */
+    public function CountMedia($scope = null, $search = null)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $where = $this->_listWhere($scope, $search, false);
+
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS total,'
+            . " COALESCE(SUM(CASE WHEN alt IS NULL OR alt = '' THEN 1 ELSE 0 END), 0) AS no_alt"
+            . ' FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE ' . implode(' AND ', $where)
+        ));
+
+        // A failed query must not read as an empty library: the caller shows
+        // these as counts, and 0/0 would quietly claim there is nothing to fix.
+        if ($row === null) {
+            return array('total' => 0, 'no_alt' => 0);
+        }
+        return array(
+            'total' => (int)($row['total'] ?? 0),
+            'no_alt' => (int)($row['no_alt'] ?? 0),
+        );
+    }
+
+    /**
+     * Sortable column whitelist for ListMedia. The ORDER BY clause cannot be
+     * parameterized, so the caller's key is mapped through this table and an
+     * unknown key falls back to the default rather than reaching the SQL —
+     * a whitelist, not an escape.
+     *
+     * 'px' sorts by pixel area, which is what an author means by "biggest":
+     * a 6276x2437 banner outranks a 2400x1800 photo on area, not on width.
+     * Every entry carries `media_id` as the final tiebreak so paging is stable —
+     * without it, rows sharing a sort value can reappear on the next page.
+     *
+     * @var array<string,string>
+     */
+    private static $SORTABLE = array(
+        'created' => array('created_at'),
+        'filename' => array('filename'),
+        'bytes' => array('bytes'),
+        'px' => array('(COALESCE(width, 0) * COALESCE(height, 0))'),
+        // Two terms: described-ness, then alphabetical within each group. The CASE
+        // yields 0 for an undescribed row so that ASCENDING puts the rows needing
+        // attention on top — sorting by Description is something an author does to
+        // find the gaps, so one click should land on them.
+        'alt' => array("(CASE WHEN alt IS NULL OR alt = '' THEN 0 ELSE 1 END)", 'alt'),
+    );
+
+    /**
+     * Newest-first media rows for the picker, returned as media refs enriched
+     * with id/filename/alt and raw paths.
+     *
+     * @param array|null  $scope  optional ['type'=>...,'id'=>...] filter
+     * @param int         $limit  max rows (default 200)
+     * @param string|null $search optional LIKE over filename/alt/title
+     * @param int         $offset windowed-paging offset
+     * @param string|null $sort   a key of self::$SORTABLE; anything else = newest first
+     * @param string|null $dir    'asc' | 'desc' (default 'desc')
+     * @param bool        $noAltOnly true = only rows with no alt text (the a11y audit)
+     * @return array list of media-ref + {media_id,filename,alt,created_at}
+     */
+    public function ListMedia(
+        $scope = null,
+        $limit = 200,
+        $search = null,
+        $offset = 0,
+        $sort = null,
+        $dir = null,
+        $noAltOnly = false
+    ) {
+        global $DB;
+
+        $DB->Clear();
+        $where = $this->_listWhere($scope, $search, $noAltOnly);
 
         // SQL-level windowed paging: LIMIT <offset>, <count>. Both operands are
         // ints (offset sanitized here, count via _clampLimit) so no injection.
@@ -524,7 +639,7 @@ class CmsMedia extends CmsBase
             . ' alt, title, focal, thumb_path, scope_type, scope_id, uploaded_by, created_at'
             . ' FROM ' . DB_PREFIX . 'cms_media'
             . ' WHERE ' . implode(' AND ', $where)
-            . ' ORDER BY media_id DESC'
+            . $this->_orderBy($sort, $dir)
             . $limitSql;
 
         $r = $DB->DataSet($sql);
@@ -534,6 +649,37 @@ class CmsMedia extends CmsBase
             $out[] = $this->_mediaListRow($row);
         }
         return $out;
+    }
+
+    /**
+     * Build the ORDER BY clause for ListMedia from a whitelisted sort key.
+     *
+     * ORDER BY takes no bound parameters, so $sort is never interpolated: it is
+     * used only to look up a fixed column expression in self::$SORTABLE, and an
+     * unrecognized key yields the default (newest first). $dir collapses to one
+     * of two literals for the same reason.
+     *
+     * @param string|null $sort
+     * @param string|null $dir
+     * @return string the ' ORDER BY ...' fragment, leading space included
+     */
+    private function _orderBy($sort, $dir)
+    {
+        $key = is_string($sort) ? strtolower(trim($sort)) : '';
+        if ($key === '' || !isset(self::$SORTABLE[$key])) {
+            return ' ORDER BY media_id DESC';
+        }
+        $direction = (is_string($dir) && strtolower(trim($dir)) === 'asc') ? 'ASC' : 'DESC';
+
+        // 'alt' orders on two terms (described-ness, then the text), so the
+        // direction is applied to each rather than appended once to the clause.
+        $parts = array();
+        foreach (self::$SORTABLE[$key] as $piece) {
+            $parts[] = $piece . ' ' . $direction;
+        }
+
+        // media_id breaks ties so the LIMIT window is stable across pages.
+        return ' ORDER BY ' . implode(', ', $parts) . ', media_id DESC';
     }
 
     /**

@@ -2856,9 +2856,22 @@ window.CmsBlockEditor = (function () {
         }
     }
 
-    /* ================= Media picker ================= */
-    var mediaModal, mediaGrid, mediaSearch, mediaSearchBtn, uploadInput, uploadDrop, uploadAlt, uploadDecorative;
+    /* ================= Media picker =================
+     * Two views over one library:
+     *   Grid — recognise an image by sight, then click it.
+     *   List — audit and fix descriptions, sortable by any column.
+     * They share the toolbar, the paging state and the alt-text writer; only the
+     * results region swaps, and the chosen view is remembered per browser.
+     *
+     * Search, sort and the "needs a description" filter are all served by
+     * CmsAjax/medialist, so each is true of the WHOLE library rather than of the
+     * rows that happen to have lazy-loaded so far.
+     */
+    var mediaModal, mediaGrid, mediaListWrap, mediaList, mediaSearch;
+    var mediaNoAltBtn, mediaNoAltLabel, mediaCountEl, mediaViewBtns;
+    var uploadInput, uploadDrop, uploadAlt, uploadDecorative, uploadPanel, uploadToggle;
     var mediaCallback = null;
+
     // Lazy-load paging state. The picker pulls one page at a time (medialist
     // offset/limit) and appends more as the author scrolls (IntersectionObserver)
     // or clicks "Load more", so a large media library is never fetched + rendered
@@ -2866,6 +2879,28 @@ window.CmsBlockEditor = (function () {
     var MEDIA_PAGE = 24;
     var mediaQuery = '', mediaOffset = 0, mediaHasMore = false, mediaLoading = false;
     var mediaMoreBtn = null, mediaMoreIO = null;
+    var mediaNoAltOnly = false;
+    var mediaTotal = 0, mediaNoAltTotal = 0;
+    // Server-side sort. null = the endpoint's default (newest first).
+    var mediaSort = null, mediaDir = 'desc';
+    var mediaView = 'grid';
+    var mediaSearchTimer = null;
+    // Which tile currently has its description editor open (media_id), or null.
+    var mediaEditingId = null;
+
+    var MEDIA_VIEW_KEY = 'cmsMediaView';
+    var MEDIA_SEARCH_DEBOUNCE = 250;
+
+    // First click on a column picks the direction that answers the question the
+    // column is usually asked: newest first, heaviest first, biggest first, but
+    // A-Z by name and gaps-first by description.
+    var MEDIA_SORT_DEFAULT_DIR = {
+        filename: 'asc',
+        alt: 'asc',
+        px: 'desc',
+        bytes: 'desc',
+        created: 'desc'
+    };
 
     function openMediaPicker(cb) {
         mediaCallback = cb;
@@ -2873,136 +2908,381 @@ window.CmsBlockEditor = (function () {
         loadMedia('');
     }
 
-    // Build one picker tile: click the image/caption to pick it; edit its alt inline
-    // (writes through to the media row) without picking.
-    function buildMediaTile(m) {
-        var tile = el('div', 'cms-media-tile');
-        // Make the whole tile a real, keyboard-operable control (not mouse-only).
-        tile.setAttribute('role', 'button');
-        tile.setAttribute('tabindex', '0');
-        tile.setAttribute('aria-label', 'Use image: ' + (m.alt || m.filename || ('#' + (m.media_id || ''))));
-        var img = el('img');
-        img.alt = m.alt || '';
-        var cap = el('div', 'cms-media-cap', esc(m.alt || m.filename || ('#' + (m.media_id || ''))));
+    /* ---- formatting ---- */
 
-        function pick() {
-            if (mediaCallback) { mediaCallback(m); }
-            closeModal(mediaModal);
-        }
-        img.addEventListener('click', pick);
-        cap.addEventListener('click', pick);
-        // Enter/Space activate the tile like a click — but only when the tile itself
-        // has focus, so typing in the inline alt-editor input doesn't fire pick().
-        tile.addEventListener('keydown', function (e) {
-            if (e.target !== tile) { return; }
-            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-                e.preventDefault();
-                pick();
-            }
-        });
-        // A broken thumbnail swaps to the fa-image placeholder (sized to the
-        // tile so it never overlaps the caption below), keeping the tile clickable.
+    function fmtBytes(b) {
+        b = Number(b) || 0;
+        if (b >= 1048576) { return (b / 1048576).toFixed(1) + ' MB'; }
+        if (b >= 1024) { return Math.round(b / 1024) + ' KB'; }
+        return b + ' B';
+    }
+    function fmtDims(m) {
+        var w = Number(m.width) || 0, h = Number(m.height) || 0;
+        if (!w || !h) { return '—'; }
+        return w.toLocaleString() + '×' + h.toLocaleString();
+    }
+    function fmtDate(raw) {
+        if (!raw) { return '—'; }
+        // created_at is a MySQL DATETIME; Safari refuses the space form, so
+        // normalize to ISO before parsing rather than trusting Date().
+        var d = new Date(String(raw).replace(' ', 'T'));
+        if (isNaN(d.getTime())) { return '—'; }
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    function mediaName(m) {
+        return m.filename || m.title || ('#' + (m.media_id || ''));
+    }
+    function hasNoAlt(m) {
+        return !m.alt || !String(m.alt).trim();
+    }
+
+    /* ---- shared pieces ---- */
+
+    // The letterbox a thumbnail sits in. `contain`, never `cover`: aspect ratio is
+    // the fact an author most needs (a 6276x2437 banner vs a 150x194 icon), and
+    // cropping every image into the same rectangle destroys it.
+    //
+    // A file with no bytes on disk gets the SAME amber dashed treatment the media
+    // grid and the block editor's image fields already use — .cms-empty-thumb +
+    // .cms-missing-thumb, with MISSING_IMG_TIP's wording. The picker was the one
+    // surface that never got it and showed an unlabelled grey square instead,
+    // which reads identically to "still loading".
+    function buildThumbBox(m) {
+        var box = el('div', 'cms-media-thumbbox');
+        var img = el('img');
+        img.alt = '';
+        img.loading = 'lazy';
         img.addEventListener('error', function () {
-            var ph = el('div', 'cms-media-tile-fallback', '<i class="fas fa-image" aria-hidden="true"></i>');
-            ph.addEventListener('click', pick);
-            if (img.parentNode) { img.parentNode.replaceChild(ph, img); }
+            box.classList.add('cms-empty-thumb', 'cms-missing-thumb');
+            box.setAttribute('data-tip', MISSING_IMG_TIP);
+            box.innerHTML = '<i class="fas fa-unlink" aria-hidden="true"></i>';
         });
         img.src = m.thumb || m.src;
+        box.appendChild(img);
+        return box;
+    }
 
-        tile.appendChild(img);
-        tile.appendChild(cap);
-        // Inline alt editing in the picker. Editing here writes the
-        // description back to the shared media row (CmsAjax/mediaupdate — CSRF- and
-        // scope-guarded via post()), so it's reusable everywhere the image appears.
-        if (m.media_id) { tile.appendChild(buildAltEditor(m, cap, img)); }
+    // Write a description back to the shared media row (CmsAjax/mediaupdate —
+    // CSRF- and scope-guarded via post()). `decorative` INTENTIONALLY saves an
+    // empty alt so assistive tech skips the image — distinct from simply
+    // forgetting to describe it, which is why the choice is explicit.
+    // Returns a promise resolving true on success.
+    function saveMediaAlt(m, value, decorative, onDone) {
+        var alt = decorative ? '' : String(value || '').trim();
+        return post('mediaupdate', { media_id: m.media_id, alt: alt }).then(function (res) {
+            if (!res || !res.ok) {
+                toast((res && res.error) || 'Could not save the description.', 'error');
+                if (onDone) { onDone(false); }
+                return false;
+            }
+            var wasMissing = hasNoAlt(m);
+            // Reflect the sanitized value the server echoed back.
+            m.alt = (res.alt != null) ? String(res.alt) : alt;
+            // Keep the library-wide counter honest without a refetch.
+            var nowMissing = hasNoAlt(m);
+            if (wasMissing && !nowMissing) { mediaNoAltTotal = Math.max(0, mediaNoAltTotal - 1); }
+            if (!wasMissing && nowMissing) { mediaNoAltTotal += 1; }
+            syncMediaCounts();
+            toast(decorative ? 'Marked decorative — saved with no description.' : 'Description saved.', 'ok');
+            if (onDone) { onDone(true); }
+            return true;
+        }).catch(function () {
+            toast('Network error saving the description.', 'error');
+            if (onDone) { onDone(false); }
+            return false;
+        });
+    }
+
+    /* ---- grid view ---- */
+
+    function buildMediaTile(m) {
+        var tile = el('div', 'cms-media-tile');
+        tile.setAttribute('data-media-id', String(m.media_id || ''));
+
+        // The PICK target is a real <button> wrapping the thumbnail and name.
+        // The tile itself stays a plain container: a role="button" that contains
+        // a text input and a checkbox has its contents flattened into its
+        // accessible name, which made the old inline editor unreachable.
+        var pick = el('button', 'cms-media-pick');
+        pick.type = 'button';
+        pick.setAttribute('aria-label', 'Use image: ' + mediaName(m));
+        pick.appendChild(buildThumbBox(m));
+
+        var body = el('div', 'cms-media-tile-body');
+        body.appendChild(el('div', 'cms-media-fn', esc(mediaName(m))));
+        body.appendChild(el('div', 'cms-media-dim', esc(fmtDims(m) + ' · ' + fmtBytes(m.bytes))));
+
+        var desc = el('div', 'cms-media-desc');
+        if (hasNoAlt(m)) {
+            desc.innerHTML = '<span class="cms-media-needs">'
+                + '<span class="cms-dot-warn" aria-hidden="true"></span> No description</span>';
+        } else {
+            desc.textContent = m.alt;
+        }
+        body.appendChild(desc);
+        pick.appendChild(body);
+        pick.addEventListener('click', function () {
+            if (mediaCallback) { mediaCallback(m); }
+            closeModal(mediaModal);
+        });
+        tile.appendChild(pick);
+
+        if (m.media_id) {
+            var editBtn = el('button', 'cms-media-editbtn', '<i class="fas fa-pen" aria-hidden="true"></i>');
+            editBtn.type = 'button';
+            editBtn.setAttribute('data-tip', 'Edit this description');
+            editBtn.setAttribute('aria-label', 'Edit the description for ' + mediaName(m));
+            editBtn.addEventListener('click', function () {
+                mediaEditingId = (mediaEditingId === m.media_id) ? null : m.media_id;
+                renderTileEditor(tile, m);
+            });
+            tile.appendChild(editBtn);
+            if (mediaEditingId === m.media_id) { renderTileEditor(tile, m); }
+        }
         return tile;
     }
 
-    // Inline alt editor for a picker tile. The "decorative" tick INTENTIONALLY saves
-    // an empty alt (assistive tech then skips the image) — the same teaching pattern
-    // as the upload panel, but applied to an existing library image.
-    function buildAltEditor(m, cap, img) {
-        var box = el('div', 'cms-media-alt');
-        // Interacting with the editor must not trigger the tile's "pick" click.
-        box.addEventListener('click', function (e) { e.stopPropagation(); });
+    // Open or close the description editor inside one tile. Rare task, so it
+    // occupies the tile only while it is being used.
+    function renderTileEditor(tile, m) {
+        var existing = tile.querySelector('.cms-media-alt');
+        if (existing) { tile.removeChild(existing); }
+        tile.classList.toggle('cms-is-editing', mediaEditingId === m.media_id);
+        if (mediaEditingId !== m.media_id) { return; }
 
-        var input = el('input', 'cms-input cms-media-alt-input');
+        var box = el('div', 'cms-media-alt');
+        var input = el('input', 'cms-input');
         input.type = 'text';
-        input.placeholder = 'Describe this image…';
+        input.placeholder = 'Describe this image for screen readers';
         input.value = m.alt || '';
 
-        var saveBtn = el('button', 'cms-btn cms-btn-sm cms-media-alt-save', 'Save');
-        saveBtn.type = 'button';
-        saveBtn.setAttribute('data-tip', 'Save this description to the media library');
-
-        var decoLab = el('label', 'cms-check-inline cms-media-alt-deco');
-        var deco = el('input'); deco.type = 'checkbox';
+        var decoLab = el('label', 'cms-check-inline');
+        var deco = el('input');
+        deco.type = 'checkbox';
         decoLab.appendChild(deco);
-        decoLab.appendChild(document.createTextNode(' Decorative (no alt text)'));
-
+        decoLab.appendChild(document.createTextNode(' Decorative'));
         deco.addEventListener('change', function () {
             input.disabled = deco.checked;
             if (deco.checked) { input.value = ''; }
         });
 
-        function save() {
-            var alt = deco.checked ? '' : input.value.trim();
-            var prev = saveBtn.textContent;
+        var cancelBtn = el('button', 'cms-btn cms-btn-sm', 'Cancel');
+        cancelBtn.type = 'button';
+        var saveBtn = el('button', 'cms-btn cms-btn-primary cms-btn-sm', 'Save');
+        saveBtn.type = 'button';
+
+        function finish() {
+            mediaEditingId = null;
+            renderMediaResults();
+        }
+        cancelBtn.addEventListener('click', finish);
+        function doSave() {
+            var label = saveBtn.textContent;
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving…';
-            // post() sends X-CSRF-Token (window.CMS_CSRF) + the active scope.
-            post('mediaupdate', { media_id: m.media_id, alt: alt }).then(function (res) {
+            saveMediaAlt(m, input.value, deco.checked, function (ok) {
                 saveBtn.disabled = false;
-                saveBtn.textContent = prev;
-                if (!res || !res.ok) { toast((res && res.error) || 'Could not save the description.', 'error'); return; }
-                // Reflect the sanitized value the server echoed back.
-                m.alt = (res.alt != null) ? String(res.alt) : alt;
-                input.value = m.alt;
-                if (img) { img.alt = m.alt; }
-                if (cap) { cap.textContent = m.alt || m.filename || ('#' + (m.media_id || '')); }
-                toast(deco.checked ? 'Marked decorative — empty alt saved.' : 'Description saved.', 'ok');
-            }).catch(function () {
-                saveBtn.disabled = false;
-                saveBtn.textContent = prev;
-                toast('Network error saving the description.', 'error');
+                saveBtn.textContent = label;
+                if (ok) { finish(); }
             });
         }
-        saveBtn.addEventListener('click', save);
-        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+        saveBtn.addEventListener('click', doSave);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+            if (e.key === 'Escape') { e.preventDefault(); finish(); }
+        });
 
+        var btns = el('div', 'cms-media-alt-btns');
+        btns.appendChild(cancelBtn);
+        btns.appendChild(saveBtn);
         var row = el('div', 'cms-media-alt-row');
-        row.appendChild(input);
-        row.appendChild(saveBtn);
+        row.appendChild(decoLab);
+        row.appendChild(btns);
+
+        box.appendChild(input);
         box.appendChild(row);
-        box.appendChild(decoLab);
-        return box;
+        tile.appendChild(box);
+        input.focus();
     }
 
-    // Append a page of tiles. `reset` clears the grid first (new search / reopen).
-    function appendMediaTiles(items, reset) {
-        if (reset) { mediaGrid.innerHTML = ''; }
-        if (reset && (!items || !items.length)) {
-            mediaGrid.appendChild(el('div', 'cms-media-empty', 'No media yet. Upload an image above.'));
+    /* ---- list view ---- */
+
+    function buildMediaRow(m) {
+        var tr = el('tr');
+        tr.setAttribute('data-media-id', String(m.media_id || ''));
+
+        var tdThumb = el('td');
+        tdThumb.appendChild(buildThumbBox(m));
+        tr.appendChild(tdThumb);
+
+        var tdName = el('td');
+        var name = el('div', 'cms-media-list-name');
+        if (hasNoAlt(m)) {
+            name.appendChild(el('span', 'cms-dot-warn'));
+            name.lastChild.setAttribute('aria-hidden', 'true');
+        }
+        name.appendChild(document.createTextNode(mediaName(m)));
+        name.title = mediaName(m);
+        tdName.appendChild(name);
+        if (m.title) { tdName.appendChild(el('div', 'cms-media-list-sub', esc(m.title))); }
+        tr.appendChild(tdName);
+
+        // Every description editable in place — the audit is the reason List
+        // exists, so it must not take a click to open each one.
+        var tdAlt = el('td');
+        var alt = el('input', 'cms-media-list-alt');
+        alt.type = 'text';
+        alt.value = m.alt || '';
+        alt.placeholder = 'Add a description';
+        alt.setAttribute('aria-label', 'Description for ' + mediaName(m));
+        var lastSaved = alt.value;
+        function commit() {
+            if (alt.value === lastSaved) { return; }
+            var pending = alt.value;
+            alt.disabled = true;
+            saveMediaAlt(m, pending, false, function (ok) {
+                alt.disabled = false;
+                if (ok) {
+                    lastSaved = m.alt;
+                    alt.value = m.alt;
+                    // The dot is the row's only "needs attention" cue.
+                    var dot = name.querySelector('.cms-dot-warn');
+                    if (hasNoAlt(m) && !dot) {
+                        var d = el('span', 'cms-dot-warn');
+                        d.setAttribute('aria-hidden', 'true');
+                        name.insertBefore(d, name.firstChild);
+                    } else if (!hasNoAlt(m) && dot) {
+                        name.removeChild(dot);
+                    }
+                } else {
+                    alt.value = lastSaved;
+                }
+            });
+        }
+        alt.addEventListener('change', commit);
+        alt.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); alt.blur(); }
+            if (e.key === 'Escape') { e.preventDefault(); alt.value = lastSaved; alt.blur(); }
+        });
+        tdAlt.appendChild(alt);
+        tr.appendChild(tdAlt);
+
+        tr.appendChild(el('td', 'cms-ta-r cms-hide-sm', esc(fmtDims(m))));
+        tr.appendChild(el('td', 'cms-ta-r cms-hide-sm', esc(fmtBytes(m.bytes))));
+        tr.appendChild(el('td', 'cms-ta-r cms-hide-sm', esc(fmtDate(m.created_at))));
+
+        var tdAct = el('td', 'cms-ta-r');
+        var useBtn = el('button', 'cms-btn cms-btn-primary cms-btn-sm cms-media-list-use', 'Use');
+        useBtn.type = 'button';
+        useBtn.setAttribute('aria-label', 'Use image: ' + mediaName(m));
+        useBtn.addEventListener('click', function () {
+            if (mediaCallback) { mediaCallback(m); }
+            closeModal(mediaModal);
+        });
+        tdAct.appendChild(useBtn);
+        tr.appendChild(tdAct);
+        return tr;
+    }
+
+    /* ---- rendering + paging ---- */
+
+    // The page of rows currently loaded. Held so a view switch or an inline edit
+    // can re-render without refetching.
+    var mediaItems = [];
+
+    function mediaEmptyMessage() {
+        if (mediaNoAltOnly) {
+            return '<i class="fas fa-check" aria-hidden="true"></i>'
+                + 'Every image here has a description.';
+        }
+        if (mediaQuery) {
+            return '<i class="fas fa-magnifying-glass" aria-hidden="true"></i>'
+                + 'Nothing matches “' + esc(mediaQuery) + '”. Try a shorter word, or upload a new image.';
+        }
+        return '<i class="fas fa-image" aria-hidden="true"></i>'
+            + 'No images yet. Use Upload to add the first one.';
+    }
+
+    function renderMediaResults() {
+        var isGrid = (mediaView === 'grid');
+        mediaGrid.hidden = !isGrid;
+        mediaListWrap.hidden = isGrid;
+
+        if (!mediaItems.length) {
+            mediaGrid.innerHTML = '';
+            mediaList.innerHTML = '';
+            var empty = el('div', 'cms-media-empty', mediaEmptyMessage());
+            if (isGrid) {
+                mediaGrid.appendChild(empty);
+            } else {
+                var td = el('td', '', '');
+                td.colSpan = 7;
+                td.appendChild(empty);
+                var tr = el('tr');
+                tr.appendChild(td);
+                mediaList.appendChild(tr);
+            }
             return;
         }
-        (items || []).forEach(function (m) { mediaGrid.appendChild(buildMediaTile(m)); });
+
+        if (isGrid) {
+            mediaGrid.innerHTML = '';
+            mediaItems.forEach(function (m) { mediaGrid.appendChild(buildMediaTile(m)); });
+        } else {
+            mediaList.innerHTML = '';
+            mediaItems.forEach(function (m) { mediaList.appendChild(buildMediaRow(m)); });
+        }
+    }
+
+    function syncMediaCounts() {
+        if (mediaCountEl) {
+            var shown = mediaItems.length;
+            mediaCountEl.textContent = (shown < mediaTotal)
+                ? (shown.toLocaleString() + ' of ' + mediaTotal.toLocaleString())
+                : (mediaTotal.toLocaleString() + (mediaTotal === 1 ? ' image' : ' images'));
+        }
+        if (mediaNoAltLabel) {
+            mediaNoAltLabel.textContent = mediaNoAltTotal.toLocaleString()
+                + (mediaNoAltTotal === 1 ? ' needs a description' : ' need a description');
+        }
+        if (mediaNoAltBtn) {
+            // Nothing to filter to — hide the chip rather than offer an empty view.
+            mediaNoAltBtn.hidden = (mediaNoAltTotal === 0 && !mediaNoAltOnly);
+        }
+    }
+
+    function syncMediaSortHeaders() {
+        if (!mediaListWrap) { return; }
+        var ths = mediaListWrap.querySelectorAll('th[data-sort]');
+        Array.prototype.forEach.call(ths, function (th) {
+            var key = th.getAttribute('data-sort');
+            var icon = th.querySelector('i');
+            var active = (mediaSort === key);
+            th.setAttribute('aria-sort', active ? (mediaDir === 'asc' ? 'ascending' : 'descending') : 'none');
+            if (icon) {
+                icon.className = active
+                    ? (mediaDir === 'asc' ? 'fas fa-arrow-up-short-wide' : 'fas fa-arrow-down-wide-short')
+                    : 'fas fa-sort';
+            }
+        });
     }
 
     // Create (once) the "Load more" control + its IntersectionObserver, then reflect
     // the current paging state onto it.
     function syncMediaMore() {
-        if (!mediaMoreBtn && mediaGrid && mediaGrid.parentNode) {
+        var host = mediaGrid && mediaGrid.parentNode;
+        if (!mediaMoreBtn && host) {
             mediaMoreBtn = el('button', 'cms-btn cms-btn-sm cms-btn-ghost cms-media-more', 'Load more images');
             mediaMoreBtn.type = 'button';
             mediaMoreBtn.style.display = 'none';
             mediaMoreBtn.addEventListener('click', function () { loadMediaPage(false); });
-            mediaGrid.parentNode.insertBefore(mediaMoreBtn, mediaGrid.nextSibling);
+            host.appendChild(mediaMoreBtn);
             // Auto-load the next page when the button scrolls into view inside the
             // modal body. The manual click above is the fallback if IO is unavailable.
             if (typeof IntersectionObserver !== 'undefined') {
                 mediaMoreIO = new IntersectionObserver(function (entries) {
                     if (entries[0] && entries[0].isIntersecting) { loadMediaPage(false); }
-                }, { root: mediaGrid.parentNode, rootMargin: '150px' });
+                }, { root: host, rootMargin: '150px' });
                 mediaMoreIO.observe(mediaMoreBtn);
             }
         }
@@ -3012,15 +3292,18 @@ window.CmsBlockEditor = (function () {
         mediaMoreBtn.textContent = mediaLoading ? 'Loading…' : 'Load more images';
     }
 
-    // Fetch one page. `reset` starts over (offset 0, new/blank search).
+    // Fetch one page. `reset` starts over (offset 0, new search/sort/filter).
     function loadMediaPage(reset) {
         if (mediaLoading) { return; }
         if (!reset && !mediaHasMore) { return; }
         if (reset) {
             mediaOffset = 0;
             mediaHasMore = false;
+            mediaItems = [];
+            mediaEditingId = null;
             if (mediaMoreBtn) { mediaMoreBtn.style.display = 'none'; }
-            mediaGrid.innerHTML = '<div class="cms-media-empty">Loading…</div>';
+            mediaGrid.innerHTML = '<div class="cms-media-empty"><span class="cms-spin"></span> Loading…</div>';
+            mediaList.innerHTML = '';
         }
         mediaLoading = true;
         syncMediaMore();
@@ -3029,6 +3312,8 @@ window.CmsBlockEditor = (function () {
         // '&' — a second '?' would corrupt the Route param (empties $_GET).
         var params = { limit: String(MEDIA_PAGE), offset: String(mediaOffset) };
         if (mediaQuery) { params.q = mediaQuery; }
+        if (mediaSort) { params.sort = mediaSort; params.dir = mediaDir; }
+        if (mediaNoAltOnly) { params.no_alt = '1'; }
         var url = AJAX + 'medialist&' + new URLSearchParams(params).toString()
             + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
         fetch(url, { credentials: 'same-origin' })
@@ -3036,15 +3321,25 @@ window.CmsBlockEditor = (function () {
             .then(function (res) {
                 mediaLoading = false;
                 if (!res || !res.ok) {
-                    if (reset) { mediaGrid.innerHTML = '<div class="cms-media-empty">' + esc((res && res.error) || 'Could not load media.') + '</div>'; }
-                    else { toast((res && res.error) || 'Could not load more media.', 'error'); }
+                    if (reset) {
+                        mediaGrid.innerHTML = '<div class="cms-media-empty">'
+                            + esc((res && res.error) || 'Could not load media.') + '</div>';
+                    } else {
+                        toast((res && res.error) || 'Could not load more media.', 'error');
+                    }
                     syncMediaMore();
                     return;
                 }
                 var items = res.media || [];
                 mediaHasMore = !!res.has_more;
                 mediaOffset += items.length;
-                appendMediaTiles(items, reset);
+                mediaItems = mediaItems.concat(items);
+                // Library-wide totals, so the header and the chip describe the whole
+                // library rather than the rows loaded so far.
+                if (res.total != null) { mediaTotal = Number(res.total) || 0; }
+                if (res.no_alt != null) { mediaNoAltTotal = Number(res.no_alt) || 0; }
+                renderMediaResults();
+                syncMediaCounts();
                 syncMediaMore();
             })
             .catch(function () {
@@ -3061,6 +3356,34 @@ window.CmsBlockEditor = (function () {
         loadMediaPage(true);
     }
 
+    function setMediaView(view) {
+        mediaView = (view === 'list') ? 'list' : 'grid';
+        try { window.localStorage.setItem(MEDIA_VIEW_KEY, mediaView); } catch (e) { /* private mode */ }
+        if (mediaViewBtns) {
+            Array.prototype.forEach.call(mediaViewBtns, function (btn) {
+                var on = (btn.getAttribute('data-view') === mediaView);
+                btn.classList.toggle('cms-is-on', on);
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+        renderMediaResults();
+    }
+
+    function setMediaSort(key) {
+        if (mediaSort === key) {
+            mediaDir = (mediaDir === 'asc') ? 'desc' : 'asc';
+        } else {
+            mediaSort = key;
+            mediaDir = MEDIA_SORT_DEFAULT_DIR[key] || 'desc';
+        }
+        syncMediaSortHeaders();
+        // Sorting is server-side, so the window has to be refetched from the top —
+        // re-ordering the loaded page would only sort the rows already pulled.
+        loadMediaPage(true);
+    }
+
+    /* ---- upload ---- */
+
     // Alt text authored at upload. A "decorative" tick INTENTIONALLY sends an
     // empty alt (assistive tech then skips the image) — distinct from simply
     // forgetting to describe it, which is why the choice is explicit.
@@ -3069,9 +3392,8 @@ window.CmsBlockEditor = (function () {
         return uploadAlt ? uploadAlt.value.trim() : '';
     }
     function resetUploadMeta() {
-        if (uploadAlt) { uploadAlt.value = ''; }
+        if (uploadAlt) { uploadAlt.value = ''; uploadAlt.disabled = false; }
         if (uploadDecorative) { uploadDecorative.checked = false; }
-        if (uploadAlt) { uploadAlt.disabled = false; }
     }
 
     function doUpload(file) {
@@ -3079,7 +3401,8 @@ window.CmsBlockEditor = (function () {
         // The upload is base64'd into an x-www-form-urlencoded `data=` field, so
         // the POST body is ~1.4x the file. Anything above ~5MB blows past PHP's
         // 8M post_max_size, which drops $_POST entirely and surfaces as the
-        // misleading "No image data was supplied." Gate on the REAL ceiling.
+        // misleading "No image data was supplied." Gate on the REAL ceiling —
+        // and the drop zone's copy states this same 5MB, not post_max_size.
         if (file.size > 5 * 1024 * 1024) { toast('Image is larger than 5MB.', 'error'); return; }
         var alt = uploadAltValue();
         var reader = new FileReader();
@@ -3090,6 +3413,14 @@ window.CmsBlockEditor = (function () {
                 if (!res || !res.ok) { toast((res && res.error) || 'Upload failed.', 'error'); loadMedia(''); return; }
                 toast('Image uploaded.', 'ok');
                 resetUploadMeta();
+                // A new upload is the newest row, so drop any sort/filter that
+                // would hide it — otherwise the author uploads and sees nothing.
+                mediaSort = null;
+                mediaDir = 'desc';
+                mediaNoAltOnly = false;
+                if (mediaNoAltBtn) { mediaNoAltBtn.setAttribute('aria-pressed', 'false'); }
+                if (mediaSearch) { mediaSearch.value = ''; }
+                syncMediaSortHeaders();
                 loadMedia('');
             }).catch(function () { toast('Network error.', 'error'); loadMedia(''); });
         };
@@ -3099,13 +3430,39 @@ window.CmsBlockEditor = (function () {
     function wireMediaPicker() {
         mediaModal = document.getElementById('cmsMediaModal');
         mediaGrid = document.getElementById('cmsMediaGrid');
+        mediaListWrap = document.getElementById('cmsMediaListWrap');
+        mediaList = document.getElementById('cmsMediaList');
         mediaSearch = document.getElementById('cmsMediaSearch');
-        mediaSearchBtn = document.getElementById('cmsMediaSearchBtn');
+        mediaNoAltBtn = document.getElementById('cmsMediaNoAlt');
+        mediaNoAltLabel = document.getElementById('cmsMediaNoAltLabel');
+        mediaCountEl = document.getElementById('cmsMediaCount');
         uploadInput = document.getElementById('cmsUploadInput');
         uploadDrop = document.getElementById('cmsUploadDrop');
         uploadAlt = document.getElementById('cmsUploadAlt');
         uploadDecorative = document.getElementById('cmsUploadDecorative');
+        uploadPanel = document.getElementById('cmsUploadPanel');
+        uploadToggle = document.getElementById('cmsMediaUploadToggle');
         if (!mediaModal) { return; }
+
+        mediaViewBtns = mediaModal.querySelectorAll('.cms-viewtoggle-btn');
+        Array.prototype.forEach.call(mediaViewBtns, function (btn) {
+            btn.addEventListener('click', function () { setMediaView(btn.getAttribute('data-view')); });
+        });
+        // Remembered per browser; a bad/absent value falls back to Grid.
+        var saved = null;
+        try { saved = window.localStorage.getItem(MEDIA_VIEW_KEY); } catch (e) { /* private mode */ }
+        setMediaView(saved === 'list' ? 'list' : 'grid');
+
+        if (mediaListWrap) {
+            var sortThs = mediaListWrap.querySelectorAll('th[data-sort]');
+            Array.prototype.forEach.call(sortThs, function (th) {
+                var btn = th.querySelector('.cms-sort-btn');
+                if (btn) {
+                    btn.addEventListener('click', function () { setMediaSort(th.getAttribute('data-sort')); });
+                }
+            });
+            syncMediaSortHeaders();
+        }
 
         // A decorative image needs no description — grey the alt field to teach why.
         if (uploadDecorative && uploadAlt) {
@@ -3115,12 +3472,50 @@ window.CmsBlockEditor = (function () {
             });
         }
 
-        if (mediaSearchBtn) {
-            mediaSearchBtn.addEventListener('click', function () { loadMedia(mediaSearch.value.trim()); });
+        if (uploadToggle && uploadPanel) {
+            uploadToggle.addEventListener('click', function () {
+                var open = uploadPanel.hidden;
+                uploadPanel.hidden = !open;
+                uploadToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open && uploadAlt) { uploadDrop.focus(); }
+            });
         }
+
+        // Filters as you type. Debounced so a five-letter word is one query, not
+        // five, and Escape clears back to the whole library.
         if (mediaSearch) {
-            mediaSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); loadMedia(mediaSearch.value.trim()); } });
+            mediaSearch.addEventListener('input', function () {
+                window.clearTimeout(mediaSearchTimer);
+                mediaSearchTimer = window.setTimeout(function () {
+                    loadMedia(mediaSearch.value.trim());
+                }, MEDIA_SEARCH_DEBOUNCE);
+            });
+            mediaSearch.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    window.clearTimeout(mediaSearchTimer);
+                    loadMedia(mediaSearch.value.trim());
+                }
+                if (e.key === 'Escape' && mediaSearch.value !== '') {
+                    // Swallow it: Escape clears the box here rather than closing
+                    // the modal out from under a half-typed search.
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mediaSearch.value = '';
+                    window.clearTimeout(mediaSearchTimer);
+                    loadMedia('');
+                }
+            });
         }
+
+        if (mediaNoAltBtn) {
+            mediaNoAltBtn.addEventListener('click', function () {
+                mediaNoAltOnly = !mediaNoAltOnly;
+                mediaNoAltBtn.setAttribute('aria-pressed', mediaNoAltOnly ? 'true' : 'false');
+                loadMediaPage(true);
+            });
+        }
+
         if (uploadInput) {
             uploadInput.addEventListener('change', function () { doUpload(uploadInput.files[0]); uploadInput.value = ''; });
         }
