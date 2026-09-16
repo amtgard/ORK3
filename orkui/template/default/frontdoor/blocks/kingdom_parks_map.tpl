@@ -65,13 +65,12 @@ if (empty($kpmParks)) {
 }
 
 $kpmId  = 'kpm-' . substr(md5(uniqid('', true)), 0, 10);
-// Per-env Maps key only — NO hardcoded fallback. Shipping a literal key in public
-// page source exposes a shared credential to quota abuse across every kingdom site.
-// When the key is missing/empty we render a graceful "map unavailable" fallback
-// rather than injecting a broken Maps <script> that 403s in the browser.
+// Per-env Maps key when configured; otherwise the ORK's shared browser key — the
+// same one Kingdom_map.tpl, Atlas_index.tpl and revised.js (knInitMap) already
+// ship in public page source.
 $kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
     ? (string) GOOGLE_MAPS_API_KEY
-    : '';
+    : 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8';
 ?>
 <div class="fd-pad fd-section-light kpm-block" id="<?= $kpmId ?>">
     <?php if ($kpmKicker !== '' || $kpmHeading !== ''): ?>
@@ -242,7 +241,9 @@ $kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
         }
     }
     // Lazy-load: defer the Maps CDN until this block is near the viewport.
-    var observeTarget = ROOT.querySelector('[data-kpm-map]') || ROOT;
+    // Observe ROOT, not [data-kpm-map] — the map element is display:none until
+    // init() runs, and a display:none target never reports isIntersecting.
+    var observeTarget = ROOT;
     if ('IntersectionObserver' in window) {
         var io = new IntersectionObserver(function (entries, obs) {
             for (var i = 0; i < entries.length; i++) {
