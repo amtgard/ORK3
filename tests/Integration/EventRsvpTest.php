@@ -223,8 +223,11 @@ final class EventRsvpTest extends TestCase
 
     public function testGetUpcomingRsvpsFallsBackToStartWhenEndIsZero(): void
     {
+        // Anchored to today's DATE, not a relative offset: strtotime('-3 hours')
+        // lands on yesterday whenever the suite runs between midnight and 3 AM,
+        // which would make this case pass or fail by time of day.
         $today = $this->fixture->createZeroEndOccurrence(
-            date('Y-m-d H:i:s', strtotime('-3 hours')),
+            date('Y-m-d') . ' 09:00:00',
             'upcoming-zeroend-today'
         );
         $past = $this->fixture->createZeroEndOccurrence(
