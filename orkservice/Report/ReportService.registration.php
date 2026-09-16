@@ -40,5 +40,12 @@ $server->register(
 		array('return' => 'tns:GetPlayerRosterResponse'),
 		$namespace
 	);
-	
+
+$server->register(
+		'RecentParkAttendees',
+		array('RecentParkAttendees'=>'tns:RecentParkAttendeesRequest'),
+		array('return' => 'tns:RecentParkAttendeesResponse'),
+		$namespace
+	);
+
 ?>
