@@ -40,8 +40,8 @@
 .lv-help-btn:hover { color: var(--ork-text); }
 .lv-help-pop {
 	position: absolute; top: 110px; right: 24px; z-index: 2000;
-	background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 6px;
-	box-shadow: 0 4px 14px rgba(0,0,0,0.25); padding: 12px 14px; min-width: 260px; display: none;
+	background: var(--ork-card-bg); border: 1px solid var(--ork-input-border); border-radius: 6px;
+	box-shadow: var(--ork-shadow-dropdown); padding: 12px 14px; min-width: 260px; display: none;
 	font-size: 12px;
 }
 .lv-help-pop.open { display: block; }
@@ -57,11 +57,11 @@
 	background: var(--ork-card-bg); border-left: 1px solid var(--ork-border);
 	display: flex; flex-direction: column; min-height: 0;
 }
-.lv-sb-section { padding: 10px 12px; border-bottom: 1px solid var(--ork-border); position: relative; }
+.lv-sb-section { padding: 10px 12px; border-bottom: 1px solid var(--ork-divider); position: relative; }
 .lv-search-box { position: relative; background: var(--ork-bg-secondary); border: 1px solid var(--ork-border); border-radius: 6px; }
 .lv-search-box input { width: 100%; padding: 8px 32px 8px 12px; background: transparent; color: var(--ork-text); border: 0; outline: 0; font-size: 13px; font-family: inherit; }
 .lv-search-box .lv-search-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ork-text-muted); font-size: 13px; pointer-events: none; }
-.lv-search-box kbd { position: absolute; right: 32px; top: 50%; transform: translateY(-50%); color: var(--ork-text-muted); font-size: 10px; background: var(--ork-bg); padding: 1px 5px; border: 1px solid var(--ork-border); border-radius: 3px; pointer-events: none; }
+.lv-search-box kbd { position: absolute; right: 32px; top: 50%; transform: translateY(-50%); color: var(--ork-text-muted); font-size: 10px; background: var(--ork-card-bg); padding: 1px 5px; border: 1px solid var(--ork-border); border-radius: 3px; pointer-events: none; }
 .lv-search-results {
 	position: absolute; top: 100%; left: 12px; right: 12px; z-index: 50;
 	background: var(--ork-card-bg); border: 1px solid var(--ork-link-bright); border-radius: 6px;
@@ -69,7 +69,7 @@
 	max-height: 280px; overflow-y: auto; display: none; margin-top: 6px;
 }
 .lv-search-results.open { display: block; }
-.lv-search-result { padding: 9px 12px 9px 16px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--ork-border); border-left: 3px solid transparent; transition: background .1s, border-left-color .1s; }
+.lv-search-result { padding: 9px 12px 9px 16px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--ork-divider); border-left: 3px solid transparent; transition: background .1s, border-left-color .1s; }
 .lv-search-result:last-child { border-bottom: 0; }
 .lv-search-result:hover { background: var(--ork-bg-secondary); }
 .lv-search-result.kbd-active { background: var(--ork-bg-tertiary); border-left-color: var(--ork-link-bright); }
@@ -83,7 +83,9 @@
 .lv-pi-actions { display: flex; gap: 4px; }
 .lv-pi-btn { background: var(--ork-bg-secondary); border: 1px solid var(--ork-border); color: var(--ork-text-muted); cursor: pointer; padding: 3px 7px; font-size: 12px; border-radius: 4px; text-decoration: none; line-height: 1; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
 .lv-pi-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-.lv-pi-key { background: var(--ork-bg); border: 1px solid var(--ork-border); color: var(--ork-text-muted); padding: 1px 5px; border-radius: 3px; font-size: 10px; font-family: 'SF Mono', Menlo, monospace; line-height: 1.2; }
+.lv-pi-key { background: var(--ork-card-bg); border: 1px solid var(--ork-border); color: var(--ork-text-muted); padding: 1px 5px; border-radius: 3px; font-size: 10px; font-family: 'SF Mono', Menlo, monospace; line-height: 1.2; }
+/* Key caps: raised white in light; dark keeps its original recessed --ork-bg fill (card-bg would vanish on the #2d3748 box). */
+html[data-theme="dark"] .lv-search-box kbd, html[data-theme="dark"] .lv-pi-key { background: var(--ork-bg); }
 .lv-pi-loc { font-size: 11px; color: var(--ork-text-muted); margin-bottom: 10px; }
 .lv-pi-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .lv-pi-stat { text-align: center; padding: 6px 4px; background: var(--ork-bg-secondary); border-radius: 4px; }
@@ -95,9 +97,9 @@
 .lv-pi-weather .lv-wx-attr { color: var(--ork-text-muted); text-decoration: none; font-size: 11px; opacity: 0.6; }
 .lv-pi-weather .lv-wx-attr:hover { opacity: 1; }
 
-.lv-ticker-head { padding: 12px 16px; border-bottom: 1px solid var(--ork-border); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--ork-text-muted); display: flex; justify-content: space-between; align-items: center; }
+.lv-ticker-head { padding: 12px 16px; border-bottom: 1px solid var(--ork-divider); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--ork-text-muted); display: flex; justify-content: space-between; align-items: center; }
 .lv-ticker { flex: 1 1 auto; overflow-y: auto; padding: 8px 0; }
-.lv-t-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 16px; font-size: 13px; border-bottom: 1px solid var(--ork-border); }
+.lv-t-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 16px; font-size: 13px; border-bottom: 1px solid var(--ork-divider); }
 .lv-t-row.first-ever { background: linear-gradient(90deg, rgba(246,224,94,0.15), transparent); }
 .lv-t-row .lv-t-time { color: var(--ork-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; min-width: 56px; }
 .lv-t-row .lv-t-msg { flex: 1; color: var(--ork-text); }
@@ -108,7 +110,7 @@
 .lv-t-row.enter { animation: lv-enter .35s ease; }
 @keyframes lv-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
-.lv-legend { font-size: 11px; color: var(--ork-text-muted); padding: 8px 16px; border-top: 1px solid var(--ork-border); }
+.lv-legend { font-size: 11px; color: var(--ork-text-muted); padding: 8px 16px; border-top: 1px solid var(--ork-divider); }
 .lv-legend .lv-sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; vertical-align: middle; }
 .lv-legend .lv-sw.s1 { background: rgba(72,187,120,0.85); }
 .lv-legend .lv-sw.s2 { background: rgba(72,187,120,0.45); }

@@ -30,7 +30,7 @@
 
 /* ── Pre-Test: Overview Hero ────────────────────────────────── */
 .qt-overview {
-	background: #fff;
+	background: var(--ork-card-bg);
 	border: 1px solid var(--rp-border);
 	border-radius: 8px;
 	overflow: hidden;
@@ -41,7 +41,7 @@
 	align-items: center;
 	gap: 16px;
 	padding: 28px 28px 20px;
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 	background: var(--rp-bg-light);
 }
 .qt-overview-icon {
@@ -86,7 +86,7 @@
 	gap: 12px;
 	flex-wrap: wrap;
 	padding: 20px 28px;
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 }
 .qt-stat-chip {
 	display: flex;
@@ -119,7 +119,7 @@
 }
 
 /* ── Status badge (large pill) ──────────────────────────────── */
-.qt-status-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-border); }
+.qt-status-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-divider); }
 .qt-status-pill {
 	display: inline-flex;
 	align-items: center;
@@ -142,7 +142,7 @@
 .qt-status-detail strong { color: var(--rp-text-body); }
 
 /* ── Instructions callout ───────────────────────────────────── */
-.qt-instructions-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-border); }
+.qt-instructions-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-divider); }
 .qt-instructions-box {
 	padding: 14px 18px;
 	background: #ebf4ff;
@@ -167,14 +167,14 @@
 }
 
 /* ── "What to expect" blurb ─────────────────────────────────── */
-.qt-expect-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-border); }
+.qt-expect-section { padding: 20px 28px; border-bottom: 1px solid var(--rp-divider); }
 .qt-expect-blurb {
 	display: flex;
 	align-items: flex-start;
 	gap: 10px;
 	padding: 12px 16px;
-	background: #f7fafc;
-	border: 1px solid var(--rp-border);
+	background: var(--ork-bg-inset);
+	border: 1px solid var(--ork-border);
 	border-radius: 6px;
 	font-size: 0.88rem;
 	color: var(--rp-text-body);
@@ -238,7 +238,7 @@
 
 /* ── Question View ─────────────────────────────────────────── */
 .qt-question-card {
-	background: #fff;
+	background: var(--ork-card-bg);
 	border: 1px solid var(--rp-border);
 	border-radius: 8px;
 	padding: 24px 28px;
@@ -310,7 +310,7 @@
 	margin-bottom: 22px;
 	line-height: 1.6;
 	padding-bottom: 16px;
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 }
 
 /* Answer options — card style */
@@ -321,7 +321,8 @@
 	align-items: flex-start;
 	gap: 12px;
 	padding: 14px 18px;
-	border: 2px solid #e2e8f0;
+	border: 2px solid var(--ork-border);
+	background: var(--ork-bg-inset);
 	border-radius: 8px;
 	cursor: pointer;
 	font-size: 0.95rem;
@@ -371,7 +372,7 @@
 	border-color: #fff;
 }
 .qt-answer-label:hover:not(.qt-ans-disabled):not(.qt-ans-correct):not(.qt-ans-wrong) {
-	background: #f7fafc;
+	background: var(--ork-card-bg);
 	border-color: #bee3f8;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 	transform: translateY(-1px);
@@ -495,7 +496,7 @@
 .qt-card-footer {
 	margin-top: 20px;
 	padding-top: 12px;
-	border-top: 1px solid var(--rp-border);
+	border-top: 1px solid var(--rp-divider);
 	font-size: 0.78rem;
 	color: var(--rp-text-muted);
 	text-align: center;
@@ -525,7 +526,8 @@
 }
 .qt-report-select {
 	padding: 5px 8px;
-	border: 1px solid #cbd5e0;
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 4px;
 	font-size: 0.85rem;
 	/* A native select sizes to its widest option; clamp it to the flex row. */
@@ -533,6 +535,7 @@
 	min-width: 0;
 	max-width: 100%;
 }
+.qt-report-select:focus { background: var(--ork-card-bg); }
 .qt-report-submit {
 	padding: 5px 12px;
 	background: #e53e3e;
@@ -601,7 +604,7 @@
 
 /* ── Result View ─────────────────────────────────────────── */
 .qt-result-card {
-	background: #fff;
+	background: var(--ork-card-bg);
 	border: 1px solid var(--rp-border);
 	border-radius: 8px;
 	padding: 48px 28px 36px;
@@ -686,8 +689,8 @@
 .qt-review-toggle:hover { background: #f7fafc; }
 .qt-review-wrap { margin-top: 18px; text-align: left; }
 .qt-review-q {
-	border: 1px solid #e2e8f0; border-radius: 10px;
-	padding: 14px 16px; margin-bottom: 12px; background: #fff;
+	border: 1px solid var(--ork-border); border-radius: 10px;
+	padding: 14px 16px; margin-bottom: 12px; background: var(--ork-bg-inset);
 }
 .qt-review-q-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
 .qt-review-q-badge { flex: 0 0 auto; font-size: 1.05rem; line-height: 1.3; }
@@ -710,7 +713,7 @@
 .qt-history-item {
 	display: flex; align-items: center; gap: 12px; width: 100%;
 	padding: 11px 14px; margin-bottom: 8px;
-	background: #fff; border: 1px solid #e2e8f0; border-radius: 9px;
+	background: var(--ork-bg-inset); border: 1px solid var(--ork-border); border-radius: 9px;
 	cursor: pointer; text-align: left; font: inherit;
 	transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -726,6 +729,18 @@
 /* Shared muted text for the JS-rendered loading/empty states (was inline #718096,
    which has no dark override and measures 2.99:1 on the dark card). */
 .qt-modal-muted { color: #718096; }
+
+/* Light only: .rp-table-area is pure layout on this page; the qt cards are the
+   L1 surfaces, so drop the wrapper chrome (no white frame around white cards).
+   The history list sits outside .qt-overview, so it becomes its own card.
+   Dark keeps its #1e2433 frame. */
+html:not([data-theme="dark"]) .rp-table-area {
+	background: transparent; border-color: transparent; box-shadow: none; padding: 0;
+}
+html:not([data-theme="dark"]) .qt-history-section {
+	background: var(--ork-card-bg); border: 1px solid var(--rp-border); border-radius: 8px;
+}
+html:not([data-theme="dark"]) .qt-loading { color: var(--ork-text-on-ground); }
 
 html[data-theme="dark"] .qt-review-q,
 html[data-theme="dark"] .qt-history-item { background: #2d3748; border-color: #4a5568; }
@@ -977,7 +992,7 @@ html[data-theme="dark"] .qt-modal-muted { color: var(--ork-text-muted, #a0aec0);
 .qt-confirm-overlay.qt-open { display:flex; }
 /* box-sizing + min-width:0 so the 300px floor and the 24px padding can't push the
    modal past a 320px viewport; max-width still governs the desktop width. */
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-modal { background:var(--ork-card-bg); border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 /* orkui.css paints every h1..h6 as a grey "chip" (background + border + white text-shadow),
    which on a modal title reads as a pale box — a glaring white box in dark mode. Strip it.

@@ -53,9 +53,9 @@
 /* Right-anchor tips in the Actions column so they don't clip off-screen */
 .qt-actions-cell [data-tip]::after { left: auto; right: 0; transform: none; }
 /* ── Versions (question sets) ───────────────────────────── */
-.qt-versions { margin:10px 0 0; padding:12px 14px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; }
+.qt-versions { margin:10px 0 0; padding:12px 14px; background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px; }
 .qt-ver-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.qt-ver-row + .qt-ver-row { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.qt-ver-row + .qt-ver-row { margin-top:10px; padding-top:10px; border-top:1px dashed var(--ork-divider); }
 .qt-ver-chip { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
 .qt-ver-live  { background:#c6f6d5; color:#22543d; }
 .qt-ver-off   { background:#e2e8f0; color:#4a5568; }
@@ -71,7 +71,7 @@
 /* The live version's rules/corpora label, edited in place like the name. */
 .qt-ver-label { font-size:0.8rem; color:#718096; }
 /* Previous versions — retired sets, readable but not editable. Collapsed: the list only grows. */
-.qt-ver-past-wrap { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.qt-ver-past-wrap { margin-top:10px; padding-top:10px; border-top:1px dashed var(--ork-divider); }
 .qt-ver-pasthdr { display:flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:700;
 	text-transform:uppercase; letter-spacing:.04em; color:#718096; cursor:pointer; list-style:none; user-select:none; }
 .qt-ver-pasthdr::-webkit-details-marker { display:none; }   /* we draw our own caret */
@@ -80,14 +80,14 @@
 .qt-ver-past-wrap[open] .qt-ver-caret { transform:rotate(90deg); }
 /* Cap the height once there are many versions — scroll rather than shove the page down. */
 .qt-ver-pastlist { display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height:220px; overflow-y:auto; }
-.qt-ver-past { display:flex; align-items:center; gap:10px; padding:6px 10px; background:#fff; text-align:left;
-	border:1px solid #e2e8f0; border-radius:6px; cursor:pointer; font-size:0.82rem; color:#2d3748; }
+.qt-ver-past { display:flex; align-items:center; gap:10px; padding:6px 10px; background:var(--ork-bg-inset); text-align:left;
+	border:1px solid var(--ork-border); border-radius:6px; cursor:pointer; font-size:0.82rem; color:#2d3748; }
 .qt-ver-past:hover { border-color:#90cdf4; background:#ebf8ff; }
 .qt-ver-past .qt-ver-view { margin-left:auto; }   /* View pinned right, so the rows line up */
 .qt-ver-view { display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; font-weight:600; color:#2b6cb0; }
 .qt-ver-nolabel { font-style:italic; }
 /* A retired version's question, shown read-only in the modal. */
-.qt-vq { padding:10px 12px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:8px; background:#fff; }
+.qt-vq { padding:10px 12px; border:1px solid var(--ork-border); border-radius:6px; margin-bottom:8px; background:var(--ork-bg-inset); }
 .qt-vq-text { font-weight:600; color:#2d3748; margin-bottom:6px; }
 .qt-vq-ans { font-size:0.85rem; color:#4a5568; padding:2px 0 2px 18px; position:relative; }
 .qt-vq-ans.qt-vq-correct { color:#22543d; font-weight:600; }
@@ -118,7 +118,8 @@ html[data-theme="dark"] .qt-vq-archived { background:#742a2a; color:#feb2b2; }
 .qt-notlive-warning i { color:#f59e0b; margin-top:3px; flex-shrink:0; }
 html[data-theme="dark"] .qt-notlive-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
 .qt-ver-meta  { font-size:0.8rem; color:#718096; }
-.qt-ver-input { padding:5px 9px; border:1px solid #cbd5e0; border-radius:5px; font-size:0.82rem; min-width:230px; }
+.qt-ver-input { padding:5px 9px; border:1px solid var(--ork-input-border); background:var(--ork-input-bg); border-radius:5px; font-size:0.82rem; min-width:230px; }
+.qt-ver-input:focus { background:var(--ork-card-bg); }
 .qt-ver-btn { margin-left:auto; padding:5px 13px; border:1px solid #cbd5e0; background:#fff; border-radius:6px; font-size:0.82rem; font-weight:600; color:#2d3748; cursor:pointer; }
 .qt-ver-btn:hover { background:#edf2f7; }
 .qt-ver-publish { background:#2b6cb0; border-color:#2b6cb0; color:#fff; margin-left:auto; }
@@ -178,7 +179,7 @@ html[data-theme="dark"] .qt-ver-input { background:#374151; border-color:#4a5568
 .qt-unsaved-warning a { color:#92400e; font-weight:700; text-decoration:underline; }
 html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
 html[data-theme="dark"] .qt-unsaved-warning a { color:#fde68a; }
-.qt-lib-question { border:1px solid #e2e8f0; border-radius:6px; padding:12px 14px; margin-bottom:10px; }
+.qt-lib-question { border:1px solid var(--ork-border); background:var(--ork-bg-inset); border-radius:6px; padding:12px 14px; margin-bottom:10px; }
 .qt-lib-question-hdr { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
 .qt-lib-question-text { font-size:0.88rem; font-weight:600; color:#2d3748; flex:1; }
 .qt-lib-kingdom { font-size:0.75rem; color:#718096; margin-top:2px; }
@@ -214,7 +215,7 @@ html[data-theme="dark"] .qt-modal-muted { color:var(--ork-text-muted, #a0aec0); 
 /* box-sizing + no min-width floor: padding must live INSIDE the width, or the modal is
    wider than a 320px phone and the corners shear off both edges. max-width still governs
    desktop, so nothing above 440px moves. */
-.qt-report-modal { background:#fff; border-radius:8px; padding:24px 26px; box-sizing:border-box; min-width:0; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-report-modal { background:var(--ork-card-bg); border-radius:8px; padding:24px 26px; box-sizing:border-box; min-width:0; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-report-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
 .qt-report-modal h4 i { color:#e53e3e; margin-right:6px; }
 /* orkui.css styles EVERY h1..h6 as a grey "chip" — background, border, white text-shadow —
@@ -252,7 +253,7 @@ html[data-theme="dark"] .qt-confirm-title {
 .qt-bulk-bar-restore:hover { background:#9ae6b4; }
 .qt-bulk-bar-deselect { color:#a0aec0; text-decoration:underline; cursor:pointer; background:none; border:none; font-size:0.82rem; }
 /* Bulk import modal */
-.qt-bulk-import-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:0; max-width:680px; width:95%; max-height:90vh; max-height:90dvh; box-sizing:border-box; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+.qt-bulk-import-modal { background:var(--ork-card-bg); border-radius:8px; padding:24px 26px; min-width:0; max-width:680px; width:95%; max-height:90vh; max-height:90dvh; box-sizing:border-box; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
 .qt-bulk-import-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
 /* The header (above) and the button row (below) are flex-shrink:0 and stay
    pinned; only this middle region scrolls, so the buttons are never pushed off
@@ -264,9 +265,9 @@ html[data-theme="dark"] .qt-confirm-title {
 .qt-bulk-import-modal textarea { min-height:96px; }
 .qt-bulk-help > summary { cursor:pointer; font-size:0.8rem; font-weight:600; color:#4a5568; margin-bottom:6px; list-style-position:inside; }
 html[data-theme="dark"] .qt-bulk-help > summary { color:var(--ork-text-secondary, #cbd5e0); }
-.qt-bulk-import-instructions { background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; font-size:0.78rem; color:#4a5568; font-family:monospace; white-space:pre-line; margin-bottom:12px; line-height:1.6; flex-shrink:0; }
+.qt-bulk-import-instructions { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:6px; padding:10px 14px; font-size:0.78rem; color:#4a5568; font-family:monospace; white-space:pre-line; margin-bottom:12px; line-height:1.6; flex-shrink:0; }
 .qt-bulk-import-preview { flex:0 0 auto; margin:12px 0; }
-.qt-bulk-import-preview-q { border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:8px; }
+.qt-bulk-import-preview-q { border:1px solid var(--ork-border); background:var(--ork-bg-inset); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
 .qt-bulk-import-preview-q-text { font-weight:600; font-size:0.88rem; color:#2d3748; margin-bottom:6px; }
 .qt-bulk-import-preview-a { font-size:0.8rem; color:#4a5568; line-height:1.5; padding-left:12px; }
 .qt-bulk-import-preview-a.qt-correct { color:#276749; font-weight:600; }
@@ -275,7 +276,7 @@ html[data-theme="dark"] .qt-bulk-help > summary { color:var(--ork-text-secondary
 /* Test preview modal */
 .qt-preview-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9100; align-items:center; justify-content:center; }
 .qt-preview-overlay.qt-open { display:flex; }
-.qt-preview-modal { background:#fff; border-radius:8px; padding:24px 26px; box-sizing:border-box; max-width:720px; width:95%; max-height:85vh; max-height:85dvh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-preview-modal { background:var(--ork-card-bg); border-radius:8px; padding:24px 26px; box-sizing:border-box; max-width:720px; width:95%; max-height:85vh; max-height:85dvh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-preview-info { background:#ebf8ff; border:1px solid #bee3f8; border-radius:6px; padding:8px 14px; font-size:0.85rem; color:#2b6cb0; font-weight:600; margin-bottom:14px; flex-shrink:0; }
 /* Which version the preview drew from. A GMR mid-draft must never mistake the running test for
    the one they are building, or vice versa. */
@@ -288,7 +289,7 @@ html[data-theme="dark"] .qt-bulk-help > summary { color:var(--ork-text-secondary
 html[data-theme="dark"] .qt-preview-setmeta { color:#a0aec0; }
 html[data-theme="dark"] .qt-preview-setnote { color:#d6bcfa; }
 .qt-preview-body { overflow-y:auto; flex:1; }
-.qt-preview-q { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+.qt-preview-q { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:8px; padding:14px 16px; margin-bottom:12px; }
 .qt-preview-q-text { font-weight:700; font-size:0.92rem; color:#2d3748; margin-bottom:10px; }
 .qt-preview-answer { padding:5px 10px; border-radius:4px; font-size:0.85rem; color:#4a5568; margin-bottom:4px; }
 .qt-preview-correct { background:#c6f6d5; color:#276749; font-weight:600; }
@@ -305,7 +306,7 @@ html[data-theme="dark"] .qt-preview-setnote { color:#d6bcfa; }
 /* ── In-product confirm/alert modal (replaces native confirm/alert) ── */
 .qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
 .qt-confirm-overlay.qt-open { display:flex; }
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-modal { background:var(--ork-card-bg); border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 .qt-confirm-body { font-size:0.9rem; color:#4a5568; line-height:1.5; margin-bottom:18px; }
 .qt-confirm-footer { display:flex; gap:10px; justify-content:flex-end; }
@@ -470,7 +471,7 @@ html[data-theme="dark"] .qt-ver-past:focus-visible { outline-color:#63b3ed; }
 	   so a hover-only colour change latches on after a single touch. */
 	.qt-flag-btn:hover { color:#e53e3e; }
 	html[data-theme="dark"] .qt-flag-btn:hover { color:#fc8181; }
-	.qt-ver-past:hover { border-color:#e2e8f0; background:#fff; }
+	.qt-ver-past:hover { border-color:var(--ork-border); background:var(--ork-bg-inset); }
 	html[data-theme="dark"] .qt-ver-past:hover { background:var(--ork-bg-tertiary, #374151); border-color:var(--ork-border, #4a5568); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -515,11 +516,11 @@ html[data-theme="dark"] .qt-ver-past:focus-visible { outline-color:#63b3ed; }
 	   Actions (at full scroll the Question text was entirely off-screen), and drop the two
 	   lowest-value columns to halve the scroll distance. A sticky cell must be opaque. */
 	#qt-active-table th:nth-child(2), #qt-archived-table th:nth-child(2) {
-		position:sticky; left:0; z-index:2; background:var(--rp-bg-light, #f7fafc);
+		position:sticky; left:0; z-index:2; background:var(--rp-bg-light, var(--ork-bg-secondary));
 		min-width:130px; max-width:130px; white-space:normal;
 	}
 	#qt-active-table td:nth-child(2), #qt-archived-table td:nth-child(2) {
-		position:sticky; left:0; z-index:2; background:var(--rp-bg-table, #fff);
+		position:sticky; left:0; z-index:2; background:var(--rp-bg-table, var(--ork-card-bg));
 		min-width:130px; max-width:130px; white-space:normal;
 	}
 	html[data-theme="dark"] #qt-active-table th:nth-child(2),
@@ -1156,7 +1157,7 @@ Which of these is a primary color?
 B) Green
 C) Orange</div>
 		</details>
-		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;"></textarea>
+		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;"></textarea>
 		<div class="qt-bulk-import-preview" id="qt-bulkimport-preview"></div>
 		</div><!-- /.qt-bulk-import-body -->
 		<div style="display:flex;gap:8px;margin-top:10px;flex-shrink:0;">
@@ -1185,7 +1186,7 @@ C) Orange</div>
 		</div>
 		<div id="qt-library-search-wrap" style="display:none;flex-shrink:0;margin-bottom:12px;">
 			<input type="text" id="qt-library-search" placeholder="Filter by question text or kingdom&hellip;" autocomplete="off"
-			       style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:0.88rem;outline:none;">
+			       style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:0.88rem;outline:none;">
 		</div>
 		<div id="qt-library-loading" class="qt-modal-muted" style="text-align:center;padding:32px;"><i class="fas fa-spinner fa-spin"></i> Loading library&hellip;</div>
 		<div id="qt-library-empty" class="qt-modal-muted" style="display:none;text-align:center;padding:32px;">No questions available from other kingdoms yet.</div>

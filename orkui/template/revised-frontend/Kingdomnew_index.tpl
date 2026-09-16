@@ -623,7 +623,7 @@
 								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';var show=p.style.display==='none';p.style.setProperty('display',show?'block':'none','important');event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
-							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:var(--ork-card-bg,#fff);border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px;color:var(--ork-text,#2d3748)">
+							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:var(--ork-card-bg,#fff);border:1px solid var(--ork-input-border,#c3ccd7);border-radius:8px;box-shadow:var(--ork-shadow-dropdown);padding:12px 14px;width:280px;font-size:13px;color:var(--ork-text,#2d3748)">
 								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
@@ -660,7 +660,7 @@
 
 				<!-- Map view (lazy-loaded Google Maps) -->
 				<div id="kn-events-map-wrap" style="position:relative;display:none">
-					<div id="kn-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="kn-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid var(--ork-border);"></div>
 					<div id="kn-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
 				</div>
 
@@ -1506,7 +1506,7 @@ var KnBannerConfig = {
 			<button class="pn-modal-close-btn" id="kn-heraldry-close-btn">&times;</button>
 		</div>
 		<div class="pn-modal-body" id="kn-heraldry-step-select">
-			<label class="pn-upload-area" for="kn-heraldry-file-input" style="cursor:pointer;display:block;border:2px dashed #cbd5e0;border-radius:8px;padding:28px 20px;text-align:center;color:#718096">
+			<label class="pn-upload-area" for="kn-heraldry-file-input" style="cursor:pointer;display:block;border:2px dashed var(--ork-input-border);border-radius:8px;padding:28px 20px;text-align:center;color:#718096">
 				<i class="fas fa-image" style="font-size:28px;margin-bottom:8px;display:block"></i>
 				Click to select an image<br><small style="color:#a0aec0">PNG, JPG, or GIF</small>
 			</label>
@@ -1649,12 +1649,12 @@ var KnBannerConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-config" style="display:none">
 					<div id="kn-admin-config-feedback" class="kn-admin-feedback" style="display:none"></div>
-					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--ork-border,#e2e8f0);margin-bottom:12px">
+					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--ork-divider,#e2e8f0);margin-bottom:12px">
 						<div>
 							<div style="font-size:13px;font-weight:600;color:var(--ork-text,#2d3748)">Recommendation Visibility</div>
 							<div style="font-size:12px;color:var(--ork-text-muted,#718096);margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
 						</div>
-						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid var(--ork-border,#e2e8f0);border-radius:6px;padding:5px 8px;flex-shrink:0">
+						<select id="kn-admin-recs-public" style="font-size:13px;border-radius:6px;padding:5px 8px;flex-shrink:0">
 							<option value="1" <?= !empty($AwardRecsPublic) ? 'selected' : '' ?>>Public</option>
 							<option value="0" <?= empty($AwardRecsPublic) ? 'selected' : '' ?>>Private (monarchy and submitters only)</option>
 						</select>
@@ -2189,14 +2189,6 @@ tr:hover .kn-copy-link { opacity: 1; }
 </style>
 <!-- Move Player Modal -->
 <style>
-.kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
-.kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
-.kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
-.kn-qt-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; font-size: 0.82rem; color: #4a5568; }
-.kn-qt-stat strong { color: #2b6cb0; }
-.kn-qt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.kn-qt-card-disabled { opacity: 0.55; border-style: dashed; }
-.kn-qt-badge-disabled { display: inline-block; font-size: 0.7rem; font-weight: 600; color: #a0aec0; background: #edf2f7; border-radius: 4px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.03em; }
 .kn-btn-sm { padding: 5px 12px; font-size: 0.8rem; }
 .kn-tab-toolbar { margin-bottom: 14px; }
 .kn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
@@ -2208,7 +2200,7 @@ tr:hover .kn-copy-link { opacity: 1; }
 .kn-mp-toggle-btn.kn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
 /* Cascade filter dropdowns (Move Player) */
 .kn-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.kn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.kn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid var(--ork-input-border); border-radius:6px; background:var(--ork-input-bg); color:#4a5568; }
 .kn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #kn-moveplayer-overlay .kn-modal-body { overflow:visible; }
 #kn-moveplayer-overlay .kn-acct-field { position:relative; }
@@ -2217,8 +2209,8 @@ tr:hover .kn-copy-link { opacity: 1; }
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
 	display:none !important; position:fixed; z-index:9000;
-	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
-	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-input-border); border-radius:8px;
+	box-shadow:var(--ork-shadow-dropdown); padding:12px 14px; width:280px; font-size:13px;
 }
 .kn-sub-pop.kn-sub-open { display:block !important; }
 .kn-sub-pop-title {
@@ -2319,12 +2311,12 @@ html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; co
 /* ============================================================
 
 /* ---- Copy from past event (kn-cfe-*) ---- */
-.kn-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.kn-cfe-wrap { border: 1px solid var(--ork-border); border-radius: 6px; background: var(--ork-bg-inset); overflow: hidden; }
 .kn-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
-.kn-cfe-toggle:hover { background: #edf2f7; }
+.kn-cfe-toggle:hover { background: var(--ork-card-bg); }
 .kn-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
 .kn-cfe-toggle[aria-expanded="true"] .kn-cfe-chev { transform: rotate(180deg); }
-.kn-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.kn-cfe-body { padding: 12px; border-top: 1px solid var(--ork-divider); background: var(--ork-card-bg); }
 .kn-cfe-field { position: relative; }
 .kn-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
 .kn-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
@@ -2332,7 +2324,7 @@ html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; co
 .kn-cfe-modules .kn-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .kn-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
 .kn-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
-.kn-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.kn-cfe-mod-all { border-bottom: 1px solid var(--ork-divider); padding-bottom: 8px; margin-bottom: 4px; }
 .kn-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
 
 #kn-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
@@ -2479,13 +2471,13 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 <!-- QR Code Modal -->
 <div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top)" onclick="if(event.target===this)knCloseQrModal()">
-	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ork-card-bg);color:var(--ork-text);border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
 			<button onclick="knCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
 		</div>
-		<img id="kn-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
-		<div id="kn-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<img id="kn-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid var(--ork-border);background:#fff;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="kn-qr-expires" style="font-size:11px;color:var(--ork-text-muted);margin-bottom:14px"></div>
 		<a id="kn-qr-download" href="" download="signin-qr.png" class="kn-btn kn-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
 			<i class="fas fa-download"></i> Download PNG
 		</a>

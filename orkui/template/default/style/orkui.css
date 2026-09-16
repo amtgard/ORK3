@@ -3,20 +3,32 @@
    =========================== */
 
 :root {
-  --ork-bg: #fff;
-  --ork-bg-secondary: #f7fafc;
-  --ork-bg-tertiary: #edf2f7;
+  /* Light mode alternates surface layers so nested panels read as depth
+     instead of white-on-white:
+       --ork-bg        page ground (gray)
+       --ork-card-bg   cards / panels / modals sitting on the ground (white)
+       --ork-bg-inset  tiles and sub-panels nested inside a card (gray)
+       --ork-input-bg  form fields on a card (tinted, with a firmer border)
+     Lines: --ork-border is the outer edge of a surface; --ork-divider is for
+     rules inside one (tab strips, modal header/footer, table heads). Header
+     bands use --ork-bg-secondary. */
+  --ork-bg: #e9edf2;
+  --ork-bg-secondary: #f3f5f8;
+  --ork-bg-tertiary: #e9edf2;
+  --ork-bg-inset: #f3f5f8;
   --ork-card-bg: #fff;
   --ork-text: #2d3748;
   --ork-text-secondary: #4a5568;
   --ork-text-muted: #718096;
   --ork-text-lighter: #a0aec0;
-  --ork-border: #e2e8f0;
+  --ork-text-on-ground: #5f6b7a;
+  --ork-border: #d3dae3;
+  --ork-divider: #e2e8f0;
   --ork-border-dark: #cbd5e0;
   --ork-link: #2b6cb0;
   --ork-link-bright: #4299e1;
-  --ork-input-bg: #fff;
-  --ork-input-border: #e2e8f0;
+  --ork-input-bg: #f6f8fa;
+  --ork-input-border: #c3ccd7;
   --ork-overlay: rgba(0,0,0,0.5);
   --ork-overlay-light: rgba(255,255,255,0.88);
   --ork-hero-lightness: 18%;
@@ -59,12 +71,15 @@ html[data-theme="dark"] {
   --ork-bg: #1a202c;
   --ork-bg-secondary: #2d3748;
   --ork-bg-tertiary: #374151;
+  --ork-bg-inset: #2d3748;
   --ork-card-bg: #2d3748;
   --ork-text: #e2e8f0;
   --ork-text-secondary: #cbd5e0;
   --ork-text-muted: #a0aec0;
   --ork-text-lighter: #718096;
+  --ork-text-on-ground: #a0aec0;
   --ork-border: #4a5568;
+  --ork-divider: #4a5568;
   --ork-border-dark: #374151;
   --ork-link: #63b3ed;
   --ork-link-bright: #90cdf4;
@@ -762,7 +777,7 @@ body {
     font-family: "Open Sans", Helvetica, Arial, sans-serif;
     font-size: 11pt;
     color: #666;
-    background-color: white;
+    background-color: var(--ork-bg);
     padding-top: 48px; /* clear the fixed navbar (#newmenu height: 48px) */
     scrollbar-gutter: stable;
 }
@@ -775,7 +790,7 @@ body {
 h1,h2,h3,h4,h5,h6 {
     font-family: "Open Sans", Helvetica, Arial, sans-serif;
     font-weight: bold;
-    color: #999;
+    color: #666;
     text-shadow: 0px 2px 3px #fff;
     padding: 3px;
     border-radius: 3px;
@@ -943,9 +958,10 @@ p {
     right: 0;
     top: calc(100% + 8px);
     width: 360px;
-    background: #fff;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-input-border);
     border-radius: var(--ork-radius-lg);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+    box-shadow: var(--ork-shadow-dropdown);
     z-index: var(--ork-z-nav-overlay);
     max-height: 480px;
     overflow-y: auto;
@@ -1042,9 +1058,10 @@ p {
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
-    background: #fff;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-input-border);
     border-radius: var(--ork-radius-lg);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    box-shadow: var(--ork-shadow-dropdown);
     min-width: 180px;
     padding: 6px 0;
     z-index: var(--ork-z-nav-dropdown);
@@ -1063,7 +1080,7 @@ p {
 }
 .nav-dropdown-menu a:hover { background: var(--ork-surface-light); text-decoration: none; }
 .nav-dropdown-menu a i { width: 14px; text-align: center; color: var(--ork-text-muted); font-size: 13px; }
-.nav-dropdown-divider { border-top: 1px solid var(--ork-border); margin: 4px 0; }
+.nav-dropdown-divider { border-top: 1px solid var(--ork-divider); margin: 4px 0; }
 .nav-dropdown-danger { color: var(--ork-red-danger) !important; }
 .nav-dropdown-danger i { color: var(--ork-red-danger) !important; }
 .nav-dropdown-danger:hover { background: #fff5f5 !important; }
@@ -1083,12 +1100,12 @@ a:hover {
    ========================================================================== */
 .info-container, .heraldry-item {
     padding: 6px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ork-border);
     border-radius: 6px;
     margin: 10px;
     display: inline-block;
     vertical-align: top;
-    background-color: transparent;
+    background-color: var(--ork-card-bg);
 }
 .suspended-player {
     border: 1px solid #fcc;
@@ -1155,8 +1172,9 @@ a:hover {
 }
 .login-box {
     padding: 6px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ork-border);
     border-radius: 6px;
+    background-color: var(--ork-card-bg);
     margin: 100px auto;
     display: block;
     width: 250px;
@@ -1436,8 +1454,8 @@ html[data-theme="dark"] .unimplemented .information-table th {
 
 tr.tablesorter-headerRow th:hover {
     cursor: pointer;
-    background-color: #ccc;
-    color: #eee;
+    background-color: var(--ork-bg-tertiary);
+    color: var(--ork-text);
     text-shadow: none;
 }
 /* Extra selectors needed to override the default styling */
@@ -1584,8 +1602,8 @@ table.tablesorter tbody tr.normal-row td {
     height: auto;
     margin: 0;
     padding: 4px;
-    background-color: #fff;
-    border: 1px solid #bbb;
+    background-color: var(--ork-input-bg);
+    border: 1px solid var(--ork-input-border);
     color: #333;
     -webkit-box-sizing: border-box;
     -moz-box-sizing: border-box;
@@ -1932,6 +1950,12 @@ html[data-theme="dark"] .nav-dropdown-danger:hover {
    Scoped to #theme_container so it covers all pages
    without hitting elements outside the app.
    ===================================================== */
+html[data-theme="dark"] #theme_container input[type="time"],
+html[data-theme="dark"] #theme_container input[type="tel"],
+html[data-theme="dark"] #theme_container input[type="datetime-local"],
+html[data-theme="dark"] #theme_container input[type="month"],
+html[data-theme="dark"] #theme_container input[type="week"],
+html[data-theme="dark"] #theme_container input:not([type]),
 html[data-theme="dark"] #theme_container input[type="text"],
 html[data-theme="dark"] #theme_container input[type="password"],
 html[data-theme="dark"] #theme_container input[type="email"],

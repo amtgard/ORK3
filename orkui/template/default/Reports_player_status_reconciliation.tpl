@@ -32,7 +32,14 @@ if (($report_type ?? null) === 'Park') {
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
-.psr-section { margin-bottom: 32px; }
+.psr-section {
+	margin-bottom: 32px;
+	background: var(--rp-bg-table, var(--ork-card-bg));
+	border: 1px solid var(--ork-border);
+	border-radius: 8px;
+	padding: 12px 14px;
+	box-shadow: var(--ork-shadow-card);
+}
 .psr-section-header {
 	display: flex;
 	align-items: center;
@@ -53,7 +60,7 @@ if (($report_type ?? null) === 'Park') {
 
 .psr-bulk-bar {
 	display: flex; align-items: center; gap: 12px;
-	padding: 8px 12px; background: #f7fafc; border: 1px solid #e2e8f0;
+	padding: 8px 12px; background: var(--ork-bg-inset); border: 1px solid var(--ork-border);
 	border-radius: 5px; margin-bottom: 10px; font-size: 13px;
 }
 .psr-bulk-bar button {
@@ -82,7 +89,7 @@ if (($report_type ?? null) === 'Park') {
 .psr-done-icon { color: #38a169; font-weight: 600; font-size: 13px; }
 .psr-error-msg { color: #c53030; font-size: 12px; }
 
-.psr-empty { text-align: center; padding: 24px; color: #a0aec0; font-style: italic; }
+.psr-empty { text-align: center; padding: 24px; color: var(--ork-text-muted); font-style: italic; }
 
 table.psr-table td input[type="checkbox"] { margin: 0; vertical-align: middle; }
 /* =====================================================
@@ -265,8 +272,8 @@ html[data-theme="dark"] #psr-table-deactivate_wrapper .dataTables_info { color: 
 						<td><a href="<?=UIR?>Park/profile/<?=(int)$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
 <?php endif; ?>
 						<td><a href="<?=UIR?>Player/profile/<?=(int)$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a></td>
-						<td><?=$row['ParkMemberSince'] ? htmlspecialchars($row['ParkMemberSince']) : '<em style="color:#a0aec0">Unknown</em>'?></td>
-						<td><?=$row['LastSignIn'] ? htmlspecialchars($row['LastSignIn']) : '<em style="color:#a0aec0">Never</em>'?></td>
+						<td><?=$row['ParkMemberSince'] ? htmlspecialchars($row['ParkMemberSince']) : '<em style="color:var(--ork-text-muted)">Unknown</em>'?></td>
+						<td><?=$row['LastSignIn'] ? htmlspecialchars($row['LastSignIn']) : '<em style="color:var(--ork-text-muted)">Never</em>'?></td>
 <?php if ($can_edit): ?>
 						<td class="psr-action-cell">
 							<button class="psr-action-btn psr-btn-deactivate" onclick="psrSingleAction(this, <?=(int)$row['MundaneId']?>, 0)"><i class="fas fa-user-minus"></i> Deactivate</button>

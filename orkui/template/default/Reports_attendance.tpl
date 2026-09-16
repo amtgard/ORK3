@@ -206,8 +206,8 @@ if ($Type !== 'Event') {
 .rp-view-toggle { display: flex; flex-direction: row; align-items: center; gap: 6px; margin-bottom: 10px; }
 .rp-view-btn {
 	display: inline-block; width: auto; padding: 4px 14px;
-	font-size: 12px; font-weight: 600; border: 1px solid #cbd5e0;
-	border-radius: 20px; background: #fff; color: #4a5568;
+	font-size: 12px; font-weight: 600; border: 1px solid var(--ork-input-border);
+	border-radius: 20px; background: var(--ork-card-bg); color: #4a5568;
 	cursor: pointer; white-space: nowrap;
 }
 .rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }

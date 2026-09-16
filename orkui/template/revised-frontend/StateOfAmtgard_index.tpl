@@ -573,7 +573,7 @@ html {
 }
 .sor-toc {
   background: var(--ork-card-bg, #fff);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--ork-border);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   padding: 14px 18px;
@@ -628,13 +628,13 @@ html {
   text-align: right;
   margin-top: 16px;
   padding-top: 10px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--ork-border);
 }
 .sor-back-to-top a {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #718096;
+  color: var(--ork-text-on-ground);
   font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
@@ -652,7 +652,7 @@ html {
 
 /* ---- Filter Card ---- */
 .sor-filter-card {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.09);
   padding: 22px 24px 18px;
@@ -696,35 +696,35 @@ html {
 
 .sor-filter-group input[type="date"] {
   padding: 7px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--ork-input-border);
   border-radius: 5px;
   font-size: 0.9rem;
   color: #2d3748;
-  background: #f9fafb;
+  background: var(--ork-input-bg);
   outline: none;
   transition: border-color 0.15s;
 }
 
 .sor-filter-group input[type="date"]:focus {
   border-color: #c0392b;
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 .sor-filter-kingdoms select {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--ork-input-border);
   border-radius: 5px;
   padding: 6px 8px;
   font-size: 0.88rem;
   min-width: 200px;
   max-width: 360px;
-  background: #f9fafb;
+  background: var(--ork-input-bg);
   color: #2d3748;
   outline: none;
 }
 
 .sor-filter-kingdoms select:focus {
   border-color: #c0392b;
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 /* Setting custom backgrounds on <option> disables the browser's native
@@ -808,7 +808,7 @@ html {
 .sor-section-divider {
   margin-bottom: 16px;
   padding-bottom: 10px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--ork-border);
 }
 
 .sor-section-heading {
@@ -833,7 +833,7 @@ html {
 }
 .sor-kpi-card {
   flex: 1 1 130px;
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 10px;
   border-top: 4px solid #ccc;
   padding: 16px 14px 12px;
@@ -850,20 +850,20 @@ html {
 /* ---- Cohort Funnel ---- */
 .sor-players-funnel-wrap {
   margin: 0 0 20px;
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 8px;
-  border: 1px solid #e8ecf0;
+  border: 1px solid var(--ork-border);
   padding: 14px 16px 6px;
 }
 
 /* ---- Parks enhancement charts ---- */
-#sor-parks-net-chart    { background: #fff; border-radius: 8px; padding: 8px; }
-#sor-parks-health-chart { background: #fff; border-radius: 8px; padding: 8px; }
+#sor-parks-net-chart    { background: var(--ork-card-bg); border-radius: 8px; padding: 8px; }
+#sor-parks-health-chart { background: var(--ork-card-bg); border-radius: 8px; padding: 8px; }
 
 /* ---- Diversity Index Card ---- */
 .sor-diversity-card {
-  background: #f8f9fc;
-  border: 1px solid #e2e8f0;
+  background: var(--ork-card-bg);
+  border: 1px solid var(--ork-border);
   border-left: 4px solid #2980b9;
   border-radius: 6px;
   padding: 10px 14px;
@@ -914,7 +914,7 @@ html {
 
 .sor-section-subtitle {
   font-size: 13px;
-  color: #718096;
+  color: var(--ork-text-on-ground);
   font-weight: 400;
 }
 
@@ -1006,7 +1006,7 @@ html {
   box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 .sor-table thead th {
@@ -1144,7 +1144,7 @@ html {
 
 /* Chart card */
 .sor-chart-card {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 6px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   padding: 16px 8px 8px 8px;
@@ -1247,7 +1247,7 @@ html {
   border-collapse: collapse;
   font-size: 0.88rem;
   box-shadow: 0 1px 4px rgba(0,0,0,0.09);
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1444,19 +1444,19 @@ html {
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,0.09);
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 .sor-note {
   margin: 8px 0 0 0;
   font-size: 0.78rem;
-  color: #888;
+  color: var(--ork-text-on-ground);
   line-height: 1.5;
 }
 
 .sor-table-label {
   font-size: 0.78rem;
-  color: #888;
+  color: var(--ork-text-on-ground);
   margin: 0 0 6px 0;
 }
 </style>
@@ -1473,12 +1473,12 @@ html {
 
 .sor-parks-stat-card {
   flex: 1 1 140px;
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--ork-card-bg);
+  border: 1px solid var(--ork-border);
   border-radius: 6px;
   padding: 14px 16px;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  box-shadow: var(--ork-shadow-card);
 }
 
 .sor-parks-stat-card .sor-parks-stat-value {
@@ -1527,7 +1527,8 @@ html {
 /* Expandable park lists */
 .sor-parks-expandable {
   margin-bottom: 20px;
-  border: 1px solid #ddd;
+  background: var(--ork-card-bg);
+  border: 1px solid var(--ork-border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1537,7 +1538,7 @@ html {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #f5f5f5;
+  background: var(--ork-bg-secondary);
   cursor: pointer;
   user-select: none;
   font-size: 0.9rem;
@@ -1549,7 +1550,7 @@ html {
 }
 
 .sor-parks-expandable-header:hover {
-  background: #ececec;
+  background: var(--ork-bg-tertiary);
 }
 
 .sor-parks-expandable-header .sor-parks-expand-icon {
@@ -1565,7 +1566,7 @@ html {
 .sor-parks-expandable-body {
   display: none;
   padding: 12px 14px;
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 .sor-parks-expandable-body.sor-parks-visible {
@@ -1588,7 +1589,7 @@ html {
   color: #555;
   margin-bottom: 6px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--ork-divider);
 }
 
 .sor-parks-park-list {
@@ -1701,8 +1702,9 @@ html {
 .sor-parks-table-wrap {
   overflow-x: auto;
   margin-bottom: 24px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--ork-border);
   border-radius: 6px;
+  background: var(--ork-card-bg);
 }
 
 .sor-parks-table {
@@ -1753,7 +1755,7 @@ html {
 
 .sor-parks-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--ork-divider);
   color: #333;
 }
 
@@ -1791,9 +1793,9 @@ html {
 
 .sor-parks-chart-outer {
   overflow-x: auto;
-  border: 1px solid #ddd;
+  border: 1px solid var(--ork-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--ork-card-bg);
 }
 
 #sor-parks-chart-container {
@@ -1911,7 +1913,7 @@ html {
 }
 
 .sor-players-card {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 10px;
   padding: 18px 16px 14px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -1966,7 +1968,7 @@ html {
   .sor-players-prose { grid-template-columns: 1fr; }
 }
 .sor-players-prose-col {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 10px;
   padding: 18px 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
@@ -1985,7 +1987,7 @@ html {
   font-size: 1rem;
   font-weight: 700;
   color: #1a1a2e;
-  border-bottom: 2px solid #eee !important;
+  border-bottom: 2px solid var(--ork-divider) !important;
 }
 .sor-players-prose-col strong {
   color: #1a1a2e;
@@ -2008,7 +2010,7 @@ html {
 
 /* ---- Trend chart ---- */
 .sor-players-chart-wrap {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 10px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
@@ -2025,7 +2027,7 @@ html {
   font-size: 1rem;
   font-weight: 700;
   color: #1a1a2e;
-  border-bottom: 2px solid #eee !important;
+  border-bottom: 2px solid var(--ork-divider) !important;
   display: block;
 }
 #sor-players-chart {
@@ -2085,7 +2087,7 @@ html {
 <style>
 /* ===== New Player Retention ===== */
 .sor-ret-grid { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; }
-.sor-ret-card { flex:1 1 130px; min-width:120px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 10px; text-align:center; }
+.sor-ret-card { flex:1 1 130px; min-width:120px; background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px; padding:12px 10px; text-align:center; }
 .sor-ret-val { font-size:22px; font-weight:700; color:#2b6cb0; }
 .sor-ret-lbl { font-size:11px; color:#718096; margin-top:4px; line-height:1.3; }
 .sor-ret-sub { font-size:13px; font-weight:600; color:#4a5568; margin-top:6px; }
@@ -2104,7 +2106,7 @@ html[data-theme="dark"] .sor-ret-sub { color:var(--ork-text,#e2e8f0); }
 #sor-longevity-chart {
   flex: 1 1 400px;
   min-width: 300px;
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   padding: 12px;
@@ -2576,8 +2578,10 @@ html[data-theme="dark"] .sor-parks-risk-med {
 }
 
 /* ---- Parks kingdom table ---- */
+/* Light mode gives the wrap a card surface; keep dark's original transparent ground so row striping is unchanged. */
 html[data-theme="dark"] .sor-parks-table-wrap {
   border-color: var(--ork-border);
+  background: transparent;
 }
 html[data-theme="dark"] .sor-parks-table tbody tr:nth-child(even) {
   background: var(--ork-bg-secondary);
@@ -2717,7 +2721,7 @@ html[data-theme="dark"] .sor-lon-pct {
 }
 .sor-awards-chart-card {
   padding: 16px 14px 12px;
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   display: flex;
@@ -2744,7 +2748,7 @@ html[data-theme="dark"] .sor-lon-pct {
   width: 100%;
 }
 .sor-awards-table-wrap {
-  background: #fff;
+  background: var(--ork-card-bg);
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   padding: 14px 16px 16px;
@@ -2770,7 +2774,7 @@ html[data-theme="dark"] .sor-lon-pct {
   letter-spacing: 0.04em;
   color: #4a5568;
   padding: 8px 10px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--ork-divider);
   background: transparent;
 }
 .sor-awards-table tbody td {
@@ -2784,7 +2788,7 @@ html[data-theme="dark"] .sor-lon-pct {
   background: #f8fafc;
 }
 .sor-awards-table tbody tr:hover {
-  background: #edf2f7;
+  background: var(--ork-bg-tertiary);
 }
 .sor-awards-recipient-link {
   color: #2980b9;
