@@ -475,6 +475,14 @@ class CmsMedia extends CmsBase
         $ref['height']     = isset($row['height']) && $row['height'] !== null ? (int)$row['height'] : null;
         $ref['bytes']      = isset($row['bytes']) && $row['bytes'] !== null ? (int)$row['bytes'] : null;
         $ref['mime']       = isset($row['mime']) ? (string)$row['mime'] : '';
+        // Who uploaded it. The SELECT has always carried this and the mapper
+        // dropped it; the library UI now needs it to tell a Contributor which
+        // tiles are theirs to remove (media.upload acts only on its own rows,
+        // media.manage on any). Null stays null — "not recorded" is owned by
+        // nobody, which the server-side gate treats as manage-only.
+        $ref['uploaded_by'] = isset($row['uploaded_by']) && $row['uploaded_by'] !== null
+            ? (int)$row['uploaded_by']
+            : null;
         return $ref;
     }
 
@@ -800,12 +808,20 @@ class CmsMedia extends CmsBase
      * scope-taking method. Pass a concrete scope; a null will filter as global
      * rather than failing loudly.
      *
-     * @param array  $ids       candidate media ids (max MAX_FILTER_IDS)
-     * @param string $scopeType 'global' | 'kingdom' | 'park' (null coerces to 'global')
-     * @param int    $scopeId   scope owner id (0 for global)
+     * $uploadedBy additionally narrows the result to rows THAT PERSON uploaded.
+     * It serves the two-tier media model: media.manage acts on any row in the
+     * scope, media.upload (the Contributor tier) only on its own. Left at 0 the
+     * filter is scope-only, exactly as before. Rows with a NULL uploaded_by can
+     * never match a positive $uploadedBy, so unattributed files stay
+     * manage-only — the fail-closed direction.
+     *
+     * @param array  $ids        candidate media ids (max MAX_FILTER_IDS)
+     * @param string $scopeType  'global' | 'kingdom' | 'park' (null coerces to 'global')
+     * @param int    $scopeId    scope owner id (0 for global)
+     * @param int    $uploadedBy when > 0, also require uploaded_by = this mundane_id
      * @return array the owned subset, as ints, in input order
      */
-    public function FilterOwnedIds(array $ids, $scopeType, $scopeId)
+    public function FilterOwnedIds(array $ids, $scopeType, $scopeId, $uploadedBy = 0)
     {
         global $DB;
 
@@ -837,6 +853,14 @@ class CmsMedia extends CmsBase
             . ' WHERE media_id IN (' . implode(',', $clean) . ')'
             . ' AND scope_type = :scope_type AND scope_id = :scope_id'
             . ' AND deleted_at IS NULL';
+
+        // Optional uploader constraint (the media.upload tier). Bound, not
+        // interpolated; a NULL uploaded_by never equals a positive id.
+        $uploadedBy = (int)$uploadedBy;
+        if ($uploadedBy > 0) {
+            $sql .= ' AND uploaded_by = :uploaded_by';
+            $DB->uploaded_by = $uploadedBy;
+        }
 
         $owned = array();
         foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {

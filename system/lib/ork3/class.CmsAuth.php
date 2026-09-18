@@ -4,12 +4,29 @@
 require_once __DIR__ . '/class.CmsBase.php';
 
 /*************************************************************************
- * CmsAuth — RBAC layer for the CMS (Hybrid RBAC + scope bridge).
+ * CmsAuth — RBAC layer for the CMS.
  *
  * Named CMS roles map cumulatively to capabilities; grants are stored in
- * ork_cms_grant (mundane_id, role, scope_type, scope_id). CmsCan() unions
- * a user's matching-scope grant capabilities AND bridges to the existing
- * HasAuthority() so kingdom/park officers implicitly gain rights.
+ * ork_cms_grant (mundane_id, role, scope_type, scope_id). CmsCan() answers
+ * from those grant rows alone.
+ *
+ * WHERE ORK AUTHORIZATION MEETS OGRE. The two systems are separate, and OGRE
+ * rights never flow back the other way — an OGRE Administrator gains no ORK
+ * authority whatsoever. ORK office reaches into OGRE at exactly two points,
+ * both of which make somebody an OGRE ADMINISTRATOR (the whole capability set,
+ * never a partial one):
+ *
+ *   1. A site-wide ORK Admin (all-zero-scope ork_authorization role='admin') is
+ *      an OGRE Administrator EVERYWHERE — IsSuperAdmin(), CmsCan() step 1.
+ *   2. An org officer at the create-or-admin tier is an OGRE Administrator of
+ *      THEIR OWN org's site and every site below it — IsScopeOfficer(),
+ *      CmsCan() step 3. Kingdom/park scopes only.
+ *
+ * The GLOBAL front door takes neither of those below the ORK-Admin level: its
+ * authors come from ork_cms_grant alone, so no amount of kingdom office admits
+ * anyone to the Amtgard front door. An 'edit'-tier authorization row grants
+ * nothing anywhere — the bridge hands over roles.manage and theme.manage, which
+ * is not a clerical privilege.
  *
  * Super-admin: the canonical site-wide admin check the Admin panel uses —
  * Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
@@ -35,7 +52,7 @@ class CmsAuth extends CmsBase
      * input that isn't exactly global/kingdom/park, so a garbage/forged scope can
      * never be silently promoted to the highest-privilege GLOBAL scope. It matches
      * no real scope enum value, so GrantRole/RevokeRole reject it outright and
-     * CmsCan's grant/bridge checks never fire for it.
+     * neither CmsCan's grant check nor its officer bridge fires for it.
      */
     private const INVALID_SCOPE = '__invalid__';
 
@@ -45,16 +62,11 @@ class CmsAuth extends CmsBase
      * (cumulative). Keep these increments non-overlapping.
      */
     private static $ROLE_INCREMENTS = array(
-        'contributor' => array('page.create', 'page.edit_own'),
+        'contributor' => array('page.create', 'page.edit_own', 'media.upload'),
         'author'      => array('page.edit'),
-        'editor'      => array('media.manage'),
-        'publisher'   => array('page.publish'),
-        'admin'       => array('page.delete', 'nav.manage', 'roles.manage', 'theme.manage'),
-    );
-
-    /** Capabilities that demand AUTH_ADMIN (not merely AUTH_EDIT) on the bridge. */
-    private static $ADMIN_BRIDGE_CAPS = array(
-        'page.publish', 'page.delete', 'roles.manage', 'nav.manage', 'theme.manage',
+        'editor'      => array('media.manage', 'page.publish'),
+        'publisher'   => array('page.delete', 'nav.manage'),
+        'admin'       => array('roles.manage', 'theme.manage'),
     );
 
     /**
@@ -141,6 +153,158 @@ class CmsAuth extends CmsBase
             }
         }
         return array_keys($caps);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Role / capability vocabulary (for the OGRE Settings UI)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Display label + one-line summary per role. Deliberately DESCRIPTIVE only:
+     * the authoritative capability list for each role is derived below from
+     * CapabilitiesForRole(), never restated here, so a change to
+     * $ROLE_INCREMENTS can not leave the Settings page describing a privilege
+     * the gates no longer grant (or hiding one they do).
+     */
+    private static $ROLE_LABELS = array(
+        'contributor' => array(
+            'label' => 'OGRE Contributor',
+            'blurb' => 'Can draft new pages, edit the ones they created, and upload media (removing their own uploads, but nobody else\'s). Nothing they write goes live until someone else publishes it.',
+        ),
+        'author' => array(
+            'label' => 'OGRE Author',
+            'blurb' => 'Everything a Contributor can do, plus editing pages and posts written by anyone else.',
+        ),
+        'editor' => array(
+            'label' => 'OGRE Editor',
+            'blurb' => 'Everything an Author can do, plus managing the whole media library (including other people\'s uploads) and taking pages and posts live.',
+        ),
+        'publisher' => array(
+            'label' => 'OGRE Publisher',
+            'blurb' => 'Everything an Editor can do, plus deleting pages and posts and rearranging the site menus.',
+        ),
+        'admin' => array(
+            'label' => 'OGRE Administrator',
+            'blurb' => 'Full control of this site: everything above, plus changing the Theme and managing who appears on this page.',
+        ),
+    );
+
+    /**
+     * Plain-English name for each capability string, for the Settings page's
+     * role reference. A capability with no entry here falls back to its raw
+     * key, so a newly added capability shows up (unlabelled) rather than
+     * silently vanishing from the description of what a role can do.
+     */
+    private static $CAPABILITY_LABELS = array(
+        'page.create'   => 'Create pages and blog posts',
+        'page.edit_own' => 'Edit their own pages and posts',
+        'page.edit'     => 'Edit anyone\'s pages and posts',
+        'media.upload'  => 'Upload media, and remove their own',
+        'media.manage'  => 'Manage and remove anyone\'s media',
+        'page.publish'  => 'Publish and unpublish',
+        'page.delete'   => 'Delete pages and posts',
+        'nav.manage'    => 'Manage site navigation',
+        'theme.manage'  => 'Change the site Theme',
+        'roles.manage'  => 'Manage OGRE users and roles',
+    );
+
+    /**
+     * The grantable roles, lowest → highest, each with its label, summary and
+     * its FULL cumulative capability list (keys plus human labels).
+     *
+     * This is the single source the OGRE Settings page renders both its role
+     * picker and its "what can each role do" reference from, so the two can
+     * never disagree with each other or with CmsCan().
+     *
+     * @return array list of ['key','label','blurb','capabilities'=>[['key','label'],…]]
+     */
+    public function RoleCatalog()
+    {
+        $out = array();
+        foreach (self::$ROLES as $role) {
+            $caps = array();
+            foreach ($this->CapabilitiesForRole($role) as $cap) {
+                $caps[] = array(
+                    'key'   => $cap,
+                    'label' => isset(self::$CAPABILITY_LABELS[$cap]) ? self::$CAPABILITY_LABELS[$cap] : $cap,
+                );
+            }
+            $meta = isset(self::$ROLE_LABELS[$role]) ? self::$ROLE_LABELS[$role] : array();
+            $out[] = array(
+                'key'          => $role,
+                'label'        => isset($meta['label']) ? $meta['label'] : $role,
+                'blurb'        => isset($meta['blurb']) ? $meta['blurb'] : '',
+                'capabilities' => $caps,
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * Display label for a single role key ('' when the key is not a real role —
+     * callers render that as-is rather than inventing a name for it).
+     *
+     * @param string $role
+     * @return string
+     */
+    public function RoleLabel($role)
+    {
+        $role = (string)$role;
+        return isset(self::$ROLE_LABELS[$role]['label']) ? self::$ROLE_LABELS[$role]['label'] : '';
+    }
+
+    /**
+     * Can this mundane_id be given an OGRE role at all?
+     *
+     * The grant table carries no FK, and _authorizeGrantMutation only checks
+     * that the id is positive — so without this a hand-posted mundane_id writes
+     * a grant for an account that does not exist. The Settings roster then shows
+     * it as "Player #999999", and worse, that phantom counts as a role-manager in
+     * IsLastRoleManager, which would let a real administrator remove themselves
+     * behind cover that nobody can log into.
+     *
+     * Suspended and penalty-box accounts are refused for the obvious reason: a
+     * banned member should not be handed authorship of the public site. This is
+     * a grant-time check only — it deliberately does NOT revoke on suspension,
+     * which would be a behaviour change in the suspension flow rather than here.
+     *
+     * @param int $uid
+     * @return bool
+     */
+    public function IsGrantablePerson($uid)
+    {
+        global $DB;
+
+        $uid = (int)$uid;
+        if ($uid <= 0) {
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->mundane_id = $uid;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT mundane_id, suspended, penalty_box FROM ' . DB_PREFIX . 'mundane'
+            . ' WHERE mundane_id = :mundane_id LIMIT 1'
+        ));
+
+        if ($row === null) {
+            return false;
+        }
+        return (int)$row['suspended'] === 0 && (int)$row['penalty_box'] === 0;
+    }
+
+    /**
+     * Is this string one of the grantable role keys? The Settings endpoints
+     * validate against this before touching the grant table; GrantRole/
+     * RevokeRole re-check it themselves, so this is the early, friendly
+     * rejection rather than the security boundary.
+     *
+     * @param string $role
+     * @return bool
+     */
+    public function IsValidRole($role)
+    {
+        return in_array((string)$role, self::$ROLES, true);
     }
 
     /* ------------------------------------------------------------------ *
@@ -248,10 +412,10 @@ class CmsAuth extends CmsBase
      * Can $uid perform $capability in $scope?
      *
      *  1. ORK super-admin → always true.
-     *  2. true if $capability is in the user's unioned capabilities for $scope.
-     *  3. Bridge: for kingdom/park scopes, defer to HasAuthority so officers
-     *     implicitly gain rights — AUTH_EDIT for ordinary capabilities,
-     *     AUTH_ADMIN for publish/delete/roles.manage/nav.manage.
+     *  2. true if $capability is in the user's unioned grant capabilities for
+     *     $scope.
+     *  3. Org-site officer bridge (kingdom/park only) → OGRE Administrator of
+     *     that site and everything below it. See the class docblock.
      *
      * @param int    $uid        mundane_id
      * @param string $capability capability string
@@ -277,28 +441,59 @@ class CmsAuth extends CmsBase
             return true;
         }
 
-        // (3) Scope bridge — only meaningful for kingdom/park scopes.
+        // (3) ORG-SITE OFFICER BRIDGE — kingdom and park scopes ONLY.
+        //
+        // An officer of an org is an OGRE Administrator of that org's site: the
+        // capability asked for does not matter, because the bridge confers the
+        // whole set. The GLOBAL front door is deliberately excluded — its
+        // authors are grant-only, so no amount of org office admits anyone to
+        // the Amtgard front door.
+        return $this->IsScopeOfficer($uid, $scope);
+    }
+
+    /**
+     * Does ORK office make this user an OGRE Administrator of this scope?
+     *
+     * TRUE only for kingdom/park scopes, and only at the create-or-admin tier
+     * (AUTH_CREATE; an 'edit' authorization row does not qualify, because the
+     * bridge hands over the TOP OGRE rung — granting other people OGRE roles and
+     * changing the site Theme included).
+     *
+     * "Their level and below" needs no code here: HasAuthority already walks the
+     * hierarchy. A park check falls back to that park's kingdom, so a kingdom
+     * officer covers every park beneath them; and a kingdom check walks up
+     * parent_kingdom_id, so a principality is covered by its parent kingdom's
+     * officers. See class.Authorization.php::HasAuthority.
+     *
+     * @param int   $uid
+     * @param array $scope ['type'=>..., 'id'=>...]
+     * @return bool
+     */
+    public function IsScopeOfficer($uid, $scope)
+    {
+        $uid = (int)$uid;
+        if ($uid <= 0 || !is_object(Ork3::$Lib->authorization)) {
+            return false;
+        }
+
         $scopeType = $this->_strictScopeType(isset($scope['type']) ? $scope['type'] : 'global');
         $scopeId   = isset($scope['id']) ? (int)$scope['id'] : 0;
 
-        if (($scopeType === 'kingdom' || $scopeType === 'park') && $scopeId > 0 && is_object(Ork3::$Lib->authorization)) {
-            $authType = ($scopeType === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
-            $authRole = in_array($capability, self::$ADMIN_BRIDGE_CAPS, true) ? AUTH_ADMIN : AUTH_EDIT;
-
-            // Per-request memoization of the HasAuthority bridge — CmsCan() is hit
-            // repeatedly per action and this authority probe is otherwise a repeated
-            // round-trip. Keyed to the full HasAuthority signature.
-            $bridgeKey = $uid . '|' . $authType . '|' . $scopeId . '|' . $authRole;
-            if (!isset(self::$_bridgeCache[$bridgeKey])) {
-                self::$_bridgeCache[$bridgeKey] =
-                    (bool)Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, $authRole);
-            }
-            if (self::$_bridgeCache[$bridgeKey]) {
-                return true;
-            }
+        // Global is grant-only; an unrecognized scope already failed closed.
+        if (($scopeType !== 'kingdom' && $scopeType !== 'park') || $scopeId <= 0) {
+            return false;
         }
 
-        return false;
+        $authType = ($scopeType === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
+
+        // Per-request memo: CmsCan() is hit many times per action and this is
+        // otherwise a repeated (recursive) authority probe.
+        $key = $uid . '|' . $authType . '|' . $scopeId;
+        if (!isset(self::$_bridgeCache[$key])) {
+            self::$_bridgeCache[$key] =
+                (bool)Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, AUTH_CREATE);
+        }
+        return self::$_bridgeCache[$key];
     }
 
     /**
@@ -529,10 +724,10 @@ class CmsAuth extends CmsBase
             // scope label) ONLY when they can genuinely no longer manage content
             // here. The old test — "no raw grant left in this scope" — was too
             // eager: a member who still edits via a GLOBAL CMS grant (global grants
-            // apply to every scope) or via the officer→HasAuthority bridge would be
-            // wrongly de-credited. Probe REAL residual capability instead. CmsCan
+            // apply to every scope) would be wrongly de-credited. Probe REAL residual capability instead. CmsCan
             // reads the just-busted grant cache, so it reflects the post-revoke
-            // state and folds in super-admin + global grant + the scope bridge.
+            // state and folds in super-admin + global grant (which applies to
+            // every scope). Office confers nothing — see the class docblock.
             $scope = array('type' => $scopeType, 'id' => $scopeId);
             $stillManages = $this->CmsCan($uid, 'page.edit', $scope)
                 || $this->CmsCan($uid, 'page.edit_own', $scope);
@@ -632,6 +827,291 @@ class CmsAuth extends CmsBase
             $out[] = $row;
         }
         return $out;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Scope membership (the OGRE Settings "Manage Users" view)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * The people holding CMS grants in ONE scope, collapsed to a row per PERSON
+     * rather than a row per grant.
+     *
+     * Roles are cumulative (an 'admin' grant already implies everything
+     * 'publisher' allows), so somebody holding both reads to a human as one
+     * member at the higher rung — not as two separate entries to be revoked
+     * independently. 'role' is therefore the HIGHEST rung held and is what the
+     * UI shows and edits; 'roles' keeps the raw list so a member carrying
+     * redundant lower grants can still be fully cleaned up by SetUserRole /
+     * RevokeAllRoles.
+     *
+     * Scope is matched EXACTLY: a global grant is not folded into a kingdom
+     * scope's member list even though it confers rights there. The global
+     * holder is a member of the global site and is managed on that site's
+     * Settings page, where revoking actually removes the grant.
+     *
+     * @param string $scopeType 'global'|'kingdom'|'park'
+     * @param int    $scopeId   0 for global
+     * @return array list of ['mundane_id','persona','given_name','surname',
+     *                        'roles'=>[…],'role','role_label','granted_at',
+     *                        'granted_by','granted_by_persona']
+     */
+    public function ListScopeMembers($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_strictScopeType($scopeType);
+        if ($scopeType === self::INVALID_SCOPE) {
+            return array();
+        }
+        $scopeId = ($scopeType === 'global') ? 0 : (int)$scopeId;
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $r = $DB->DataSet(
+            'SELECT g.grant_id, g.mundane_id, g.role, g.granted_by, g.created_at,'
+            . ' m.persona, m.given_name, m.surname,'
+            . ' gb.persona AS granted_by_persona'
+            . ' FROM ' . DB_PREFIX . 'cms_grant g'
+            . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = g.mundane_id'
+            . ' LEFT JOIN ' . DB_PREFIX . 'mundane gb ON gb.mundane_id = g.granted_by'
+            . ' WHERE g.scope_type = :scope_type AND g.scope_id = :scope_id'
+            . ' ORDER BY g.grant_id ASC'
+        );
+
+        // Collapse to one entry per person, keeping the highest rung held.
+        $members = array();
+        foreach ($this->_eachRow($r) as $row) {
+            $uid  = (int)$row['mundane_id'];
+            $role = (string)$row['role'];
+            if ($uid <= 0 || !in_array($role, self::$ROLES, true)) {
+                continue;
+            }
+
+            if (!isset($members[$uid])) {
+                $members[$uid] = array(
+                    'mundane_id'         => $uid,
+                    'persona'            => (string)$row['persona'],
+                    'given_name'         => (string)$row['given_name'],
+                    'surname'            => (string)$row['surname'],
+                    'roles'              => array(),
+                    'role'               => $role,
+                    'role_label'         => '',
+                    'granted_at'         => (string)$row['created_at'],
+                    'granted_by'         => (int)$row['granted_by'],
+                    'granted_by_persona' => (string)$row['granted_by_persona'],
+                );
+            }
+            $members[$uid]['roles'][] = $role;
+
+            // Highest rung wins. array_search on the ordered ladder IS the
+            // privilege comparison — don't compare the strings themselves.
+            $held = array_search($members[$uid]['role'], self::$ROLES, true);
+            $rank = array_search($role, self::$ROLES, true);
+            if ($rank !== false && ($held === false || $rank > $held)) {
+                $members[$uid]['role']               = $role;
+                // Attribute the row to whoever granted the rung actually in
+                // effect, so "granted by" explains the privilege being shown.
+                $members[$uid]['granted_at']         = (string)$row['created_at'];
+                $members[$uid]['granted_by']         = (int)$row['granted_by'];
+                $members[$uid]['granted_by_persona'] = (string)$row['granted_by_persona'];
+            }
+        }
+
+        foreach ($members as $uid => $member) {
+            $members[$uid]['role_label'] = $this->RoleLabel($member['role']);
+        }
+
+        // Highest rung first, then persona — the useful reading order for an
+        // access-control list (who has the most power here?).
+        $members = array_values($members);
+        usort($members, function ($a, $b) {
+            $ra = array_search($a['role'], self::$ROLES, true);
+            $rb = array_search($b['role'], self::$ROLES, true);
+            if ($ra !== $rb) {
+                return $rb - $ra;
+            }
+            return strcasecmp($a['persona'], $b['persona']);
+        });
+
+        return $members;
+    }
+
+    /**
+     * Set a person's role in a scope to EXACTLY $role: grant it, then drop every
+     * other rung they hold there.
+     *
+     * The UI presents one role per person, so a plain GrantRole would silently
+     * leave a previous, now-stale rung in place — demoting an Administrator to
+     * Contributor would change the badge while leaving the admin grant (and
+     * every admin capability) intact. Granting BEFORE revoking also means an
+     * actor editing their own row never passes through a state with no grant,
+     * which would make the roles.manage check on the follow-up revoke fail and
+     * strand them mid-change.
+     *
+     * Authorization is NOT re-implemented here: GrantRole/RevokeRole each run
+     * the full _authorizeGrantMutation() check, so an actor without
+     * roles.manage on this scope gets nothing done by calling this.
+     *
+     * @param int    $uid       grantee mundane_id
+     * @param string $role      target role
+     * @param string $scopeType 'global'|'kingdom'|'park'
+     * @param int    $scopeId   0 for global
+     * @param int    $actorUid  acting mundane_id
+     * @return bool true when the target grant is in place
+     */
+    public function SetUserRole($uid, $role, $scopeType, $scopeId, $actorUid)
+    {
+        $uid  = (int)$uid;
+        $role = (string)$role;
+        if ($uid <= 0 || !in_array($role, self::$ROLES, true)) {
+            return false;
+        }
+
+        if ($this->GrantRole($uid, $role, $scopeType, $scopeId, $actorUid) <= 0) {
+            return false;
+        }
+
+        // Drop the now-redundant rungs. Read the grants back rather than
+        // looping the whole ladder so we only touch rows that exist.
+        $scopeTypeNorm = $this->_strictScopeType($scopeType);
+        $scopeIdNorm   = ($scopeTypeNorm === 'global') ? 0 : (int)$scopeId;
+
+        $stale = array();
+        foreach ($this->GetUserGrants($uid, $scopeTypeNorm, $scopeIdNorm) as $grant) {
+            $held = (string)$grant['role'];
+            if ($held !== $role) {
+                $stale[] = $held;
+            }
+        }
+
+        // ORDER MATTERS when the actor is editing their OWN row. Each RevokeRole
+        // re-checks that the ACTOR still holds roles.manage, and only the top rung
+        // carries it — so revoking highest-first drops the actor's own authority
+        // partway through the loop and every later revoke is silently denied,
+        // stranding a rung the UI then claims is gone. Revoking in ASCENDING
+        // privilege order keeps the authority-bearing rung in place until its own
+        // check has already passed.
+        usort($stale, function ($a, $b) {
+            return array_search($a, self::$ROLES, true) - array_search($b, self::$ROLES, true);
+        });
+        foreach ($stale as $held) {
+            $this->RevokeRole($uid, $held, $scopeTypeNorm, $scopeIdNorm, $actorUid);
+        }
+
+        // Authoritative: report success only if the person now holds EXACTLY the
+        // requested rung. Returning true off the grant alone would let a partial
+        // revoke surface as "Saved — OGRE Contributor" while a higher rung, and
+        // every capability it carries, quietly survived.
+        $remaining = $this->GetUserGrants($uid, $scopeTypeNorm, $scopeIdNorm);
+        return count($remaining) === 1 && (string)$remaining[0]['role'] === $role;
+    }
+
+    /**
+     * Remove a person from a scope entirely — revoke every rung they hold there.
+     *
+     * Each RevokeRole runs its own authorization check and its own
+     * orphaned-authorship guard, so a member who still edits here via a global
+     * grant (which applies to every scope) keeps their bylines; only a member who
+     * genuinely loses all access has their posts de-credited.
+     *
+     * @param int    $uid
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @param int    $actorUid
+     * @return bool true when no grant for this person remains in this scope
+     */
+    public function RevokeAllRoles($uid, $scopeType, $scopeId, $actorUid)
+    {
+        $uid = (int)$uid;
+        if ($uid <= 0) {
+            return false;
+        }
+
+        $scopeTypeNorm = $this->_strictScopeType($scopeType);
+        if ($scopeTypeNorm === self::INVALID_SCOPE) {
+            return false;
+        }
+        $scopeIdNorm = ($scopeTypeNorm === 'global') ? 0 : (int)$scopeId;
+
+        $held = array();
+        foreach ($this->GetUserGrants($uid, $scopeTypeNorm, $scopeIdNorm) as $grant) {
+            $held[] = (string)$grant['role'];
+        }
+
+        // Ascending privilege order, for the same reason as SetUserRole: an actor
+        // removing their OWN access loses roles.manage the moment their top rung
+        // goes, so revoking highest-first would deny every later revoke and leave
+        // them with an orphaned lower grant they can no longer reach.
+        usort($held, function ($a, $b) {
+            return array_search($a, self::$ROLES, true) - array_search($b, self::$ROLES, true);
+        });
+        foreach ($held as $role) {
+            $this->RevokeRole($uid, $role, $scopeTypeNorm, $scopeIdNorm, $actorUid);
+        }
+
+        // Authoritative: nothing left for this person in this scope.
+        return count($this->GetUserGrants($uid, $scopeTypeNorm, $scopeIdNorm)) === 0;
+    }
+
+    /**
+     * Would removing/demoting $uid leave this scope with NO ONE able to manage
+     * roles here? Guards the lockout the Settings UI can otherwise walk into:
+     * the last Administrator of a kingdom site removing themselves, after which
+     * nobody but an ORK super-admin can hand the rights back.
+     *
+     * Counts OTHER people who can still manage roles here, which is NOT the same
+     * as the members of this scope: a GLOBAL grant applies to every scope (see
+     * GetUserCapabilities), so a global OGRE Administrator is a role-manager of
+     * every kingdom and park site and must be counted, or the sole scoped
+     * administrator is wrongly told they are the last one.
+     *
+     * Super-admins are deliberately NOT counted. They can always recover any
+     * scope, so a lockout is never permanent — but an org should not have to go
+     * find one, and treating them as cover would disable the guard everywhere.
+     *
+     * @param int    $uid       the person about to lose their rights
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @return bool true when $uid is the last role-manager in this scope
+     */
+    public function IsLastRoleManager($uid, $scopeType, $scopeId)
+    {
+        $uid = (int)$uid;
+        if ($uid <= 0) {
+            return false;
+        }
+
+        $scopeTypeNorm = $this->_strictScopeType($scopeType);
+        if ($scopeTypeNorm === self::INVALID_SCOPE) {
+            return false;
+        }
+        $scopeIdNorm = ($scopeTypeNorm === 'global') ? 0 : (int)$scopeId;
+
+        // Everyone whose grants reach THIS scope: its own members, plus global
+        // grant holders when the scope is an org site (a global grant already IS
+        // the scope's member list when scopeType is 'global' — don't count twice).
+        $reaching = $this->ListScopeMembers($scopeTypeNorm, $scopeIdNorm);
+        if ($scopeTypeNorm !== 'global') {
+            $reaching = array_merge($reaching, $this->ListScopeMembers('global', 0));
+        }
+
+        $selfManages = false;
+        $othersManage = false;
+        foreach ($reaching as $member) {
+            $manages = in_array('roles.manage', $this->CapabilitiesForRole($member['role']), true);
+            if (!$manages) {
+                continue;
+            }
+            if ((int)$member['mundane_id'] === $uid) {
+                $selfManages = true;
+            } else {
+                $othersManage = true;
+            }
+        }
+
+        return $selfManages && !$othersManage;
     }
 
 }

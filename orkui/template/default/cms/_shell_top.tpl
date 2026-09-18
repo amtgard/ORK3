@@ -11,7 +11,7 @@
  *
  * Page-set variables (all optional unless noted):
  *   $cmsActive  string  which rail item is highlighted:
- *                       'dashboard'|'pages'|'posts'|'media'|'nav'|'theme'|'sites'
+ *                       'dashboard'|'pages'|'posts'|'media'|'nav'|'theme'|'settings'|'sites'
  *                       ('sites' is the scopeless super-admin overview). Any other
  *                       value, e.g. 'edit', highlights nothing — leaf surfaces.
  *   $cmsTitle   string  masthead display title. Default 'OGRE'.
@@ -82,6 +82,7 @@ $shRail = array(
     array('media',     'Media',      UIR . 'Cms/media' . $shScopeQuery,     'fa-images',     !empty($shCaps['media'])),
     array('nav',       'Navigation', UIR . 'Cms/nav' . $shScopeQuery,       'fa-bars',       !empty($shCaps['nav'])),
     array('theme',     'Theme',      UIR . 'Cms/theme' . $shScopeQuery,     'fa-palette',    !empty($shCaps['theme'])),
+    array('settings',  'Settings',   UIR . 'Cms/settings' . $shScopeQuery,  'fa-sliders-h',  !empty($shCaps['roles'])),
     // GLOBAL cross-org overview — super-admins only (scopeless href on purpose;
     // it lists every scope at once). Hidden for org-scoped officers.
     array('sites',     'All sites',  UIR . 'Cms/sites',                     'fa-sitemap',    !empty($shCaps['super'])),

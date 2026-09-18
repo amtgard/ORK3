@@ -69,9 +69,9 @@ class Model_CmsMedia extends Model
      * null here — the lib signature is a typed non-nullable string, so a null
      * forwarded through this untyped pass-through is a fatal TypeError.
      */
-    public function filter_owned_ids($ids, $scopeType, $scopeId)
+    public function filter_owned_ids($ids, $scopeType, $scopeId, $uploadedBy = 0)
     {
-        return $this->CmsMedia->FilterOwnedIds($ids, $scopeType, $scopeId);
+        return $this->CmsMedia->FilterOwnedIds($ids, $scopeType, $scopeId, $uploadedBy);
     }
 
     public function get_media($mediaId)

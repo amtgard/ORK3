@@ -207,6 +207,16 @@ class CmsSite extends CmsBase
             return null;
         }
 
+        // Rollout policy. Refuse to MINT a new site for a level that has not been
+        // enabled — but only for the mint path: the existing-row branch below is
+        // reached first for any site that already exists, so switching a toggle
+        // back off never disturbs a site that is already built or published.
+        if (!$this->CanCreateSite($scopeType, $scopeId)
+            && $this->GetSiteForScope($scopeType, $scopeId) === null
+        ) {
+            return null;
+        }
+
         // Finer-grained idempotency. A site row can exist while its starter
         // template is only PARTIALLY seeded — a first-run that died mid-seed, or a
         // pre-seed legacy row — leaving the nav menu empty and/or home_page_id
@@ -1989,5 +1999,211 @@ class CmsSite extends CmsBase
         }
         // Extremely unlikely fallback — keep it unique-ish without a DB round trip.
         return $base . '-' . time();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Site-creation policy (the three rollout toggles)
+     *
+     * Whether an org LEVEL may have OGRE sites at all, stored in the existing
+     * ork_configuration EAV table:
+     *
+     *   Service / 0 / CmsKingdomSitesEnabled   ORK Admins — kingdoms may build sites
+     *   Service / 0 / CmsParkSitesEnabled      ORK Admins — parks may build sites
+     *   Kingdom / K / CmsAllowParkSites        the kingdom — ITS parks may build sites
+     *
+     * The chain is AND-ed downward: a park site needs BOTH the global park
+     * switch AND its own kingdom's permission. A kingdom site needs only the
+     * global kingdom switch.
+     *
+     * These gate CREATION ONLY. A site that already exists keeps working — its
+     * admin surfaces and its published public pages both — so turning a switch
+     * back off is a rollout control, never a destructive act that would 404 an
+     * org's live website. CanCreateSite() is therefore called on the
+     * provisioning path, and nowhere in the read/render path.
+     *
+     * Absent config reads as OFF (fail-closed): a level is enabled only once
+     * somebody deliberately turns it on.
+     * ------------------------------------------------------------------ */
+
+    /** ork_configuration keys owned by this policy. */
+    public const CFG_KINGDOM_SITES = 'CmsKingdomSitesEnabled';
+    public const CFG_PARK_SITES    = 'CmsParkSitesEnabled';
+    public const CFG_ALLOW_PARKS   = 'CmsAllowParkSites';
+
+    /**
+     * Read one ork_configuration flag as a boolean.
+     *
+     * Type-tolerant on purpose. The same logical flag reads back as int 1 from a
+     * backfill migration (bare scalar value) and as string '1' after a UI save
+     * (json_encode'd), so a strict comparison silently fails for one of them.
+     *
+     * @param string $type CFG_SERVICE | CFG_KINGDOM | CFG_PARK
+     * @param int    $id   scope owner id (0 for the service-wide row)
+     * @param string $key
+     * @return bool
+     */
+    private function _configFlag($type, $id, $key)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->type = (string)$type;
+        $DB->id   = (int)$id;
+        $DB->key  = (string)$key;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT value FROM ' . DB_PREFIX . 'configuration'
+            . ' WHERE type = :type AND id = :id AND `key` = :key LIMIT 1'
+        ));
+        if ($row === null) {
+            return false;
+        }
+        // json_decode handles the '"1"' form; a bare '1' decodes to int 1. Cast
+        // through int so both shapes — and a stray bool — land on the same answer.
+        $decoded = json_decode((string)$row['value']);
+        return (int)$decoded === 1;
+    }
+
+    /**
+     * Write one ork_configuration flag. Inserts the row when absent.
+     *
+     * Stores the json_encode'd form the rest of the app's UI saves use, so the
+     * value reads identically through Common::get_configs.
+     *
+     * @return void
+     */
+    private function _setConfigFlag($type, $id, $key, $on)
+    {
+        global $DB;
+
+        $value = json_encode($on ? '1' : '0');
+
+        $DB->Clear();
+        $DB->type = (string)$type;
+        $DB->id   = (int)$id;
+        $DB->key  = (string)$key;
+        $existing = $this->_firstRow($DB->DataSet(
+            'SELECT configuration_id FROM ' . DB_PREFIX . 'configuration'
+            . ' WHERE type = :type AND id = :id AND `key` = :key LIMIT 1'
+        ));
+
+        $DB->Clear();
+        if ($existing !== null) {
+            $DB->configuration_id = (int)$existing['configuration_id'];
+            $DB->value = $value;
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'configuration SET value = :value'
+                . ' WHERE configuration_id = :configuration_id'
+            );
+            return;
+        }
+        $DB->type  = (string)$type;
+        $DB->id    = (int)$id;
+        $DB->key   = (string)$key;
+        $DB->value = $value;
+        $DB->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'configuration'
+            . ' (type, id, `key`, value, user_setting, allowed_values, var_type)'
+            . " VALUES (:type, :id, :key, :value, 0, 'null', 'fixed')"
+        );
+    }
+
+    /** Global switch: may KINGDOMS build OGRE sites? (ORK Admins own this.) */
+    public function KingdomSitesEnabled()
+    {
+        return $this->_configFlag(CFG_SERVICE, 0, self::CFG_KINGDOM_SITES);
+    }
+
+    /** Global switch: may PARKS build OGRE sites? (ORK Admins own this.) */
+    public function ParkSitesEnabled()
+    {
+        return $this->_configFlag(CFG_SERVICE, 0, self::CFG_PARK_SITES);
+    }
+
+    /**
+     * Does THIS kingdom let its parks build sites? Meaningful only while the
+     * global park switch is on — CanCreateSite() AND-s the two, so this alone
+     * never admits a park.
+     */
+    public function KingdomAllowsParkSites($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        if ($kingdomId <= 0) {
+            return false;
+        }
+        return $this->_configFlag(CFG_KINGDOM, $kingdomId, self::CFG_ALLOW_PARKS);
+    }
+
+    /** Set a global switch. The CALLER must confirm the actor is an ORK Admin. */
+    public function SetKingdomSitesEnabled($on)
+    {
+        $this->_setConfigFlag(CFG_SERVICE, 0, self::CFG_KINGDOM_SITES, $on);
+    }
+
+    /** Set a global switch. The CALLER must confirm the actor is an ORK Admin. */
+    public function SetParkSitesEnabled($on)
+    {
+        $this->_setConfigFlag(CFG_SERVICE, 0, self::CFG_PARK_SITES, $on);
+    }
+
+    /** Set one kingdom's park permission. The CALLER must authorize the actor. */
+    public function SetKingdomAllowsParkSites($kingdomId, $on)
+    {
+        $kingdomId = (int)$kingdomId;
+        if ($kingdomId <= 0) {
+            return;
+        }
+        $this->_setConfigFlag(CFG_KINGDOM, $kingdomId, self::CFG_ALLOW_PARKS, $on);
+    }
+
+    /**
+     * May a NEW site be provisioned for this scope right now?
+     *
+     * kingdom → the global kingdom switch.
+     * park    → the global park switch AND that park's kingdom's permission.
+     * global  → always true; the front door is not a provisioned org site.
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @return bool
+     */
+    public function CanCreateSite($scopeType, $scopeId)
+    {
+        $scopeType = $this->_normalizeSiteScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+
+        if ($scopeType === 'kingdom') {
+            return $this->KingdomSitesEnabled();
+        }
+        if ($scopeType === 'park') {
+            if (!$this->ParkSitesEnabled()) {
+                return false;
+            }
+            // A park's permission comes from the kingdom it belongs to.
+            return $this->KingdomAllowsParkSites($this->_parkKingdomId($scopeId));
+        }
+        return true;
+    }
+
+    /**
+     * The kingdom a park belongs to (0 when unknown). Used only by the policy
+     * chain above, so it stays private to it.
+     *
+     * @param int $parkId
+     * @return int
+     */
+    private function _parkKingdomId($parkId)
+    {
+        global $DB;
+
+        $parkId = (int)$parkId;
+        if ($parkId <= 0) {
+            return 0;
+        }
+        $DB->Clear();
+        $DB->park_id = $parkId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = :park_id LIMIT 1'
+        ));
+        return $row === null ? 0 : (int)$row['kingdom_id'];
     }
 }

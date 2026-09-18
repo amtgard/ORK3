@@ -19,6 +19,7 @@
  *   CmsAdmin.autosave(opts)          debounced autosave timer (editor hosts)
  *   CmsAdmin.guardUnsaved(isDirty)   beforeunload guard (editor hosts)
  *   CmsAdmin.previewPane(opts)       in-context preview pane (editor hosts)
+ *   CmsAdmin.personaSearch(el, opts) shared ORK player autocomplete (body-appended)
  *
  * Loaded ONCE from cms/_shell_top.tpl, which also emits window.CMS_UIR /
  * CMS_SCOPE / CMS_CSRF. Keeping the CSRF-header contract in a single place is
@@ -674,8 +675,175 @@
         return ph;
     }
 
+    /* ==================================================================
+       personaSearch — the shared ORK player autocomplete for CMS admin
+       surfaces.
+
+       ONE body-appended dropdown for the whole page. The body append is
+       required so the dropdown can be position:fixed out of any modal or
+       overflow context that would otherwise clip it (see the standing rule
+       about autocompletes inside modals); it is created once and repositioned
+       per input, so wiring several fields does not leak a node apiece.
+
+       Scoping: KingdomAjax/playersearch's `scope` parameter is the SEARCH
+       scope — 'own' | 'exclude' | 'all' — NOT the CMS site selector. Passing
+       the site selector into it (as the staff-roster picker still does) yields
+       an empty result set, because neither 'k:5' nor '' is a valid value.
+
+       A positive kingdomId searches that kingdom's roster ('own'); 0 searches
+       every player ('all'). The CALLER decides which, because only it knows
+       the page's context — see the project rule that every player search is
+       scoped to its context unless it is one of the documented site-wide
+       exceptions.
+
+         personaSearch(inputEl, { kingdomId, onPick, minChars })
+           onPick(row)  row = {MundaneId, Persona, KAbbr, PAbbr, …}
+
+       Returns { destroy() } so a caller can unwire a field it rebuilds.
+       ================================================================== */
+
+    var personaDd = null;
+
+    function personaDropdown() {
+        if (!personaDd || !personaDd.parentNode) {
+            personaDd = document.createElement('div');
+            personaDd.className = 'kn-ac-results cms-persona-ac';
+            personaDd.style.display = 'none';
+            document.body.appendChild(personaDd);
+        }
+        return personaDd;
+    }
+
+    // The input the singleton dropdown is currently anchored to, and a ONE-TIME
+    // scroll/resize hook that keeps it there. Both live at module scope because
+    // the dropdown does.
+    var activeInput = null;
+    var repositionArmed = false;
+
+    function armReposition() {
+        if (repositionArmed) { return; }
+        repositionArmed = true;
+        var onReposition = function () {
+            var dd = personaDropdown();
+            if (activeInput && dd.classList.contains('kn-ac-open')) {
+                positionDropdown(activeInput, dd);
+            }
+        };
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
+    }
+
+    function positionDropdown(input, dd) {
+        var r = input.getBoundingClientRect();
+        dd.style.position = 'fixed';
+        dd.style.left = r.left + 'px';
+        dd.style.top = (r.bottom + 2) + 'px';
+        dd.style.width = r.width + 'px';
+        dd.style.zIndex = '99999';
+    }
+
+    function personaSearch(input, opts) {
+        if (!input) { return { destroy: function () {} }; }
+        opts = opts || {};
+        var minChars = opts.minChars || 2;
+        var timer = null;
+        var ctrl = null;
+
+        function close() {
+            var dd = personaDropdown();
+            dd.classList.remove('kn-ac-open');
+            dd.style.display = 'none';
+        }
+        function open() {
+            var dd = personaDropdown();
+            activeInput = input;
+            positionDropdown(input, dd);
+            dd.style.display = 'block';
+            dd.classList.add('kn-ac-open');
+        }
+        function cancel() {
+            if (timer) { clearTimeout(timer); timer = null; }
+            if (ctrl) { ctrl.abort(); ctrl = null; }
+        }
+
+        function search(term) {
+            cancel();
+            ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+            var kid = parseInt(opts.kingdomId, 10) || 0;
+            // A kingdom site searches its own roster; everything else searches
+            // all players. Note `&`, never `?` — UIR already ends in '?Route='.
+            var url = (window.CMS_UIR || '') + 'KingdomAjax/playersearch/' + kid
+                + '&scope=' + (kid > 0 ? 'own' : 'all')
+                + '&q=' + encodeURIComponent(term);
+
+            fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+                .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+                .then(function (rows) {
+                    var dd = personaDropdown();
+                    dd.innerHTML = '';
+                    if (!rows || !rows.length) {
+                        var none = document.createElement('div');
+                        none.className = 'kn-ac-item kn-ac-none';
+                        none.textContent = 'No matches';
+                        dd.appendChild(none);
+                        open();
+                        return;
+                    }
+                    rows.forEach(function (row) {
+                        var loc = [row.KAbbr, row.PAbbr].filter(Boolean).join(':');
+                        var item = document.createElement('div');
+                        item.className = 'kn-ac-item';
+                        item.innerHTML = esc(row.Persona)
+                            + (loc ? ' <span class="kn-ac-meta">' + esc(loc) + '</span>' : '');
+                        // mousedown, not click: the input's own blur would close
+                        // the dropdown before a click ever landed.
+                        item.addEventListener('mousedown', function (e) {
+                            e.preventDefault();
+                            close();
+                            if (opts.onPick) { opts.onPick(row); }
+                        });
+                        dd.appendChild(item);
+                    });
+                    open();
+                })
+                .catch(function () { /* aborted or failed — leave the field as typed */ });
+        }
+
+        function onInput() {
+            var term = input.value.trim();
+            if (timer) { clearTimeout(timer); }
+            if (term.length < minChars) { cancel(); close(); return; }
+            timer = setTimeout(function () { search(term); }, 220);
+        }
+        function onBlur() { cancel(); setTimeout(close, 120); }
+        function onFocus() { activeInput = input; }
+
+        input.setAttribute('autocomplete', 'off');
+        input.addEventListener('input', onInput);
+        input.addEventListener('focus', onFocus);
+        input.addEventListener('blur', onBlur);
+        // Scroll/resize repositioning is armed ONCE for the page, not per field:
+        // the dropdown is a singleton, so per-field handlers would all fire on
+        // every scroll and reposition it under whichever input ran last.
+        armReposition();
+
+        return {
+            close: close,
+            destroy: function () {
+                cancel();
+                close();
+                if (activeInput === input) { activeInput = null; }
+                input.removeEventListener('input', onInput);
+                input.removeEventListener('focus', onFocus);
+                input.removeEventListener('blur', onBlur);
+            }
+        };
+    }
+
     window.CmsAdmin = {
         thumbFallback: thumbFallback,
+        personaSearch: personaSearch,
         esc: esc,
         toast: toast,
         undoableToast: undoableToast,

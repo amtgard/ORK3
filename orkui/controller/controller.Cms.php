@@ -35,7 +35,6 @@ class Controller_Cms extends Controller
     /**
      * Per-request capability cache: ['is_super' => bool, 'caps' => string[]].
      * Keyed by uid+scope so a single request can't bleed between users or orgs.
-     * Also holds _bridgedCaps() lists under a 'bridge|'-prefixed key.
      * @var array
      */
     private $_capCache = array();
@@ -280,14 +279,12 @@ class Controller_Cms extends Controller
         // state, so a never-provisioned org still gets SiteLiveUrl = UIR on its
         // first dashboard load) — do not reorder the two.
         $this->_scopeSiteMemo = is_array($site) ? $site : null;
-        // Site publish/unpublish is an AUTH_ADMIN-tier action (monarch/regent).
-        // page.publish bridges to AUTH_ADMIN on the scope, so it is the correct
-        // gate: an AUTH_EDIT-only officer sees the "must be published" state.
+        // Site publish/unpublish is gated on page.publish (OGRE Editor and up).
+        // Office confers nothing here — a Monarch with no OGRE grant cannot
+        // publish their own site until somebody grants them a role.
         $this->data['CanPublishSite'] = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
-        // Site settings (name / home page) is an edit-tier action. Use the SAME
-        // bridge-aware source as the publish gate above: GetUserCapabilities
-        // (behind $Caps) reads grant rows only, so an officer whose CMS rights
-        // come from OFFICE would see "Publish site" but no "Site settings".
+        // Site settings (name / home page). Same grant-derived source as the
+        // publish gate above, so the two can never disagree.
         $this->data['CanEditSite'] = $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
     }
 
@@ -435,13 +432,10 @@ class Controller_Cms extends Controller
     public function media($action = null)
     {
         $uid = $this->_uid();
-        // Media management is its own capability (super-admins pass via _capFlags).
-        //
-        // DELIBERATELY NOT `cms_can('media.manage')`: media.manage is absent from
-        // CmsAuth::$ADMIN_BRIDGE_CAPS, so the officer bridge grants it at AUTH_EDIT
-        // — every AUTH_EDIT officer of the scope would gain the Media Library.
-        // _capFlags reads GRANT rows only (plus the super-admin short-circuit), so
-        // this gate stays narrow. Widening it is a privilege change, not a refactor.
+        // Library access is the UPLOAD tier (Contributor and up), not the manage
+        // tier — $Caps['media'] is upload-or-manage. Kept as a _capFlags() probe
+        // rather than a bare cms_can() so this gate and the rail entry read the
+        // exact same expression and cannot drift apart.
         $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
             return !empty($this->_capFlags($uid, $scope)['media']);
         });
@@ -459,6 +453,11 @@ class Controller_Cms extends Controller
         $media = $this->CmsMedia->list_media($scope, 200, ($search === '' ? null : $search));
         $this->data['Media']  = is_array($media) ? $media : array();
         $this->data['Search'] = $search;
+        // The viewer, so the grid can mark which tiles are THEIRS. A holder of
+        // media.upload alone may only act on their own uploads, and the template
+        // compares this against each row's uploaded_by. Presentation only — the
+        // authoritative test is CmsAjax::_requireMediaControl on every write.
+        $this->data['ViewerId'] = $uid;
     }
 
     /* ------------------------------------------------------------------ *
@@ -871,6 +870,100 @@ class Controller_Cms extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * Settings — who can work on this site (OGRE access control)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * OGRE Settings: the access-control surface for the resolved scope.
+     *
+     * Gated on roles.manage, the capability only the top rung (and an ORK
+     * super-admin) holds — see CmsAuth::$ROLE_INCREMENTS. The matching rail
+     * entry is shown off $Caps['roles'], which _capFlags() already computes, so
+     * the rail and this gate cannot disagree.
+     *
+     * Three data sets:
+     *   - Members     people holding OGRE grants IN THIS SCOPE, one row each.
+     *   - RoleCatalog the grantable roles with their real capability lists, so
+     *                 the page documents what it is actually handing out.
+     *   - OrkAdmins   GLOBAL ONLY. ORK Administrators pass every OGRE gate via
+     *                 CmsAuth::IsSuperAdmin()'s short-circuit without holding a
+     *                 grant row, so a roster that listed only grants would be
+     *                 quietly wrong about who can edit this site. Read-only:
+     *                 ORK-level authority is granted in Admin -> Permissions,
+     *                 which stays the one place that role is managed.
+     */
+    public function settings($action = null)
+    {
+        $uid = $this->_uid();
+        $scope = $this->_scopeOrDenyWithCap($uid, 'roles.manage');
+        if ($scope === false) {
+            return;
+        }
+
+        $isGlobal = $this->_scopeIsGlobal($scope);
+
+        $this->template = 'Cms_settings.tpl';
+        $this->data['page_title']  = 'Settings';
+        $this->data['Members']     = $this->CmsAuth->list_scope_members($scope['type'], $scope['id']);
+        $this->data['RoleCatalog'] = $this->CmsAuth->role_catalog();
+        $this->data['SettingsUid'] = $uid;
+
+        // ORK Administrators are a GLOBAL fact, and they are the ONE class of
+        // user holding OGRE rights without a grant row (CmsAuth::IsSuperAdmin).
+        // On a kingdom/park site nobody has implicit access at all, so the list
+        // would be a non-sequitur there.
+        $orkAdmins = array();
+        if ($isGlobal) {
+            $this->load_model('AdminDashboard');
+            $orkAdmins = $this->AdminDashboard->global_admin_grants((string)($this->session->token ?? ''));
+        }
+        // Which kingdom's roster the Add-a-user persona search is scoped to.
+        // Project rule: a player search is scoped to its page's context, with
+        // only two documented global exceptions — so an ORG site searches that
+        // org's kingdom (a park searches its PARENT kingdom, which is why this
+        // is not just $scope['id']), and only the global front door, whose
+        // authors legitimately come from anywhere, searches site-wide.
+        $searchKingdomId = 0;
+        if ((string)$scope['type'] === 'kingdom') {
+            $searchKingdomId = (int)$scope['id'];
+        } elseif ((string)$scope['type'] === 'park') {
+            $this->load_model('Park');
+            $searchKingdomId = (int)$this->Park->GetParkKingdomId((int)$scope['id']);
+        }
+        $this->data['SearchKingdomId'] = $searchKingdomId;
+
+        // --- Site-creation policy toggles -------------------------------------
+        // ORK ADMIN, not OGRE Admin. These two decide whether kingdoms and parks
+        // may build sites at all, so they belong to whoever runs the ORK — an OGRE
+        // Administrator of the front door does NOT get to switch them. The same
+        // test gates the save endpoint; this flag only decides whether the control
+        // renders at all.
+        $this->load_model('CmsSite');
+        $isOrkAdmin = (bool)$this->CmsAuth->is_super_admin($uid);
+        $this->data['IsOrkAdmin'] = $isOrkAdmin;
+
+        if ($isGlobal) {
+            $this->data['KingdomSitesEnabled'] = (bool)$this->CmsSite->kingdom_sites_enabled();
+            $this->data['ParkSitesEnabled']    = (bool)$this->CmsSite->park_sites_enabled();
+        } else {
+            // The kingdom-level control appears only once the GLOBAL park switch
+            // is on — there is nothing for a kingdom to permit while parks are
+            // switched off service-wide, and showing a toggle that grants nothing
+            // reads as broken. Parks themselves have nothing to set: their level
+            // is decided above them.
+            $isKingdomScope = ((string)$scope['type'] === 'kingdom');
+            $this->data['ShowAllowParkSites'] = $isKingdomScope
+                && (bool)$this->CmsSite->park_sites_enabled();
+            $this->data['AllowParkSites'] = $isKingdomScope
+                && (bool)$this->CmsSite->kingdom_allows_park_sites((int)$scope['id']);
+        }
+
+        $this->data['OrkAdmins']      = $orkAdmins;
+        $this->data['ShowOrkAdmins']  = $isGlobal;
+        $this->data['OrkAdminUrl']    = UIR . 'Admin/permissions';
+    }
+
+    /* ------------------------------------------------------------------ *
      * Blog posts — editor
      * ------------------------------------------------------------------ */
 
@@ -1015,11 +1108,10 @@ class Controller_Cms extends Controller
         if (!empty($resolved['caps'])) {
             return true;
         }
-        // Officer bridge (see _bridgedCaps): _resolveCapabilities reads GRANT rows
-        // only, so a real kingdom/park officer with no grant row would be locked
-        // out of surfaces that cms_can() would happily let them edit. page.edit is
-        // the broadest bridged capability (AUTH_EDIT), so it answers "any?".
-        return (bool)$this->CmsAuth->cms_can($uid, 'page.edit', is_array($scope) ? $scope : self::$SCOPE);
+        // No officer bridge: CMS rights come only from grant rows (plus the ORK
+        // super-admin short-circuit already handled above), so an empty grant set
+        // genuinely means no CMS capability here.
+        return false;
     }
 
     /**
@@ -1045,22 +1137,23 @@ class Controller_Cms extends Controller
         $resolved = $this->_resolveCapabilities($uid, $scope);
         $isSuper  = $resolved['is_super'];
         $caps     = $resolved['caps'];
-        // Officer bridge — see _bridgedCaps(). Every key below EXCEPT 'media' ORs
-        // it in so the rail agrees with the cms_can() gates on the actions.
-        $bridged = $isSuper ? array() : $this->_bridgedCaps($uid, $scope);
-        $held = function ($cap) use ($isSuper, $caps, $bridged) {
-            return $isSuper || in_array($cap, $caps, true) || in_array($cap, $bridged, true);
+        // Grant rows + the ORK super-admin short-circuit ARE the capability set —
+        // there is no officer bridge to union in, so this map and the server-side
+        // cms_can() gates can no longer disagree for any user.
+        $held = function ($cap) use ($isSuper, $caps) {
+            return $isSuper || in_array($cap, $caps, true);
         };
         return array(
             'create'  => $held('page.create'),
             'edit'    => $held('page.edit'),
             'publish' => $held('page.publish'),
             'delete'  => $held('page.delete'),
-            // GRANT-ONLY on purpose: media.manage is absent from
-            // CmsAuth::$ADMIN_BRIDGE_CAPS, so bridging it would hand the Media
-            // Library to every AUTH_EDIT officer. media() gates on this same flag,
-            // so the rail entry and the action can never disagree.
-            'media'   => $isSuper || in_array('media.manage', $caps, true),
+            // 'media' is LIBRARY ACCESS (upload-or-manage) — a Contributor holds
+            // media.upload and needs the library to add and remove their own
+            // files. 'media_manage' is the narrower right to act on ANYONE's
+            // upload; the template shows destructive controls off that one.
+            'media'        => $held('media.upload') || $held('media.manage'),
+            'media_manage' => $held('media.manage'),
             'nav'     => $held('nav.manage'),
             'roles'   => $held('roles.manage'),
             'theme'   => $held('theme.manage'),
@@ -1093,56 +1186,10 @@ class Controller_Cms extends Controller
             // with indexOf, never position, so the emit order is not a contract.
             return $this->CmsAuth->all_capabilities();
         }
-        // Officer bridge — see _bridgedCaps(). Without it window.CMS_CAPS would
-        // disable actions for an officer that the server-side gate allows.
-        $caps = array_merge(
-            array_map('strval', (array)$resolved['caps']),
-            $this->_bridgedCaps($uid, $scope)
-        );
+        // Grant rows are the whole capability set (the officer bridge is gone), so
+        // window.CMS_CAPS and the server-side cms_can() gates read the same source.
+        $caps = array_map('strval', (array)$resolved['caps']);
         return array_values(array_unique($caps));
-    }
-
-    /**
-     * Capabilities the OFFICER-AUTHORITY bridge grants in this scope, on top of
-     * the user's grant rows. cms_can() (CmsAuth::CmsCan step 3) falls through to
-     * HasAuthority for kingdom/park scopes; _resolveCapabilities() reads grant
-     * rows ONLY, so every consumer of it has to union these in or a real officer
-     * sees an admin rail that disagrees with the actions' own cms_can() gates.
-     *
-     * 'media.manage' is deliberately EXCLUDED: it is absent from
-     * CmsAuth::$ADMIN_BRIDGE_CAPS, so the bridge would grant it at AUTH_EDIT to
-     * every edit-tier officer. media() gates on the narrow grant-only flag, so
-     * bridging it here would advertise a Media Library that then 403s.
-     *
-     * @param int        $uid
-     * @param array|null $scope
-     * @return string[]
-     */
-    private function _bridgedCaps($uid, $scope = null)
-    {
-        $uid = (int)$uid;
-        if ($uid <= 0) {
-            return array();
-        }
-        if (!is_array($scope)) {
-            $scope = self::$SCOPE;
-        }
-        $key = 'bridge|' . $uid . '|' . (string)($scope['type'] ?? 'global') . ':' . (int)($scope['id'] ?? 0);
-        if (isset($this->_capCache[$key])) {
-            return $this->_capCache[$key];
-        }
-        $out = array();
-        foreach ((array)$this->CmsAuth->all_capabilities() as $cap) {
-            $cap = (string)$cap;
-            if ($cap === 'media.manage') {
-                continue;
-            }
-            if ($this->CmsAuth->cms_can($uid, $cap, $scope)) {
-                $out[] = $cap;
-            }
-        }
-        $this->_capCache[$key] = $out;
-        return $out;
     }
 
     /**
@@ -1177,11 +1224,17 @@ class Controller_Cms extends Controller
 
         // One GetUserGrants query + in-memory role expansion, scoped to this org.
         // Skip for super-admins — they pass every cap already.
-        // NOTE: GRANT ROWS ONLY — no officer bridge. Callers that must agree with
-        // cms_can() union in _bridgedCaps(); media() relies on this being narrow.
-        $caps = ($uid > 0 && !$isSuper)
-            ? $this->CmsAuth->get_user_capabilities($uid, $scope)
-            : array();
+        // Grant rows, PLUS the org-site officer bridge: a create-or-admin officer of
+        // a kingdom/park is an OGRE Administrator of that site (CmsCan step 3), so
+        // they hold the whole capability set there. Resolving that here — rather
+        // than unioning a per-capability probe at each call site — is what keeps
+        // $Caps, window.CMS_CAPS and the server-side cms_can() gates in agreement.
+        $caps = array();
+        if ($uid > 0 && !$isSuper) {
+            $caps = $this->CmsAuth->is_scope_officer($uid, $scope)
+                ? (array)$this->CmsAuth->all_capabilities()
+                : (array)$this->CmsAuth->get_user_capabilities($uid, $scope);
+        }
 
         $resolved = array('is_super' => $isSuper, 'caps' => $caps);
         $this->_capCache[$key] = $resolved;

@@ -55,9 +55,9 @@ trait CmsScopeContext
      * @param int $uid acting mundane_id (from $this->session->user_id)
      * @return array{type:string,id:int}|false
      *   ['type'=>'global','id'=>0]         when no selector (legacy front door),
-     *   ['type'=>'kingdom'|'park','id'=>N] when authorized over the named org,
+     *   ['type'=>'kingdom'|'park','id'=>N] when the user holds CMS rights there,
      *   false                              when the selector is malformed or the
-     *                                      user lacks AUTH_EDIT over that org.
+     *                                      user holds no CMS capability in that org.
      */
     private function _resolveScope($uid)
     {
@@ -90,18 +90,27 @@ trait CmsScopeContext
             return false;
         }
 
-        // Re-validate server-side: the acting user MUST hold at least AUTH_EDIT
-        // over the requested org (super-admins pass via HasAuthority's all-zero
-        // short-circuit; publish-tier caps are gated separately via CmsCan).
-        $uid      = (int)$uid;
-        $authType = ($scopeType === 'park') ? AUTH_PARK : AUTH_KINGDOM;
-        // Through the model layer (Model_Authorization::has_authority), never the
-        // lib handle directly — that is how every other controller asks this, and
-        // it keeps the auth gate swappable behind one seam.
-        $this->load_model('Authorization');
+        // Re-validate server-side against CMS RIGHTS IN THAT ORG — which is the
+        // union of a grant (scoped or global) and the org-site officer bridge,
+        // exactly the three sources CmsAuth::CmsCan consults. The per-action
+        // cms_can() gate then decides what may actually be done.
+        //
+        // This used to ask ork_authorization for AUTH_EDIT directly, which drew
+        // the line in a different place from CmsCan: somebody granted OGRE
+        // Administrator of a kingdom site could not open it unless they also held
+        // office there, while an edit-tier officer could open a site they had no
+        // OGRE role on. Asking CmsAuth keeps one definition of "may reach this
+        // site" — including that 'edit'-tier office alone grants nothing.
+        $uid = (int)$uid;
+        $this->load_model('CmsAuth');
+        $probeScope = array('type' => $scopeType, 'id' => $scopeId);
         $ok = ($uid > 0)
-            && isset($this->Authorization)
-            && $this->Authorization->has_authority($uid, $authType, $scopeId, AUTH_EDIT);
+            && isset($this->CmsAuth)
+            && (
+                (bool)$this->CmsAuth->is_super_admin($uid)
+                || (bool)$this->CmsAuth->is_scope_officer($uid, $probeScope)
+                || !empty($this->CmsAuth->get_user_capabilities($uid, $probeScope))
+            );
         if (!$ok) {
             $this->_cmsScope = false;
             return false;
@@ -249,7 +258,7 @@ trait CmsScopeContext
      *
      * The public renderers ask the same question more than once per render (the
      * unpublished-site preview gate, then the edit FAB, then the new-post FAB),
-     * and each miss is a grant + officer-authority round trip. The memo is
+     * and each miss is a grant round trip. The memo is
      * request-scoped and keyed by the full (uid, capability, scope) tuple, so it
      * can only ever return the answer cms_can would have returned a moment
      * earlier — no capability decision changes, only how often it is asked.

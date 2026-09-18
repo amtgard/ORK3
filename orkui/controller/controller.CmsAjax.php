@@ -751,7 +751,7 @@ class Controller_CmsAjax extends Controller
     {
         $uid   = $this->_begin(false);
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'media.manage', $scope);
+        $this->_require($uid, 'media.upload', $scope);
 
         $mediaId = (int)($_GET['media_id'] ?? $_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
@@ -759,7 +759,12 @@ class Controller_CmsAjax extends Controller
         }
         $this->load_model('CmsMedia');
         // IDOR guard: never disclose usage for a row belonging to another scope.
-        $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
+        $media = $this->CmsMedia->get_media($mediaId);
+        $this->_requireOwned($media, $scope);
+        // Same ownership tier as the delete this read exists to make safe: an
+        // uploader may ask where their OWN file is used before removing it, but
+        // not survey someone else's.
+        $this->_requireMediaControl($uid, $scope, $media);
 
         $usage = $this->CmsMedia->ReferenceUsage($mediaId);
         if (!is_array($usage)) {
@@ -778,7 +783,9 @@ class Controller_CmsAjax extends Controller
     {
         $uid   = $this->_begin();
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'media.manage', $scope);
+        // Contributor tier gets in the door; _requireMediaControl below decides
+        // whether THIS row is theirs to remove.
+        $this->_require($uid, 'media.upload', $scope);
 
         $mediaId = (int)($_POST['media_id'] ?? 0);
         if ($mediaId <= 0) {
@@ -786,7 +793,11 @@ class Controller_CmsAjax extends Controller
         }
         $this->load_model('CmsMedia');
         // IDOR guard: never delete a media row belonging to another scope.
-        $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
+        $media = $this->CmsMedia->get_media($mediaId);
+        $this->_requireOwned($media, $scope);
+        // Ownership tier: media.manage acts on anything, media.upload only on
+        // its own uploads.
+        $this->_requireMediaControl($uid, $scope, $media);
 
         $ok = (bool)$this->CmsMedia->DeleteMedia($mediaId, $uid, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
@@ -820,7 +831,7 @@ class Controller_CmsAjax extends Controller
     {
         $uid   = $this->_begin();
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'media.manage', $scope);
+        $this->_require($uid, 'media.upload', $scope);
 
         $ids = $this->_parseIdList($_POST['media_ids'] ?? $_POST['ids'] ?? null);
         if (empty($ids)) {
@@ -829,13 +840,19 @@ class Controller_CmsAjax extends Controller
 
         $this->load_model('CmsMedia');
 
+        // Ownership tier. A manager deletes anything in scope; an uploader is
+        // constrained to their OWN rows, which the filter below enforces in SQL
+        // rather than by trusting the posted list. Ids that fall outside the
+        // caller's tier are simply skipped, the same as a foreign-scope id.
+        $restrictTo = $this->CmsAuth->cms_can($uid, 'media.manage', $scope) ? 0 : (int)$uid;
+
         // Batch the per-id IDOR/scope check into ONE query instead of a
         // GetMedia round-trip per id. The query itself is the lib's job — this is
         // the IDOR guard, so it lives with the code that defines what "in scope"
         // and "trashed" mean (CmsMedia::FilterOwnedIds).
         $ownedSet = array();
         $ownedIds = array();
-        $owned = $this->CmsMedia->filter_owned_ids($ids, (string)$scope['type'], (int)$scope['id']);
+        $owned = $this->CmsMedia->filter_owned_ids($ids, (string)$scope['type'], (int)$scope['id'], $restrictTo);
         foreach ((is_array($owned) ? $owned : array()) as $ownedId) {
             $ownedSet[(int)$ownedId] = true;
         }
@@ -1055,6 +1072,204 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * setrole / removerole — OGRE access control (Settings > Manage Users)
+     *
+     * Both gate on roles.manage in the RESOLVED scope, so a kingdom officer can
+     * only ever hand out rights on their own site. CmsAuth::GrantRole and
+     * ::RevokeRole independently re-run that same actor check, so these
+     * endpoints are the friendly rejection, not the security boundary.
+     * ------------------------------------------------------------------ */
+
+    /**
+     * POST mundane_id + role: set that person's role in this scope to exactly
+     * that role (SetUserRole grants it and drops the rungs it supersedes).
+     * Doubles as "add a user" — there is no separate create path, because a
+     * first grant and a role change are the same write.
+     *
+     * Self-demotion is refused when it would strip the scope's LAST role
+     * manager, which would otherwise leave nobody able to hand the rights back.
+     */
+    public function setrole($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'roles.manage', $scope);
+
+        $targetId = (int)($_POST['mundane_id'] ?? 0);
+        $role     = trim((string)($_POST['role'] ?? ''));
+
+        if ($targetId <= 0) {
+            $this->_fail('Choose a person to give access to.', self::ERR_VALIDATION);
+        }
+        if (!$this->CmsAuth->is_valid_role($role)) {
+            $this->_fail('Choose a role.', self::ERR_VALIDATION);
+        }
+        // The grant table has no FK: without this an arbitrary posted id writes a
+        // grant for an account that does not exist (and a phantom role-manager
+        // can then satisfy the lockout guard). Suspended/banned members are
+        // refused here too — not retroactively revoked, which belongs elsewhere.
+        if (!$this->CmsAuth->is_grantable_person($targetId)) {
+            $this->_fail(
+                'That person could not be found, or their account is suspended.',
+                self::ERR_NOT_FOUND
+            );
+        }
+
+        // Lockout guard — only relevant when demoting YOURSELF out of
+        // roles.manage. Losing the last manager of a scope is unrecoverable
+        // without an ORK Administrator, so refuse rather than warn.
+        $keepsManaging = in_array(
+            'roles.manage',
+            (array)$this->CmsAuth->capabilities_for_role($role),
+            true
+        );
+        if ($targetId === $uid
+            && !$keepsManaging
+            && $this->CmsAuth->is_last_role_manager($uid, (string)$scope['type'], (int)$scope['id'])
+        ) {
+            $this->_fail(
+                'You are the only person who can manage access here. Give someone else the '
+                . 'Administrator role first, then change your own.',
+                self::ERR_RESERVED
+            );
+        }
+
+        $ok = (bool)$this->CmsAuth->set_user_role(
+            $targetId,
+            $role,
+            (string)$scope['type'],
+            (int)$scope['id'],
+            $uid
+        );
+        if (!$ok) {
+            $this->_fail('That role could not be saved.', self::ERR_SAVE_FAILED);
+        }
+
+        $this->_ok(array(
+            'mundane_id' => $targetId,
+            'role'       => $role,
+            'role_label' => (string)$this->CmsAuth->role_label($role),
+        ));
+    }
+
+    /**
+     * POST mundane_id: revoke every OGRE grant that person holds in this scope.
+     *
+     * RevokeAllRoles runs CmsAuth's orphaned-authorship guard per revoke, so a
+     * member who still edits here via a global grant or the officer bridge
+     * keeps their post bylines; only someone who truly loses all access here is
+     * de-credited.
+     */
+    public function removerole($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'roles.manage', $scope);
+
+        $targetId = (int)($_POST['mundane_id'] ?? 0);
+        if ($targetId <= 0) {
+            $this->_fail('Choose a person to remove.', self::ERR_VALIDATION);
+        }
+
+        // Same lockout guard as setrole, for the remove-yourself path.
+        if ($targetId === $uid
+            && $this->CmsAuth->is_last_role_manager($uid, (string)$scope['type'], (int)$scope['id'])
+        ) {
+            $this->_fail(
+                'You are the only person who can manage access here. Give someone else the '
+                . 'Administrator role before removing yourself.',
+                self::ERR_RESERVED
+            );
+        }
+
+        $ok = (bool)$this->CmsAuth->revoke_all_roles(
+            $targetId,
+            (string)$scope['type'],
+            (int)$scope['id'],
+            $uid
+        );
+        if (!$ok) {
+            $this->_fail('That person could not be removed.', self::ERR_SAVE_FAILED);
+        }
+
+        $this->_ok(array('mundane_id' => $targetId, 'removed' => true));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * sitepolicy — the three site-creation rollout toggles
+     * ------------------------------------------------------------------ */
+
+    /**
+     * POST key + on: flip one site-creation switch.
+     *
+     * Two DIFFERENT authorities, deliberately:
+     *   CmsKingdomSitesEnabled / CmsParkSitesEnabled  → ORK ADMIN ONLY. These say
+     *     whether a whole tier of the ORK may build sites, so they are not an
+     *     OGRE privilege at all: an OGRE Administrator of the front door, who
+     *     holds roles.manage and every other CMS capability, still cannot flip
+     *     them. The test is CmsAuth::IsSuperAdmin, not cms_can.
+     *   CmsAllowParkSites → the KINGDOM's own decision, so it takes the ordinary
+     *     scoped roles.manage gate on a kingdom scope (which its officers hold).
+     *     It is refused outright while the global park switch is off, so a
+     *     kingdom cannot pre-arm a permission the ORK has not enabled.
+     */
+    public function sitepolicy($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+
+        $key = trim((string)($_POST['key'] ?? ''));
+        // Checkbox semantics: absent/0/false = off, anything else = on.
+        $on  = !empty($_POST['on']) && (string)$_POST['on'] !== '0';
+
+        $this->load_model('CmsSite');
+
+        if ($key === CmsSite::CFG_KINGDOM_SITES || $key === CmsSite::CFG_PARK_SITES) {
+            if (!$this->CmsAuth->is_super_admin($uid)) {
+                $this->_fail(
+                    'Only an ORK Administrator can change this setting.',
+                    self::ERR_FORBIDDEN
+                );
+            }
+            if (!$this->_scopeIsGlobal($scope)) {
+                $this->_fail(
+                    'This setting belongs to the global front door.',
+                    self::ERR_RESERVED
+                );
+            }
+            if ($key === CmsSite::CFG_KINGDOM_SITES) {
+                $this->CmsSite->set_kingdom_sites_enabled($on);
+            } else {
+                $this->CmsSite->set_park_sites_enabled($on);
+            }
+            $this->_ok(array('key' => $key, 'on' => $on));
+        }
+
+        if ($key === CmsSite::CFG_ALLOW_PARKS) {
+            if ((string)$scope['type'] !== 'kingdom') {
+                $this->_fail(
+                    'This setting belongs to a kingdom site.',
+                    self::ERR_RESERVED
+                );
+            }
+            $this->_require($uid, 'roles.manage', $scope);
+            // Cannot be armed while the ORK has parks switched off service-wide:
+            // the chain is AND-ed, so allowing it would store a permission that
+            // silently grants nothing and reads as broken when it does not work.
+            if ($on && !$this->CmsSite->park_sites_enabled()) {
+                $this->_fail(
+                    'Park sites are switched off for the whole ORK, so this cannot be enabled yet.',
+                    self::ERR_RESERVED
+                );
+            }
+            $this->CmsSite->set_kingdom_allows_park_sites((int)$scope['id'], $on);
+            $this->_ok(array('key' => $key, 'on' => $on));
+        }
+
+        $this->_fail('Unknown setting.', self::ERR_VALIDATION);
+    }
+
+    /* ------------------------------------------------------------------ *
      * reordernav — apply a new ordering/parent layout for a menu
      * ------------------------------------------------------------------ */
 
@@ -1113,7 +1328,9 @@ class Controller_CmsAjax extends Controller
     {
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'media.manage', $scope);
+        // Uploading is the CONTRIBUTOR tier (media.upload); managing anyone
+        // else's file is the editor tier and gates separately below.
+        $this->_require($uid, 'media.upload', $scope);
 
         $data = (string)($_POST['data'] ?? $_POST['image'] ?? '');
         if ($data === '') {
@@ -1157,7 +1374,11 @@ class Controller_CmsAjax extends Controller
     {
         $uid = $this->_begin(false);
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'media.manage', $scope);
+        // READ of the scope's library, at the contributor tier: an author
+        // building a page must be able to pick an existing image, and the block
+        // editor's media picker calls this. Cumulative roles mean every manager
+        // holds media.upload too, so this one test covers both tiers.
+        $this->_require($uid, 'media.upload', $scope);
 
         $search = trim((string)($_GET['q'] ?? $_POST['q'] ?? ''));
         $search = ($search === '') ? null : $search;
@@ -1271,9 +1492,10 @@ class Controller_CmsAjax extends Controller
 
     /**
      * POST: publish the resolved org's public site (status='published').
-     * Requires a non-global scope and an AUTH_ADMIN-tier officer (monarch /
-     * regent) — gated via 'page.publish', which bridges to AUTH_ADMIN on the
-     * scope. EnsureSite first so a never-opened site can still be published.
+     * Requires a non-global scope and 'page.publish' (OGRE Editor and up).
+     * Office alone grants nothing — a Monarch with no OGRE role cannot publish
+     * their own site. EnsureSite first so a never-opened site can still be
+     * published.
      */
     public function publishsite($action = null)
     {
@@ -1827,6 +2049,38 @@ class Controller_CmsAjax extends Controller
             // what the user lacks (and window.CMS_CAPS can pre-disable the action).
             $this->_denyCapability($capability);
         }
+    }
+
+    /**
+     * Gate a DESTRUCTIVE media action on the two-tier media model:
+     *
+     *   media.manage  → may act on ANY upload in the scope.
+     *   media.upload  → may act ONLY on rows they uploaded themselves.
+     *
+     * Contributors hold media.upload, so they can clear up their own files
+     * without being handed the whole library. The ownership test reads
+     * uploaded_by off the row the caller already fetched for its IDOR check, so
+     * this adds no query; a row with a NULL/0 uploaded_by (pre-dating the
+     * column being populated) is owned by nobody and is therefore manage-only,
+     * which fails CLOSED rather than granting it to whoever asks first.
+     *
+     * Emits the deny envelope and exits when refused; returns normally on pass.
+     *
+     * @param int        $uid
+     * @param array      $scope
+     * @param array|null $media the media row (already scope-checked)
+     * @return void
+     */
+    private function _requireMediaControl($uid, $scope, $media)
+    {
+        if ($this->CmsAuth->cms_can($uid, 'media.manage', $scope)) {
+            return;
+        }
+        $owner = (is_array($media) && isset($media['uploaded_by'])) ? (int)$media['uploaded_by'] : 0;
+        if ($owner > 0 && $owner === (int)$uid && $this->CmsAuth->cms_can($uid, 'media.upload', $scope)) {
+            return;
+        }
+        $this->_denyCapability('media.manage');
     }
 
     /**

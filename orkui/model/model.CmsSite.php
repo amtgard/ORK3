@@ -69,4 +69,41 @@ class Model_CmsSite extends Model
     {
         return $this->CmsSite->UpdateSite($siteId, $fields, $uid);
     }
+
+    /* ---- Site-creation policy (the three rollout toggles) ---- */
+
+    public function kingdom_sites_enabled()
+    {
+        return $this->CmsSite->KingdomSitesEnabled();
+    }
+
+    public function park_sites_enabled()
+    {
+        return $this->CmsSite->ParkSitesEnabled();
+    }
+
+    public function kingdom_allows_park_sites($kingdomId)
+    {
+        return $this->CmsSite->KingdomAllowsParkSites($kingdomId);
+    }
+
+    public function set_kingdom_sites_enabled($on)
+    {
+        return $this->CmsSite->SetKingdomSitesEnabled($on);
+    }
+
+    public function set_park_sites_enabled($on)
+    {
+        return $this->CmsSite->SetParkSitesEnabled($on);
+    }
+
+    public function set_kingdom_allows_park_sites($kingdomId, $on)
+    {
+        return $this->CmsSite->SetKingdomAllowsParkSites($kingdomId, $on);
+    }
+
+    public function can_create_site($scopeType, $scopeId)
+    {
+        return $this->CmsSite->CanCreateSite($scopeType, $scopeId);
+    }
 }

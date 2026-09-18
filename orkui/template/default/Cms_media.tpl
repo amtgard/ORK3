@@ -4,18 +4,43 @@
  * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
  *
  * Receives (from Controller_Cms::media):
- *   $Media   list of media-refs: ['media_id','src','thumb','alt','filename','created_at', ...]
- *   $Search  current search string
- *   $Caps    ['create','edit','publish','delete','media','nav','roles' => bool]
+ *   $Media    list of media-refs: ['media_id','src','thumb','alt','filename','created_at','uploaded_by', ...]
+ *   $Search   current search string
+ *   $Caps     ['create','edit','publish','delete','media','media_manage','nav','roles' => bool]
+ *   $ViewerId the current user's mundane_id, for the ownership test below
  *   UIR, HTTP_TEMPLATE (constants)
  *
  * Upload mirrors the block-editor media picker: FileReader → base64 data URI →
  * CmsAjax/mediaupload (the same endpoint the picker uses).
+ *
+ * TWO-TIER MEDIA RIGHTS. $Caps['media'] is LIBRARY ACCESS — it is true for a
+ * Contributor holding media.upload, who may add files and remove their OWN.
+ * $Caps['media_manage'] is the editor-tier right to act on ANYONE's upload.
+ * Destructive and metadata controls therefore render per CARD, off $mayControl()
+ * below, not off one page-wide flag. This is presentation only: the server
+ * re-checks every write in CmsAjax::_requireMediaControl(), so a hand-forged
+ * request gains nothing by the buttons being present.
  */
 
 $media  = isset($Media) && is_array($Media) ? $Media : array();
 $caps   = isset($Caps) && is_array($Caps) ? $Caps : array();
 $search = isset($Search) ? (string)$Search : '';
+$canManageMedia = !empty($caps['media_manage']);
+$viewerId = isset($ViewerId) ? (int)$ViewerId : 0;
+
+/**
+ * May the viewer act on THIS media row (delete it, inspect its usage)?
+ * A manager may act on anything; an uploader only on rows they uploaded. A row
+ * with no recorded uploader is owned by nobody and stays manage-only, matching
+ * the server's fail-closed rule.
+ */
+$mayControl = function ($m) use ($canManageMedia, $viewerId) {
+    if ($canManageMedia) {
+        return true;
+    }
+    $owner = isset($m['uploaded_by']) ? (int)$m['uploaded_by'] : 0;
+    return $owner > 0 && $viewerId > 0 && $owner === $viewerId;
+};
 
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
@@ -87,8 +112,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     $fn    = (string)($m['filename'] ?? ('#' . $mid));
                     $full  = (string)($m['src'] ?? $thumb);
                 ?>
+                    <?php $mine = $mayControl($m); ?>
                     <div class="cms-media-card" data-media-id="<?= $mid ?>">
-                        <?php if (!empty($caps['media'])): ?>
+                        <?php if ($mine): ?>
                             <label class="cms-media-card-sel"><input type="checkbox" class="cms-media-check" data-media-id="<?= $mid ?>" aria-label="Select <?= $h($fn) ?>"></label>
                         <?php endif; ?>
                         <img class="cms-media-card-thumb" src="<?= $h($thumb) ?>" alt="<?= $h($alt) ?>" loading="lazy" onerror="cmsMediaThumbFallback(this)">
@@ -103,7 +129,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                 <div class="cms-media-card-alt cms-media-noalt">No alt text</div>
                             <?php endif; ?>
                             <div class="cms-media-card-usage" data-media-id="<?= $mid ?>"></div>
-                            <?php if (!empty($caps['media'])): ?>
+                            <?php if ($mine): ?>
                                 <?php /* The picture IS the card. "Where used" is the one thing that
                                         makes deleting safe, so it stays visible; everything else —
                                         Delete included — rides in the hover/focus-within cluster so the
@@ -112,7 +138,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                 <div class="cms-media-card-actions">
                                     <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-usage" data-tip="See where this image is used"><i class="fas fa-link"></i> Where used</button>
                                     <div class="cms-media-card-reveal">
-                                        <button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>
+                                        <?php // Renaming / retitling is the MANAGE tier (CmsAjax::mediaupdate
+                                              // still gates on media.manage); an uploader gets removal of their
+                                              // own file, not library curation. ?>
+                                        <?php if ($canManageMedia): ?>
+                                            <button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>
+                                        <?php endif; ?>
                                         <div class="cms-overflow">
                                             <button type="button" class="cms-overflow-btn" data-overflow-toggle
                                                     aria-haspopup="true" aria-expanded="false"
@@ -153,10 +184,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </div>
     <?php endif; ?>
 
-    <?php if (!empty($caps['media'])): ?>
+    <?php if ($canManageMedia): ?>
     <?php /* ---- Trash: soft-deleted media, restorable or purgeable. Lazy-loaded
             on open via CmsAjax/listtrashedmedia; Restore = restoremedia, Purge =
-            purgemedia (permanent, confirmed). ---- */ ?>
+            purgemedia (permanent, confirmed).
+            MANAGE TIER ONLY: listtrashedmedia / restoremedia / purgemedia all
+            gate on media.manage, and the Trash mixes every author's deletions,
+            so showing it to an uploader would advertise a panel that 403s. Their
+            own delete still works — it just moves the file out of their sight. ---- */ ?>
     <div class="cms-trash-section" style="margin-top:26px;">
         <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsMediaTrashToggle" aria-expanded="false" aria-controls="cmsMediaTrashPanel">
             <i class="fas fa-trash-alt"></i> Trash <span class="cms-muted" id="cmsMediaTrashCount"></span>
@@ -201,7 +236,17 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     var area = document.getElementById('cmsMediaArea');
     var searchEl = document.getElementById('cmsMediaSearch');
-    var canEditMedia = <?= !empty($caps['media']) ? 'true' : 'false' ?>;
+    // Library access (upload tier) vs. the editor-tier right to act on anyone's
+    // upload. mayControl(m) mirrors the PHP $mayControl closure and the server's
+    // CmsAjax::_requireMediaControl — all three must agree.
+    var canEditMedia   = <?= !empty($caps['media']) ? 'true' : 'false' ?>;
+    var canManageMedia = <?= !empty($caps['media_manage']) ? 'true' : 'false' ?>;
+    var VIEWER_ID      = <?= (int)$viewerId ?>;
+    function mayControl(m) {
+        if (canManageMedia) { return true; }
+        var owner = parseInt(m && m.uploaded_by, 10) || 0;
+        return owner > 0 && VIEWER_ID > 0 && owner === VIEWER_ID;
+    }
 
     // Shared card body markup — name + optional title + alt line + a where-used
     // line + (when permitted) the always-visible "Where used" plus the
@@ -221,11 +266,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 ? '<div class="cms-media-card-alt">' + esc(alt) + '</div>'
                 : '<div class="cms-media-card-alt cms-media-noalt">No alt text</div>') +
             '<div class="cms-media-card-usage" data-media-id="' + esc(mid) + '"></div>' +
-            (canEditMedia
+            (mayControl(m)
                 ? '<div class="cms-media-card-actions">' +
                     '<button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-media-usage" data-tip="See where this image is used"><i class="fas fa-link"></i> Where used</button>' +
                     '<div class="cms-media-card-reveal">' +
-                      '<button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>' +
+                      (canManageMedia ? '<button type="button" class="cms-btn cms-btn-sm cms-media-edit" data-tip="Rename, edit alt &amp; title"><i class="fas fa-pen"></i> Edit</button>' : '') +
                       '<div class="cms-overflow">' +
                         '<button type="button" class="cms-overflow-btn" data-overflow-toggle aria-haspopup="true" aria-expanded="false" data-tip="More actions" aria-label="More actions for ' + esc(fn) + '">' +
                           '<i class="fas fa-ellipsis-h" aria-hidden="true"></i>' +
@@ -262,7 +307,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             card.className = 'cms-media-card';
             card.setAttribute('data-media-id', mid);
             card.innerHTML =
-                (canEditMedia
+                (mayControl(m)
                     ? '<label class="cms-media-card-sel"><input type="checkbox" class="cms-media-check" data-media-id="' + esc(mid) + '" aria-label="Select ' + esc(m.filename || ('#' + mid)) + '"></label>'
                     : '') +
                 '<img class="cms-media-card-thumb" src="' + esc(m.thumb || m.src) + '" alt="' + esc(alt) + '" loading="lazy" onerror="cmsMediaThumbFallback(this)">' +
@@ -656,8 +701,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
      * Trash panel — lazy-load soft-deleted media; Restore or Purge.
      * Reads via CmsAjax/listtrashedmedia (GET); Restore = restoremedia,
      * Purge = purgemedia (permanent, confirmed via modal — no native confirm).
+     * Manage tier only, matching the panel's own gate above.
      * ==================================================================== */
-    <?php if (!empty($caps['media'])): ?>
+    <?php if ($canManageMedia): ?>
     (function () {
         var toggle  = document.getElementById('cmsMediaTrashToggle');
         var panel   = document.getElementById('cmsMediaTrashPanel');

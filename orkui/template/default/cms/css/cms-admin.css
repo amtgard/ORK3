@@ -1701,7 +1701,10 @@ html[data-theme="dark"] {
     cursor: pointer;
     border-radius: 7px 7px 0 0;
 }
-.cms-media-pick:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
+/* Shared focus ring. Grouped rather than repeated so the duplication ratchet
+   stays flat; both are plain :focus-visible outlines with no base rule to
+   order against. */
+.cms-media-pick:focus-visible,
 
 .cms-media-thumbbox {
     background: var(--cms-field);
@@ -3713,3 +3716,262 @@ html[data-theme="dark"] .cms-empty-thumb.cms-missing-thumb {
     font-weight: 600;
     white-space: nowrap;
 }
+
+/* ============================================================
+   OGRE Settings (Cms_settings.tpl) — access control.
+
+   Every colour resolves through the --ork- and --cms- tokens the rest of this
+   sheet uses, so dark mode follows from the token flip already declared at the
+   top of the file; only the handful of rules that need a genuinely different
+   treatment in dark carry an html[data-theme="dark"] override.
+   ============================================================ */
+
+.cms-settings-section {
+    margin-bottom: 34px;
+}
+.cms-settings-section:last-of-type {
+    margin-bottom: 8px;
+}
+
+.cms-section-head {
+    margin-bottom: 14px;
+}
+.cms-settings-section .cms-section-title {
+    /* orkui.css styles bare h1–h6 globally with a pill/box treatment, and its
+       dark-mode rule (html[data-theme="dark"] h2) has specificity 0,1,1 — which
+       outranks a lone class. Scoping to the section wins on class count in BOTH
+       themes; do not flatten this back to `.cms-section-title`. */
+    margin: 0 0 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font-family: 'MedievalSharp', var(--ork-font-heading, Georgia), serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ork-text, #1b2a4a);
+    text-transform: none;
+    letter-spacing: normal;
+}
+.cms-section-sub {
+    margin: 0;
+    max-width: 68ch;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ork-text-muted, #6b7488);
+}
+.cms-section-sub strong { color: var(--ork-text, #1b2a4a); }
+
+/* ---- Member table cells ---- */
+.cms-member-name {
+    font-weight: 600;
+    color: var(--ork-link, #2c5282);
+    text-decoration: none;
+}
+.cms-member-name:hover { text-decoration: underline; }
+
+.cms-member-real {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--ork-text-muted, #6b7488);
+}
+
+.cms-badge-you {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--cms-gold, #f0b429);
+    color: var(--cms-navy, #0b1120);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    vertical-align: 1px;
+}
+
+.cms-cap-count {
+    font-size: 12.5px;
+    color: var(--ork-text-muted, #6b7488);
+    border-bottom: 1px dotted currentColor;
+    cursor: help;
+}
+
+.cms-actions-col { white-space: nowrap; }
+.cms-actions-col .cms-btn + .cms-btn { margin-left: 6px; }
+
+/* ---- Role badge. One rule; the per-role modifier only sets the two colours,
+   so a new rung needs a two-line addition rather than a whole new badge. ---- */
+.cms-role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.cms-role-contributor { background: #eef2f7; border-color: #d3dce8; color: #44506a; }
+.cms-role-author      { background: #e8f1fb; border-color: #c3dbf3; color: #23548c; }
+.cms-role-editor      { background: #e6f5ef; border-color: #b7e2d0; color: #1f6b4d; }
+.cms-role-publisher   { background: #f1ecfb; border-color: #d8c9f2; color: #573c96; }
+.cms-role-admin       { background: #fdf0d8; border-color: #f0cf8a; color: #8a5a10; }
+
+html[data-theme="dark"] .cms-role-contributor { background: #242b38; border-color: #333d4e; color: #b9c4d6; }
+html[data-theme="dark"] .cms-role-author      { background: #1b2d44; border-color: #2a4470; color: #9dc4ef; }
+html[data-theme="dark"] .cms-role-editor      { background: #17332a; border-color: #23503f; color: #8fd9bb; }
+html[data-theme="dark"] .cms-role-publisher   { background: #271f3c; border-color: #3b2f5c; color: #c3aef0; }
+html[data-theme="dark"] .cms-role-admin       { background: #37290f; border-color: #574019; color: #f0c473; }
+
+/* ---- Role reference cards ---- */
+.cms-role-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+.cms-role-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 10px;
+    background: var(--cms-card, #fff);
+    box-shadow: var(--cms-card-shadow, 0 1px 2px rgba(15, 26, 51, .07));
+}
+/* The top rung is the one worth noticing on an access-control page. */
+.cms-role-card-admin { border-color: var(--cms-gold, #f0b429); }
+
+.cms-role-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.cms-role-rung {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ork-text-muted, #6b7488);
+}
+.cms-role-blurb {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ork-text-secondary, #414c63);
+}
+
+.cms-role-caps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.cms-role-caps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--ork-text, #1b2a4a);
+}
+.cms-role-caps li .fas {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #2f855a;
+}
+.cms-role-caps-no {
+    padding-top: 9px;
+    border-top: 1px dashed var(--ork-border, #d8dde6);
+}
+.cms-role-caps-no li { color: var(--ork-text-muted, #6b7488); }
+.cms-role-caps-no li .fas { color: #b03636; }
+
+html[data-theme="dark"] .cms-role-caps li .fas { color: #63d69d; }
+html[data-theme="dark"] .cms-role-caps-no li .fas { color: #e08585; }
+
+/* ---- Add / change role modal ----
+   The person field toggles with the native `hidden` attribute (the house
+   convention — see .cms-media-grid[hidden] above), not a utility class:
+   .cms-field declares no `display`, so the UA sheet's [hidden] rule applies
+   with nothing to override. ---- */
+.cms-locked-person {
+    margin: 0;
+    padding: 9px 12px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 6px;
+    background: var(--ork-surface-alt, #f5f7fa);
+    font-weight: 600;
+    color: var(--ork-text, #1b2a4a);
+}
+html[data-theme="dark"] .cms-locked-person,
+
+.cms-role-explain {
+    margin: 8px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ork-text-secondary, #414c63);
+}
+.cms-role-explain strong { display: block; font-weight: 600; }
+.cms-role-explain-caps {
+    display: block;
+    margin-top: 5px;
+    font-size: 11.5px;
+    color: var(--ork-text-muted, #6b7488);
+}
+
+/* ---- Narrow screens: the action buttons stack rather than forcing the table
+   into a horizontal scroll, and the role grid collapses to one column. ---- */
+@media (max-width: 640px) {
+    .cms-role-grid { grid-template-columns: 1fr; }
+    .cms-actions-col { white-space: normal; }
+    .cms-actions-col .cms-btn { display: block; width: 100%; }
+    .cms-actions-col .cms-btn + .cms-btn { margin-left: 0; margin-top: 6px; }
+}
+
+/* ---- Site-availability toggles (Settings > Site availability) ----
+   Reuses the existing .cms-switch / .cms-slider control defined above (the one
+   Cms_nav.tpl uses) — only the ROW around it is new. Do not restyle .cms-switch
+   here: it is a shared 38x21 inline-block, and giving it row layout would break
+   every other surface that uses it. */
+.cms-policy-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 10px;
+    background: var(--cms-card, #fff);
+    box-shadow: var(--cms-card-shadow, 0 1px 2px rgba(15, 26, 51, .07));
+    overflow: hidden;
+}
+.cms-policy-row + .cms-policy-row { border-top: 1px solid var(--ork-border, #d8dde6); }
+
+.cms-policy-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+.cms-policy-label:has(input:disabled) { cursor: not-allowed; opacity: .72; }
+.cms-policy-label .cms-switch { margin-top: 1px; }
+
+.cms-policy-text { display: block; font-size: 13px; line-height: 1.45; }
+.cms-policy-text strong { display: block; color: var(--ork-text, #1b2a4a); }
+.cms-policy-note { display: block; margin-top: 2px; color: var(--ork-text-muted, #6b7488); }
+
+.cms-policy-locked {
+    margin: 0;
+    padding: 10px 16px;
+    border-top: 1px solid var(--ork-border, #d8dde6);
+    background: var(--ork-surface-alt, #f5f7fa);
+    font-size: 12.5px;
+    color: var(--ork-text-muted, #6b7488);
+}
+.cms-policy-locked .fas { margin-right: 6px; }
+
