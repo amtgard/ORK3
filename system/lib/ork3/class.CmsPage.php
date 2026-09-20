@@ -477,7 +477,7 @@ class CmsPage extends CmsBase
             'slug'             => $this->_normalizeSlug(isset($data['slug']) ? $data['slug'] : ''),
             // NOTE: 'type' is AUTHOR-FACING editor metadata, not a render input.
             // It records which editor preset a page was created from (see
-            // Controller_Cms::_pageTypes — 'composed'|'article'|'media'|'about'|
+            // Controller_Cms::_pageTypes — 'composed'|'article'|'media'|'about'|'store'|
             // 'resource'|'blog_index') and labels the admin list's Type column. The
             // PUBLIC renderer (frontdoor/render_blocks.tpl) is driven entirely by
             // per-BLOCK type + the site meta og_type literal, and never reads this

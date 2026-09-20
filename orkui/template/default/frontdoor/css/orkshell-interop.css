@@ -30,6 +30,16 @@
     color: #1a1205 !important;
 }
 
+/* Store Catalog "Buy on …" pills are <a> tags on the theme's primary colour.
+   Same trap, dark only (default.theme's `html[data-theme="dark"]
+   #theme_container a`, (1,1,2)): restate primary-contrast — the ink the theme
+   pairs with primary — and keep the pill free of link underlines. */
+html[data-theme="dark"] #theme_container a.fdb-catalog-cta,
+html[data-theme="dark"] #theme_container a.fdb-catalog-cta:hover {
+    color: var(--fd-primary-contrast);
+    text-decoration: none;
+}
+
 /* Ghost buttons sit on the DARK hero field (not on gold), where white is the
    correct, legible choice — kept separate from the gold-filled pair above so a
    future contrast fix to one never silently changes the other. */
@@ -156,3 +166,18 @@ body.fd-home #newmenu {
    (<html> scrolled its own 56px, reachable by scrollIntoView, never by a wheel);
    no single `top` value fixes that and the at-rest position both. See
    cms/css/cms-admin.css:203-230 for the full measurement. */
+
+/* Dark-mode heading pill. frontdoor.css's `.fd-page h1..h6` reset (0,1,1) clears
+   orkui.css's global light-mode gray box, but orkui.css repaints it in dark as
+   `html[data-theme="dark"] h1..h6` (0,1,2), which wins — so every CMS heading
+   rendered inside the ORK shell (section titles, card and modal titles) showed a
+   slate box in dark mode. Clear the two box properties that rule paints. */
+html[data-theme="dark"] .fd-page h1,
+html[data-theme="dark"] .fd-page h2,
+html[data-theme="dark"] .fd-page h3,
+html[data-theme="dark"] .fd-page h4,
+html[data-theme="dark"] .fd-page h5,
+html[data-theme="dark"] .fd-page h6 {
+    background-color: transparent;
+    border-color: transparent;
+}

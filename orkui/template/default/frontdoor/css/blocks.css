@@ -352,7 +352,8 @@ html[data-theme="dark"] .bf-card-date { color: #c9940c; }
     display: block;
     transition: transform .25s ease;
 }
-.fdb-gallery-thumb:hover img { transform: scale(1.05); }
+.fdb-gallery-thumb:hover img,
+.fdb-catalog-card:hover .fdb-catalog-thumb img { transform: scale(1.05); }
 .fdb-gallery-cap {
     margin-top: 12px;
     text-align: center;
@@ -893,8 +894,9 @@ html[data-theme="dark"] .fdb-divider-dots {
    surface, and on the saved CMS preview that nav IS painted (--ork-z-nav 9999,
    --ork-z-nav-overlay 10001), so the old 1200 let the bar punch through this
    backdrop. .fd-rmodal-card keeps its own z-index:1 inside this stacking context. */
-.fd-rmodal { position: fixed; inset: 0; z-index: 100000; display: none; align-items: center; justify-content: center; padding: 22px; }
-.fd-rmodal.is-open { display: flex; }
+/* .fdb-cmodal (the catalog detail dialog) shares the roster modal's shell. */
+.fd-rmodal, .fdb-cmodal { position: fixed; inset: 0; z-index: 100000; display: none; align-items: center; justify-content: center; padding: 22px; }
+.fd-rmodal.is-open, .fdb-cmodal.is-open { display: flex; }
 .fd-rmodal-backdrop { position: absolute; inset: 0; background: rgba(6,10,20,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .fd-rmodal-card { position: relative; z-index: 1; width: 100%; max-width: 540px; max-height: 88vh; overflow-y: auto; background: var(--fd-surface, #fff); color: var(--fd-text, #1a2236); border: 1px solid var(--fd-border, #e2e6ec); border-radius: 18px; padding: 34px 32px 30px; box-shadow: 0 28px 80px rgba(0,0,0,.55); text-align: center; animation: fdRModalIn .18s ease-out; }
 
@@ -902,7 +904,7 @@ html[data-theme="dark"] .fdb-divider-dots {
 .fd-rmodal-close { position: absolute; top: 12px; right: 14px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: none; border: none; font-size: 26px; line-height: 1; color: var(--fd-text-muted, #5b6472); cursor: pointer; border-radius: 9px; transition: background .15s, color .15s; }
 .fd-rmodal-close:hover { color: var(--fd-text, #1a2236); background: rgba(127,127,127,.14); }
 .fd-rmodal-avatar { width: 110px; height: 110px; border-radius: 50%; margin: 4px auto 18px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--navy, #0b1120); color: var(--gold, #f0b429); font-weight: 700; font-size: 40px; line-height: 1; font-family: var(--fd-font-body, sans-serif); }
-.fd-rmodal-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fd-rmodal-avatar img, .fdb-cmodal-strip button img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fd-rmodal-name { font-size: 27px; margin: 0 0 4px; line-height: 1.15; }
 .fd-rmodal-secondary { color: var(--fd-text-muted, #5b6472); font-size: 14px; margin: 0 0 8px; }
 .fd-rmodal-role { text-transform: uppercase; letter-spacing: .09em; font-size: 12.5px; font-weight: 700; color: var(--gold, #f0b429); margin: 0 0 20px; }
@@ -1141,4 +1143,375 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover {
 
 @media (max-width: 760px) {
     .fdb-columns { grid-template-columns: 1fr; gap: 14px; }
+}
+
+
+/* ---- catalog block (Store Catalog) ---- */
+/* scoped: fdb-catalog (cards) + fdb-cmodal (the one shared detail dialog,
+   driven by frontdoor.js). Surfaces and text ride the --fd-* theme tokens, so
+   an org theme and the dark-mode token block in frontdoor.css re-skin it with
+   no per-mode rules; only the badge palette below is literal, because a status
+   colour has to mean the same thing on every site. */
+.fdb-catalog-head { text-align: center; margin-bottom: 26px; }
+.fdb-catalog-head .fd-kicker { margin-bottom: 8px; }
+/* text-align restated: orkui.css justifies every bare <p>, which beats the
+   inherited centring from .fdb-catalog-head. */
+.fdb-catalog-sub { margin: 6px auto 0; max-width: 640px; font-size: 15px; text-align: center; }
+
+.fdb-catalog-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--fdb-cols, 3), minmax(0, 1fr));
+    gap: 22px;
+}
+
+@media (max-width: 760px) {
+    .fdb-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+
+@media (max-width: 420px) {
+    .fdb-catalog-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.fdb-catalog-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--fd-card-bg, var(--fd-bg));
+    color: var(--fd-text);
+    border: 1px solid var(--fd-border);
+    border-radius: var(--fd-radius, 12px);
+    overflow: hidden;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.fdb-catalog-card:hover,
+.fdb-catalog-card:focus-within {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 34px rgba(10, 16, 32, .16);
+}
+.fdb-catalog-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: zoom-in;
+    overflow: hidden;
+    background: var(--fd-surface);
+}
+.fdb-catalog-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .35s ease;
+}
+.fdb-catalog-noimg {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    color: var(--fd-text-muted);
+    opacity: .45;
+}
+.fdb-catalog-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px 16px;
+}
+/* Two classes: orkui.css paints bare h1..h6 #999 (and a dark-mode colour at
+   (0,1,1)), which a single class loses to. */
+.fdb-catalog-card .fdb-catalog-title { margin: 0; font-size: 16px; line-height: 1.3; color: var(--fd-text); }
+.fdb-catalog-open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+.fdb-catalog-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+.fdb-catalog-open:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 3px; border-radius: 3px; }
+.fdb-catalog-subtitle { font-size: 13px; color: var(--fd-text-muted); overflow-wrap: anywhere; }
+.fdb-catalog-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 12px;
+}
+.fdb-catalog-price { font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+
+/* The Buy button. Primary + primary-contrast are a pair the theme editor keeps
+   legible together, so an org's colours can't produce an unreadable button. */
+.fdb-catalog-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 8px 14px;
+    margin-left: auto;
+    border-radius: 999px;
+    background: var(--fd-primary);
+    color: var(--fd-primary-contrast);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: filter .15s, transform .15s;
+}
+.fdb-catalog-cta:hover { filter: brightness(1.15); color: var(--fd-primary-contrast); text-decoration: none; }
+.fdb-catalog-cta:active { transform: translateY(1px); }
+.fdb-catalog-cta:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 3px; }
+.fdb-catalog-cta i { font-size: 11px; opacity: .85; }
+.fdb-catalog-cta.is-disabled {
+    background: transparent;
+    color: var(--fd-text-muted);
+    border: 1px dashed var(--fd-border);
+    cursor: not-allowed;
+    filter: none;
+}
+.fdb-catalog-card.is-sold-out .fdb-catalog-thumb img { filter: grayscale(.85); opacity: .7; }
+
+/* ---- status badges ---- */
+.fdb-catalog-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    padding: 5px 11px 5px 10px;
+    border-radius: 999px;
+    background: var(--fd-primary);
+    color: var(--fd-primary-contrast);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .07em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .25);
+    pointer-events: none;
+}
+.fdb-catalog-badge[data-badge="new"] { background: #0f7a4d; color: #fff; }
+.fdb-catalog-badge[data-badge="limited"] { background: #b3261e; color: #fff; }
+.fdb-catalog-badge[data-badge="going_soon"] { background: #b44a06; color: #fff; }
+.fdb-catalog-badge[data-badge="best_seller"] { background: #f0b429; color: #1a1205; }
+.fdb-catalog-badge[data-badge="sold_out"] { background: #4b5566; color: #fff; }
+.fdb-catalog-badge[data-badge="new"]::before { content: "\2726"; font-size: 10px; }
+.fdb-catalog-badge[data-badge="best_seller"]::before { content: "\2605"; font-size: 10px; }
+/* Limited / Going Soon carry a live dot — the two badges that mean "act now". */
+.fdb-catalog-badge[data-badge="limited"]::before,
+.fdb-catalog-badge[data-badge="going_soon"]::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: #fff;
+    animation: fdbCatalogPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes fdbCatalogPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .35; transform: scale(.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fdb-catalog-badge::before { animation: none !important; }
+    .fdb-catalog-card,
+    .fdb-catalog-card:hover,
+    .fdb-catalog-card:focus-within,
+    .fdb-catalog-thumb img,
+    .fdb-catalog-card:hover .fdb-catalog-thumb img { transition: none; transform: none; }
+}
+.fdb-catalog-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---- the detail dialog ---- */
+/* .fdb-cmodal / .fdb-cmodal.is-open are grouped with .fd-rmodal above. */
+/* The dialog toggles its parts with [hidden]; several of them set their own
+   display (inline-flex pills), which would otherwise beat the UA rule. */
+.fdb-cmodal [hidden] { display: none; }
+.fdb-cmodal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 10, 20, .74);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.fdb-cmodal-card {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    width: 100%;
+    max-width: 940px;
+    max-height: 90vh;
+    overflow: auto;
+    background: var(--fd-card-bg, var(--fd-bg));
+    color: var(--fd-text);
+    border: 1px solid var(--fd-border);
+    border-radius: 18px;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, .55);
+    animation: fdbCmodalIn .18s ease-out;
+}
+.fdb-cmodal-card:focus { outline: none; }
+
+@keyframes fdbCmodalIn {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fdb-cmodal-card { animation: none; }
+}
+.fdb-cmodal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: var(--fd-card-bg, var(--fd-bg));
+    color: var(--fd-text-muted);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+}
+.fdb-cmodal-close:hover { color: var(--fd-text); background: var(--fd-surface); }
+.fdb-cmodal-media {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px;
+    background: var(--fd-surface);
+}
+.fdb-cmodal-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--fd-bg);
+}
+.fdb-cmodal-stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.fdb-cmodal-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.fdb-cmodal-strip button {
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--fd-bg);
+    cursor: pointer;
+    opacity: .7;
+}
+.fdb-cmodal-strip button:hover { opacity: 1; }
+.fdb-cmodal-strip button[aria-pressed="true"] { border-color: var(--fd-primary); opacity: 1; }
+.fdb-cmodal-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 30px 28px 22px;
+    min-width: 0;
+}
+/* The card badge floats over the photo; in the dialog it sits in the flow. */
+.fdb-cmodal-badge { position: static; box-shadow: none; }
+.fdb-cmodal-card .fdb-cmodal-title {
+    margin: 0;
+    color: var(--fd-text);
+    padding-right: 36px;
+    font-family: var(--fd-font-heading);
+    font-size: 26px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+.fdb-cmodal-subtitle { color: var(--fd-text-muted); font-size: 14px; }
+.fdb-cmodal-price { font-size: 24px; font-weight: 800; }
+.fdb-cmodal-desc {
+    width: 100%;
+    padding-top: 12px;
+    border-top: 1px solid var(--fd-border);
+    font-size: 15px;
+    line-height: 1.65;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+.fdb-cmodal-cta,
+.fdb-cmodal-soldout { margin: 6px 0 0; min-height: 46px; padding: 11px 22px; font-size: 15px; }
+.fdb-cmodal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    margin-top: auto;
+    padding-top: 18px;
+}
+.fdb-cmodal-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--fd-border);
+    border-radius: 999px;
+    background: none;
+    color: var(--fd-text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.fdb-cmodal-step:hover { background: var(--fd-surface); }
+.fdb-cmodal-close:focus-visible,
+.fdb-cmodal-strip button:focus-visible,
+.fdb-cmodal-step:focus-visible { outline: 2px solid var(--fd-accent); outline-offset: 2px; }
+.fdb-cmodal-count { font-size: 12px; color: var(--fd-text-muted); }
+
+@media (max-width: 720px) {
+    .fdb-cmodal { padding: 10px; align-items: flex-end; }
+    .fdb-cmodal-card { grid-template-columns: minmax(0, 1fr); max-height: 94vh; border-radius: 16px; }
+    .fdb-cmodal-media { padding: 12px; }
+    .fdb-cmodal-stage { aspect-ratio: 4 / 3; }
+    .fdb-cmodal-info { padding: 18px 18px 16px; }
+    .fdb-cmodal-card .fdb-cmodal-title { font-size: 22px; }
+    .fdb-cmodal-cta,
+    .fdb-cmodal-soldout { align-self: stretch; justify-content: center; }
 }

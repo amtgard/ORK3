@@ -421,9 +421,80 @@ class CmsBlockRegistry
                     'show_weather' => 1, 'placeholder_image' => array(),
                 ),
             ),
+            // Merch / store catalog. Each item is a product card whose thumbnail
+            // opens a detail modal, with a "Buy on {store}" button that links OUT
+            // to wherever the item is actually sold (Redbubble, Spoonflower, …).
+            // ORK never takes the order — the block is a shop window, not a shop.
+            // `store` left blank is auto-detected from the item's link host by
+            // catalog.tpl (fdCatalogStoreName). `badge` is a preset key, or
+            // 'custom' with the author's own `badge_text`.
+            'catalog' => array(
+                'label'          => 'Store Catalog',
+                'group'          => 'Media',
+                'dynamic'        => false,
+                'icon'           => 'fa-store',
+                'description'    => 'A shop-window grid of products. Each opens a detail view with more photos and a “Buy on Redbubble”-style button to wherever it’s sold. Add New / Limited Time / Going Soon badges.',
+                'addable'        => true,
+                'scopes'         => null,
+                'starter_fields' => array('kicker' => '', 'heading' => '', 'subheading' => '', 'columns' => 3, 'items' => array()),
+            ),
         );
 
         return self::$_blockDefs;
+    }
+
+    /**
+     * Storefront hosts the catalog block names on its "Buy on {store}" button,
+     * keyed by registrable host. A link on the host or any subdomain of it
+     * matches (shop.spoonflower.com → Spoonflower).
+     *
+     * MIRRORED in cms-block-editor.js (CATALOG_STORES), which shows the detected
+     * name as the Store field's placeholder. tests/cms-fields/catalog_test.php
+     * fails if the two key sets drift.
+     *
+     * @return array<string,string> host => store name
+     */
+    public static function CatalogStores()
+    {
+        return array(
+            'redbubble.com'     => 'Redbubble',
+            'spoonflower.com'   => 'Spoonflower',
+            'etsy.com'          => 'Etsy',
+            'zazzle.com'        => 'Zazzle',
+            'society6.com'      => 'Society6',
+            'teepublic.com'     => 'TeePublic',
+            'teespring.com'     => 'Spring',
+            'creator-spring.com' => 'Spring',
+            'bonfire.com'       => 'Bonfire',
+            'threadless.com'    => 'Threadless',
+            'ko-fi.com'         => 'Ko-fi',
+            'amazon.com'        => 'Amazon',
+            'amzn.to'           => 'Amazon',
+        );
+    }
+
+    /**
+     * The store name for a catalog item's link: a known storefront's own name,
+     * else the bare host without "www." (so an unknown shop still reads
+     * "Buy on myguildshop.com"), else '' for a link with no host at all
+     * (relative, '#', empty) — the caller then falls back to plain "Buy now".
+     *
+     * @param string $url
+     * @return string
+     */
+    public static function CatalogStoreName($url)
+    {
+        $host = strtolower((string)parse_url(trim((string)$url), PHP_URL_HOST));
+        if ($host === '') {
+            return '';
+        }
+        $host = preg_replace('/^www\./', '', $host);
+        foreach (self::CatalogStores() as $known => $name) {
+            if ($host === $known || substr($host, -strlen('.' . $known)) === '.' . $known) {
+                return $name;
+            }
+        }
+        return $host;
     }
 
     /**
@@ -477,7 +548,7 @@ class CmsBlockRegistry
                 'description' => 'A page led by pictures — galleries and photo mosaics, with headings between them.',
                 'starters' => array('heading', 'gallery'),
                 // Image-led blocks.
-                'extra_blocks' => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
+                'extra_blocks' => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid', 'catalog'),
             ),
             'about' => array(
                 'label'    => 'About us',
@@ -515,6 +586,13 @@ class CmsBlockRegistry
                     'park_meeting', 'park_officers', 'park_events',
                     'member_bar', 'card_grid', 'cta_band',
                 ),
+            ),
+            'store' => array(
+                'label'    => 'Store catalog',
+                'description' => 'A shop window for your merch — shirts, patches, fabric, stickers — with each item linking out to the store that sells it.',
+                'starters' => array('heading', 'catalog'),
+                // The catalog itself, plus the framing a storefront wants.
+                'extra_blocks' => array('catalog', 'card_grid', 'cta_band', 'gallery', 'video_embed', 'accordion'),
             ),
             // NOT a page type (label null): blog post bodies, which behave like
             // articles in the Add-block chooser and nowhere else.

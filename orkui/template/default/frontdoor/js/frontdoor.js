@@ -292,3 +292,167 @@
         });
     });
 })();
+
+// Store Catalog detail dialog. catalog.tpl emits ONE shared #fdCatalogModal per
+// page plus a JSON data island per block; this paints the dialog from the
+// island of whichever block was clicked. Delegated off document and looking the
+// dialog up at open time (not at ready), so it also works for blocks the CMS
+// live preview injects after load. Every authored string lands via textContent.
+(function () {
+    if (window.__fdCatalogModalInit) { return; }
+    window.__fdCatalogModalInit = true;
+
+    var modal = null, card = null;
+    var items = [], cur = 0, lastTrigger = null;
+    var inertNodes = [];   // {el, hadAriaHidden, prevAriaHidden, hadInert}
+
+    function q(sel) { return modal.querySelector(sel); }
+    function setText(el, val) { el.textContent = val || ''; el.hidden = !val; }
+
+    // Same background-inert walk as the roster card and the gallery lightbox.
+    function setBackgroundInert(on) {
+        if (on) {
+            inertNodes = [];
+            var node = modal;
+            while (node && node.parentNode && node.parentNode.nodeType === 1) {
+                var parent = node.parentNode;
+                var kids = parent.children;
+                for (var k = 0; k < kids.length; k++) {
+                    var sib = kids[k];
+                    if (sib === node) { continue; }
+                    inertNodes.push({
+                        el: sib,
+                        hadAriaHidden: sib.hasAttribute('aria-hidden'),
+                        prevAriaHidden: sib.getAttribute('aria-hidden'),
+                        hadInert: sib.hasAttribute('inert')
+                    });
+                    sib.setAttribute('aria-hidden', 'true');
+                    sib.setAttribute('inert', '');
+                }
+                if (parent === document.body || parent.tagName === 'BODY') { break; }
+                node = parent;
+            }
+        } else {
+            inertNodes.forEach(function (r) {
+                if (r.hadAriaHidden) { r.el.setAttribute('aria-hidden', r.prevAriaHidden); }
+                else { r.el.removeAttribute('aria-hidden'); }
+                if (!r.hadInert) { r.el.removeAttribute('inert'); }
+            });
+            inertNodes = [];
+        }
+    }
+
+    function showPhoto(it, p) {
+        var ph = (it.photos || [])[p];
+        var img = q('.fdb-cmodal-stage img');
+        q('.fdb-cmodal-media').hidden = !ph;
+        if (!ph) { img.removeAttribute('src'); return; }
+        img.src = ph.src;
+        img.alt = ph.alt || it.title || '';
+        var btns = q('.fdb-cmodal-strip').children;
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].setAttribute('aria-pressed', i === p ? 'true' : 'false');
+        }
+    }
+
+    function paint(i) {
+        cur = (i + items.length) % items.length;
+        var it = items[cur] || {};
+        var photos = it.photos || [];
+
+        var strip = q('.fdb-cmodal-strip');
+        strip.textContent = '';
+        strip.hidden = photos.length < 2;
+        if (photos.length > 1) {
+            photos.forEach(function (ph, p) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.setAttribute('aria-label', 'Photo ' + (p + 1) + ' of ' + photos.length);
+                var im = document.createElement('img');
+                im.src = ph.thumb || ph.src;
+                im.alt = '';
+                b.appendChild(im);
+                b.addEventListener('click', function () { showPhoto(it, p); });
+                strip.appendChild(b);
+            });
+        }
+        showPhoto(it, 0);
+
+        var badge = q('.fdb-cmodal-badge');
+        if (it.badge) { badge.setAttribute('data-badge', it.badge); } else { badge.removeAttribute('data-badge'); }
+        setText(badge, it.badgeLabel);
+        q('.fdb-cmodal-title').textContent = it.title || '';
+        setText(q('.fdb-cmodal-subtitle'), it.subtitle);
+        setText(q('.fdb-cmodal-price'), it.price);
+        setText(q('.fdb-cmodal-desc'), it.description);
+
+        var cta = q('.fdb-cmodal-cta');
+        var showCta = !!(it.href && it.cta && !it.soldOut);
+        cta.hidden = !showCta;
+        if (showCta) { cta.href = it.href; } else { cta.removeAttribute('href'); }
+        q('.fdb-cmodal-cta-label').textContent = it.cta || '';
+        q('.fdb-cmodal-soldout').hidden = !it.soldOut;
+
+        q('.fdb-cmodal-nav').hidden = items.length < 2;
+        q('.fdb-cmodal-count').textContent = (cur + 1) + ' of ' + items.length;
+    }
+
+    function open(trigger) {
+        var block = trigger.closest('.fdb-catalog');
+        var island = block ? block.querySelector('.fdb-catalog-data') : null;
+        modal = document.getElementById('fdCatalogModal');
+        if (!island || !modal) { return; }
+        try { items = JSON.parse(island.textContent) || []; } catch (err) { items = []; }
+        if (!items.length) { return; }
+        card = q('.fdb-cmodal-card');
+        // A thumb is aria-hidden and unfocusable; hand focus back to its card's
+        // title button on close so a keyboard user lands somewhere real.
+        var li = trigger.closest('.fdb-catalog-card');
+        lastTrigger = (li && li.querySelector('.fdb-catalog-open')) || trigger;
+        paint(parseInt(trigger.getAttribute('data-fdb-cat-open'), 10) || 0);
+        modal.hidden = false;
+        modal.classList.add('is-open');
+        setBackgroundInert(true);
+        document.body.style.overflow = 'hidden';
+        card.focus();
+    }
+
+    function close() {
+        if (!modal || !modal.classList.contains('is-open')) { return; }
+        modal.classList.remove('is-open');
+        modal.hidden = true;
+        setBackgroundInert(false);
+        document.body.style.overflow = '';
+        if (lastTrigger && typeof lastTrigger.focus === 'function') { lastTrigger.focus(); }
+        lastTrigger = null;
+    }
+
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest) { return; }
+        var t = e.target.closest('[data-fdb-cat-open]');
+        if (t) { e.preventDefault(); open(t); return; }
+        if (!modal || !modal.classList.contains('is-open')) { return; }
+        if (e.target.closest('[data-fdb-cat-close]')) { close(); return; }
+        var step = e.target.closest('[data-fdb-cat-step]');
+        if (step) { paint(cur + (parseInt(step.getAttribute('data-fdb-cat-step'), 10) || 0)); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (!modal || !modal.classList.contains('is-open')) { return; }
+        if (e.key === 'Escape') { close(); return; }
+        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && items.length > 1) {
+            paint(cur + (e.key === 'ArrowLeft' ? -1 : 1));
+            return;
+        }
+        if (e.key === 'Tab') {
+            var f = Array.prototype.filter.call(
+                card.querySelectorAll('button, [href]'),
+                function (el) { return el.offsetParent !== null; }
+            );
+            if (!f.length) { e.preventDefault(); card.focus(); return; }
+            var first = f[0], last = f[f.length - 1], active = document.activeElement;
+            if (e.shiftKey && (active === first || active === card)) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+        }
+    });
+})();

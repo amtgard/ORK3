@@ -57,6 +57,10 @@ if ($urlType !== '') {
     }
 }
 
+// "Blank page" from the New-page chooser: a new page of its type that is NOT
+// seeded with that type's starter blocks. Only meaningful on a new page.
+$isBlank = $isNew && !empty($_GET['blank']);
+
 $pageId       = (int)($page['page_id'] ?? 0);
 $pTitle       = (string)($page['title'] ?? '');
 $pSlug        = (string)($page['slug'] ?? '');
@@ -558,8 +562,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
             pageType:  typeInput ? typeInput.value : <?= json_encode($pType, JSON_HEX_TAG) ?>,
             onDirty:   markDirty
         });
-        // For a brand-new page that arrived with no blocks, seed from the type preset.
-        if (STATE.isNew && BE.isEmpty()) {
+        // For a brand-new page that arrived with no blocks, seed from the type
+        // preset — unless the author asked for a blank page.
+        if (STATE.isNew && BE.isEmpty() && !<?= $isBlank ? 'true' : 'false' ?>) {
             BE.seedFromPreset(typeInput.value);
         }
     }

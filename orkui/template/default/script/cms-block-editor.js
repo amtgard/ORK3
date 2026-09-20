@@ -209,6 +209,8 @@ window.CmsBlockEditor = (function () {
                 return strip(f.text || f.quote || '');
             case 'gallery':
                 return ((f.images || []).length) + ' image(s)';
+            case 'catalog':
+                return (f.heading ? strip(f.heading) + ' — ' : '') + ((f.items || []).length) + ' item(s)';
             case 'video_embed':
                 return (f.provider || 'youtube') + (f.video_id || f.url ? ' · ' + strip(f.video_id || f.url) : ' · no video');
             case 'file_download':
@@ -654,6 +656,94 @@ window.CmsBlockEditor = (function () {
         if (tip) { b.setAttribute('aria-label', tip); }
         if (disabled) { b.disabled = true; }
         return b;
+    }
+
+    /* ---- Store Catalog item ----
+     * CATALOG_STORES MIRRORS CmsBlockRegistry::CatalogStores() (the public
+     * partial's authority); tests/cms-fields/catalog_test.php fails if the key
+     * sets drift. Used only to show the author which store name a blank Store
+     * field will publish as. */
+    var CATALOG_STORES = {
+        'redbubble.com': 'Redbubble',
+        'spoonflower.com': 'Spoonflower',
+        'etsy.com': 'Etsy',
+        'zazzle.com': 'Zazzle',
+        'society6.com': 'Society6',
+        'teepublic.com': 'TeePublic',
+        'teespring.com': 'Spring',
+        'creator-spring.com': 'Spring',
+        'bonfire.com': 'Bonfire',
+        'threadless.com': 'Threadless',
+        'ko-fi.com': 'Ko-fi',
+        'amazon.com': 'Amazon',
+        'amzn.to': 'Amazon'
+    };
+
+    function catalogStoreName(url) {
+        var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#:]+)/i.exec(String(url || '').trim());
+        if (!m) { return ''; }
+        var host = m[1].toLowerCase().replace(/^www\./, '');
+        for (var k in CATALOG_STORES) {
+            if (!Object.prototype.hasOwnProperty.call(CATALOG_STORES, k)) { continue; }
+            if (host === k || host.slice(-(k.length + 1)) === '.' + k) { return CATALOG_STORES[k]; }
+        }
+        return host;
+    }
+
+    var CATALOG_BADGES = [
+        { value: '', label: 'No badge' },
+        { value: 'new', label: 'New' },
+        { value: 'limited', label: 'Limited Time' },
+        { value: 'going_soon', label: 'Going Soon' },
+        { value: 'best_seller', label: 'Best Seller' },
+        { value: 'sold_out', label: 'Sold Out (disables the Buy button)' },
+        { value: 'custom', label: 'Custom text…' }
+    ];
+
+    function catalogItemForm(item) {
+        if (!Array.isArray(item.images)) { item.images = []; }
+        var box = el('div', null);
+        box.appendChild(imageBound(item, 'image', 'Main photo (the card thumbnail)'));
+        box.appendChild(textBound(item, 'title', 'Item name', 'e.g. Crystal Groves Tabard Patch'));
+        var g = el('div', 'cms-grid2');
+        g.appendChild(textBound(item, 'subtitle', 'Short line under the name', 'e.g. Embroidered · 3 in'));
+        g.appendChild(textBound(item, 'price', 'Price', 'e.g. $12 or from $18'));
+        box.appendChild(g);
+        box.appendChild(textBoundArea(item, 'description', 'Description (shown in the detail view)'));
+
+        box.appendChild(textBound(item, 'href', 'Store link', 'https://www.redbubble.com/…'));
+        var storeField = textBound(item, 'store', 'Store name on the button');
+        var storeInput = storeField.querySelector('input');
+        var storeHelp = el('div', 'cms-help');
+        storeField.appendChild(storeHelp);
+        function paintStore() {
+            var found = catalogStoreName(item.href);
+            storeInput.placeholder = found || 'e.g. Redbubble';
+            var name = (item.store || '').trim() || found;
+            storeHelp.textContent = name
+                ? 'The button will read “Buy on ' + name + '”.' + ((item.store || '').trim() ? '' : ' Detected from the link — type to change it.')
+                : 'Add a store link to show a Buy button.';
+        }
+        box.addEventListener('input', paintStore);
+        paintStore();
+        box.appendChild(storeField);
+
+        var badgeRow = el('div', 'cms-grid2');
+        var badgeSel = selectBound(item, 'badge', 'Status badge', CATALOG_BADGES, '');
+        var customField = textBound(item, 'badge_text', 'Badge text', 'e.g. Crown Qual Exclusive');
+        function paintBadge() { customField.style.display = (item.badge === 'custom') ? '' : 'none'; }
+        badgeSel.querySelector('select').addEventListener('change', paintBadge);
+        paintBadge();
+        badgeRow.appendChild(badgeSel);
+        badgeRow.appendChild(customField);
+        box.appendChild(badgeRow);
+
+        box.appendChild(el('div', 'cms-label', 'More photos (optional)'));
+        box.appendChild(el('div', 'cms-help', 'Extra angles or mockups. Visitors see them in the detail view.'));
+        box.appendChild(repeater({ fields: item }, 'images', 'Photo', {}, function (img, i) {
+            return imageBound(item.images, i, 'Photo');
+        }));
+        return box;
     }
 
     function ctaRepeater(block, styleOpts) {
@@ -1734,6 +1824,19 @@ window.CmsBlockEditor = (function () {
             body.appendChild(fieldNumSelect(block, 'columns', 'Columns',
                 [{ value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }], 3));
             body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional gallery caption' }));
+            return body;
+        }
+
+        if (t === 'catalog') {
+            body.appendChild(fieldText(block, 'kicker', 'Kicker'));
+            body.appendChild(fieldText(block, 'heading', 'Heading', { placeholder: 'e.g. Kingdom Merch' }));
+            body.appendChild(fieldText(block, 'subheading', 'Subheading'));
+            body.appendChild(fieldNumSelect(block, 'columns', 'Items per row',
+                [{ value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }], 3));
+            body.appendChild(el('div', 'cms-label', 'Items'));
+            body.appendChild(repeater(block, 'items', 'Item',
+                { image: {}, images: [], title: '', subtitle: '', price: '', description: '', href: '', store: '', badge: '', badge_text: '' },
+                catalogItemForm));
             return body;
         }
 
