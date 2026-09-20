@@ -166,7 +166,12 @@ class CmsBlockRegistry
                 'description'    => 'Banner with a heading, subcopy, optional logo, and call-to-action buttons.',
                 'addable'        => true,
                 'scopes'         => null,
-                'starter_fields' => array('heading' => '', 'subcopy' => '', 'logo' => array(), 'ctas' => array(), 'links' => ''),
+                // The heading ships FILLED so a freshly-created Landing page is
+                // not publicly blank (this block suppresses itself when every
+                // field is empty). It is real page copy an author can overwrite,
+                // never an instruction to the author — see the staff_roster
+                // 'Meet the Team' default below for the same convention.
+                'starter_fields' => array('heading' => 'Come play with us', 'subcopy' => '', 'logo' => array(), 'ctas' => array(), 'links' => ''),
             ),
             'staff_roster' => array(
                 'label'          => 'Staff Roster',
@@ -323,12 +328,42 @@ class CmsBlockRegistry
 
             // ---- Phase 4 org-scoped dynamic blocks (kingdom sites) -------
             // Pull live ORK data for the page's owning kingdom.
+            'kingdom_hero' => array(
+                'label'          => 'Kingdom hero (live)',
+                'group'          => 'Hero',
+                'dynamic'        => true,
+                'icon'           => 'fa-crown',
+                // The park_hero argument, which is exactly as true one level up:
+                // a kingdom has a device and a colour, and almost never a banner
+                // photograph worth putting behind a headline. Crest-led means the
+                // FRAME is the design decision, so the block looks finished with
+                // no image at all — and with no device either, where it degrades
+                // to a monogram rather than a broken <img>.
+                'description'    => 'Crest-led hero built from the kingdom’s own heraldry and colour, with a call to action. Designed to look finished with no photo.',
+                'addable'        => true,
+                'scopes'         => array('kingdom'),
+                // The partial's whole field contract. 'tagline' is the one line
+                // of authored copy in the block; everything else is either
+                // resolved live (name, rank, device) or a single button.
+                'starter_fields' => array(
+                    'kicker' => '', 'heading' => '', 'tagline' => '',
+                    'cta_label' => '', 'cta_href' => '',
+                ),
+            ),
             'kingdom_officers' => array(
                 'label'          => 'Officers (live)',
                 'group'          => 'Dynamic',
                 'dynamic'        => true,
                 'icon'           => 'fa-user-shield',
-                'description'    => 'Live grid of the kingdom’s current officers from ORK data (office + persona). Pair with a Staff Roster for your Board of Directors.',
+                // "Pair with a Staff Roster for non-ORK roles" — the park-side
+                // wording, which gets this right. ORK stores exactly five kingdom
+                // seats (Officer::PUBLIC_OFFICER_ROLE_LABELS), so the guild
+                // masters, Treasurer, Historian, Webminister and the Crown's
+                // appointed deputies can only ever come from an authored roster.
+                // A "Board of Directors" exists only in the few separately
+                // incorporated kingdoms, and is a legal entity distinct from the
+                // Crown even there.
+                'description'    => 'Live grid of the kingdom’s current officers from ORK data (office + persona). Pair with a Staff Roster for non-ORK roles.',
                 'addable'        => true,
                 'scopes'         => array('kingdom'),
                 'starter_fields' => array('kicker' => '', 'heading' => '', 'limit' => 12),
@@ -517,8 +552,16 @@ class CmsBlockRegistry
      * type is now named for what the author GETS, with one plain line saying what
      * kind of page it makes.
      *
+     * `starters` is the scope-neutral seed list. A type whose right starters
+     * DEPEND on the site scope (a kingdom site wants its own events, not a grid
+     * of other kingdoms) also declares `starters_by_scope` — a map of
+     * 'kingdom'|'park'|'global' => starter list — which Controller_Cms::_pageTypes()
+     * prefers when it knows the scope. The registry itself stays static and
+     * scope-free; only the controller, which resolved the scope, chooses.
+     *
      * @return array<string,array{label:string|null,description:string|null,
      *                            starters:array<int,string>|null,
+     *                            starters_by_scope?:array<string,array<int,string>>,
      *                            extra_blocks:array<int,string>|null}>
      */
     public static function PageTypeDefs()
@@ -530,7 +573,7 @@ class CmsBlockRegistry
         self::$_pageTypeDefs = array(
             'composed' => array(
                 'label'        => 'Landing page',
-                'description'  => 'A page you build from blocks — a big hero image, rows of cards, photos, buttons. The most flexible type, and the one front pages use.',
+                'description'  => 'You get a rotating hero at the top, a block of writing under it and a call-to-action banner at the foot — then add rows of cards, photos or anything else.',
                 'starters'     => array('hero_carousel', 'rich_text', 'cta_band'),
                 // The landing-page kitchen sink: every addable block, computed
                 // from the catalog rather than enumerated (see _blockAllow).
@@ -538,43 +581,62 @@ class CmsBlockRegistry
             ),
             'article' => array(
                 'label'    => 'Article',
-                'description' => 'A page of writing: a heading and formatted text, with tables, downloads or images dropped in where you need them.',
-                'starters' => array('heading', 'rich_text'),
+                // No 'heading' starter: Site_shell already promotes the page
+                // title to the page's <h1>, so a seeded heading invites the
+                // author to type the title twice (cf. tests/cms-site/site_test.php).
+                'description' => 'You get one block of formatted writing — its own heading, paragraphs and links — ready to type into. Add tables, downloads or images beneath it.',
+                'starters' => array('rich_text'),
                 // Long-form content + inline media + supporting layout.
                 'extra_blocks' => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
             ),
             'media' => array(
                 'label'    => 'Photo gallery',
-                'description' => 'A page led by pictures — galleries and photo mosaics, with headings between them.',
-                'starters' => array('heading', 'gallery'),
+                'description' => 'You get an image grid ready for photos, with a caption under it. Add more grids, a photo collage or a video below.',
+                'starters' => array('gallery'),
                 // Image-led blocks.
                 'extra_blocks' => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid', 'catalog'),
             ),
             'about' => array(
                 'label'    => 'About us',
-                'description' => 'Who you are and who runs things: your story, plus a roster of officers or staff with photos and roles.',
+                'description' => 'You get a block of writing for your story and a people roster under it, each person with a photo, a role and a link to their persona.',
                 'starters' => array('rich_text', 'staff_roster'),
                 // A people roster plus supporting content blocks.
                 'extra_blocks' => array('staff_roster', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'park_officers', 'park_meeting', 'card_grid', 'cta_band', 'gallery'),
             ),
             'resource' => array(
                 'label'    => 'Documents & downloads',
-                'description' => 'A place to hand people files — rules PDFs, forms, waivers — with tables and a questions list around them.',
-                'starters' => array('heading', 'file_download'),
+                'description' => 'You get a download list ready for your rules PDFs, forms and waivers. Add tables or a questions list around it.',
+                'starters' => array('file_download'),
                 // Downloads + tabular/structured reference.
                 'extra_blocks' => array('file_download', 'table', 'accordion', 'columns'),
             ),
             'blog_index' => array(
                 'label'    => 'News index',
-                'description' => 'The page that lists your news posts, newest first. You write the posts themselves under Posts.',
-                'starters' => array('heading', 'blog_feed'),
+                'description' => 'You get a live feed of your news posts, newest first. The posts themselves are written under Posts.',
+                'starters' => array('blog_feed'),
                 // The live post feed, with an optional call-to-action.
                 'extra_blocks' => array('blog_feed', 'cta_band'),
             ),
             'dynamic' => array(
                 'label'    => 'Live ORK data',
-                'description' => 'A page that fills itself in from the ORK — your parks, your officers, your upcoming events. Nothing to type or keep up to date.',
+                'description' => 'You get live ORK feeds already placed — upcoming events, your parks and your officers — filled in from ORK data with nothing to type or keep up to date.',
+                // The GLOBAL default. kingdoms_teaser is a grid of every active
+                // parent kingdom: right on the front door, wrong (and, with no
+                // $ActiveKingdomSummary injected outside the front-door HOME
+                // action, an error band) on a kingdom's or park's own site. The
+                // scope-correct seeds live in 'starters_by_scope' below, which
+                // _pageTypes() prefers when it knows the scope.
                 'starters' => array('kingdoms_teaser'),
+                // Scope-correct starter sets. Every block named here is already
+                // in this type's extra_blocks, so the chooser offers them too,
+                // and each is gated to its own scope by BlockDefs['scopes'] —
+                // _pageTypes() intersects with the catalog's addable set, so a
+                // scope-wrong entry can never be seeded even if one is added here.
+                'starters_by_scope' => array(
+                    'kingdom' => array('kingdom_events', 'kingdom_parks', 'kingdom_officers'),
+                    'park'    => array('park_meeting', 'park_events', 'park_officers'),
+                    'global'  => array('kingdoms_teaser'),
+                ),
                 // Every live feed, plus framing blocks. The global
                 // events_feed (org-wide, all kingdoms) is dropped from the
                 // chooser in favor of the scope-correct kingdom_events; existing
@@ -589,8 +651,8 @@ class CmsBlockRegistry
             ),
             'store' => array(
                 'label'    => 'Store catalog',
-                'description' => 'A shop window for your merch — shirts, patches, fabric, stickers — with each item linking out to the store that sells it.',
-                'starters' => array('heading', 'catalog'),
+                'description' => 'You get a merch grid ready for shirts, patches, fabric and stickers, each item linking out to the store that sells it.',
+                'starters' => array('catalog'),
                 // The catalog itself, plus the framing a storefront wants.
                 'extra_blocks' => array('catalog', 'card_grid', 'cta_band', 'gallery', 'video_embed', 'accordion'),
             ),

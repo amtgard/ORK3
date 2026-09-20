@@ -44,7 +44,20 @@ if (!in_array($kpSort, CmsRenderCache::PARKS_SORTS, true)) {
 $kpShowHeraldry = !empty($blockFields['show_heraldry'])
     && (string) $blockFields['show_heraldry'] !== '0'
     && (string) $blockFields['show_heraldry'] !== 'false';
-$kpMoreHref = isset($blockFields['more_href']) ? trim((string) $blockFields['more_href']) : '';
+// Opt-in: fold the kingdom's principalities' parks into the list (the map block
+// already plots them). Absent field → 0, so existing blocks are unchanged.
+$kpIncludeChildren = !empty($blockFields['include_child_kingdoms'])
+    && (string) $blockFields['include_child_kingdoms'] !== '0'
+    && (string) $blockFields['include_child_kingdoms'] !== 'false'
+    ? 1 : 0;
+// The seeded teaser on a kingdom home page points "All parks" at this site's own
+// Parks page in the stable 'Page/view/{slug}' form (CmsSite::_sitePageHref), which
+// must be re-pointed onto the site's CURRENT /Site/page/{slug}/ route at render
+// time — the global page route resolves global pages only, and would 404. Same
+// one-line resolve steps.tpl does; see fdSiteInternalHref() in _helpers.tpl.
+$kpMoreHref = isset($blockFields['more_href'])
+    ? trim(fdSiteInternalHref((string) $blockFields['more_href'], isset($SiteSlug) ? (string) $SiteSlug : ''))
+    : '';
 if ($kpMoreHref === '#') {
     // Blank URL fields are rewritten to '#' by the save sanitizer — treat as unset.
     $kpMoreHref = '';
@@ -60,9 +73,14 @@ if ($kpMoreHref === '#') {
 // $kpResolved: list of ['park_id','name','loc','title','crest'].
 $kpResolved = fdBlockCache(
     CmsRenderCache::NS_KINGDOM_PARKS,
-    CmsRenderCache::ParksKey($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry),
+    // The child-kingdom variant is a DIFFERENT result set, so it needs its own
+    // key — but the suffix is ParksKey()'s job, not this file's. Appending it
+    // here put the key outside the set CmsRenderCache::BustScope() enumerates,
+    // and since the seeded Our Parks block turns the roll-up ON, that
+    // unflushable key was the only one a new kingdom site ever wrote.
+    CmsRenderCache::ParksKey($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry, $kpIncludeChildren),
     CmsRenderCache::TTL,
-    function () use ($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry) {
+    function () use ($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry, $kpIncludeChildren) {
     // Which parks count as active, the three display orders, the row cap and the
     // crest-URL resolve all live in Kingdom::GetActiveParks — this block only
     // renders what it hands back.
@@ -76,6 +94,7 @@ $kpResolved = fdBlockCache(
             'Sort'         => $kpSort,
             'Limit'        => $kpLimit,
             'WithHeraldry' => $kpShowHeraldry,
+            'IncludeChildKingdoms' => $kpIncludeChildren,
         ]);
     } catch (\Throwable $e) {
         return [];
@@ -84,6 +103,16 @@ $kpResolved = fdBlockCache(
     return is_array($kpRows) ? $kpRows : [];
     }
 );
+
+// The lib slices to $kpLimit, so a full page of rows probably means there are
+// more parks we are not showing — while the kingdom_parks_map block above plots
+// ALL of them. Never truncate silently: when the list is full, offer somewhere
+// else to look. "Probably" is as far as we can honestly go — the lib returns no
+// total, so a full page may also be an exact fit; the wording therefore claims
+// no truncation, and matches the "find another group" phrasing the park starter
+// already uses for this same Atlas destination. Suppressed when the block
+// authors their own more_href, because the header already renders that link.
+$kpAtlasLink = ($kpMoreHref === '') && (count($kpResolved) >= $kpLimit);
 ?>
 <div class="fd-pad fd-section-light kp-block">
     <div class="kp-head">
@@ -141,5 +170,10 @@ $kpResolved = fdBlockCache(
                 </a>
             <?php endforeach; ?>
         </div>
+        <?php if ($kpAtlasLink): ?>
+            <div class="kp-more-foot">
+                <a class="kp-more" href="<?= htmlspecialchars(UIR . 'Atlas', ENT_QUOTES) ?>">Find another Amtgard group &rarr;</a>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>

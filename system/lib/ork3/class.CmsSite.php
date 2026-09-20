@@ -14,6 +14,12 @@
 //
 // CmsSite sorts AFTER class.CmsBase.php alphabetically, so no explicit
 // require_once of the base is needed (autoload/scandir loads CmsBase first).
+//
+// CmsStarterContent sorts AFTER this file, though, so it IS required explicitly
+// (same idiom as class.CmsTheme.php -> class.CmsThemeTokens.php). It holds the
+// hand-authored starter-website copy this class used to carry inline.
+
+require_once __DIR__ . '/class.CmsStarterContent.php';
 
 class CmsSite extends CmsBase
 {
@@ -38,6 +44,39 @@ class CmsSite extends CmsBase
         // common infrastructure paths worth reserving defensively
         'api', 'assets', 'static', 'index', 'orkui', 'orkservice', 'www',
     );
+
+    /**
+     * Which version of CmsStarterContent a seed writes TODAY, stamped into
+     * ork_cms_site.seed_version alongside template_seeded_at.
+     *
+     * template_seeded_at on its own is a one-way "seeded ever" marker with no
+     * version in it, so a site seeded a year ago and a site seeded this morning
+     * are indistinguishable — and every copy or layout improvement needed its
+     * own bespoke hand-written migration to reach the sites already out there
+     * (db-migrations/2026-09-20-cms-kingdom-seed-copy-repair.php is the 162-line
+     * example). Recording the version turns that into one generic, repeatable
+     * operation: BackfillSeedContent().
+     *
+     * Deliberately a SITE-level version, not a per-block starter_key. Per-block
+     * provenance would be more convenient at backfill time, but it would mean
+     * opening CmsPage's block-persistence core (_fetchBlocks / _normalizeBlocks
+     * / _upsertKnownBlocks / _insertNewBlocks / _verifyBlockCount /
+     * _snapshotRevision) to carry and preserve a new column, and re-deriving the
+     * old version's content from CmsStarterContent gives the same answer without
+     * touching any of it.
+     *
+     * Version 0 is "seeded before versioning existed", which is what every site
+     * seeded to date received and what the column's DEFAULT 0 (and its ABSENCE,
+     * pre-migration) both read as.
+     *
+     * Version 2 is the kingdom starter redesign (CmsStarterContent::_kingdomV2):
+     * a crest-led kingdom_hero and a parks teaser on Home, a 'New to Amtgard?'
+     * page, an officer-corps roster in place of the Board of Directors, and a
+     * visitor-facing nav with News and an About dropdown. Carrying it to the
+     * already-seeded kingdoms is BackfillSeedContent()'s job — no bespoke repair
+     * migration — and the runner only rewrites fields nobody has edited.
+     */
+    public const CURRENT_SEED_VERSION = 2;
 
     public function __construct()
     {
@@ -257,16 +296,29 @@ class CmsSite extends CmsBase
         // A site row must carry a globally-unique slug (UNIQUE key). Prefer the
         // org's REAL display name for both the site name and the slug — a brand
         // new site should read "Kingdom of the Burning Lands" / /k/kingdom-of-the-
-        // burning-lands, not a blank name at /k/kingdom-42. Fall back to the
-        // deterministic scope placeholder only when the name lookup comes back
-        // empty or its derived slug is already taken. Mint-new-row path ONLY —
-        // an existing site's slug is never touched here.
+        // burning-lands, not a blank name at /k/kingdom-42. Mint-new-row path
+        // ONLY — an existing site's slug is never touched here.
+        //
+        // A COLLISION IS NOT A REASON TO ABANDON THE NAME. This used to drop
+        // straight to the scope placeholder whenever the name-derived candidate
+        // failed ValidateSlug() — and the overwhelmingly likely reason for that
+        // failure is that ANOTHER org already holds the slug, which two orgs
+        // sharing a display name (a rename, a revived kingdom, a generic park
+        // name) is not exotic. The second one was then stranded at a permanent,
+        // unrecognizable /k/kingdom-57, because nothing anywhere ever re-derives
+        // an existing site's slug. Running the candidate through _uniqueSlug()
+        // yields 'kingdom-of-the-north-wind-2' instead: still the org's own
+        // name, still unique, still readable.
+        //
+        // The scope placeholder is reserved for the one case it is actually the
+        // right answer — NO name could be resolved at all (or it slugified to
+        // nothing, e.g. a name that is entirely punctuation).
         $orgName = $this->_orgDisplayName($scopeType, $scopeId);
         $slug    = '';
         if ($orgName !== '') {
             $candidate = $this->DeriveSlug($orgName);
-            if ($candidate !== '' && $this->ValidateSlug($candidate, 0) === true) {
-                $slug = $candidate;
+            if ($candidate !== '') {
+                $slug = $this->_uniqueSlug($candidate);
             }
         }
         if ($slug === '') {
@@ -442,13 +494,44 @@ class CmsSite extends CmsBase
         // the nav loop below can look each id up by slug (0 = didn't seed).
         $pageIds = array();
         foreach ($starters as $starterSlug => $starterDef) {
+            // A NAV-ONLY registry entry (no 'attrs') seeds a menu item pointing
+            // at a route this site already has rather than a page of its own —
+            // the News item on the org's existing blog route. It has nothing to
+            // create here, and it must not be audited as a failed page seed.
+            if (!isset($starterDef['attrs'])) {
+                continue;
+            }
             $pageIds[$starterSlug] = $makePage($starterDef['attrs'], $starterDef['blocks']);
+
+            // AUDIT EVERY SEED OUTCOME, not just the theme's. A page that fails
+            // to create leaves no trace anywhere — CreatePage returns falsy
+            // rather than throwing under PDO::ERRMODE_WARNING — so an operator
+            // investigating a half-seeded site previously had no log line and no
+            // lever but raw SQL. The slug rides in the action string because
+            // ork_cms_audit has no free-text column.
+            //
+            // On a REPAIR pass a 0 can also mean "this starter page was
+            // deliberately trashed since the seed, so it was intentionally not
+            // re-created" — a different event, hence a different verb.
+            if ((int) $pageIds[$starterSlug] <= 0) {
+                $this->_cmsAudit(
+                    (int) $uid,
+                    ($isRepair ? 'seed_page_skipped:' : 'seed_page_failed:') . $starterSlug,
+                    'page',
+                    0,
+                    $scopeType,
+                    $scopeId
+                );
+            }
         }
         $homeId = isset($pageIds['home']) ? (int) $pageIds['home'] : 0;
 
         // ---- Scoped nav menu ('marketing' — the key org_header.tpl reads) ----
         if (!$this->_seedNavMenu($siteId, $scopeType, $scopeId, $starters, $pageIds)) {
-            // Site row vanished under the lock — nothing to finish.
+            // Site row vanished under the lock — nothing to finish. Audited
+            // because the abort is otherwise completely silent (it returns false
+            // and writes nothing), and it leaves the site with pages but no nav.
+            $this->_cmsAudit((int) $uid, 'seed_nav_aborted', 'site', (int) $siteId, $scopeType, $scopeId);
             return;
         }
 
@@ -524,26 +607,82 @@ class CmsSite extends CmsBase
                 return true;
             }
 
-            // Same registry, same order: Home/About/Parks/Officers/Documents at
-            // ordering 10, 20, 30, 40, 50.
+            // Same registry, same order. TWO PASSES, because a child's row needs
+            // its parent's nav_id and CreateItem hands that back only after the
+            // parent is inserted. Top-level items keep the 10, 20, 30… ordering
+            // they always had; children are ordered 10, 20… within their parent,
+            // which is the scale CmsNav::ReorderItems() uses per level.
+            //
+            // A registry entry may declare:
+            //   'nav_parent' => '<registry key>'  seed me under that item
+            //   'nav_link'   => array('link_type' => …, 'url' => …)
+            //                                     a nav item with no page of its
+            //                                     own (the News blog route)
+            // Anything else is the page link the seed has always written.
+            $navIds   = array();
             $ordering = 0;
-            foreach ($starters as $starterSlug => $starterDef) {
-                $navPageId = isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0;
-                if ($navPageId <= 0) {
-                    continue; // page failed to seed — skip its nav item
-                }
-                $ordering += 10;
-                $nav->CreateItem(array(
+            $navRow = function ($starterDef, $navPageId) use ($scopeType, $scopeId) {
+                $link = isset($starterDef['nav_link']) && is_array($starterDef['nav_link'])
+                    ? $starterDef['nav_link'] : array();
+                return array(
                     'menu'       => 'marketing',
                     'label'      => $starterDef['nav_label'],
-                    'link_type'  => 'page',
-                    'page_id'    => $navPageId,
-                    'parent_id'  => null,
-                    'ordering'   => $ordering,
+                    'link_type'  => isset($link['link_type']) ? (string) $link['link_type'] : 'page',
+                    'page_id'    => ($navPageId > 0) ? $navPageId : null,
+                    'url'        => isset($link['url']) ? (string) $link['url'] : null,
                     'enabled'    => 1,
                     'scope_type' => $scopeType,
                     'scope_id'   => $scopeId,
-                ));
+                );
+            };
+            // A nav item is seedable when it has a page that really landed, or
+            // when it carries its own link and needs no page at all. A starter
+            // page that failed to seed still gets no menu row.
+            $navSeedable = function ($starterSlug, $starterDef) use ($pageIds) {
+                if (isset($starterDef['nav_link'])) {
+                    return true;
+                }
+                return isset($pageIds[$starterSlug]) && (int) $pageIds[$starterSlug] > 0;
+            };
+
+            foreach ($starters as $starterSlug => $starterDef) {
+                if (!empty($starterDef['nav_parent']) || !$navSeedable($starterSlug, $starterDef)) {
+                    continue;
+                }
+                $ordering += 10;
+                $navIds[$starterSlug] = (int) $nav->CreateItem($navRow(
+                    $starterDef,
+                    isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0
+                ) + array('parent_id' => null, 'ordering' => $ordering));
+            }
+
+            $childOrdering = array();
+            foreach ($starters as $starterSlug => $starterDef) {
+                if (empty($starterDef['nav_parent']) || !$navSeedable($starterSlug, $starterDef)) {
+                    continue;
+                }
+                $parentKey = (string) $starterDef['nav_parent'];
+                // A parent that never landed (its own page failed to seed) would
+                // orphan the child into an invisible branch — CmsNav renders only
+                // items whose parent resolves — so promote it to top level rather
+                // than lose it.
+                $parentId = isset($navIds[$parentKey]) ? (int) $navIds[$parentKey] : 0;
+                if ($parentId <= 0) {
+                    $ordering += 10;
+                    $navIds[$starterSlug] = (int) $nav->CreateItem($navRow(
+                        $starterDef,
+                        isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0
+                    ) + array('parent_id' => null, 'ordering' => $ordering));
+                    continue;
+                }
+                if (!isset($childOrdering[$parentKey])) {
+                    $childOrdering[$parentKey] = 0;
+                }
+                $childOrdering[$parentKey] += 10;
+                $navIds[$starterSlug] = (int) $nav->CreateItem($navRow(
+                    $starterDef,
+                    isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0
+                ) + array('parent_id' => $parentId, 'ordering' => $childOrdering[$parentKey]));
             }
 
             // Commit the nav inserts (releasing the row lock) BEFORE the home_page_id
@@ -575,6 +714,27 @@ class CmsSite extends CmsBase
      * without _seedOrgTheme() having run immediately before it, which would
      * leave a site seeded with no theme row and no way to re-seed one.
      *
+     * CONDITIONAL: the marker is stamped only when the seed actually produced
+     * the page that matters — the is_system landing page ($homeId > 0). The
+     * marker is PERMANENT and EnsureSite's repair branch is gated exclusively on
+     * template_seeded_at IS NULL, so stamping a seed whose home page never
+     * landed left the site instantly and permanently unrepairable, with
+     * home_page_id NULL and a "being built" landing page no amount of dashboard
+     * loads could fix. Withholding the stamp costs one retry on the next
+     * EnsureSite; stamping a broken seed costs raw SQL.
+     *
+     * ACCEPTED COST of withholding it: while the home page keeps failing to
+     * seed, every dashboard GET re-runs the whole seed (row-locked nav
+     * transaction and theme step included) and writes two ork_cms_audit rows.
+     * That is the intended retry, and it cannot be provoked by an org deleting
+     * its home page — CmsPage refuses to trash an is_system page — so it only
+     * runs on a genuinely broken database, where the retry is what you want.
+     *
+     * The THEME step is deliberately NOT part of that condition — a failing
+     * theme write would otherwise re-run the entire starter seed (row lock
+     * included) on every dashboard load for as long as it kept failing. It is
+     * audited instead (see _seedOrgTheme).
+     *
      * @param int    $siteId
      * @param string $scopeType 'kingdom'|'park'
      * @param int    $scopeId
@@ -596,6 +756,15 @@ class CmsSite extends CmsBase
         // _seedOrgTheme).
         $this->_seedOrgTheme($scopeType, $scopeId, $uid, $isRepair);
 
+        // The landing page is the one piece the site cannot be left without:
+        // without it home_page_id stays NULL and the public site is a permanent
+        // "being built" interstitial. Leave template_seeded_at NULL so the next
+        // EnsureSite re-enters the repair, and leave a trail saying why.
+        if ((int) $homeId <= 0) {
+            $this->_cmsAudit((int) $uid, 'seed_incomplete_unstamped', 'site', (int) $siteId, $scopeType, $scopeId);
+            return;
+        }
+
         // Seed complete — stamp the marker so this site is never re-seeded, no
         // matter how much of the seeded content the org later deletes.
         $this->_stampTemplateSeeded($siteId);
@@ -609,13 +778,24 @@ class CmsSite extends CmsBase
      * Single source of truth: the seed loop and the nav loop both read this, so
      * the page list and the menu can no longer drift apart.
      *
-     * SCOPE-AWARE, and it must stay that way. A park scope returns its OWN
+     * A THIN ADAPTER, not the copy itself. The authored HTML bodies, FAQ items,
+     * page list and CTA wording all live in CmsStarterContent — see that file's
+     * header for why public marketing copy does not belong inside the class that
+     * owns the site lifecycle, and for how to change it. This method's whole job
+     * is to resolve the RUNTIME-dependent values that copy needs (the org's noun
+     * and display name, the park's own description and URL, the sanitizer, the
+     * block registry's starter_fields, the stable self-href form, the parks-list
+     * ceiling) and hand them over.
+     *
+     * SCOPE-AWARE, and it must stay that way. A park scope gets its OWN
      * three-page registry built on the park_* blocks (including park_meeting,
      * the most useful block on a park page) and no parks page, rather than
      * sharing the kingdom template: the kingdom-scoped dynamic blocks
      * (kingdom_events, kingdom_parks, kingdom_parks_map, kingdom_officers)
      * each correctly render NOTHING outside a kingdom scope, so seeding them
-     * into a park site fails SILENTLY — blank pages, no error anywhere.
+     * into a park site fails SILENTLY — blank pages, no error anywhere. The two
+     * scopes resolve DIFFERENT runtime values, which is why the park branch
+     * returns before any of the kingdom scaffolding is built.
      *
      * Copy uses CmsSite::OrgUnitNoun() so a principality reads "Principality" and a
      * park reads "Park" instead of every org being told it is a kingdom.
@@ -627,43 +807,50 @@ class CmsSite extends CmsBase
      *
      * @param string $scopeType 'kingdom' | 'park'
      * @param int    $scopeId   owning org id
+     * @param string|null $orgName the org's resolved display name, so the
+     *   kingdom meta descriptions and the About body can name the org. NO CALLER
+     *   PASSES IT TODAY — the only call site is _seedStarterTemplate(), which
+     *   does not have it, so it resolves here via _orgDisplayName(). The
+     *   parameter exists for a caller that already holds the name (EnsureSite
+     *   does, at its mint branch) and wants to save the re-query.
+     * @param int|null $version which CmsStarterContent version to build. null
+     *   means CURRENT_SEED_VERSION — what a seed writes today. BackfillSeedContent()
+     *   is the only caller that passes an older one, to re-derive what a site
+     *   was originally seeded with.
+     *
+     * PROTECTED, not private, and only for one reason: it is the seam the
+     * backfill's own test suite injects a genuinely-different content version
+     * through. Today every shipped version builds identical copy (V1 delegates
+     * to V0), so a test that used the real versions could not tell a working
+     * byte-match gate from a missing one — both write nothing. A test double
+     * overrides this method to make the NEW version's copy actually differ, and
+     * then asserts both directions: an untouched seeded field IS upgraded, an
+     * officer-edited one is NOT. Nothing in the application subclasses CmsSite.
+     *
      * @return array slug => array{nav_label:string, attrs:array, blocks:array}
      */
-    private function _starterPageDefs($scopeType, $scopeId)
+    protected function _starterPageDefs($scopeType, $scopeId, $orgName = null, $version = null)
     {
         $scopeType = (string) $scopeType;
         $isPark    = ($scopeType === 'park');
+        $version   = ($version === null) ? self::CURRENT_SEED_VERSION : (int) $version;
 
         // Sanitize authored HTML bodies exactly the way the editor save path does.
         $clean = function ($html) {
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
         };
 
-        // A park is not a small kingdom — it gets its OWN three-page design,
-        // not a trimmed copy of the kingdom template. Returns early: the shared
-        // $officersBlock/$eventsBlock/$defs scaffolding below is kingdom-scoped,
-        // so it must never run for a park.
-        //
-        // Three pages only (Home, New Players, Contact) against the kingdom's
-        // five. About Us is gone because its seeded body published author
-        // instructions to the open web; Documents & Resources is gone because
-        // a park has no library to put behind it; the Board of Directors
-        // roster is gone because parks have no board and it published a
-        // fabricated person. No Events page either: 26 of 342 parks have an
-        // upcoming event, so a nav item to an empty page would tell a
-        // prospective newcomer the club is dead before they clicked — Events
-        // stays as a block on Home, where the honest empty state reads as
-        // "nothing beyond our regular park days".
-        //
-        // Every time/place/officer claim below comes from a dynamic block —
-        // never hand-typed — so it can never contradict the live ORK data.
+        // A park is not a small kingdom — it gets its OWN three-page design, and
+        // its own runtime inputs. Returns early: the kingdom scaffolding below
+        // (noun, org label, meta clamp, starter_fields) must never be built for
+        // a park, which is exactly why the two scopes never shared a code path.
         if ($isPark) {
             $uir = defined('UIR') ? UIR : 'index.php?Route=';
 
-            // The steps CTA below links to this SAME site's own 'new-players'
-            // page. A bare relative 'new-players' href 404s: Controller_Page::
-            // view() is hard-coded to scope_type='global', so it can never
-            // resolve a park-scoped page on its own.
+            // The steps CTA on the park home page links to this SAME site's own
+            // 'new-players' page. A bare relative 'new-players' href 404s:
+            // Controller_Page::view() is hard-coded to scope_type='global', so it
+            // can never resolve a park-scoped page on its own.
             //
             // _sitePageHref() deliberately does NOT bake in this site's current
             // slug here at seed time — an earlier version did, and it went stale
@@ -678,90 +865,16 @@ class CmsSite extends CmsBase
             // everywhere at once, same guarantee nav already had.
             $newPlayersHref = $this->_sitePageHref('new-players');
 
-            return array(
-                'home' => array(
-                    'nav_label' => 'Home',
-                    'attrs' => array(
-                        'slug' => 'home', 'type' => 'composed', 'title' => 'Home', 'is_system' => 1,
-                        'meta_description' => 'A local Amtgard chapter — foam combat and medieval hobby, all ages, no experience or equipment needed. See when and where we meet, and what to expect on your first day.',
-                    ),
-                    'blocks' => array(
-                        array('type' => 'park_hero', 'source' => 'dynamic', 'enabled' => 1, 'order' => 10,
-                            'fields' => array('kicker' => '', 'heading' => '', 'show_weather' => 1,
-                                'cta_label' => 'Plan your first visit', 'cta_href' => '#pk-meet')),
-                        array('type' => 'park_meeting', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-                            'fields' => array('kicker' => 'When can I show up?', 'heading' => 'When & Where We Meet',
-                                'show_map' => 1, 'show_directions' => 1, 'limit' => 6)),
-                        array('type' => 'steps', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
-                            'fields' => array(
-                                'kicker' => 'New here? Start here', 'heading' => 'Your First Day, Start to Finish',
-                                'band' => 'light',
-                                'cta' => array('label' => 'More questions? Read the new player guide', 'href' => $newPlayersHref),
-                                'steps' => array(
-                                    array('title' => 'Just show up.', 'body' => 'You don’t need to email anyone, register, or bring anything but water. Come to the time and place above. Ten minutes early is perfect. An hour late is also fine — we’ll still be out there.'),
-                                    array('title' => 'Say the words "I’m new."', 'body' => 'Walk up to anyone and say it. That is the entire process. They’ll point you at whoever is running the day. Every person on that field said the same sentence once.'),
-                                    array('title' => 'Borrow a sword.', 'body' => 'We keep loaner weapons and shields for exactly this reason. They’re foam over a flexible core. Someone will walk you through the safety basics — what counts as a hit, what’s off-limits — in about five minutes.'),
-                                    array('title' => 'Play, or just watch.', 'body' => 'Jump into a game whenever you’re ready. If you’d rather stand on the sideline your whole first day and figure out what’s going on, that is completely normal and nobody will push you.'),
-                                ))),
-                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 40,
-                            'fields' => array(
-                                'kicker' => 'What is this, exactly?', 'heading' => 'Who We Are', 'align' => 'left',
-                                'body' => $clean($this->_parkIntroBody($scopeId)))),
-                        array('type' => 'park_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 50,
-                            'fields' => array('kicker' => 'What’s coming up?', 'heading' => 'Upcoming Events', 'limit' => 3)),
-                        array('type' => 'park_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 60,
-                            'fields' => array('kicker' => 'Who do I talk to?', 'heading' => 'Our Officers', 'limit' => 12)),
-                        array('type' => 'cta_band', 'source' => 'authored', 'enabled' => 1, 'order' => 70,
-                            'fields' => $this->_parkCtaFields($scopeId)),
-                    ),
-                ),
-
-                'new-players' => array(
-                    'nav_label' => 'New Players',
-                    'attrs' => array(
-                        'slug' => 'new-players', 'type' => 'article', 'title' => 'New Players',
-                        'meta_description' => 'Everything you need for your first day of Amtgard: what to wear, what it costs, whether it’s safe, and what actually happens at a park day.',
-                    ),
-                    'blocks' => array(
-                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                            'fields' => array(
-                                'kicker' => 'Never played?', 'heading' => 'Start Here', 'align' => 'left',
-                                'body' => $clean('<p>Amtgard is a foam-combat and medieval hobby that meets outdoors in a public park. There is no tryout, no membership to buy, and no experience required. Turn up, borrow a sword, and someone will teach you the rest.</p>'))),
-                        array('type' => 'accordion', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                            'fields' => array('items' => array(
-                                array('q' => 'What should I wear?', 'a' => 'Clothes you can run in and closed-toe shoes you don’t mind getting grass on. That’s genuinely it — you do not need a costume, armor, or anything medieval, and plenty of regulars play in gym shorts and a t-shirt. Bring water. Sunscreen if it’s that kind of day.'),
-                                array('q' => 'Do I need to buy equipment?', 'a' => 'No. We have loaner weapons and shields, and you’re welcome to use them as long as you want — weeks or months, nobody’s counting. When you do want your own, most players build theirs out of foam, tape, and a bit of patience, and someone here will happily show you how. This hobby is much cheaper than it looks.'),
-                                array('q' => 'Does it cost anything?', 'a' => 'Coming out and playing doesn’t. Amtgard is run entirely by volunteers — nobody here is paid and nobody is selling you anything. Some groups ask their regular members for small dues later on to keep loaner gear stocked, but nobody is going to ask you for money on your first day.'),
-                                array('q' => 'What actually happens at a park day?', 'a' => 'People trickle in, gear gets laid out and safety-checked, and someone starts calling games — team battles, last-one-standing, capture the flag with foam swords. In between, people sit in the shade and talk, work on armor and costume, or practice. You can play as hard or as gently as you like; there’s no fitness requirement and no minimum. Come late, leave early, take breaks whenever you want.'),
-                                array('q' => 'Is it safe? Will I get hurt?', 'a' => 'Every weapon is foam over a flexible core and gets checked before it’s used. Intentional hits to the head are against the rules, and so is swinging harder than it takes to feel a hit. You may pick up a bruise, the way you would in any sport — real injuries are rare. If someone is playing too hard, tell an officer. That’s what they’re there for.'),
-                                array('q' => 'Will I be the only new person?', 'a' => 'Maybe, maybe not — some days there are three newcomers and some days there’s just you. Either way, you won’t be the only person who has ever been new: every single player out there walked up once without knowing anybody. Showing up alone is the normal way to start.'),
-                                array('q' => 'How old do you have to be?', 'a' => 'Amtgard is all ages, and most groups have players from grade-schoolers to retirees. If you’re under 18, bring a parent or guardian along the first time — they may need to sign a waiver, and they’ll probably enjoy watching more than they expect.'),
-                                array('q' => 'Do I have to role-play or be in character?', 'a' => 'No. Some players have an elaborate persona and a name they go by out here; plenty of others just use their own first name and hit people with foam. Both are completely normal. Nobody is going to make you do an accent.'),
-                            ))),
-                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
-                            'fields' => array(
-                                'kicker' => 'Not near us?', 'heading' => 'Find Another Group', 'align' => 'left',
-                                'body' => $clean('<p>Amtgard has hundreds of chapters. If we’re too far away, the Atlas will find the one nearest you.</p>'),
-                                'cta' => array('label' => 'Find another Amtgard group', 'href' => $uir . 'Atlas'))),
-                    ),
-                ),
-
-                'contact' => array(
-                    'nav_label' => 'Contact',
-                    'attrs' => array(
-                        'slug' => 'contact', 'type' => 'composed', 'title' => 'Contact & Officers',
-                        'meta_description' => 'The volunteers who run this Amtgard chapter, and how to reach us.',
-                    ),
-                    'blocks' => array(
-                        array('type' => 'park_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 10,
-                            'fields' => array('kicker' => 'Who do I talk to?', 'heading' => 'Our Officers', 'limit' => 12)),
-                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                            'fields' => array(
-                                'heading' => 'Visiting from another park?', 'align' => 'left',
-                                'body' => $clean('<p>You’re welcome at any of our park days — just come as you are. If you need to reach someone before you travel, any of the officers above can help.</p>'))),
-                    ),
-                ),
-            );
+            // Both park lookups hit the DB, in this order, and both are seed-time
+            // SNAPSHOTS of live ORK data — see each method's docblock for the
+            // invariants they enforce before letting that data onto a public page.
+            return CmsStarterContent::Registry('park', array(
+                'clean'            => $clean,
+                'new_players_href' => $newPlayersHref,
+                'atlas_href'       => $uir . 'Atlas',
+                'park_intro_body'  => $this->_parkIntroBody($scopeId),
+                'park_cta_fields'  => $this->_parkCtaFields($scopeId),
+            ), $version);
         }
 
         // "Kingdom" / "Principality" / "Park" — the org's own word for itself.
@@ -769,206 +882,109 @@ class CmsSite extends CmsBase
         // resolve, so a seed can never hard-code the wrong org type.
         //
         // Computed HERE, after the park branch's early return, not up front:
-        // park copy below never reads $noun/$nounLower (OrgUnitNoun('park', ...)
+        // park copy never reads $noun/$nounLower (OrgUnitNoun('park', ...)
         // returns the literal 'Park' with no DB touch, but the call and its
         // result were still built and then discarded on every park seed). Only
-        // the kingdom scaffolding below uses it.
+        // the kingdom content below uses it.
         $noun = $this->OrgUnitNoun($scopeType, (int) $scopeId);
         if ($noun === '') {
             $noun = 'Group';
         }
         $nounLower = strtolower($noun);
 
-        // The org's live "who holds office" block. Both partials take the same
-        // fields; only the scope they read differs.
-        // NOTE: reached by KINGDOM scope only — the park branch above returns
-        // before this point, so kingdom_officers is the only type ever used
-        // here.
-        $officersBlock = array(
-            'type' => 'kingdom_officers',
-            'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-            'fields' => array(
-                'heading' => 'Our Officers',
-                'kicker'  => 'Leadership',
-                'limit'   => 12,
-            ),
-        );
+        // ---- Per-org meta descriptions -------------------------------------
+        // These strings are LIVE: Controller_Site::view() publishes
+        // meta_description into <meta name="description"> and feeds og_desc, so
+        // they are also the preview text of every Slack/Discord/Facebook share.
+        // They used to be noun-only placeholders ("Welcome to our kingdom."),
+        // byte-identical across every sibling site on the network — the
+        // duplicate-content signature that suppresses a whole network at once.
+        // The org's REAL name is already resolved on the mint path, so name the
+        // org. Nothing in the copy invents a fact (park counts, states) that
+        // isn't already on hand in this class.
+        if ($orgName === null) {
+            $orgName = $this->_orgDisplayName($scopeType, (int) $scopeId);
+        }
+        $orgName = trim((string) $orgName);
+        // Two forms so the name can lead a sentence or sit inside one, and the
+        // copy still reads correctly when the name can't be resolved.
+        $orgLabel      = ($orgName !== '') ? $orgName : 'our ' . $nounLower;
+        $orgLabelStart = ($orgName !== '') ? $orgName : 'Our ' . $noun;
 
-        // The org's live upcoming-events block, same story (kingdom scope only).
-        $eventsBlock = array(
-            'type' => 'kingdom_events',
-            'source' => 'dynamic', 'enabled' => 1, 'order' => 40,
-            'fields' => array(
-                'heading' => 'Upcoming Events',
-                'kicker'  => "What's happening",
-                'limit'   => 6,
-            ),
-        );
+        // Search engines truncate around 155 characters; a long org name must
+        // not push the distinguishing half of a description past the cut.
+        $meta = function ($text) {
+            $text = trim((string) $text);
+            if (function_exists('mb_strlen') && mb_strlen($text) > 155) {
+                return rtrim(mb_substr($text, 0, 152)) . '…';
+            }
+            return $text;
+        };
 
-        // NOTE: seeded pages deliberately carry NO leading heading block. Site_shell
-        // already promotes the page title to the page's <h1> whenever no content
-        // block supplies one, so a heading block repeating that title rendered the
-        // page name twice, one directly under the other.
-        $defs = array(
-            // ---- HOME (is_system within scope) — welcome + intro + upcoming events ----
-            // NOTE: deliberately NOT hero_carousel — that block bakes in a GLOBAL
-            // stats ticker (0s on a kingdom scope) and would emit an empty-src <img>
-            // with no seed image. The spec cut the stats ticker; the org adds its own
-            // hero imagery via the editor. Seed a clean welcome rich_text instead.
-            'home' => array(
-                'nav_label' => 'Home',
-                'attrs' => array(
-                    'slug'             => 'home',
-                    'type'             => 'composed',
-                    'title'            => 'Home',
-                    'is_system'        => 1,
-                    'meta_description' => 'Welcome to our ' . $nounLower . '.',
-                ),
-                'blocks' => array_values(array_filter(array(
-                    array(
-                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                        'fields' => array(
-                            'kicker'  => 'Welcome',
-                            'heading' => 'Welcome to Our ' . $noun,
-                            'align'   => 'center',
-                            // NOTE: reached by KINGDOM scope only — the park branch above
-                            // returns before this point.
-                            'body'    => $clean(
-                                '<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'
-                            ),
-                        ),
-                    ),
-                    array(
-                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                        'fields' => array(
-                            'kicker'  => 'About Us',
-                            'heading' => 'A ' . $noun . ' of Adventurers',
-                            'align'   => 'center',
-                            'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your ' . $nounLower . ', describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
-                        ),
-                    ),
-                    // Kingdoms have no meeting-time equivalent — their meeting times
-                    // live at the park level. (A park's own home page carries a
-                    // park_meeting block instead — see the park branch above.)
-                    $eventsBlock,
-                ))),
-            ),
+        return CmsStarterContent::Registry('kingdom', array(
+            'clean'           => $clean,
+            'meta'            => $meta,
+            'noun'            => $noun,
+            'noun_lower'      => $nounLower,
+            'org_label'       => $orgLabel,
+            'org_label_start' => $orgLabelStart,
+            'parks_limit'     => CmsRenderCache::PARKS_LIMIT_MAX,
+            // The kingdom starter's own internal links (the hero CTA, the parks
+            // teaser's "All parks", both closing CTA bands, the steps block's
+            // guide link). STABLE 'Page/view/{slug}' form, never a baked-in
+            // /k/{siteSlug}/ route — see _sitePageHref() for why a rename would
+            // otherwise 404 every one of them. Pure string builders: no DB.
+            'parks_href'       => $this->_sitePageHref('parks'),
+            'new_players_href' => $this->_sitePageHref('new-players'),
+            'starter_fields'  => function ($type, array $overrides = array()) {
+                return $this->_starterFields($type, $overrides);
+            },
+        ), $version);
+    }
 
-            // ---- ABOUT US / HISTORY — heading + rich_text placeholder ----
-            'about' => array(
-                'nav_label' => 'About Us',
-                'attrs' => array(
-                    'slug'             => 'about',
-                    'type'             => 'article',
-                    'title'            => 'About Us',
-                    'meta_description' => 'About our ' . $nounLower . ' and its history.',
-                ),
-                'blocks' => array(
-                    array(
-                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                        'fields' => array(
-                            'kicker'  => 'Our History',
-                            'heading' => 'How We Got Here',
-                            'align'   => 'left',
-                            // NOTE: reached by KINGDOM scope only — the park branch above
-                            // returns before this point (and no longer has an About page).
-                            'body'    => $clean(
-                                '<p>Share your ' . $nounLower . '&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-
-            // ---- OUR PARKS — kingdom_parks_map + kingdom_parks (both dynamic) ----
-            // KINGDOM SCOPE ONLY. A park has no parks of its own, and both blocks
-            // here are kingdom-scoped, so on a park site this page seeded as a
-            // permanently empty "Our Parks" entry in the nav. Filtered out below.
-            'parks' => array(
-                'nav_label' => 'Our Parks',
-                'attrs' => array(
-                    'slug'             => 'parks',
-                    'type'             => 'composed',
-                    'title'            => 'Our Parks',
-                    'meta_description' => 'Find a park near you.',
-                ),
-                'blocks' => array(
-                    array(
-                        'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-                        'fields' => array(
-                            'heading' => 'Find a Park Near You',
-                            'kicker'  => 'Our Parks',
-                        ),
-                    ),
-                    array(
-                        'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
-                        'fields' => array(
-                            'heading' => 'Where We Play',
-                            'kicker'  => '',
-                            'sort'    => 'city',
-                            'show_heraldry' => 1,
-                            'limit'   => 24,
-                        ),
-                    ),
-                ),
-            ),
-
-            // ---- OFFICERS — heading + kingdom_officers (dynamic) + Board roster ----
-            'officers' => array(
-                'nav_label' => 'Officers',
-                'attrs' => array(
-                    'slug'             => 'officers',
-                    'type'             => 'composed',
-                    'title'            => 'Officers',
-                    'meta_description' => 'Meet the officers who keep the ' . $nounLower . ' running.',
-                ),
-                'blocks' => array(
-                    $officersBlock,
-                    array(
-                        'type' => 'staff_roster', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
-                        'fields' => array(
-                            'kicker'       => 'Governance',
-                            'heading'      => 'Board of Directors',
-                            'subheading'   => 'Add the members who govern and steward the ' . $nounLower . '.',
-                            'presentation' => 'mundane',
-                            'people'       => array(
-                                array(
-                                    'image'        => array(),
-                                    'persona_name' => '',
-                                    'mundane_name' => 'Add a board member',
-                                    'role'         => 'Role / title',
-                                    'bio'          => '',
-                                    'mundane_id'   => 0,
-                                    'href'         => '',
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-
-            // ---- DOCUMENTS & RESOURCES — heading + empty file_download library ----
-            'documents' => array(
-                'nav_label' => 'Documents & Resources',
-                'attrs' => array(
-                    'slug'             => 'documents',
-                    'type'             => 'media',
-                    'title'            => 'Documents & Resources',
-                    'meta_description' => $noun . ' documents, bylaws, and resources.',
-                ),
-                'blocks' => array(
-                    array(
-                        'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                        'fields' => array('files' => array()),
-                    ),
-                ),
-            ),
-        );
-
-        // NOTE: reached by KINGDOM scope only — the park branch above returns its
-        // own three-page array before this point, so nothing here needs a
-        // park-side "drop the Our Parks page" carve-out.
-        return $defs;
+    /**
+     * A seeded block's fields, built from the block type's OWN declared
+     * starter_fields plus page-specific overrides.
+     *
+     * A block type's field contract used to be hand-written twice with nothing
+     * connecting the two: once in CmsBlockRegistry::BlockDefs()['starter_fields']
+     * (what an officer gets when they add the block) and again in
+     * _starterPageDefs() (what provisioning seeds). Neither was checked against
+     * what the .tpl partial actually consumes, so a field the template needed
+     * could be missing from both — harmless in BlockDefs, where the starter is
+     * empty, but a visibly broken block in a POPULATED seeded row.
+     *
+     * Merging instead of re-declaring means the seed inherits the registry's
+     * contract and states only what it genuinely changes. CmsBlockRegistry is
+     * read-only from here. Falls back to the overrides alone when the registry
+     * isn't loaded or doesn't know the type.
+     *
+     * MEASURE OF WHAT THIS BUYS TODAY, so nobody over-reads it: for
+     * file_download the registry starter is exactly array('files' => array()),
+     * which the overrides replace outright — the merge contributes nothing but
+     * the link to the contract. For staff_roster it contributes 'subheading'
+     * and an empty 'people'. It does NOT supply the fields neither side
+     * declares (staff_roster's show_mundane is missing from the registry too);
+     * the seeded roster was fixed by dropping its fabricated blank person row,
+     * not by this merge. The value here is structural — one declaration to
+     * update when a block's contract changes — not a bug already caught.
+     *
+     * @param string $type      block type key
+     * @param array  $overrides fields this starter page sets differently
+     * @return array
+     */
+    private function _starterFields($type, array $overrides = array())
+    {
+        $base = array();
+        if (class_exists('CmsBlockRegistry')) {
+            $defs = CmsBlockRegistry::BlockDefs();
+            if (isset($defs[(string) $type]['starter_fields'])
+                && is_array($defs[(string) $type]['starter_fields'])
+            ) {
+                $base = $defs[(string) $type]['starter_fields'];
+            }
+        }
+        return array_merge($base, $overrides);
     }
 
     /**
@@ -1145,17 +1161,59 @@ class CmsSite extends CmsBase
     }
 
     /**
-     * Stamp ork_cms_site.template_seeded_at once, at the end of a successful
-     * starter-template seed. This is the explicit "this site HAS been seeded"
-     * marker EnsureSite gates its repair on — see the repair block there. Written
-     * only when still NULL (re-entrant).
+     * Does ork_cms_site carry this column yet?
      *
-     * Pre-migration DBs are handled by PROBING for the column, not by a
-     * try/catch: PDO runs under ERRMODE_WARNING here (YapoMysql/YapoDb), so an
-     * unknown-column UPDATE does not throw — execute() just returns false and
-     * raises a PHP Warning on every new-site creation. The probe skips the write
-     * (and the warning) instead. The outcome is safe either way: with the column
-     * absent EnsureSite treats the site as seeded and never re-seeds.
+     * The _firstRow-based SHOW COLUMNS probe idiom (same as CmsBase::
+     * _tableExists()) that _stampTemplateSeeded() has always used, lifted out so
+     * the seed_version reads share it. PDO runs under ERRMODE_WARNING here
+     * (YapoMysql/YapoDb), so a statement naming an unknown column does not
+     * throw — execute() just returns false and raises a PHP Warning on every
+     * request that runs it. Probing skips the statement, and the warning, instead.
+     *
+     * @param string $column
+     * @return bool
+     */
+    private function _siteColumnExists($column)
+    {
+        global $DB;
+
+        $column = preg_replace('/[^a-z0-9_]+/', '', strtolower((string) $column));
+        if ($column === '') {
+            return false;
+        }
+
+        $DB->Clear();
+        $row = $this->_firstRow($DB->DataSet(
+            'SHOW COLUMNS FROM ' . DB_PREFIX . "cms_site LIKE '" . $column . "'"
+        ));
+        return ($row !== null);
+    }
+
+    /**
+     * Stamp ork_cms_site.template_seeded_at — and, on the same statement,
+     * seed_version — once, at the end of a successful starter-template seed.
+     * template_seeded_at is the explicit "this site HAS been seeded" marker
+     * EnsureSite gates its repair on (see the repair block there); seed_version
+     * records WHICH version of CmsStarterContent it was seeded with, so
+     * BackfillSeedContent() can later re-derive exactly that content. Written
+     * only when the marker is still NULL (re-entrant).
+     *
+     * ONE STATEMENT, ONE GATE, on purpose: a seed that withholds the marker must
+     * withhold the version too. A site stamped with a version it was never fully
+     * seeded at would be skipped by the backfill AND (once the marker is
+     * withheld) re-seeded by EnsureSite's repair, which is the worst of both.
+     * Keeping both columns on the single guarded UPDATE makes the two impossible
+     * to disagree.
+     *
+     * Called from exactly one place, _finishSeed(), and only when that seed
+     * produced a landing page — a partially-failed seed is deliberately left
+     * UNSTAMPED so the next EnsureSite retries it. See _finishSeed's docblock.
+     *
+     * Pre-migration DBs are handled by PROBING for each column, not by a
+     * try/catch — see _siteColumnExists(). The outcome is safe either way: with
+     * template_seeded_at absent EnsureSite treats the site as seeded and never
+     * re-seeds, and with seed_version absent the backfill treats every site as
+     * current and never re-derives.
      *
      * @param int $siteId
      * @return void
@@ -1169,19 +1227,23 @@ class CmsSite extends CmsBase
             return;
         }
 
-        // Same _firstRow-based probe idiom as CmsBase::_tableExists().
-        $DB->Clear();
-        $column = $this->_firstRow($DB->DataSet(
-            'SHOW COLUMNS FROM ' . DB_PREFIX . "cms_site LIKE 'template_seeded_at'"
-        ));
-        if ($column === null) {
+        if (!$this->_siteColumnExists('template_seeded_at')) {
             return; // migration not run yet — nothing to stamp
         }
+        // Independent probe: the two columns arrived in two different
+        // migrations, so a DB can legitimately have the marker and not the
+        // version. Naming a column that isn't there would fail the WHOLE
+        // UPDATE, losing the marker as well.
+        $setVersion = $this->_siteColumnExists('seed_version');
 
         $DB->Clear();
         $DB->site_id = $siteId;
+        if ($setVersion) {
+            $DB->seed_version = self::CURRENT_SEED_VERSION;
+        }
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_site SET template_seeded_at = NOW()'
+            . ($setVersion ? ', seed_version = :seed_version' : '')
             . ' WHERE site_id = :site_id AND template_seeded_at IS NULL'
         );
 
@@ -1190,6 +1252,1198 @@ class CmsSite extends CmsBase
         // so a row cached before the stamp can't serve template_seeded_at = NULL
         // for up to 1800s.
         $this->_bustSlugCache($this->_slugForSite($siteId));
+    }
+
+    /**
+     * Clear ONE site's seed marker so the NEXT EnsureSite() re-enters the
+     * starter seed through its repair branch. The supported, audited
+     * alternative to the raw SQL that used to be the only lever.
+     *
+     * WHY THIS IS SAFE TO EXPOSE, and it rests entirely on the repair pass
+     * already being non-destructive: re-entering with $isRepair = true does NOT
+     * resurrect a starter page the org deliberately trashed, does NOT re-point a
+     * home page the org has chosen, and CreatePage self-guards the live-slug
+     * uniqueness tuple so an existing page is recovered rather than duplicated.
+     * So the worst a re-run can do to a finished site is CREATE the starter
+     * pages and nav items that are genuinely missing — which is exactly the
+     * "a page is missing / the nav is empty" report this exists to answer.
+     * It is emphatically NOT a "reset to factory" and must never become one.
+     *
+     * Deliberately does NOT call EnsureSite itself. Clearing the marker and
+     * acting on it are two decisions: the caller owns authorization (this is a
+     * super-admin action — it rewrites content on a site that may be public),
+     * and owns reporting what the subsequent seed actually did.
+     *
+     * @param int $siteId
+     * @param int $actorId acting mundane_id, recorded in the audit trail
+     * @return bool true when the marker was cleared (or was already NULL);
+     *              false when the site is unknown or the column is absent
+     */
+    public function ClearSeedMarker($siteId, $actorId = 0)
+    {
+        global $DB;
+
+        $siteId  = (int)$siteId;
+        $actorId = (int)$actorId;
+        if ($siteId <= 0) {
+            return false;
+        }
+
+        // Same fails-OPEN convention every other reader of this column uses: an
+        // ABSENT column means the seed-marker migration has not run, and a site
+        // on a pre-migration DB is treated as seeded. There is nothing to clear
+        // and nothing to re-run, so say so rather than pretending it worked.
+        if (!$this->_siteColumnExists('template_seeded_at')) {
+            return false;
+        }
+
+        // seed_version is probed independently: the two columns arrived in two
+        // different migrations, so naming one that isn't there would fail the
+        // WHOLE update. Reset it alongside the marker — a site about to be
+        // re-seeded is about to receive CURRENT_SEED_VERSION content, so leaving
+        // a stale version behind would make a later backfill re-derive against
+        // the wrong baseline and silently skip every field.
+        $clearVersion = $this->_siteColumnExists('seed_version');
+
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_site SET template_seeded_at = NULL'
+            . ($clearVersion ? ', seed_version = 0' : '')
+            . ' WHERE site_id = :site_id'
+        );
+
+        $scope = $this->_scopeForSite($siteId);
+        $this->_cmsAudit(
+            $actorId,
+            'site.seed_marker_cleared',
+            'site',
+            $siteId,
+            ($scope !== null) ? $scope['scope_type'] : 'global',
+            ($scope !== null) ? (int)$scope['scope_id'] : 0
+        );
+
+        // The marker rides on the cached GetSiteBySlug row — bust it, or a row
+        // cached moments ago keeps serving the OLD stamped value and EnsureSite
+        // reads it as seeded, silently skipping the repair we just enabled.
+        $this->_bustSlugCache($this->_slugForSite($siteId));
+
+        return true;
+    }
+
+    /**
+     * The (scope_type, scope_id) a site row belongs to, for audit attribution.
+     *
+     * @param int $siteId
+     * @return array|null ['scope_type' => string, 'scope_id' => int]
+     */
+    private function _scopeForSite($siteId)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        if ($siteId <= 0) {
+            return null;
+        }
+
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
+        ));
+        if ($row === null) {
+            return null;
+        }
+
+        return array(
+            'scope_type' => isset($row['scope_type']) ? (string)$row['scope_type'] : 'global',
+            'scope_id'   => isset($row['scope_id']) ? (int)$row['scope_id'] : 0,
+        );
+    }
+
+    /**
+     * Bring ONE site's UNEDITED starter content up to CURRENT_SEED_VERSION.
+     *
+     * THE SAFETY PROPERTY, which is the whole point of this method: a stored
+     * block field is replaced ONLY when it still BYTE-MATCHES what the site's
+     * recorded seed version would have written into it. Anything an officer has
+     * touched — one word, one character, one reordered array element — no longer
+     * byte-matches, so it is left completely alone. The code below enforces that
+     * with a single `===` against the re-derived old value and has no other way
+     * to write: there is no fuzzy match, no prefix match, no "looks like the
+     * placeholder" heuristic anywhere in it.
+     *
+     * That is the rule the two bespoke repair scripts
+     * (db-migrations/2026-09-20-cms-kingdom-seed-copy-repair.php and
+     * 2026-08-10-cms-park-seed-repair.php) each hand-implemented over a
+     * hand-typed copy of the old strings. This generalizes them: the old strings
+     * come back from CmsStarterContent at the version the site records, so no
+     * future copy change needs a script of its own.
+     *
+     * RE-DERIVATION IS APPROXIMATE IN ONE DIRECTION, and it matters. The old
+     * version's builder is a historical record of the COPY, but it is replayed
+     * against TODAY'S runtime inputs — CmsRenderCache::PARKS_LIMIT_MAX, the
+     * block registry's starter_fields, the org's live display name, the park's
+     * live ORK description. Change any of those and a field that really was
+     * seeded stops byte-matching. That fails SAFE (no match, no write, the
+     * officer's page is untouched), but it is a skip, not an error, and nothing
+     * reports it. See CmsStarterContent's header for what version 0 does and
+     * does not cover — in particular, a site seeded BEFORE this wave needs
+     * db-migrations/2026-09-20-cms-kingdom-seed-copy-repair.php run first for
+     * its stored copy to line up with what v0 re-derives.
+     *
+     * THE WRITE IS NOT HAND-ROLLED. Every change goes back through
+     * CmsPage::ReplaceBlocks() — the same choke point _seedStarterTemplate()
+     * writes the seed through — so the rewrite gets the sanitizer, the
+     * GetPageWithBlocks cache bust, the owner-row updated_at/updated_by stamp
+     * and a revision snapshot (the only undo) from the code that owns them.
+     *
+     * IT CAN ALSO RESTRUCTURE, under one condition that never bends. Field-level
+     * retouching alone could not carry a version that changes a block's TYPE,
+     * inserts a block, or adds a page — every such block key is absent from one
+     * of the two versions and is skipped — so a redesign reached nobody. Three
+     * structural moves are therefore allowed, each gated on "nothing here has
+     * been edited":
+     *   - PAGE-LEVEL UPGRADE: when EVERY block on a page is still exactly what
+     *     the site's recorded version seeded (same types, same orders, same
+     *     enabled flags, every seeded field byte-matching) AND the new version's
+     *     block LAYOUT for that page differs, the page's block list is replaced
+     *     wholesale with the new version's, through ReplaceBlocks(). One edited
+     *     character anywhere on the page and the page is NOT restructured: the
+     *     run falls back to the field-level pass. See _pageIsPristineSeed().
+     *   - MISSING PAGE: a page the new version INTRODUCES (in the new registry,
+     *     absent from the old) is created when the scope has no page at that
+     *     slug — and NOT when it has a TRASHED one, which is a deliberate
+     *     removal, exactly as the seed's own repair pass treats it.
+     *   - MISSING NAV ROW: a nav item the new version introduces is appended
+     *     only when the stored menu still matches, row for row and in order,
+     *     what the OLD version seeded. A menu an officer has rearranged,
+     *     relabelled, disabled or added to gets nothing injected into it.
+     *
+     * WHAT IT DOES NOT DO, deliberately:
+     *   - It never DELETES a page, a block or a nav item, and never re-creates
+     *     one the org trashed.
+     *   - It never restructures, relabels or re-orders anything an officer has
+     *     edited. Every structural move above is gated on the surrounding
+     *     content still being byte-identical to the seed.
+     *   - It never touches a page the site does not still have (beyond the
+     *     narrow "the new version adds it" case above), or a block whose type or
+     *     order the org has changed.
+     *   - It does not RENAME or RE-PARENT nav rows both versions seed: a version
+     *     that rewords an existing menu label leaves already-seeded sites on the
+     *     old label. Only genuinely new rows are added.
+     *   - It never runs on its own. No render path calls it; the production
+     *     entry point is db-migrations/2026-09-20-cms-seed-backfill.php. A seed
+     *     that was never completed (template_seeded_at still NULL) is skipped
+     *     outright and left to EnsureSite's repair.
+     *
+     * IDEMPOTENT: the second run sees seed_version already at
+     * CURRENT_SEED_VERSION and returns 'current' without reading a single block.
+     *
+     * FAILS OPEN on a pre-migration database, the same convention
+     * template_seeded_at's absence already follows: no seed_version column means
+     * every site is treated as current and nothing is ever re-derived on a guess.
+     *
+     * @param int $siteId site to upgrade
+     * @param int $uid    acting mundane_id (audit)
+     * @return array{status:string, from:int, to:int, blocks:int, fields:int, reason:string,
+     *   pages_restructured:int, pages_created:int, nav_added:int, nav_reason:string}
+     *   status: 'updated' (version advanced), 'current' (nothing to do) or
+     *   'skipped' (couldn't safely act — see reason). 'to' is the version the
+     *   site is on AFTERWARDS, so on 'skipped' it equals 'from': nothing landed.
+     */
+    public function BackfillSeedContent($siteId, $uid)
+    {
+        global $DB;
+
+        $siteId = (int) $siteId;
+        $uid    = (int) $uid;
+        // 'to' is the version the site ACTUALLY ends up on, so it starts at
+        // 'from' and only advances where a version really lands. Reporting
+        // CURRENT_SEED_VERSION on a 'skipped' run told an operator the site had
+        // been brought forward when nothing was written at all.
+        $result = array(
+            'status' => 'skipped', 'from' => 0, 'to' => 0,
+            'blocks' => 0, 'fields' => 0, 'reason' => '',
+            // The STRUCTURAL half of the upgrade, counted separately from the
+            // field retouches so an operator can see which kind of change landed.
+            'pages_restructured' => 0, 'pages_created' => 0, 'nav_added' => 0,
+            'nav_reason' => '',
+            // Pages that REACHED the restructure gate and were refused because
+            // the page is no longer pristine seed. Counted separately because
+            // the version is stamped either way, so without this an operator
+            // cannot tell "this site had nothing to restructure" from "this
+            // site declined the restructure" — and once stamped, there is no
+            // query left that can find the declined sites.
+            'pages_declined' => 0, 'declined_slugs' => array(),
+            'failed' => 0,
+        );
+
+        if ($siteId <= 0) {
+            return $this->_backfillSkip($result, 'no_site');
+        }
+        if (!$this->_siteColumnExists('seed_version')) {
+            // Fail OPEN — see the docblock.
+            return $this->_backfillSkip($result, 'no_seed_version_column');
+        }
+
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $site = $this->_firstRow($DB->DataSet(
+            'SELECT site_id, scope_type, scope_id, slug, seed_version, template_seeded_at'
+            . ' FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
+        ));
+        if ($site === null) {
+            return $this->_backfillSkip($result, 'no_site');
+        }
+
+        // An unseeded (or half-seeded) site has no starter content to re-derive
+        // against: EnsureSite's repair owns that case, and stamping a version
+        // here would take the site out of its reach forever.
+        if (empty($site['template_seeded_at'])) {
+            return $this->_backfillSkip($result, 'never_seeded');
+        }
+
+        $scopeType = $this->_normalizeSiteScopeType($site['scope_type']);
+        $scopeId   = (int) $site['scope_id'];
+        $from      = (int) $site['seed_version'];
+        $result['from'] = $from;
+
+        if ($from >= self::CURRENT_SEED_VERSION) {
+            $result['status'] = 'current';
+            $result['to']     = $from;
+            $result['reason'] = 'already_current';
+            return $result;
+        }
+
+        // The write goes through CmsPage::ReplaceBlocks() — the class that owns
+        // block storage, the sanitizer choke point, the page-cache bust and the
+        // revision history. Without it there is no safe way to write, so skip.
+        if (!class_exists('CmsPage')) {
+            return $this->_backfillSkip($result, 'no_cms_page');
+        }
+        $page = new CmsPage();
+
+        // Re-derive BOTH versions for this exact org, so the comparison is
+        // against what this site was really given — org name, noun, park
+        // description and all — not against a generic template.
+        $old = $this->_starterPageDefs($scopeType, $scopeId, null, $from);
+        $new = $this->_starterPageDefs($scopeType, $scopeId, null, self::CURRENT_SEED_VERSION);
+
+        // Key both by (page slug, block type, block order) — the identity a
+        // seeded block keeps across a version, and the only one an officer
+        // cannot silently change out from under us without also changing the
+        // thing we would have matched on.
+        //
+        // BOTH SIDES GO THROUGH THE SANITIZER, because the seed did: the
+        // registry value is not what landed in fields_json — ReplaceBlocks()
+        // ran it through _normalizeBlocks() -> _sanitizeBlockFields() first
+        // (CmsSanitizer::Clean on HTML fields, SafeHrefOrHash on URL fields).
+        // Comparing the RAW registry value against sanitized storage made the
+        // gate unmatchable for any field the sanitizer rewrites — the park home
+        // CTA band's empty editor slot, whose href the sanitizer maps '' -> '#',
+        // could never be upgraded by any future version. This is the same step
+        // db-migrations/2026-09-20-cms-kingdom-seed-copy-repair.php spells out:
+        // reconstruct the expected strings the way they were STORED, so the
+        // comparison is byte-exact rather than a guess at what the sanitizer did.
+        $oldByKey = $this->_starterFieldsByKey($page, $old);
+        $newByKey = $this->_starterFieldsByKey($page, $new);
+
+        // The SAME sanitized starter blocks, grouped per page instead of keyed
+        // per block — the input to the STRUCTURAL half of the upgrade below. The
+        // field-level gate can only ever retouch a block BOTH versions declare at
+        // the same (slug|type|order), so before this a version that changed a
+        // block's TYPE, inserted a block, or added a whole page reached nobody:
+        // every one of those keys is absent from one side and skipped.
+        $oldBySlug = $this->_starterBlocksBySlug($page, $old);
+        $newBySlug = $this->_starterBlocksBySlug($page, $new);
+
+        // Buffer every candidate page BEFORE issuing any write: the shared $DB
+        // handle is single-cursor, so writing mid-iteration drops the rest of
+        // the result set.
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $pages = $this->_eachRow($DB->DataSet(
+            'SELECT page_id, slug FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+            . ' AND deleted_at IS NULL'
+        ));
+
+        $failed = 0;
+        $liveSlugs = array();
+        foreach ($pages as $pageRow) {
+            $pageId = (int) $pageRow['page_id'];
+            $slug   = (string) $pageRow['slug'];
+            if ($pageId <= 0 || $slug === '') {
+                continue;
+            }
+            $liveSlugs[$slug] = $pageId;
+
+            // Read the owner's CURRENT blocks the way the editor does —
+            // including disabled ones, so a block an officer switched off
+            // survives the write-back instead of being deleted by it.
+            $blocks = $page->GetBlocksForEditor('page', $pageId);
+
+            // ---- PAGE-LEVEL UPGRADE ------------------------------------
+            // The only way a version can RESTRUCTURE a page, and it is allowed
+            // exactly when the page is still 100% seed: same blocks, same types
+            // in the same sequence, same enabled flags, and every seeded field
+            // still byte-matching what this site's recorded version wrote. (The
+            // absolute order NUMBERS are deliberately not compared — see
+            // _pageIsPristineSeed.) One edited
+            // character anywhere on the page and _pageIsPristineSeed() is false,
+            // so the run falls through to the field-level pass below and this
+            // page is never restructured. That is the safety property, unchanged.
+            //
+            // Gated on the block LAYOUT really differing (type/order list), so a
+            // version that only rewords fields keeps taking the narrower,
+            // field-by-field path and its per-field accounting.
+            $layoutDiffers = isset($oldBySlug[$slug], $newBySlug[$slug])
+                && $this->_seedBlockKeys($oldBySlug[$slug]) !== $this->_seedBlockKeys($newBySlug[$slug]);
+            if ($layoutDiffers && $this->_pageIsPristineSeed($blocks, $oldBySlug[$slug])) {
+                $replacement = (isset($new[$slug]['blocks']) && is_array($new[$slug]['blocks']))
+                    ? $new[$slug]['blocks'] : array();
+                if ($replacement !== array()) {
+                    // Same canonical write as every other path here: sanitizer,
+                    // cache bust, owner stamp and a revision snapshot (the undo).
+                    if ((int) $page->ReplaceBlocks('page', $pageId, $replacement, $uid) === -1) {
+                        $failed++;
+                        continue;
+                    }
+                    $result['blocks'] += count($newBySlug[$slug]);
+                    $result['pages_restructured']++;
+                    continue;
+                }
+            } elseif ($layoutDiffers) {
+                // The new version WANTED to restructure this page and the gate
+                // refused it. Record which page, so the sites that silently
+                // declined remain findable after the version is stamped.
+                $result['pages_declined']++;
+                $result['declined_slugs'][] = $slug;
+                $this->_cmsAudit(
+                    (int) $uid,
+                    'seed_backfill_page_declined:' . $slug,
+                    'page',
+                    $pageId,
+                    $scopeType,
+                    (int) $scopeId
+                );
+            }
+
+            $touched = 0;
+            $changed = 0;
+            foreach ($blocks as $i => $block) {
+                $key = $slug . '|' . (string) $block['type'] . '|' . (int) $block['order'];
+                if (!isset($oldByKey[$key]) || !isset($newByKey[$key])) {
+                    continue; // a block one of the two versions doesn't seed here
+                }
+                $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
+
+                $n = 0;
+                foreach ($oldByKey[$key] as $field => $seededValue) {
+                    // THE byte-match gate. array_key_exists (not isset) so a
+                    // field seeded as null is still comparable, and === so an
+                    // array field must match element for element, in order, by
+                    // type. There is no other way to write from here: no fuzzy
+                    // match, no prefix match, no "looks like the placeholder".
+                    if (!array_key_exists($field, $fields) || $fields[$field] !== $seededValue) {
+                        continue; // absent, or the officer's own wording — hands off
+                    }
+                    if (!array_key_exists($field, $newByKey[$key])
+                        || $newByKey[$key][$field] === $seededValue
+                    ) {
+                        continue; // this version doesn't change that field
+                    }
+                    $fields[$field] = $newByKey[$key][$field];
+                    $n++;
+                }
+                if ($n > 0) {
+                    $blocks[$i]['fields'] = $fields;
+                    $changed += $n;
+                    $touched++;
+                }
+            }
+            if ($changed === 0) {
+                continue; // nothing on this page is still untouched seed copy
+            }
+
+            // THE CANONICAL WRITE. Hand the whole (mutated) set back to the same
+            // method _seedStarterTemplate() itself writes through, rather than
+            // UPDATEing fields_json behind its back. ReplaceBlocks() owns four
+            // things a hand-rolled UPDATE silently skipped: the sanitize choke
+            // point, the GetPageWithBlocks cache bust (PWB_CACHE_TTL is 1800s,
+            // keyed on the page's updated_at — a direct UPDATE re-primed the
+            // STALE payload for half an hour after the operator was told the
+            // backfill had landed), the owner-row updated_at/updated_by stamp,
+            // and a revision snapshot, which is the only undo for content this
+            // runner rewrote on a published page.
+            if ((int) $page->ReplaceBlocks('page', $pageId, $blocks, $uid) === -1) {
+                // Verified partial write — ReplaceBlocks already ROLLBACKed.
+                $failed++;
+                continue;
+            }
+            $result['blocks'] += $touched;
+            $result['fields'] += $changed;
+        }
+
+        // ---- PAGES THE NEW VERSION ADDS --------------------------------
+        // Strictly pages the new version INTRODUCES (present in $new, absent
+        // from $old). A starter page both versions declare and this site does
+        // not have was removed on purpose — or never seeded — and is left alone.
+        $created = $this->_backfillNewPages($page, $old, $new, $scopeType, $scopeId, $uid, $liveSlugs, $result);
+
+        // ---- NAV ROWS THE NEW VERSION ADDS -----------------------------
+        // Only when the menu still matches, row for row and in order, what the
+        // OLD version seeded. An officer who rearranged their nav gets nothing
+        // injected into it.
+        $this->_backfillNewNav($old, $new, $scopeType, $scopeId, $liveSlugs + $created, $result);
+
+        // _backfillNewPages() reports its own write failures through the result;
+        // fold them in so a failed new-page write withholds the stamp too.
+        $failed += (int) $result['failed'];
+        $result['failed'] = $failed;
+
+        if ($failed > 0) {
+            // Do NOT stamp the version: leaving the site behind is what makes a
+            // re-run retry the pages that failed. Every write is idempotent
+            // (an already-upgraded field no longer byte-matches the old value),
+            // so a retry can only finish the job.
+            return $this->_backfillSkip($result, 'partial_write');
+        }
+
+        // Stamp the new version even when nothing changed: the site HAS been
+        // re-derived at this version, and everything still seeded-looking is now
+        // the current copy. Re-running would only re-do the same no-op work.
+        $DB->Clear();
+        $DB->site_id      = $siteId;
+        $DB->seed_version = self::CURRENT_SEED_VERSION;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_site SET seed_version = :seed_version'
+            . ' WHERE site_id = :site_id AND seed_version < :seed_version'
+        );
+
+        // seed_version rides on the cached GetSiteBySlug row; the nav tree's
+        // content version covers the menus. The rendered block payload is
+        // ReplaceBlocks()' own concern and is busted there, per page.
+        $this->_bustSlugCache(isset($site['slug']) ? (string) $site['slug'] : '');
+        $this->_bumpContentVersion($scopeType, $scopeId);
+
+        $this->_cmsAudit($uid, 'seed_backfill', 'site', $siteId, $scopeType, $scopeId);
+
+        $result['status'] = 'updated';
+        $result['to']     = self::CURRENT_SEED_VERSION;
+        $result['reason'] = 'v' . $from . '_to_v' . self::CURRENT_SEED_VERSION;
+        return $result;
+    }
+
+    /**
+     * The one way BackfillSeedContent() reports "I did not act": status stays
+     * 'skipped' and 'to' collapses onto 'from', because the site is still on the
+     * version it arrived with. Centralized so no skip path can drift back into
+     * claiming a version it never landed on.
+     *
+     * @param array  $result partially-filled result array
+     * @param string $reason machine-readable reason code
+     * @return array the result, ready to return
+     */
+    private function _backfillSkip(array $result, $reason)
+    {
+        $result['status'] = 'skipped';
+        $result['to']     = (int) $result['from'];
+        $result['reason'] = (string) $reason;
+        return $result;
+    }
+
+    /**
+     * Flatten a starter registry to (page slug|block type|block order) => fields.
+     *
+     * The key is a seeded block's stable identity across content versions, and
+     * the only one BackfillSeedContent() can safely match a STORED block on: a
+     * block_id is not in the registry, and matching on position alone would
+     * follow an officer's re-ordering onto the wrong block.
+     *
+     * THE FIELDS COME BACK SANITIZED, which is the whole reason this takes a
+     * CmsPage. SanitizeBlocksForRender() is the public face of the exact
+     * _normalizeBlocks() -> _sanitizeBlockFields() pass ReplaceBlocks() ran the
+     * registry through when the site was seeded, so what this returns is what
+     * the seed really STORED — not the pre-sanitizer registry text, which for
+     * any Clean()ed or SafeHrefOrHash()ed field is a different string and could
+     * never byte-match the stored row.
+     *
+     * @param CmsPage $page     the sanitize choke point (pure call — no DB)
+     * @param array   $registry as returned by _starterPageDefs()
+     * @return array key => fields array, as the seed would have stored them
+     */
+    private function _starterFieldsByKey($page, array $registry)
+    {
+        $out = array();
+        foreach ($registry as $slug => $def) {
+            if (!isset($def['blocks']) || !is_array($def['blocks'])) {
+                continue;
+            }
+            foreach ($page->SanitizeBlocksForRender($def['blocks']) as $block) {
+                if (!is_array($block['fields'])) {
+                    continue;
+                }
+                $key = (string) $slug . '|' . (string) $block['type'] . '|' . (int) $block['order'];
+                $out[$key] = $block['fields'];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The same sanitized starter blocks _starterFieldsByKey() flattens, grouped
+     * per PAGE and kept in registry order.
+     *
+     * The structural half of BackfillSeedContent() has to reason about a page's
+     * whole block list at once — "is every block on this page still exactly what
+     * the seed wrote?" and "does the new version lay this page out differently?"
+     * — which a (slug|type|order)-keyed flat map cannot answer: it has no notion
+     * of how many blocks a page has, nor of their order.
+     *
+     * Same sanitize pass, same reason (see _starterFieldsByKey): what the seed
+     * STORED is the registry after CmsPage's clean, not the raw registry text.
+     *
+     * @param CmsPage $page     the sanitize choke point (pure call — no DB)
+     * @param array   $registry as returned by _starterPageDefs()
+     * @return array page slug => ordered list of sanitized blocks
+     */
+    private function _starterBlocksBySlug($page, array $registry)
+    {
+        $out = array();
+        foreach ($registry as $slug => $def) {
+            if (!isset($def['blocks']) || !is_array($def['blocks'])) {
+                continue;
+            }
+            $out[(string) $slug] = $page->SanitizeBlocksForRender($def['blocks']);
+        }
+        return $out;
+    }
+
+    /**
+     * A page's block LAYOUT, as the ordered list of 'type|order' keys.
+     *
+     * This is the comparison that decides whether a version change is
+     * STRUCTURAL (a block's type changed, a block was added or removed, an order
+     * moved) or merely a rewording. A rewording keeps the narrower field-level
+     * path and its per-field accounting; only a structural change earns a
+     * wholesale replace.
+     *
+     * @param array $blocks sanitized starter blocks for one page
+     * @return array list of 'type|order' strings, in order
+     */
+    private function _seedBlockKeys(array $blocks)
+    {
+        $keys = array();
+        foreach ($blocks as $block) {
+            $keys[] = (string) $block['type'] . '|' . (int) $block['order'];
+        }
+        return $keys;
+    }
+
+    /**
+     * Is this page still 100% untouched seed content at the given version?
+     *
+     * THE GATE FOR EVERY RESTRUCTURE. It is deliberately stricter than the
+     * field-level gate, because a wholesale replace throws away whatever is
+     * there: the stored page must have the SAME NUMBER of blocks, of the same
+     * types IN THE SAME SEQUENCE, with the same enabled flags, and every single
+     * field the seed wrote must still byte-match (array_key_exists + ===, the
+     * same test the field loop uses). Anything else — one reworded sentence, one
+     * block switched off, one block the officer added — makes this false, and
+     * the caller then leaves the page's structure exactly as the officer left it.
+     *
+     * NOT "at the same orders", and do not re-tighten it to that. The absolute
+     * order numbers are explicitly NOT compared; see the comment on the sort in
+     * the body for why, and tests/cms-site/site_test.php pins BOTH halves of
+     * that decision. Restoring an order comparison here silently stops the
+     * upgrade reaching every kingdom seeded before this branch.
+     *
+     * Fields the seed did NOT write are not examined: a later code path that
+     * adds a default key to a stored block must not make an untouched page
+     * permanently unupgradable.
+     *
+     * @param array $stored  blocks as CmsPage::GetBlocksForEditor() returns them
+     * @param array $seeded  sanitized starter blocks for the same page
+     * @return bool true only when nothing on the page has been edited
+     */
+    private function _pageIsPristineSeed($stored, array $seeded)
+    {
+        if (!is_array($stored) || count($stored) !== count($seeded)) {
+            return false;
+        }
+        // Compare by SEQUENCE, not by absolute order value. Both sides are
+        // sorted by order first (GetBlocksForEditor already returns them that
+        // way; the seed side is sorted defensively), so the resulting sequence
+        // of types is what proves the officer did not re-order anything.
+        //
+        // The absolute order NUMBERS are deliberately NOT compared, and that is
+        // load-bearing rather than lax. Pre-branch kingdoms were seeded with
+        // kingdom_events at order 30 where the v0 registry declares 40 — every
+        // type, every enabled flag and (after the copy-repair migration) every
+        // field byte-matches, and the ONLY thing that made them fail this gate
+        // was 30 !== 40. That one clause was the difference between this upgrade
+        // reaching prod's seeded kingdoms and reaching none of them. Nothing is
+        // weakened by dropping it: order values are sort keys, the sequence
+        // already carries the ordering information, and a restructure replaces
+        // the whole list with the new version's orders anyway.
+        $sortByOrder = function ($a, $b) {
+            return (int) (isset($a['order']) ? $a['order'] : 0)
+                <=> (int) (isset($b['order']) ? $b['order'] : 0);
+        };
+        $stored = array_values($stored);
+        $seeded = array_values($seeded);
+        usort($stored, $sortByOrder);
+        usort($seeded, $sortByOrder);
+
+        foreach ($seeded as $i => $seedBlock) {
+            $have = $stored[$i];
+            if ((string) $have['type'] !== (string) $seedBlock['type']
+                || !empty($have['enabled']) !== !empty($seedBlock['enabled'])
+            ) {
+                return false;
+            }
+            $fields = (isset($have['fields']) && is_array($have['fields'])) ? $have['fields'] : array();
+            foreach ($seedBlock['fields'] as $field => $seededValue) {
+                if (!array_key_exists($field, $fields) || $fields[$field] !== $seededValue) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Create the starter pages the NEW content version introduces.
+     *
+     * Only pages present in the new registry and ABSENT from the old one: a page
+     * both versions declare and the site does not have was either removed on
+     * purpose or never seeded, and re-minting it here would resurrect content an
+     * officer deleted. A TRASHED row at the slug stops the create outright, for
+     * the same reason and by the same rule _seedStarterTemplate()'s repair pass
+     * already follows — a soft-deleted page does not collide with the live
+     * uniqueness key, so without this check a brand-new published page of
+     * template copy would appear at a slug the org deliberately emptied.
+     *
+     * Pages are created PUBLISHED, exactly as the seed creates them: the site's
+     * own published/draft status is the real go-live gate, and a draft page
+     * behind a nav row is a dead link.
+     *
+     * @param CmsPage $page      storage choke point
+     * @param array   $old       the old version's registry
+     * @param array   $new       the new version's registry
+     * @param string  $scopeType 'kingdom'|'park'
+     * @param int     $scopeId
+     * @param int     $uid       acting mundane_id (audit + owner stamp)
+     * @param array   $liveSlugs slug => page_id for the pages the site already has
+     * @param array   $result    run report, mutated in place
+     * @return array slug => page_id for the pages this call created
+     */
+    private function _backfillNewPages($page, array $old, array $new, $scopeType, $scopeId, $uid, array $liveSlugs, array &$result)
+    {
+        $created = array();
+        $now     = date('Y-m-d H:i:s');
+
+        foreach ($new as $slug => $def) {
+            $slug = (string) $slug;
+            // 'attrs' absent = a NAV-ONLY registry entry: it has no page to make.
+            if (!isset($def['attrs']) || !is_array($def['attrs'])) {
+                continue;
+            }
+            if (isset($old[$slug]) || isset($liveSlugs[$slug])) {
+                continue; // not new, or already here
+            }
+            $prior = $this->_anyPageBySlug($slug, $scopeType, (int) $scopeId);
+            if ($prior !== null) {
+                // Live (raced in under us) or TRASHED (a deliberate removal) —
+                // either way this runner does not create a page here.
+                continue;
+            }
+
+            $pid = (int) $page->CreatePage(array_merge(array(
+                'status'       => 'published',
+                'published_at' => $now,
+                'scope_type'   => $scopeType,
+                'scope_id'     => (int) $scopeId,
+                'created_by'   => (int) $uid,
+                'updated_by'   => (int) $uid,
+                'created_at'   => $now,
+                'updated_at'   => $now,
+            ), $def['attrs']));
+            if ($pid <= 0) {
+                $this->_cmsAudit((int) $uid, 'seed_backfill_page_failed:' . $slug, 'page', 0, $scopeType, (int) $scopeId);
+                continue;
+            }
+            if (isset($def['blocks']) && is_array($def['blocks']) && count($def['blocks']) > 0) {
+                // Check the return like the other two write sites do. Without
+                // this, a failed write left the page PUBLISHED with zero blocks
+                // — a blank page on the public web — while blocks was counted as
+                // if it had worked, $failed stayed 0, and the site was stamped
+                // current, so nothing ever retried it.
+                if ((int) $page->ReplaceBlocks('page', $pid, $def['blocks'], (int) $uid) === -1) {
+                    $this->_cmsAudit((int) $uid, 'seed_backfill_page_blocks_failed:' . $slug, 'page', $pid, $scopeType, (int) $scopeId);
+                    $result['failed']++;
+                    continue;
+                }
+                $result['blocks'] += count($def['blocks']);
+            }
+            $created[$slug] = $pid;
+            $result['pages_created']++;
+            $this->_cmsAudit((int) $uid, 'seed_backfill_page_added:' . $slug, 'page', $pid, $scopeType, (int) $scopeId);
+        }
+
+        return $created;
+    }
+
+    /**
+     * Append the nav rows the NEW content version introduces — and only into a
+     * menu nobody has touched.
+     *
+     * THE GATE: the stored 'marketing' menu must still be, row for row and in
+     * order, exactly what the OLD version seeded (same labels, same link types,
+     * same targets, same parents, all enabled). An officer who rearranged,
+     * relabelled, disabled or extended their menu has made it theirs, and a row
+     * injected into it would be this runner overwriting a decision. On a
+     * mismatch nothing is written and 'nav_reason' records why.
+     *
+     * New rows are APPENDED (after the last top-level item, or after the last
+     * child of their declared parent) rather than slotted into the new version's
+     * position: moving the rows around them would re-order a menu this method
+     * has no mandate to re-order.
+     *
+     * Rows both versions seed are never renamed or re-parented here — see
+     * BackfillSeedContent()'s docblock.
+     *
+     * @param array  $old       the old version's registry
+     * @param array  $new       the new version's registry
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @param array  $pageIds   slug => page_id (live pages plus any just created)
+     * @param array  $result    run report, mutated in place
+     * @return void
+     */
+    private function _backfillNewNav(array $old, array $new, $scopeType, $scopeId, array $pageIds, array &$result)
+    {
+        // Which entries are genuinely NEW to the menu? Computed before any DB
+        // read so the common case (no new nav rows) costs nothing at all.
+        $added = array();
+        foreach ($new as $key => $def) {
+            if (isset($old[$key]) || empty($def['nav_label'])) {
+                continue;
+            }
+            $added[(string) $key] = $def;
+        }
+        if ($added === array()) {
+            return;
+        }
+        if (!class_exists('CmsNav')) {
+            $result['nav_reason'] = 'no_cms_nav';
+            return;
+        }
+
+        $nav   = new CmsNav();
+        $items = $nav->ListItems('marketing', $scopeType, (int) $scopeId);
+        if (!is_array($items) || $items === array()) {
+            // No menu at all is not a menu the old version seeded — leave it to
+            // EnsureSite's repair rather than half-seed one here.
+            $result['nav_reason'] = 'menu_empty';
+            return;
+        }
+
+        if ($this->_navSignature($items) !== $this->_seededNavSignature($old, $pageIds)) {
+            $result['nav_reason'] = 'menu_edited';
+            return;
+        }
+
+        // Where a new row lands: after the last top-level item, or after the
+        // last child of the parent it declares.
+        $byLabel     = array();
+        $maxTop      = 0;
+        $maxChild    = array();
+        foreach ($items as $item) {
+            $byLabel[(string) $item['label']] = (int) $item['nav_id'];
+            $parentId = ($item['parent_id'] === null) ? 0 : (int) $item['parent_id'];
+            if ($parentId === 0) {
+                $maxTop = max($maxTop, (int) $item['ordering']);
+            } else {
+                $maxChild[$parentId] = max(
+                    isset($maxChild[$parentId]) ? $maxChild[$parentId] : 0,
+                    (int) $item['ordering']
+                );
+            }
+        }
+
+        foreach ($added as $key => $def) {
+            $link    = (isset($def['nav_link']) && is_array($def['nav_link'])) ? $def['nav_link'] : array();
+            $pageId  = 0;
+            if ($link === array()) {
+                // A page link with no page is a dead menu row — skip it.
+                $pageId = isset($pageIds[$key]) ? (int) $pageIds[$key] : 0;
+                if ($pageId <= 0) {
+                    continue;
+                }
+            }
+
+            $parentId = 0;
+            if (!empty($def['nav_parent'])) {
+                $parentKey   = (string) $def['nav_parent'];
+                $parentLabel = isset($new[$parentKey]['nav_label']) ? (string) $new[$parentKey]['nav_label'] : '';
+                $oldLabel    = isset($old[$parentKey]['nav_label']) ? (string) $old[$parentKey]['nav_label'] : '';
+                // The stored row still carries the OLD version's label (this
+                // method renames nothing), so match on that first.
+                foreach (array($oldLabel, $parentLabel) as $candidate) {
+                    if ($candidate !== '' && isset($byLabel[$candidate])) {
+                        $parentId = $byLabel[$candidate];
+                        break;
+                    }
+                }
+            }
+
+            if ($parentId > 0) {
+                $ordering = (isset($maxChild[$parentId]) ? $maxChild[$parentId] : 0) + 10;
+                $maxChild[$parentId] = $ordering;
+            } else {
+                $maxTop  += 10;
+                $ordering = $maxTop;
+            }
+
+            $navId = (int) $nav->CreateItem(array(
+                'menu'       => 'marketing',
+                'label'      => (string) $def['nav_label'],
+                'link_type'  => isset($link['link_type']) ? (string) $link['link_type'] : 'page',
+                'page_id'    => ($pageId > 0) ? $pageId : null,
+                'url'        => isset($link['url']) ? (string) $link['url'] : null,
+                'parent_id'  => ($parentId > 0) ? $parentId : null,
+                'ordering'   => $ordering,
+                'enabled'    => 1,
+                'scope_type' => $scopeType,
+                'scope_id'   => (int) $scopeId,
+            ));
+            if ($navId > 0) {
+                $result['nav_added']++;
+                $byLabel[(string) $def['nav_label']] = $navId;
+            }
+        }
+
+        if ($result['nav_added'] > 0) {
+            $result['nav_reason'] = 'appended';
+        }
+    }
+
+    /**
+     * The stored menu as a comparable ordered fingerprint.
+     *
+     * One string per row: parent label, label, link type, resolved href and the
+     * enabled flag — everything an officer could have changed that would mean
+     * "this menu is mine now". ListItems() orders top-level rows first, then
+     * children grouped by parent, which is exactly the order _seedNavMenu()
+     * inserts them in, so the two sequences are comparable element for element.
+     *
+     * @param array $items CmsNav::ListItems() rows
+     * @return array list of fingerprint strings, in stored order
+     */
+    private function _navSignature(array $items)
+    {
+        $labelById = array();
+        foreach ($items as $item) {
+            $labelById[(int) $item['nav_id']] = (string) $item['label'];
+        }
+        $out = array();
+        foreach ($items as $item) {
+            $parentId    = ($item['parent_id'] === null) ? 0 : (int) $item['parent_id'];
+            $parentLabel = isset($labelById[$parentId]) ? $labelById[$parentId] : '';
+            $out[] = $parentLabel . '>' . (string) $item['label']
+                . '|' . (string) $item['link_type']
+                . '|' . (string) $item['href']
+                . '|' . (!empty($item['enabled']) ? '1' : '0');
+        }
+        return $out;
+    }
+
+    /**
+     * The same fingerprint, for the menu a given content version WOULD have
+     * seeded on this site — built from the registry the way _seedNavMenu()
+     * builds the real thing: top-level entries in registry order, then children
+     * grouped under their parent, in registry order.
+     *
+     * An entry whose page never landed contributes no row, exactly as the seed's
+     * own $navSeedable test decides. hrefs are built the way CmsNav resolves
+     * them (page → the stable Page/view/{slug} form, dynamic → UIR + route), so
+     * the comparison is against what ListItems() really returns.
+     *
+     * @param array $starters the registry for the version being compared against
+     * @param array $pageIds  slug => page_id for the pages the site has
+     * @return array list of fingerprint strings, in seeded order
+     */
+    private function _seededNavSignature(array $starters, array $pageIds)
+    {
+        $uir = defined('UIR') ? UIR : 'index.php?Route=';
+
+        $row = function ($key, $def) use ($starters, $pageIds, $uir) {
+            if (empty($def['nav_label'])) {
+                return null;
+            }
+            $link = (isset($def['nav_link']) && is_array($def['nav_link'])) ? $def['nav_link'] : array();
+            if ($link === array()) {
+                if (empty($pageIds[(string) $key])) {
+                    return null; // no page => the seed wrote no nav row
+                }
+                $linkType = 'page';
+                $href     = $this->_sitePageHref((string) $key);
+            } else {
+                $linkType = isset($link['link_type']) ? (string) $link['link_type'] : 'page';
+                $route    = isset($link['url']) ? trim((string) $link['url']) : '';
+                if ($linkType === 'dynamic') {
+                    $href = ($route === '') ? '#' : $uir . ltrim($route, '/');
+                } elseif ($linkType === 'url') {
+                    $href = ($route === '') ? '#' : $route;
+                } else {
+                    $href = '#';
+                }
+            }
+            $parentLabel = '';
+            if (!empty($def['nav_parent'])
+                && isset($starters[(string) $def['nav_parent']]['nav_label'])
+            ) {
+                $parentLabel = (string) $starters[(string) $def['nav_parent']]['nav_label'];
+            }
+            return $parentLabel . '>' . (string) $def['nav_label'] . '|' . $linkType . '|' . $href . '|1';
+        };
+
+        // Pass 1: top level. Pass 2: children, grouped by parent in the order
+        // their parents appear — the order _seedNavMenu() inserts them in, and
+        // therefore the order ListItems() reads them back in.
+        $top      = array();
+        $promoted = array();
+        $children = array();
+        foreach ($starters as $key => $def) {
+            $sig = $row($key, $def);
+            if ($sig === null) {
+                continue;
+            }
+            $parentKey = !empty($def['nav_parent']) ? (string) $def['nav_parent'] : '';
+            if ($parentKey === '') {
+                $top[] = $sig;
+                continue;
+            }
+            // A child whose parent never seeded is PROMOTED to top level by
+            // _seedNavMenu() — and promoted in its second pass, so it sits after
+            // every pass-one top-level row. Mirror that or the fingerprint of a
+            // site with a half-seeded menu could never match.
+            if ($row($parentKey, isset($starters[$parentKey]) ? $starters[$parentKey] : array()) === null) {
+                $promoted[] = $sig;
+                continue;
+            }
+            $children[$parentKey][] = $sig;
+        }
+        $out = array_merge($top, $promoted);
+        foreach ($starters as $key => $def) {
+            if (isset($children[(string) $key])) {
+                foreach ($children[(string) $key] as $sig) {
+                    $out[] = $sig;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * READ-ONLY: how much of a site's seeded starter content is still exactly as
+     * the seed left it — the input to the pre-publish readiness panel.
+     *
+     * The question the panel asks is "is this site ready to show the public, or
+     * is it still the template?", and the honest answer is per-field, not
+     * per-page: an officer who rewrote Home and never opened About has one real
+     * page and one template page, and a count of pages cannot say so.
+     *
+     * SAME COMPARISON AS THE BACKFILL, deliberately reused rather than re-coded.
+     * "Still seeded" means the stored value BYTE-MATCHES what this site's
+     * recorded seed version would have written — and what the seed wrote is the
+     * registry AFTER CmsPage's sanitize pass, not the raw registry text (see
+     * _starterFieldsByKey()). A second implementation of that would drift from
+     * BackfillSeedContent()'s within a release, and the two would then disagree
+     * about which fields the runner is allowed to touch.
+     *
+     * WRITES NOTHING. No ReplaceBlocks, no version stamp, no cache bust, no
+     * audit row — every call here is a SELECT. That is a hard contract: this
+     * runs on a dashboard GET, possibly on every load.
+     *
+     * 'renders_nothing' is the defect the panel exists to catch: a nav-linked
+     * page whose every block would publish NOTHING (an empty authored block
+     * self-suppresses, so the visitor gets a page containing only its own <h1>).
+     * An enabled DYNAMIC block never counts as empty — it publishes live ORK
+     * data this class cannot see from here — so the flag only ever fires on a
+     * page that is authored-only and genuinely blank.
+     *
+     * FAILS OPEN exactly as BackfillSeedContent() does: no seed_version column
+     * means every site reads as current, and an unresolvable site reads as an
+     * empty report rather than an error.
+     *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId   owning org id
+     * @return array{version:int, current:int, pages:array, untouched_pages:int, seeded_pages:int}
+     */
+    public function SeedContentStatus($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeSiteScopeType($scopeType);
+        $scopeId   = (int) $scopeId;
+
+        $out = array(
+            'version'         => self::CURRENT_SEED_VERSION,
+            'current'         => self::CURRENT_SEED_VERSION,
+            'pages'           => array(),
+            'untouched_pages' => 0,
+            'seeded_pages'    => 0,
+        );
+        if ($scopeId <= 0 || !class_exists('CmsPage')) {
+            return $out;
+        }
+
+        if ($this->_siteColumnExists('seed_version')) {
+            $DB->Clear();
+            $DB->scope_type = $scopeType;
+            $DB->scope_id   = $scopeId;
+            $site = $this->_firstRow($DB->DataSet(
+                'SELECT seed_version FROM ' . DB_PREFIX . 'cms_site'
+                . ' WHERE scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
+            ));
+            if ($site === null) {
+                return $out;
+            }
+            $out['version'] = (int) ($site['seed_version'] ?? 0);
+        }
+
+        // Re-derive what THIS org was seeded with, at the version it records —
+        // org name, noun and all — and sanitize it the way the seed stored it.
+        $page     = new CmsPage();
+        $seeded   = $this->_starterPageDefs($scopeType, $scopeId, null, $out['version']);
+        $byKey    = $this->_starterFieldsByKey($page, $seeded);
+
+        // Buffer the page list BEFORE reading any blocks: the shared $DB handle
+        // is single-cursor, so a read mid-iteration drops the rest of the set.
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $pages = $this->_eachRow($DB->DataSet(
+            'SELECT page_id, slug, title FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+            . ' AND deleted_at IS NULL'
+        ));
+
+        foreach ($pages as $pageRow) {
+            $pageId = (int) $pageRow['page_id'];
+            $slug   = (string) $pageRow['slug'];
+            // Only SEEDED starter pages are reportable: a page the org wrote
+            // itself has no seed to compare against, and calling it "edited"
+            // would be as wrong as calling it "untouched".
+            if ($pageId <= 0 || $slug === '' || !isset($seeded[$slug])) {
+                continue;
+            }
+
+            $unedited = 0;
+            $edited   = 0;
+            $publishes = false;
+            foreach ($page->GetBlocksForEditor('page', $pageId) as $block) {
+                if (!empty($block['enabled'])) {
+                    $publishes = $publishes || $this->_blockPublishesSomething($block);
+                }
+                $key = $slug . '|' . (string) $block['type'] . '|' . (int) $block['order'];
+                if (!isset($byKey[$key])) {
+                    continue; // not a seeded block (added, retyped or re-ordered)
+                }
+                $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
+                foreach ($byKey[$key] as $field => $seededValue) {
+                    // array_key_exists (not isset) so a field seeded as null is
+                    // still comparable; === so an array field must match element
+                    // for element, in order, by type. Same gate as the backfill.
+                    if (array_key_exists($field, $fields) && $fields[$field] === $seededValue) {
+                        $unedited++;
+                    } else {
+                        $edited++;
+                    }
+                }
+            }
+
+            // "Untouched" needs at least one field that IS still seed copy: a
+            // page whose seeded blocks were all deleted has nothing matching and
+            // nothing edited, and it is not a template page.
+            $isUntouched = ($edited === 0 && $unedited > 0);
+            $out['pages'][] = array(
+                'page_id'         => $pageId,
+                'slug'            => $slug,
+                'title'           => (string) ($pageRow['title'] ?? ''),
+                'unedited_fields' => $unedited,
+                'edited_fields'   => $edited,
+                'renders_nothing' => !$publishes,
+                'is_untouched'    => $isUntouched,
+            );
+            $out['seeded_pages']++;
+            if ($isUntouched) {
+                $out['untouched_pages']++;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Would this stored block put ANYTHING on the public page?
+     *
+     * Used only by SeedContentStatus()'s 'renders_nothing' flag, and deliberately
+     * conservative in one direction: a DYNAMIC block (kingdom_events, the parks
+     * teaser, the live officer grid) reads ORK data at render time that nothing
+     * here can see, so it always counts as publishing. For an AUTHORED block the
+     * partials agree on one rule — no visible copy anywhere in the block,
+     * nothing rendered — so any field holding visible text counts.
+     *
+     * CONTENT ONLY. Presentation keys (align, band, limit, the show_* flags…)
+     * are always populated and say nothing about whether the block has anything
+     * to show; an href alone renders nothing either, because every partial gates
+     * its link on the LABEL. Counting those made the flag unable to ever fire,
+     * which is the whole reason they are named here.
+     *
+     * Pure: no DB, no cache, no I/O.
+     *
+     * @param array $block one row from CmsPage::GetBlocksForEditor()
+     * @return bool
+     */
+    private function _blockPublishesSomething($block)
+    {
+        if ((string) ($block['source'] ?? '') === 'dynamic') {
+            return true;
+        }
+        $skip = array(
+            'align' => true, 'band' => true, 'presentation' => true, 'sort' => true,
+            'limit' => true, 'style' => true, 'autoplay_ms' => true, 'filetype' => true,
+            'href' => true, 'url' => true, 'src' => true, 'display' => true,
+            'more_href' => true, 'media_id' => true, 'mundane_id' => true,
+        );
+        $hasText = function ($value) use (&$hasText, $skip) {
+            if (is_array($value)) {
+                foreach ($value as $k => $v) {
+                    if (is_string($k) && (isset($skip[$k]) || strpos($k, 'show_') === 0)) {
+                        continue;
+                    }
+                    if ($hasText($v)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (!is_string($value)) {
+                return false;
+            }
+            // strip_tags so an empty <p></p> — what a cleared rich-text body
+            // leaves behind — is not mistaken for content.
+            return trim(strip_tags($value)) !== '';
+        };
+        return $hasText(
+            (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array()
+        );
     }
 
     /**
@@ -1237,16 +2491,32 @@ class CmsSite extends CmsBase
 
         $primary = '';
         if (class_exists('CmsHeraldryColor')) {
-            $primary = CmsHeraldryColor::FromFile($this->_heraldryPath($scopeType, $scopeId));
+            // The heraldry step decodes, resamples and buckets an image through
+            // GD, INLINE in the officer's first dashboard GET. A large, slow,
+            // truncated or malformed device file must never be able to hang or
+            // fail site provisioning, so it is both bounded (an oversize file,
+            // by bytes on disk OR by decoded pixel count, is not decoded at all
+            // — see _decodableHeraldryPath) and
+            // non-fatal: any Throwable drops through to the name hash below and
+            // leaves an audit row. The stamp gate in _finishSeed() deliberately
+            // does NOT depend on the theme, so a site that loses its palette
+            // this way is still a complete, usable site.
+            try {
+                $primary = CmsHeraldryColor::FromFile($this->_decodableHeraldryPath($scopeType, $scopeId));
 
-            if ($primary === '' && $scopeType === 'park') {
-                $parentKingdomId = $this->_parentKingdomIdForPark($scopeId);
-                if ($parentKingdomId > 0) {
-                    $primary = CmsHeraldryColor::FromFile(
-                        $this->_heraldryPath('kingdom', $parentKingdomId)
-                    );
+                if ($primary === '' && $scopeType === 'park') {
+                    $parentKingdomId = $this->_parentKingdomIdForPark($scopeId);
+                    if ($parentKingdomId > 0) {
+                        $primary = CmsHeraldryColor::FromFile(
+                            $this->_decodableHeraldryPath('kingdom', $parentKingdomId)
+                        );
+                    }
                 }
+            } catch (\Throwable $e) {
+                $primary = '';
+                $this->_cmsAudit((int) $uid, 'theme.heraldry_failed', 'theme', 0, $scopeType, $scopeId);
             }
+
             if ($primary === '') {
                 $primary = CmsHeraldryColor::FromName($this->OrgDisplayName($scopeType, $scopeId));
             }
@@ -1286,6 +2556,56 @@ class CmsSite extends CmsBase
             $this->_cmsAudit((int) $uid, 'theme.seed_failed', 'theme', 0, $scopeType, $scopeId);
         }
         return $primary;
+    }
+
+    /**
+     * The largest heraldry master this seed will hand to GD. A device is a small
+     * badge; anything past this is either a mis-uploaded photo or something
+     * hostile, and decoding it inline in a dashboard GET is not worth a colour.
+     */
+    private const MAX_HERALDRY_DECODE_BYTES = 6291456; // 6 MiB
+
+    /**
+     * The largest DECODED image this seed will hand to GD, in pixels. Bytes on
+     * disk are not a bound on memory: a flat-fill 30000x30000 PNG compresses to
+     * a few hundred KB and still allocates gigabytes once decoded, and a memory
+     * exhaustion is an uncatchable fatal that the try/catch around FromFile()
+     * cannot absorb. Heraldry masters are org-uploaded, so this is
+     * attacker-influenced input on the provisioning path.
+     */
+    private const MAX_HERALDRY_DECODE_PIXELS = 40000000; // ~40 MP
+
+    /**
+     * _heraldryPath(), but '' for any file too large to decode inside a web
+     * request — measured BOTH ways: bytes on disk, and decoded pixel count read
+     * from the image header. The decode/resample happens synchronously in the
+     * officer's first dashboard load, so this is the bound on that work: the
+     * caller simply falls through to the next colour source (parent kingdom,
+     * then the name hash) exactly as it does for an org with no device at all.
+     *
+     * @return string absolute path, or ''
+     */
+    private function _decodableHeraldryPath($scopeType, $scopeId)
+    {
+        $path = $this->_heraldryPath($scopeType, $scopeId);
+        if ($path === '') {
+            return '';
+        }
+        $bytes = @filesize($path);
+        if ($bytes === false || $bytes > self::MAX_HERALDRY_DECODE_BYTES) {
+            return '';
+        }
+        // Header-only probe: cheap, and the only check that sees the decode
+        // bomb (see MAX_HERALDRY_DECODE_PIXELS). An unreadable header means GD
+        // has nothing to decode either, so refuse that too.
+        $info = @getimagesize($path);
+        if (!is_array($info) || empty($info[0]) || empty($info[1])) {
+            return '';
+        }
+        if (((int) $info[0] * (int) $info[1]) > self::MAX_HERALDRY_DECODE_PIXELS) {
+            return '';
+        }
+        return $path;
     }
 
     /**
@@ -1532,8 +2852,21 @@ class CmsSite extends CmsBase
      * Ordered kingdoms-then-parks ('kingdom' < 'park'), then by org name, so the
      * caller can split the flat list into its two sections in order.
      *
+     * org_missing flags a site whose SCOPE ORG NO LONGER EXISTS — the LEFT JOIN
+     * to ork_kingdom/ork_park found nothing, because the org was merged,
+     * re-keyed or deleted after the site was provisioned. Detection only, on
+     * purpose: such a row still holds its UNIQUE slug forever and GetSiteBySlug()
+     * still resolves /k/{slug} to a scope with no owning org, but deleting it,
+     * drafting it or freeing its slug are all destructive dispositions that need
+     * a human decision. OPEN QUESTION, deliberately unanswered here: what SHOULD
+     * happen to an orphan — re-point it at the surviving org after a merge,
+     * archive it, or release the slug? Until that is decided, an admin at least
+     * has to be able to see it, and org_name being blank is indistinguishable
+     * from a data glitch.
+     *
      * @return array list of site rows, each carrying the base ork_cms_site
-     *   columns plus: org_name, pages_total, pages_published, posts_total.
+     *   columns (including the raw template_seeded_at marker) plus: org_name,
+     *   pages_total, pages_published, posts_total, org_missing.
      */
     public function ListAllSites()
     {
@@ -1546,12 +2879,22 @@ class CmsSite extends CmsBase
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
             . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id'
             . '      AND pg.deleted_at IS NULL) AS pages_total,'
-            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
+            // INVARIANT: pages_published counts PUBLICLY REACHABLE pages, so it
+            // is gated on the OWNING SITE's own status as well as the page's.
+            // The starter seed deliberately publishes all five starter pages the
+            // moment EnsureSite first runs, so an ungated count reported
+            // "5 published pages" for every org that had merely opened its
+            // dashboard once — an admin scanning for orgs with a LIVE site could
+            // not tell them from genuinely published ones. An unbuilt or draft
+            // site reports 0.
+            . ' CASE WHEN s.status = \'published\' THEN (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
             . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id'
-            . "      AND pg.status = 'published' AND pg.deleted_at IS NULL) AS pages_published,"
+            . "      AND pg.status = 'published' AND pg.deleted_at IS NULL) ELSE 0 END AS pages_published,"
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_post po'
             . '    WHERE po.scope_type = s.scope_type AND po.scope_id = s.scope_id'
-            . '      AND po.deleted_at IS NULL) AS posts_total'
+            . '      AND po.deleted_at IS NULL) AS posts_total,'
+            // 1 when neither LEFT JOIN matched — the owning org row is gone.
+            . ' CASE WHEN k.kingdom_id IS NULL AND p.park_id IS NULL THEN 1 ELSE 0 END AS org_missing'
             . ' FROM ' . DB_PREFIX . 'cms_site s'
             . ' LEFT JOIN ' . DB_PREFIX . "kingdom k ON s.scope_type = 'kingdom' AND k.kingdom_id = s.scope_id"
             . ' LEFT JOIN ' . DB_PREFIX . "park    p ON s.scope_type = 'park'    AND p.park_id    = s.scope_id"
@@ -1679,6 +3022,10 @@ class CmsSite extends CmsBase
      * an invalid slug returns the error STRING and no columns are written. On
      * success returns true.
      *
+     * A slug that actually CHANGES also retires the old one into
+     * ork_cms_site_alias (_recordSlugAlias), so links already shared to the old
+     * address can be redirected instead of 404ing.
+     *
      * @param int   $siteId
      * @param array $fields subset of editable columns
      * @param int   $uid    acting mundane_id
@@ -1798,8 +3145,110 @@ class CmsSite extends CmsBase
             if ($stored !== (string)$binds['slug']) {
                 return 'That web address is already in use. Please choose another.';
             }
+            // The rename landed: remember the OLD slug so every link already
+            // shared to it can still be resolved (and 301'd) rather than 404ing.
+            // Deliberately inside the verified-success path, alongside the cache
+            // bust for both slugs — an alias for a rename that never happened
+            // would shadow a live site's address.
+            if ($oldSlug !== '' && $oldSlug !== $stored) {
+                $this->_recordSlugAlias($siteId, $oldSlug, $stored);
+            }
         }
         return true;
+    }
+
+    /**
+     * Record one retired slug as an alias of a site, and retire any alias that
+     * would now point at that site's CURRENT slug.
+     *
+     * INSERT IGNORE, because alias_slug is the table's primary key: if some
+     * other site already claimed this slug as an alias, the first claimant keeps
+     * it rather than having its visitors silently redirected elsewhere.
+     *
+     * The delete is what stops a slug aliasing to itself: an org that renames
+     * a → b → a would otherwise leave an alias row 'a' pointing at a site whose
+     * live slug is once again 'a', and the resolver would bounce /k/a to /k/a.
+     *
+     * Guarded on the table existing, the same defensive way _stampTemplateSeeded
+     * probes for template_seeded_at: PDO runs under ERRMODE_WARNING here, so a
+     * pre-migration write would not throw — it would just raise a PHP Warning on
+     * every rename. A rename must never fail because this table is missing.
+     *
+     * @param int    $siteId
+     * @param string $oldSlug the slug being retired
+     * @param string $newSlug the slug now stored on the site row
+     * @return void
+     */
+    private function _recordSlugAlias($siteId, $oldSlug, $newSlug)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        if ($siteId <= 0 || (string)$oldSlug === '') {
+            return;
+        }
+        if (!$this->_tableExists(DB_PREFIX . 'cms_site_alias')) {
+            return; // migration not run yet — a rename still succeeds
+        }
+
+        // Drop any alias that now equals the live slug (including one this very
+        // site retired on an earlier rename) before claiming the old one.
+        if ((string)$newSlug !== '') {
+            $DB->Clear();
+            $DB->alias_slug = (string)$newSlug;
+            $DB->Execute(
+                'DELETE FROM ' . DB_PREFIX . 'cms_site_alias WHERE alias_slug = :alias_slug'
+            );
+        }
+
+        $DB->Clear();
+        $DB->alias_slug = (string)$oldSlug;
+        $DB->site_id    = $siteId;
+        $DB->created_at = date('Y-m-d H:i:s');
+        $DB->Execute(
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_site_alias (alias_slug, site_id, created_at)'
+            . ' VALUES (:alias_slug, :site_id, :created_at)'
+        );
+    }
+
+    /**
+     * Public resolver for a RETIRED slug: the site row that used to answer to
+     * this address, or null. Joins through site_id so the row returned is the
+     * site's CURRENT state — its live slug, status and home page — which is what
+     * a caller needs to build the 301 target.
+     *
+     * Deliberately separate from GetSiteBySlug(): that is the hot public router
+     * path and stays a single cached lookup on the live slug. This is only
+     * consulted once that lookup has MISSED, so an alias costs nothing on the
+     * overwhelmingly common path.
+     *
+     * Returns null when the alias table does not exist yet (pre-migration) — the
+     * caller simply 404s as it did before, never fatals.
+     *
+     * @param string $slug the (possibly retired) slug from the URL
+     * @return array|null the owning site's CURRENT row, or null
+     */
+    public function GetSiteByAliasSlug($slug)
+    {
+        global $DB;
+
+        // Same normalization as GetSiteBySlug so nothing beyond [a-z0-9-] can
+        // be smuggled into the lookup.
+        $slug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$slug));
+        if ($slug === '') {
+            return null;
+        }
+        if (!$this->_tableExists(DB_PREFIX . 'cms_site_alias')) {
+            return null;
+        }
+
+        $DB->Clear();
+        $DB->alias_slug = $slug;
+        return $this->_firstRow($DB->DataSet(
+            'SELECT s.* FROM ' . DB_PREFIX . 'cms_site_alias a'
+            . ' JOIN ' . DB_PREFIX . 'cms_site s ON s.site_id = a.site_id'
+            . ' WHERE a.alias_slug = :alias_slug LIMIT 1'
+        ));
     }
 
     /**
@@ -1977,7 +3426,15 @@ class CmsSite extends CmsBase
 
     /**
      * Disambiguate a base slug against existing sites by appending -2, -3, ...
-     * until ValidateSlug accepts it. Used by EnsureSite's placeholder slug.
+     * until ValidateSlug accepts it. Used by EnsureSite's placeholder slug AND,
+     * since the mint branch stopped abandoning a colliding org name, by the
+     * name-derived candidate — which is where the width clamp below earns its
+     * keep: DeriveSlug() clamps to exactly 160, the full width of
+     * ork_cms_site.slug, so appending a suffix to a maximal name-derived slug
+     * would overflow the column (silent truncation, or a failed INSERT under
+     * strict sql_mode). The BASE is therefore re-clamped to leave room for the
+     * suffix, and the trailing hyphen is trimmed so the cut can't produce
+     * 'foo--2' or a slug ending in '-' (which ValidateSlug rejects outright).
      *
      * @param string $base already-derived slug
      * @return string a slug that currently passes ValidateSlug
@@ -1991,14 +3448,22 @@ class CmsSite extends CmsBase
         if ($this->ValidateSlug($base, 0) === true) {
             return $base;
         }
+        // Fit $base . $suffix inside the 160-char column.
+        $fit = function ($suffix) use ($base) {
+            $room = 160 - strlen($suffix);
+            if ($room < 1) {
+                return $suffix;   // unreachable with the suffixes below; never return ''
+            }
+            return rtrim(substr($base, 0, $room), '-') . $suffix;
+        };
         for ($i = 2; $i < 1000; $i++) {
-            $candidate = $base . '-' . $i;
+            $candidate = $fit('-' . $i);
             if ($this->ValidateSlug($candidate, 0) === true) {
                 return $candidate;
             }
         }
         // Extremely unlikely fallback — keep it unique-ish without a DB round trip.
-        return $base . '-' . time();
+        return $fit('-' . time());
     }
 
     /* ------------------------------------------------------------------ *
@@ -2158,9 +3623,19 @@ class CmsSite extends CmsBase
     /**
      * May a NEW site be provisioned for this scope right now?
      *
-     * kingdom → the global kingdom switch.
-     * park    → the global park switch AND that park's kingdom's permission.
-     * global  → always true; the front door is not a provisioned org site.
+     * Which ork_configuration flag governs each scope, so a caller can tell the
+     * officer WHO has to turn it on:
+     *
+     *   kingdom → Service/0/CmsKingdomSitesEnabled (an ORK Admin).
+     *   park    → Service/0/CmsParkSitesEnabled (an ORK Admin) AND
+     *             Kingdom/{K}/CmsAllowParkSites (the park's own kingdom).
+     *   global  → always true; the front door is not a provisioned org site.
+     *
+     * Always a real boolean, for every scope type, and cheap enough to call
+     * twice in one request: each flag is one keyed ork_configuration read, and
+     * absent config reads as OFF (fail-closed). Public and side-effect free —
+     * the controller calls it to decide whether to offer provisioning at all,
+     * and EnsureSite calls it again on the mint path.
      *
      * @param string $scopeType
      * @param int    $scopeId

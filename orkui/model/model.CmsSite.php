@@ -70,6 +70,11 @@ class Model_CmsSite extends Model
         return $this->CmsSite->UpdateSite($siteId, $fields, $uid);
     }
 
+    public function clear_seed_marker($siteId, $actorId = 0)
+    {
+        return $this->CmsSite->ClearSeedMarker($siteId, $actorId);
+    }
+
     /* ---- Site-creation policy (the three rollout toggles) ---- */
 
     public function kingdom_sites_enabled()

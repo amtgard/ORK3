@@ -124,11 +124,22 @@ class CmsRenderCache
         return (string)$prefix . (int)$orgId . '.l' . (int)$limit;
     }
 
-    /** kingdom_parks: 'k17.l24.sname.h0'. */
-    public static function ParksKey($kingdomId, $limit, $sort, $showHeraldry)
+    /**
+     * kingdom_parks: 'k17.l24.sname.h0', plus '.c1' when the block rolls up its
+     * principalities' parks (the kingdom_parks 'include_child_kingdoms' field).
+     *
+     * That suffix MUST be built here rather than concatenated by the caller.
+     * kingdom_parks.tpl originally appended it itself, which put the key outside
+     * the set BustScope() enumerates below — and because the Our Parks starter
+     * seeds include_child_kingdoms => 1, the roll-up key was the ONLY one a
+     * freshly seeded kingdom site ever wrote, so no park edit could flush it.
+     * Default false keeps every pre-existing key byte-identical.
+     */
+    public static function ParksKey($kingdomId, $limit, $sort, $showHeraldry, $includeChildren = false)
     {
         return self::PREFIX_KINGDOM . (int)$kingdomId . '.l' . (int)$limit
-            . '.s' . (string)$sort . '.h' . ($showHeraldry ? 1 : 0);
+            . '.s' . (string)$sort . '.h' . ($showHeraldry ? 1 : 0)
+            . ($includeChildren ? '.c1' : '');
     }
 
     /** kingdom_parks_map: 'k17' (the map varies on nothing else). */
@@ -188,13 +199,20 @@ class CmsRenderCache
                 'key' => self::OfficersKey(self::PREFIX_KINGDOM, $kingdomId, $l),
             );
         }
+        // NOTE: the $c (include-children roll-up) dimension doubles this
+        // enumeration to 3 sorts x 2 heraldry x 2 roll-up x PARKS_LIMIT_MAX.
+        // It is not optional: the seeded Our Parks block sets
+        // include_child_kingdoms => 1, so the $c=1 keys are the ones real sites
+        // actually write, and omitting them left them permanently unflushable.
         foreach (self::PARKS_SORTS as $sort) {
             foreach (array(0, 1) as $h) {
-                for ($l = 1; $l <= self::PARKS_LIMIT_MAX; $l++) {
-                    $out[] = array(
-                        'ns'  => self::NS_KINGDOM_PARKS,
-                        'key' => self::ParksKey($kingdomId, $l, $sort, $h),
-                    );
+                foreach (array(false, true) as $c) {
+                    for ($l = 1; $l <= self::PARKS_LIMIT_MAX; $l++) {
+                        $out[] = array(
+                            'ns'  => self::NS_KINGDOM_PARKS,
+                            'key' => self::ParksKey($kingdomId, $l, $sort, $h, $c),
+                        );
+                    }
                 }
             }
         }

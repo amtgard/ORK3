@@ -128,7 +128,12 @@ ob_start();
     </div>
     <div class="cms-field">
         <label class="cms-label" for="cmsMeta">Meta description</label>
-        <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines." style="min-height:58px;"><?= $h($pMeta) ?></textarea>
+        <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines."
+                  maxlength="200" aria-describedby="cmsMetaHelp" style="min-height:58px;"><?= $h($pMeta) ?></textarea>
+        <div class="cms-help cms-meta-help" id="cmsMetaHelp">
+            <span>Used in search results and link previews. Aim for about 155 characters.</span>
+            <span class="cms-meta-count" id="cmsMetaCount" aria-live="polite"><?= (int)mb_strlen($pMeta) ?>/155</span>
+        </div>
     </div>
     <?php if ($canDelete): ?>
     <div class="cms-action-row" style="margin-top:10px;">
@@ -316,7 +321,19 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
         markDirty();
     });
-    metaInput.addEventListener('input', markDirty);
+    // Meta-description length readout. 155 is the display budget most search
+    // engines and link previews truncate at — past it the tail is simply cut,
+    // so the counter warns rather than blocks (the textarea's own maxlength is
+    // the hard stop).
+    var metaCount = document.getElementById('cmsMetaCount');
+    function paintMetaCount() {
+        if (!metaCount) { return; }
+        var n = (metaInput.value || '').length;
+        metaCount.textContent = n + '/155';
+        metaCount.classList.toggle('cms-meta-count-over', n > 155);
+    }
+    paintMetaCount();
+    metaInput.addEventListener('input', function () { paintMetaCount(); markDirty(); });
 
     /* ================= save flow ================= */
     var saveBtn = document.getElementById('cmsSaveBtn');

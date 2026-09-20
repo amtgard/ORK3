@@ -1,0 +1,51 @@
+-- Amtgard CMS — starter-content VERSION on ork_cms_site
+-- =============================================================================
+-- 2026-08-09-cms-site-seed-marker.sql gave ork_cms_site an explicit
+-- template_seeded_at marker, which answers exactly one question: has this site
+-- ever been seeded? It carries no version, so a site seeded a year ago and one
+-- seeded this morning are indistinguishable — and every improvement to the
+-- starter copy or layout has therefore needed its own bespoke, hand-written
+-- migration to reach the sites already out there
+-- (db-migrations/2026-09-20-cms-kingdom-seed-copy-repair.php is the 162-line
+-- example; 2026-08-10-cms-park-seed-repair.php is another). The orgs already
+-- seeded otherwise keep the template they were minted with forever, and there
+-- is no "reset this page back to the starter" path anywhere either.
+--
+-- seed_version records WHICH version of CmsStarterContent a site was seeded
+-- with. CmsSite::BackfillSeedContent() then re-derives that old version's
+-- content, compares it byte-for-byte against what is stored, and upgrades only
+-- the fields nobody has edited — one generic, audited, idempotent operation in
+-- place of a new hand-written script per change.
+--
+-- SITE-level, deliberately, and NOT a per-block starter_key column: carrying
+-- per-block provenance would mean opening CmsPage's block-persistence core
+-- (_fetchBlocks / _normalizeBlocks / _upsertKnownBlocks / _insertNewBlocks /
+-- _verifyBlockCount / _snapshotRevision) to thread and preserve a new column,
+-- and re-derivation from CmsStarterContent gives the same answer without
+-- touching any of it.
+--
+-- Applied at deploy (MariaDB client, not mysql). Additive only — no data is
+-- dropped or rewritten; the foundation/site migrations stay faithful records of
+-- the original schema and this ALTER layers the new column on top.
+--
+-- Re-run safe: ADD COLUMN IF NOT EXISTS is a no-op on a second run.
+
+-- ---------------------------------------------------------------------------
+-- ork_cms_site — the starter-content version this site was seeded with.
+-- ---------------------------------------------------------------------------
+-- NO BACKFILL, and that is the correct behaviour rather than an omission
+-- (contrast the seed-marker migration, whose backfill was critical): every row
+-- that exists when this migration runs WAS seeded before versioning existed,
+-- which is precisely what version 0 means. DEFAULT 0 already says so for each
+-- of them, and CmsSite::CURRENT_SEED_VERSION starts at 1, so the ~20 kingdoms
+-- already live are correctly reported as one version behind.
+--
+-- NOT NULL DEFAULT 0 also makes the column's ABSENCE and its zero value read
+-- the same way, which matters because CmsSite must keep working on a
+-- pre-migration database: every read of seed_version there fails OPEN (an
+-- absent column means "treat this site as current" and never re-derive on a
+-- guess), the same convention template_seeded_at's absence already follows —
+-- see controller.Cms.php:416-423 and CmsSite::EnsureSite()'s docblock.
+ALTER TABLE `ork_cms_site`
+  ADD COLUMN IF NOT EXISTS `seed_version` INT NOT NULL DEFAULT 0
+    AFTER `template_seeded_at`;

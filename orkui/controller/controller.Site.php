@@ -500,6 +500,13 @@ class Controller_Site extends Controller
      * Resolve a slug to a site row (or null). The slug is normalized to the
      * [a-z0-9-] charset inside CmsSite::GetSiteBySlug, so nothing beyond the
      * lookup key ever reaches the DB from user input.
+     *
+     * On a MISS the slug may be one this site used to answer to: renaming a site
+     * slug would otherwise 404 every externally-shared link at once (Discord,
+     * Facebook, search results). CmsPage's redirect table cannot cover that — it
+     * keys on the path AFTER the site slug, and is only consulted once the site
+     * row has already been resolved by its CURRENT slug. So fall back to the
+     * alias table and 301 to the same path under the current slug.
      */
     private function _resolveSite($slug)
     {
@@ -509,7 +516,73 @@ class Controller_Site extends Controller
         }
         $this->load_model('CmsSite');
         $site = $this->CmsSite->get_site_by_slug($slug);
-        return (is_array($site) && !empty($site)) ? $site : null;
+        if (is_array($site) && !empty($site)) {
+            return $site;
+        }
+        $this->_tryAliasRedirect($slug);   // 301s and exits on a hit
+        return null;
+    }
+
+    /**
+     * A retired slug → permanent redirect to the site's CURRENT slug, preserving
+     * the rest of the path and the query string (a deep link like
+     * /k/old-slug/officers lands on /k/new-slug/officers, not the home page).
+     * Returns normally when there is no alias, so the caller still 404s.
+     *
+     * Loop-safe: an alias resolving to a site whose current slug IS the requested
+     * slug is treated as a miss — redirecting there would bounce forever.
+     *
+     * @param string $slug the slug that just missed the primary lookup
+     * @return void (exits on a hit)
+     */
+    private function _tryAliasRedirect($slug)
+    {
+        // The alias resolver is owned by CmsSite; tolerate its absence rather
+        // than fataling on a call_user_func_array to an undefined method.
+        if (!method_exists('CmsSite', 'GetSiteByAliasSlug')) {
+            return;
+        }
+        $site = $this->CmsSite->GetSiteByAliasSlug($slug);
+        if (!is_array($site) || empty($site)) {
+            return;
+        }
+        // Same discipline as the /k-vs-/p canonical 301: only redirect toward a
+        // site the viewer may already see, so a retired slug can't reveal that an
+        // unbuilt/draft site exists behind it.
+        $published = ((string) ($site['status'] ?? 'unbuilt') === 'published');
+        if (!$published && !$this->_viewerCanPreview($site)) {
+            return;
+        }
+        $current = strtolower(trim((string) ($site['slug'] ?? '')));
+        $asked   = strtolower(trim((string) $slug));
+        if ($current === '' || $current === $asked) {
+            return; // nothing to move to — treat as a miss
+        }
+
+        // Swap ONLY the slug segment of the pretty path, keeping everything after
+        // it (nested page path) and the query string intact.
+        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+        $uri = preg_replace('/([?&])_pfx=[kp](&|$)/', '$1', $uri);
+        $uri = rtrim($uri, '?&');
+        $pattern = '#^(/[kp]/)' . preg_quote(rawurlencode($asked), '#') . '(?=$|[/?])#i';
+        if (preg_match($pattern, $uri)) {
+            $target = preg_replace($pattern, '${1}' . rawurlencode($current), $uri, 1);
+        } else {
+            // Raw Site/* route (no pretty path to rewrite) — send them to the
+            // site's canonical home under its current slug.
+            $target = $this->_siteUrl($site);
+        }
+        if (!$published) {
+            // This 301 is issued only to a viewer authorized to preview; an
+            // anonymous visitor gets a 404 at the same URL. A shared cache that
+            // stored it would serve the officer's redirect to the public and
+            // reveal that the retired slug maps to a real unpublished site —
+            // the exact indistinguishability the gate above protects.
+            header('Cache-Control: private, no-store');
+        }
+        http_response_code(301);
+        header('Location: ' . $target, true, 301);
+        exit;
     }
 
     /**
@@ -964,6 +1037,14 @@ class Controller_Site extends Controller
         $title    = trim((string) ($page['title'] ?? ''));
         $ogTitle  = $title . ($siteName !== '' && $title !== $siteName ? ' — ' . $siteName : '');
 
+        // Resolve the page description ONCE, here, and publish it to BOTH tags:
+        // default.theme emits <meta name="description"> from $meta_description and
+        // og:description from $PageMeta['og_desc'], so anything assembled in two
+        // places drifts. (This deliberately overwrites the raw value the action
+        // stashed before calling us.)
+        $desc                           = $this->_orgPageDescription($page, $siteName);
+        $this->data['meta_description'] = $desc;
+
         // NOTE: an org-site page falls back to the SITE name, not the ORK brand
         // (Controller_Page does the opposite for a global CMS page). Keep the
         // fallback here at the call site — CmsMeta must not homogenize the two.
@@ -971,10 +1052,132 @@ class Controller_Site extends Controller
             'canonical'   => $canon,
             'og_type'     => ($type === 'website') ? 'website' : 'article',
             'og_title'    => ($ogTitle !== '') ? $ogTitle : $siteName,
-            'og_desc'     => trim((string) ($page['meta_description'] ?? '')),
+            'og_desc'     => $desc,
             'og_image'    => $this->_ogImage((int) ($page['hero_media_id'] ?? 0)),
             'og_sitename' => $siteName,
         ));
+    }
+
+    /**
+     * The description an ORG-SITE page advertises to search engines and link
+     * previews, resolved in one place for both <meta name="description"> and
+     * og:description.
+     *
+     * A newly seeded page carries meta_description = '', which in default.theme
+     * falls through to the GLOBAL ORK fallback ("The Online Record Keeper for the
+     * Amtgard International LARP.") — so every page a kingdom adds would describe
+     * the record-keeping app instead of the kingdom. An org site gets its own
+     * chain instead: the authored meta_description, then the leading sentence of
+     * the first authored rich_text block, then "{Site name} — {Page title}".
+     * The GLOBAL front door's fallback is untouched.
+     *
+     * @param array  $page     page row (title, meta_description)
+     * @param string $siteName resolved site name ('' when unknown)
+     * @return string never the ORK literal; '' only when the page has no identity
+     */
+    private function _orgPageDescription($page, $siteName)
+    {
+        $desc = trim((string) ($page['meta_description'] ?? ''));
+        if ($desc !== '') {
+            return $desc;
+        }
+
+        // Blocks are already published to the view by the action that called us,
+        // in the shared renderer shape ['type','source','fields'].
+        $blocks = (isset($this->data['SiteBlocks']) && is_array($this->data['SiteBlocks']))
+            ? $this->data['SiteBlocks']
+            : array();
+        foreach ($blocks as $block) {
+            if (!is_array($block) || (string) ($block['type'] ?? '') !== 'rich_text') {
+                continue;
+            }
+            if ((string) ($block['source'] ?? 'authored') !== 'authored') {
+                continue;
+            }
+            $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
+            // strip_tags() removes a tag WITHOUT leaving a separator, so
+            // '</p><p>' welds two authored paragraphs into one run-on word
+            // ('...the field.We meet...') — which also hides the sentence
+            // boundary from _leadingSentence(). Separate on BLOCK-LEVEL tag
+            // boundaries only; the \s+ collapse below eats the doubles.
+            //
+            // Deliberately NOT every tag boundary: CmsSanitizer::$ALLOWED_TAGS
+            // permits inline markup (a, strong, em, b, i, u, s, sub, sup, span),
+            // and spacing those would push a stray space in front of the
+            // punctuation that follows them — '<strong>Amtgard</strong>.'
+            // rendering as 'Amtgard .' in <meta name="description"> and
+            // og:description. A bolded org name or a linked park name before a
+            // period is ordinary authored copy, so inline tags must fall to
+            // strip_tags() with no separator at all.
+            $raw    = preg_replace(
+                '#<\s*/?\s*(?:p|br|div|h[1-6]|ul|ol|li|blockquote|hr|figure|figcaption'
+                . '|table|caption|thead|tbody|tr|th|td)\b[^>]*>#i',
+                ' ',
+                (string) ($fields['body'] ?? '')
+            );
+            $body   = html_entity_decode(strip_tags($raw), ENT_QUOTES, 'UTF-8');
+            $body   = trim(preg_replace('/\s+/u', ' ', $body));
+            if ($body === '') {
+                continue;
+            }
+            return $this->_leadingSentence($body, 155);
+        }
+
+        $title = trim((string) ($page['title'] ?? ''));
+        if ($siteName !== '' && $title !== '' && $title !== $siteName) {
+            return $siteName . ' — ' . $title;
+        }
+        return ($siteName !== '') ? $siteName : $title;
+    }
+
+    /**
+     * The leading sentence of a body of plain text, or a word-boundary truncation
+     * when the first sentence is longer than $max (roughly a meta description's
+     * useful length).
+     *
+     * @param string $text plain text, whitespace already collapsed
+     * @param int    $max
+     * @return string
+     */
+    private function _leadingSentence($text, $max = 155)
+    {
+        $len = function ($s) {
+            return function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s);
+        };
+        $cut = function ($s, $n) {
+            return function_exists('mb_substr') ? mb_substr($s, 0, $n, 'UTF-8') : substr($s, 0, $n);
+        };
+
+        // A lone period is NOT reliably a sentence end — Amtgard copy is dense
+        // with 'Sir.', 'St.', 'Est.', 'vs.', so stopping at the first match can
+        // emit a 15-character description. Keep taking sentences while the
+        // result is implausibly short AND the next one still fits in $max.
+        $min  = 60;
+        $out  = '';
+        $rest = $text;
+        while (preg_match('/^(.+?[.!?])(\s|$)/u', $rest, $m)) {
+            $candidate = ($out === '') ? $m[1] : $out . ' ' . $m[1];
+            if ($len($candidate) > $max) {
+                break;
+            }
+            $out  = $candidate;
+            $rest = ltrim((string) substr($rest, strlen($m[0])));
+            if ($len($out) >= $min) {
+                break;
+            }
+        }
+        if ($out !== '' && $len($out) >= $min) {
+            return $out;
+        }
+        if ($len($text) <= $max) {
+            return $text;
+        }
+        $slice = $cut($text, $max);
+        $space = strrpos($slice, ' ');
+        if ($space !== false && $space > 0) {
+            $slice = substr($slice, 0, $space);
+        }
+        return rtrim($slice, " \t\n\r\0\x0B,;:-") . '…';
     }
 
     /** Canonical + OG for a scoped blog POST (/post/{slug}). */

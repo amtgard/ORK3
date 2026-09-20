@@ -91,6 +91,18 @@ $ktResolved = fdBlockCache(
 
 $shown        = $ktResolved['shown'];
 $moreCount    = (int)$ktResolved['total'] - count($shown);
+
+// No kingdoms to show — which is the case on EVERY render path that does not
+// inject $ActiveKingdomSummary (only the global front-door HOME action does).
+// A visitor must never see the internal reason: render nothing at all rather
+// than a full-width banded section containing a diagnostic string. The author,
+// in the CMS editor/preview, still gets told why the block is blank.
+if (empty($shown)) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This block only lists kingdoms on the global Amtgard front door, so it has nothing to show here.');
+    }
+    return;
+}
 ?>
 <div class="fd-pad fd-section-muted">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
@@ -111,43 +123,39 @@ $moreCount    = (int)$ktResolved['total'] - count($shown);
         <?php endif; ?>
     </div>
 
-    <?php if (empty($shown)): ?>
-        <div class="fd-empty">Kingdoms list unavailable.</div>
-    <?php else: ?>
-        <div class="fd-kingdoms-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;">
-            <?php foreach ($shown as $row): ?>
-                <?php
-                $kingdomId   = (int)$row['id'];
-                $kingdomName = htmlspecialchars($row['name'], ENT_QUOTES);
-                $heraldryUrl = htmlspecialchars($row['heraldry'], ENT_QUOTES);
-                $provinces   = $showProvinces ? (string) ($row['provinces'] ?? '') : '';
-                ?>
-                <a class="fd-card" href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"
-                   style="padding:12px;text-align:center;text-decoration:none;color:inherit;display:block;">
-                    <div style="height:48px;display:flex;align-items:center;justify-content:center;">
-                        <img src="<?= $heraldryUrl ?>"
-                             onerror="this.style.display='none'"
-                             alt="<?= $kingdomName ?> heraldry"
-                             style="max-height:48px;max-width:100%;object-fit:contain;">
-                    </div>
-                    <div style="font-size:11px;font-weight:600;margin-top:6px;">
-                        <?= $kingdomName ?>
-                    </div>
-                    <?php if ($provinces !== ''): ?>
-                        <?php $provincesEsc = htmlspecialchars($provinces, ENT_QUOTES); ?>
-                        <div class="fd-kingdom-provinces" title="<?= $provincesEsc ?>"><?= $provincesEsc ?></div>
-                    <?php endif; ?>
-                </a>
-            <?php endforeach; ?>
+    <div class="fd-kingdoms-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;">
+        <?php foreach ($shown as $row): ?>
+            <?php
+            $kingdomId   = (int)$row['id'];
+            $kingdomName = htmlspecialchars($row['name'], ENT_QUOTES);
+            $heraldryUrl = htmlspecialchars($row['heraldry'], ENT_QUOTES);
+            $provinces   = $showProvinces ? (string) ($row['provinces'] ?? '') : '';
+            ?>
+            <a class="fd-card" href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"
+               style="padding:12px;text-align:center;text-decoration:none;color:inherit;display:block;">
+                <div style="height:48px;display:flex;align-items:center;justify-content:center;">
+                    <img src="<?= $heraldryUrl ?>"
+                         onerror="this.style.display='none'"
+                         alt="<?= $kingdomName ?> heraldry"
+                         style="max-height:48px;max-width:100%;object-fit:contain;">
+                </div>
+                <div style="font-size:11px;font-weight:600;margin-top:6px;">
+                    <?= $kingdomName ?>
+                </div>
+                <?php if ($provinces !== ''): ?>
+                    <?php $provincesEsc = htmlspecialchars($provinces, ENT_QUOTES); ?>
+                    <div class="fd-kingdom-provinces" title="<?= $provincesEsc ?>"><?= $provincesEsc ?></div>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
 
-            <?php if ($moreCount > 0 && !empty($moreHref)): ?>
-                <a class="fd-card" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>"
-                   style="padding:12px;text-align:center;display:flex;flex-direction:column;align-items:center;
-                          justify-content:center;background:var(--navy);color:var(--fd-primary-contrast);text-decoration:none;
-                          border-color:var(--navy);">
-                    <div style="font-size:13px;font-weight:700;">+<?= $moreCount ?> more &rarr;</div>
-                </a>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
+        <?php if ($moreCount > 0 && !empty($moreHref)): ?>
+            <a class="fd-card" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>"
+               style="padding:12px;text-align:center;display:flex;flex-direction:column;align-items:center;
+                      justify-content:center;background:var(--navy);color:var(--fd-primary-contrast);text-decoration:none;
+                      border-color:var(--navy);">
+                <div style="font-size:13px;font-weight:700;">+<?= $moreCount ?> more &rarr;</div>
+            </a>
+        <?php endif; ?>
+    </div>
 </div>

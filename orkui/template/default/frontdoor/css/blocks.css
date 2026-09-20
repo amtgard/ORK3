@@ -219,10 +219,26 @@ html[data-theme="dark"] .pm-directions { background: #1b2233; }
 .ke-head,
 .bf-head,
 .kp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
-/* .kp-more is NOT in this group: it hardcodes #1d4ed8 instead of var(--pk-link). */
+/* .kp-more used to sit outside this group because it hardcoded #1d4ed8, which
+   had no dark-mode rule and failed contrast on the transparent dark .kp-block.
+   Folding it in fixes the STANDALONE org-site tier (Site_shell.tpl loads
+   orgsite.css, which has no bare `a` dark rule, so this class-only selector
+   genuinely lands): #1d4ed8 on --fd-bg measured 2.67:1, and --pk-link → --fd-accent
+   under html[data-theme="dark"] (frontdoor.css) measures 9.5:1.
+   IN-SHELL this family is a different story and the fold changes nothing: these
+   are <a> elements, so at (0,1,0) the whole .pe-more/.ke-more/.bf-more/.kp-more
+   group is outranked in dark by default.theme's (1,1,2)
+   `html[data-theme="dark"] #theme_container a { color:#63b3ed }` — the trap
+   orkshell-interop.css:86 documents. That renders #63b3ed on #1a202c (7.15:1),
+   which is legible, so no interop armour is added here. Do not write "the whole
+   family is theme-correct": it is theme-correct standalone, and shell-governed
+   in-shell. Note this also restyles LIGHT mode for the family — the header
+   "All parks →" moves from #1d4ed8 to --fd-primary — which is the intended
+   normalization, not an accident. */
 .pe-more,
 .ke-more,
-.bf-more { color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.bf-more,
+.kp-more { color: var(--pk-link); font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
 .pe-grid,
 .ke-grid,
 .bf-grid,
@@ -511,9 +527,19 @@ html[data-theme="dark"] .fdb-file-meta { color: #7d88a6; }
 html[data-theme="dark"] .fdb-file-dl { color: #a9b3d0; }
 html[data-theme="dark"] .fdb-file-card:hover .fdb-file-dl { color: #7ea2ff; }
 
-/* ---- park_hero block (was inline style element in frontdoor/blocks/park_hero.tpl) ---- */
+/* ---- park_hero + kingdom_hero blocks -------------------------------------
+   (was an inline style element in frontdoor/blocks/park_hero.tpl)
+
+   ONE crest-hero component under TWO namespaces. kingdom_hero.tpl is the same
+   frame one level up — crest, eyebrow, name, one button — and its .kh-* rules
+   are GROUPED onto park_hero's rather than copied, so the two can never drift
+   and the CSS duplication gate stays where it is. They can never co-occur: each
+   partial returns early outside its own scope. Per-namespace differences (the
+   photo layer, the next-game-day line, the retired filter) stay on .pk-* alone;
+   .kh-tagline is the kingdom's one authored line and rides on .pk-place. */
 /* scoped: pk-hero */
-.pk-hero { position: relative; overflow: hidden; background: var(--fd-primary);
+.pk-hero,
+.kh-hero { position: relative; overflow: hidden; background: var(--fd-primary);
     color: var(--fd-primary-contrast); border-bottom: 3px solid var(--fd-accent-on-primary, var(--fd-primary-contrast));
     padding: clamp(40px, 7vw, 84px) clamp(20px, 4vw, 56px); }
 /* Placeholder photo sits BEHIND the field at low opacity so removing it degrades
@@ -523,7 +549,8 @@ html[data-theme="dark"] .fdb-file-card:hover .fdb-file-dl { color: #7ea2ff; }
 /* Diapering: heralds incised a lattice into large flat tinctures precisely because
    unbroken flat colour reads as dead paint. CSS-only, so it never depends on the
    device file's alpha. */
-.pk-hero-field { position: absolute; inset: 0; pointer-events: none;
+.pk-hero-field,
+.kh-hero-field { position: absolute; inset: 0; pointer-events: none;
     background-image:
         radial-gradient(circle at 1px 1px, rgba(255,255,255,.075) 1px, transparent 1.7px),
         repeating-linear-gradient( 60deg, transparent 0 15px, rgba(255,255,255,.042) 15px 16px),
@@ -531,22 +558,27 @@ html[data-theme="dark"] .fdb-file-card:hover .fdb-file-dl { color: #7ea2ff; }
     background-size: 32px 55px, auto, auto;
     -webkit-mask-image: radial-gradient(115% 105% at 78% 45%, #000 18%, rgba(0,0,0,.28) 100%);
     mask-image: radial-gradient(115% 105% at 78% 45%, #000 18%, rgba(0,0,0,.28) 100%); }
-.pk-hero-inner { position: relative; max-width: 1120px; margin-inline: auto; display: grid;
+.pk-hero-inner,
+.kh-hero-inner { position: relative; max-width: 1120px; margin-inline: auto; display: grid;
     grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: clamp(24px, 5vw, 64px); }
-.pk-eyebrow { font-family: var(--fd-font-body); font-weight: 700; font-size: .6875rem;
+.pk-eyebrow,
+.kh-eyebrow { font-family: var(--fd-font-body); font-weight: 700; font-size: .6875rem;
     letter-spacing: .16em; text-transform: uppercase; color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
     margin: 0 0 10px; }
 /* Reset the orkui global h1-h6 grey pill box. */
-.pk-name { background: none; border: 0; padding: 0; border-radius: 0; margin: 0 0 10px;
+.pk-name,
+.kh-name { background: none; border: 0; padding: 0; border-radius: 0; margin: 0 0 10px;
     font-family: var(--fd-font-heading); color: var(--fd-primary-contrast);
     font-size: clamp(2.25rem, 1.35rem + 4.4vw, 4rem); line-height: .98; letter-spacing: -.015em; }
-.pk-place { margin: 0 0 14px; opacity: .86; }
+.pk-place,
+.kh-tagline { margin: 0 0 14px; opacity: .86; }
 .pk-place i { margin-right: 7px; }
 .pk-next { display: inline-block; margin: 0 0 22px; padding: 8px 14px;
     border-left: 3px solid var(--fd-accent-on-primary, var(--fd-primary-contrast));
     background: rgba(255,255,255,.09); border-radius: 0 var(--fd-radius, 6px) var(--fd-radius, 6px) 0; }
 .pk-wx { margin-left: 10px; opacity: .85; }
-.pk-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.pk-actions,
+.kh-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 /* The matting disc is a PLATE, and it is light in BOTH themes on purpose. It
    used to read --pk-paper, which dark mode remaps to var(--fd-bg) — a near-black
    — so the disc inverted under artwork that was drawn for white paper: a trimmed
@@ -554,24 +586,31 @@ html[data-theme="dark"] .fdb-file-card:hover .fdb-file-dl { color: #7ea2ff; }
    black ring. Heraldry is painted on a light field; the plate follows the
    artwork, not the page. --pk-seal-plate / --pk-seal-ink are defined once in
    frontdoor.css and deliberately NOT overridden in the dark block. */
-.pk-seal { width: clamp(116px, 17vw, 196px); aspect-ratio: 1; display: grid; place-items: center;
+.pk-seal,
+.kh-seal { width: clamp(116px, 17vw, 196px); aspect-ratio: 1; display: grid; place-items: center;
     border-radius: 50%; background: var(--pk-seal-plate, #fbfcfd);
     box-shadow: 0 0 0 2px var(--fd-accent-on-primary, var(--fd-primary-contrast)),
                 0 0 0 9px rgba(255,255,255,.13), 0 14px 34px rgba(0,0,0,.28); }
-.pk-seal.is-matted img { width: 78%; height: 78%; object-fit: contain; }
-.pk-seal.is-cut img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.pk-seal.is-matted img,
+.kh-seal.is-matted img { width: 78%; height: 78%; object-fit: contain; }
+.pk-seal.is-cut img,
+.kh-seal.is-cut img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 /* Monogram ink, NOT --fd-primary: dark mode lifts the primary to L>=0.55 for
    legibility on a dark page, and that lifted colour on this permanently light
    plate is the same contrast failure in reverse. --pk-seal-ink is the org's own
    hue held dark in both themes. */
-.pk-seal.is-monogram { color: var(--pk-seal-ink, var(--fd-primary)); font-family: var(--fd-font-heading);
+.pk-seal.is-monogram,
+.kh-seal.is-monogram { color: var(--pk-seal-ink, var(--fd-primary)); font-family: var(--fd-font-heading);
     font-size: clamp(2.4rem, 6vw, 4.2rem); font-weight: 700; }
 .pk-hero.is-retired { filter: saturate(.35); }
 
 @media (max-width: 760px) {
-    .pk-hero-inner { grid-template-columns: 1fr; gap: 22px; }
-    .pk-seal { order: -1; width: 104px; }
-    .pk-actions > a { flex: 1 1 auto; justify-content: center; }
+    .pk-hero-inner,
+    .kh-hero-inner { grid-template-columns: 1fr; gap: 22px; }
+    .pk-seal,
+    .kh-seal { order: -1; width: 104px; }
+    .pk-actions > a,
+    .kh-actions > a { flex: 1 1 auto; justify-content: center; }
 }
 
 /* ---- accordion block (was inline style element in frontdoor/blocks/accordion.tpl) ---- */
@@ -771,9 +810,14 @@ html[data-theme="dark"] .fdb-img-caption {
 }
 
 /* ---- kingdom_parks block (was inline style element in frontdoor/blocks/kingdom_parks.tpl) ---- */
-/* .kp-block, .kp-head, .kp-title, .kp-grid and .kp-more:hover are grouped with
-   the shared feed shells above. */
-.kp-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+/* .kp-block, .kp-head, .kp-title, .kp-grid, .kp-more and .kp-more:hover are
+   grouped with the shared feed shells above. */
+/* Centred link under a truncated park grid. The header .kp-more is a short
+   one-line phrase, so the family's white-space:nowrap is fine there; this one
+   sits under the grid on its own row and is allowed to wrap, so a narrow phone
+   never gets horizontal scroll out of it. */
+.kp-more-foot { text-align: center; margin-top: 16px; }
+.kp-more-foot .kp-more { white-space: normal; }
 .kp-card {
     display: flex; flex-direction: column; text-decoration: none; color: inherit;
     background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px; overflow: hidden;

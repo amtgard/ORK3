@@ -61,9 +61,45 @@ check('catalog starter carries an items list', isset($defs['catalog']['starter_f
 
 $pts = CmsBlockRegistry::PageTypeDefs();
 check('store page type is registered', isset($pts['store']) && $pts['store']['label'] === 'Store catalog');
-check('store page seeds heading + catalog', $pts['store']['starters'] === array('heading', 'catalog'));
+check('store page seeds the catalog alone (no heading — the shell prints the title)', $pts['store']['starters'] === array('catalog'));
 check('store chooser offers catalog', in_array('catalog', $pts['store']['extra_blocks'], true));
 check('photo gallery chooser offers catalog', in_array('catalog', $pts['media']['extra_blocks'], true));
+
+// Every block type a page type NAMES must exist in BlockDefs(). Nothing else
+// asserts this, and both lookups fail SILENTLY and in opposite directions:
+// Controller_Cms::_starter() falls back to an empty field set plus source
+// 'authored' on a miss (a new page seeds a blank block), and _blockAllow()
+// drops an unknown extra_blocks entry through its isset($addable[$t]) filter (a
+// block quietly vanishes from the Add-block chooser). A typo, a rename, or a
+// block removed from BlockDefs while still referenced here produces no error.
+// This is the seam every new page type crosses: 'store' had to land in
+// BlockDefs, PageTypeDefs and a template together.
+$danglingRefs = array();
+foreach ($pts as $type => $def) {
+    $refs = array();
+    foreach (array('starters', 'extra_blocks') as $key) {
+        // null is meaningful, not missing: 'composed' takes every addable block
+        // and 'post' seeds nothing. Only a real list names block types.
+        if (isset($def[$key]) && is_array($def[$key])) {
+            $refs[$key] = $def[$key];
+        }
+    }
+    foreach ((isset($def['starters_by_scope']) && is_array($def['starters_by_scope'])
+        ? $def['starters_by_scope'] : array()) as $scope => $list) {
+        $refs['starters_by_scope.' . $scope] = is_array($list) ? $list : array();
+    }
+    foreach ($refs as $key => $list) {
+        foreach ($list as $blockType) {
+            if (!isset($defs[$blockType])) {
+                $danglingRefs[] = $type . '.' . $key . ' => ' . $blockType;
+            }
+        }
+    }
+}
+check(
+    'every PageTypeDefs block reference resolves in BlockDefs (' . implode(', ', $danglingRefs) . ')',
+    $danglingRefs === array()
+);
 
 $mig = (string) @file_get_contents($root . '/db-migrations/2026-09-19-cms-page-type-store.sql');
 check('store is in the ork_cms_page.type ENUM migration', strpos($mig, "'about','store')") !== false);

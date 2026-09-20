@@ -267,6 +267,8 @@ window.CmsBlockEditor = (function () {
                 return liveSummary(f, 'meeting times & directions');
             case 'park_hero':
                 return liveSummary(f, 'park crest & next game day');
+            case 'kingdom_hero':
+                return liveSummary(f, 'kingdom crest & call to action');
             default:
                 return firstTextIn(f);
         }
@@ -1417,6 +1419,23 @@ window.CmsBlockEditor = (function () {
             { key: 'limit', type: 'number', label: 'Max posts shown', placeholder: '3' },
             { key: 'tag', type: 'tagpicker', label: 'Filter by tag (optional)',
               help: 'Pick from tags that already exist. “All posts” shows every published post.' }
+        ],
+        // kingdom_hero is the FIRST block on a kingdom home page, and the same
+        // rule park_hero records applies: a dynamic block with no schema here
+        // renders the live-info card and stops, so the headline, the eyebrow,
+        // the one line of copy and the button would all be uneditable. Keys
+        // mirror exactly what kingdom_hero.tpl reads; the name, rank and crest
+        // come from the kingdom's own ORK record and are not editable fields.
+        kingdom_hero: [
+            { key: 'heading', type: 'text', label: 'Headline',
+              help: 'Leave blank to use the kingdom’s own name.' },
+            { key: 'kicker', type: 'text', label: 'Eyebrow',
+              help: 'The small line above the name. Leave blank to use the rank, e.g. “Kingdom of Amtgard”.' },
+            { key: 'tagline', type: 'text', label: 'One-line intro',
+              placeholder: 'Foam swords, real friendships, and a place for everyone.' },
+            { key: 'cta_label', type: 'text', label: 'Button label', placeholder: 'Find a park near you' },
+            { key: 'cta_href', type: 'text', label: 'Button link',
+              help: 'Points at your Parks page by default.' }
         ],
         kingdom_officers: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Officers' },

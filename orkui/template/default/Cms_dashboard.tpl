@@ -57,6 +57,12 @@ $dashScope     = isset($CmsScope) && is_array($CmsScope) ? $CmsScope : array('ty
 $dashIsOrgSite = ($dashScope['type'] ?? 'global') !== 'global';
 $dashSite      = isset($CmsSite) && is_array($CmsSite) ? $CmsSite : array();
 $dashSiteStatus = (string)($dashSite['status'] ?? 'unbuilt');
+// The rollout gate said no: there is no site row AND none can be created for
+// this scope yet. Distinct from 'unbuilt' (a real row waiting to be published) —
+// rendering the Public-site card here would offer a Publish button and a web
+// address for a site that cannot exist. The controller supplies the reason.
+$dashSiteBlocked = !empty($SiteBlocked);
+$dashSiteBlockedWhy = (string)($SiteBlockedReason ?? '');
 $dashSiteSlug   = (string)($dashSite['slug'] ?? '');
 $dashCanPublish = !empty($CanPublishSite);
 // Site settings (name / URL slug / home page). Naming is edit-tier; the public
@@ -84,6 +90,48 @@ $dashSiteAdminTerm = 'a site administrator';
 // the neutral 'site' when the controller did not resolve one.
 $dashOrgNoun      = trim((string)($CmsScopeNoun ?? ''));
 $dashOrgNounLower = ($dashOrgNoun !== '') ? strtolower($dashOrgNoun) : 'site';
+
+// --- "Finish your site" (contract C-READINESS) ---
+// The controller has already filtered these to starter pages that are still
+// untouched or still render nothing. An empty list — which is also what an
+// unavailable readiness call produces — renders no panel whatsoever: a nag that
+// never goes away is worse than no nudge at all. This copy is admin chrome and
+// never reaches the public site.
+$dashSeedRows  = isset($SeedReadiness) && is_array($SeedReadiness) ? $SeedReadiness : array();
+$dashSeedCount = count($dashSeedRows);
+// The two reasons a row is here are NOT interchangeable: 'empty' means the
+// officer edited the page down to nothing, so any copy asserting the seeder's
+// text is still on it states something false. Count them apart and let the
+// aggregate copy below say only what is true of every row it covers.
+$dashSeedEmpty = 0;
+foreach ($dashSeedRows as $sr) {
+    if ((string)($sr['reason'] ?? '') === 'empty') {
+        $dashSeedEmpty++;
+    }
+}
+$dashSeedStarter = $dashSeedCount - $dashSeedEmpty;
+// This org's own public home URL, built from the POST-ensure slug.
+//
+// Deliberately NOT $SiteLiveUrl. That is computed by _applyScopeData() BEFORE
+// _loadSiteContext() provisions the site, so on a never-provisioned org's first
+// dashboard load the row does not exist yet, _scopeLiveHome() sees an empty slug
+// and returns bare UIR — the GLOBAL front door. Guarding on $SiteLiveUrl being
+// non-empty cannot catch that, because UIR is not empty: in the bad case
+// $SiteLiveUrl already IS the wrong URL. $dashSiteSlug is read from the CmsSite
+// row AFTER the ensure, so it is the only trustworthy source here.
+//
+// That first load is precisely when every starter page is untouched — i.e. the
+// one load where the readiness panel is guaranteed to render and this dialog
+// guaranteed to appear. No slug, no link: the dialog degrades to plain text.
+$dashSiteHomeUrl = ($dashSiteSlug !== '')
+    ? UIR . 'Site/view/' . rawurlencode($dashSiteSlug)
+    : '';
+
+$dashPreviewHtml = '';
+if ($dashSiteHomeUrl !== '') {
+    $dashPreviewHtml = '<a class="cms-finish-preview" href="' . $h($dashSiteHomeUrl) . '" target="_blank" rel="noopener">'
+        . '<i class="fas fa-external-link-alt"></i> Preview site first</a>';
+}
 ?>
 
 <?php // Dashboard-specific styling (.cms-dash-*/.cms-sitecard-*) lives in the
@@ -103,7 +151,26 @@ include __DIR__ . '/cms/_shell_top.tpl';
           // slot where it is re-read on every visit. The name is carried by the rail
           // wordmark, its tooltip and the rail's screen-reader expansion. ?>
 
-    <?php if ($dashIsOrgSite): ?>
+    <?php if ($dashIsOrgSite && $dashSiteBlocked): ?>
+    <?php // Rollout gate: no site row, and none can be created. Say so plainly and
+          // render NO publish control and NO settings modal — see the guard on the
+          // Site-settings modal further down. Pages/Media/Nav still work, so the
+          // note also warns that the work has nowhere to go yet. ?>
+    <div class="cms-dash-block">
+        <div class="cms-sitecard cms-sitecard-blocked" id="cmsSiteCard" data-status="blocked">
+            <div class="cms-sitecard-main">
+                <div class="cms-sitecard-title">
+                    <i class="fas fa-lock"></i> Public site
+                    <span class="cms-sitecard-badge cms-sitecard-badge-draft">Not available yet</span>
+                </div>
+                <div class="cms-sitecard-sub">
+                    <?= $h($dashSiteBlockedWhy !== '' ? $dashSiteBlockedWhy : 'Public websites are not switched on for this ' . $dashOrgNounLower . ' yet.') ?>
+                    Anything you write here is saved, but it cannot be published until then.
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php elseif ($dashIsOrgSite): ?>
     <?php
         $siteIsPublished = ($dashSiteStatus === 'published');
         $siteBadgeClass  = $siteIsPublished ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft';
@@ -146,6 +213,55 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     </span>
                 <?php endif; ?>
             </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php // "Finish your site" — the starter pages nobody has made their own yet,
+          // each one click from the editor that fixes it. Reuses the recent-list
+          // chrome wholesale (row layout, hover, phone label collapse) rather than
+          // growing a parallel set of rules. Omitted entirely when the list is
+          // empty, so it retires itself once the last row clears. ?>
+    <?php if ($dashIsOrgSite && !$dashSiteBlocked && $dashSeedCount > 0): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title"><i class="fas fa-clipboard-list"></i> Finish your site</h3>
+        <p class="cms-finish-lede">
+            <?php if ($dashSeedEmpty === 0): ?>
+                <?= $dashSeedCount === 1
+                    ? 'One page still holds the example text OGRE wrote when your site was created.'
+                    : $h($dashSeedCount) . ' pages still hold the example text OGRE wrote when your site was created.' ?>
+            <?php elseif ($dashSeedStarter === 0): ?>
+                <?= $dashSeedCount === 1
+                    ? 'One page has nothing on it that shows up on your site yet.'
+                    : $h($dashSeedCount) . ' pages have nothing on them that shows up on your site yet.' ?>
+            <?php else: ?>
+                <?= $h($dashSeedCount) ?> pages aren't finished yet.
+            <?php endif; ?>
+            Swap in your own words whenever you like — your site works either way.
+        </p>
+        <div class="cms-recent-list cms-finish-list">
+            <?php foreach ($dashSeedRows as $sr):
+                $srTitle  = (string)($sr['title'] ?? '(untitled)');
+                $srHref   = (string)($sr['edit_href'] ?? '#');
+                $srEmpty  = ((string)($sr['reason'] ?? '') === 'empty');
+            ?>
+                <div class="cms-recent-item">
+                    <span class="cms-recent-kind" data-tip="<?= $srEmpty ? 'Empty page' : 'Starter page' ?>">
+                        <i class="fas fa-file-alt"></i>
+                    </span>
+                    <div class="cms-recent-main">
+                        <div class="cms-recent-title"><?= $h($srTitle) ?></div>
+                        <div class="cms-recent-meta">
+                            <?= $srEmpty
+                                ? 'Nothing on this page shows up on your site yet.'
+                                : 'Still the starter text from when your site was created.' ?>
+                        </div>
+                    </div>
+                    <div class="cms-recent-actions">
+                        <a class="cms-btn cms-btn-sm" href="<?= $h($srHref) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
         </div>
     </div>
     <?php endif; ?>
@@ -351,18 +467,32 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
+    <?php /* Suppressed on a blocked scope: with no site row there is no slug, so
+             _scopeLiveHome() falls back to bare UIR — the GLOBAL front door — and
+             "View live site" would hand this org somebody else's website. */ ?>
+    <?php // Same trap as the preview link above, and it was live here too: the
+          // !$dashSiteBlocked guard covers the ROLLOUT-blocked case only, so on a
+          // never-provisioned org's first dashboard load (not blocked, but
+          // $SiteLiveUrl still computed pre-ensure) this handed the org the
+          // GLOBAL front door and called it their site. Use the post-ensure slug. ?>
+    <?php if (!$dashSiteBlocked && $dashSiteHomeUrl !== ''): ?>
     <div class="cms-dash-block">
-        <a class="cms-dash-livelink" href="<?= htmlspecialchars(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>" target="_blank" rel="noopener">
+        <a class="cms-dash-livelink" href="<?= $h($dashSiteHomeUrl) ?>" target="_blank" rel="noopener">
             <i class="fas fa-external-link-alt"></i> View live site
         </a>
     </div>
+    <?php endif; ?>
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
 <?php include __DIR__ . '/cms/_new_page_modal.tpl'; ?>
 
 <?php /* ---- Site settings (name / public URL / home page) ---- */ ?>
-<?php if ($dashIsOrgSite && $dashCanEditSite): ?>
+<?php /* Suppressed when the rollout gate blocks this scope: there is no site row
+         to name and no web address to hand out, so the modal would edit nothing.
+         The handlers below all resolve their elements with getElementById and
+         no-op when absent. */ ?>
+<?php if ($dashIsOrgSite && $dashCanEditSite && !$dashSiteBlocked): ?>
 <div class="cms-modal-overlay" id="cmsSiteModal">
     <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Site settings">
         <div class="cms-modal-head">
@@ -486,7 +616,45 @@ include __DIR__ . '/cms/_shell_top.tpl';
             });
         }
 
-        if (pubBtn) { pubBtn.addEventListener('click', function () { siteAction('publishsite', pubBtn); }); }
+        /* Publishing with starter pages still unfinished is a NUDGE, not a gate:
+           a kingdom mid-build has perfectly good reasons to go live, so the
+           dialog states the count, offers a preview first, and publishes on the
+           officer's word. With nothing outstanding it never appears at all. */
+        var seedPending  = <?= (int)$dashSeedCount ?>;
+        /* Says only what is true of every outstanding page: mixed reasons fall
+           back to neutral phrasing rather than claiming starter text is still
+           on a page the officer emptied out. */
+        var seedNote     = <?= json_encode(
+            $dashSeedEmpty === 0
+                ? ($dashSeedCount === 1
+                    ? 'One page still has its starter text on it.'
+                    : $dashSeedCount . ' pages still have their starter text on them.')
+                : ($dashSeedStarter === 0
+                    ? ($dashSeedCount === 1
+                        ? 'One page has nothing on it that shows up on your site yet.'
+                        : $dashSeedCount . ' pages have nothing on them that shows up on your site yet.')
+                    : $dashSeedCount . " pages aren't finished yet."),
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        ) ?>;
+        /* Empty string when this org has no slug yet — the dialog then carries no
+           link at all rather than one pointing at the global front door. */
+        var previewExtra = <?= json_encode($dashPreviewHtml, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        if (pubBtn) {
+            pubBtn.addEventListener('click', function () {
+                if (seedPending < 1) { siteAction('publishsite', pubBtn); return; }
+                CmsAdmin.confirm({
+                    title: 'Publish your site?',
+                    message: seedNote + ' That is fine — you can keep editing after the site goes live.',
+                    extraHtml: previewExtra,
+                    okLabel: 'Publish site',
+                    okKind: 'cms-btn-primary',
+                    onOk: function () {
+                        CmsAdmin.confirmClose();
+                        siteAction('publishsite', pubBtn);
+                    }
+                });
+            });
+        }
         if (unpubBtn) { unpubBtn.addEventListener('click', function () { siteAction('unpublishsite', unpubBtn); }); }
 
         /* ---- Site settings (name / public URL / home page) ---- */

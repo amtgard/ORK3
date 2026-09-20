@@ -18,7 +18,7 @@ require_once __DIR__ . '/controller.Cms.php';
  * unpublish, delete, revisions), Trash/undo (restore*, purge, listtrashed*),
  * media (upload, list, update, usage, delete, bulk delete), navigation, themes,
  * per-org site settings (publishsite/unpublishsite/savesite), maintenance
- * (clearrendercache, runmaintenance) and the editor helpers (previewblocks,
+ * (clearrendercache, runmaintenance, reseedsite) and the editor helpers (previewblocks,
  * personlookup, pagelist). Each group is documented by its own section banner
  * below rather than duplicated here.
  *
@@ -1705,6 +1705,173 @@ class Controller_CmsAjax extends Controller
             // distinguish "0 cleaned" from "not yet available".
             'ran'     => $ran,
         ));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * reseedsite — super-admin recovery for a site whose starter seed never
+     *              finished (the "Seeding incomplete" badge on Cms_sites)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Re-run the starter template for ONE org site whose seeding never
+     * completed. Until this existed, the only lever for a "this kingdom's site
+     * is missing its pages / its nav is empty" report was a bespoke migration or
+     * raw SQL against a live table — while the sites overview happily badged the
+     * problem with no way to act on it.
+     *
+     * This is a THIN WRAPPER over logic that already exists and is already
+     * tested: CmsSite::EnsureSite() re-enters its repair seed pass
+     * (_seedStarterTemplate($isRepair = true)) whenever
+     * ork_cms_site.template_seeded_at is still NULL, and stamps the marker only
+     * once the pass completes. Nothing about seeding is reimplemented here — the
+     * endpoint only decides WHO may ask, WHICH site, and reports back what the
+     * pass actually did.
+     *
+     * Deliberate limits, all inherited from the repair pass itself:
+     *   - It does NOT resurrect a starter page an officer trashed.
+     *   - It does NOT re-point a site's chosen home page.
+     *   - It only ADDS what is missing; existing content is untouched.
+     * The result message says exactly that, so nobody reads "repair complete" as
+     * "your deleted page is back".
+     *
+     * A site whose marker IS stamped is REFUSED rather than silently no-opped:
+     * forcing a re-seed of a finished site would rewrite published content, and
+     * clearing the marker is not something this endpoint offers.
+     *
+     * AUDIT: EnsureSite writes the seed's own ork_cms_audit rows against the
+     * actor id passed in, so the trail names the super-admin who ran this — no
+     * second, parallel audit call here (the controller cannot reach _cmsAudit
+     * anyway; it is a lib-internal helper by design).
+     *
+     * Super-admin only, POST + CSRF-guarded.
+     */
+    public function reseedsite($action = null)
+    {
+        $uid = $this->_begin();
+        // Resolves AND authorizes the ?scope= selector (JSON 403 + exit on a bad
+        // one). The super-admin gate below is what actually decides this action,
+        // but the scope still has to be a real, resolvable one to act on.
+        $scope = $this->_scope($uid);
+        // Re-seeding rewrites a live site's content. Kingdom/park officers do not
+        // get this for their own site, let alone anyone else's — and because the
+        // gate is on the USER, not the scope, passing another org's selector
+        // cannot get a non-super-admin past it.
+        if (!$this->CmsAuth->IsSuperAdmin($uid)) {
+            $this->_denyCapability('super-admin');
+        }
+
+        $type = (string)$scope['type'];
+        $id   = (int)$scope['id'];
+        if (($type !== 'kingdom' && $type !== 'park') || $id <= 0) {
+            $this->_fail(
+                'The starter template applies to a kingdom or park site, not the global front door.',
+                self::ERR_RESERVED
+            );
+        }
+
+        $this->load_model('CmsSite');
+        $site = $this->CmsSite->get_site_for_scope($type, $id);
+        if (!is_array($site) || empty($site)) {
+            $this->_fail(
+                'That site has not been provisioned yet — open its dashboard to create it.',
+                self::ERR_NOT_FOUND
+            );
+        }
+
+        // CONVENTION — template_seeded_at fails OPEN, in every reader (see
+        // Controller_Cms::sites and CmsSite::EnsureSite): an ABSENT column means
+        // the seed-marker migration has not run, which must read as "seeded" so a
+        // pre-migration site is never re-seeded on a guess. Only a column that
+        // EXISTS and is empty means the seed really did not finish.
+        $seeded = (!array_key_exists('template_seeded_at', $site) || !empty($site['template_seeded_at']));
+        $siteId = isset($site['site_id']) ? (int)$site['site_id'] : 0;
+
+        // A site whose marker is STAMPED is still repairable, and refusing it
+        // was wrong twice over. (a) It rejected the very population the finding
+        // describes — "a page is missing / the nav is empty" on a site that
+        // finished seeding. (b) It lost a race: any OGRE dashboard visit for
+        // this scope re-runs the repair and stamps the marker, so an admin
+        // clicking a stale row got a red error for a site that had just been
+        // fixed. Clear the marker instead, which is safe ONLY because the repair
+        // pass is non-destructive — it never resurrects a trashed starter page
+        // and never re-points a home page the org chose (see
+        // CmsSite::ClearSeedMarker's contract).
+        if ($seeded && !$this->CmsSite->clear_seed_marker($siteId, $uid)) {
+            // Fails only when the column is absent (pre-migration DB), where
+            // there is genuinely nothing to clear and nothing to re-run.
+            $this->_fail(
+                'This site cannot be re-seeded: the seed-marker migration has not been applied to this database yet.',
+                self::ERR_NOT_FOUND
+            );
+        }
+
+        // Before/after census so the outcome reported to the admin is what
+        // actually happened, not an optimistic "done". The repair pass is
+        // idempotent and may legitimately create nothing at all.
+        $pagesBefore = $this->_seedCensus($type, $id);
+
+        // The repair pass itself. Same entry point Controller_Cms uses to
+        // provision a scope; it re-enters seeding because the marker is NULL.
+        $this->CmsSite->ensure_site($type, $id, $uid);
+
+        $pagesAfter = $this->_seedCensus($type, $id);
+        $madePages  = max(0, $pagesAfter['pages'] - $pagesBefore['pages']);
+        $madeNav    = max(0, $pagesAfter['nav'] - $pagesBefore['nav']);
+
+        // Did the pass actually complete? EnsureSite stamps the marker only when
+        // the seed finished (a seed whose home page never landed leaves it NULL
+        // so the site stays repairable), so re-reading it is the honest answer to
+        // "is this site fixed now?".
+        $after     = $this->CmsSite->get_site_for_scope($type, $id);
+        $nowSeeded = (is_array($after) && (!array_key_exists('template_seeded_at', $after) || !empty($after['template_seeded_at'])));
+
+        if ($madePages === 0 && $madeNav === 0) {
+            $message = $nowSeeded
+                ? 'Nothing needed repair — the starter pages and navigation were already in place, and the site is no longer flagged.'
+                : 'Nothing was created. The starter seed still has not completed, so this site stays flagged.';
+        } else {
+            // Say only what the repair pass actually guarantees. It does NOT
+            // restore a trashed page, and it does not re-point a home page the
+            // org has ALREADY chosen — but on a site whose home_page_id is still
+            // NULL (the half-seeded case this endpoint exists for) it does set
+            // one, and a site with no active theme does get a default palette
+            // derived from its heraldry. Claiming "the home page was not
+            // changed" and "existing content is untouched" was false in exactly
+            // the population being repaired.
+            $message = 'Starter repair created '
+                . $madePages . ' page' . ($madePages === 1 ? '' : 's')
+                . ' and ' . $madeNav . ' navigation item' . ($madeNav === 1 ? '' : 's')
+                . '. Pages you deleted stay deleted, and a home page you already chose is not re-pointed.'
+                . ' A site with no home page or no theme yet gets those set.';
+        }
+
+        $this->_ok(array(
+            'pages_created' => $madePages,
+            'nav_created'   => $madeNav,
+            // False = the seed STILL did not complete; the row keeps its badge.
+            'seeded'        => $nowSeeded,
+            'scope_type'    => $type,
+            'scope_id'      => $id,
+            'message'       => $message,
+        ));
+    }
+
+    /**
+     * Page + marketing-nav counts for one scope, used either side of the repair
+     * pass so reseedsite can report what it really created.
+     *
+     * @return array{pages:int,nav:int}
+     */
+    private function _seedCensus($type, $id)
+    {
+        $counts = $this->CmsPage->CountPages($type, $id);
+        $counts = is_array($counts) ? $counts : array();
+        $nav    = $this->CmsNav->list_items('marketing', $type, $id);
+
+        return array(
+            'pages' => (int)($counts['total'] ?? 0),
+            'nav'   => is_array($nav) ? count($nav) : 0,
+        );
     }
 
     /* ------------------------------------------------------------------ *

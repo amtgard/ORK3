@@ -447,7 +447,10 @@ html[data-theme="dark"] .cms-modal [data-tip]:focus-visible::after {
 }
 .cms-crumb { color: var(--ork-text-secondary); text-decoration: none; }
 .cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
-.cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
+/* Grouped: .cms-typecard-blank strong carries the identical body. Nothing
+   between here and the type-chooser sets color on .cms-typecard strong
+   (:867 sets display/size/margin only), so hoisting it here is cascade-safe. */
+.cms-crumb-current,
 .cms-crumb-sep { color: var(--ork-text-lighter); }
 /* dark .cms-crumb[href]:hover is gold — see "Gold accent text" below. */
 
@@ -641,7 +644,10 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .cms-badge-draft { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
 .cms-badge-system { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
-.cms-badge-scope { background: var(--ork-badge-purple-bg); color: var(--ork-badge-purple-text); }
+/* Grouped: .cms-site-badge-seeding is the same purple pair. The
+   .cms-site-badge base (further down) sets no background/color, so it cannot
+   override this from its later position. */
+.cms-badge-scope,
 
 .cms-muted { color: var(--ork-text-muted); }
 
@@ -695,6 +701,19 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     margin-bottom: 3px;
 }
 .cms-help { font-size: 11.5px; color: var(--ork-text-muted); margin-top: 3px; }
+
+/* Meta-description hint + live character readout on one line. Every colour is a
+   badge token, and those invert under html[data-theme="dark"] in orkui.css
+   (--ork-badge-orange-text goes #9c4221 → #fbd38d), so dark mode follows with
+   no second rule. */
+.cms-meta-help {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.cms-meta-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.cms-meta-count-over { color: var(--ork-badge-orange-text, #9c4221); font-weight: 600; }
 
 /* ============================================================================
  * Page list (Cms_index)
@@ -820,10 +839,14 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     text-align: left;
 }
 
-/* New-page type chooser (in a modal) */
+/* New-page type chooser (in a modal).
+   auto-fit + minmax rather than repeat(2, 1fr) plus a 560px override: two cards
+   side by side leave ~160px each on a phone, unreadable for a nine-card
+   chooser. Letting the track list collapse itself drops the breakpoint
+   entirely, so there is no second grid-template-columns body to keep in sync. */
 .cms-typegrid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 10px;
 }
 /* The flex tile layout (icon chip + text column) is folded in here; it used to
@@ -847,6 +870,17 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-typecard:hover { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-typecard strong { display: block; font-size: 14px; margin-bottom: 3px; }
 .cms-typecard span { font-size: 12px; color: var(--ork-text-muted); }
+
+/* "Blank page" is the escape hatch, not the recommendation: it sits LAST in the
+   grid and is drawn as a placeholder (dashed, transparent, full width) so it
+   never competes with the eight real presets. Colours are tokens, so dark mode
+   follows with no second rule. */
+.cms-typecard-blank {
+    grid-column: 1 / -1;
+    border-style: dashed;
+    background: transparent;
+}
+.cms-typecard-blank strong { color: var(--ork-text-secondary); font-weight: 600; }
 
 /* Block chooser: searchable + grouped + icon'd tiles */
 .cms-typesearch {
@@ -973,6 +1007,20 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 #cmsAddModal .cms-typegrid {
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
 }
+
+/* New-page chooser: text-only cards (no icon chip), so stack the label over its
+ * description instead of the icon-tile row layout. The cards are <a>s — pin
+ * the text colour so the global dark link colour doesn't turn titles blue. */
+#cmsNewModal .cms-modal { max-width: 580px; }
+/* (1,2,1) to beat the inline `html[data-theme="dark"] #theme_container a` (1,1,2). */
+#cmsNewModal .cms-modal a.cms-typecard {
+    flex-direction: column;
+    gap: 0;
+    color: var(--ork-text);
+    text-decoration: none;
+}
+#cmsNewModal .cms-typecard strong { font-size: 15px; margin-bottom: 4px; }
+#cmsNewModal .cms-typecard span { font-size: 13px; line-height: 1.45; }
 .cms-typecard-desc {
     display: block;
     font-size: 12px;
@@ -1256,7 +1304,11 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
         text-overflow: ellipsis;
     }
 }
-.cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
+/* Grouped with .cms-site-badge-orphan: same red token pair. They are unrelated
+   components sharing one semantic (danger), which is what the tokens are for;
+   the duplication gate wants one rule rather than two copies of the body.
+   .cms-site-badge sets no background/color, so order is immaterial. */
+.cms-icon-btn.cms-icon-danger:hover,
 
 .cms-block-body { padding: 10px 12px; }
 .cms-block-body.cms-collapsed { display: none; }
@@ -1446,7 +1498,8 @@ html[data-theme="dark"] .cms-dyninfo-icon { color: #1a1205; }
     padding: 15px 18px;
     border-bottom: 1px solid var(--ork-border);
 }
-.cms-modal-head h3 {
+/* (0,2,1) so it beats orkui.css's `html[data-theme="dark"] h3` pill (0,1,2). */
+.cms-modal .cms-modal-head h3 {
     margin: 0; font-size: 16px;
     background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
     color: var(--ork-text);
@@ -3258,6 +3311,32 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
 .cms-recent-actions { flex: 0 0 auto; }
 
+/* "Finish your site" readiness panel. The rows ARE .cms-recent-item rows —
+   layout, hover and the ≤560px label collapse all come from the rules above, so
+   only the three things that differ are stated here. Tokens throughout, so dark
+   mode follows without a second block. */
+.cms-finish-lede {
+    margin: -4px 0 12px;
+    max-width: 72ch;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ork-text-secondary);
+}
+/* Marks the list as the one asking for attention, next to the identically
+   shaped Continue-editing list directly below it. */
+.cms-finish-list { border-left: 4px solid var(--cms-gold, #f0b429); }
+/* "Preview site first", in the shared confirm dialog's detail region. */
+.cms-finish-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cms-gold-deep, #caa23a);
+    text-decoration: none;
+}
+.cms-finish-preview:hover { text-decoration: underline; }
+
 /* Public-site status card (Multi-Site) */
 .cms-sitecard {
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
@@ -3276,6 +3355,11 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
 .cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
 html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
+/* Rollout gate: no site row and none creatable. Drops the gold action rail for a
+   neutral one so the card reads as informational, not as a site one click from
+   going live. Tokens only, so dark mode follows. */
+.cms-sitecard-blocked { border-left-color: var(--ork-border-dark); }
+.cms-sitecard-blocked .cms-sitecard-title .fa-lock { color: var(--ork-text-muted); }
 
 .cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-secondary); text-decoration: none; font-size: 13.5px; }
 .cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
@@ -3366,6 +3450,23 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 .cms-site-badge-published { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .cms-site-badge-draft { background: var(--ork-badge-orange-bg); color: var(--ork-badge-orange-text); }
 .cms-site-badge-unbuilt { background: var(--ork-badge-gray-bg); color: var(--ork-badge-gray-text); }
+/* Health badges, shown BESIDE the publish-status badge rather than instead of
+   it: a half-seeded site and a site whose org row is gone are both normal-looking
+   today. Badge tokens invert under html[data-theme="dark"] in orkui.css, so both
+   are dark-correct without a second rule. */
+.cms-site-badge-seeding { background: var(--ork-badge-purple-bg); color: var(--ork-badge-purple-text); }
+.cms-site-badge-orphan { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
+.cms-sites-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* Health filter above the site tables. Tokens only — dark mode follows. */
+.cms-sites-filterbar { margin: 0 0 14px; }
+.cms-sites-filter {
+    display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 13px; color: var(--ork-text-secondary); cursor: pointer;
+    padding: 7px 11px; border-radius: 9px;
+    border: 1px solid var(--ork-border-dark); background: var(--cms-card);
+}
+
 
 .cms-sites-rowactions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
@@ -3527,6 +3628,8 @@ a.cms-sites-slug:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: 
 /* ---- Block-editor columns visual splitter — theme-aware via ORK
    vars. ---- */
 .cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+/* Grouped: .cms-sites-filter input carries the identical body. */
+.cms-sites-filter input,
 .cms-cols-countrow .cms-label { margin: 0; }
 /* The segmented control moved to the shared .cms-seg rules at the end of this
    file — the columns splitter and the link chooser both use it. */

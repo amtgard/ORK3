@@ -66,7 +66,18 @@ if (
                     continue;
                 }
                 $btnClass = ($cta['style'] ?? '') === 'gold' ? 'fd-btn-gold' : 'fd-btn-ghost';
-                $ctaHref = CmsSanitizer::SafeHrefOrHash($cta['href'] ?? '');
+                // A seeded button may point at one of THIS site's own pages in the
+                // stable 'Page/view/{slug}' form (CmsSite::_sitePageHref) — the
+                // kingdom starter closes both Home and its new-player page on one.
+                // That form has to be re-pointed onto the site's CURRENT
+                // /Site/page/{slug}/ route at render time or it lands on the
+                // GLOBAL page route, which resolves only global pages and 404s.
+                // Same one-line resolve steps.tpl does; see fdSiteInternalHref()
+                // in frontdoor/_helpers.tpl for why the seed stores it this way.
+                $ctaHref = CmsSanitizer::SafeHrefOrHash(fdSiteInternalHref(
+                    (string) ($cta['href'] ?? ''),
+                    isset($SiteSlug) ? (string) $SiteSlug : ''
+                ));
                 ?>
                 <a class="<?= htmlspecialchars($btnClass, ENT_QUOTES) ?>"
                    href="<?= htmlspecialchars($ctaHref, ENT_QUOTES) ?>">

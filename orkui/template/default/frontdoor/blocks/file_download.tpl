@@ -49,7 +49,13 @@ foreach ($fdbFiles as $fdbFile) {
     ];
 }
 
+// No usable files → nothing at all for a visitor (a bare heading over an empty
+// stripe is worse than silence), and a discoverable hint for the author in the
+// CMS editor/preview. Same pattern as rich_text.tpl / photo_mosaic.tpl.
 if (empty($fdbRows)) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('No files added yet.');
+    }
     return;
 }
 ?>

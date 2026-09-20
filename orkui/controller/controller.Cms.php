@@ -213,6 +213,14 @@ class Controller_Cms extends Controller
         $this->data['TypeLabels'] = self::_pageTypeLabelMap();
         $this->data['Greet']      = $this->_greeting();
 
+        // ---- "Finish your site": the starter pages the seeder wrote that nobody
+        //      has touched yet. Org scope only — the global front door has no
+        //      seeded site. An empty list renders no panel at all, so the nudge
+        //      retires itself the moment the last row clears. ----
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->data['SeedReadiness'] = $this->_seedReadiness($scope, $sf);
+        }
+
         // Home-page chooser source for the site-settings form on the site card
         // (org scope only — the global front door has no /k/{slug} site row).
         // Only loaded for users who can actually see the form — otherwise this is
@@ -249,9 +257,80 @@ class Controller_Cms extends Controller
     }
 
     /**
+     * Rows for the dashboard's "Finish your site" panel: starter pages that are
+     * still exactly as the seeder left them, or that still render nothing.
+     *
+     * Contract C-READINESS — CmsSite::SeedContentStatus($scopeType, $scopeId),
+     * read-only (no writes, no cache mutation). model.CmsSite.php declares no
+     * snake_case wrapper for it, so this uses the PascalCase reach-around that
+     * that file's own docblock names as the sanctioned form for a lib method
+     * without one. Model::__call forwards the name verbatim.
+     *
+     * DEFENSIVE BY CONTRACT: the readiness call lands on its own branch, so a
+     * missing method, a thrown error or a malformed return all mean the same
+     * thing — "no readiness information" — and yield an empty list, i.e. no
+     * panel. There is deliberately no second, weaker heuristic (a string match,
+     * a length check): guessing here would let the panel tell an officer their
+     * edited page is untouched, which is worse than saying nothing.
+     *
+     * @param array $scope resolved, authorized non-global scope
+     * @param array $sf    scope filters ['scope_type','scope_id']
+     * @return array list of ['page_id','title','slug','reason','edit_href']
+     */
+    private function _seedReadiness($scope, $sf)
+    {
+        $this->load_model('CmsSite');
+        $status = null;
+        try {
+            if (method_exists('CmsSite', 'SeedContentStatus')) {
+                $status = $this->CmsSite->SeedContentStatus((string)$sf['scope_type'], (int)$sf['scope_id']);
+            }
+        } catch (\Throwable $e) {
+            $status = null;
+        }
+        if (!is_array($status) || !isset($status['pages']) || !is_array($status['pages'])) {
+            return array();
+        }
+
+        $rows = array();
+        foreach ($status['pages'] as $p) {
+            if (!is_array($p)) {
+                continue;
+            }
+            $pageId = (int)($p['page_id'] ?? 0);
+            if ($pageId <= 0) {
+                continue;
+            }
+            $rendersNothing = !empty($p['renders_nothing']);
+            $isUntouched    = !empty($p['is_untouched']);
+            // An officer has been here — the panel has nothing to say about it.
+            if (!$rendersNothing && !$isUntouched) {
+                continue;
+            }
+            $rows[] = array(
+                'page_id'   => $pageId,
+                'title'     => (string)($p['title'] ?? '(untitled)'),
+                'slug'      => (string)($p['slug'] ?? ''),
+                // Two truthful states, and "nothing shows up yet" is the more
+                // concrete of the two when a page is both.
+                'reason'    => $rendersNothing ? 'empty' : 'starter',
+                'edit_href' => UIR . 'Cms/edit/' . $pageId . $this->_scopeQuery($scope),
+            );
+        }
+        return $rows;
+    }
+
+    /**
      * Load the org site row + publish-gate flag for the dashboard's site card
      * (non-global scope only). Optionally EnsureSite first (dashboard entry).
      * Sets $this->data['CmsSite'] and ['CanPublishSite'].
+     *
+     * ALSO distinguishes "no site row because none has been built yet" from "no
+     * site row because this org LEVEL is not switched on". EnsureSite returns
+     * null in the second case, and an empty CmsSite array reads downstream as
+     * status='unbuilt' — i.e. as a site one Publish click away, which it is not.
+     * ['SiteBlocked'] + ['SiteBlockedReason'] give that case its own state so the
+     * dashboard can say what is actually true instead of offering dead controls.
      *
      * @param int   $uid
      * @param array $scope     resolved, authorized non-global scope
@@ -286,6 +365,31 @@ class Controller_Cms extends Controller
         // Site settings (name / home page). Same grant-derived source as the
         // publish gate above, so the two can never disagree.
         $this->data['CanEditSite'] = $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
+        // Rollout gate (contract C2): the policy lives in CmsSite::CanCreateSite —
+        // read it, never re-derive the config flags here.
+        $blocked = empty($this->data['CmsSite']) && !$this->CmsSite->can_create_site($type, $id);
+        $this->data['SiteBlocked']       = $blocked;
+        $this->data['SiteBlockedReason'] = $blocked ? $this->_siteBlockedReason($type) : '';
+    }
+
+    /**
+     * Plain-language reason a site cannot be created for this scope yet — which
+     * switch is off, and who can flip it. Mirrors the CanCreateSite() chain
+     * (global kingdom switch / global park switch AND the kingdom's own park
+     * permission) by asking the lib which of the two is missing.
+     *
+     * @param string $type 'kingdom' | 'park'
+     * @return string
+     */
+    private function _siteBlockedReason($type)
+    {
+        if ((string)$type === 'park') {
+            if (!$this->CmsSite->park_sites_enabled()) {
+                return 'Park websites are not switched on yet. An ORK administrator turns them on in the OGRE settings.';
+            }
+            return 'Park websites are not enabled for this park\'s kingdom yet. Your monarch can turn them on in the kingdom\'s OGRE settings.';
+        }
+        return 'Kingdom websites are not switched on yet. An ORK administrator turns them on in the OGRE settings.';
     }
 
     /**
@@ -377,6 +481,20 @@ class Controller_Cms extends Controller
                 'pages_published' => (int)($row['pages_published'] ?? 0),
                 'posts_total'     => (int)($row['posts_total'] ?? 0),
                 'updated_at'      => (string)($row['updated_at'] ?? ''),
+                // Health flags from ListAllSites (contract C4). A site whose
+                // template seeding never completed, and a site whose owning
+                // kingdom/park row is gone, both look entirely normal in this
+                // table otherwise — the template badges them.
+                // CONVENTION — template_seeded_at fails OPEN, in every reader.
+                // CmsSite::EnsureSite() owns this marker and treats an ABSENT
+                // column (the seed-marker migration not run yet) as "seeded",
+                // precisely so a pre-migration site is never re-seeded on a
+                // guess. This badge must read the same NULL the same way, or a
+                // DB that has not run db-migrations/2026-08-09-cms-site-seed-marker.sql
+                // badges every site "Seeding incomplete". Only a column that
+                // EXISTS and is empty means the seed really did not finish.
+                'seeded'          => (!array_key_exists('template_seeded_at', $row) || !empty($row['template_seeded_at'])),
+                'org_missing'     => !empty($row['org_missing']),
                 // Manage = the scoped CMS dashboard for this org.
                 'manage_url'      => UIR . 'Cms/dashboard&scope=' . $sel,
                 // Visit = the org's public site home (empty when no slug yet).
@@ -406,6 +524,22 @@ class Controller_Cms extends Controller
         $this->load_model('Kingdom');
         $krows = $this->Kingdom->list_active_id_name();
         $pick  = array();
+        // The global switches are scope-independent — read them ONCE rather than
+        // per kingdom inside the loop below.
+        $parkSwitch    = (bool)$this->CmsSite->park_sites_enabled();
+        $kingdomSwitch = (bool)$this->CmsSite->kingdom_sites_enabled();
+        // FOLLOW-UP (owner: system/lib/ork3/class.CmsSite.php) — add a
+        // kingdom-level batch predicate, e.g.
+        //   CmsSite::KingdomsAllowingParkSites(array $kingdomIds): array
+        // returning the id => bool set in ONE configuration read, and have
+        // CanCreateSite('park', …) resolve through it. That closes both of the
+        // compromises below: (a) the park half of CanCreateSite is re-assembled
+        // here as "global switch AND kingdom permission" because park scope needs
+        // a park id and the picker only has a kingdom id — add a third condition
+        // to CanCreateSite and this picker silently disagrees with the dashboard;
+        // and (b) kingdom_allows_park_sites() is an uncached SELECT per call, so
+        // this loop costs one round trip per active kingdom.
+        $this->data['ProvisionKingdomsOk'] = $kingdomSwitch;
         foreach ((is_array($krows) ? $krows : array()) as $krow) {
             $kid = (int)($krow['kingdom_id'] ?? 0);
             if ($kid <= 0) {
@@ -415,6 +549,13 @@ class Controller_Cms extends Controller
                 'id'       => $kid,
                 'name'     => (string)($krow['name'] ?? ''),
                 'has_site' => !empty($kingdomHasSite[$kid]),
+                // Rollout gate (contract C2), asked of the policy owner rather
+                // than re-derived: offering "Open (and create) this park's site"
+                // for a kingdom that has not enabled park sites hands the admin a
+                // button that cannot work. Park scope needs a park id, so the
+                // kingdom-level half is read directly — the global park switch is
+                // ANDed once below, outside the loop.
+                'parks_ok' => ($parkSwitch && $this->CmsSite->kingdom_allows_park_sites($kid)),
             );
         }
         $this->data['ProvisionKingdoms'] = $pick;
@@ -585,7 +726,16 @@ class Controller_Cms extends Controller
                 'status'           => 'draft',
                 'published_at'     => null,
                 'hero_media_id'    => null,
-                'meta_description' => '',
+                // Prefilled, not blank: an empty meta_description falls through
+                // to a GLOBAL fallback on the public site, which advertises the
+                // ORK app rather than this org. A content-shaped default (never
+                // an instruction to the author) means a page an officer never
+                // touches still describes ITSELF in search results and link
+                // previews, and the officer can overwrite it in the rail.
+                'meta_description' => $this->_defaultMeta(
+                    (string)($_GET['type'] ?? ''),
+                    (string)($this->data['CmsScopeLabel'] ?? '')
+                ),
                 'is_system'        => 0,
                 'scope_type'       => (string)$scope['type'],
                 'scope_id'         => (int)$scope['id'],
@@ -1449,6 +1599,14 @@ class Controller_Cms extends Controller
      * The editor seeds the block list from these when CREATING a new page of the
      * given type (and re-seeds when the type is switched on an empty new page).
      * `fields` carry sensible empty defaults matching each block's partial keys.
+     *
+     * SCOPE-AWARE on two axes. A type may declare `starters_by_scope` (the
+     * 'dynamic' type does: a kingdom site seeds its OWN events/parks/officers,
+     * not a grid of every other kingdom), and whatever list is chosen is then
+     * intersected with the catalog's addable set — the SAME gate _blockAllow()
+     * applies to the chooser, via the shared _addableSet() helper. Without that
+     * intersection a starter could seed a block the partial refuses to render in
+     * this scope: an error band or an invisible block on a brand-new page.
      */
     private function _pageTypes()
     {
@@ -1456,6 +1614,10 @@ class Controller_Cms extends Controller
         // the starters below don't each rebuild it (memoized too, belt-and-
         // suspenders). The starter only needs the catalog's dynamic-type flags.
         $catalog = $this->_blockCatalog();
+        $addable = $this->_addableSet($catalog);
+        // The catalog's addable flags are already scope-gated (see
+        // _blockCatalog), but the starter CHOICE needs the scope name itself.
+        $scopeType = is_array($this->_cmsScope) ? (string)($this->_cmsScope['type'] ?? 'global') : 'global';
 
         $out = array();
         foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
@@ -1464,8 +1626,16 @@ class Controller_Cms extends Controller
             if (empty($def['starters'])) {
                 continue;
             }
+            $starters = (isset($def['starters_by_scope'][$scopeType]) && is_array($def['starters_by_scope'][$scopeType]))
+                ? $def['starters_by_scope'][$scopeType]
+                : $def['starters'];
             $blocks = array();
-            foreach ($def['starters'] as $blockType) {
+            foreach ($starters as $blockType) {
+                // Same gate as the Add-block chooser: a block that cannot be
+                // added in this scope must not be seeded in it either.
+                if (!isset($addable[$blockType])) {
+                    continue;
+                }
                 $blocks[] = $this->_starter($blockType, $catalog);
             }
             $out[] = array(
@@ -1480,6 +1650,64 @@ class Controller_Cms extends Controller
             );
         }
         return $out;
+    }
+
+    /**
+     * A sensible starting meta description for a BRAND-NEW page.
+     *
+     * Public copy, not authoring instructions: it is written to appear verbatim
+     * in a search result or a link preview if the officer never edits it. The
+     * alternative is the empty string, which the public renderer falls back out
+     * of to a global, org-agnostic default.
+     *
+     * @param string $type     page type key from the New-page chooser ('' = unknown)
+     * @param string $orgLabel the org's own name ('' for the global front door)
+     * @return string
+     */
+    private function _defaultMeta($type, $orgLabel)
+    {
+        $org = trim((string)$orgLabel);
+        if ($org === '') {
+            $org = 'Amtgard';
+        }
+        $type = trim((string)$type);
+        $byType = array(
+            'composed'   => 'Who we are, where we play and how to get started with ' . $org . '.',
+            'article'    => 'News and information from ' . $org . '.',
+            'media'      => 'Photos from ' . $org . '.',
+            'about'      => 'About ' . $org . ' — our story and the people who run it.',
+            'resource'   => 'Rules, forms and downloads from ' . $org . '.',
+            'blog_index' => 'News and announcements from ' . $org . '.',
+            'dynamic'    => 'Parks, officers and upcoming events for ' . $org . '.',
+            'store'      => 'Merchandise and gear from ' . $org . '.',
+        );
+        return isset($byType[$type]) ? $byType[$type] : $byType['composed'];
+    }
+
+    /**
+     * The scope-gated addable block-type set, as blockType => true.
+     *
+     * ONE definition of "may this block be used in the active scope", shared by
+     * the Add-block chooser (_blockAllow) and the new-page starter presets
+     * (_pageTypes). The catalog's `addable` flag already folds in the per-block
+     * `scopes` gating (see _blockCatalog), so both callers inherit it for free
+     * and cannot drift apart.
+     *
+     * @param array|null $catalog already-built catalog, or null to build it
+     * @return array<string,bool>
+     */
+    private function _addableSet($catalog = null)
+    {
+        if (!is_array($catalog)) {
+            $catalog = $this->_blockCatalog();
+        }
+        $addable = array();
+        foreach ($catalog as $c) {
+            if (!empty($c['addable'])) {
+                $addable[$c['type']] = true;
+            }
+        }
+        return $addable;
     }
 
     /**
@@ -1505,14 +1733,8 @@ class Controller_Cms extends Controller
         $universal = array('heading', 'rich_text', 'image', 'divider', 'spacer', 'quote', 'raw_html');
 
         // composed = all addable block types (the full landing-page kit).
-        $composed = array();
-        $addable  = array();
-        foreach ($catalog as $c) {
-            if (!empty($c['addable'])) {
-                $composed[]              = $c['type'];
-                $addable[$c['type']] = true;
-            }
-        }
+        $addable  = $this->_addableSet($catalog);
+        $composed = array_keys($addable);
 
         $allow = array('composed' => $composed);
         foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {

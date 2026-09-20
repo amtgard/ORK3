@@ -25,11 +25,6 @@
         <div class="cms-modal-body">
             <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
             <div class="cms-typegrid">
-                <?php // Not a page type: a Landing page (every block on offer) that skips the starter blocks. Cms_edit.tpl reads blank=1. ?>
-                <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=composed&blank=1<?= $scopeQ ?>">
-                    <strong>Blank page</strong>
-                    <span>Start from nothing and add exactly the blocks you want. Every block type is on offer.</span>
-                </a>
                 <?php foreach ($pageTypes as $pt): ?>
                     <?php // Plain-language description only — never the raw type slug (dev jargon). ?>
                     <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
@@ -39,6 +34,14 @@
                         <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
+                <?php // Not a page type: a Landing page (every block on offer) that skips the
+                      // starter blocks. Cms_edit.tpl reads blank=1. LAST and styled as a
+                      // placeholder — this chooser exists to keep officers OFF a blank canvas,
+                      // so the escape hatch must not be the first thing they read. ?>
+                <a class="cms-typecard cms-typecard-blank" href="<?= UIR ?>Cms/edit/new&type=composed&blank=1<?= $scopeQ ?>">
+                    <strong>Blank page</strong>
+                    <span>Nothing to start from — add exactly the blocks you want, from the full list.</span>
+                </a>
             </div>
         </div>
     </div>

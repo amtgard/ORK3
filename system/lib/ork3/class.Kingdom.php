@@ -628,6 +628,12 @@ class Kingdom extends Ork3
      *     @var int    Limit         max rows returned; <= 0 means no cap
      *     @var bool   WithHeraldry  resolve each park's crest URL (one
      *                               file_exists() probe per park)
+     *     @var bool   IncludeChildKingdoms
+     *                               OPT-IN roll-up for the CMS kingdom_parks
+     *                               block: also return the parks of this
+     *                               kingdom's ACTIVE principalities. Absent or
+     *                               falsy leaves the result identical to the
+     *                               kingdom-only list every other caller sees.
      * }
      * @return array<int,array{park_id:int,name:string,loc:string,title:string,crest:string}>
      */
@@ -644,8 +650,24 @@ class Kingdom extends Ork3
         $limit        = isset($request['Limit']) ? (int)$request['Limit'] : 0;
         $withHeraldry = !empty($request['WithHeraldry']);
 
-        $result = $this->GetParks(array('KingdomId' => $kingdomId));
-        $parks  = (isset($result['Parks']) && is_array($result['Parks'])) ? $result['Parks'] : array();
+        // A principality is an ork_kingdom row with a NON-ZERO parent_kingdom_id,
+        // and its parks key to the PRINCIPALITY's own kingdom_id — so a parent
+        // kingdom's park list omits them unless they are folded in. This is the
+        // SAME roll-up the front door already uses (Report::GetActiveKingdomProvinces
+        // / the kingdoms teaser): one level down, ACTIVE children only, so the
+        // product keeps ONE answer to "which parks belong to this kingdom".
+        // Strictly opt-in: with the key absent/falsy the rows below are byte-for-byte
+        // what every existing caller gets today (same query, same sort, same limit).
+        if (!empty($request['IncludeChildKingdoms'])) {
+            // GetFamilyKingdomIds() is the canonical one-level roll-up in this
+            // class (memoized, own cursor, already what the parks dropdown and
+            // player search scope by) — reuse it rather than re-deriving it.
+            $kingdomIds = array_values(array_unique($this->GetFamilyKingdomIds($kingdomId)));
+            $result     = $this->GetParks(array('KingdomIds' => $kingdomIds));
+        } else {
+            $result = $this->GetParks(array('KingdomId' => $kingdomId));
+        }
+        $parks = (isset($result['Parks']) && is_array($result['Parks'])) ? $result['Parks'] : array();
 
         // GetParks does NOT filter status — keep only active parks.
         $rows = array();

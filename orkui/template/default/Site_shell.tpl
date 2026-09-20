@@ -30,7 +30,14 @@ $siteHomeWarning = (isset($SiteHomeWarning) && $SiteHomeWarning !== '') ? (strin
 $sitePageTitle   = isset($page_title) ? (string) $page_title : '';
 
 // $fdHasBlockH1: does a content block already supply the page's one and only
-// <h1>? Only a hero_carousel can — the editor's Level control
+// <h1>? Three block types can. Two of them — park_hero and kingdom_hero — are
+// ORG HEROES: each renders the org's own name as the page's <h1> whenever it is
+// in its own scope (park_hero.tpl:186, kingdom_hero.tpl:122), and each returns
+// before emitting anything outside it (fdScopedOrgId()). Leaving them out of
+// this test is what put a meaningless 2rem "<h1>Home</h1>" above the crest on
+// every seeded park and kingdom home page, with a second <h1> underneath it —
+// precisely the failure the comment below warns about. The third is the
+// hero_carousel, whose test is genuinely conditional; the editor's Level control
 // (fieldNumSelect(block, 'level', …) in script/cms-block-editor.js) offers
 // H2/H3/H4 only, so no authored heading block is ever level 1. If H1 is ever
 // added to that Level control, a level-1 test MUST be added here with it or such
@@ -50,11 +57,28 @@ $sitePageTitle   = isset($page_title) ? (string) $page_title : '';
 // runs before that include.)
 require_once $fdDir . '_helpers.tpl';
 $fdHasBlockH1 = false;
+// An org hero emits its <h1> whenever it is rendering in its own scope, which
+// is the same test the partial itself returns on. Kept as one list in one place
+// so a new org hero is added here with it. (kingdom_hero also self-suppresses
+// when the kingdom resolves to nothing at all — no name, no tagline, no CTA, no
+// device — which for a site that exists because that kingdom exists means a
+// deleted org row, not an authoring state; the cost there is an outline with no
+// <h1>, never two.)
+$fdOrgHeroScopes = array('park_hero' => 'park', 'kingdom_hero' => 'kingdom');
+$fdScopeType     = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : '';
+$fdScopeId       = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
 foreach ($fdBlocks as $fdBlock) {
     if (empty($fdBlock['enabled'])) {
         continue;
     }
     $fdBlockType = isset($fdBlock['type']) ? (string) $fdBlock['type'] : '';
+    if (isset($fdOrgHeroScopes[$fdBlockType])) {
+        if ($fdScopeType === $fdOrgHeroScopes[$fdBlockType] && $fdScopeId > 0) {
+            $fdHasBlockH1 = true;
+            break;
+        }
+        continue;
+    }
     if ($fdBlockType !== 'hero_carousel') {
         continue;
     }
