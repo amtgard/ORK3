@@ -1,6 +1,8 @@
 <?php
 
-if (getenv('ENVIRONMENT') == 'DEV') {
+if (getenv('ENVIRONMENT') == 'TEST') {
+	include_once(dirname(__FILE__) . '/config.test.php');
+} elseif (getenv('ENVIRONMENT') == 'DEV') {
 	include_once(dirname(__FILE__) . '/config.dev.php');
 } else {
 	include_once(dirname(__FILE__) . '/config.php');
@@ -12,6 +14,12 @@ function mysql_real_escape_string($str)
 }
 
 // System Setup
+
+global $DB, $LOG;
+
+if (defined('ORK3_STARTUP_COMPLETE')) {
+	return;
+}
 
 if (isset($LOG))
 	return;
@@ -60,4 +68,8 @@ if (!DO_SETUP) {
 	}
 	Ork3::$Lib = $LIB;
 	Ork3::$Lib->Log = $LOG;
+}
+
+if (!defined('ORK3_STARTUP_COMPLETE')) {
+	define('ORK3_STARTUP_COMPLETE', true);
 }

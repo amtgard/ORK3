@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * @deprecated Manual dev script — superseded by tests/Integration/CalendarServiceTest.php.
+ * Kept for reference; die() prevents accidental execution against a live database.
+ */
+die();
+
 $DONOTWEBSERVICE = true;
 
 include_once('CalendarService.php');

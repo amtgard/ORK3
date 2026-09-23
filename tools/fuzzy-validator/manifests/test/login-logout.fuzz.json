@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "pageId": "login-logout",
+  "imageWidth": 1280,
+  "imageHeight": 1002,
+  "calibratedAt": "2026-08-01T20:42:29Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [],
+  "manualZones": [],
+  "refuzzedAt": "2026-08-02T16:46:14Z",
+  "refuzzedFromCommit": "05389516"
+}

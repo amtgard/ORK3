@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# Evidence suite — pixel + DOM fuzz + asset hard gate proof (FU-13…FU-15).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+EVIDENCE="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$EVIDENCE/../../.." && pwd)"
+PYTHON_DIR="$ROOT/tools/fuzzy-validator/python"
+SCRIPTS="$EVIDENCE/scripts"
+PROFILE="test"
+
+export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
+export ORK3_E2E_BASE_URL="${ORK3_E2E_BASE_URL:-http://localhost:19080/orkui/}"
+
+die() { echo "evidence-suite: $*" >&2; exit 1; }
+
+require_file() {
+  [[ -f "$1" ]] || die "missing required file: $1"
+}
+
+# --- Preconditions (FU-12 virgin baselines) ---
+require_file "$EVIDENCE/baselines/$PROFILE/player-profile.png"
+require_file "$EVIDENCE/baselines/$PROFILE/home-authenticated.png"
+require_file "$EVIDENCE/baselines/$PROFILE/home-authenticated.dom.html"
+
+run_discover() {
+  local page_id="$1"
+  local phase="$2"
+  if [[ "$phase" == "visual" ]]; then
+    python3 "$PYTHON_DIR/discover_fuzz.py" \
+      --page-id "$page_id" \
+      --calibration-dir "$EVIDENCE/calibrations/$page_id" \
+      --defaults "$EVIDENCE/manifests/defaults.json5" \
+      --out "$EVIDENCE/manifests/$PROFILE/${page_id}.fuzz.json" \
+      --overlay "$EVIDENCE/reports/pixel-proof/${page_id}-calibration-overlay.png" \
+      --baseline-out "$EVIDENCE/baselines/$PROFILE/${page_id}.png"
+  else
+    python3 "$PYTHON_DIR/discover_dom_fuzz.py" \
+      --page-id "$page_id" \
+      --calibration-dir "$EVIDENCE/calibrations/$page_id" \
+      --defaults "$EVIDENCE/manifests/defaults.json5" \
+      --out "$EVIDENCE/manifests/$PROFILE/${page_id}.dom-fuzz.json" \
+      --debug-out "$EVIDENCE/reports/dom-proof/${page_id}-dom-fuzz.txt" \
+      --baseline-out "$EVIDENCE/baselines/$PROFILE/${page_id}.dom.json"
+  fi
+}
+
+run_validate() {
+  local page_id="$1"
+  local phase="$2"
+  local run_id="$3"
+  local expect="$4"
+  set +e
+  python3 -m fuzzy_validator.cli validate \
+    --tool-root "$EVIDENCE" \
+    --profile "$PROFILE" \
+    --page "$page_id" \
+    --phase "$phase" \
+    --skip-capture \
+    --run-id "$run_id"
+  local code=$?
+  set -e
+  [[ "$code" -eq "$expect" ]] || die "$phase validate $page_id expected exit $expect got $code (run-id=$run_id)"
+}
+
+copy_report() {
+  local run_id="$1"
+  local dest="$2"
+  local src="$EVIDENCE/reports/run-$run_id"
+  [[ -d "$src" ]] || die "missing report dir $src"
+  rm -rf "$dest"
+  mkdir -p "$(dirname "$dest")"
+  cp -R "$src" "$dest"
+  cp "$src/summary.json" "$dest/../summary-${run_id}.json" 2>/dev/null || cp "$src/summary.json" "$dest/summary.json"
+}
+
+mkdir -p "$EVIDENCE/reports/pixel-proof" "$EVIDENCE/reports/dom-proof" "$EVIDENCE/reports/assets-proof" "$EVIDENCE/reports/unified-proof"
+
+echo "=== Pixel: discover fuzz from heraldry mutation ==="
+python3 "$SCRIPTS/evidence_mutations.py" pixel-discover
+run_discover "player-profile" visual
+require_file "$EVIDENCE/manifests/$PROFILE/player-profile.fuzz.json"
+python3 - <<'PY' "$EVIDENCE/manifests/$PROFILE/player-profile.fuzz.json"
+import json, sys
+manifest = json.load(open(sys.argv[1]))
+zones = manifest.get("fuzzZones", [])
+assert zones, "player-profile.fuzz.json must have non-empty fuzzZones"
+print(f"pixel discover: {len(zones)} fuzz zone(s)")
+PY
+
+echo "=== Pixel: in-zone validate (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" pixel-inzone
+run_validate "player-profile" visual "pixel-inzone" 0
+copy_report "pixel-inzone" "$EVIDENCE/reports/pixel-proof/inzone"
+
+echo "=== Pixel: out-of-zone validate (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" pixel-outzone
+run_validate "player-profile" visual "pixel-outzone" 1
+copy_report "pixel-outzone" "$EVIDENCE/reports/pixel-proof/outzone"
+# Promote in-zone report as primary index for reviewers
+cp -R "$EVIDENCE/reports/pixel-proof/inzone" "$EVIDENCE/reports/pixel-proof/index.bundle"
+cat > "$EVIDENCE/reports/pixel-proof/README.txt" <<'EOF'
+Open inzone/index.html (PASS) and outzone/index.html (FAIL).
+Calibration overlay: player-profile-calibration-overlay.png
+EOF
+
+echo "=== DOM: discover fuzz from session token drift ==="
+python3 "$SCRIPTS/evidence_mutations.py" dom-discover
+run_discover "home-authenticated" dom
+require_file "$EVIDENCE/manifests/$PROFILE/home-authenticated.dom-fuzz.json"
+require_file "$EVIDENCE/reports/dom-proof/home-authenticated-dom-fuzz.txt"
+python3 - <<'PY' "$EVIDENCE/manifests/$PROFILE/home-authenticated.dom-fuzz.json"
+import json, sys
+manifest = json.load(open(sys.argv[1]))
+nodes = manifest.get("fuzzNodes", [])
+assert nodes, "home-authenticated.dom-fuzz.json must have non-empty fuzzNodes"
+print(f"dom discover: {len(nodes)} fuzz node(s)")
+PY
+
+echo "=== DOM: in-zone validate (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" dom-inzone
+run_validate "home-authenticated" dom "dom-inzone" 0
+copy_report "dom-inzone" "$EVIDENCE/reports/dom-proof/inzone"
+
+echo "=== DOM: out-of-zone validate (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" dom-outzone
+run_validate "home-authenticated" dom "dom-outzone" 1
+copy_report "dom-outzone" "$EVIDENCE/reports/dom-proof/outzone"
+cat > "$EVIDENCE/reports/dom-proof/README.txt" <<'EOF'
+Open inzone/index.html (PASS) and outzone/index.html (FAIL).
+Debug: home-authenticated-dom-fuzz.txt
+EOF
+
+# Use inzone report as index.html entry point with links noted in README
+cp "$EVIDENCE/reports/pixel-proof/inzone/index.html" "$EVIDENCE/reports/pixel-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/pixel-proof/inzone/summary.json" "$EVIDENCE/reports/pixel-proof/summary.json" 2>/dev/null || true
+cp "$EVIDENCE/reports/dom-proof/inzone/index.html" "$EVIDENCE/reports/dom-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/dom-proof/inzone/summary.json" "$EVIDENCE/reports/dom-proof/summary.json" 2>/dev/null || true
+
+echo "=== Assets: virgin validate (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-pass
+run_validate "home-authenticated" assets "assets-pass" 0
+copy_report "assets-pass" "$EVIDENCE/reports/assets-proof/pass"
+
+echo "=== Assets: 1-byte CSS change (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-css-fail
+run_validate "home-authenticated" assets "assets-css-fail" 1
+copy_report "assets-css-fail" "$EVIDENCE/reports/assets-proof/css-fail"
+
+echo "=== Assets: 1-byte JS change (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-js-fail
+run_validate "home-authenticated" assets "assets-js-fail" 1
+copy_report "assets-js-fail" "$EVIDENCE/reports/assets-proof/js-fail"
+
+cp "$EVIDENCE/reports/assets-proof/pass/index.html" "$EVIDENCE/reports/assets-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/assets-proof/pass/summary.json" "$EVIDENCE/reports/assets-proof/summary.json" 2>/dev/null || true
+cat > "$EVIDENCE/reports/assets-proof/README.txt" <<'EOF'
+Open pass/index.html (PASS on same commit).
+css-fail/index.html and js-fail/index.html show asset diffs (FAIL).
+EOF
+
+echo "=== Unified: in-zone validate --phase all (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" unified-inzone
+run_validate "home-authenticated" all "unified-inzone" 0
+copy_report "unified-inzone" "$EVIDENCE/reports/unified-proof/inzone"
+
+echo "=== Unified: out-of-zone validate --phase all (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" unified-outzone
+run_validate "home-authenticated" all "unified-outzone" 1
+copy_report "unified-outzone" "$EVIDENCE/reports/unified-proof/outzone"
+
+cp "$EVIDENCE/reports/unified-proof/inzone/index.html" "$EVIDENCE/reports/unified-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/unified-proof/inzone/summary.json" "$EVIDENCE/reports/unified-proof/summary.json" 2>/dev/null || true
+cat > "$EVIDENCE/reports/unified-proof/README.txt" <<'EOF'
+Open inzone/index.html (PASS — assets + dom + visual all green).
+outzone/index.html (FAIL — structural DOM change outside fuzz nodes).
+EOF
+
+python3 "$SCRIPTS/write_reports_index.py"
+
+echo "evidence-suite: PASS (pixel + dom + assets + unified discover/pass/fail)"

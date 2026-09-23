@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-mergeplayer",
+  "calibratedAt": "2026-08-01T20:05:29Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:51:52Z",
+  "refuzzedFromCommit": "05389516"
+}

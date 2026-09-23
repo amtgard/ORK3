@@ -1,0 +1,24 @@
+{
+  "defaults": {
+    "viewport": { "width": 1280, "height": 720 },
+    "repeat": 5,
+    "waitAfterMs": 500,
+    "auth": "none"
+  },
+  "pages": [
+    {
+      "id": "player-profile",
+      "url": "./index.php?Route=Player/profile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "notes": "Evidence page — heraldry tile for pixel fuzz proof"
+    },
+    {
+      "id": "home-authenticated",
+      "url": "./index.php?Route=",
+      "auth": "login",
+      "readySelector": "#main, body",
+      "notes": "Evidence page — session chrome / volatile DOM nodes"
+    }
+  ]
+}

@@ -62,11 +62,56 @@ html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #71
 		No parks with geocoordinates found for this kingdom.
 	</div>
 <?php else:
+	// --- Geographic outlier detection -------------------------------------
+	// A park whose nearest neighbor is dramatically farther than the typical
+	// nearest-neighbor distance (e.g. an island or out-of-region park) blows
+	// out the global max and crushes every in-region pair into the "closest"
+	// end of the color scale. Detect such parks and (a) exclude their pairs
+	// from the min/max that drives the scale, (b) paint their row/column the
+	// "farthest" color so they read as off-the-charts distant.
+	$_pdm_nn = []; // park_id => distance to its nearest other park (miles)
+	foreach ($_pdm_matrix as $rid => $cells) {
+		if ($cells) $_pdm_nn[$rid] = min($cells);
+	}
+	$_nn_sorted = array_values($_pdm_nn);
+	sort($_nn_sorted);
+	$_median_nn = 0.0;
+	if ($_nn_sorted) {
+		$_m = intdiv(count($_nn_sorted), 2);
+		$_median_nn = (count($_nn_sorted) % 2)
+			? $_nn_sorted[$_m]
+			: ($_nn_sorted[$_m - 1] + $_nn_sorted[$_m]) / 2;
+	}
+	// Must be both a strong relative outlier (>5x median) and absolutely far
+	// (>150 mi), so tight or sparse-but-legitimate kingdoms are never flagged.
+	$_outlier_cut  = max($_median_nn * 5, 150);
+	$_pdm_outliers = []; // park_id => true
+	foreach ($_pdm_nn as $pid => $d) {
+		if ($d > $_outlier_cut) $_pdm_outliers[$pid] = true;
+	}
+
+	// Color scale spans only in-region pairs (neither endpoint an outlier).
+	$scale_miles = [];
+	foreach ($_pdm_matrix as $rid => $cells) {
+		if (isset($_pdm_outliers[$rid])) continue;
+		foreach ($cells as $cid => $miles) {
+			if (isset($_pdm_outliers[$cid])) continue;
+			$scale_miles[] = $miles;
+		}
+	}
+	$min_miles = $scale_miles ? min($scale_miles) : 0;
+	$max_miles = $scale_miles ? max($scale_miles) : 1;
+	$range     = max($max_miles - $min_miles, 1);
+
+	// True overall extremes (every pair) for the summary cards.
 	$all_miles = [];
 	foreach ($_pdm_matrix as $row) foreach ($row as $miles) $all_miles[] = $miles;
-	$min_miles = $all_miles ? min($all_miles) : 0;
-	$max_miles = $all_miles ? max($all_miles) : 1;
-	$range     = max($max_miles - $min_miles, 1);
+	$true_min = $all_miles ? min($all_miles) : 0;
+	$true_max = $all_miles ? max($all_miles) : 1;
+
+	// Outlier cells reuse the scale's "farthest" color so they blend in with
+	// the in-region maximum rather than calling attention to themselves.
+	$_pdm_outlier_bg = 'hsl(25,90%,50%)';
 ?>
 
 	<div class="rp-stats-row">
@@ -77,12 +122,12 @@ html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #71
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-compress-arrows-alt"></i></div>
-			<div class="rp-stat-number"><?=number_format($min_miles, 1)?> mi</div>
+			<div class="rp-stat-number"><?=number_format($true_min, 1)?> mi</div>
 			<div class="rp-stat-label">Shortest Distance</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-expand-arrows-alt"></i></div>
-			<div class="rp-stat-number"><?=number_format($max_miles, 1)?> mi</div>
+			<div class="rp-stat-number"><?=number_format($true_max, 1)?> mi</div>
 			<div class="rp-stat-label">Longest Distance</div>
 		</div>
 	</div>
@@ -109,17 +154,23 @@ html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #71
 					<td class="pdm-self" title="<?=htmlspecialchars($row['Name'])?>">—</td>
 <?php 		elseif (isset($_pdm_matrix[$row_id][$col_id])):
 				$miles = $_pdm_matrix[$row_id][$col_id];
-				$t = ($miles - $min_miles) / $range;
-				if ($t < 0.5) {
-					$tt = $t * 2;
-					$hue = round(120 - $tt * 65); $sat = round(70 + $tt * 25); $light = round(65 - $tt * 5);
-				} else {
-					$tt = ($t - 0.5) * 2;
-					$hue = round(55 - $tt * 30); $sat = round(95 - $tt * 5); $light = round(60 - $tt * 10);
-				}
+				if (isset($_pdm_outliers[$row_id]) || isset($_pdm_outliers[$col_id])):
+?>
+					<td style="background:<?=$_pdm_outlier_bg?>;color:rgba(0,0,0,0.8)" title="<?=htmlspecialchars($row['Name'])?> → <?=htmlspecialchars($col['Name'])?>"><?=$miles?></td>
+<?php 			else:
+					$t = ($miles - $min_miles) / $range;
+					$t = $t < 0 ? 0 : ($t > 1 ? 1 : $t);
+					if ($t < 0.5) {
+						$tt = $t * 2;
+						$hue = round(120 - $tt * 65); $sat = round(70 + $tt * 25); $light = round(65 - $tt * 5);
+					} else {
+						$tt = ($t - 0.5) * 2;
+						$hue = round(55 - $tt * 30); $sat = round(95 - $tt * 5); $light = round(60 - $tt * 10);
+					}
 ?>
 					<td style="background:hsl(<?=$hue?>,<?=$sat?>%,<?=$light?>%);color:rgba(0,0,0,0.8)" title="<?=htmlspecialchars($row['Name'])?> → <?=htmlspecialchars($col['Name'])?>"><?=$miles?></td>
-<?php 		else: ?>
+<?php 			endif;
+			else: ?>
 					<td>N/A</td>
 <?php 		endif; endforeach; ?>
 				</tr>

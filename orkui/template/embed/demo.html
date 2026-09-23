@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORK schedule embed — demo</title>
+<style>
+	body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #1a202c; }
+	h1 { font-size: 20px; }
+	label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+	input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; }
+	button { margin-top: 16px; padding: 9px 18px; font-size: 14px; font-weight: 600; background: #2b6cb0; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+	.row { display: flex; gap: 12px; }
+	.row > div { flex: 1; }
+	pre { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 12px; overflow-x: auto; }
+	hr { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
+</style>
+</head>
+<body>
+	<h1>ORK schedule embed — demo &amp; tester</h1>
+	<p>Enter your ORK base URL and an event id, then Load. This mimics how a third-party
+	site (e.g. a kingdom page) would embed a published event's schedule.</p>
+
+	<label for="base">ORK base URL (ends in <code>/orkui/</code>)</label>
+	<input id="base" placeholder="https://your-ork-host/orkui/">
+	<div class="row">
+		<div>
+			<label for="event">Event id (<code>data-event</code>)</label>
+			<input id="event" placeholder="123">
+		</div>
+		<div>
+			<label for="detail">Detail id (<code>data-detail</code>, optional)</label>
+			<input id="detail" placeholder="leave blank for next upcoming">
+		</div>
+	</div>
+	<button id="go">Load schedule</button>
+
+	<hr>
+
+	<div id="target"></div>
+
+	<hr>
+	<h2 style="font-size:16px">Copy-paste embed snippet</h2>
+	<pre id="snippet">Fill in the fields above to generate your snippet.</pre>
+
+<script>
+	var target  = document.getElementById('target');
+	var snippet = document.getElementById('snippet');
+	var scriptTag = null;
+
+	document.getElementById('go').addEventListener('click', function () {
+		var base   = document.getElementById('base').value.trim();
+		var event  = document.getElementById('event').value.trim();
+		var detail = document.getElementById('detail').value.trim();
+		if (!base || !event) { alert('Base URL and event id are required.'); return; }
+		if (base.charAt(base.length - 1) !== '/') base += '/';
+
+		// (Re)build the container
+		target.innerHTML = '';
+		var div = document.createElement('div');
+		div.className = 'ork-schedule';
+		div.setAttribute('data-event', event);
+		if (detail) div.setAttribute('data-detail', detail);
+		div.setAttribute('data-base', base);
+		target.appendChild(div);
+
+		// Load the widget once, then re-render on subsequent clicks
+		if (!scriptTag) {
+			scriptTag = document.createElement('script');
+			scriptTag.src = base + 'template/embed/ork-schedule.js';
+			scriptTag.onload = function () { window.OrkSchedule.render(); };
+			document.body.appendChild(scriptTag);
+		} else if (window.OrkSchedule) {
+			window.OrkSchedule.render();
+		}
+
+		// Show the real snippet they'd paste on their own site
+		snippet.textContent =
+			'<div class="ork-schedule" data-event="' + event + '"' +
+			(detail ? ' data-detail="' + detail + '"' : '') + '></div>\n' +
+			'<script src="' + base + 'template/embed/ork-schedule.js"><\/script>';
+	});
+</script>
+</body>
+</html>

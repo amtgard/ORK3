@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-knights-list",
+  "imageWidth": 1280,
+  "imageHeight": 776,
+  "calibratedAt": "2026-08-01T21:24:21Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 956,
+      "y": 416,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:48:59Z",
+  "refuzzedFromCommit": "05389516"
+}

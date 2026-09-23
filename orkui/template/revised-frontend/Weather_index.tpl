@@ -3,7 +3,7 @@
 	$events     = $UpcomingEvents ?? array();
 	$dateStrip  = $DateStrip ?? array();
 	$playToday  = $PlayToday ?? array();
-	$selected   = $SelectedDate ?? date('Y-m-d');
+	$selected   = $SelectedDate ?? EraPhoenice::todayDateString();
 
 	// ─── Rundown sentence builder ──────────────────────────────────
 	// Pre-written slot templates; no LLM.
@@ -64,6 +64,21 @@
 		if ($f === null) return '';
 		$c = round(($f - 32) * 5 / 9);
 		return round($f) . '°F / ' . $c . '°C';
+	};
+
+	// Compact "97/36°" — matches the inline temp format used on cards + popups.
+	$wxPair = function($f) {
+		if ($f === null) return '';
+		return round($f) . '/' . round(($f - 32) * 5 / 9) . '°';
+	};
+
+	// "(feels 107/41°)" tail when the apparent temp diverges enough from air
+	// temp to matter — heat index on hot+humid days, wind chill on cold+windy
+	// days. Same field (Open-Meteo `apparent_temperature`) handles both.
+	$wxFeelsTail = function($f, $appF) use ($wxPair) {
+		if ($f === null || $appF === null) return '';
+		if (abs($appF - $f) < 5) return '';
+		return ' <span class="wx-feels">(feels ' . $wxPair($appF) . ')</span>';
 	};
 
 	// ─── Lead sentence(s). Counts here are scoped to parks with in-person play today —
@@ -195,28 +210,28 @@
 	.wx-map-card .wx-map { height: 320px; }
 	.wx-lists > .wx-events { margin-top: 12px; }
 }
-.wx-rundown { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.wx-rundown { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 20px; box-shadow: var(--ork-shadow-card); }
 /* Fixed rundown height so warning-heavy days don't push the map down.
    Short days have some breathing room; long days scroll internally. */
 .wx-rundown { height: 140px; overflow-y: auto; }
 .wx-rundown h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-rundown p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; color: var(--ork-text, #2d3748); }
 .wx-rundown p:last-child { margin-bottom: 0; }
-.wx-rundown .wx-freshness { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted, #718096); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-border, #edf2f7); }
+.wx-rundown .wx-freshness { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted, #718096); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-divider, #e2e8f0); }
 .wx-rundown .wx-jump-park { color: var(--ork-link-bright, #2b6cb0); font-weight: 600; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .wx-rundown .wx-jump-park:hover { border-bottom-style: solid; }
 .wx-rundown .wx-events-link { color: var(--ork-link-bright, #2b6cb0); text-decoration: none; border-bottom: 1px dotted currentColor; }
 .wx-rundown .wx-events-link::after { content: ' ↓'; opacity: .6; }
 .wx-rundown .wx-events-link:hover { border-bottom-style: solid; }
 
-.wx-events { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-events-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); flex: 0 0 auto; }
+.wx-events { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-events-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); flex: 0 0 auto; }
 .wx-events-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-events-header .wx-events-attr { font-size: 11px; color: var(--ork-text-muted, #a0aec0); }
 .wx-events-header .wx-events-attr a { color: inherit; text-decoration: none; }
 .wx-events-header .wx-events-attr a:hover { color: var(--ork-link); }
 
-.wx-event { display: grid; grid-template-columns: 70px 1fr auto; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--ork-border, #edf2f7); align-items: center; }
+.wx-event { display: grid; grid-template-columns: 70px 1fr auto; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--ork-divider, #e2e8f0); align-items: center; }
 .wx-event[data-lat]:hover, .wx-event[data-park-id]:hover { background: var(--ork-bg-secondary, #f7fafc); cursor: pointer; }
 .wx-event:last-child { border-bottom: 0; }
 .wx-event-date { font-size: 12px; color: var(--ork-text-muted, #718096); font-variant-numeric: tabular-nums; text-align: center; }
@@ -261,8 +276,8 @@ html[data-theme="dark"] .wx-pill:focus-visible { box-shadow: 0 0 0 2px #63b3ed; 
 .wx-pill-dot { display: block; width: 7px; height: 7px; border-radius: 50%; margin: 5px auto 0; }
 
 /* Play list */
-.wx-play { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-play-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); flex: 0 0 auto; }
+.wx-play { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-play-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); flex: 0 0 auto; }
 .wx-play-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-play-controls { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ork-text-muted, #a0aec0); }
 /* Fixed widths on count + toggle so changing mode/search doesn't reflow the header. */
@@ -274,8 +289,8 @@ html[data-theme="dark"] .wx-play-toggle:hover { background: rgba(255,255,255,0.0
 /* Mode is conveyed by label text + the banner — no loud active-fill needed. */
 .wx-play-toggle.active { background: rgba(43, 108, 176, 0.10); border-color: var(--ork-link-bright, #2b6cb0); }
 html[data-theme="dark"] .wx-play-toggle.active { background: rgba(99, 179, 237, 0.12); border-color: #63b3ed; color: #63b3ed; }
-.wx-play-search { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #cbd5e0); border-radius: 6px; padding: 3px 8px; font-size: 12px; color: var(--ork-text, #2d3748); width: 130px; outline: none; }
-.wx-play-search:focus { border-color: var(--ork-link-bright, #2b6cb0); }
+.wx-play-search { background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 6px; padding: 3px 8px; font-size: 12px; color: var(--ork-text, #2d3748); width: 130px; outline: none; }
+.wx-play-search:focus { border-color: var(--ork-link-bright, #2b6cb0); background: var(--ork-card-bg); }
 html[data-theme="dark"] .wx-play-search { background: var(--ork-bg-secondary, #1a202c); color: var(--ork-text, #e2e8f0); }
 .wx-play-row.wx-filtered { display: none; }
 
@@ -287,7 +302,7 @@ html[data-theme="dark"] .wx-play-search { background: var(--ork-bg-secondary, #1
 .wx-play.is-flagged-mode .wx-play-mode { display: flex; }
 html[data-theme="dark"] .wx-play-mode { background: #422006; color: #fcd34d; border-color: #78350f; }
 html[data-theme="dark"] .wx-play-mode .wx-play-mode-clear { color: #fcd34d; }
-.wx-play-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--ork-border, #edf2f7); align-items: center; }
+.wx-play-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--ork-divider, #e2e8f0); align-items: center; }
 .wx-play-row[data-park-id]:hover { background: var(--ork-bg-secondary, #f7fafc); cursor: pointer; }
 .wx-play-row:last-child { border-bottom: 0; }
 .wx-play-main { min-width: 0; }
@@ -302,8 +317,8 @@ html[data-theme="dark"] .wx-play-mode .wx-play-mode-clear { color: #fcd34d; }
 .wx-loading { padding: 20px; text-align: center; color: var(--ork-text-muted, #a0aec0); font-style: italic; }
 
 /* Map */
-.wx-map-card { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); gap: 10px; }
+.wx-map-card { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); gap: 10px; }
 .wx-map-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 #wx-zoom-out { display: none; background: transparent; border: 1px solid var(--ork-border, #cbd5e0); color: var(--ork-text-muted, #718096); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 #wx-zoom-out:hover { background: var(--ork-bg-secondary, #f7fafc); color: var(--ork-text, #2d3748); }
@@ -341,6 +356,10 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 .wx-map-popup .wx-pp-badges .wx-event-badge { margin-left: 0; padding: 2px 8px; font-size: 10.5px; }
 
 .wx-play-row.wx-hidden, .wx-event.wx-hidden { display: none; }
+/* "(feels 107/41°)" tail — muted so it reads as a modifier on the primary temp,
+   not a second competing number. Slightly lighter weight for the same reason. */
+.wx-feels { color: var(--ork-text-muted, #718096); font-weight: 500; font-size: 0.9em; margin-left: 2px; }
+html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 </style>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -470,12 +489,12 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 						?>
 							<div class="wx-play-temps">
 								<?= $wxIcon($fc['code']) ?>
-								<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?php endif; ?>
+								<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?= $wxFeelsTail($fc['hi_f'], $fc['app_hi_f'] ?? null) ?><?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?= $wxFeelsTail($fc['lo_f'], $fc['app_lo_f'] ?? null) ?><?php endif; ?>
 							</div>
 							<?php if (!empty($p['badges'])): ?>
 								<div class="wx-play-meta">
 									<?php foreach ($p['badges'] as $b): ?>
-										<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"><?= $b['icon'] ?></span>
+										<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"<?= wx_safety_attrs($b['label']) ?>><?= $b['icon'] ?></span>
 									<?php endforeach; ?>
 								</div>
 							<?php endif; ?>
@@ -503,7 +522,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			<?php foreach ($events as $ev):
 				$ts = strtotime($ev['event_start']);
 				$dayDate = substr($ev['event_start'], 0, 10);
-				$today = date('Y-m-d');
+				$today = EraPhoenice::todayDateString();
 				$isToday = ($dayDate === $today);
 			?>
 			<div class="wx-event"
@@ -552,7 +571,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 					?>
 						<div class="wx-event-temps">
 							<?= $wxIcon($fc['code']) ?>
-							<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?php endif; ?>
+							<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?= $wxFeelsTail($fc['hi_f'], $fc['app_hi_f'] ?? null) ?><?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?= $wxFeelsTail($fc['lo_f'], $fc['app_lo_f'] ?? null) ?><?php endif; ?>
 						</div>
 						<?php if (!empty($fc['precip_pct']) && $fc['precip_pct'] >= 20): ?>
 							<div class="wx-event-meta"><?= (int)$fc['precip_pct'] ?>% rain</div>
@@ -560,7 +579,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 						<?php if (!empty($ev['badges'])): ?>
 							<div class="wx-event-meta">
 								<?php foreach ($ev['badges'] as $b): ?>
-									<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"><?= $b['icon'] ?></span>
+									<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"<?= wx_safety_attrs($b['label']) ?>><?= $b['icon'] ?></span>
 								<?php endforeach; ?>
 							</div>
 						<?php endif; ?>
@@ -584,7 +603,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 	// Server-computed today in the server's local timezone — use this wherever
 	// JS code needs to know "is this date today?". JS's new Date().toISOString()
 	// returns UTC and will be off by one for users west of UTC late at night.
-	var WX_TODAY = '<?= htmlspecialchars(date('Y-m-d')) ?>';
+	var WX_TODAY = '<?= htmlspecialchars(EraPhoenice::todayDateString()) ?>';
 	var wxIcon = function(c) {
 		c = +c;
 		if (c === 0)                  return '☀️';
@@ -602,6 +621,13 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 	};
 	function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 	function tempPair(f) { var c = Math.round((f - 32) * 5 / 9); return Math.round(f) + '/' + c + '°'; }
+	// "(feels 107/41°)" tail when apparent temp diverges by ≥5°F — heat index
+	// on hot+humid days, wind chill on cold+windy days. Silent otherwise.
+	function feelsTail(f, appF) {
+		if (f == null || appF == null) return '';
+		if (Math.abs(appF - f) < 5) return '';
+		return ' <span class="wx-feels">(feels ' + tempPair(appF) + ')</span>';
+	}
 
 	// Kingdom-name shortener mirrors Weather::short_kingdom in PHP
 	function shortKingdom(name) {
@@ -742,12 +768,14 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 		}
 		setZoomedIn(false);
 	}
+	// CARTO's free tiles now require a key -- mirrored in Live_index.tpl,
+	// update both if this ever changes.
+	var WX_CARTO_KEY = <?= json_encode(CARTO_API_KEY) ?>;
 	function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 	function wxApplyMapTheme() {
 		if (!wxMap) return;
-		var url = isDarkTheme()
-			? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-			: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+		var style = isDarkTheme() ? 'dark_all' : 'light_all';
+		var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(WX_CARTO_KEY);
 		if (wxTileLayer) wxMap.removeLayer(wxTileLayer);
 		wxTileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(wxMap);
 	}
@@ -788,8 +816,8 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			var fc = p.forecast;
 			var wxLine = '';
 			if (fc && fc.hi_f != null) {
-				var loPart = fc.lo_f != null ? ' / L ' + tempPair(fc.lo_f) : '';
-				wxLine = '<div class="wx-pp-wx">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + loPart + '</div>';
+				var loPart = fc.lo_f != null ? ' / L ' + tempPair(fc.lo_f) + feelsTail(fc.lo_f, fc.app_lo_f) : '';
+				wxLine = '<div class="wx-pp-wx">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + feelsTail(fc.hi_f, fc.app_hi_f) + loPart + '</div>';
 				wxLine += renderBadgeChips(p.badges);
 			} else {
 				wxLine = '<div class="wx-pp-meta">' + esc(statusText(p.forecast_status)) + '</div>';
@@ -849,11 +877,11 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			});
 			var wx = '';
 			if (fc && fc.hi_f != null) {
-				var loPart = fc.lo_f != null ? ' · L ' + tempPair(fc.lo_f) : '';
-				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + loPart + '</div>';
+				var loPart = fc.lo_f != null ? ' · L ' + tempPair(fc.lo_f) + feelsTail(fc.lo_f, fc.app_lo_f) : '';
+				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + feelsTail(fc.hi_f, fc.app_hi_f) + loPart + '</div>';
 				if (p.badges && p.badges.length) {
 					wx += '<div class="wx-play-meta">' +
-						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '">' + b.icon + '</span>'; }).join(' ') +
+						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '"' + wxSafetyAttrs(b.label) + '>' + b.icon + '</span>'; }).join(' ') +
 						'</div>';
 				}
 			} else {
@@ -1155,7 +1183,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 	function renderBadgeChips(badges) {
 		if (!badges || !badges.length) return '';
 		return '<div class="wx-pp-badges">' + badges.map(function(b) {
-			return '<span class="wx-event-badge wx-event-badge-' + b.severity + '">' + b.icon + ' ' + esc(b.label) + '</span>';
+			return '<span class="wx-event-badge wx-event-badge-' + b.severity + '"' + wxSafetyAttrs(b.label) + '>' + b.icon + ' ' + esc(b.label) + wxSafetyIconHtml(b.label) + '</span>';
 		}).join('') + '</div>';
 	}
 

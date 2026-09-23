@@ -1,0 +1,20 @@
+{
+  // Hardcoded endpoints — NOT overridable via CLI or env in v1.
+  // extract always uses mirror; apply/validate always use sandbox.
+  "mirror": {
+    "role": "extract_source",
+    "host": "127.0.0.1",
+    "port": 19306,
+    "database": "ork",
+    "container": "ork3-php8-db",
+    "description": "Local copy of real-shaped data (redacted dump)"
+  },
+  "sandbox": {
+    "role": "apply_target",
+    "host": "127.0.0.1",
+    "port": 19307,
+    "database": "ork_test",
+    "container": "ork3-php8-test-db",
+    "description": "Disposable fake-data database for tests"
+  }
+}

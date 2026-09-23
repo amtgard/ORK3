@@ -18,7 +18,7 @@
 .rs-second-withdraw:hover{border-color:#fc8181;color:#c53030;background:#fff5f5}
 .rs-seconds-badge{position:relative;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:#c6f6d5;color:#22543d;font-size:11px;font-weight:700;margin-right:6px;cursor:default}
 .rs-edit-reason-btn{height:20px;min-width:20px;padding:0 4px;font-size:10px;margin-left:6px;vertical-align:1px}
-.rs-seconds{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.rs-seconds{margin-top:8px;padding-top:8px;border-top:1px dashed var(--ork-divider);display:flex;flex-direction:column;gap:4px;min-width:0}
 .rs-second{font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;min-width:0;overflow-wrap:anywhere;word-break:break-word}
 .rs-second .rs-supporter{font-weight:600;color:#2d3748}
 .rs-second .rs-notes{color:#718096;font-style:italic;min-width:0;overflow-wrap:anywhere;word-break:break-word}
@@ -51,7 +51,8 @@
 }
 
 /* ---- Modals (rs-overlay-* IDs) — leverage the host's .pn-overlay/.pn-modal-box styles ---- */
-.rs-textarea{width:100%;resize:vertical;font-family:inherit;font-size:13px;padding:8px;border:1px solid #cbd5e0;border-radius:4px;box-sizing:border-box}
+.rs-textarea{width:100%;resize:vertical;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--ork-input-border);border-radius:4px;box-sizing:border-box;background:var(--ork-input-bg)}
+.rs-textarea:focus{background:var(--ork-card-bg)}
 .rs-modal-context{margin:0 0 12px 0;color:#4a5568;font-size:13px}
 
 /* ---- Dark mode ---- */
@@ -192,7 +193,7 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 			}
 			return '<span class="rs-notes">&mdash; "' + inner + '"</span>';
 		}
-		return '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+		return '';
 	}
 
 	function buildOwnSecondHtml(secondId, notes, supPersona) {
@@ -208,11 +209,18 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		if (!editBtn) return false;
 		var secondEl = editBtn.closest('.rs-second');
 		if (!secondEl) return false;
-		var oldNotes = secondEl.querySelector('.rs-notes, .rs-notes-empty');
-		if (!oldNotes) return false;
 		var holder = document.createElement('div');
 		holder.innerHTML = buildNotesSpanHtml(newNotes);
-		secondEl.replaceChild(holder.firstChild, oldNotes);
+		var newNotesEl = holder.firstChild; // null when newNotes is empty (no-comment second)
+		var oldNotes = secondEl.querySelector('.rs-notes, .rs-notes-empty');
+		if (oldNotes) {
+			if (newNotesEl) secondEl.replaceChild(newNotesEl, oldNotes);
+			else secondEl.removeChild(oldNotes);
+		} else if (newNotesEl) {
+			var actions = secondEl.querySelector('.rs-second-actions');
+			if (actions) secondEl.insertBefore(newNotesEl, actions);
+			else secondEl.appendChild(newNotesEl);
+		}
 		editBtn.setAttribute('data-notes', newNotes || '');
 		return true;
 	}

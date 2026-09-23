@@ -1,0 +1,5 @@
+
+/* One rule enough — badges tagged with data-wx-safety become click targets. */
+[data-wx-safety] { cursor: pointer; }
+[data-wx-safety]:hover { filter: brightness(1.05); }
+[data-wx-safety]:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }

@@ -2,7 +2,10 @@
 
 <?php
 
-
+/**
+ * @deprecated Manual authorization test rig — superseded by PHPUnit (see docs/megiddo/refactor/06-test-framework.md).
+ * Kept for reference; destructive when APP_STAGE != DEV.
+ */
 $TESTS = 1;
 
 $DONOTWEBSERVICE = true;

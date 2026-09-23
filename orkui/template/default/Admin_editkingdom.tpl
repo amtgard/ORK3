@@ -78,6 +78,11 @@
 <?php			endforeach; ?>
 <?php 		elseif ($config['Type'] == 'number'): ?>
 						<input type='text' class='remove-float' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?= $config['Value'] === null || $config['Value'] === 'null' ? '' : $config['Value'] ?>' placeholder='blank = not set' />
+<?php     	elseif (in_array($config['Key'], ['QualTestReeveEnabled', 'QualTestCorporaEnabled'], true)): ?>
+						<select name='Config[<?=$config['ConfigurationId'] ?>]'>
+							<option value='0'<?= $config['Value'] == 0 ? ' selected' : '' ?>>No</option>
+							<option value='1'<?= $config['Value'] == 1 ? ' selected' : '' ?>>Yes</option>
+						</select>
 <?php     	else : ?>
 						<input type='text' class='' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?=$config['Value'] ?>' />
 <?php 		endif; ?>

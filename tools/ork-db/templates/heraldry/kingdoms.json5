@@ -1,0 +1,33 @@
+{
+  "100001": {
+    "field": "#8B0000",
+    "charge": "eagle",
+    "charge_color": "#FFD700",
+    "label": "Empire of Ashkara"
+  },
+  "100002": {
+    "field": "#003366",
+    "charge": "lion",
+    "charge_color": "#FFD700",
+    "label": "Kingdom of Meridia"
+  },
+  "100003": {
+    "field": "#006400",
+    "charge": "crescent",
+    "charge_color": "#FFD700",
+    "label": "Sultanate of Zanzibarr"
+  },
+  "100004": {
+    "field": "#1A1A1A",
+    "charge": "bear",
+    "charge_color": "#FFD700",
+    "border": "#FFD700",
+    "label": "Tsardom of Vyatka"
+  },
+  "100005": {
+    "field": "#F5F5F5",
+    "charge": "cross",
+    "charge_color": "#8B0000",
+    "label": "Grand Duchy of Litavia"
+  }
+}

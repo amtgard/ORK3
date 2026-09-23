@@ -1,132 +1,205 @@
 <?php
 
-class Model_Kingdom extends Model {
+class Model_Kingdom extends Model
+{
+    public function __construct()
+    {
+        parent::__construct();
+        $this->Kingdom = new APIModel('Kingdom');
+        $this->Park = new APIModel('Park');
+        $this->Report = new APIModel('Report');
+        $this->Event = new APIModel('Event');
+        $this->Heraldry = new APIModel('Heraldry');
+        $this->Search = new JSONModel('Search');
+    }
 
-	function __construct() {
-		parent::__construct();
-		$this->Kingdom = new APIModel('Kingdom');
-		$this->Park = new APIModel('Park');
-		$this->Report = new APIModel('Report');
-		$this->Event = new APIModel('Event');
-		$this->Heraldry = new APIModel('Heraldry');
-		$this->Search = new JSONModel('Search');
-	}
-	
-	function get_principalities($kingdom_id) {
-		return $this->Kingdom->GetPrincipalities(array('KingdomId' => $kingdom_id));
-	}
-	
-	function update_parks($token, $request) {
-		$z = array();
-		foreach ($request as $k => $details) {
-			$z[] = $this->Park->SetParkDetails(array(
-					'Token' => $token,
-					'ParkId' => $details['ParkId'],
-					'Name' => $details['ParkName'],
-					'Abbreviation' => $details['Abbreviation'],
-					'ParkTitleId' => $details['ParkTitleId'],
-					'Active' => $details['Active']
-				));
-				
-		}
-		return $z;
-	}
-	
-	function get_park_info($kingdom_id) {
-		$r = $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
-		$pt = $this->Kingdom->GetKingdomParkTitles(array('KingdomId' => $kingdom_id));
-		if (0 == $r['Status']['Status'] && 0 == $pt['Status']['Status'])
-			return array('Parks' => $r['Parks'], 'Titles' => $pt['ParkTitles']);
-		return array();
-	}
-	
-	function get_officers($kingdom_id, $token) {
-		$r = $this->Kingdom->GetOfficers(array('KingdomId' => $kingdom_id, 'Token' => $token ));
-		logtrace("get_officers($kingdom_id)", $r);
-		if ($r['Status']['Status'] == 0)
-			return $r['Officers'];
-		return false;
-	}
-	
-	function set_officers($token, $kingdom_id, $request) {
-		$r = array();
-		foreach ($request as $k => $officer_request) {
-			$officer_request['Token'] = $token;
-			$officer_request['KingdomId'] = $kingdom_id;
-			$r[] = $this->Kingdom->SetOfficer($officer_request);
-		}
-		return $r;
-	}
+    public function get_principalities($kingdom_id)
+    {
+        return $this->Kingdom->GetPrincipalities(array('KingdomId' => $kingdom_id));
+    }
 
-	function vacate_officer($kingdom_id, $role, $token) {
-		return $this->Kingdom->VacateOfficer(array('KingdomId' => $kingdom_id, 'Role' => $role, 'Token' => $token));
-	}
-	
-	function create_kingdom($request) {
-		logtrace("create_kingdom", $request);
-		$r = $this->Kingdom->CreateKingdom($request);
-		return $r;
-	}
-	
-	function set_kingdom_details($request) {
-		$r = $this->Kingdom->SetKingdomDetails($request);
-		return $r;
-	}
+    public function update_parks($token, $request)
+    {
+        $z = array();
+        foreach ($request as $k => $details) {
+            $z[] = $this->Park->SetParkDetails(array(
+                    'Token' => $token,
+                    'ParkId' => $details['ParkId'],
+                    'Name' => $details['ParkName'],
+                    'Abbreviation' => $details['Abbreviation'],
+                    'ParkTitleId' => $details['ParkTitleId'],
+                    'Active' => $details['Active']
+                ));
 
-	function set_kingdom_parent($request) {
-		return $this->Kingdom->SetKingdomParent($request);
-	}	
-	
-	function set_kingdom_parktitles($request) {
-		$r = $this->Kingdom->SetKingdomParkTitles($request);
-		return $r;
-	}	
-	
-	function set_kingdom_awards($request) {
-		$r = $this->Kingdom->SetKingdomAwards($request);
-		return $r;
-	}	
-	
-	function get_kingdom_name($kingdom_id) {
-		$r = $this->Kingdom->GetKingdomShortInfo(array('KingdomId'=>$kingdom_id));
-		return $r['KingdomInfo']['KingdomName'];
-	}
-	
-	function get_kingdom_shortinfo($kingdom_id) {
-		return array( 
-			'Info' => $this->Kingdom->GetKingdomShortInfo(array('KingdomId'=>$kingdom_id)),
-			'HeraldryUrl' => $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ))
-		);
-	}
-	
-	function get_kingdom_details($kingdom_id) {
-		$r = $this->Kingdom->GetKingdomDetails(array('KingdomId'=>$kingdom_id));
-		$r['Heraldry'] = $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ));
-		return $r;
-	}
-	
-	function get_park_summary($kingdom_id) {
-		return $this->Report->GetKingdomParkAverages(array('KingdomId'=>$kingdom_id));
-	}
-	
-	function get_kingdom_events($kingdom_id) {
-		$t = array();
-		//$name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1
-		$s = $this->Search->Search_Event(null, $kingdom_id, 0, null, null, 12, null, true);
-		foreach ($s as $k => $e) $t[$e['EventId']] = $e;
-		$r = $this->Search->Search_Event(null, $kingdom_id, null, null, null, 8, null, true);
-		foreach ($r as $k => $e) $t[$e['EventId']] = $e;
-		return $t;
-	}
+        }
+        return $z;
+    }
 
-	function set_kingdom_heraldry($request) {
-		return $this->Heraldry->SetKingdomHeraldry($request);
-	}
+    public function get_park_info($kingdom_id)
+    {
+        $r = $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+        $pt = $this->Kingdom->GetKingdomParkTitles(array('KingdomId' => $kingdom_id));
+        if (0 == $r['Status']['Status'] && 0 == $pt['Status']['Status']) {
+            return array('Parks' => $r['Parks'], 'Titles' => $pt['ParkTitles']);
+        }
+        return array();
+    }
 
-	function remove_kingdom_heraldry($request) {
-		return $this->Heraldry->RemoveKingdomHeraldry($request);
-	}
+    public function get_officers($kingdom_id, $token)
+    {
+        $r = $this->Kingdom->GetOfficers(array('KingdomId' => $kingdom_id, 'Token' => $token ));
+        logtrace("get_officers($kingdom_id)", $r);
+        if ($r['Status']['Status'] == 0) {
+            return $r['Officers'];
+        }
+        return false;
+    }
+
+    public function get_officers_bundle($kingdom_id, $token)
+    {
+        $_officers = $this->get_officers($kingdom_id, $token);
+
+        return array('Officers' => is_array($_officers) ? $_officers : array());
+    }
+
+    public function get_parks($kingdom_id)
+    {
+        return $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+    }
+
+    public function stats_includes_principalities($kingdom_id)
+    {
+        return $this->_kingdom()->StatsIncludesPrincipalities($kingdom_id);
+    }
+
+    public function set_officers($token, $kingdom_id, $request)
+    {
+        $r = array();
+        foreach ($request as $k => $officer_request) {
+            $officer_request['Token'] = $token;
+            $officer_request['KingdomId'] = $kingdom_id;
+            $r[] = $this->Kingdom->SetOfficer($officer_request);
+        }
+        return $r;
+    }
+
+    public function vacate_officer($kingdom_id, $role, $token)
+    {
+        return $this->Kingdom->VacateOfficer(array('KingdomId' => $kingdom_id, 'Role' => $role, 'Token' => $token));
+    }
+
+    public function create_kingdom($request)
+    {
+        logtrace("create_kingdom", $request);
+        $r = $this->Kingdom->CreateKingdom($request);
+        return $r;
+    }
+
+    public function set_kingdom_details($request)
+    {
+        $r = $this->Kingdom->SetKingdomDetails($request);
+        return $r;
+    }
+
+    public function set_kingdom_parent($request)
+    {
+        return $this->Kingdom->SetKingdomParent($request);
+    }
+
+    public function set_kingdom_parktitles($request)
+    {
+        $r = $this->Kingdom->SetKingdomParkTitles($request);
+        return $r;
+    }
+
+    public function set_kingdom_awards($request)
+    {
+        $r = $this->Kingdom->SetKingdomAwards($request);
+        return $r;
+    }
+
+    public function list_kingdoms()
+    {
+        $r = $this->Kingdom->GetKingdoms(array());
+        if (($r['Status']['Status'] ?? 1) == 0) {
+            return $r['Kingdoms'] ?? array();
+        }
+        return array();
+    }
+
+    public function get_family_parks($kingdom_id)
+    {
+        $kingdom = $this->_kingdom();
+
+        return $kingdom->GetParks(array(
+            'KingdomIds' => $kingdom->GetFamilyKingdomIds($kingdom_id),
+        ));
+    }
+
+    public function get_kingdom_park_titles($kingdom_id)
+    {
+        return $this->_kingdom()->GetKingdomParkTitles(array('KingdomId' => $kingdom_id));
+    }
+
+    public function get_kingdoms_response()
+    {
+        return $this->_kingdom()->GetKingdoms(array());
+    }
+
+    public function get_kingdom_name($kingdom_id)
+    {
+        $r = $this->Kingdom->GetKingdomShortInfo(array('KingdomId' => $kingdom_id));
+        return $r['KingdomInfo']['KingdomName'];
+    }
+
+    public function get_kingdom_shortinfo($kingdom_id)
+    {
+        return array(
+            'Info' => $this->Kingdom->GetKingdomShortInfo(array('KingdomId' => $kingdom_id)),
+            'HeraldryUrl' => $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ))
+        );
+    }
+
+    public function get_kingdom_details($kingdom_id)
+    {
+        $r = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));
+        $r['Heraldry'] = $this->Heraldry->GetHeraldryUrl(array('Type' => 'Kingdom', 'Id' => $kingdom_id ));
+        return $r;
+    }
+
+    public function get_park_summary($kingdom_id)
+    {
+        return $this->Report->GetKingdomParkAverages(array('KingdomId' => $kingdom_id));
+    }
+
+    public function get_kingdom_events($kingdom_id)
+    {
+        $t = array();
+        //$name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1
+        $s = $this->Search->Search_Event(null, $kingdom_id, 0, null, null, 12, null, true);
+        foreach ($s as $k => $e) {
+            $t[$e['EventId']] = $e;
+        }
+        $r = $this->Search->Search_Event(null, $kingdom_id, null, null, null, 8, null, true);
+        foreach ($r as $k => $e) {
+            $t[$e['EventId']] = $e;
+        }
+        return $t;
+    }
+
+    public function set_kingdom_heraldry($request)
+    {
+        return $this->Heraldry->SetKingdomHeraldry($request);
+    }
+
+    public function remove_kingdom_heraldry($request)
+    {
+        return $this->Heraldry->RemoveKingdomHeraldry($request);
+    }
+
+    private function _kingdom(): Kingdom
+    {
+        return new Kingdom();
+    }
 
 }
-
-?>

@@ -22,11 +22,11 @@ html[data-theme="dark"] .se-header-title,
 html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
 }
-.se-header-sub { font-size:13px; color:#718096; margin-top:1px; }
+.se-header-sub { font-size:13px; color:var(--ork-text-on-ground); margin-top:1px; }
 
 /* ── Search bar ── */
 .se-search-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	padding:16px 20px; display:flex; align-items:center; gap:14px;
 }
 .se-search-label {
@@ -37,13 +37,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 .se-search-input-wrap { flex:1; position:relative; }
 .se-search-input {
 	width:100%; padding:8px 12px 8px 36px;
-	border:1px solid #cbd5e0; border-radius:6px;
-	font-size:14px; color:#2d3748;
+	border:1px solid var(--ork-input-border); border-radius:6px;
+	font-size:14px; color:#2d3748; background:var(--ork-input-bg);
 	outline:none; box-sizing:border-box;
 	transition:border-color .15s, box-shadow .15s;
 }
 .se-search-input:focus {
-	border-color:#3182ce;
+	border-color:#3182ce; background:var(--ork-card-bg);
 	box-shadow:0 0 0 3px rgba(49,130,206,.15);
 }
 .se-search-icon {
@@ -54,13 +54,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 /* ── Results cards ── */
 .se-results-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	overflow:hidden;
 }
 .se-results-header {
 	display:flex; align-items:center; justify-content:space-between;
-	padding:10px 16px; border-bottom:1px solid #e2e8f0;
-	background:#f7fafc;
+	padding:10px 16px; border-bottom:1px solid var(--ork-divider);
+	background:var(--ork-bg-secondary);
 }
 .se-results-title {
 	font-size:13px; font-weight:700; color:#2d3748;
@@ -82,7 +82,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	font-size:11px; font-weight:700; text-transform:uppercase;
 	letter-spacing:.06em; color:#718096;
 	padding:9px 14px; text-align:left;
-	border-bottom:1px solid #e2e8f0; background:#f7fafc;
+	border-bottom:1px solid var(--ork-divider); background:var(--ork-bg-secondary);
 }
 .se-table td {
 	padding:10px 14px; font-size:13px; color:#4a5568;
@@ -115,6 +115,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	padding:2px 7px; border-radius:4px; white-space:nowrap;
 }
 .se-rsvp-badge i { font-size:10px; }
+.se-rsvp-badge.se-rsvp-interested { background:#fffbeb; color:#92400e; }
 .se-rsvp-none { font-size:12px; color:#a0aec0; }
 
 /* ── Empty / loading ── */
@@ -124,11 +125,45 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 }
 .se-empty i { display:block; font-size:22px; margin-bottom:8px; color:#cbd5e0; }
 .se-hidden { display:none; }
+.se-type-badge {
+	display:inline-flex; align-items:center;
+	background:#e9d8fd; color:#553c9a;
+	font-size:10px; font-weight:700;
+	padding:1px 6px; border-radius:3px;
+	text-transform:uppercase; letter-spacing:.04em;
+	margin-left:4px; white-space:nowrap;
+}
 
 @media (max-width:768px) {
 	.se-search-card { flex-direction:column; align-items:stretch; gap:10px; }
 	.se-search-hint { display:none; }
 }
+
+/* ── Dark mode overrides ── */
+html[data-theme="dark"] .se-search-card,
+html[data-theme="dark"] .se-results-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-results-header { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-results-title { color: var(--ork-text); }
+html[data-theme="dark"] .se-results-count { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-search-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .se-search-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .se-search-input::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-search-hint,
+html[data-theme="dark"] .se-all-toggle { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-table th { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .se-table tbody tr:hover td { color: var(--ork-text); }
+html[data-theme="dark"] .se-event-name { color: var(--ork-text); }
+html[data-theme="dark"] .se-date-badge { background: rgba(99, 179, 237, 0.18); color: #9ecdff; }
+html[data-theme="dark"] .se-date-past { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-rsvp-badge { background: rgba(72, 187, 120, 0.18); color: #9ae6b4; }
+html[data-theme="dark"] .se-rsvp-badge.se-rsvp-interested { background: rgba(237, 137, 54, 0.20); color: #fbd38d; }
+html[data-theme="dark"] .se-rsvp-none,
+html[data-theme="dark"] .se-no-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-type-badge { background: rgba(159, 122, 234, 0.22); color: #d6bcfa; }
+html[data-theme="dark"] .se-empty,
+html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 </style>
 
 <div class="se-page">
@@ -208,6 +243,14 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	var _pid     = parseInt(document.getElementById('se-park-id').value)    || 0;
 	var _uid_val = parseInt(document.getElementById('se-unit-id').value)    || 0;
 
+	// XSS escape helper — used everywhere a search-service string is inserted via innerHTML.
+	function escHtml(s) {
+		if (s == null) return '';
+		var d = document.createElement('div');
+		d.textContent = String(s);
+		return d.innerHTML;
+	}
+
 	function formatDate(dateStr) {
 		if (!dateStr) return null;
 		var d = new Date(dateStr + 'T00:00:00');
@@ -217,7 +260,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 	function navLink(href, label) {
 		return '<a href="' + href + '" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none">'
-			+ label + '</a>';
+			+ escHtml(label) + '</a>';
 	}
 
 	function buildRow(v, isPast) {
@@ -247,10 +290,12 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		} else {
 			rsvpCel = '';
 			if (rsvpGoing      > 0) rsvpCel += '<span class="se-rsvp-badge"><i class="fas fa-check-circle"></i>' + rsvpGoing      + ' going</span> ';
-			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge" style="background:#fffbeb;color:#92400e;"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
+			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge se-rsvp-interested"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
 		}
+		var nameCel = '<span class="se-event-name">' + escHtml(name) + '</span>';
+		if (v.EventType) nameCel += ' <span class="se-type-badge">' + escHtml(v.EventType) + '</span>';
 		return '<tr onclick="window.location.href=\'' + url + '\'">'
-			+ '<td><span class="se-event-name">' + name + '</span></td>'
+			+ '<td>' + nameCel + '</td>'
 			+ '<td>' + dateCel + '</td>'
 			+ '<td>' + kingdomCel + '</td>'
 			+ '<td>' + parkCel + '</td>'
@@ -372,16 +417,18 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 	document.getElementById('se-all-past-toggle').addEventListener('change', function() {
 		_allPast = this.checked;
-		if (_current.length >= 2) doSearch(_current);
+		doSearch(_current.length >= 2 || _current.length === 0 ? _current : '');
 	});
 
 	document.getElementById('se-event-input').addEventListener('input', function() {
 		var term = this.value;
 		_current = term;
 		clearTimeout(_timer);
-		if (term.length < 2) { resetTables(); document.getElementById('se-upcoming-label').textContent = 'Next Upcoming Events'; return; }
+		if (term.length === 0) { doSearch(''); document.getElementById('se-upcoming-label').textContent = 'Next Upcoming Events'; return; }
+		if (term.length < 2) { return; }
 		document.getElementById('se-upcoming-label').textContent = 'Upcoming Events';
 		_timer = setTimeout(function() { doSearch(term); }, 300);
 	});
+	// (loadDefaults() above already populated upcoming on page load; no extra search.)
 })();
 </script>

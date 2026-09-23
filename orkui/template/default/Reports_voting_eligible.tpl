@@ -101,11 +101,11 @@ if (!empty($Players)) {
 .rp-cross { color: #c53030; font-weight: 600; }
 .rp-warn  { color: #c05621; font-weight: 600; }
 .rp-not-supported {
-	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px;
-	padding: 40px 32px; text-align: center; color: #718096; margin: 24px 0;
+	background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px; box-shadow: var(--ork-shadow-card);
+	padding: 40px 32px; text-align: center; color: var(--ork-text-muted); margin: 24px 0;
 }
 .rp-not-supported i { font-size: 2rem; margin-bottom: 12px; display: block; color: #a0aec0; }
-.rp-not-supported h3 { margin: 0 0 8px; color: #4a5568; font-size: 1.1rem; }
+.rp-not-supported h3 { margin: 0 0 8px; color: var(--ork-text-secondary); font-size: 1.1rem; background: none; border: 0; padding: 0; text-shadow: none; }
 .rp-not-supported p  { margin: 0; font-size: 0.9rem; }
 </style>
 
@@ -534,6 +534,7 @@ if (!empty($Players)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <?php if (empty($NotSupported)) : ?>
 <script>
@@ -583,7 +584,7 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>
 <?php endif; ?>

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "park-profile",
+  "calibratedAt": "2026-07-08T19:55:48Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "40f4fa2c"
+}

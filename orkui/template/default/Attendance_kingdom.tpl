@@ -46,22 +46,31 @@ $show_charts = $total > 0;
 <style>
 /* ── Attendance-specific styles ───────────────────── */
 .att-form-card {
-	background: #fff;
-	border: 1px solid #e5e7eb;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	overflow: hidden;
 	margin-bottom: 16px;
 }
 .att-form-card-header {
-	background: #f3f4f6;
+	background: var(--ork-bg-secondary);
 	padding: 10px 16px;
 	font-size: 0.82rem;
 	font-weight: 600;
 	color: #374151;
-	border-bottom: 1px solid #e5e7eb;
+	border-bottom: 1px solid var(--ork-divider);
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+.att-error {
+	color: var(--ork-alert-danger-text);
+	background: var(--ork-alert-danger-bg);
+	border: 1px solid var(--ork-alert-danger-border);
+	font-size: 0.82rem;
+	border-radius: 6px;
+	padding: 8px 10px;
+	margin-bottom: 12px;
 }
 .att-form-card-body { padding: 14px 16px; }
 .att-form-group { margin-bottom: 10px; }
@@ -77,15 +86,16 @@ $show_charts = $total > 0;
 .att-form-input, .att-form-select {
 	width: 100%;
 	padding: 7px 10px;
-	border: 1px solid #d1d5db;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 0.87rem;
 	color: #111827;
-	background: #fff;
+	background: var(--ork-input-bg);
 	box-sizing: border-box;
 }
 .att-form-input:focus, .att-form-select:focus {
 	outline: none;
+	background: var(--ork-card-bg);
 	border-color: #6366f1;
 	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
 }
@@ -109,8 +119,8 @@ $show_charts = $total > 0;
 }
 .att-chart-card {
 	flex: 1;
-	background: #fff;
-	border: 1px solid #e5e7eb;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	overflow: hidden;
 }
@@ -119,15 +129,15 @@ $show_charts = $total > 0;
 	font-size: 0.8rem;
 	font-weight: 600;
 	color: #374151;
-	background: #f9fafb;
-	border-bottom: 1px solid #e5e7eb;
+	background: var(--ork-bg-secondary);
+	border-bottom: 1px solid var(--ork-divider);
 	display: flex;
 	align-items: center;
 	gap: 7px;
 	cursor: pointer;
 	user-select: none;
 }
-.att-chart-title:hover { background: #f1f5f9; }
+.att-chart-title:hover { background: var(--ork-bg-tertiary); }
 .att-chart-chevron { margin-left: auto; transition: transform 0.2s ease; color: #9ca3af; }
 .att-chart-card.att-collapsed .att-chart-chevron { transform: rotate(-90deg); }
 .att-chart-card.att-collapsed .att-chart-body { display: none; }
@@ -147,7 +157,7 @@ $show_charts = $total > 0;
 }
 .att-edit-overlay.att-edit-open { display: flex; }
 .att-edit-modal {
-	background: #fff; border-radius: 10px;
+	background: var(--ork-card-bg); border-radius: 10px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 	width: 360px; max-width: 96vw;
 }
@@ -169,12 +179,12 @@ $show_charts = $total > 0;
 	color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
 }
 .att-edit-input, .att-edit-select {
-	width: 100%; padding: 7px 10px; border: 1px solid #d1d5db;
+	width: 100%; padding: 7px 10px; border: 1px solid var(--ork-input-border);
 	border-radius: 6px; font-size: 0.87rem; color: #111827;
-	background: #fff; box-sizing: border-box;
+	background: var(--ork-input-bg); box-sizing: border-box;
 }
 .att-edit-input:focus, .att-edit-select:focus {
-	outline: none; border-color: #6366f1;
+	outline: none; background: var(--ork-card-bg); border-color: #6366f1;
 	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
 }
 .att-edit-row { display: flex; gap: 12px; }
@@ -185,7 +195,7 @@ $show_charts = $total > 0;
 	border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; margin-bottom: 12px; display: none;
 }
 .att-edit-modal-footer {
-	padding: 12px 18px; border-top: 1px solid #f3f4f6;
+	padding: 12px 18px; border-top: 1px solid var(--ork-divider);
 	display: flex; justify-content: flex-end; gap: 8px;
 }
 .att-edit-btn-cancel {
@@ -198,6 +208,32 @@ $show_charts = $total > 0;
 }
 .att-edit-btn-save:hover:not(:disabled) { background: #3730a3; }
 .att-edit-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Active-event banner: surfaced when an event is happening at this scope on
+   the rendered date — nudges the user toward Event-attendance instead. */
+.att-event-nudge {
+	display: flex; gap: 10px; align-items: flex-start;
+	padding: 10px 12px; margin-bottom: 12px;
+	background: var(--ork-alert-info-bg, #ebf8ff);
+	border: 1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left: 3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius: 6px;
+	color: var(--ork-alert-info-text, #2a4365);
+	font-size: 0.82rem; line-height: 1.45;
+}
+.att-event-nudge-icon { font-size: 16px; color: var(--ork-alert-info-text, #2b6cb0); flex-shrink: 0; margin-top: 1px; }
+.att-event-nudge-body { flex: 1; min-width: 0; }
+.att-event-nudge-text { margin: 0 0 8px 0; }
+.att-event-nudge-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 6px 12px; border-radius: 6px;
+	background: var(--ork-link, #2b6cb0); color: #fff;
+	font-size: 0.78rem; font-weight: 600; text-decoration: none;
+	transition: background 0.15s;
+}
+.att-event-nudge-btn:hover { background: var(--ork-link-bright, #3182ce); color: #fff; text-decoration: none; }
+.att-event-nudge-btn i { font-size: 0.7rem; }
+
 /* =====================================================
    DARK MODE — Attendance form + edit modal (.att-*)
    ===================================================== */
@@ -294,7 +330,16 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
 				</div>
 				<div class="att-form-card-body">
 <?php if ($Error) : ?>
-					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
+					<div class="att-error"><?=$Error?></div>
+<?php endif; ?>
+<?php if (!empty($ActiveEvent)) : ?>
+					<div class="att-event-nudge">
+						<div class="att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+						<div class="att-event-nudge-body">
+							<p class="att-event-nudge-text">It looks like <strong><?=htmlspecialchars($ActiveEvent['Name'])?></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+							<a class="att-event-nudge-btn" href="<?=UIR?>Event/detail/<?=(int)$ActiveEvent['EventId']?>/<?=(int)$ActiveEvent['EventCalendarDetailId']?>">Go To Event <i class="fas fa-arrow-right"></i></a>
+						</div>
+					</div>
 <?php endif; ?>
 					<form method="post" action="<?=UIR?>Attendance/kingdom/<?=$Id?>/new">
 						<div class="att-form-group">
@@ -444,6 +489,7 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -534,7 +580,7 @@ $(function() {
 		scrollX: true
 	});
 	$('#att-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('#att-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 	/* ── Charts ──────────────────────────────────────── */
 	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';

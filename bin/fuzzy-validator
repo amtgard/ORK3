@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Repo-root entry point for the fuzzy-validator tool.
+# See docs/megiddo/fuzzy-validator/10-cli-reference.md
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TOOL_BIN="$ROOT/tools/fuzzy-validator/bin/fuzzy-validator"
+
+if [[ ! -x "$TOOL_BIN" ]]; then
+  echo "fuzzy-validator: tool not installed at $TOOL_BIN" >&2
+  echo "Run FU-0 scaffold or see docs/megiddo/fuzzy-validator/README.md" >&2
+  exit 2
+fi
+
+exec "$TOOL_BIN" "$@"

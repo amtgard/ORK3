@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "name": "Spring War",
+      "occurrences_per_window": 3,
+      "spacing_months": 12,
+      "offset_from_anchor_days": -45
+    },
+    {
+      "name": "Gathering of Kingdoms",
+      "occurrences_per_window": 3,
+      "spacing_months": 12,
+      "offset_from_anchor_days": -120
+    },
+    {
+      "name": "Olympiad",
+      "occurrences_per_window": 2,
+      "spacing_months": 18,
+      "offset_from_anchor_days": -200
+    }
+  ]
+}

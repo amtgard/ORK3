@@ -201,7 +201,7 @@ html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
 				<tbody>
 <?php if (is_array($Awards)) : ?>
 <?php 	foreach ($Awards as $award) : ?>
-				<tr>
+				<tr<?=!empty($award['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : ''?>>
 <?php 		if (($report_type ?? null) !== 'Kingdom') : ?>
 					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>
@@ -232,6 +232,7 @@ html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -287,6 +288,6 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "pageId": "authorization-add-auth",
+  "imageWidth": 1280,
+  "imageHeight": 776,
+  "calibratedAt": "2026-08-01T20:19:37Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 52,
+      "y": 158,
+      "width": 227,
+      "height": 78,
+      "source": "refuzz"
+    },
+    {
+      "x": 674,
+      "y": 183,
+      "width": 53,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 674,
+      "y": 233,
+      "width": 53,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 52,
+      "y": 258,
+      "width": 227,
+      "height": 76,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:53:34Z",
+  "refuzzedFromCommit": "05389516"
+}

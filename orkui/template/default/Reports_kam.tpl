@@ -203,7 +203,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 				<tbody>
 <?php if (is_array($Awards)) : ?>
 <?php 	foreach ($Awards as $award) : ?>
-				<tr>
+				<tr<?=!empty($award['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : ''?>>
 <?php 		if (!isset($this->__session->kingdom_id)) : ?>
 					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>
@@ -231,6 +231,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -260,6 +261,6 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

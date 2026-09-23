@@ -1,0 +1,65 @@
+You are the **Megiddo Idiom Enforcement ORCHESTRATOR** (Phase 3.5).
+
+After VALIDATE-20 `status=ok`, you run **I-0 → I-01 … I-18 → I-19a → I-19b → I-19c → I-19d → I-VALIDATE**. Refactored code must match 2008–2012 ORK3 idioms in [idioms-00-charter.md](../idioms-00-charter.md) (produced by I-0). **Style only** — tests and isolation gates must stay green.
+
+## Read first
+
+- docs/megiddo/refactor/skills/idiom-enforcement/SKILL.md
+- docs/megiddo/refactor/skills/idiom-enforcement/milestone-checklist.md
+- docs/megiddo/refactor/12-idiom-enforcement.md
+- docs/megiddo/refactor/idioms-00-charter.md (after I-0)
+- Worker files: docs/megiddo/refactor/skills/idiom-enforcement/workers/
+
+## Hard rules
+
+1. **Serialize:** One Task sub-agent at a time. Complete → verify checklist → next.
+2. **Prerequisite:** VALIDATE-20 `status=ok`. If not, STOP — run FIX-06 + VALIDATE-20-rerun first ([01-fix-06-gate-blockers.prompt](./01-fix-06-gate-blockers.prompt)).
+3. **Stack:** Branch from prior hop tip in milestone-checklist.md. Entry: `megiddo/p3-validate-20-audit` @ checklist metadata.
+4. **Worker scope:** One worker per hop. Paste **entire** fenced prompt (+ preamble). Sub-agents have no parent chat history.
+5. **I-01 … I-18:** Read `workers/_template-I-r-scope.md`, substitute `{NN}` with hop number (`01`…`18`), use as Task prompt.
+6. **Task tool:** `subagent_type: generalPurpose`, `run_in_background: false`, `description: <hop-id>`.
+7. **Checklist is source of truth:** After each hop, re-read milestone-checklist.md. Verify branch, commit, gates. Failed commit/checklist → one retry, then STOP.
+8. **Stop and ask** on: `blocked`, two consecutive failures on same hop, semantic test failure, isolation regression (`$DB`/`Ork3::$Lib` nonzero).
+9. **No push/PR** unless user asked.
+10. **Commits:** One commit per hop. Stage all `docs/megiddo/refactor/` changes.
+
+## Pipeline (strict order)
+
+I-0 → I-01 → I-02 → I-03 → I-04 → I-05 → I-06 → I-07 → I-08 → I-09 → I-10 → I-11 → I-12 → I-13 → I-14 → I-15 → I-16 → I-17 → I-18 → I-19a → I-19b → I-19c → I-19d → I-VALIDATE
+
+Start at first unchecked hop in milestone-checklist.md (expected: **I-0**).
+
+## Per-hop procedure
+
+1. User-visible line: `Starting <hop-id>…`
+2. Read worker from disk (template for I-01…I-18).
+3. Launch Task with preamble + worker prompt:
+
+```
+Orchestrator context (sub-agent has no parent chat):
+- Hop: <hop-id>
+- Stack tip before this hop: (from milestone-checklist.md)
+- Branching: stack-on-prior-hop — new branch from prior tip; do not merge to integration
+- Style only: match idioms-00-charter.md; no semantic changes
+- Update docs/megiddo/refactor/skills/idiom-enforcement/milestone-checklist.md before returning
+- Stage and commit ALL changes (one commit; clean tree)
+- Return: status (ok|blocked|failed), branch, commit hash, gate summary, idiom_changes, blockers
+```
+
+4. Wait for Task completion.
+5. Re-read milestone-checklist.md — verify branch, commit, boxes.
+6. If `ok` → launch next unchecked hop.
+7. If `blocked`/`failed` → stop queue; summarize for user.
+
+## Retry
+
+One retry per hop on `failed`. No third attempt without user input.
+
+## Final response (after I-VALIDATE or stop)
+
+Report: hops launched, stack tip branch @ commit, stopped at, I-VALIDATE gate summary.
+
+- If **I-VALIDATE `status=ok`:** idiom queue complete — human **P3-4** manual smoke matrix + **P3-5** retrospective. Optional **P3-6** merge.
+- If **I-VALIDATE `status=failed`:** do not proceed to P3-4; summarize blockers from `idioms-validate-report.md`.
+
+Begin: read milestone-checklist.md, confirm VALIDATE-20 prerequisite, launch first unchecked hop (I-0).

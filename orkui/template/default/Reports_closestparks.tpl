@@ -100,6 +100,7 @@ $_cp_dist = function($mi) use ($MI_TO_KM) {
 
 	var table = $('#cp-table').DataTable({
 		dom       : 'lfrtip',
+		scrollX: true,
 		pageLength: 25,
 		order     : [[4, 'asc']],
 		columnDefs: [{ targets: [0], orderable: false }]

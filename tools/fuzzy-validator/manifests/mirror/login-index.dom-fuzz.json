@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "pageId": "login-index",
+  "calibratedAt": "2026-08-01T20:41:36Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": []
+}

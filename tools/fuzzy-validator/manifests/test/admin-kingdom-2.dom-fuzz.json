@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-kingdom-2",
+  "calibratedAt": "2026-08-01T20:04:04Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]",
+      "mode": "subtree",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:42:51Z",
+  "refuzzedFromCommit": "05389516"
+}

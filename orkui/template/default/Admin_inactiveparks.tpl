@@ -8,8 +8,8 @@ $_has_data = is_array($Parks) && count($Parks) > 0;
 .rp-param-form { display: flex; flex-direction: column; gap: 10px; }
 .rp-form-group { display: flex; flex-direction: column; gap: 3px; }
 .rp-form-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rp-text-muted); }
-.rp-form-input { width: 100%; border: 1px solid var(--rp-border); border-radius: 5px; padding: 6px 8px; font-size: 13px; color: var(--rp-text); background: var(--rp-card-bg); box-sizing: border-box; }
-.rp-form-input:focus { outline: none; border-color: #6366f1; }
+.rp-form-input { width: 100%; border: 1px solid var(--ork-input-border); border-radius: 5px; padding: 6px 8px; font-size: 13px; color: var(--rp-text); background: var(--ork-input-bg); box-sizing: border-box; }
+.rp-form-input:focus { outline: none; background: var(--ork-card-bg); border-color: #6366f1; }
 .rp-btn-run { width: 100%; padding: 8px 0; background: #4338ca; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
 .rp-btn-run:hover { background: #3730a3; }
 details > summary { list-style: none; }
@@ -142,6 +142,7 @@ $(function () {
 	}
 	$('#ip-table').DataTable({
 		dom: 'lfrtip',
+		scrollX: true,
 		pageLength: 50,
 		order: [[0, 'asc'], [1, 'asc']],
 		columnDefs: [

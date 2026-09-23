@@ -221,6 +221,7 @@ details > summary::-webkit-details-marker { display: none; }
 	};
 	var table = $('#npa-table').DataTable({
 		dom        : 't',
+		scrollX: true,
 		paging     : false,
 		order      : [[1, 'desc']],
 		columnDefs : [

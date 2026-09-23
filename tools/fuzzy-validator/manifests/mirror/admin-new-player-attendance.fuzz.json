@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-new-player-attendance",
+  "imageWidth": 1280,
+  "imageHeight": 949,
+  "calibratedAt": "2026-08-01T20:07:04Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 116,
+      "y": 260,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 116,
+      "y": 317,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:51:57Z",
+  "refuzzedFromCommit": "05389516"
+}

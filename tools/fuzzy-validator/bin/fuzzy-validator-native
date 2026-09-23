@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Fuzzy Validator — native (host or in-container) CLI dispatcher.
+# Always runs Python locally; no docker ensure. Used by the default wrapper
+# via `docker exec`, and by FUZZY_VALIDATOR_NATIVE=1 / --host.
+set -euo pipefail
+
+TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHON_DIR="$TOOL_ROOT/python"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  fuzzy-validator-native record  [URL ...] [--urls FILE] [options]
+  fuzzy-validator-native validate [URL ...] [--urls FILE] [options]
+  fuzzy-validator-native overlay validate|summarize PATH...
+  fuzzy-validator-native setpoint capture|publish|restore [options]
+
+Commands:
+  record    Capture stabilized renders (×N), learn fuzz zones, write baselines
+  validate  Capture once, compare to baselines, pass/fail + HTML report
+  overlay   Schema-check or summarize drift overlays (v2)
+  refuzz    Merge baseline→candidate drift into fuzz manifests; re-baseline
+  setpoint  Bundle baselines for external storage (capture / publish / restore)
+
+Global options:
+  -h, --help    Show help
+
+Run from repo root:
+  bin/fuzzy-validator record --help
+  bin/fuzzy-validator validate --help
+
+Documentation:
+  docs/megiddo/fuzzy-validator/10-cli-reference.md
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  record|validate|refuzz|setpoint|overlay)
+    export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
+    # Prefer image venv when present (container path).
+    if [[ -x /opt/fv-venv/bin/python ]]; then
+      exec /opt/fv-venv/bin/python -m fuzzy_validator.cli "$cmd" "$@"
+    fi
+    exec python3 -m fuzzy_validator.cli "$cmd" "$@"
+    ;;
+  -h|--help|help|'')
+    usage
+    exit 0
+    ;;
+  *)
+    echo "fuzzy-validator: unknown command '$cmd'" >&2
+    usage
+    exit 2
+    ;;
+esac

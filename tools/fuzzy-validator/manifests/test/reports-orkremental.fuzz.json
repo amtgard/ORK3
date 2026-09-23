@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-orkremental",
+  "imageWidth": 1280,
+  "imageHeight": 917,
+  "calibratedAt": "2026-08-01T21:28:35Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 1119,
+      "y": 322,
+      "width": 36,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 75,
+      "y": 325,
+      "width": 21,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 161,
+      "y": 382,
+      "width": 34,
+      "height": 43,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:49:29Z",
+  "refuzzedFromCommit": "05389516"
+}

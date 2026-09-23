@@ -1,0 +1,19 @@
+You are executing **Megiddo FIX-09** only — fix VALIDATE-20-rerun (3rd) V20-C and V20-D blockers.
+
+Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/FIX-09-event-index-attendance.md, docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md, docs/megiddo/refactor/validations/v-05-event-validation.md
+
+| Field | Value |
+|-------|-------|
+| Branch | `megiddo/p3-fix-09-event-index-attendance` |
+| Stack base | `megiddo/p3-fix-08-heraldry-dom-volatile` @ checklist |
+| Root cause | V20-C: mirror `event-index` DOM href churn (V-00 only per v-05). V20-D: `attendance.spec.ts` login `networkidle` flake on mirror long-polling |
+
+## Tasks
+
+1. Canonical preflight: `deploy-sandbox --yes` → `setpoint restore` → `validate --all`.
+2. **V20-C** — mark `event-index` `skip: true` in `pages.json5` (mirror volatile event list; R-05 coverage via `event-index-rsvp*`).
+3. **V20-D** — replace `networkidle` in `attendance.spec.ts` login `beforeEach` with `waitForURL` (leave login page).
+4. Repro gate: `validate --all` exit 0 (41/41), Playwright mirror 50/50 + sandbox heraldry 3/3.
+
+Commit: `FIX-09: Stabilize V20-C/V20-D gates (event-index skip + attendance login wait).`  
+Update milestone checklist; rebase `megiddo/p3-validate-20-audit` onto FIX-09 tip; return report.

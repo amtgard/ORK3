@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "pageId": "event-detail-3",
+  "calibratedAt": "2026-08-01T20:23:24Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[4]/div[1]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[4]/div[2]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[4]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:54:37Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -1,0 +1,45 @@
+{
+  "runId": "pixel-outzone",
+  "phase": "visual",
+  "exitCode": 1,
+  "pass": false,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "player-profile",
+      "pass": false,
+      "scores": {
+        "visual": 0.97955
+      },
+      "pageScore": 0.97955,
+      "reportPath": "pages/player-profile.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:43:26Z",
+  "pagesDetailed": [
+    {
+      "pageId": "player-profile",
+      "passed": false,
+      "layers": [
+        {
+          "layer": "visual",
+          "passed": false,
+          "score": 0.97955,
+          "exitCode": 1,
+          "details": {
+            "passed": false,
+            "outsideDiffPx": 25600,
+            "comparablePx": 1251856,
+            "visualScore": 0.97955,
+            "failureBoxCount": 1
+          }
+        }
+      ]
+    }
+  ]
+}

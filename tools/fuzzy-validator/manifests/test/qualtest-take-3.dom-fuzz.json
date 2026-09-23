@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "pageId": "qualtest-take-3",
+  "calibratedAt": "2026-08-01T20:58:13Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": []
+}

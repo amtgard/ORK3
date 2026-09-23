@@ -1,4 +1,23 @@
 <script type='text/javascript'>
+	// Deleting an occurrence used to be a bare GET link with no confirmation of
+	// any kind, nested inside a <tr onClick=...>. One stray click -- or any
+	// prefetcher, link-scanner or crawler following the href -- permanently
+	// destroyed the occurrence. It is a POST now, and requires a second,
+	// deliberate click. Two-step inline rather than a native confirm(), which
+	// this project does not use.
+	function ArmDeleteOccurrence(btn) {
+		var form = btn.form;
+		var go   = form.querySelector('.occ-del-go');
+		btn.style.display = 'none';
+		go.style.display  = '';
+		// Re-arm after a few seconds so a forgotten confirm button is not left
+		// sitting live in the table.
+		setTimeout(function () {
+			go.style.display  = 'none';
+			btn.style.display = '';
+		}, 5000);
+	}
+
 	function EditEvent(id) {
 		$('#CancelButton').show();
 		$.getJSON(
@@ -354,7 +373,13 @@
 				<td><?php if ($detail['Current'] == 1) : ?>Yes<?php else : ?>No<?php endif ?></td>
 				<td><a href='<?=UIR ?>Tournament/index&EventCalendarDetailId=<?=$detail['EventCalendarDetailId'] ?>'>Tournaments</a></td>
 				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/delete&DetailId=<?=$detail['EventCalendarDetailId'] ?>'>&times;</a></td>
+				<td class='deletion' onclick='event.stopPropagation()'>
+					<form method='post' action='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/delete' style='margin:0'>
+						<input type='hidden' name='DetailId' value='<?=$detail['EventCalendarDetailId'] ?>' />
+						<button type='button' class='occ-del-arm' onclick='ArmDeleteOccurrence(this)' title='Delete this occurrence'>&times;</button>
+						<button type='submit' class='occ-del-go' style='display:none' title='Permanently delete this occurrence'>Confirm delete</button>
+					</form>
+				</td>
 			</tr>
 			<tr class='table-data-break'>
 				<td colspan=9><?=nl2br($detail['Description']) ?></td>

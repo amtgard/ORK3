@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-voting-eligible-3",
+  "calibratedAt": "2026-08-01T22:01:40Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:50:34Z",
+  "refuzzedFromCommit": "05389516"
+}

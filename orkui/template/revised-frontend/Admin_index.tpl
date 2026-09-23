@@ -291,6 +291,8 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
+				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
 			</ul>
 		</div>
 
@@ -320,37 +322,37 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 }
 .cp-overlay.cp-open { display: flex; }
 .cp-modal-box {
-	background: #fff; border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
-	max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+	background: var(--ork-card-bg); border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
+	max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: visible;
 }
 .cp-modal-header {
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-divider);
 	display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
 .cp-modal-title {
 	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
 	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
 }
-.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ork-text-hint); line-height: 1; padding: 2px 6px; }
 .cp-modal-close:hover { color: #2d3748; }
 .cp-modal-body { padding: 20px; overflow: visible; flex: 1; }
-.cp-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
+.cp-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ork-divider); display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: var(--ork-bg-secondary); border-radius: 0 0 10px 10px; }
 /* Field rows */
 .cp-field { margin-bottom: 14px; }
-.cp-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.cp-field label { display: block; font-size: 12px; font-weight: 600; color: var(--ork-text-body); margin-bottom: 5px; }
 .cp-field input[type=text], .cp-field input[type=email], .cp-field input[type=password], .cp-field input[type=date], .cp-field select, .cp-field textarea {
-	width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
-	font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
+	width: 100%; padding: 7px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px;
+	font-size: 13px; color: #2d3748; background: var(--ork-input-bg); box-sizing: border-box;
 }
 .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus {
-	outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
+	outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); background: var(--ork-card-bg);
 }
 .cp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cp-field-ac { position: relative; }
 .cp-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: 9999; }
 .cp-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.cp-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.cp-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid var(--ork-input-border); border-radius:6px; background:var(--ork-input-bg); color:#4a5568; }
 html[data-theme="dark"] .cp-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 /* Feedback */
 .cp-feedback { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-bottom: 14px; display: none; }
@@ -458,7 +460,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 <div class="cp-overlay" id="cp-moveplayer-overlay">
 	<div class="cp-modal-box">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-moveplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
@@ -493,7 +495,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 <div class="cp-overlay" id="cp-mergeplayer-overlay">
 	<div class="cp-modal-box" style="width:560px">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-mergeplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
@@ -518,7 +520,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		</div>
 		<div class="cp-modal-footer">
 			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-mergeplayer-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -574,8 +576,8 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 					<div>The abbreviation <strong id="cp-tp-abbr-conflict-abbr"></strong> is already used by <strong id="cp-tp-abbr-conflict-name"></strong> in the destination kingdom. Enter a new abbreviation for this park.</div>
 				</div>
 				<div id="cp-tp-abbr-field" style="display:none;margin-top:12px">
-					<label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">New Abbreviation <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="cp-tp-new-abbr" maxlength="3" autocomplete="off" style="width:80px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px;text-transform:uppercase" placeholder="e.g. ABC">
+					<label style="display:block;font-size:12px;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">New Abbreviation <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-tp-new-abbr" maxlength="3" autocomplete="off" style="width:80px;padding:6px 8px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:4px;font-size:13px;text-transform:uppercase" placeholder="e.g. ABC">
 				</div>
 				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
 			</div>

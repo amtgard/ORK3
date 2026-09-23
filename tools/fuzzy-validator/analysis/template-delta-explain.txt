@@ -1,0 +1,31 @@
+Template count delta: all discovery vs --ui-only
+========================================================================
+
+  All discovered templates : 495
+  --ui-only templates      : 307
+  Delta (all − ui-only)    : 188
+
+Delta is exactly the Ajax filter (`is_ajax_template`): controllers
+whose name ends with Ajax, plus WnAjax / EventRsvpAjax.
+API/Health/EraPhoenice/QR remain inside --ui-only and are excluded
+later by the include-list policy (see REGISTRY-EXPANSION.md).
+
+Non-ui-only templates by category
+---------------------------------
+  ajax                  188
+
+Examples (up to 8 per category)
+-------------------------------
+  [ajax]
+    AdminAjax/global
+    AdminAjax/global/{id}
+    AdminAjax/index
+    AdminAjax/stateofamtgard
+    AdminAjax/stateofamtgard/{id}
+    AttendanceAjax/attendance
+    AttendanceAjax/attendance/{id}
+    AttendanceAjax/index
+    … +180 more
+
+Wrote non-ui template list: tools/fuzzy-validator/analysis/non-ui-templates.txt
+

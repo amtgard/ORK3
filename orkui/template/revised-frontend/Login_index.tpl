@@ -24,7 +24,7 @@
 /* Left panel — form */
 .lg-form-panel {
 	flex: 0 0 380px;
-	background: #fff;
+	background: var(--ork-card-bg);
 	padding: 44px 40px 36px;
 	display: flex;
 	flex-direction: column;
@@ -37,7 +37,7 @@
 }
 .lg-logo-sword {
 	font-size: 28px;
-	color: #2c5282;
+	color: var(--ork-blue-primary);
 }
 .lg-logo-text {
 	font-size: 20px;
@@ -46,7 +46,7 @@
 	letter-spacing: 0.3px;
 }
 .lg-logo-text span {
-	color: #2c5282;
+	color: var(--ork-blue-primary);
 }
 .lg-heading {
 	font-size: 22px;
@@ -61,7 +61,7 @@
 }
 .lg-subheading {
 	font-size: 13px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	margin: 0 0 24px 0;
 }
 .lg-field {
@@ -71,7 +71,7 @@
 	display: block;
 	font-size: 12px;
 	font-weight: 600;
-	color: #4a5568;
+	color: var(--ork-text-body);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 	margin-bottom: 6px;
@@ -79,11 +79,11 @@
 .lg-input {
 	width: 100%;
 	padding: 10px 12px;
-	border: 1px solid #cbd5e0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 14px;
 	color: #2d3748;
-	background: #f7fafc;
+	background: var(--ork-input-bg);
 	transition: border-color 0.15s, box-shadow 0.15s;
 	box-sizing: border-box;
 }
@@ -91,12 +91,12 @@
 	outline: none;
 	border-color: #4299e1;
 	box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
-	background: #fff;
+	background: var(--ork-card-bg);
 }
 .lg-btn-primary {
 	width: 100%;
 	padding: 11px;
-	background: #2c5282;
+	background: var(--ork-blue-primary);
 	color: #fff;
 	border: none;
 	border-radius: 6px;
@@ -117,7 +117,7 @@
 	align-items: center;
 	gap: 10px;
 	margin: 18px 0;
-	color: #a0aec0;
+	color: var(--ork-text-hint);
 	font-size: 12px;
 }
 .lg-divider::before,
@@ -125,7 +125,7 @@
 	content: '';
 	flex: 1;
 	height: 1px;
-	background: #e2e8f0;
+	background: var(--ork-divider);
 }
 .lg-btn-oauth {
 	width: 100%;
@@ -144,8 +144,8 @@
 	transition: background 0.15s, border-color 0.15s;
 }
 .lg-btn-oauth:hover {
-	background: #f7fafc;
-	border-color: #a0aec0;
+	background: var(--ork-surface-light);
+	border-color: var(--ork-text-hint);
 }
 .lg-btn-oauth img {
 	height: 22px;
@@ -154,13 +154,13 @@
 .lg-links {
 	margin-top: 16px;
 	font-size: 13px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
 .lg-links a {
-	color: #3182ce;
+	color: var(--ork-blue-link);
 	text-decoration: none;
 }
 .lg-links a:hover {
@@ -386,7 +386,7 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 		<h2 class="lg-heading">Welcome back</h2>
 		<p class="lg-subheading">Sign in to access your records and community</p>
 
-		<form action="<?= UIR ?>Login/login" method="POST">
+		<form action="<?= UIR ?>Login/login" method="POST" id="lg-form">
 			<div class="lg-field">
 				<label class="lg-label" for="lg-username">Username</label>
 				<input class="lg-input" type="text" id="lg-username" name="username" autocomplete="username" autofocus />
@@ -395,10 +395,27 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 				<label class="lg-label" for="lg-password">Password</label>
 				<input class="lg-input" type="password" id="lg-password" name="password" autocomplete="current-password" value="<?= htmlspecialchars($_GET['pw'] ?? '') ?>" />
 			</div>
-			<button type="submit" class="lg-btn-primary">
+			<button type="submit" class="lg-btn-primary" id="lg-submit-btn">
 				<i class="fas fa-sign-in-alt" style="margin-right:7px"></i> Sign In
 			</button>
 		</form>
+		<script>
+		// Plain full-page POST (no fetch/JS elsewhere on this page) — a
+		// double-tap or a slow-network second tap fires two independent
+		// logins, each minting its own ork_session row. Disabling the button
+		// on submit doesn't cancel the in-flight submission; it just makes a
+		// second click/Enter a no-op until the page navigates away. A failed
+		// login re-renders this page fresh, so there's nothing to reset.
+		(function() {
+			var form = document.getElementById('lg-form');
+			var btn  = document.getElementById('lg-submit-btn');
+			form.addEventListener('submit', function() {
+				if (btn.disabled) return;
+				btn.disabled = true;
+				btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:7px"></i> Signing In…';
+			});
+		})();
+		</script>
 
 		<div class="lg-divider">or</div>
 

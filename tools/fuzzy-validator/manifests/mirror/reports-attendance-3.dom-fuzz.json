@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-attendance-3",
+  "calibratedAt": "2026-08-02T00:10:57Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:56:32Z",
+  "refuzzedFromCommit": "05389516"
+}

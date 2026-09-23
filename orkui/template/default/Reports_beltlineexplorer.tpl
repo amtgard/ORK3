@@ -34,8 +34,8 @@ if ($kingdom_id && !empty($knights)) {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	background: #fff;
-	border: 1px solid #dde2ec;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	padding: 14px 18px;
 	margin-bottom: 20px;
@@ -50,14 +50,15 @@ if ($kingdom_id && !empty($knights)) {
 	flex: 1;
 	min-width: 200px;
 	padding: 7px 10px;
-	border: 1px solid #c5cde0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 14px;
-	background: #f8f9fc;
+	background: var(--ork-input-bg);
 	color: #3a3f5c;
 }
 .be-selector-bar select:focus {
 	outline: none;
+	background: var(--ork-card-bg);
 	border-color: #7c8cf8;
 	box-shadow: 0 0 0 3px rgba(124,140,248,0.15);
 }
@@ -84,7 +85,7 @@ if ($kingdom_id && !empty($knights)) {
 .be-empty-state {
 	text-align: center;
 	padding: 60px 20px;
-	color: #8a93b2;
+	color: var(--ork-text-on-ground);
 }
 .be-empty-state i {
 	font-size: 48px;
@@ -104,8 +105,8 @@ if ($kingdom_id && !empty($knights)) {
 
 /* ── Tree view ───────────────────────────────────────────── */
 .be-tree-wrap {
-	background: #fff;
-	border: 1px solid #dde2ec;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	padding: 20px 24px;
 	overflow-x: auto;
@@ -162,8 +163,8 @@ if ($kingdom_id && !empty($knights)) {
 	gap: 7px;
 	padding: 5px 10px;
 	border-radius: 6px;
-	background: #f8f9fc;
-	border: 1px solid #e4e8f0;
+	background: var(--ork-bg-inset);
+	border: 1px solid var(--ork-border);
 	margin: 2px 0;
 	transition: background 0.12s;
 }
@@ -220,8 +221,8 @@ if ($kingdom_id && !empty($knights)) {
 
 /* ── Table view ──────────────────────────────────────────── */
 .be-table-wrap {
-	background: #fff;
-	border: 1px solid #dde2ec;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	padding: 20px 24px;
 	overflow-x: auto;
@@ -558,6 +559,7 @@ if ($kingdom_id && !empty($knights)) {
 
 		dtTable = $('#be-table').DataTable({
 			dom: 'lfrtip',
+			scrollX: true,
 			pageLength: 50,
 			order: [[3, 'asc']],
 			destroy: true

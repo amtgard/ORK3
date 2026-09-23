@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-park-monthly-json-2",
+  "calibratedAt": "2026-08-01T20:33:14Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

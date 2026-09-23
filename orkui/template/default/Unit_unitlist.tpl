@@ -33,11 +33,11 @@ html[data-theme="dark"] .ul-badge-retired { background: #374151; color: #d1d5db;
 	max-width: 50%;
 }
 .ul-search-input {
-	flex: 1; padding: 8px 12px; border: 1.5px solid var(--rp-border); border-radius: 6px;
-	font-size: 14px; color: #2d3748; background: #fff; box-sizing: border-box; font-family: inherit;
+	flex: 1; padding: 8px 12px; border: 1.5px solid var(--ork-input-border); border-radius: 6px;
+	font-size: 14px; color: #2d3748; background: var(--ork-input-bg); box-sizing: border-box; font-family: inherit;
 	transition: border-color 0.15s;
 }
-.ul-search-input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.ul-search-input:focus { outline: none; background: var(--ork-card-bg); border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
 .ul-search-clear {
 	background: none; border: none; color: #a0aec0; cursor: pointer; font-size: 18px;
 	padding: 0 6px; line-height: 1; display: none;
@@ -82,14 +82,14 @@ html[data-theme="dark"] .ul-default-note i { color: var(--ork-link, #63b3ed); }
 }
 .uc-overlay.uc-open { opacity: 1; pointer-events: auto; }
 .uc-modal {
-	background: #fff; border-radius: 10px; width: 460px;
+	background: var(--ork-card-bg); border-radius: 10px; width: 460px;
 	max-width: calc(100vw - 32px); box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 	transform: translateY(12px); transition: transform 0.18s;
 }
 .uc-overlay.uc-open .uc-modal { transform: none; }
 .uc-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-divider);
 }
 .uc-modal-title {
 	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
@@ -114,11 +114,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 .uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .uc-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
 .uc-field input, .uc-field select {
-	width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
-	font-size: 14px; color: #2d3748; box-sizing: border-box; font-family: inherit;
+	width: 100%; padding: 8px 10px; border: 1px solid var(--ork-input-border); border-radius: 6px;
+	font-size: 14px; color: #2d3748; background: var(--ork-input-bg); box-sizing: border-box; font-family: inherit;
 }
-.uc-field input:focus, .uc-field select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
-.uc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e2e8f0; }
+.uc-field input:focus, .uc-field select:focus { outline: none; background: var(--ork-card-bg); border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.uc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--ork-divider); }
 .uc-btn { border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 7px 16px; }
 .uc-btn-secondary { background: #edf2f7; color: #4a5568; }
 .uc-btn-secondary:hover { background: #e2e8f0; }
@@ -226,7 +226,8 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			Loading units…
 		</div>
 
-		<table id="ul-table" class="dataTable" style="width:100%;display:none">
+		<div id="ul-table-wrap" style="display:none">
+		<table id="ul-table" class="dataTable" style="width:100%">
 			<thead>
 				<tr>
 					<th></th>
@@ -244,6 +245,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			</thead>
 			<tbody></tbody>
 		</table>
+		</div>
 
 	</div>
 
@@ -384,7 +386,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	function loadData(q) {
 		defaultMode = !q;
 		$('#ul-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
-		$('#ul-table').hide();
+		$('#ul-table-wrap').hide();
 		$('#ul-limit-warn').hide();
 		if (q) $('#ul-default-note').hide();
 
@@ -396,7 +398,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		$.getJSON(url, function (units) {
 			$('#ul-loading').hide();
 			if (!units || !units.length) {
-				$('#ul-table').hide();
+				$('#ul-table-wrap').hide();
 				$('#ul-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>No units found.').show();
 				updateStats([]);
 				return;
@@ -436,13 +438,14 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				table = $('#ul-table').DataTable({
 					data      : rows,
 					dom       : 'lfrtip',
+					scrollX: true,
 					pageLength: 25,
 					order     : [[1, 'asc']],
 					columnDefs: colDefs
 				});
 			}
 
-			$('#ul-table').show();
+			$('#ul-table-wrap').show();
 			table.order(defaultMode ? [[SIZE_COL, 'desc']] : [[1, 'asc']]);
 			table.column(TYPE_COL).search(activeTypeFilter ? '^' + activeTypeFilter + '$' : '', true, false).draw();
 

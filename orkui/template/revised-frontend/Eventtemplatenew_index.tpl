@@ -68,7 +68,7 @@
 			<img id="en-heraldry-img"
 				src="<?= $heraldryUrl ?: (HTTP_EVENT_HERALDRY . '00000.jpg') ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-				alt="<?= $eventName ?> heraldry"
+				alt="<?= $eventName ?> logo"
 				crossorigin="anonymous">
 		</div>
 
@@ -282,7 +282,7 @@
 						</tr>
 						<?php if (!empty(trim($cd['Description'] ?? ''))): ?>
 						<tr>
-							<td colspan="6" style="background:#fafafa;color:#4a5568;font-size:12px;padding:6px 10px;">
+							<td colspan="6" style="background:var(--ork-bg-inset);color:var(--ork-text-secondary);font-size:12px;padding:6px 10px;">
 								<?= nl2br(htmlspecialchars(strip_tags($cd['Description']))) ?>
 							</td>
 						</tr>

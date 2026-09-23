@@ -32,11 +32,11 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 	max-width: 50%;
 }
 .su-search-input {
-	flex: 1; padding: 8px 12px; border: 1.5px solid var(--rp-border); border-radius: 6px;
-	font-size: 14px; color: #2d3748; background: #fff; box-sizing: border-box; font-family: inherit;
+	flex: 1; padding: 8px 12px; border: 1.5px solid var(--ork-input-border); border-radius: 6px;
+	font-size: 14px; color: #2d3748; background: var(--ork-input-bg); box-sizing: border-box; font-family: inherit;
 	transition: border-color 0.15s;
 }
-.su-search-input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.su-search-input:focus { outline: none; background: var(--ork-card-bg); border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
 .su-search-clear {
 	background: none; border: none; color: #a0aec0; cursor: pointer; font-size: 18px;
 	padding: 0 6px; line-height: 1; display: none;
@@ -58,7 +58,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 .su-retired-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle; background: #feebc8; color: #9c4221; }
 .su-thumb-retired { opacity: 0.55; filter: grayscale(0.5); }
 #su-retired-table { width: 100%; border-collapse: collapse; }
-#su-retired-table th, #su-retired-table td { padding: 8px 10px; border-bottom: 1px solid var(--rp-border); font-size: 13px; text-align: left; vertical-align: middle; }
+#su-retired-table th, #su-retired-table td { padding: 8px 10px; border-bottom: 1px solid var(--rp-divider); font-size: 13px; text-align: left; vertical-align: middle; }
 #su-retired-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rp-text-muted, #718096); }
 #su-retired-table td:first-child, #su-retired-table th:first-child { width: 50px; padding-right: 4px; }
 html[data-theme="dark"] .su-retired-badge { background: rgba(192,86,33,0.25); color: #f6ad55; }
@@ -80,14 +80,14 @@ html[data-theme="dark"] .su-retired-badge { background: rgba(192,86,33,0.25); co
 }
 .uc-overlay.uc-open { opacity: 1; pointer-events: auto; }
 .uc-modal {
-	background: #fff; border-radius: 10px; width: 460px;
+	background: var(--ork-card-bg); border-radius: 10px; width: 460px;
 	max-width: calc(100vw - 32px); box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 	transform: translateY(12px); transition: transform 0.18s;
 }
 .uc-overlay.uc-open .uc-modal { transform: none; }
 .uc-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-divider);
 }
 .uc-modal-title {
 	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
@@ -112,11 +112,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 .uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .uc-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
 .uc-field input, .uc-field select {
-	width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
-	font-size: 14px; color: #2d3748; box-sizing: border-box; font-family: inherit;
+	width: 100%; padding: 8px 10px; border: 1px solid var(--ork-input-border); border-radius: 6px;
+	font-size: 14px; color: #2d3748; background: var(--ork-input-bg); box-sizing: border-box; font-family: inherit;
 }
-.uc-field input:focus, .uc-field select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
-.uc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e2e8f0; }
+.uc-field input:focus, .uc-field select:focus { outline: none; background: var(--ork-card-bg); border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.uc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--ork-divider); }
 .uc-btn { border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 7px 16px; }
 .uc-btn-secondary { background: #edf2f7; color: #4a5568; }
 .uc-btn-secondary:hover { background: #e2e8f0; }
@@ -204,7 +204,8 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			Type a name to search companies &amp; households.
 		</div>
 
-		<table id="su-table" class="dataTable" style="width:100%;display:none">
+		<div id="su-table-wrap" style="display:none">
+		<table id="su-table" class="dataTable" style="width:100%">
 			<thead>
 				<tr>
 					<th></th>
@@ -219,10 +220,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			</thead>
 			<tbody></tbody>
 		</table>
+		</div>
 
 		<!-- Retired (Inactive) Units — separate section -->
 		<div id="su-retired-section" style="display:none;margin-top:28px;">
-			<div class="su-retired-header"><i class="fas fa-box-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
+			<div class="su-retired-header"><i class="fas fa-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
 			<p class="su-retired-note">These companies &amp; households have been retired and are hidden from the main results. A member of monarchy can reactivate one from its profile.</p>
 			<table id="su-retired-table">
 				<thead><tr><th></th><th>Name</th><th>Total</th><th class="su-col-leaders">Leaders</th><th class="su-col-web" style="text-align:center">Web</th></tr></thead>
@@ -323,7 +325,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	function loadData(q) {
 		$('#su-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
-		$('#su-table').hide();
+		$('#su-table-wrap').hide();
 		$('#su-retired-section').hide();
 		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '') + AJAX_PARAMS;
 		$.getJSON(url, function (units) {
@@ -334,7 +336,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			var live    = units.filter(function (u) { return u.Active !== 'Retired'; });
 			renderRetired(retired);
 			if (!live.length) {
-				$('#su-table').hide();
+				$('#su-table-wrap').hide();
 				updateStats([]);
 				if (!retired.length) {
 					$('#su-loading').text('No units found.').show();
@@ -356,6 +358,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				table = $('#su-table').DataTable({
 					data      : rows,
 					dom       : 'lfrtip',
+					scrollX: true,
 					pageLength: 25,
 					order     : [[1, 'asc']],
 					columnDefs: [
@@ -366,7 +369,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 					]
 				});
 			}
-			$('#su-table').show();
+			$('#su-table-wrap').show();
 
 			if (activeTypeFilter) {
 				table.column(TYPE_COL).search('^' + activeTypeFilter + '$', true, false).draw();
@@ -407,7 +410,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	function clearSearch() {
 		if (table) { table.destroy(); table = null; }
-		$('#su-table').hide();
+		$('#su-table-wrap').hide();
 		$('#su-stats-row').hide();
 		$('#su-retired-section').hide();
 		$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();

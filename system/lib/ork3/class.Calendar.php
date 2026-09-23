@@ -48,7 +48,7 @@ class Calendar extends Ork3 {
 	public function _park_days($start_date, $period) {
 		$sql = "
 				select 
-						park.name, park.park_id, recurrence, week_of_month, week_day, month_day, purpose, description, time 
+						park.name, park.park_id, recurrence, week_of_month, week_day, month_day, start_date, week_interval, purpose, description, time 
 					from " . DB_PREFIX . "park park 
 						left join " . DB_PREFIX . "parkday parkday on parkday.park_id = park.park_id 
 					where 
@@ -67,9 +67,10 @@ class Calendar extends Ork3 {
 			$counter = 0;
 			while ($moredates) {
 				$counter++;
-				$date = Park::CalculateNextParkDay($parkdays->recurrence, $parkdays->week_of_month, $parkdays->month_day, $parkdays->week_day, $currdate);
+				$date = Park::CalculateNextParkDay($parkdays->recurrence, $parkdays->week_of_month, $parkdays->month_day, $parkdays->week_day, $currdate, $parkdays->start_date, $parkdays->week_interval);
 				switch($parkdays->recurrence) {
 					case 'weekly': $currdate = strtotime("+1 week", $currdate); break;
+					case 'every-x-weeks': $currdate = strtotime("+" . max(1, (int)$parkdays->week_interval) . " weeks", $currdate); break;
 					case 'monthly': 
 					case 'week-of-month': $currdate = strtotime("+1 month", $currdate); break;
 					default:

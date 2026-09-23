@@ -1,0 +1,49 @@
+{
+  "kingdoms": [
+    {
+      "id": 100001,
+      "type": "sovereign",
+      "moniker": "Empire of",
+      "name": "Ashkara",
+      "abbreviation": "EAK",
+      "parent_kingdom_id": 0,
+      "description": "Caliphal test sovereign — primary parent for Litavia."
+    },
+    {
+      "id": 100002,
+      "type": "sovereign",
+      "moniker": "Kingdom of",
+      "name": "Meridia",
+      "abbreviation": "KMR",
+      "parent_kingdom_id": 0,
+      "description": "Western feudal test sovereign."
+    },
+    {
+      "id": 100003,
+      "type": "sovereign",
+      "moniker": "Sultanate of",
+      "name": "Zanzibarr",
+      "abbreviation": "SZ",
+      "parent_kingdom_id": 0,
+      "description": "Swahili coast test sovereign."
+    },
+    {
+      "id": 100004,
+      "type": "sovereign",
+      "moniker": "Tsardom of",
+      "name": "Vyatka",
+      "abbreviation": "TVK",
+      "parent_kingdom_id": 0,
+      "description": "Rus-inspired test sovereign."
+    },
+    {
+      "id": 100005,
+      "type": "principality",
+      "moniker": "Grand Duchy of",
+      "name": "Litavia",
+      "abbreviation": "GDL",
+      "parent_kingdom_id": 100001,
+      "description": "Baltic-flavored principality under Empire of Ashkara."
+    }
+  ]
+}

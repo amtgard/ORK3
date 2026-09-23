@@ -1,0 +1,16 @@
+{
+  "personas": [
+    "Aldric Fairhand", "Briar Thorn", "Cedric Vale", "Dara Flint", "Eldon Marsh",
+    "Fenn Greycloak", "Garrick Holt", "Hilda Storm", "Ivor Pennant", "Jessa Wyrm",
+    "Kael Driftwood", "Lyra Sunmark", "Merrick Ash", "Nessa Coldwater", "Orin Pike",
+    "Petra Windlass", "Quinn Harrow", "Rowan Shield", "Sable Reed", "Torin Brand",
+    "Una Foxglove", "Vance Hollow", "Wren Copper", "Xander Moss", "Ysolde Crane",
+    "Zephyr Noll", "Arden Pike", "Bran Hollow", "Cora Flint", "Dorian Vale",
+    "Elara Moss", "Finn Greycloak", "Gwen Ash", "Hugo Storm", "Isla Reed",
+    "Jasper Wyrm", "Kira Sunmark", "Leif Driftwood", "Mira Coldwater", "Nolan Brand",
+    "Opal Crane", "Perrin Foxglove", "Quill Harrow", "Rhea Windlass", "Silas Pennant",
+    "Tamsin Holt", "Ulric Shield", "Vera Thorn", "Willem Fairhand", "Yara Marsh"
+  ],
+  "test_password_hash": "$2y$10$testdbplayerhashplaceholder00000000000000000000000",
+  "test_password_salt": "test-db-player-salt"
+}

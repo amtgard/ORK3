@@ -64,36 +64,11 @@
 	$hmEventList = is_array($EventSummary) ? $EventSummary : [];
 ?>
 
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
-
 <style type="text/css">
 /* ========================================
    Home / Landing Page
    All classes prefixed with hm- to avoid collisions
    ======================================== */
-
-/* ---- Welcome banner ---- */
-.hm-welcome-banner {
-	text-align: center;
-	padding: 14px 20px 6px;
-	margin-bottom: 10px;
-}
-.hm-welcome-title {
-	font-family: 'MedievalSharp', serif;
-	font-size: 36px;
-	color: var(--ork-text);
-	letter-spacing: 0.02em;
-	line-height: 1.2;
-	margin: 0;
-	text-shadow: 0 1px 2px rgba(0,0,0,0.08);
-	background: transparent;
-	border: none;
-	padding: 0;
-	border-radius: 0;
-}
-@media (max-width: 600px) {
-	.hm-welcome-title { font-size: 24px; }
-}
 
 /* ---- Downtime info box ---- */
 .hm-infobox {
@@ -125,6 +100,42 @@
 	margin-bottom: 14px;
 	overflow: hidden;
 }
+/* Logo cell — also serves as the page <h1>, so it resets the global heading
+   pill box (background/border/padding/radius) the same way other hero
+   headings on this page do. */
+.hm-logo-cell {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	padding: 8px 18px;
+	background: transparent;
+	border: none;
+	border-right: 1px solid var(--ork-divider);
+	border-radius: 0;
+	font-size: 0;
+	line-height: 0;
+}
+.hm-logo-cell img {
+	display: block;
+	height: 110px;
+	width: auto;
+	/* Full width needs ~252px of viewport. Below that the clamp kicks in and
+	   object-fit scales the artwork down rather than squashing it. */
+	max-width: 100%;
+	object-fit: contain;
+}
+/* Scoped to .hm-logo-cell so it outranks `.hm-logo-cell img` above. */
+.hm-logo-cell .hm-logo-dark { display: none; }
+/* Wrapper around the four widgets. Keeps the responsive nth-child rules
+   further down scoped to the stat items only — without it the logo cell
+   would shift every index by one and break the 2-column border grid. */
+.hm-stats-cells {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+}
 .hm-stat-item {
 	flex: 1;
 	display: flex;
@@ -133,7 +144,7 @@
 	justify-content: center;
 	padding: 11px 12px;
 	gap: 3px;
-	border-right: 1px solid var(--ork-border);
+	border-right: 1px solid var(--ork-divider);
 }
 .hm-stat-item:last-child { border-right: none; }
 .hm-stat-item-link { text-decoration: none; color: inherit; transition: background 0.15s; }
@@ -167,7 +178,7 @@
 	color: var(--ork-text);
 }
 .hm-section-title i { margin-right: 7px; color: var(--ork-text-secondary); }
-.hm-section-hint { font-size: 12px; color: var(--ork-text-muted); font-style: italic; }
+.hm-section-hint { font-size: 12px; color: var(--ork-text-on-ground); font-style: italic; }
 .hm-view-all {
 	font-size: 13px;
 	color: var(--ork-link);
@@ -456,9 +467,12 @@
 }
 @media (max-width: 600px) {
 	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
-	.hm-stats-bar { display: grid; grid-template-columns: 1fr 1fr; }
-	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-border); }
-	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-border); }
+	.hm-stats-bar { flex-direction: column; }
+	/* Logo keeps its full 110px height here — the stacked layout has the room. */
+	.hm-logo-cell { padding: 10px 16px; border-right: none; border-bottom: 1px solid var(--ork-divider); }
+	.hm-stats-cells { display: grid; grid-template-columns: 1fr 1fr; }
+	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-divider); }
+	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-divider); }
 	.hm-stat-item:last-child { border-bottom: none; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 	/* Last item spanning both columns when count is odd */
@@ -469,13 +483,11 @@
 /* ========================================
    DARK MODE — Home page (hm-*)
    ======================================== */
-html[data-theme="dark"] .hm-welcome-title {
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-  background: transparent;
-  border: none;
-  padding: 0;
-  border-radius: 0;
+html[data-theme="dark"] .hm-logo-cell .hm-logo-light {
+  display: none;
+}
+html[data-theme="dark"] .hm-logo-cell .hm-logo-dark {
+  display: block;
 }
 html[data-theme="dark"] .hm-stat-value {
   color: #fff;
@@ -519,45 +531,39 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 </style>
 
 <!-- =============================================
-     Welcome Banner
-     ============================================= -->
-<div class="hm-welcome-banner">
-	<h1 class="hm-welcome-title">Welcome to the Amtgard Online Record Keeper</h1>
-</div>
-
-<!-- =============================================
      Downtime Info Box
      ============================================= -->
 
 
 <!-- =============================================
-     Stats Bar
+     Masthead + Stats Bar
+     The logo cell is the page <h1>; its alt text carries the page name.
      ============================================= -->
 <div class="hm-stats-bar">
-	<div class="hm-stat-item">
-		<span class="hm-stat-value"><?= count($hmKingdoms) ?></span>
-		<span class="hm-stat-label">Kingdoms</span>
+	<h1 class="hm-logo-cell">
+		<img class="hm-logo-light" src="/assets/images/logo-ork-wide.svg" alt="Amtgard Online Record Keeper">
+		<img class="hm-logo-dark" src="/assets/images/logo-ork-wide-ondark.svg" alt="Amtgard Online Record Keeper">
+	</h1>
+	<div class="hm-stats-cells">
+		<div class="hm-stat-item">
+			<span class="hm-stat-value"><?= count($hmKingdoms) + count($hmPrinz) ?></span>
+			<span class="hm-stat-label">Kingdoms &amp; Principalities</span>
+		</div>
+		<div class="hm-stat-item">
+			<span class="hm-stat-value"><?= $hmTotalParks ?></span>
+			<span class="hm-stat-label">Parks</span>
+		</div>
+		<div class="hm-stat-item">
+			<span class="hm-stat-value">~<?= number_format($hmWeeklyAvg) ?></span>
+			<span class="hm-stat-label">Players / Week</span>
+		</div>
+		<?php if (is_array($week_recap ?? null)): ?>
+		<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
+			<span class="hm-stat-value">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.7em;opacity:0.7"></i></span>
+			<span class="hm-stat-label">Week of <?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></span>
+		</a>
+		<?php endif; ?>
 	</div>
-	<?php if (count($hmPrinz) > 0): ?>
-	<div class="hm-stat-item">
-		<span class="hm-stat-value"><?= count($hmPrinz) ?></span>
-		<span class="hm-stat-label">Principalities</span>
-	</div>
-	<?php endif; ?>
-	<div class="hm-stat-item">
-		<span class="hm-stat-value"><?= $hmTotalParks ?></span>
-		<span class="hm-stat-label">Parks</span>
-	</div>
-	<div class="hm-stat-item">
-		<span class="hm-stat-value">~<?= number_format($hmWeeklyAvg) ?></span>
-		<span class="hm-stat-label">Players / Week</span>
-	</div>
-	<?php if (!empty($LoggedIn) && is_array($week_recap ?? null)): ?>
-	<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
-		<span class="hm-stat-value">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.7em;opacity:0.7"></i></span>
-		<span class="hm-stat-label">Week of <?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></span>
-	</a>
-	<?php endif; ?>
 </div>
 
 <!-- =============================================

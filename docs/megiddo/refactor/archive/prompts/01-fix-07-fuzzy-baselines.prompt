@@ -1,0 +1,32 @@
+You are executing **Megiddo FIX-07** only — re-record fuzzy baselines blocking VALIDATE-20-rerun (no production refactors unless gate reveals a real layout regression).
+
+Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/FIX-07-fuzzy-baselines.md, docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md, docs/megiddo/refactor/phase3-audit-report.md (V20-C section), docs/megiddo/refactor/validations/v-00-fuzzy-setpoint.md, docs/megiddo/refactor/06-test-framework.md
+
+| Field | Value |
+|-------|-------|
+| Branch | `megiddo/p3-fix-07-fuzzy-baselines` |
+| Stack base | `megiddo/p3-fix-06-gate-blockers` @ `c330d69b` |
+| Prerequisite | FIX-06 complete; VALIDATE-20-rerun `status=failed` on V20-C |
+| Known blockers | mirror `reports-ladder-grid` dimension 15643→15588; test `player-profile` per audit — verify live first |
+
+## Tasks
+
+1. Preflight: `docker compose -f docker-compose.php8.yml up -d`, `bin/ork-db deploy-sandbox --yes`, `bin/fuzzy-validator setpoint restore`.
+2. **Human drift sign-off** — reviewer completes [validations/r-milestone-smoke-matrix.html § P3-4 fuzzy drift](../validations/r-milestone-smoke-matrix.html#p3-fuzzy-drift) callouts before re-recording. Stop if either callout is marked regression.
+3. Run `bin/fuzzy-validator validate --all --phase all` on clean FIX-06 tip; list actual failing pages/profiles before re-recording.
+4. Re-record each failing page via `bin/fuzzy-validator record --pages … --phase all --profiles …` (`--ensure-sandbox` for test).
+5. Full setpoint: `setpoint capture` → `setpoint publish` → copy zip to `setpoints/bootstrap/` → `setpoint restore`.
+6. Re-run `validate --all --phase all` exit 0; PHPUnit stays green.
+
+## Gates
+
+```bash
+rg 'Ork3::\$Lib' orkui/          # exit 1
+rg '\$DB->' orkui/               # exit 1
+sh bin/run-unit-tests.sh         # exit 0
+bin/fuzzy-validator setpoint restore
+bin/fuzzy-validator validate --all --phase all   # exit 0
+```
+
+Commit: `FIX-07: Re-record fuzzy baselines for VALIDATE-20 V20-C gate.`  
+Update `skills/phase3-gate-fix/milestone-checklist.md`; return report.

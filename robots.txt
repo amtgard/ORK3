@@ -7,3 +7,7 @@ Allow: /orkui/index.php?Route=Park/
 Allow: /orkui/index.php?Route=Kingdom/
 Allow: /orkui/index.php?Route=Player/profile/
 Allow: /orkui/index.php?Route=Event/detail/
+
+# Sitemap index (also aliased at /sitemap.xml once the nginx rewrite ships).
+# The Route URL is the canonical one submitted in Search Console.
+Sitemap: https://ork.amtgard.com/orkui/index.php?Route=Sitemap

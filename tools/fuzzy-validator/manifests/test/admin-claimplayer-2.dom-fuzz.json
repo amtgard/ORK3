@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-claimplayer-2",
+  "calibratedAt": "2026-08-01T19:57:25Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

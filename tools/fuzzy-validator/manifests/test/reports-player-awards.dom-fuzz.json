@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-player-awards",
+  "calibratedAt": "2026-08-01T23:54:20Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:49:38Z",
+  "refuzzedFromCommit": "05389516"
+}

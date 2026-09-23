@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "search-kingdom",
+  "calibratedAt": "2026-08-01T22:03:41Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "id": "walker-mobile-fixes",
+  "workstream": "feature/walker-mobile-fixes",
+  "createdAt": "2026-08-18T16:00:00Z",
+  "basedOnSetpoint": "pin-after-restore",
+  "entries": [
+    {
+      "id": "reports-css-mobile",
+      "class": "intentional",
+      "layer": "assets",
+      "profiles": ["test", "mirror"],
+      "pages": ["qualtest-take", "reports-corpora", "reports-reeve"],
+      "assets": {
+        "ids": ["css:http://ork3-php8-app/orkui/template/default/style/reports.css"]
+      },
+      "rationale": "Walker mobile support restyles reports.css (responsive tables, qual-test square checkboxes).",
+      "requirementRef": "https://github.com/amtgard/ORK3/pull/495",
+      "source": "manual"
+    },
+    {
+      "id": "corpora-inline-js",
+      "class": "intentional",
+      "layer": "assets",
+      "profiles": ["test", "mirror"],
+      "pages": ["reports-corpora"],
+      "assets": {
+        "ids": [
+          "inline:js:6f41ff4aebba3260c0d011db07b69aa730b1380e815a46da58e262ec413365b5",
+          "inline:js:4b3eb3c51b555c9c08aefed1874a4f77965670e3f8d63b490b79c75f69cb7496"
+        ]
+      },
+      "rationale": "Corpora report inline scripts updated for mobile table behavior.",
+      "requirementRef": "https://github.com/amtgard/ORK3/pull/495",
+      "source": "manual"
+    },
+    {
+      "id": "corpora-structure",
+      "class": "intentional",
+      "layer": "dom",
+      "profiles": ["test", "mirror"],
+      "pages": ["reports-corpora"],
+      "dom": { "pathPrefix": "/html[0]/body[0]/div[1]/div[1]", "match": "subtree" },
+      "rationale": "Corpora report container restructured for responsive layout.",
+      "requirementRef": "https://github.com/amtgard/ORK3/pull/495",
+      "source": "manual"
+    }
+  ]
+}

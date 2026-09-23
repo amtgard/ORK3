@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-profile",
+  "imageWidth": 1280,
+  "imageHeight": 1060,
+  "calibratedAt": "2026-08-01T19:40:42Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 758,
+      "y": 324,
+      "width": 49,
+      "height": 31,
+      "source": "refuzz"
+    },
+    {
+      "x": 775,
+      "y": 424,
+      "width": 18,
+      "height": 17,
+      "source": "refuzz"
+    },
+    {
+      "x": 375,
+      "y": 546,
+      "width": 124,
+      "height": 28,
+      "source": "refuzz"
+    },
+    {
+      "x": 542,
+      "y": 546,
+      "width": 135,
+      "height": 32,
+      "source": "refuzz"
+    },
+    {
+      "x": 725,
+      "y": 546,
+      "width": 114,
+      "height": 32,
+      "source": "refuzz"
+    },
+    {
+      "x": 894,
+      "y": 546,
+      "width": 122,
+      "height": 32,
+      "source": "refuzz"
+    },
+    {
+      "x": 1080,
+      "y": 546,
+      "width": 95,
+      "height": 28,
+      "source": "refuzz"
+    },
+    {
+      "x": 903,
+      "y": 666,
+      "width": 34,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 377,
+      "y": 757,
+      "width": 121,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 561,
+      "y": 757,
+      "width": 97,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 718,
+      "y": 757,
+      "width": 129,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 904,
+      "y": 757,
+      "width": 101,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 1063,
+      "y": 757,
+      "width": 129,
+      "height": 25,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:54:54Z",
+  "refuzzedFromCommit": "05389516"
+}

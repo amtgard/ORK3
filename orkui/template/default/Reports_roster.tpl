@@ -86,34 +86,8 @@ if ($variant === 'suspended' && is_array($roster) && count($roster) > 1) {
 }
 
 /* ── Remove-suspension auth ────────────────────────────────── */
-$_canRemoveAny = false;
-$_canRemoveMap = [];
-if ($variant === 'suspended' && $this->__session->user_id) {
-	$_uid        = $this->__session->user_id;
-	$_isOrkAdmin = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-if ($_isOrkAdmin) {
-		$_canRemoveAny = true;
-		// Mark every roster player as removable
-		if (is_array($roster)) {
-			foreach ($roster as $player) {
-				$_canRemoveMap[(int)$player['MundaneId']] = true;
-			}
-		}
-	} elseif (is_array($roster)) {
-		// Check if user has authority for the report's scope kingdom directly —
-		// covers cases where a player's KingdomId differs from the scoped kingdom
-		// (e.g. parent/child kingdom relationships or data inconsistencies).
-		$_scopeKingdomAuth = $_scopeType === 'kingdom' && valid_id($_scopeId)
-			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$_scopeId, AUTH_EDIT);
-		foreach ($roster as $player) {
-			$mid = (int)$player['MundaneId'];
-			$can = $_scopeKingdomAuth
-				|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
-			$_canRemoveMap[$mid] = $can;
-			if ($can) $_canRemoveAny = true;
-		}
-	}
-}
+$_canRemoveAny = !empty($RosterCanRemoveAny);
+$_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [];
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -280,7 +254,7 @@ if ($_isOrkAdmin) {
 <?php if ($_canRemoveAny) : ?>
 						<th class="rp-col-actions">Actions</th>
 <?php endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 						<th>Mundane</th>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -336,7 +310,7 @@ if ($_isOrkAdmin) {
 					</a>
 				<?php endif; ?></td>
 <?php 		endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -380,6 +354,7 @@ if ($_isOrkAdmin) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -428,7 +403,7 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 <?php if ($is_suspended) : ?>
 	// Propagates filter
@@ -438,7 +413,7 @@ $(function() {
 		<?php if (!isset($this->__session->park_id)) { echo 'idx++;'; } ?>
 		idx++; // Persona
 		<?php if ($_canRemoveAny) { echo 'idx++;'; } ?>
-		<?php if (!empty($canViewMundane)) { echo 'idx++;'; } ?>
+		<?php if (!empty($CanViewMundane)) { echo 'idx++;'; } ?>
 		idx++; // Last Sign-in
 		idx++; // Suspended At
 		idx++; // Suspended Until
@@ -456,11 +431,11 @@ $(function() {
 <?php if ($_canRemoveAny) : ?>
 <!-- Remove suspension overlay -->
 <div id="rm-susp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="rm-susp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:440px;width:90%;padding:28px 28px 22px;">
-		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:10px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Remove Suspension</div>
-		<div id="rm-susp-body" style="color:#4a5568;font-size:.97em;margin-bottom:20px">You are about to remove a suspension, this cannot be undone. Are you sure you want to proceed?</div>
+	<div id="rm-susp-box" style="background:var(--ork-card-bg);color:var(--ork-text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:440px;width:90%;padding:28px 28px 22px;">
+		<div style="font-size:1.08em;font-weight:600;color:var(--ork-text);margin-bottom:10px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Remove Suspension</div>
+		<div id="rm-susp-body" style="color:var(--ork-text-secondary);font-size:.97em;margin-bottom:20px">You are about to remove a suspension, this cannot be undone. Are you sure you want to proceed?</div>
 		<div style="display:flex;justify-content:flex-end;gap:10px">
-			<button id="rm-susp-cancel" style="padding:7px 18px;border:1px solid #cbd5e0;background:#fff;color:#4a5568;border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
+			<button id="rm-susp-cancel" style="padding:7px 18px;border:1px solid var(--ork-input-border);background:var(--ork-card-bg);color:var(--ork-text-secondary);border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
 			<button id="rm-susp-confirm" style="padding:7px 18px;background:#e53e3e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.95em;font-weight:600">Remove Suspension</button>
 		</div>
 	</div>
@@ -509,59 +484,59 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="es-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
-		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-pencil-alt" style="color:#4a5568;margin-right:7px"></i>Edit Suspension</div>
+	<div id="es-box" style="background:var(--ork-card-bg);color:var(--ork-text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
+		<div style="font-size:1.08em;font-weight:600;color:var(--ork-text);margin-bottom:18px"><i class="fas fa-pencil-alt" style="color:var(--ork-text-secondary);margin-right:7px"></i>Edit Suspension</div>
 
-		<div id="es-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
+		<div id="es-error" style="display:none;background:var(--ork-alert-danger-bg);border:1px solid var(--ork-alert-danger-border);color:var(--ork-alert-danger-text);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Player</label>
-			<div id="es-player-name" style="padding:7px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:.95em;color:#2d3748"></div>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Player</label>
+			<div id="es-player-name" style="padding:7px 10px;background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:6px;font-size:.95em;color:var(--ork-text)"></div>
 			<input type="hidden" id="es-player-id">
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended By</label>
 			<div style="position:relative">
 				<input type="text" id="es-by-text" autocomplete="off" placeholder="Leave blank to keep existing"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="es-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
+				<div id="es-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-top:none;box-shadow:var(--ork-shadow-dropdown);border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="es-by-id">
 		</div>
 
 		<div style="display:flex;gap:14px;margin-bottom:14px">
 			<div style="flex:1">
-				<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended From <span style="color:#e53e3e">*</span></label>
+				<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended From <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="es-from" autocomplete="off" placeholder="Select date"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
 			</div>
 			<div style="flex:1">
-				<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended Until</label>
+				<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended Until</label>
 				<input type="text" id="es-until" autocomplete="off" placeholder="Select date"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.88em;color:#4a5568;cursor:pointer">
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
+				<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.88em;color:var(--ork-text-secondary);cursor:pointer">
 					<input type="checkbox" id="es-indefinite"> Indefinite
 				</label>
 			</div>
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Comment</label>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Comment</label>
 			<textarea id="es-comment" maxlength="100" rows="3" placeholder="Reason for suspension (max 100 characters)"
-				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em;resize:vertical"></textarea>
+				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em;resize:vertical"></textarea>
 			<div id="es-char-count" style="text-align:right;font-size:.8em;color:#a0aec0;margin-top:2px">0 / 100</div>
 		</div>
 
 		<div style="margin-bottom:20px">
-			<label style="display:flex;align-items:center;gap:8px;font-size:.93em;color:#2d3748;cursor:pointer;user-select:none;">
+			<label style="display:flex;align-items:center;gap:8px;font-size:.93em;color:var(--ork-text);cursor:pointer;user-select:none;">
 				<input type="checkbox" id="es-propagates" style="width:16px;height:16px;accent-color:#c53030;cursor:pointer;">
 				Suspension propagates to all Kingdoms
 			</label>
 		</div>
 
 		<div style="display:flex;justify-content:flex-end;gap:10px">
-			<button id="es-cancel" style="padding:7px 18px;border:1px solid #cbd5e0;background:#fff;color:#4a5568;border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
+			<button id="es-cancel" style="padding:7px 18px;border:1px solid var(--ork-input-border);background:var(--ork-card-bg);color:var(--ork-text-secondary);border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
 			<button id="es-submit" style="padding:7px 18px;background:#4a5568;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.95em;font-weight:600"><i class="fas fa-save"></i> Save Changes</button>
 		</div>
 	</div>
@@ -597,7 +572,7 @@ $(function() {
 
 		function getItems() { return Array.from(resultsEl.querySelectorAll('[data-ac-item]')); }
 		function highlight(items, idx) {
-			items.forEach(function(el, i) { el.style.background = i === idx ? '#ebf4ff' : ''; });
+			items.forEach(function(el, i) { el.style.background = i === idx ? 'rgba(66,153,225,0.15)' : ''; });
 		}
 		function select(p) {
 			textEl.value   = p.Persona;
@@ -618,7 +593,7 @@ $(function() {
 						data.forEach(function(p) {
 							var div = document.createElement('div');
 							div.setAttribute('data-ac-item', '1');
-							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid var(--ork-divider)';
 							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
 							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
 							div.addEventListener('click', function() { select(p); });
@@ -749,70 +724,70 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="sp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
-		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Suspend Player</div>
+	<div id="sp-box" style="background:var(--ork-card-bg);color:var(--ork-text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
+		<div style="font-size:1.08em;font-weight:600;color:var(--ork-text);margin-bottom:18px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Suspend Player</div>
 
-		<div id="sp-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
+		<div id="sp-error" style="display:none;background:var(--ork-alert-danger-bg);border:1px solid var(--ork-alert-danger-border);color:var(--ork-alert-danger-text);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Park</label>
-			<select id="sp-park" style="width:100%;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em;background:#fff">
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Park</label>
+			<select id="sp-park" style="width:100%;padding:7px 10px;border:1px solid var(--ork-input-border);border-radius:6px;font-size:.95em;background:var(--ork-input-bg)">
 				<option value="">Loading parks…</option>
 			</select>
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Player <span style="color:#e53e3e">*</span></label>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Player <span style="color:#e53e3e">*</span></label>
 			<div style="position:relative">
 				<input type="text" id="sp-player-text" autocomplete="off" placeholder="Search by persona or name…"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="sp-player-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
+				<div id="sp-player-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-top:none;box-shadow:var(--ork-shadow-dropdown);border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-player-id">
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended By</label>
 			<div style="position:relative">
 				<input type="text" id="sp-by-text" autocomplete="off" placeholder="Default: you (leave blank to use your account)"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="sp-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
+				<div id="sp-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-top:none;box-shadow:var(--ork-shadow-dropdown);border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-by-id">
 		</div>
 
 		<div style="display:flex;gap:14px;margin-bottom:14px">
 			<div style="flex:1">
-				<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended From <span style="color:#e53e3e">*</span></label>
+				<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended From <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="sp-from" autocomplete="off" placeholder="Select date"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
 			</div>
 			<div style="flex:1">
-				<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended Until</label>
+				<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Suspended Until</label>
 				<input type="text" id="sp-until" autocomplete="off" placeholder="Select date"
-					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.88em;color:#4a5568;cursor:pointer">
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em">
+				<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.88em;color:var(--ork-text-secondary);cursor:pointer">
 					<input type="checkbox" id="sp-indefinite"> Indefinite
 				</label>
 			</div>
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Comment</label>
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Comment</label>
 			<textarea id="sp-comment" maxlength="100" rows="3" placeholder="Reason for suspension (max 100 characters)"
-				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em;resize:vertical"></textarea>
+				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em;resize:vertical"></textarea>
 			<div id="sp-char-count" style="text-align:right;font-size:.8em;color:#a0aec0;margin-top:2px">0 / 100</div>
 		</div>
 
 		<div style="margin-bottom:20px">
-			<label style="display:flex;align-items:center;gap:8px;font-size:.93em;color:#2d3748;cursor:pointer;user-select:none;">
+			<label style="display:flex;align-items:center;gap:8px;font-size:.93em;color:var(--ork-text);cursor:pointer;user-select:none;">
 				<input type="checkbox" id="sp-propagates" checked style="width:16px;height:16px;accent-color:#c53030;cursor:pointer;">
 				Suspension propagates to all Kingdoms
 			</label>
 		</div>
 
 		<div style="display:flex;justify-content:flex-end;gap:10px">
-			<button id="sp-cancel" style="padding:7px 18px;border:1px solid #cbd5e0;background:#fff;color:#4a5568;border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
+			<button id="sp-cancel" style="padding:7px 18px;border:1px solid var(--ork-input-border);background:var(--ork-card-bg);color:var(--ork-text-secondary);border-radius:6px;cursor:pointer;font-size:.95em">Cancel</button>
 			<button id="sp-submit" style="padding:7px 18px;background:#c53030;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.95em;font-weight:600"><i class="fas fa-ban"></i> Suspend Player</button>
 		</div>
 	</div>
@@ -902,7 +877,7 @@ $(function() {
 		}
 		function highlight(items, idx) {
 			items.forEach(function(el, i) {
-				el.style.background = i === idx ? '#ebf4ff' : '';
+				el.style.background = i === idx ? 'rgba(66,153,225,0.15)' : '';
 			});
 		}
 		function select(p) {
@@ -928,7 +903,7 @@ $(function() {
 						data.forEach(function(p) {
 							var div = document.createElement('div');
 							div.setAttribute('data-ac-item', '1');
-							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid var(--ork-divider)';
 							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
 							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
 							div.addEventListener('click', function() { select(p); });

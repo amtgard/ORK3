@@ -1,0 +1,8 @@
+
+*, *::before, *::after {
+  animation: none !important;
+  transition: none !important;
+}
+input, textarea {
+  caret-color: transparent !important;
+}
