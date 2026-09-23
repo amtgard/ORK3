@@ -40,14 +40,14 @@
 .rc-table input[type="number"],
 .rc-table input[type="date"],
 .rc-table select {
-	padding: 5px 7px; border: 1.5px solid var(--ork-border); border-radius: 5px;
-	font-size: 12px; background: #fff; color: #2d3748; width: 100%;
+	padding: 5px 7px; border: 1.5px solid var(--ork-input-border); border-radius: 5px;
+	font-size: 12px; background: var(--ork-input-bg); color: #2d3748; width: 100%;
 	box-sizing: border-box; transition: border-color .15s;
 }
 .rc-table input[type="text"]:focus,
 .rc-table input[type="number"]:focus,
 .rc-table input[type="date"]:focus,
-.rc-table select:focus { border-color: #90cdf4; outline: none; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
+.rc-table select:focus { background: var(--ork-card-bg); border-color: #90cdf4; outline: none; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
 .rc-table input[type="number"] { width: 62px; }
 .rc-table input[type="date"]   { width: 148px; }
 .rc-table select               { min-width: 160px; }
@@ -55,9 +55,9 @@
 /* Autocomplete */
 .rc-search-wrap   { position: relative; min-width: 130px; }
 .rc-ac-results    { position: absolute; left: 0; right: 0; top: 100%; z-index: 200;
-                    background: #fff; border: 1px solid var(--ork-border); border-top: none;
+                    background: var(--ork-card-bg); border: 1px solid var(--ork-input-border); border-top: none;
                     border-radius: 0 0 6px 6px; max-height: 180px; overflow-y: auto;
-                    box-shadow: 0 4px 12px rgba(0,0,0,.08); display: none; }
+                    box-shadow: var(--ork-shadow-dropdown); display: none; }
 .rc-ac-item       { padding: 6px 10px; cursor: pointer; font-size: 12px; color: #2d3748; }
 .rc-ac-item:hover { background: #ebf8ff; }
 .rc-ac-item-sub   { font-size: 11px; color: var(--ork-text-hint); }
