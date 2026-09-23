@@ -1539,3 +1539,113 @@ html[data-theme="dark"] .apexcharts-tooltip-text-y-label,
 html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
 	color: var(--ork-text, #e2e8f0) !important;
 }
+
+/* =====================================================
+   Tool-page controls (Treasury, Inventory) — buttons, modals,
+   form fields, segmented control, pager, pill badge.
+   Modals and row menus are appended outside .rp-root, so the
+   tokens below live on :root rather than on .rp-root.
+   ===================================================== */
+:root {
+	--rp-primary       : #4338ca;               /* indigo-700 — primary fill */
+	--rp-primary-hover : #3730a3;
+	--rp-focus         : #6366f1;               /* input focus border        */
+	--rp-focus-ring    : rgba(99,102,241,.25);
+	--rp-danger        : #c53030;               /* destructive fill / error border (both modes) */
+	--rp-danger-text   : #c53030;               /* error / destructive text  */
+	--rp-warning-text  : #c05621;
+}
+html[data-theme="dark"] {
+	--rp-primary       : #6366f1;
+	--rp-primary-hover : #818cf8;
+	--rp-danger-text   : #feb2b2;
+	--rp-warning-text  : #f6ad55;
+}
+
+/* Sidebar "Clear filters" link-button */
+.rp-filter-reset {
+	background: none; border: none; padding: 0; margin-top: 2px;
+	color: var(--ork-link); font-size: 12px; cursor: pointer; text-align: left;
+}
+.rp-filter-reset:hover { text-decoration: underline; }
+
+/* Buttons */
+.rp-btn {
+	display: inline-block; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--ork-border-dark);
+	background: var(--ork-bg-secondary); color: var(--ork-text); font-size: 0.85rem; font-weight: 600;
+	cursor: pointer; text-decoration: none; line-height: 1.2;
+}
+.rp-btn:hover { background: var(--ork-bg-tertiary); }
+.rp-btn.rp-btn-primary { background: var(--rp-primary); border-color: var(--rp-primary); color: #fff; }
+.rp-btn.rp-btn-primary:hover { background: var(--rp-primary-hover); }
+.rp-btn.rp-btn-danger,
+.rp-btn.rp-btn-danger:hover { background: var(--rp-danger); border-color: var(--rp-danger); color: #fff; }
+
+/* Pager */
+.rp-pager { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 12px; font-size: 0.85rem; color: var(--ork-text-muted); }
+.rp-pager button {
+	background: var(--ork-bg-secondary); border: 1px solid var(--ork-border); color: var(--ork-text);
+	border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.82rem;
+}
+.rp-pager button:disabled { opacity: .45; cursor: default; }
+
+/* Pill badge (colour comes from a modifier class) */
+.rp-badge {
+	display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+	border-radius: 999px; padding: 2px 8px;
+}
+
+/* Modal (in-product; no native dialogs) */
+.rp-modal-overlay {
+	position: fixed; inset: 0; background: rgba(15, 23, 42, .55);
+	display: none; align-items: flex-start; justify-content: center;
+	z-index: 10000; padding: 40px 16px; overflow-y: auto;
+}
+.rp-modal-overlay.rp-open { display: flex; }
+.rp-modal {
+	background: var(--ork-card-bg); color: var(--ork-text);
+	border: 1px solid var(--ork-border); border-radius: 12px;
+	width: 100%; max-width: 520px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+.rp-modal-head {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border);
+}
+.rp-modal-head h2 {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+	margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--ork-text);
+}
+.rp-modal-close { background: none; border: none; color: var(--ork-text-muted); font-size: 1.3rem; cursor: pointer; line-height: 1; padding: 0 2px; }
+.rp-modal-close:hover { color: var(--ork-text); }
+.rp-modal-body { padding: 16px 18px; }
+.rp-modal-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px 16px; border-top: 1px solid var(--ork-border); }
+/* Confirm-sized dialog (also the tnConfirm fallback) */
+.rp-confirm-box { max-width: 420px; }
+.rp-confirm-box .rp-modal-body { font-size: 0.9rem; color: var(--ork-text); }
+
+/* Form fields */
+.rp-field { margin-bottom: 13px; }
+.rp-field-row { display: flex; gap: 12px; }
+.rp-field-row > .rp-field { flex: 1 1 0; margin-bottom: 13px; }
+.rp-label { display: block; font-size: 0.76rem; font-weight: 600; color: var(--ork-text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
+.rp-input, .rp-select, .rp-textarea {
+	width: 100%; box-sizing: border-box;
+	background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); color: var(--ork-text);
+	border-radius: 6px; padding: 8px 10px; font-size: 0.88rem; font-family: inherit;
+}
+.rp-textarea { resize: vertical; min-height: 56px; }
+.rp-input:focus, .rp-select:focus, .rp-textarea:focus { outline: none; border-color: var(--rp-focus); box-shadow: 0 0 0 2px var(--rp-focus-ring); }
+.rp-field-err { color: var(--rp-danger-text); font-size: 0.78rem; margin-top: 5px; display: none; }
+.rp-field-err.rp-field-err-form { text-align: center; }
+.rp-field.rp-has-err .rp-input, .rp-field.rp-has-err .rp-select { border-color: var(--rp-danger); }
+.rp-field.rp-has-err .rp-field-err { display: block; }
+
+/* Segmented control */
+.rp-seg { display: inline-flex; border: 1px solid var(--ork-input-border); border-radius: 7px; overflow: hidden; }
+.rp-seg button {
+	background: var(--ork-input-bg); color: var(--ork-text-secondary); border: none;
+	padding: 7px 14px; font-size: 0.84rem; font-weight: 600; cursor: pointer;
+	border-right: 1px solid var(--ork-input-border); line-height: 1.2;
+}
+.rp-seg button:last-child { border-right: none; }
+.rp-seg button.rp-seg-on { background: var(--rp-primary); color: #fff; }

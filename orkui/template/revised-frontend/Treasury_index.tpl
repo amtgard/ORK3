@@ -47,8 +47,8 @@ $summary += ['CurrentBalance' => 0, 'TotalIn' => 0, 'TotalOut' => 0, 'ByCategory
    Treasury tool — .tr-* additions on top of the shared
    report chrome (.rp-*, reports.css). Only what the shared
    sheet doesn't already provide lives here: the ledger and
-   reconciliation tables, the modals, and the form controls
-   inside them. Light defaults; dark via --ork-* + overrides.
+   reconciliation tables, and Treasury-only deltas on the shared
+   modal and form controls. Light defaults; dark via --ork-* + overrides.
    ===================================================== */
 /* Full-bleed: the ledger has nine columns and wants every pixel. */
 .tr-root { width: 100%; margin: 0; padding: 16px 16px 48px; box-sizing: border-box; color: var(--ork-text); }
@@ -74,24 +74,9 @@ html[data-theme="dark"] #tr-out-card .rp-stat-number { color: #feb2b2; }
 /* Sidebar filter form — flatpickr swaps in an altInput sibling, which
    needs the same shell as the field it replaces. */
 .tr-filter-form .rp-form-input.form-control { width: 100%; box-sizing: border-box; }
-.tr-filter-reset {
-    background: none; border: none; padding: 0; margin-top: 2px;
-    color: var(--ork-link); font-size: 12px; cursor: pointer; text-align: left;
-}
-.tr-filter-reset:hover { text-decoration: underline; }
 
-/* Buttons */
-.tr-btn {
-    display: inline-block; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--ork-border-dark);
-    background: var(--ork-bg-secondary); color: var(--ork-text); font-size: 0.85rem; font-weight: 600;
-    cursor: pointer; text-decoration: none; line-height: 1.2;
-}
-.tr-btn:hover { background: var(--ork-bg-tertiary); }
-.tr-btn:disabled, .tr-btn[disabled] { opacity: .45; cursor: not-allowed; }
-.tr-btn.tr-btn-primary { background: #4338ca; border-color: #4338ca; color: #fff; }
-.tr-btn.tr-btn-primary:hover { background: #3730a3; }
-html[data-theme="dark"] .tr-btn.tr-btn-primary { background: #6366f1; border-color: #6366f1; }
-html[data-theme="dark"] .tr-btn.tr-btn-primary:hover { background: #818cf8; }
+/* Buttons (shared .rp-btn in reports.css) — Treasury dims disabled buttons */
+.rp-btn:disabled, .rp-btn[disabled] { opacity: .45; cursor: not-allowed; }
 
 /* Ledger table — the .rp-table-area wrapper already supplies the card
    surface, so the table itself stays flat (no second border/background). */
@@ -108,70 +93,11 @@ html[data-theme="dark"] .tr-btn.tr-btn-primary:hover { background: #818cf8; }
 .tr-ledger tbody td:last-child { text-align: right; }
 .tr-ledger .tr-empty td { text-align: center; color: var(--ork-text-muted); padding: 22px 12px; font-style: italic; }
 
-/* Pager */
-.tr-pager { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 12px; font-size: 0.85rem; color: var(--ork-text-muted); }
-.tr-pager button {
-    background: var(--ork-bg-secondary); border: 1px solid var(--ork-border); color: var(--ork-text);
-    border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.82rem;
-}
-.tr-pager button:disabled { opacity: .45; cursor: default; }
-
-/* Modal (in-product; no native dialogs) */
-.tr-modal-overlay {
-    position: fixed; inset: 0; background: rgba(15, 23, 42, .55);
-    display: none; align-items: flex-start; justify-content: center;
-    z-index: 10000; padding: 40px 16px; overflow-y: auto;
-}
-.tr-modal-overlay.tr-open { display: flex; }
-.tr-modal {
-    background: var(--ork-card-bg); color: var(--ork-text);
-    border: 1px solid var(--ork-border); border-radius: 12px;
-    width: 100%; max-width: 520px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
-}
-.tr-modal-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 18px; border-bottom: 1px solid var(--ork-border);
-}
-.tr-modal-head h2 {
-    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
-    margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--ork-text);
-}
-.tr-modal-close { background: none; border: none; color: var(--ork-text-muted); font-size: 1.3rem; cursor: pointer; line-height: 1; padding: 0 2px; }
-.tr-modal-close:hover { color: var(--ork-text); }
-.tr-modal-body { padding: 16px 18px; }
-.tr-modal-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px 16px; border-top: 1px solid var(--ork-border); }
-
-/* Form fields */
-.tr-field { margin-bottom: 13px; }
-.tr-field-row { display: flex; gap: 12px; }
-.tr-field-row > .tr-field { flex: 1 1 0; margin-bottom: 13px; }
-.tr-label { display: block; font-size: 0.76rem; font-weight: 600; color: var(--ork-text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
-.tr-input, .tr-select, .tr-textarea {
-    width: 100%; box-sizing: border-box;
-    background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); color: var(--ork-text);
-    border-radius: 6px; padding: 8px 10px; font-size: 0.88rem; font-family: inherit;
-}
-.tr-textarea { resize: vertical; min-height: 56px; }
-.tr-input:focus, .tr-select:focus, .tr-textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.25); }
-.tr-field-err { color: #c53030; font-size: 0.78rem; margin-top: 5px; display: none; }
-html[data-theme="dark"] .tr-field-err { color: #feb2b2; }
-.tr-field.tr-has-err .tr-input, .tr-field.tr-has-err .tr-select { border-color: #c53030; }
-.tr-field.tr-has-err .tr-field-err { display: block; }
-
-/* Segmented control (direction + payment method) */
-.tr-seg { display: inline-flex; border: 1px solid var(--ork-input-border); border-radius: 7px; overflow: hidden; }
-.tr-seg button {
-    background: var(--ork-input-bg); color: var(--ork-text-secondary); border: none;
-    padding: 7px 14px; font-size: 0.84rem; font-weight: 600; cursor: pointer;
-    border-right: 1px solid var(--ork-input-border); line-height: 1.2;
-}
-.tr-seg button:last-child { border-right: none; }
-.tr-seg button.tr-seg-on { background: #4338ca; color: #fff; }
-html[data-theme="dark"] .tr-seg button.tr-seg-on { background: #6366f1; }
-.tr-seg.tr-seg-credit button.tr-seg-on { background: #2f855a; }
-.tr-seg.tr-seg-debit button.tr-seg-on { background: #c53030; }
-html[data-theme="dark"] .tr-seg.tr-seg-credit button.tr-seg-on { background: #38a169; }
-html[data-theme="dark"] .tr-seg.tr-seg-debit button.tr-seg-on { background: #e53e3e; }
+/* Segmented control (shared .rp-seg) — direction colours */
+.rp-seg.tr-seg-credit button.rp-seg-on { background: #2f855a; }
+.rp-seg.tr-seg-debit button.rp-seg-on { background: #c53030; }
+html[data-theme="dark"] .rp-seg.tr-seg-credit button.rp-seg-on { background: #38a169; }
+html[data-theme="dark"] .rp-seg.tr-seg-debit button.rp-seg-on { background: #e53e3e; }
 
 /* Blue inline hint (e.g. negative-amount notice) */
 .tr-hint { display: none; margin-top: 5px; font-size: 0.78rem; color: #2b6cb0; }
@@ -182,24 +108,22 @@ html[data-theme="dark"] .tr-hint { color: #63b3ed; }
 .tr-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--ork-text-secondary); cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0 0 5px; }
 .tr-check input { margin: 0; cursor: pointer; }
 
-/* Player-search autocomplete (scoped) — absolute within a relative field, above modal */
-.tr-ac-wrap { position: relative; }
-.tr-ac-results {
-    position: absolute; left: 0; right: 0; top: 100%; z-index: 10001;
-    margin-top: 4px; max-height: 220px; overflow-y: auto; display: none;
+/* Player-search autocomplete — canonical kn-ac-results dropdown. revised.css (which
+   carries the shared kn-ac-* rules) is not loaded on this page, so they are defined
+   here. Inside the scrolling modal it is position:fixed and placed by
+   tnFixedAcPosition() so the modal's overflow never clips it. */
+#tr-entry-overlay .kn-ac-results {
+    position: fixed; z-index: 10001;
+    margin-top: 0; max-height: 220px; overflow-y: auto; display: none;
     background: var(--ork-card-bg); border: 1px solid var(--ork-input-border);
     border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.28);
 }
-.tr-ac-results.tr-ac-open { display: block; }
-.tr-ac-item { padding: 8px 11px; font-size: 0.84rem; cursor: pointer; color: var(--ork-text); border-bottom: 1px solid var(--ork-border); }
-.tr-ac-item:last-child { border-bottom: none; }
-.tr-ac-item:hover, .tr-ac-item.tr-ac-focused { background: rgba(99,102,241,.16); }
-.tr-ac-item.tr-ac-empty { color: var(--ork-text-muted); cursor: default; }
-.tr-ac-item .tr-ac-meta { color: var(--ork-text-muted); font-size: 0.72rem; }
-
-/* tnConfirm fallback dialog (when Tournament helper not present) */
-.tr-confirm-box { max-width: 420px; }
-.tr-confirm-box .tr-modal-body { font-size: 0.9rem; color: var(--ork-text); }
+#tr-entry-overlay .kn-ac-results.kn-ac-open { display: block; }
+#tr-entry-overlay .kn-ac-item { padding: 8px 11px; font-size: 0.84rem; cursor: pointer; color: var(--ork-text); border-bottom: 1px solid var(--ork-border); }
+#tr-entry-overlay .kn-ac-item:last-child { border-bottom: none; }
+#tr-entry-overlay .kn-ac-item:hover, #tr-entry-overlay .kn-ac-item:focus, #tr-entry-overlay .kn-ac-item.kn-ac-focused { background: rgba(99,102,241,.16); outline: none; }
+#tr-entry-overlay .kn-ac-item.tr-ac-empty { color: var(--ork-text-muted); cursor: default; }
+#tr-entry-overlay .kn-ac-item .tr-ac-meta { color: var(--ork-text-muted); font-size: 0.72rem; }
 
 /* Reconciliation — live compare panel inside the reconcile modal */
 .tr-recon-compare {
@@ -234,11 +158,8 @@ html[data-theme="dark"] .tr-recon-status.tr-recon-mismatch { color: #feb2b2; }
 .tr-recon-table .tr-empty td { text-align: center; color: var(--ork-text-muted); padding: 22px 12px; font-style: italic; }
 .tr-var-pos { color: #2f855a; } .tr-var-neg { color: #c53030; }
 html[data-theme="dark"] .tr-var-pos { color: #9ae6b4; } html[data-theme="dark"] .tr-var-neg { color: #feb2b2; }
-.tr-badge-opening {
-    display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
-    background: #4338ca; color: #fff; border-radius: 999px; padding: 2px 8px; margin-left: 6px;
-}
-html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
+.tr-badge-opening { background: var(--rp-primary); color: #fff; margin-left: 6px; }   /* on .rp-badge */
+.tr-req-flag { color: var(--rp-danger); }
 </style>
 
 <div class="rp-root tr-root" id="tr-app"
@@ -282,7 +203,7 @@ html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
     <?php if (!$has_opening): ?>
     <div class="tr-firstrun" id="tr-firstrun">
         <p>Set your starting balance to begin. Enter the current real-world balance and the date it&rsquo;s accurate as of.</p>
-        <button class="tr-btn tr-btn-primary" id="tr-set-opening" type="button">Set Opening Balance</button>
+        <button class="rp-btn rp-btn-primary" id="tr-set-opening" type="button">Set Opening Balance</button>
     </div>
     <?php endif; ?>
 
@@ -363,7 +284,7 @@ html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
                                 <option value="debit">Out only</option>
                             </select>
                         </div>
-                        <button type="button" class="tr-filter-reset" id="tr-f-reset">Clear filters</button>
+                        <button type="button" class="rp-filter-reset" id="tr-f-reset">Clear filters</button>
                     </div>
                 </div>
             </div>
@@ -408,7 +329,7 @@ html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
                     </thead>
                     <tbody id="tr-ledger-body"><!-- rendered by JS --></tbody>
                 </table>
-                <div class="tr-pager" id="tr-pager"></div>
+                <div class="rp-pager" id="tr-pager"></div>
             </div>
 
             <div class="rp-table-area tr-recon-history" id="tr-recon-history">
@@ -433,100 +354,100 @@ html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
 </div>
 
 <!-- Add / Edit entry modal (built/populated by JS) -->
-<div class="tr-modal-overlay" id="tr-entry-overlay" aria-hidden="true">
-    <div class="tr-modal" role="dialog" aria-modal="true" aria-labelledby="tr-entry-title">
-        <div class="tr-modal-head">
+<div class="rp-modal-overlay" id="tr-entry-overlay" aria-hidden="true">
+    <div class="rp-modal" role="dialog" aria-modal="true" aria-labelledby="tr-entry-title">
+        <div class="rp-modal-head">
             <h2 id="tr-entry-title">Add Entry</h2>
-            <button class="tr-modal-close" type="button" data-tr-close aria-label="Close">&times;</button>
+            <button class="rp-modal-close" type="button" data-tr-close aria-label="Close">&times;</button>
         </div>
         <form id="tr-entry-form" autocomplete="off">
-            <div class="tr-modal-body">
+            <div class="rp-modal-body">
                 <input type="hidden" name="id" id="tr-e-id" value="">
                 <input type="hidden" name="direction" id="tr-e-direction" value="credit">
-                <div class="tr-field">
-                    <label class="tr-label">Type</label>
-                    <div class="tr-seg tr-seg-credit" id="tr-e-dir-seg">
-                        <button type="button" data-dir="credit" class="tr-seg-on">Money In</button>
+                <div class="rp-field">
+                    <label class="rp-label">Type</label>
+                    <div class="rp-seg tr-seg-credit" id="tr-e-dir-seg">
+                        <button type="button" data-dir="credit" class="rp-seg-on">Money In</button>
                         <button type="button" data-dir="debit">Money Out</button>
                     </div>
                 </div>
-                <div class="tr-field-row">
-                    <div class="tr-field">
-                        <label class="tr-label" for="tr-e-date">Date</label>
-                        <input class="tr-input" type="text" id="tr-e-date" name="entry_date" placeholder="Select date">
-                        <div class="tr-field-err" data-err="entry_date">A date is required.</div>
+                <div class="rp-field-row">
+                    <div class="rp-field">
+                        <label class="rp-label" for="tr-e-date">Date</label>
+                        <input class="rp-input" type="text" id="tr-e-date" name="entry_date" placeholder="Select date">
+                        <div class="rp-field-err" data-err="entry_date">A date is required.</div>
                     </div>
-                    <div class="tr-field">
-                        <label class="tr-label" for="tr-e-amount">Amount</label>
-                        <input class="tr-input" type="text" inputmode="decimal" id="tr-e-amount" name="amount" placeholder="0.00" autocomplete="off">
-                        <div class="tr-field-err" data-err="amount">Enter an amount greater than zero.</div>
+                    <div class="rp-field">
+                        <label class="rp-label" for="tr-e-amount">Amount</label>
+                        <input class="rp-input" type="text" inputmode="decimal" id="tr-e-amount" name="amount" placeholder="0.00" autocomplete="off">
+                        <div class="rp-field-err" data-err="amount">Enter an amount greater than zero.</div>
                         <div class="tr-hint" id="tr-e-amount-hint">No need to enter it as a negative, Money Out takes care of that.</div>
                     </div>
                 </div>
-                <div class="tr-field">
-                    <label class="tr-label" for="tr-e-category">Category</label>
-                    <select class="tr-select" id="tr-e-category" name="category"></select>
-                    <div class="tr-field-err" data-err="category">Choose a category.</div>
+                <div class="rp-field">
+                    <label class="rp-label" for="tr-e-category">Category</label>
+                    <select class="rp-select" id="tr-e-category" name="category"></select>
+                    <div class="rp-field-err" data-err="category">Choose a category.</div>
                 </div>
-                <div class="tr-field">
-                    <label class="tr-label">Payment Method</label>
-                    <div class="tr-seg" id="tr-e-method-seg">
+                <div class="rp-field">
+                    <label class="rp-label">Payment Method</label>
+                    <div class="rp-seg" id="tr-e-method-seg">
                         <button type="button" data-method="cash">Cash</button>
                         <button type="button" data-method="check">Check</button>
                         <button type="button" data-method="digital">Digital</button>
                     </div>
                     <input type="hidden" name="payment_method" id="tr-e-method" value="">
-                    <div class="tr-field-err" data-err="payment_method">Select a payment method.</div>
+                    <div class="rp-field-err" data-err="payment_method">Select a payment method.</div>
                 </div>
-                <div class="tr-field">
-                    <label class="tr-label" for="tr-e-description">Description</label>
-                    <input class="tr-input" type="text" id="tr-e-description" name="description" maxlength="255" placeholder="What was this for?">
+                <div class="rp-field">
+                    <label class="rp-label" for="tr-e-description">Description</label>
+                    <input class="rp-input" type="text" id="tr-e-description" name="description" maxlength="255" placeholder="What was this for?">
                 </div>
-                <div class="tr-field-row">
-                    <div class="tr-field tr-ac-wrap" id="tr-e-cp-field">
-                        <label class="tr-label" id="tr-e-cp-label" for="tr-e-counterparty">Counterparty</label>
+                <div class="rp-field-row">
+                    <div class="rp-field" id="tr-e-cp-field">
+                        <label class="rp-label" id="tr-e-cp-label" for="tr-e-counterparty">Counterparty</label>
                         <label class="tr-check"><input type="checkbox" id="tr-e-toplayer"> To / From a player?</label>
-                        <input class="tr-input" type="text" id="tr-e-counterparty" name="counterparty" maxlength="255" placeholder="Paid to / received from">
-                        <input class="tr-input" type="text" id="tr-e-player-text" placeholder="Search players&hellip;" autocomplete="off" style="display:none">
+                        <input class="rp-input" type="text" id="tr-e-counterparty" name="counterparty" maxlength="255" placeholder="Paid to / received from">
+                        <input class="rp-input" type="text" id="tr-e-player-text" placeholder="Search players&hellip;" autocomplete="off" style="display:none">
                         <input type="hidden" id="tr-e-counterparty-player-id" name="counterparty_player_id" value="0">
-                        <div class="tr-ac-results" id="tr-e-player-results"></div>
-                        <div class="tr-field-err" data-err="counterparty_player_id">Select a player from the list.</div>
+                        <div class="kn-ac-results" id="tr-e-player-results"></div>
+                        <div class="rp-field-err" data-err="counterparty_player_id">Select a player from the list.</div>
                     </div>
-                    <div class="tr-field">
-                        <label class="tr-label" for="tr-e-reference">Reference #</label>
-                        <input class="tr-input" type="text" id="tr-e-reference" name="reference_no" maxlength="64" placeholder="Check / receipt #">
+                    <div class="rp-field">
+                        <label class="rp-label" for="tr-e-reference">Reference #</label>
+                        <input class="rp-input" type="text" id="tr-e-reference" name="reference_no" maxlength="64" placeholder="Check / receipt #">
                     </div>
                 </div>
-                <div class="tr-field-err" data-err="_form" style="text-align:center;"></div>
+                <div class="rp-field-err rp-field-err-form" data-err="_form"></div>
             </div>
-            <div class="tr-modal-foot">
-                <button class="tr-btn" type="button" data-tr-close>Cancel</button>
-                <button class="tr-btn tr-btn-primary" type="submit" id="tr-e-save">Save Entry</button>
+            <div class="rp-modal-foot">
+                <button class="rp-btn" type="button" data-tr-close>Cancel</button>
+                <button class="rp-btn rp-btn-primary" type="submit" id="tr-e-save">Save Entry</button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Reconcile / opening-balance modal (built/populated by JS) -->
-<div class="tr-modal-overlay" id="tr-recon-overlay" aria-hidden="true">
-    <div class="tr-modal" role="dialog" aria-modal="true" aria-labelledby="tr-recon-title">
-        <div class="tr-modal-head">
+<div class="rp-modal-overlay" id="tr-recon-overlay" aria-hidden="true">
+    <div class="rp-modal" role="dialog" aria-modal="true" aria-labelledby="tr-recon-title">
+        <div class="rp-modal-head">
             <h2 id="tr-recon-title">Reconcile</h2>
-            <button class="tr-modal-close" type="button" data-tr-rclose aria-label="Close">&times;</button>
+            <button class="rp-modal-close" type="button" data-tr-rclose aria-label="Close">&times;</button>
         </div>
         <form id="tr-recon-form" autocomplete="off">
-            <div class="tr-modal-body">
+            <div class="rp-modal-body">
                 <p class="tr-recon-intro" id="tr-recon-intro" style="margin:0 0 14px;font-size:0.88rem;color:var(--ork-text-secondary);"></p>
-                <div class="tr-field-row">
-                    <div class="tr-field">
-                        <label class="tr-label" for="tr-r-date">As Of Date</label>
-                        <input class="tr-input" type="text" id="tr-r-date" name="as_of_date" placeholder="Select date">
-                        <div class="tr-field-err" data-err="as_of_date">A date is required.</div>
+                <div class="rp-field-row">
+                    <div class="rp-field">
+                        <label class="rp-label" for="tr-r-date">As Of Date</label>
+                        <input class="rp-input" type="text" id="tr-r-date" name="as_of_date" placeholder="Select date">
+                        <div class="rp-field-err" data-err="as_of_date">A date is required.</div>
                     </div>
-                    <div class="tr-field">
-                        <label class="tr-label" for="tr-r-actual" id="tr-r-actual-label">Actual Balance</label>
-                        <input class="tr-input" type="number" step="0.01" id="tr-r-actual" name="actual_balance" placeholder="0.00">
-                        <div class="tr-field-err" data-err="actual_balance">Enter the real-world balance.</div>
+                    <div class="rp-field">
+                        <label class="rp-label" for="tr-r-actual" id="tr-r-actual-label">Actual Balance</label>
+                        <input class="rp-input" type="number" step="0.01" id="tr-r-actual" name="actual_balance" placeholder="0.00">
+                        <div class="rp-field-err" data-err="actual_balance">Enter the real-world balance.</div>
                     </div>
                 </div>
                 <div class="tr-recon-compare" id="tr-recon-compare">
@@ -543,16 +464,16 @@ html[data-theme="dark"] .tr-badge-opening { background: #6366f1; }
                         <span class="tr-recon-var" id="tr-r-variance"></span>
                     </div>
                 </div>
-                <div class="tr-field" id="tr-r-expl-field" style="display:none;">
-                    <label class="tr-label" for="tr-r-explanation">Explanation <span style="color:#c53030;">(required &mdash; balances don&rsquo;t match)</span></label>
-                    <textarea class="tr-textarea" id="tr-r-explanation" name="explanation" maxlength="500" placeholder="Why does the actual balance differ from the computed balance?"></textarea>
-                    <div class="tr-field-err" data-err="explanation">An explanation is required when the balances don&rsquo;t match.</div>
+                <div class="rp-field" id="tr-r-expl-field" style="display:none;">
+                    <label class="rp-label" for="tr-r-explanation">Explanation <span class="tr-req-flag">(required &mdash; balances don&rsquo;t match)</span></label>
+                    <textarea class="rp-textarea" id="tr-r-explanation" name="explanation" maxlength="500" placeholder="Why does the actual balance differ from the computed balance?"></textarea>
+                    <div class="rp-field-err" data-err="explanation">An explanation is required when the balances don&rsquo;t match.</div>
                 </div>
-                <div class="tr-field-err" data-err="_form" style="text-align:center;"></div>
+                <div class="rp-field-err rp-field-err-form" data-err="_form"></div>
             </div>
-            <div class="tr-modal-foot">
-                <button class="tr-btn" type="button" data-tr-rclose>Cancel</button>
-                <button class="tr-btn tr-btn-primary" type="submit" id="tr-r-save">Save</button>
+            <div class="rp-modal-foot">
+                <button class="rp-btn" type="button" data-tr-rclose>Cancel</button>
+                <button class="rp-btn rp-btn-primary" type="submit" id="tr-r-save">Save</button>
             </div>
         </form>
     </div>
@@ -619,23 +540,22 @@ window.TrConfig = {
         if (typeof window.tnConfirm === 'function') { window.tnConfirm(opts); return; }
         // Self-contained fallback modal (no native confirm()).
         var ov = document.createElement('div');
-        ov.className = 'tr-modal-overlay tr-open';
+        ov.className = 'rp-modal-overlay rp-open';
         ov.innerHTML =
-            '<div class="tr-modal tr-confirm-box" role="dialog" aria-modal="true">' +
-            '<div class="tr-modal-head"><h2></h2>' +
-            '<button class="tr-modal-close" type="button" data-c="x" aria-label="Close">&times;</button></div>' +
-            '<div class="tr-modal-body"></div>' +
-            '<div class="tr-modal-foot">' +
-            '<button class="tr-btn" type="button" data-c="cancel"></button>' +
-            '<button class="tr-btn" type="button" data-c="ok"></button></div></div>';
+            '<div class="rp-modal rp-confirm-box" role="dialog" aria-modal="true">' +
+            '<div class="rp-modal-head"><h2></h2>' +
+            '<button class="rp-modal-close" type="button" data-c="x" aria-label="Close">&times;</button></div>' +
+            '<div class="rp-modal-body"></div>' +
+            '<div class="rp-modal-foot">' +
+            '<button class="rp-btn" type="button" data-c="cancel"></button>' +
+            '<button class="rp-btn" type="button" data-c="ok"></button></div></div>';
         ov.querySelector('h2').textContent = opts.title || 'Confirm';
-        ov.querySelector('.tr-modal-body').textContent = opts.body || '';
+        ov.querySelector('.rp-modal-body').textContent = opts.body || '';
         var okBtn = ov.querySelector('[data-c="ok"]');
         var cancelBtn = ov.querySelector('[data-c="cancel"]');
         okBtn.textContent = opts.confirmLabel || 'Confirm';
         cancelBtn.textContent = opts.cancelLabel || 'Cancel';
-        okBtn.className = 'tr-btn ' + (opts.danger ? 'tr-btn-danger' : 'tr-btn-primary');
-        if (opts.danger) { okBtn.style.background = '#c53030'; okBtn.style.borderColor = '#c53030'; okBtn.style.color = '#fff'; }
+        okBtn.className = 'rp-btn ' + (opts.danger ? 'rp-btn-danger' : 'rp-btn-primary');
         function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } }
         ov.addEventListener('click', function (e) {
             var c = e.target.getAttribute && e.target.getAttribute('data-c');
@@ -753,7 +673,7 @@ window.TrConfig = {
     var TR_POLL_MS = 25000;
     var lastRev = null;
     var pollTimer = null;
-    function anyModalOpen() { return !!document.querySelector('.tr-modal-overlay.tr-open'); }
+    function anyModalOpen() { return !!document.querySelector('.rp-modal-overlay.rp-open'); }
     function syncRevision() {
         return fetch(cfg.ajax + 'rev', { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
@@ -861,7 +781,15 @@ window.TrConfig = {
     var playerRes  = document.getElementById('tr-e-player-results');
     var playerTimer = null;
 
-    function closePlayerResults() { if (playerRes) { playerRes.classList.remove('tr-ac-open'); playerRes.innerHTML = ''; } }
+    // Canonical fixed-position placement for autocomplete dropdowns inside modals.
+    function tnFixedAcPosition(inputEl, dropdownEl) {
+        var rect = inputEl.getBoundingClientRect();
+        dropdownEl.style.top   = (rect.bottom + 2) + 'px';
+        dropdownEl.style.left  = rect.left + 'px';
+        dropdownEl.style.width = rect.width + 'px';
+    }
+    function openPlayerResults() { tnFixedAcPosition(playerText, playerRes); playerRes.classList.add('kn-ac-open'); }
+    function closePlayerResults() { clearTimeout(playerTimer); if (playerRes) { playerRes.classList.remove('kn-ac-open'); playerRes.innerHTML = ''; } }
     function setPlayerMode(on) {
         if (!toPlayerCb) { return; }
         toPlayerCb.checked = !!on;
@@ -878,10 +806,10 @@ window.TrConfig = {
         }
     }
     function runPlayerSearch() {
+        clearTimeout(playerTimer);
         if (playerId) { playerId.value = '0'; }   // typing invalidates a prior pick
         var term = playerText.value.trim();
         if (term.length < 2) { closePlayerResults(); return; }
-        clearTimeout(playerTimer);
         playerTimer = setTimeout(function () {
             // UIR already ends in '?Route=', so query params use '&' (a 2nd '?' empties $_GET['q']).
             var url = cfg.uir + 'KingdomAjax/playersearch/' + (cfg.kingdomId || 0) +
@@ -889,19 +817,21 @@ window.TrConfig = {
             fetch(url, { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
+                    // Drop a stale response: the input changed (or blurred) while it was in flight.
+                    if (playerText.value.trim() !== term || document.activeElement !== playerText) { return; }
                     if (!Array.isArray(data) || !data.length) {
-                        playerRes.innerHTML = '<div class="tr-ac-item tr-ac-empty">No players found</div>';
-                        playerRes.classList.add('tr-ac-open');
+                        playerRes.innerHTML = '<div class="kn-ac-item tr-ac-empty">No players found</div>';
+                        openPlayerResults();
                         return;
                     }
                     playerRes.innerHTML = data.map(function (p) {
                         var meta = (p.KAbbr || '') + (p.PAbbr ? ':' + p.PAbbr : '');
-                        return '<div class="tr-ac-item" tabindex="-1" data-id="' + p.MundaneId +
+                        return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId +
                             '" data-name="' + encodeURIComponent(p.Persona || '') + '">' +
                             escapeHtml(p.Persona || '') + ' <span class="tr-ac-meta">(' + escapeHtml(meta) + ')</span>' +
                             (p.Active === 0 ? ' <span class="tr-ac-meta">&mdash; inactive</span>' : '') + '</div>';
                     }).join('');
-                    playerRes.classList.add('tr-ac-open');
+                    openPlayerResults();
                 })
                 .catch(function () { closePlayerResults(); });
         }, 250);
@@ -914,13 +844,14 @@ window.TrConfig = {
     }
     function playerKeyNav(e) {
         if (!playerRes) { return; }
-        var items = playerRes.querySelectorAll('.tr-ac-item[data-id]');
+        if (e.key === 'Tab') { closePlayerResults(); return; }
+        var items = playerRes.querySelectorAll('.kn-ac-item[data-id]');
         if (!items.length) { return; }
-        var cur = playerRes.querySelector('.tr-ac-item.tr-ac-focused');
+        var cur = playerRes.querySelector('.kn-ac-item.kn-ac-focused');
         var idx = -1;
         for (var i = 0; i < items.length; i++) { if (items[i] === cur) { idx = i; break; } }
-        if (e.key === 'ArrowDown') { e.preventDefault(); if (cur) { cur.classList.remove('tr-ac-focused'); } idx = Math.min(idx + 1, items.length - 1); items[idx].classList.add('tr-ac-focused'); items[idx].scrollIntoView({ block: 'nearest' }); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); if (cur) { cur.classList.remove('tr-ac-focused'); } idx = Math.max(idx - 1, 0); items[idx].classList.add('tr-ac-focused'); items[idx].scrollIntoView({ block: 'nearest' }); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (cur) { cur.classList.remove('kn-ac-focused'); } idx = Math.min(idx + 1, items.length - 1); items[idx].classList.add('kn-ac-focused'); items[idx].scrollIntoView({ block: 'nearest' }); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); if (cur) { cur.classList.remove('kn-ac-focused'); } idx = Math.max(idx - 1, 0); items[idx].classList.add('kn-ac-focused'); items[idx].scrollIntoView({ block: 'nearest' }); }
         else if (e.key === 'Enter' && cur) { e.preventDefault(); choosePlayer(cur); }
         else if (e.key === 'Escape') { closePlayerResults(); }
     }
@@ -960,9 +891,9 @@ window.TrConfig = {
     function setDirection(dir) {
         dir = (dir === 'debit') ? 'debit' : 'credit';
         dirHidden.value = dir;
-        dirSeg.className = 'tr-seg ' + (dir === 'debit' ? 'tr-seg-debit' : 'tr-seg-credit');
+        dirSeg.className = 'rp-seg ' + (dir === 'debit' ? 'tr-seg-debit' : 'tr-seg-credit');
         Array.prototype.forEach.call(dirSeg.querySelectorAll('button'), function (b) {
-            b.classList.toggle('tr-seg-on', b.getAttribute('data-dir') === dir);
+            b.classList.toggle('rp-seg-on', b.getAttribute('data-dir') === dir);
         });
         buildCategoryOptions(dir);
         if (dir !== 'debit') { hideAmountHint(); }
@@ -970,12 +901,12 @@ window.TrConfig = {
     function setMethod(method) {
         methodHid.value = method || '';
         Array.prototype.forEach.call(methodSeg.querySelectorAll('button'), function (b) {
-            b.classList.toggle('tr-seg-on', b.getAttribute('data-method') === method);
+            b.classList.toggle('rp-seg-on', b.getAttribute('data-method') === method);
         });
     }
 
     function clearErrors() {
-        Array.prototype.forEach.call(form.querySelectorAll('.tr-field.tr-has-err'), function (f) { f.classList.remove('tr-has-err'); });
+        Array.prototype.forEach.call(form.querySelectorAll('.rp-field.rp-has-err'), function (f) { f.classList.remove('rp-has-err'); });
         var fe = form.querySelector('[data-err="_form"]');
         if (fe) { fe.textContent = ''; fe.style.display = 'none'; }
     }
@@ -988,8 +919,8 @@ window.TrConfig = {
         var errEl = form.querySelector('[data-err="' + field + '"]');
         if (errEl) {
             if (msg) { errEl.textContent = msg; }
-            var wrap = errEl.closest('.tr-field');
-            if (wrap) { wrap.classList.add('tr-has-err'); }
+            var wrap = errEl.closest('.rp-field');
+            if (wrap) { wrap.classList.add('rp-has-err'); }
         }
     }
 
@@ -997,14 +928,14 @@ window.TrConfig = {
         clearErrors();
         titleEl.textContent = isEdit ? 'Edit Entry' : 'Add Entry';
         document.getElementById('tr-e-save').textContent = isEdit ? 'Save Changes' : 'Save Entry';
-        overlay.classList.add('tr-open');
+        overlay.classList.add('rp-open');
         overlay.setAttribute('aria-hidden', 'false');
         if (!fpEntry && window.flatpickr) {
             fpEntry = flatpickr(dateInput, { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', allowInput: false });
         }
     }
     function closeModal() {
-        overlay.classList.remove('tr-open');
+        overlay.classList.remove('rp-open');
         overlay.setAttribute('aria-hidden', 'true');
     }
 
@@ -1145,11 +1076,18 @@ window.TrConfig = {
         if (playerText) {
             playerText.addEventListener('input', runPlayerSearch);
             playerText.addEventListener('keydown', playerKeyNav);
+            playerText.addEventListener('blur', closePlayerResults);
         }
         if (playerRes) {
+            // Keep focus in the input while picking, so its blur-close doesn't eat the click.
+            playerRes.addEventListener('mousedown', function (e) { e.preventDefault(); });
             playerRes.addEventListener('click', function (e) {
-                var item = e.target.closest('.tr-ac-item[data-id]');
+                var item = e.target.closest('.kn-ac-item[data-id]');
                 if (item) { choosePlayer(item); }
+            });
+            // The fixed dropdown must follow its input when the modal overlay scrolls.
+            overlay.addEventListener('scroll', function () {
+                if (playerRes.classList.contains('kn-ac-open')) { tnFixedAcPosition(playerText, playerRes); }
             });
         }
         // Close the player dropdown on an outside click.
@@ -1162,7 +1100,7 @@ window.TrConfig = {
         });
         overlay.addEventListener('click', function (e) { if (e.target === overlay) { closeModal(); } });
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && overlay.classList.contains('tr-open')) { closeModal(); }
+            if (e.key === 'Escape' && overlay.classList.contains('rp-open')) { closeModal(); }
         });
         form.addEventListener('submit', submitEntry);
     }
@@ -1255,7 +1193,7 @@ window.TrConfig = {
 
     /* ---- field error helpers (mirror the entry modal) ---- */
     function clearErrors() {
-        Array.prototype.forEach.call(form.querySelectorAll('.tr-field.tr-has-err'), function (f) { f.classList.remove('tr-has-err'); });
+        Array.prototype.forEach.call(form.querySelectorAll('.rp-field.rp-has-err'), function (f) { f.classList.remove('rp-has-err'); });
         var fe = form.querySelector('[data-err="_form"]');
         if (fe) { fe.textContent = ''; fe.style.display = 'none'; }
     }
@@ -1268,8 +1206,8 @@ window.TrConfig = {
         var errEl = form.querySelector('[data-err="' + field + '"]');
         if (errEl) {
             if (msg) { errEl.textContent = msg; }
-            var wrap = errEl.closest('.tr-field');
-            if (wrap) { wrap.classList.add('tr-has-err'); }
+            var wrap = errEl.closest('.rp-field');
+            if (wrap) { wrap.classList.add('rp-has-err'); }
         }
     }
 
@@ -1295,7 +1233,7 @@ window.TrConfig = {
             var tr = document.createElement('tr');
             var opening = Number(r.IsOpening) === 1;
             tr.innerHTML =
-                '<td>' + escapeHtml(r.AsOfDate) + (opening ? '<span class="tr-badge-opening">Opening</span>' : '') + '</td>' +
+                '<td>' + escapeHtml(r.AsOfDate) + (opening ? '<span class="rp-badge tr-badge-opening">Opening</span>' : '') + '</td>' +
                 '<td class="tr-num">' + money(r.ActualBalance) + '</td>' +
                 '<td class="tr-num">' + money(r.ComputedBalance) + '</td>' +
                 '<td class="tr-num">' + (opening ? money(0) : varianceCell(r.Variance)) + '</td>' +
@@ -1409,7 +1347,7 @@ window.TrConfig = {
             statusText.textContent = 'Enter an actual balance to compare.';
         }
 
-        overlay.classList.add('tr-open');
+        overlay.classList.add('rp-open');
         overlay.setAttribute('aria-hidden', 'false');
 
         if (!fpRecon && window.flatpickr) {
@@ -1426,7 +1364,7 @@ window.TrConfig = {
         setTimeout(function () { actualInp.focus(); }, 30);
     }
     function closeModal() {
-        overlay.classList.remove('tr-open');
+        overlay.classList.remove('rp-open');
         overlay.setAttribute('aria-hidden', 'true');
     }
 
@@ -1487,8 +1425,8 @@ window.TrConfig = {
     actualInp.addEventListener('input', updateCompare);
     explInput.addEventListener('input', function () {
         if (explInput.value.trim() !== '') {
-            var wrap = explInput.closest('.tr-field');
-            if (wrap) { wrap.classList.remove('tr-has-err'); }
+            var wrap = explInput.closest('.rp-field');
+            if (wrap) { wrap.classList.remove('rp-has-err'); }
         }
     });
     form.addEventListener('submit', submit);
@@ -1498,7 +1436,7 @@ window.TrConfig = {
     });
     overlay.addEventListener('click', function (e) { if (e.target === overlay) { closeModal(); } });
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && overlay.classList.contains('tr-open')) { closeModal(); }
+        if (e.key === 'Escape' && overlay.classList.contains('rp-open')) { closeModal(); }
     });
 
     var reconcileBtn = document.getElementById('tr-reconcile');

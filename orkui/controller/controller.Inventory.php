@@ -23,6 +23,8 @@ class Controller_Inventory extends Controller
         $this->data['categories']      = Inventory::$CATEGORIES;
         $this->data['removal_reasons'] = Inventory::$REMOVAL_REASONS;
         $this->data['conditions']      = Inventory::$CONDITIONS;
+        $this->data['treasury_income_categories'] = Treasury::$CATEGORIES['income'];
+        $this->data['treasury_methods'] = ['cash' => 'Cash', 'check' => 'Check', 'digital' => 'Digital'];
 
         $nameRes = $this->Inventory->get_owner_name($tok, $owner_type, $owner_id);
         $this->data['org_name']   = ($nameRes['Status'] ?? 4) === 0 ? $nameRes['Detail']['Name'] : '';

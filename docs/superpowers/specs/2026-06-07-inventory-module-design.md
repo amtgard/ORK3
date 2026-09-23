@@ -30,7 +30,9 @@ Admin-tab integration. Where Treasury tracks money flow, Inventory tracks owned 
 | Visibility | Officers only. Non-officers never see the tool or its link. |
 | Editing | Any org officer with authority (`HasAuthority(AUTH_KINGDOM/AUTH_PARK, …, AUTH_EDIT)`). No new dedicated role. |
 | Audit trail | Tamper-evident change log (create/edit/remove/restore/delete with before/after JSON), mirroring `ork_treasury_audit`. |
-| Reconciliation | **None in v1.** Inventory has no computed-vs-actual balance; the change log provides accountability. Physical-audit sessions are a future enhancement. |
+| Reconciliation | **Count sheet + verification.** A printable count sheet (active items sorted by location) supports a physical count; officers then mark items verified (`last_verified_at`/`last_verified_by`, one `verify` audit row per item), by selection or by the current filters. A "stale" filter surfaces items not verified in 365 days. |
+| Disposal details | Removal records disposal date, proceeds (required for a sale), and who it went to. A priced sale can optionally post a Treasury income entry in the same transaction (linked via `treasury_entry_id`); restoring the item clears the details but does **not** reverse the Treasury entry — the UI warns. |
+| Search / filters | Keyword search matches name, location, holder, and notes; exact-match filters by location and holder (linked player or free-text name). |
 | Attachments | None in v1. Stable `item_id` reserves a clean seam for a future `ork_inventory_attachment` table. |
 | Currency | Single currency (USD). No symbol config. |
 | Reporting | Summary cards (total value, total units, line items, # needs repair), two charts (value-by-category, count-by-condition), CSV export. |
@@ -57,13 +59,18 @@ Stored as canonical keys; display labels live in PHP so reports stay stable if a
 (Final wording confirmed during implementation; keys are authoritative.)
 
 - `weapons` → Weapons
+- `loaner_weapons` → Loaner Weapons
 - `armor` → Armor
 - `shields` → Shields
-- `garb_regalia` → Garb / Regalia
+- `garb` → Garb / Loaner Garb
+- `regalia` → Regalia (Crowns, Thrones, Chains)
 - `banners` → Banners / Heraldry
 - `tentage` → Pavilions / Tentage
 - `archery_siege` → Archery / Siege
 - `event_equipment` → Event Equipment
+- `feast_kitchen` → Feast / Kitchen
+- `awards_supplies` → Award & Scroll Supplies
+- `furniture` → Furniture
 - `electronics` → Electronics / AV
 - `inventory_other` → Other
 

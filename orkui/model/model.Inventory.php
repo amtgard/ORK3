@@ -14,7 +14,13 @@ class Model_Inventory extends Model
     public function get_items($token, $ot, $oid, $f)                 { return $this->Inventory->GetItems($token, $ot, $oid, $f); }
     public function get_item($token, $ot, $oid, $id)                 { return $this->Inventory->GetItem($token, $ot, $oid, $id); }
     public function save_item($token, $data)                         { return $this->Inventory->SaveItem($token, $data); }
-    public function remove_item($token, $ot, $oid, $id, $r, $n)      { return $this->Inventory->RemoveItem($token, $ot, $oid, $id, $r, $n); }
+    public function remove_item($token, $ot, $oid, $id, $r, $n, $u = 0, $x = []) { return $this->Inventory->RemoveItem($token, $ot, $oid, $id, $r, $n, $u, $x); }
+    public function split_item($token, $ot, $oid, $id, $u)           { return $this->Inventory->SplitItem($token, $ot, $oid, $id, $u); }
     public function restore_item($token, $ot, $oid, $id)            { return $this->Inventory->RestoreItem($token, $ot, $oid, $id); }
-    public function delete_item($token, $ot, $oid, $id)            { return $this->Inventory->DeleteItem($token, $ot, $oid, $id); }
+    public function delete_item($token, $ot, $oid, $id, $n)        { return $this->Inventory->DeleteItem($token, $ot, $oid, $id, $n); }
+    public function undelete_item($token, $ot, $oid, $id)          { return $this->Inventory->UndeleteItem($token, $ot, $oid, $id); }
+    public function get_item_history($token, $ot, $oid, $id)       { return $this->Inventory->GetItemHistory($token, $ot, $oid, $id); }
+    public function get_audit($token, $ot, $oid, $f)               { return $this->Inventory->GetAudit($token, $ot, $oid, $f); }
+    public function verify_items($token, $ot, $oid, $ids, $f)      { return $this->Inventory->VerifyItems($token, $ot, $oid, $ids, $f); }
+    public function get_locations($token, $ot, $oid)               { return $this->Inventory->GetLocations($token, $ot, $oid); }
 }
