@@ -189,6 +189,23 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 <?php endforeach; ?>
 		</table>
 <?php endif; ?>
+
+<?php $_au = isset($api_usage) && is_array($api_usage) ? $api_usage : array(); ?>
+<?php if ($_au !== array()) : ?>
+		<h3 class="trends-subhead">Service calls, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			Which clients call the ORK web service, and what they ask for. Sessions
+			above count logins; an app that signs in once and then works for a month
+			only shows up here. Ordered by total server time rather than call count —
+			a fast endpoint called constantly and a slow one called rarely look alike
+			in a bare tally and are very different problems. Counts only, never who.
+		</p>
+		<table class="trends-table"><tr><th>Client</th><th>Endpoint</th><th>Calls</th><th>Avg ms</th><th>Total s</th></tr>
+<?php foreach ($_au as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=htmlspecialchars($_row['Endpoint'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['AvgMs'], 1)?></td><td><?=number_format($_row['TotalMs'] / 1000, 1)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
 	</section>
 <?php endif; ?>
 

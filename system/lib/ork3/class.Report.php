@@ -4359,6 +4359,58 @@ class Report extends Ork3
     }
 
     /**
+     * JSON-service call volume by client and endpoint over the last N days
+     * (ork_api_tally, written by JsonServer::call_endpoint).
+     *
+     * GetCommunityAppVersions answers "who is logged in"; this answers "who is
+     * actually CALLING us", which for an API client that authenticates once a
+     * month is a completely different question.
+     *
+     * Ordered by TOTAL TIME, not call count, because that is the number worth
+     * acting on: an endpoint answering in 4ms half a million times and one
+     * taking 900ms a hundred times rank very differently by cost and identically
+     * by popularity. AvgMs is carried alongside so a slow-but-rare endpoint is
+     * still visible rather than buried.
+     *
+     * Aggregate counts only, no identities -- see the table's own comment.
+     *
+     * @param int $days how far back to sum (default 7)
+     * @return array of ['Client','Endpoint','Calls','TotalMs','AvgMs']
+     */
+    public function GetApiUsage($days = 7)
+    {
+        $days = max(1, min(90, (int)$days));
+        $key  = Ork3::$Lib->ghettocache->key(array('api-usage', $days));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
+        $r = $this->db->query(
+            "SELECT client, endpoint,
+			        SUM(calls)    AS calls,
+			        SUM(ms_total) AS total_ms
+			   FROM " . DB_PREFIX . "api_tally
+			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL " . $days . " DAY)
+			  GROUP BY client, endpoint
+			  ORDER BY total_ms DESC, calls DESC
+			  LIMIT 40"
+        );
+        $out = array();
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $calls = (int)$r->calls;
+                $out[] = array(
+                    'Client'   => (string)$r->client,
+                    'Endpoint' => (string)$r->endpoint,
+                    'Calls'    => $calls,
+                    'TotalMs'  => (int)$r->total_ms,
+                    'AvgMs'    => $calls > 0 ? round((int)$r->total_ms / $calls, 1) : 0.0,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
      * Distinct players credited with attendance per week (Monday-anchored,
      * matching the recap window), across all recorded history — the long
      * participation curve of the game itself, independent of web analytics.

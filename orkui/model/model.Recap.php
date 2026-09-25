@@ -70,4 +70,11 @@ class Model_Recap extends Model
         $r = $this->Report->GetCommunityAppVersions();
         return is_array($r) ? $r : array();
     }
+
+    // JSON-service call volume by client and endpoint (30m-cached upstream).
+    public function api_usage($days = 7)
+    {
+        $r = $this->Report->GetApiUsage($days);
+        return is_array($r) ? $r : array();
+    }
 }
