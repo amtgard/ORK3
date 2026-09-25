@@ -257,10 +257,20 @@ class JsonServer
             if (strlen($endpoint) > 64) {
                 $endpoint = substr($endpoint, 0, 64);
             }
-            $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+            // Prefer the client's own label over the User-Agent, matching the
+            // precedence Authorization::CreateSession already uses for the
+            // session device label. This is not a nicety: a WebView client's
+            // User-Agent is the platform's browser string and cannot be
+            // overridden from inside the page, so mORK and anything else
+            // embedded would otherwise be tallied as anonymous mobile Chrome,
+            // indistinguishable from someone browsing the website. X-ORK-Client
+            // is the only identification such a client can actually send.
+            $label = preg_replace('/[\x00-\x1F\x7F]+/', ' ', (string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? ''));
+            $ua    = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+            $raw   = trim($label) !== '' ? trim($label) : $ua;
             $client = function_exists('ork_session_client_label')
-                ? ork_session_client_label($ua)
-                : (($ua === '') ? 'Unknown client' : substr($ua, 0, 40));
+                ? ork_session_client_label($raw)
+                : (($raw === '') ? 'Unknown client' : substr($raw, 0, 40));
 
             $ms = (int)round(max(0, (float)$seconds) * 1000);
             $DB->Clear();
