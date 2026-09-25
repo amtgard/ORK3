@@ -1300,6 +1300,8 @@
 						<h5><i class="fas fa-cog"></i> Park</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
+							<li><a href="<?= UIR ?>Treasury/park/<?= $park_id ?>">Treasury</a></li>
+							<li><a href="<?= UIR ?>Inventory/park/<?= $park_id ?>">Inventory</a></li>
 						</ul>
 					</div>
 				</div>
