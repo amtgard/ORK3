@@ -923,6 +923,12 @@
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
 					</ul>
 				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-poll"></i> Surveys</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Survey/index/Kingdom/<?= $kingdom_id ?>">Manage Surveys</a></li>
+					</ul>
+				</div>
 				<?php endif; ?>
 				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 				<div class="kn-report-group">

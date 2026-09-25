@@ -1302,6 +1302,12 @@
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
 						</ul>
 					</div>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-poll"></i> Surveys</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Survey/index/Park/<?= $park_id ?>">Manage Surveys</a></li>
+						</ul>
+					</div>
 				</div>
 			</div>
 			<?php endif; ?>
