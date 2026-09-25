@@ -482,8 +482,9 @@
         return cfg;
     }
 
-    /* Win % in rank order (pairwise spec §7): the server already sorted the
-       options, never-matched ones last with a null bar. */
+    /* Bradley-Terry strength in rank order (#35): the server already sorted
+       the options; unranked ones (too few matchups, never matched) come last
+       with a null bar, their win % still in the tooltip. */
     function specPairwise(q, theme) {
         var opts = ((q.agg && q.agg.options) || []).slice();
         var cfg = baseCfg(theme, 'bar');
@@ -492,7 +493,7 @@
         cfg.yAxis.min = 0;
         cfg.yAxis.max = 100;
         cfg.yAxis.labels.format = '{value}%';
-        cfg.yAxis.title = { text: 'Win % (a tie counts half)', style: { color: theme.muted, fontSize: '11px' } };
+        cfg.yAxis.title = { text: 'Strength: chance of beating a typical option', style: { color: theme.muted, fontSize: '11px' } };
         cfg.plotOptions.bar = {
             borderRadius: 4,
             dataLabels  : {
@@ -503,14 +504,19 @@
         };
         cfg.tooltip.formatter = function () {
             var o = opts[this.point.index] || {};
-            return '<b>' + esc(o.label) + '</b><br/>Win %: <b>' + num(o.win_pct, 1) + '%</b><br/>' +
+            var ranked = o.rank !== null && o.rank !== undefined;
+            return '<b>' + esc(o.label) + '</b><br/>' +
+                (ranked ? 'Strength: <b>' + num(o.strength, 1) + '%</b><br/>' : (o.too_few ? '<i>Too few matchups to rank</i><br/>' : '')) +
+                'Win % (a tie counts half): <b>' + (o.win_pct === null || o.win_pct === undefined ? '—' : num(o.win_pct, 1) + '%') + '</b><br/>' +
                 'Won ' + (o.wins || 0) + ' · Tied ' + (o.ties || 0) + ' · Lost ' + (o.losses || 0) + '<br/>' +
                 'Matchups: <b>' + (o.appearances || 0) + '</b>';
         };
         cfg.series = [{
-            name : 'Win %',
+            name : 'Strength',
             color: theme.colors[0],
-            data : opts.map(function (o) { return o.win_pct === null ? null : o.win_pct; })
+            data : opts.map(function (o) {
+                return (o.rank === null || o.rank === undefined || o.strength === null || o.strength === undefined) ? null : o.strength;
+            })
         }];
         return cfg;
     }
@@ -848,9 +854,13 @@
                 out.push(['Mean picked', num(a.mean_selected, 2)]);
                 break;
             case 'matrix':
+                /* The mean is over valued columns only; an N/A-style column
+                   is left out of it, so say so and give its n (#34). */
+                var hasNa = (a.columns || []).some(function (c) { return c.value_num === null || c.value_num === undefined; });
                 (a.rows || []).forEach(function (r) {
                     if (r.weighted_mean !== null && r.weighted_mean !== undefined) {
-                        out.push([r.label, num(r.weighted_mean, 2)]);
+                        out.push([r.label + ' · Mean' + (hasNa ? ' (excl. N/A)' : '') + ', n=' + thousands(r.mean_n || 0),
+                            num(r.weighted_mean, 2)]);
                     }
                 });
                 break;
@@ -877,14 +887,26 @@
        Card rendering
        --------------------------------------------------------- */
 
-    function textListHtml(texts, prefix) {
+    /* The server caps each list (TEXT_SAMPLE_LIMIT); total is the full count,
+       so a capped list says "500 of 3,214" rather than "all 500" (#33). */
+    function textListLabel(loaded, total) {
+        if (total > loaded) {
+            return 'Showing ' + thousands(loaded) + ' of ' + thousands(total) + ' responses' +
+                (SHARED ? '' : '. Export the CSV for the rest.');
+        }
+        return 'All ' + thousands(loaded) + ' responses shown';
+    }
+
+    function textListHtml(texts, prefix, total) {
+        total = Math.max(texts.length, total || 0);
         var shown = texts.slice(0, TEXT_PREVIEW);
         var html = '<ul class="svr-textlist" id="' + prefix + '-list">';
         shown.forEach(function (t) { html += '<li>' + esc(t) + '</li>'; });
         html += '</ul>';
         if (texts.length > TEXT_PREVIEW) {
-            html += '<button type="button" class="sv-btn svr-showmore" data-more="' + prefix + '">' +
-                'Show all ' + texts.length + ' responses</button>';
+            html += '<button type="button" class="sv-btn svr-showmore" data-more="' + prefix + '" data-total="' + total + '">' +
+                (total > texts.length ? 'Show ' + thousands(texts.length) + ' of ' + thousands(total) + ' responses'
+                    : 'Show all ' + thousands(texts.length) + ' responses') + '</button>';
         }
         return html;
     }
@@ -930,31 +952,41 @@
     }
 
     /* The ranking as a sortable table (tabular data = DataTables). Rank sorts
-       ascending by default; never-matched options sort last on every column,
-       in either direction: the hidden last column (0 ranked, 1 never matched)
-       is pinned ahead of whatever the reader sorts by (orderFixed.pre). */
-    var PW_SORTKEY_COL = 7;
+       ascending by default. Rank and Strength come from the server's
+       Bradley-Terry fit (#35); an option in too few matchups is listed
+       unranked. Unranked options sort after ranked ones on every column, in
+       either direction: the hidden last column (0 ranked, 1 too few matchups,
+       2 never matched) is pinned ahead of whatever the reader sorts by
+       (orderFixed.pre). */
+    var PW_SORTKEY_COL = 8;
 
     function pairwiseTableHtml(q) {
         var opts = (q.agg && q.agg.options) || [];
         var html = '<div class="svr-pw-tablewrap"><table class="display svr-pw-table" style="width:100%" ' +
             'aria-labelledby="svr-title-' + q.question_id + '"><thead><tr>' +
-            '<th scope="col">Rank</th><th scope="col">Option</th><th scope="col">Win %</th>' +
+            '<th scope="col">Rank</th><th scope="col">Option</th>' +
+            '<th scope="col"><span data-tip="Chance of beating a typical option, from a Bradley-Terry fit: a win over a strong option counts for more than a win over a weak one. This sets the rank." tabindex="0">Strength</span></th>' +
+            '<th scope="col">Win %</th>' +
             /* W / T / L: the house data-tip for sighted users, the full word for screen readers. */
             '<th scope="col"><span class="svr-pw-abbr" data-tip="Wins" aria-hidden="true">W</span><span class="sv-visually-hidden">Wins</span></th>' +
             '<th scope="col"><span class="svr-pw-abbr" data-tip="Ties" aria-hidden="true">T</span><span class="sv-visually-hidden">Ties</span></th>' +
             '<th scope="col"><span class="svr-pw-abbr" data-tip="Losses" aria-hidden="true">L</span><span class="sv-visually-hidden">Losses</span></th>' +
             '<th scope="col">Matchups</th>' +
-            '<th scope="col" class="svr-pw-sortkey">Never matched</th></tr></thead><tbody>';
+            '<th scope="col" class="svr-pw-sortkey">Unranked</th></tr></thead><tbody>';
         opts.forEach(function (o, i) {
             var unranked = o.rank === null || o.rank === undefined;
+            var seen = o.win_pct !== null && o.win_pct !== undefined;
+            var hasStrength = o.strength !== null && o.strength !== undefined;
+            var rankCell = !unranked ? String(o.rank)
+                : (o.too_few ? '<span data-tip="Seen in too few matchups to rank reliably." tabindex="0">Too few matchups</span>' : '—');
             html += '<tr>' +
-                '<td data-order="' + (unranked ? 100000 + i : o.rank) + '">' + (unranked ? '—' : o.rank) + '</td>' +
+                '<td data-order="' + (unranked ? 100000 + i : o.rank) + '">' + rankCell + '</td>' +
                 '<td>' + esc(o.label) + '</td>' +
-                '<td data-order="' + (unranked ? -1 : o.win_pct) + '">' + (unranked ? '—' : num(o.win_pct, 1) + '%') + '</td>' +
+                '<td data-order="' + (unranked || !hasStrength ? -1 : o.strength) + '">' + (unranked || !hasStrength ? '—' : num(o.strength, 1) + '%') + '</td>' +
+                '<td data-order="' + (seen ? o.win_pct : -1) + '">' + (seen ? num(o.win_pct, 1) + '%' : '—') + '</td>' +
                 '<td>' + (o.wins || 0) + '</td><td>' + (o.ties || 0) + '</td><td>' + (o.losses || 0) + '</td>' +
                 '<td>' + (o.appearances || 0) + '</td>' +
-                '<td class="svr-pw-sortkey">' + (unranked ? 1 : 0) + '</td></tr>';
+                '<td class="svr-pw-sortkey">' + (!unranked ? 0 : (seen ? 1 : 2)) + '</td></tr>';
         });
         return html + '</tbody></table></div>';
     }
@@ -974,8 +1006,8 @@
                 orderFixed  : { pre: [[PW_SORTKEY_COL, 'asc']] },
                 columnDefs  : [
                     { targets: PW_SORTKEY_COL, visible: false, searchable: false },
-                    // Win %, W, T, L and Matchups read high to low on the first click.
-                    { targets: [2, 3, 4, 5, 6], orderSequence: ['desc', 'asc'] }
+                    // Strength, Win %, W, T, L and Matchups read high to low on the first click.
+                    { targets: [2, 3, 4, 5, 6, 7], orderSequence: ['desc', 'asc'] }
                 ],
                 paging      : many,
                 pageLength  : 25,
@@ -1003,8 +1035,13 @@
         /* Zero matches is its own state, not the 1–4 minimum-cell statement:
            the page notice above the cards carries the Reset filters action. */
         if (noResponses()) {
-            html += '<div class="svr-empty svr-empty-nomatch"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i> ' +
-                esc(noResponsesText()) + '</div></section>';
+            /* A held share is waiting, not filtered out: its own neutral
+               hourglass statement, matching the page notice. */
+            html += heldText()
+                ? '<div class="svr-empty svr-empty-held"><i class="fas fa-hourglass-half" aria-hidden="true"></i> ' +
+                  esc(heldText()) + '</div></section>'
+                : '<div class="svr-empty svr-empty-nomatch"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i> ' +
+                  esc(noResponsesText()) + '</div></section>';
             return html;
         }
 
@@ -1020,12 +1057,14 @@
         }
 
         if (TEXT_TYPES[q.type]) {
-            if (state.summaryMode) {
-                /* Summary for sharing (#5): comments are counted, never printed. */
+            if (state.summaryMode || SHARED) {
+                /* Summary for sharing (#5): comments are counted, never printed.
+                   A shared viewer's payload carries no texts at all. */
                 html += '<p class="svr-comment-count"><i class="fas fa-comment-dots" aria-hidden="true"></i> ' +
-                    plural(n, 'written comment', 'written comments') + '</p>';
+                    plural(n, 'written comment', 'written comments') +
+                    (SHARED ? '. Individual comments stay with the survey’s owners.' : '') + '</p>';
             } else {
-                html += textListHtml(a.texts || [], 'svr-txt-' + qid);
+                html += textListHtml(a.texts || [], 'svr-txt-' + qid, a.n);
             }
             html += '</section>';
             return html;
@@ -1035,6 +1074,10 @@
             html += '<div class="svr-xt-head"><p class="svr-field-hint">Split by: <strong>' +
                 esc(q.crosstab.prompt) + '</strong></p>' + xtToggleHtml(q) + '</div>';
             html += crosstabNote(q);
+        } else if (state.appliedFilters && Number(state.appliedFilters.crosstab_question_id) === Number(qid)) {
+            /* The source is never split by itself (#9): say why its card has no split. */
+            html += '<div class="svr-xt-head"><p class="svr-field-hint">' +
+                'This is the question the results are split by.</p></div>';
         }
 
         /* aria-labelledby, not aria-label: the Highcharts accessibility module
@@ -1047,14 +1090,17 @@
         if (q.type === 'pairwise') { html += pairwiseTableHtml(q); }
 
         var others = a.other_texts || [];
-        if (others.length) {
-            if (state.summaryMode) {
+        /* A shared payload sends other_count, never the words. */
+        var otherCount = SHARED ? (a.other_count || 0) : (a.other_texts_n || others.length);
+        if (otherCount) {
+            if (state.summaryMode || SHARED) {
                 html += '<p class="svr-comment-count"><i class="fas fa-comment-dots" aria-hidden="true"></i> ' +
-                    plural(others.length, '&ldquo;Other&rdquo; answer', '&ldquo;Other&rdquo; answers') + ' written in</p>';
+                    plural(otherCount, '&ldquo;Other&rdquo; answer', '&ldquo;Other&rdquo; answers') + ' written in' +
+                    (SHARED ? '. Individual comments stay with the survey’s owners.' : '') + '</p>';
             } else {
                 html += '<details class="svr-other"><summary><i class="fas fa-comment-dots"></i> ' +
-                    '&ldquo;Other&rdquo; answers (' + others.length + ')</summary>' +
-                    textListHtml(others, 'svr-oth-' + qid) + '</details>';
+                    '&ldquo;Other&rdquo; answers (' + thousands(a.other_texts_n || others.length) + ')</summary>' +
+                    textListHtml(others, 'svr-oth-' + qid, a.other_texts_n) + '</details>';
             }
         }
 
@@ -1133,7 +1179,8 @@
         var cfg = specFor(q, theme);
         if (!cfg) { return true; }
         cfg.chart.renderTo = el;
-        cfg.accessibility = { description: q.prompt || ('Question ' + q.question_id) };
+        /* The a11y module parses description as HTML: escape the prompt so it reads as text. */
+        cfg.accessibility = { description: esc(q.prompt || ('Question ' + q.question_id)) };
         /* Horizontal bars: wrap long option labels inside a width budget
            instead of ellipsising them — there is no hover on touch (#33). */
         if (cfg.chart.type === 'bar') {
@@ -1231,7 +1278,9 @@
         f = f || DEFAULT_FILTERS;
         var ids = (f.kingdom_ids || []).map(Number);
         Array.prototype.forEach.call(document.querySelectorAll('.svr-kingdom'), function (cb) {
-            cb.checked = ids.indexOf(parseInt(cb.value, 10)) !== -1;
+            var v = parseInt(cb.value, 10);
+            /* A shared viewer's "All kingdoms" radio (value 0) stands for no pick. */
+            cb.checked = ids.indexOf(v) !== -1 || (v === 0 && !ids.length);
         });
         var consent = $('svr-consent');
         if (consent) {
@@ -1277,7 +1326,15 @@
             (f.consent && f.consent !== 'any') || f.date_from || f.date_to);
     }
 
+    /* An ongoing share holding back its first few matches (summary.held:
+       some match, fewer than MIN_CELL). A flag only; the count never ships. */
+    function heldText() {
+        var s = state.payload && state.payload.summary;
+        return (s && s.held) ? 'Results appear here once at least ' + minCell() + ' responses match this view.' : '';
+    }
+
     function noResponsesText() {
+        if (heldText()) { return heldText(); }
         return narrowingFilters(state.appliedFilters) ? 'No responses match these filters.' : 'No responses yet.';
     }
 
@@ -1310,6 +1367,11 @@
         if (!a) { return; }
         a.setAttribute('href', UIR + 'Survey/export/' + SURVEY_ID +
             '&filters=' + encodeURIComponent(JSON.stringify(filters)));
+        var an = $('svr-export-analysis');
+        if (an) {
+            an.setAttribute('href', UIR + 'Survey/export/' + SURVEY_ID + '&format=analysis' +
+                '&filters=' + encodeURIComponent(JSON.stringify(filters)));
+        }
     }
 
     /* ---------------------------------------------------------
@@ -1503,7 +1565,9 @@
                    and offer the way back. Unfiltered, the survey has simply
                    not been answered yet, so there is nothing to reset. */
                 sup.hidden = false;
-                sup.innerHTML = narrowingFilters(filters)
+                sup.innerHTML = heldText()
+                    ? '<i class="fas fa-hourglass-half" aria-hidden="true"></i> <span>' + esc(heldText()) + '</span>'
+                    : narrowingFilters(filters)
                     ? '<i class="fas fa-filter-circle-xmark" aria-hidden="true"></i> <span>No responses match these filters.</span> ' +
                       '<button type="button" class="sv-btn svr-nomatch-reset" data-svr-reset-filters>' +
                       '<i class="fas fa-rotate-left" aria-hidden="true"></i> Reset filters</button>'
@@ -1511,9 +1575,19 @@
             } else if (s.suppressed) {
                 sup.hidden = false;
                 var rn = Number(s.responses) || 0;
+                /* A manager's rows table still lists the matching responses, so
+                   only the charts are hidden; a shared lens exposes no rows. The
+                   rows sentence is its own span so Summary for sharing (which
+                   hides the table) can hide it without a re-render. */
                 sup.innerHTML = '<i class="fas fa-eye-slash" aria-hidden="true"></i> <span>' +
-                    'Only ' + plural(rn, 'response matches', 'responses match') + ' these filters. Answers from fewer than ' +
-                    mc + ' people are hidden so no one can be singled out.' +
+                    'Only ' + plural(rn, 'response matches', 'responses match') + ' these filters. ' +
+                    (SHARED
+                        ? 'Answers from fewer than ' + mc + ' people are hidden so no one can be singled out.'
+                        : 'Charts are hidden when fewer than ' + mc + ' responses match, so no one can be singled out.' +
+                          ($('svr-rows')
+                              ? '<span class="svr-sup-rows"' + (state.summaryMode ? ' hidden' : '') +
+                                '> Managers can still see individual rows in the table below.</span>'
+                              : '')) +
                     ' Widen the filters to see results.</span>';
             } else {
                 sup.hidden = true;
@@ -1894,6 +1968,8 @@
         var btn = $('svr-summary-toggle');
         if (btn) { btn.setAttribute('aria-pressed', state.summaryMode ? 'true' : 'false'); }
         if (state.summaryMode) { closePanel(false); }
+        var supRows = document.querySelector('#svr-suppressed .svr-sup-rows');
+        if (supRows) { supRows.hidden = state.summaryMode; }
         /* The row table is not even fetched in summary mode (it would log a
            rows_view for data nobody sees); build it on the way out. */
         if (!state.summaryMode && !state.table) { initRows(); }
@@ -1991,8 +2067,9 @@
         var all = (q.agg && q.agg[kind]) || [];
         list.innerHTML = all.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('');
         btn.setAttribute('aria-disabled', 'true');
-        btn.textContent = 'All ' + all.length + ' responses shown';
-        if (tell) { announce('All ' + all.length + ' responses shown.'); }
+        var label = textListLabel(all.length, parseInt(btn.getAttribute('data-total'), 10) || all.length);
+        btn.textContent = label;
+        if (tell) { announce(/\.$/.test(label) ? label : label + '.'); }
     }
 
     /* Everything must be on the paper: expand every truncated list and open
@@ -2090,9 +2167,151 @@
         if (btn) { btn.setAttribute('aria-pressed', state.summaryMode ? 'true' : 'false'); }
     }
 
+    /* ---------------------------------------------------------
+       Clear Results (managers only): shared .sv-overlay shell, a
+       fresh server count on every open, and a confirm button that
+       stays disabled through a 5-second countdown restarted on
+       each open. Never a native confirm().
+       --------------------------------------------------------- */
+
+    var CLEAR_SECONDS = 5;
+    var CLEAR_FLASH   = 'svr-cleared-' + SURVEY_ID;
+    var clearState    = { timer: null, busy: false, ready: false, opener: null, seq: 0 };
+
+    function clearFocusables() {
+        return Array.prototype.filter.call(
+            $('svr-clear-overlay').querySelectorAll('button:not([disabled])'),
+            function (b) { return b.offsetParent !== null; });
+    }
+
+    function clearError(msg) {
+        var el = $('svr-clear-error');
+        el.textContent = msg || '';
+        el.style.display = msg ? 'block' : 'none';
+    }
+
+    function clearArm(ready) {
+        var ok = $('svr-clear-ok');
+        clearState.ready = ready;
+        ok.disabled = !ready;
+        ok.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    }
+
+    function clearCountdown() {
+        var ok = $('svr-clear-ok');
+        var left = CLEAR_SECONDS;
+        clearInterval(clearState.timer);
+        clearArm(false);
+        ok.textContent = 'Clear results (' + left + ')';
+        clearState.timer = setInterval(function () {
+            left--;
+            if (left > 0) { ok.textContent = 'Clear results (' + left + ')'; return; }
+            clearInterval(clearState.timer);
+            clearState.timer = null;
+            ok.textContent = 'Clear results';
+            clearArm(!clearState.busy);
+        }, 1000);
+    }
+
+    function openClear() {
+        var ov = $('svr-clear-overlay');
+        var seq = ++clearState.seq;
+        clearState.opener = document.activeElement;
+        clearState.busy = false;
+        clearError('');
+        $('svr-clear-count').textContent = 'Counting responses…';
+        ov.classList.add('sv-open');
+        clearCountdown();
+        $('svr-clear-cancel').focus();
+        post('clear_results', { SurveyId: SURVEY_ID }).then(function (r) {
+            if (seq !== clearState.seq) { return; }
+            if (r.status !== 0) { clearError(r.error || statusMessage(r)); return; }
+            var n = parseInt(r.count, 10) || 0;
+            $('svr-clear-count').innerHTML = n === 0
+                ? 'There are no responses to delete.'
+                : '<strong>' + esc(thousands(n)) + ' ' + (n === 1 ? 'response' : 'responses') +
+                  '</strong> (test and real) will be permanently deleted.';
+        }).catch(function () {
+            if (seq === clearState.seq) { clearError('Could not reach the server to count the responses.'); }
+        });
+    }
+
+    function closeClear() {
+        if (clearState.busy) { return; }
+        clearState.seq++;
+        clearInterval(clearState.timer);
+        clearState.timer = null;
+        clearArm(false);
+        $('svr-clear-overlay').classList.remove('sv-open');
+        var back = clearState.opener;
+        clearState.opener = null;
+        if (back && back.focus) { back.focus(); }
+    }
+
+    function confirmClear() {
+        /* The disabled attribute already stops clicks and Enter/Space; this
+           guard also covers a scripted click and a second click in flight. */
+        if (!clearState.ready || clearState.busy) { return; }
+        clearState.busy = true;
+        clearArm(false);
+        var ok = $('svr-clear-ok');
+        ok.classList.add('sv-is-busy');
+        ok.textContent = 'Clearing…';
+        clearError('');
+        var fail = function (msg) {
+            clearState.busy = false;
+            ok.classList.remove('sv-is-busy');
+            ok.textContent = 'Clear results';
+            clearArm(true);
+            clearError(msg);
+        };
+        post('clear_results', { SurveyId: SURVEY_ID, Confirm: 1 }).then(function (r) {
+            if (r.status !== 0) { fail(r.error || statusMessage(r)); return; }
+            try { sessionStorage.setItem(CLEAR_FLASH, String(parseInt(r.cleared, 10) || 0)); } catch (e) { /* no storage */ }
+            /* Reload without the filter hash: the kingdom list and every chart
+               come back from the server as the empty state. */
+            location.replace(location.pathname + location.search);
+        }).catch(function () { fail('Could not reach the server. Check your connection and try again.'); });
+    }
+
+    function initClear() {
+        var btn = $('svr-clear');
+        var ov  = $('svr-clear-overlay');
+        if (!btn || !ov) { return; }
+        btn.addEventListener('click', openClear);
+        $('svr-clear-cancel').addEventListener('click', closeClear);
+        $('svr-clear-ok').addEventListener('click', confirmClear);
+        ov.addEventListener('click', function (e) { if (e.target === ov) { closeClear(); } });
+        ov.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeClear();
+                return;
+            }
+            if (e.key !== 'Tab') { return; }
+            var f = clearFocusables();
+            if (!f.length) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        });
+
+        var flash = null;
+        try { flash = sessionStorage.getItem(CLEAR_FLASH); sessionStorage.removeItem(CLEAR_FLASH); } catch (e) { /* no storage */ }
+        var note = $('svr-cleared');
+        if (flash !== null && note) {
+            var n = parseInt(flash, 10) || 0;
+            note.hidden = false;
+            note.innerHTML = '<i class="fas fa-circle-check" aria-hidden="true"></i><span>Results cleared: ' +
+                esc(thousands(n)) + ' ' + (n === 1 ? 'response' : 'responses') + ' deleted. Attendance credits already posted were kept.</span>';
+        }
+    }
+
     function boot() {
         initDatePickers();
         restoreFromUrl();
+        initClear();
 
         if ($('svr-apply')) { $('svr-apply').addEventListener('click', onApply); }
         if ($('svr-reset')) {

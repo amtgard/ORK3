@@ -74,7 +74,8 @@ final class SurveySharingCreditTest extends TestCase
         $s->update($ks, ['ResultsShare' => 'all']);
         $this->assertSame(['shared' => true], $s->resultsAccess($this->pOfficerA, $this->row($ks), $parkCtx)['lens']);
 
-        $s->setStatus($ks, 'draft');
+        // setStatus() no longer lets an opened survey back to draft; stage one directly.
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . "survey SET status = 'draft', opened_at = NULL WHERE survey_id = " . $ks);
         $this->assertNull($s->resultsAccess($this->pOfficerA, $this->row($ks), $parkCtx), 'drafts never roll down');
     }
 
@@ -327,6 +328,7 @@ final class SurveySharingCreditTest extends TestCase
         }
         $this->answer($ks, $this->player('pb', $this->parkB, $this->k), 'full');
         $acc = (new Survey())->resultsAccess($this->pOfficerA, $this->row($ks), ['type' => 'park', 'id' => $this->parkA]);
+        $this->afterCloseTiming($ks); // the live count; an ongoing share's snapshot has its own test
         $out = (new SurveyReport())->sharedResults($ks, [], $acc['lens']);
         $this->assertSame(2, (int) $out['summary']['responses']);
         $this->assertTrue((bool) $out['summary']['suppressed'], 'a lens view under 5 is suppressed');
@@ -355,6 +357,7 @@ final class SurveySharingCreditTest extends TestCase
 
         $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($ks), ['type' => 'kingdom', 'id' => $this->k]);
         $this->assertSame('shared', $acc['level']);
+        $this->afterCloseTiming($ks); // the live count; an ongoing share's snapshot has its own test
         $all = (new SurveyReport())->sharedResults($ks, [], $acc['lens']);
         $cut = (new SurveyReport())->sharedResults($ks, ['date_to' => $yesterday], $acc['lens']);
         $this->assertSame(6, (int) $all['summary']['responses']);
@@ -363,6 +366,220 @@ final class SurveySharingCreditTest extends TestCase
 
         $park = (new SurveyReport())->sharedResults($ks, ['park_id' => $this->parkB], $acc['lens']);
         $this->assertSame(6, (int) $park['summary']['responses'], "a client's park_id is ignored");
+    }
+
+    /** Read shared results live (after close), not through an ongoing share's snapshot. */
+    private function afterCloseTiming(int $sid): void
+    {
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . "survey SET results_share_timing = 'after_close' WHERE survey_id = " . (int) $sid);
+    }
+
+    /** An unfiltered 'all' share is a shared view too: one response is suppressed. */
+    public function testAnAllShareOfOneResponseIsSuppressed(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        $this->answer($os, $this->player('one', $this->parkA, $this->k), 'full');
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $this->assertSame(['shared' => true], $acc['lens']);
+        $this->afterCloseTiming($os);
+        $out = (new SurveyReport())->sharedResults($os, [], $acc['lens']);
+        $this->assertTrue((bool) $out['summary']['suppressed']);
+        $this->assertNotEmpty($out['questions']);
+        foreach ($out['questions'] as $q) {
+            $this->assertSame(['suppressed' => true], $q['agg']);
+        }
+        $manager = (new SurveyReport())->aggregate($os, SurveyReport::normalizeFilters([]));
+        $this->assertArrayNotHasKey('suppressed', $manager['questions'][0]['agg'], 'control: the owner still sees it');
+    }
+
+    /**
+     * An ongoing share with 1..MIN_CELL-1 matches says so with a flag (#8),
+     * never with the count: the snapshot stays empty until MIN_CELL match.
+     */
+    public function testAnOngoingShareFlagsHeldResultsWithoutTheCount(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $rep = new SurveyReport();
+        $this->assertFalse($rep->sharedResults($os, [], $acc['lens'])['summary']['held'], 'nobody has answered: not held');
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->answer($os, $this->player('held' . $i, $this->parkA, $this->k), 'full');
+        }
+        $out = $rep->sharedResults($os, [], $acc['lens']);
+        $this->assertTrue($out['summary']['held']);
+        $this->assertSame(0, (int) $out['summary']['responses'], 'the snapshot is still empty');
+        array_walk_recursive($out, function ($v, $k) {
+            $this->assertFalse(is_int($v) && $v === 3, "no count of the held responses leaks ({$k})");
+        });
+        $this->assertFalse($rep->sharedResults($os, ['kingdom_ids' => [$this->kOther]], $acc['lens'])['summary']['held'], 'none match the view: not held');
+
+        for ($i = 3; $i < 5; $i++) {
+            $this->answer($os, $this->player('held' . $i, $this->parkA, $this->k), 'full');
+        }
+        $out = $rep->sharedResults($os, [], $acc['lens']);
+        $this->assertFalse($out['summary']['held'], 'MIN_CELL match: the snapshot opens');
+        $this->assertSame(5, (int) $out['summary']['responses']);
+    }
+
+    /** The shared copy promises individual comments stay with the owners. */
+    public function testSharedPayloadsCarryNoVerbatimText(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        $page = (int) $this->scalar('SELECT page_id FROM ' . DB_PREFIX . 'survey_page WHERE survey_id = ' . $os . ' LIMIT 1');
+        // An open survey's structure is locked, so the paragraph goes in directly.
+        $this->pdo->exec('INSERT INTO ' . DB_PREFIX . "survey_question (survey_id, page_id, sort_order, type, prompt, settings, created_at, updated_at)
+                          VALUES ({$os}, {$page}, 9, 'paragraph', 'T11SHARE comments', '{}', NOW(), NOW())");
+        $qid = (int) $this->pdo->lastInsertId();
+        for ($i = 0; $i < 6; $i++) {
+            $this->answer($os, $this->player('txt' . $i, $this->parkA, $this->k), 'full');
+            $rid = (int) $this->scalar('SELECT MAX(response_id) FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $os);
+            $this->pdo->exec('INSERT INTO ' . DB_PREFIX . "survey_answer (response_id, question_id, value_text) VALUES ({$rid}, {$qid}, 'T11SHARE secret {$i}')");
+        }
+        $manager = (string) json_encode((new SurveyReport())->aggregate($os, SurveyReport::normalizeFilters([])));
+        $this->assertStringContainsString('T11SHARE secret', $manager, 'control: the owner reads the comments');
+        $this->assertStringContainsString('"other_texts"', $manager);
+
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        foreach ([[], ['crosstab_question_id' => $qid]] as $filters) {
+            $out = (new SurveyReport())->sharedResults($os, $filters, $acc['lens']);
+            $json = (string) json_encode($out);
+            $this->assertStringNotContainsString('"texts"', $json);
+            $this->assertStringNotContainsString('"other_texts"', $json);
+            $this->assertStringNotContainsString('T11SHARE secret', $json);
+        }
+        $byId = array_column($out['questions'], null, 'question_id');
+        $this->assertSame(5, (int) $byId[$qid]['n'], 'the count stays (ongoing snapshot: 5 of 6)');
+    }
+
+    /**
+     * [A,B] minus [A] isolates B: a shared viewer's kingdom pick is the whole
+     * lens or one kingdom, and that kingdom and the rest of the lens beside
+     * it must each hold 0 or at least MIN_CELL responses.
+     */
+    public function testSharedKingdomPicksCannotDifferenceOutASmallKingdom(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        for ($i = 0; $i < 6; $i++) {
+            $this->answer($os, $this->player('dh' . $i, $this->parkA, $this->k), 'full');
+        }
+        for ($i = 0; $i < 2; $i++) {
+            $this->answer($os, $this->player('da' . $i, $this->parkOther, $this->kOther), 'full');
+        }
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $this->afterCloseTiming($os);
+        $rep = new SurveyReport();
+
+        $this->assertSame(8, (int) $rep->sharedResults($os, [], $acc['lens'])['summary']['responses'], 'the whole lens');
+        $away = $rep->sharedResults($os, ['kingdom_ids' => [$this->kOther]], $acc['lens']);
+        $this->assertSame(0, (int) $away['summary']['responses'], 'a kingdom under 5 is refused');
+        $this->assertTrue((bool) $away['summary']['suppressed']);
+        $home = $rep->sharedResults($os, ['kingdom_ids' => [$this->k]], $acc['lens']);
+        $this->assertSame(0, (int) $home['summary']['responses'], 'whole minus home would isolate the 2 away');
+        $both = $rep->sharedResults($os, ['kingdom_ids' => [$this->k, $this->kOther]], $acc['lens']);
+        $this->assertSame(0, (int) $both['summary']['responses'], 'a multi-kingdom subset is refused');
+
+        for ($i = 2; $i < 5; $i++) {
+            $this->answer($os, $this->player('da' . $i, $this->parkOther, $this->kOther), 'full');
+        }
+        $this->assertSame(6, (int) $rep->sharedResults($os, ['kingdom_ids' => [$this->k]], $acc['lens'])['summary']['responses'], 'both sides at 5+');
+        $this->assertSame(5, (int) $rep->sharedResults($os, ['kingdom_ids' => [$this->kOther]], $acc['lens'])['summary']['responses']);
+    }
+
+    /**
+     * Multi-way differencing: with A=10, B=10, C=1 each big pick passes a
+     * two-way check, but whole - A - B is C's one response. Complementary
+     * suppression allows only one of A and B.
+     */
+    public function testSharedKingdomPicksCannotBeSummedAgainstTheWhole(): void
+    {
+        $kThird = $this->kingdom('third');
+        $parkThird = $this->park($kThird, 't');
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        for ($i = 0; $i < 10; $i++) {
+            $this->answer($os, $this->player('mh' . $i, $this->parkA, $this->k), 'full');
+            $this->answer($os, $this->player('ma' . $i, $this->parkOther, $this->kOther), 'full');
+        }
+        $this->answer($os, $this->player('mt', $parkThird, $kThird), 'full');
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $this->afterCloseTiming($os);
+        $rep = new SurveyReport();
+
+        $whole = (int) $rep->sharedResults($os, [], $acc['lens'])['summary']['responses'];
+        $this->assertSame(21, $whole);
+        $sum = 0;
+        foreach ([$this->k, $this->kOther, $kThird] as $kid) {
+            $sum += (int) $rep->sharedResults($os, ['kingdom_ids' => [$kid]], $acc['lens'])['summary']['responses'];
+        }
+        $this->assertSame(10, $sum, 'only one of the two big kingdoms is served');
+        $this->assertGreaterThanOrEqual(SurveyReport::MIN_CELL, $whole - $sum, 'whole minus every pick is a blend of 5+');
+        $choices = $rep->sharedKingdomChoices($os, $acc['lens']);
+        $this->assertCount(1, $choices, 'the filter list offers the same allowed set');
+        $this->assertSame([10], array_values($choices));
+    }
+
+    /** A lone anonymous row (no kingdom) is the remainder of whole minus the kingdoms. */
+    public function testSharedKingdomPicksCannotIsolateALoneAnonymousRow(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        for ($i = 0; $i < 6; $i++) {
+            $this->answer($os, $this->player('ah' . $i, $this->parkA, $this->k), 'full');
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $this->answer($os, $this->player('aa' . $i, $this->parkOther, $this->kOther), 'full');
+        }
+        $this->answer($os, $this->player('anon', $this->parkA, $this->k), 'anonymous');
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $this->afterCloseTiming($os);
+        $rep = new SurveyReport();
+
+        $this->assertSame(12, (int) $rep->sharedResults($os, [], $acc['lens'])['summary']['responses']);
+        $home = (int) $rep->sharedResults($os, ['kingdom_ids' => [$this->k]], $acc['lens'])['summary']['responses'];
+        $away = (int) $rep->sharedResults($os, ['kingdom_ids' => [$this->kOther]], $acc['lens'])['summary']['responses'];
+        $this->assertSame(6, $home);
+        $this->assertSame(0, $away, 'the smaller kingdom is withheld so whole - home - away is not the anonymous row');
+        $this->assertSame([$this->k => 6], $rep->sharedKingdomChoices($os, $acc['lens']));
+    }
+
+    /** 'any' minus 'full' would isolate a lone partial row: shared viewers get no consent pick. */
+    public function testSharedViewersCannotDifferenceByConsent(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        for ($i = 0; $i < 6; $i++) {
+            $this->answer($os, $this->player('cf' . $i, $this->parkA, $this->k), 'full');
+        }
+        $this->answer($os, $this->player('cp', $this->parkA, $this->k), 'partial');
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $this->afterCloseTiming($os);
+        $rep = new SurveyReport();
+
+        $this->assertSame(6, (int) $rep->summary($os, SurveyReport::normalizeFilters(['consent' => 'full']))['responses'], 'control: a manager can pick consent');
+        foreach (['any', 'full', 'partial', 'anonymous'] as $c) {
+            $this->assertSame(7, (int) $rep->sharedResults($os, ['consent' => $c], $acc['lens'])['summary']['responses'], "consent '{$c}' is ignored");
+        }
+    }
+
+    /**
+     * An ongoing share reads a snapshot that moves only once MIN_CELL new
+     * responses arrive, so reloading after one publicly credited response
+     * cannot diff out that player's answers. The owner stays live.
+     */
+    public function testOngoingShareServesASnapshotThatAdvancesInBatches(): void
+    {
+        $os = $this->openSurvey($this->kOfficer, 'ork', $this->k, ['results_share' => 'all', 'results_share_timing' => 'ongoing']);
+        $acc = (new Survey())->resultsAccess($this->kOfficer, $this->row($os), ['type' => 'kingdom', 'id' => $this->k]);
+        $rep = new SurveyReport();
+        $shared = function () use ($rep, $os, $acc): int {
+            return (int) $rep->sharedResults($os, [], $acc['lens'])['summary']['responses'];
+        };
+        $expect = [1 => 0, 4 => 0, 5 => 5, 6 => 5, 9 => 5, 10 => 10, 11 => 10];
+        for ($i = 1; $i <= 11; $i++) {
+            $this->answer($os, $this->player('sn' . $i, $this->parkA, $this->k), 'full');
+            if (isset($expect[$i])) {
+                $this->assertSame($expect[$i], $shared(), "after {$i} responses");
+            }
+        }
+        $this->assertSame(11, (int) $rep->summary($os, SurveyReport::normalizeFilters([]))['responses'], 'the owner is live');
     }
 
     public function testAddSystemCreditWritesEveryColumnAndBustsNothingElse(): void
@@ -448,6 +665,37 @@ final class SurveySharingCreditTest extends TestCase
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . (int) $r['EventId']);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int) $r['EventId']);
         }
+    }
+
+    /** Enforced, not documented: inside a caller's transaction no event is made. */
+    public function testCreateSystemEventAndEnsureEventRefuseInsideAnOpenTransaction(): void
+    {
+        global $DB;
+        $s   = new Survey();
+        $sid = $this->fx['survey'][] = (int) $s->create($this->kOfficer, 'kingdom', $this->k, 'T11SHARE intrans')['SurveyId'];
+        $this->assertSame(0, $this->credit()->enable($this->kOfficer, $sid, ['type' => 'kingdom', 'id' => $this->k], 'event', true)['Status']);
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . "survey SET status = 'open', opened_at = NOW() WHERE survey_id = " . $sid);
+        $stale = $this->credit()->configs($sid)[0];
+        $row   = $this->row($sid);
+        $name  = 'T11SHARE intrans direct';
+
+        $DB->BeginTrans();
+        try {
+            $r = Ork3::$Lib->eventplanning->create_system_event([
+                'KingdomId' => $this->k, 'ParkId' => 0, 'Name' => $name, 'Date' => '2026-09-05',
+                'Description' => 'desc', 'Url' => '', 'UrlName' => '',
+            ]);
+            $this->assertSame(1, $r['Status']);
+
+            $ensure = new ReflectionMethod(SurveyCredit::class, 'ensureEvent');
+            $ensure->setAccessible(true);
+            $this->assertSame($stale, $ensure->invoke(new SurveyCredit(), $stale, $row), 'config left unchanged');
+        } finally {
+            $DB->RollbackTrans();
+        }
+        $this->assertSame(0, (int) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'event WHERE name IN ('
+            . $this->pdo->quote($name) . ', ' . $this->pdo->quote(SurveyCredit::eventName('T11SHARE intrans')) . ')'), 'no ork_event row');
+        $this->assertSame(0, (int) $this->scalar('SELECT COALESCE(event_calendardetail_id, 0) FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $sid));
     }
 
     private function credit(): SurveyCredit
@@ -789,7 +1037,8 @@ final class SurveySharingCreditTest extends TestCase
     public function testDeletingADraftRemovesItsCreditConfigsAndEvent(): void
     {
         $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);   // opened: it has a start date
-        $this->assertSame(0, (new Survey())->setStatus($ks, 'draft')['Status']);
+        // setStatus() refuses opened -> draft now; stage the draft-with-a-start-date row directly.
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . "survey SET status = 'draft' WHERE survey_id = " . $ks);
         $this->assertSame(0, $this->credit()->enable($this->kOfficer, $ks, ['type' => 'kingdom', 'id' => $this->k], 'event', true)['Status']);
         $eventId = (int) $this->scalar('SELECT event_id FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $ks);
         $this->assertGreaterThan(0, $eventId, 'the draft owner\'s event exists');
@@ -955,6 +1204,20 @@ final class SurveySharingCreditTest extends TestCase
         $this->assertTrue($this->credit()->creditAvailableFor($this->row($ks), $uid));
     }
 
+    /** A player already holding the survey's credit is not promised another (e.g. a retake after cleared results). */
+    public function testCreditAvailableSkipsAPlayerAlreadyGranted(): void
+    {
+        $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $this->credit()->enable($this->kOfficer, $ks, ['type' => 'kingdom', 'id' => $this->k], 'home_park', true);
+        $granted = $this->player('held', $this->parkA, $this->k);
+        $fresh   = $this->player('fresh', $this->parkA, $this->k);
+        $this->assertTrue($this->credit()->creditAvailableFor($this->row($ks), $granted), 'covered, not yet granted');
+        $this->assertSame('granted', $this->answer($ks, $granted, 'full')['Credit']);
+        $this->assertFalse($this->credit()->creditAvailableFor($this->row($ks), $granted), 'covered and already granted');
+        $this->assertSame([$ks => false], $this->credit()->creditAvailableMap([$this->row($ks)], $granted));
+        $this->assertSame([$ks => true], $this->credit()->creditAvailableMap([$this->row($ks)], $fresh), 'covered, not granted');
+    }
+
     /** SELECTs run so far on the app's own connection (the one SurveyCredit uses). */
     private function appSelects(): int
     {
@@ -1065,6 +1328,110 @@ final class SurveySharingCreditTest extends TestCase
         $this->manualAttendance($uid, date('Y-m-d', strtotime('-7 days')), $this->parkA, $this->k, 3, 'T11SHARE prior');
         $this->assertSame('granted', $this->answer($ks, $uid, 'full')['Credit']);
         $this->assertSame('3', (string) $this->grants($ks)[0]['class_id'], 'the class of their last attendance');
+    }
+
+    /** SurveyCredit with a small synchronous grant cap, so a test survey can exceed it. */
+    private function cappedCredit(int $cap): SurveyCredit
+    {
+        $c = new SurveyCredit();
+        $p = new ReflectionProperty(SurveyCredit::class, 'syncCap');
+        $p->setAccessible(true);
+        $p->setValue($c, $cap);
+        return $c;
+    }
+
+    /**
+     * #25: a web request posts a bounded batch and reports the rest as
+     * Remaining (the sweep finishes them); a retry of the same enable is a
+     * success that carries on the backfill, while a different mode is still
+     * refused. The backfill's batched last-class lookup matches the live one.
+     */
+    public function testEnableBackfillIsBoundedAndARetryWithTheSameModeSucceeds(): void
+    {
+        $ks  = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $g   = ['type' => 'kingdom', 'id' => $this->k];
+        $ids = [];
+        foreach (['b1', 'b2', 'b3'] as $s) {
+            $this->answer($ks, $ids[] = $this->player($s, $this->parkA, $this->k), 'full');
+        }
+        $this->manualAttendance($ids[0], date('Y-m-d', strtotime('-9 days')), $this->parkA, $this->k, 2, 'T11SHARE older');
+        $this->manualAttendance($ids[0], date('Y-m-d', strtotime('-3 days')), $this->parkA, $this->k, 3, 'T11SHARE newer');
+
+        $r = $this->cappedCredit(2)->enable($this->kOfficer, $ks, $g, 'home_park', true);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->assertSame([2, 1, false], [$r['Granted'], $r['Remaining'], $r['Already']]);
+        $this->assertCount(2, $this->grants($ks));
+        $this->assertSame('3', (string) $this->grants($ks)[0]['class_id'], 'batched lookup: the class of their latest attendance');
+        $this->assertSame('6', (string) $this->grants($ks)[1]['class_id'], 'no attendance: Color');
+        $this->assertSame(1, $this->credit()->status($this->kOfficer, $ks, $g)['Credit']['pending'], 'the rest stays owed');
+
+        $again = $this->cappedCredit(2)->enable($this->kOfficer, $ks, $g, 'home_park', true);
+        $this->assertSame(0, $again['Status'], 'retrying the same enable is not an error');
+        $this->assertSame([true, 1, 0], [$again['Already'], $again['Granted'], $again['Remaining']]);
+        $this->assertSame((int) $r['CreditId'], (int) $again['CreditId']);
+        $this->assertSame(1, $this->credit()->enable($this->kOfficer, $ks, $g, 'event', true)['Status'], 'a different mode is still refused');
+        $this->assertSame('1', (string) $this->scalar('SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $ks));
+        $this->assertCount(3, $this->grants($ks));
+    }
+
+    public function testPanelReconcileIsBoundedAndTheSweepReconcileIsNot(): void
+    {
+        $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $g  = ['type' => 'kingdom', 'id' => $this->k];
+        $this->assertSame(0, $this->credit()->enable($this->kOfficer, $ks, $g, 'home_park', true)['Status']);
+        // Owed but not yet posted (as if their live grants had failed).
+        foreach (['r1', 'r2', 'r3'] as $s) {
+            $uid = $this->player($s, $this->parkA, $this->k);
+            $this->answer($ks, $uid, 'full');
+            $this->pdo->exec('DELETE a, g FROM ' . DB_PREFIX . 'survey_credit_grant g JOIN ' . DB_PREFIX . 'attendance a ON a.attendance_id = g.attendance_id
+                              WHERE g.survey_id = ' . $ks . ' AND g.mundane_id = ' . $uid);
+        }
+        $r = $this->cappedCredit(1)->reconcileAs($this->kOfficer, $ks, $g);
+        $this->assertSame(0, $r['Status']);
+        $this->assertSame([1, 2], [$r['Granted'], $r['Remaining']]);
+        $this->assertSame(['Granted' => 2, 'SkippedNoPark' => 0, 'Pending' => 0], $this->cappedCredit(1)->reconcile($ks), 'the sweep finishes the backlog');
+        $this->assertCount(3, $this->grants($ks));
+    }
+
+    /**
+     * #26: a banned or currently suspended player is never credited, by the
+     * backfill, the live grant or the sweep. Their credit is held (counted
+     * in the panel) and posts once the sanction lifts; an expired suspension
+     * is no sanction.
+     */
+    public function testBannedAndSuspendedPlayersAreHeldUntilTheSanctionLifts(): void
+    {
+        $ks      = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $g       = ['type' => 'kingdom', 'id' => $this->k];
+        $clean   = $this->player('clean', $this->parkA, $this->k);
+        $banned  = $this->player('banned', $this->parkA, $this->k);
+        $susp    = $this->player('susp', $this->parkA, $this->k);
+        $forever = $this->player('forever', $this->parkA, $this->k);
+        $expired = $this->player('expired', $this->parkA, $this->k);
+        foreach ([$clean, $banned, $susp, $forever, $expired] as $uid) {
+            $this->answer($ks, $uid, 'full');
+        }
+        $m = DB_PREFIX . 'mundane';
+        $this->pdo->exec("UPDATE {$m} SET penalty_box = 1 WHERE mundane_id = {$banned}");
+        $this->pdo->exec("UPDATE {$m} SET suspended = 1, suspended_at = CURDATE(), suspended_until = CURDATE() + INTERVAL 30 DAY WHERE mundane_id = {$susp}");
+        $this->pdo->exec("UPDATE {$m} SET suspended = 1, suspended_at = CURDATE(), suspended_until = NULL WHERE mundane_id = {$forever}");
+        $this->pdo->exec("UPDATE {$m} SET suspended = 1, suspended_at = CURDATE() - INTERVAL 30 DAY, suspended_until = CURDATE() - INTERVAL 1 DAY WHERE mundane_id = {$expired}");
+
+        $this->assertSame(0, $this->credit()->enable($this->kOfficer, $ks, $g, 'home_park', true)['Status']);
+        $got = array_map(static fn (array $x): int => (int) $x['mundane_id'], $this->grants($ks));
+        sort($got);
+        $want = [$clean, $expired];
+        sort($want);
+        $this->assertSame($want, $got);
+
+        $st = $this->credit()->status($this->kOfficer, $ks, $g)['Credit'];
+        $this->assertSame([0, 3], [$st['pending'], $st['held']]);
+        $this->assertSame('none', $this->credit()->grantFor($ks, $susp), 'no live credit while suspended');
+        $this->assertSame(['Granted' => 0, 'SkippedNoPark' => 0, 'Pending' => 0], $this->credit()->reconcile($ks));
+
+        $this->pdo->exec("UPDATE {$m} SET penalty_box = 0 WHERE mundane_id = {$banned}");
+        $this->assertSame(['Granted' => 1, 'SkippedNoPark' => 0, 'Pending' => 0], $this->credit()->reconcile($ks), 'posts once the ban lifts');
+        $this->assertSame(2, $this->credit()->status($this->kOfficer, $ks, $g)['Credit']['held']);
     }
 
     /** Spec §8 / AC 3: rows and export stay manager-only; shared access never opens them. */

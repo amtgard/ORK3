@@ -45,6 +45,8 @@ class SurveyReport
         'include_test'         => false,
         'park_id'              => null,   // lens only: Any ORK Data rows snapshotted at this park (sharing spec §2)
         'impossible'           => false,  // lens only: the viewer's picks and the lens do not overlap
+        'shared'               => false,  // lens only: a shared viewer's view, always narrowing (MIN_CELL applies)
+        'max_response_id'      => null,   // lens only: an ongoing share's snapshot (sharedWatermark())
     ];
 
     /** Types that may be split by a cross-tab question. */
@@ -62,6 +64,13 @@ class SurveyReport
 
     /** Cap on the inline text list returned by aggregateType() for text questions. */
     public const TEXT_SAMPLE_LIMIT = 500;
+
+    /** A pairwise option seen in fewer matchups than this is listed unranked ("too few matchups", review #35). */
+    public const PAIRWISE_MIN_APPEARANCES = 10;
+
+    /** Bradley-Terry fit: MM iteration cap and convergence tolerance (max |change in log strength|). */
+    public const BT_MAX_ITERATIONS = 500;
+    public const BT_TOLERANCE = 1e-9;
 
     /** Number questions list each value when all are integers and at most this many are distinct (review #30). */
     public const NUMBER_VALUES_MAX_DISTINCT = 20;
@@ -155,6 +164,14 @@ class SurveyReport
             $out['impossible'] = true;
         }
 
+        if (!empty($filters['shared'])) {
+            $out['shared'] = true;
+        }
+
+        if (isset($filters['max_response_id']) && is_numeric($filters['max_response_id'])) {
+            $out['max_response_id'] = max(0, (int)$filters['max_response_id']);
+        }
+
         return $out;
     }
 
@@ -170,11 +187,14 @@ class SurveyReport
      * PURE. Does this filter carve a subset out of the survey's responses? A
      * kingdom, consent level or date bound does; include_test and the cross-tab
      * question do not. Narrowed totals below MIN_CELL are suppressed (review #4).
+     * Every shared view counts as narrowing, an unfiltered 'all' share included:
+     * a shared viewer never sees an aggregate of fewer than MIN_CELL people.
      */
     public static function isNarrowing(array $filters): bool
     {
         $f = self::normalizeFilters($filters);
-        return $f['kingdom_ids'] !== []
+        return $f['shared']
+            || $f['kingdom_ids'] !== []
             || $f['consent'] !== 'any'
             || $f['date_from'] !== null
             || $f['date_to'] !== null
@@ -201,10 +221,22 @@ class SurveyReport
             // included, of the one respondent on day D whom a credit names (D2).
             $f['date_from'] = null;
             $f['date_to']   = null;
+            $f['shared']    = true;
+            // No consent pick either: 'any' minus 'full' is the partial and
+            // anonymous rows, a handful of people even when their own view is
+            // suppressed. A park lens still forces 'full' below.
+            if (empty($lens['park_id'])) {
+                $f['consent'] = 'any';
+            }
+            // No cross-tab either: the whole view's group g minus an allowed
+            // kingdom's group g (or one ongoing snapshot's group g minus the
+            // last) is the few remainder respondents in g, with every target
+            // answer. crosstabGroups() only suppresses within one view.
+            $f['crosstab_question_id'] = null;
         }
 
+        $allowed = [];
         if (!empty($lens['kingdom_ids']) && is_array($lens['kingdom_ids'])) {
-            $allowed = [];
             foreach ($lens['kingdom_ids'] as $id) {
                 $id = (int)$id;
                 if ($id > 0 && !in_array($id, $allowed, true)) {
@@ -221,6 +253,19 @@ class SurveyReport
                 } else {
                     $f['kingdom_ids'] = $keep;
                 }
+            }
+        }
+
+        // A shared viewer's kingdom pick is the whole lens or ONE kingdom
+        // (sharedResults() then checks that kingdom's count). Any other
+        // subset differences against the whole ([A,B] minus [A] isolates B).
+        if ($f['shared'] && count($f['kingdom_ids']) > 1) {
+            $pick = $f['kingdom_ids'];
+            sort($pick);
+            $whole = $allowed;
+            sort($whole);
+            if ($pick !== $whole) {
+                $f['impossible'] = true;
             }
         }
 
@@ -245,8 +290,10 @@ class SurveyReport
     public static function clientFilters($filters): array
     {
         $f = self::normalizeFilters($filters);
-        $f['park_id']    = null;
-        $f['impossible'] = false;
+        $f['park_id']         = null;
+        $f['impossible']      = false;
+        $f['shared']          = false;
+        $f['max_response_id'] = null;
         return $f;
     }
 
@@ -290,14 +337,196 @@ class SurveyReport
      * Charts and stats for a shared viewer (sharing spec §2): lens folded in,
      * survey-wide counts removed, and summary.lens = {label} (§5) so the page
      * can say whose players it is looking at.
+     *
+     * An 'ongoing' share reads a snapshot (sharedWatermark()) that advances
+     * only in steps of MIN_CELL responses, so reloading after one new
+     * (publicly credited) response cannot diff out that player's answers. A
+     * single-kingdom pick is refused (no rows) unless sharedKingdomChoices()
+     * allows it. Verbatim text never leaves (stripVerbatim()).
      */
     public function sharedResults(int $surveyId, $filters, array $lens): array
     {
-        $f   = self::applyLens($filters, $lens);
-        $out = $this->aggregate($surveyId, $f);
+        $f = self::applyLens($filters, $lens);
+        $row = $this->surveyRow($surveyId);
+        $ongoing = $row !== null && (string)($row['results_share_timing'] ?? 'after_close') === 'ongoing';
+        $matched = 0;
+        if ($ongoing) {
+            $f['max_response_id'] = $this->sharedWatermark($surveyId, $f, $matched);
+        }
+
+        // A one-kingdom pick narrower than the lens must be one of the
+        // choices complementary suppression allows (sharedKingdomChoices()),
+        // or whole minus the allowed picks isolates a few people.
+        $whole = self::applyLens([], $lens);
+        if (!$f['impossible'] && count($f['kingdom_ids']) === 1 && $f['kingdom_ids'] !== $whole['kingdom_ids']) {
+            if (!isset($this->sharedKingdomChoices($surveyId, $lens)[$f['kingdom_ids'][0]])) {
+                $f['impossible'] = true;
+            }
+        }
+
+        $out = self::stripVerbatim($this->aggregate($surveyId, $f));
         $out['summary'] = self::redactForLens($this->summary($surveyId, $f), $lens);
         $out['summary']['lens'] = ['label' => self::lensLabel($lens)];
+        // Held: responses match the view but fewer than MIN_CELL, so the
+        // ongoing snapshot is still empty. A flag only, never the count.
+        $out['summary']['held'] = $ongoing && !$f['impossible'] && $matched > 0 && (int)$f['max_response_id'] === 0;
         return $out;
+    }
+
+    /**
+     * PURE. A shared payload keeps counts, never words: each question's (and
+     * cross-tab group's) texts and other_texts go, other_texts becoming
+     * other_count. The shared banner and consent copy promise respondents
+     * that individual comments stay with the survey's owners.
+     */
+    public static function stripVerbatim(array $aggregate): array
+    {
+        $strip = static function (array $agg): array {
+            unset($agg['texts']);
+            if (array_key_exists('other_texts', $agg)) {
+                // other_texts is capped at TEXT_SAMPLE_LIMIT; other_texts_n is the full count (#33).
+                $agg['other_count'] = isset($agg['other_texts_n'])
+                    ? (int) $agg['other_texts_n']
+                    : (is_array($agg['other_texts']) ? count($agg['other_texts']) : 0);
+                unset($agg['other_texts']);
+            }
+            return $agg;
+        };
+        foreach ($aggregate['questions'] ?? [] as $i => $q) {
+            if (isset($q['agg']) && is_array($q['agg'])) {
+                $aggregate['questions'][$i]['agg'] = $strip($q['agg']);
+            }
+            foreach ($q['crosstab']['groups'] ?? [] as $g => $group) {
+                if (isset($group['agg']) && is_array($group['agg'])) {
+                    $aggregate['questions'][$i]['crosstab']['groups'][$g]['agg'] = $strip($group['agg']);
+                }
+            }
+        }
+        return $aggregate;
+    }
+
+    /**
+     * An ongoing share's snapshot for one view: the response_id of the last of
+     * the first floor(N / MIN_CELL) * MIN_CELL responses the view matches (0
+     * below MIN_CELL). Deterministic, so nothing is stored, and it moves only
+     * once MIN_CELL more matching responses have arrived: two reloads either
+     * match or differ by at least MIN_CELL people.
+     */
+    private function sharedWatermark(int $surveyId, array $f, ?int &$matched = null): int
+    {
+        $f['max_response_id'] = null;
+        $where = $this->reportWhere($surveyId, $f);
+        $n = 0;
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'survey_response r WHERE ' . $where);
+        if ($rs && $rs->Next()) {
+            $n = (int)$rs->c;
+        }
+        $matched = $n;
+        $k = intdiv($n, self::MIN_CELL) * self::MIN_CELL;
+        if ($k < 1) {
+            return 0;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.response_id FROM ' . DB_PREFIX . 'survey_response r WHERE ' . $where
+            . ' ORDER BY r.response_id ASC LIMIT 1 OFFSET ' . ($k - 1)
+        );
+        return ($rs && $rs->Next()) ? (int)$rs->response_id : 0;
+    }
+
+    /** Responses a view's filters match on every report surface (reportWhere()). */
+    private function reportCount(int $surveyId, array $f): int
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'survey_response r WHERE ' . $this->reportWhere($surveyId, $f)
+        );
+        return ($rs && $rs->Next()) ? (int)$rs->c : 0;
+    }
+
+    /**
+     * The single kingdoms a shared viewer may pick, kingdom_id => the count
+     * that view serves (capped like the view itself on an ongoing share), for
+     * the results filter list and for sharedResults(). Every kingdom in the
+     * whole lens view is counted, then allowedKingdomPicks() applies
+     * complementary suppression against the whole: whole minus every allowed
+     * pick (small kingdoms, anonymous rows, left-out partial rows) is 0 or at
+     * least MIN_CELL people.
+     *
+     * @return array<int,int>
+     */
+    public function sharedKingdomChoices(int $surveyId, array $lens): array
+    {
+        $whole = self::applyLens([], $lens);
+        if ($whole['impossible']) {
+            return [];
+        }
+        $row = $this->surveyRow($surveyId);
+        $ongoing = $row !== null && (string)($row['results_share_timing'] ?? 'after_close') === 'ongoing';
+        $served = function (array $v) use ($surveyId, $ongoing): int {
+            if ($ongoing) {
+                $v['max_response_id'] = $this->sharedWatermark($surveyId, $v);
+            }
+            return $this->reportCount($surveyId, $v);
+        };
+
+        $ids = [];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT r.kingdom_id FROM ' . DB_PREFIX . 'survey_response r
+              WHERE ' . $this->reportWhere($surveyId, $whole) . ' AND r.kingdom_id IS NOT NULL'
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $ids[] = (int)$rs->kingdom_id;
+            }
+        }
+        $counts = [];
+        foreach ($ids as $k) {
+            $v = $whole;
+            $v['kingdom_ids'] = [$k];
+            $counts[$k] = $served($v);
+        }
+        $allowed = self::allowedKingdomPicks($counts, $served($whole));
+        return array_intersect_key($counts, array_flip($allowed));
+    }
+
+    /**
+     * PURE. Complementary suppression over one-kingdom picks, as
+     * crosstabGroups() does over cross-tab groups: only kingdoms of at least
+     * MIN_CELL are allowed, and while the remainder (whole minus the allowed
+     * kingdoms) is 1..MIN_CELL-1 the smallest allowed kingdom (ties to the
+     * lower id) is withheld too. With A=10, B=10, C=1 only one of A and B is
+     * allowed, so whole minus picks is never C alone.
+     *
+     * @param  array<int,int> $counts kingdom_id => the served count of that one-kingdom view
+     * @param  int $whole the served count of the whole lens view
+     * @return list<int> allowed kingdom ids, ascending
+     */
+    public static function allowedKingdomPicks(array $counts, int $whole): array
+    {
+        $allowed = [];
+        foreach ($counts as $k => $c) {
+            if ((int)$c >= self::MIN_CELL) {
+                $allowed[(int)$k] = (int)$c;
+            }
+        }
+        ksort($allowed);
+        $rest = $whole - array_sum($allowed);
+        // abs(): an ongoing share caps each view on its own, so the capped
+        // picks can outnumber the capped whole by a few rows.
+        while ($allowed && $rest !== 0 && abs($rest) < self::MIN_CELL) {
+            $pick = null;
+            foreach ($allowed as $k => $c) {
+                if ($pick === null || $c < $allowed[$pick]) {
+                    $pick = $k;
+                }
+            }
+            $rest += $allowed[$pick];
+            unset($allowed[$pick]);
+        }
+        return array_keys($allowed);
     }
 
     /**
@@ -332,13 +561,18 @@ class SurveyReport
      * Serve $build() through GhettoCache for CACHE_TTL seconds.
      *
      * The key carries the normalized filters plus a fingerprint that moves on
-     * every new response (test ones included), every new start and every
+     * every new response (test ones included), every new start (summary only) and every
      * survey edit (Survey::touch bumps updated_at), so a submission or an edit
      * is visible on the next Apply rather than after the TTL. The newest
      * response id rides along with the count so clearing test responses and
      * re-submitting the same number cannot reuse a stale key.
+     *
+     * Only the summary (which shows starts and completion) keys on the starts
+     * count: a start row lands the first time each player opens the runner, so
+     * keying aggregate/rowContext on it would miss on nearly every Apply during
+     * a launch, and neither of them reads starts.
      */
-    private function cached(string $what, int $surveyId, array $f, callable $build): array
+    private function cached(string $what, int $surveyId, array $f, callable $build, bool $keyStarts = false): array
     {
         $lib = class_exists('Ork3', false) ? Ork3::$Lib : null;
         if (!is_object($lib) || !isset($lib->ghettocache)) {
@@ -350,7 +584,7 @@ class SurveyReport
             'SELECT s.updated_at,
                     (SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_response r WHERE r.survey_id = s.survey_id) AS response_count,
                     (SELECT COALESCE(MAX(r.response_id), 0) FROM ' . DB_PREFIX . 'survey_response r WHERE r.survey_id = s.survey_id) AS max_response_id,
-                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_start st WHERE st.survey_id = s.survey_id) AS starts
+                    ' . ($keyStarts ? '(SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_start st WHERE st.survey_id = s.survey_id)' : '0') . ' AS starts
                FROM ' . DB_PREFIX . 'survey s
               WHERE s.survey_id = ' . (int)$surveyId
         );
@@ -393,7 +627,7 @@ class SurveyReport
         $f = self::normalizeFilters($filters);
         return $this->cached('summary', $surveyId, $f, function () use ($surveyId, $f): array {
             return $this->buildSummary($surveyId, $f);
-        });
+        }, true);
     }
 
     private function buildSummary(int $surveyId, array $f): array
@@ -459,10 +693,10 @@ class SurveyReport
         // filter, whose subset has no matching audience.
         $audience = null;
         $responseRate = null;
-        $surveyRow = $this->surveyRow($surveyId);
+        $surveyRow = $narrowing ? null : $this->surveyRow($surveyId);
         if ($surveyRow !== null) {
-            $audience = (new SurveyResponse())->audienceCount($surveyRow);
-            if (!$narrowing && $audience > 0) {
+            $audience = $this->cachedAudience($surveyRow);
+            if ($audience > 0) {
                 $responseRate = round($finished / $audience, 4);
             }
         }
@@ -815,6 +1049,35 @@ class SurveyReport
         return max(1, $n);
     }
 
+    /**
+     * SurveyResponse::audienceCount() through GhettoCache, keyed on the survey,
+     * its updated_at (audience rules only change through an edit) and today's
+     * date (the recent-attendance and tenure windows roll daily) — not on
+     * responses or starts, which do not move the audience.
+     *
+     * @param array<string,mixed> $surveyRow raw ork_survey row
+     */
+    private function cachedAudience(array $surveyRow): int
+    {
+        $lib = class_exists('Ork3', false) ? Ork3::$Lib : null;
+        if (!is_object($lib) || !isset($lib->ghettocache)) {
+            return (new SurveyResponse())->audienceCount($surveyRow);
+        }
+        $key = implode('.', [
+            (int)($surveyRow['survey_id'] ?? 0),
+            md5((string)($surveyRow['updated_at'] ?? '')),
+            date('Ymd'),
+        ]);
+        $call = __CLASS__ . '.audience';
+        $hit = $lib->ghettocache->get($call, $key, self::CACHE_TTL);
+        if (is_array($hit) && isset($hit['n'])) {
+            return (int)$hit['n'];
+        }
+        $n = (new SurveyResponse())->audienceCount($surveyRow);
+        $lib->ghettocache->cache($call, $key, ['n' => $n]);
+        return $n;
+    }
+
     /** @return ?array<string,mixed> the raw ork_survey row, for SurveyResponse::audienceCount() */
     private function surveyRow(int $surveyId): ?array
     {
@@ -974,6 +1237,8 @@ class SurveyReport
         if ($n > 0 && $n < self::MIN_CELL) {
             return ['option_id' => $optionId, 'label' => $label, 'n' => null, 'suppressed' => true];
         }
+        // A group chart never shows the free-text lists; the overall aggregate carries them.
+        unset($sub['texts'], $sub['other_texts'], $sub['other_texts_n']);
         return ['option_id' => $optionId, 'label' => $label, 'n' => $n, 'agg' => $sub];
     }
 
@@ -1182,6 +1447,7 @@ class SurveyReport
         $respondents = [];
         $selections = 0;
         $otherTexts = [];
+        $otherTextsN = 0;
         foreach ($rows as $r) {
             if ($r['option_id'] === null) {
                 continue;
@@ -1193,7 +1459,10 @@ class SurveyReport
                 $counts[$oid]++;
             }
             if (!empty($isOther[$oid]) && isset($r['value_text']) && $r['value_text'] !== '' && $r['value_text'] !== null) {
-                $otherTexts[] = (string)$r['value_text'];
+                $otherTextsN++;
+                if (count($otherTexts) < self::TEXT_SAMPLE_LIMIT) {
+                    $otherTexts[] = (string)$r['value_text'];
+                }
             }
         }
 
@@ -1214,7 +1483,8 @@ class SurveyReport
 
         // other_texts keep the input order, which answerRows() has already put
         // through the keyed display permutation (review #1).
-        $out = ['n' => $n, 'counts' => $list, 'other_texts' => $otherTexts];
+        // Capped like free text; other_texts_n is the full count for the label.
+        $out = ['n' => $n, 'counts' => $list, 'other_texts' => $otherTexts, 'other_texts_n' => $otherTextsN];
         if ($multi) {
             $out['mean_selected'] = $n > 0 ? round($selections / $n, 3) : null;
         }
@@ -1330,13 +1600,16 @@ class SurveyReport
             }
         }
 
-        $weighted = $columns !== [];
+        // The mean runs over the columns that carry a value; an unvalued
+        // column (N/A, "Don't know") is excluded from it rather than voiding
+        // it (review #34). It needs at least two valued columns to be a scale.
+        $valued = 0;
         foreach ($columns as $c) {
-            if ($c['value_num'] === null) {
-                $weighted = false;
-                break;
+            if ($c['value_num'] !== null) {
+                $valued++;
             }
         }
+        $weighted = $valued >= 2;
 
         $cells = [];
         foreach ($matrixRows as $rid => $label) {
@@ -1362,6 +1635,7 @@ class SurveyReport
             $rowN = array_sum($byCol);
             $counts = [];
             $weightSum = 0.0;
+            $meanN = 0;
             foreach ($byCol as $cid => $c) {
                 $counts[] = [
                     'option_id' => $cid,
@@ -1369,8 +1643,9 @@ class SurveyReport
                     'count'     => $c,
                     'pct'       => $rowN > 0 ? round($c / $rowN * 100, 1) : null,
                 ];
-                if ($weighted) {
+                if ($weighted && $columns[$cid]['value_num'] !== null) {
                     $weightSum += $c * (float)$columns[$cid]['value_num'];
+                    $meanN += $c;
                 }
             }
             $outRows[] = [
@@ -1378,7 +1653,8 @@ class SurveyReport
                 'label'         => $matrixRows[$rid],
                 'n'             => $rowN,
                 'counts'        => $counts,
-                'weighted_mean' => ($weighted && $rowN > 0) ? round($weightSum / $rowN, 3) : null,
+                'weighted_mean' => ($weighted && $meanN > 0) ? round($weightSum / $meanN, 3) : null,
+                'mean_n'        => $weighted ? $meanN : null,
             ];
         }
 
@@ -1447,9 +1723,15 @@ class SurveyReport
     /**
      * pairwise (pairwise spec §7): one row per judged matchup, option_id the
      * left option, row_option_id the right, value_num the left's points (1,
-     * 0.5, 0). Win % = points / appearances, ties counting half. Ranks are
-     * competition ranks (1, 2, 2, 4) by win %; an option that never came up is
-     * unranked and sorts last. n is respondents with at least one matchup.
+     * 0.5, 0). Win % = points / appearances, ties counting half, kept as a
+     * column. Ranks come from a Bradley-Terry fit (bradleyTerry()), so an
+     * option is credited for whom it beat, not just how often (review #35);
+     * `strength` is its fitted chance of beating a typical option. Ranks are
+     * competition ranks (1, 2, 2, 4) by strength, over options with at least
+     * PAIRWISE_MIN_APPEARANCES matchups when the set is sliced (over
+     * PAIRWISE_SMALL_MAX matchups); the rest are unranked with
+     * `too_few` set, sorted after, and an option that never came up sorts
+     * last. n is respondents with at least one matchup.
      */
     private static function aggPairwise(array $rows, array $options): array
     {
@@ -1468,10 +1750,14 @@ class SurveyReport
                 'losses'      => 0,
                 'points'      => 0.0,
                 'win_pct'     => null,
+                'strength'    => null,
                 'rank'        => null,
+                'too_few'     => false,
             ];
         }
         $plan = SurveyTypes::pairwisePlan(count($stats));
+        $games = [];    // [a][b] matchups between a and b (symmetric)
+        $scored = [];   // [a][b] points a took off b (ties half)
 
         $perResponse = [];
         $judged = 0;
@@ -1489,6 +1775,10 @@ class SurveyReport
             $stats[$right]['appearances']++;
             $stats[$left]['points']  += $p;
             $stats[$right]['points'] += 1.0 - $p;
+            $games[$left][$right]  = ($games[$left][$right] ?? 0) + 1;
+            $games[$right][$left]  = ($games[$right][$left] ?? 0) + 1;
+            $scored[$left][$right] = ($scored[$left][$right] ?? 0.0) + $p;
+            $scored[$right][$left] = ($scored[$right][$left] ?? 0.0) + (1.0 - $p);
             if ($p >= 1.0) {
                 $stats[$left]['wins']++;
                 $stats[$right]['losses']++;
@@ -1501,19 +1791,36 @@ class SurveyReport
             }
         }
 
+        $fit = self::bradleyTerry($games, $scored);
         foreach ($stats as $oid => $s) {
             if ($s['appearances'] > 0) {
                 $stats[$oid]['win_pct'] = round($s['points'] / $s['appearances'] * 100, 1);
+                $stats[$oid]['strength'] = isset($fit[$oid]) ? round($fit[$oid] / ($fit[$oid] + 1.0) * 100, 1) : null;
+                // Only a sliced design (each respondent sees a random subset)
+                // can leave an option thinly sampled; a small set offers
+                // every matchup to everyone, so its options all rank.
+                $stats[$oid]['too_few'] = !$plan['small'] && $s['appearances'] < self::PAIRWISE_MIN_APPEARANCES;
             }
         }
 
-        $list = array_values($stats);
-        usort($list, static function (array $x, array $y): int {
-            if (($x['win_pct'] === null) !== ($y['win_pct'] === null)) {
-                return $x['win_pct'] === null ? 1 : -1;
+        // Ranked (by strength) first, then too-few (by win %), then never seen.
+        $tier = static function (array $s): int {
+            if ($s['appearances'] === 0) {
+                return 2;
             }
-            if ($x['win_pct'] !== $y['win_pct']) {
-                return $y['win_pct'] <=> $x['win_pct'];
+            return $s['too_few'] ? 1 : 0;
+        };
+        $list = array_values($stats);
+        usort($list, static function (array $x, array $y) use ($tier): int {
+            $tx = $tier($x);
+            $ty = $tier($y);
+            if ($tx !== $ty) {
+                return $tx <=> $ty;
+            }
+            $kx = $tx === 0 ? $x['strength'] : $x['win_pct'];
+            $ky = $ty === 0 ? $y['strength'] : $y['win_pct'];
+            if ($kx !== $ky) {
+                return $ky <=> $kx;
             }
             if ($x['appearances'] !== $y['appearances']) {
                 return $y['appearances'] <=> $x['appearances'];
@@ -1524,12 +1831,12 @@ class SurveyReport
         $rank = 0;
         $prev = null;
         foreach ($list as $i => $s) {
-            if ($s['win_pct'] === null) {
+            if ($tier($s) !== 0) {
                 break;
             }
-            if ($prev === null || $s['win_pct'] !== $prev) {
+            if ($prev === null || $s['strength'] !== $prev) {
                 $rank = $i + 1;
-                $prev = $s['win_pct'];
+                $prev = $s['strength'];
             }
             $list[$i]['rank'] = $rank;
         }
@@ -1552,6 +1859,58 @@ class SurveyReport
             'avg_pct'   => $avgPct,
             'options'   => $list,
         ];
+    }
+
+    /**
+     * PURE. Bradley-Terry strengths by Hunter's MM iteration (ties already
+     * counted as half wins in $scored). Each option also plays one virtual
+     * drawn game against a fixed reference of strength 1, a small prior that
+     * keeps an undefeated or winless option finite and the fit defined on a
+     * disconnected matchup graph. Stops at BT_TOLERANCE or BT_MAX_ITERATIONS,
+     * then rescales so the geometric mean strength is 1 (a "typical" option).
+     *
+     * @param  array<int, array<int, int>>   $games  [a][b] matchups (symmetric)
+     * @param  array<int, array<int, float>> $scored [a][b] points a took off b
+     * @return array<int, float> option_id => strength (> 0), only for options that played
+     */
+    public static function bradleyTerry(array $games, array $scored): array
+    {
+        $p = [];
+        foreach ($games as $a => $_) {
+            $p[$a] = 1.0;
+        }
+        if ($p === []) {
+            return [];
+        }
+        $won = [];
+        foreach ($p as $a => $_) {
+            $won[$a] = 0.5 + array_sum($scored[$a] ?? []);   // + half of the virtual draw
+        }
+        for ($iter = 0; $iter < self::BT_MAX_ITERATIONS; $iter++) {
+            $next = [];
+            $delta = 0.0;
+            foreach ($p as $a => $pa) {
+                $denom = 1.0 / ($pa + 1.0);   // the virtual game against the reference
+                foreach ($games[$a] as $b => $n) {
+                    $denom += $n / ($pa + $p[$b]);
+                }
+                $next[$a] = $won[$a] / $denom;
+                $delta = max($delta, abs(log($next[$a]) - log($pa)));
+            }
+            $p = $next;
+            if ($delta < self::BT_TOLERANCE) {
+                break;
+            }
+        }
+        $logMean = 0.0;
+        foreach ($p as $v) {
+            $logMean += log($v);
+        }
+        $scale = exp($logMean / count($p));
+        foreach ($p as $a => $v) {
+            $p[$a] = $v / $scale;
+        }
+        return $p;
     }
 
     private static function aggNumber(array $rows): array
@@ -1961,6 +2320,357 @@ class SurveyReport
             return "'" . $v;
         }
         return $v;
+    }
+
+    // -----------------------------------------------------------------------
+    // Analysis export (#36): wide, coded, one column per datum + a codebook
+    // -----------------------------------------------------------------------
+
+    /** Cell value for a question the response's show-if logic never showed. */
+    public const NOT_SHOWN = '-99';
+
+    /** The identity/demographic columns both exports carry, scrubbed alike. */
+    private const ANALYSIS_META = [
+        'response', 'consent', 'persona', 'mundane_id', 'kingdom', 'years_played',
+        'withheld', 'submitted', 'duration_s',
+    ];
+
+    /**
+     * PURE. Each option's code: its 1-based position within its question and
+     * role, in the builder's sort order (options() order).
+     *
+     * @param  array<int,list<array>> $options grouped by question_id
+     * @return array<int,int> option_id => code
+     */
+    public static function optionCodes(array $options): array
+    {
+        $codes = [];
+        foreach ($options as $list) {
+            $n = [];
+            foreach ($list as $o) {
+                $role = (string)($o['role'] ?? 'choice');
+                $n[$role] = ($n[$role] ?? 0) + 1;
+                $codes[(int)$o['option_id']] = $n[$role];
+            }
+        }
+        return $codes;
+    }
+
+    /**
+     * PURE. The analysis export's column plan, in presentation order. Codes are
+     * built from database ids so they survive reordering and prompt edits:
+     * Q{qid} (single value), Q{qid}_o{opt} (multi 0/1), Q{qid}_r{row} (matrix
+     * row), Q{qid}_rank_o{opt} (ranking), Q{qid}_wins_o{opt} (pairwise wins),
+     * Q{qid}_other (write-in text).
+     *
+     * @return list<array{code:string,question_id:int,kind:string,option_id:int,item:string}>
+     */
+    public static function analysisColumns(array $questions, array $options): array
+    {
+        $kinds = ['multi' => ['multi', '_o'], 'matrix' => ['matrix', '_r'], 'ranking' => ['rank', '_rank_o'], 'pairwise' => ['wins', '_wins_o']];
+        $cols = [];
+        foreach ($questions as $qid => $q) {
+            $type = (string)$q['type'];
+            if (!SurveyTypes::isAnswerable($type)) {
+                continue;
+            }
+            $qid = (int)$qid;
+            $base = 'Q' . $qid;
+            $hasOther = false;
+            if (isset($kinds[$type])) {
+                [$kind, $infix] = $kinds[$type];
+                $role = $type === 'matrix' ? 'row' : 'choice';
+                foreach ($options[$qid] ?? [] as $o) {
+                    if ((string)($o['role'] ?? 'choice') !== $role) {
+                        continue;
+                    }
+                    $hasOther = $hasOther || !empty($o['is_other']);
+                    $cols[] = ['code' => $base . $infix . (int)$o['option_id'], 'question_id' => $qid, 'kind' => $kind, 'option_id' => (int)$o['option_id'], 'item' => (string)$o['label']];
+                }
+            } else {
+                $cols[] = ['code' => $base, 'question_id' => $qid, 'kind' => 'value', 'option_id' => 0, 'item' => ''];
+                foreach ($options[$qid] ?? [] as $o) {
+                    $hasOther = $hasOther || !empty($o['is_other']);
+                }
+            }
+            if ($hasOther && ($type === 'multi' || $type === 'single' || $type === 'dropdown' || $type === 'yesno')) {
+                $cols[] = ['code' => $base . '_other', 'question_id' => $qid, 'kind' => 'other', 'option_id' => 0, 'item' => 'Write-in'];
+            }
+        }
+        return $cols;
+    }
+
+    /**
+     * PURE. Was $question shown to a response with these selections? Its page's
+     * show-if and its own must both hold (SurveyTypes::isShown, the runner's
+     * rule). A response that stored an answer was shown it, whatever the rule
+     * says now.
+     *
+     * @param array<int,list<int>> $selections question_id => selected option ids
+     */
+    public static function analysisShown(array $question, array $selections, bool $answered = false): bool
+    {
+        if ($answered) {
+            return true;
+        }
+        $page = [
+            'show_if_question_id' => $question['page_show_if_question_id'] ?? null,
+            'show_if_option_id'   => $question['page_show_if_option_id'] ?? null,
+        ];
+        return SurveyTypes::isShown($page, $selections) && SurveyTypes::isShown($question, $selections);
+    }
+
+    /**
+     * PURE. One response's cells for one question's columns: -99 for every
+     * column when not shown, blank for every column when shown but skipped.
+     *
+     * @param list<array> $columns   this question's slice of analysisColumns()
+     * @param list<array> $qRows     this response's answer rows for the question
+     * @param array<int,array> $optionsById
+     * @param array<int,int> $codes  from optionCodes()
+     * @return list<string>
+     */
+    public static function analysisCells(string $type, array $columns, array $qRows, bool $shown, array $optionsById, array $codes): array
+    {
+        if (!$shown) {
+            return array_fill(0, count($columns), self::NOT_SHOWN);
+        }
+        if (!$qRows) {
+            return array_fill(0, count($columns), '');
+        }
+        $byOpt = [];
+        $byRow = [];
+        $wins = [];
+        $other = '';
+        $value = '';
+        foreach ($qRows as $r) {
+            $oid = $r['option_id'] === null ? 0 : (int)$r['option_id'];
+            $text = $r['value_text'] === null ? '' : trim((string)$r['value_text']);
+            if ($oid > 0 && !empty($optionsById[$oid]['is_other']) && $text !== '') {
+                $other = $text;
+            }
+            if ($type === 'matrix') {
+                $byRow[(int)$r['row_option_id']] = $oid;
+            } elseif ($type === 'pairwise') {
+                $p = (float)$r['value_num'];
+                $wins[$oid] = ($wins[$oid] ?? 0.0) + $p;
+                $b = (int)$r['row_option_id'];
+                $wins[$b] = ($wins[$b] ?? 0.0) + (1.0 - $p);
+            } else {
+                $byOpt[$oid] = $r;
+                if ($value === '') {
+                    if ($oid > 0) {
+                        $value = (string)($codes[$oid] ?? $oid);
+                    } elseif ($r['value_num'] !== null) {
+                        $value = self::formatNumber((float)$r['value_num']);
+                    } else {
+                        $value = $text;
+                    }
+                }
+            }
+        }
+        $out = [];
+        foreach ($columns as $c) {
+            $oid = (int)$c['option_id'];
+            switch ($c['kind']) {
+                case 'multi':
+                    $out[] = isset($byOpt[$oid]) ? '1' : '0';
+                    break;
+                case 'matrix':
+                    $col = $byRow[$oid] ?? 0;
+                    $num = $col > 0 ? ($optionsById[$col]['value_num'] ?? null) : null;
+                    $out[] = $col <= 0 ? '' : ($num !== null ? self::formatNumber((float)$num) : (string)($codes[$col] ?? $col));
+                    break;
+                case 'rank':
+                    $out[] = isset($byOpt[$oid]) && $byOpt[$oid]['value_num'] !== null ? (string)(int)round((float)$byOpt[$oid]['value_num']) : '';
+                    break;
+                case 'wins':
+                    $out[] = isset($wins[$oid]) ? self::formatNumber($wins[$oid]) : '';
+                    break;
+                case 'other':
+                    $out[] = $other;
+                    break;
+                default:
+                    $out[] = $value;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * PURE. The codebook as CSV rows: one row per variable (code, question id,
+     * type, measure, prompt, item, show-if), then one row per value it can take
+     * (option code or matrix column value, label, stored value_num), plus the
+     * -99 row wherever a show-if rule can hide the question.
+     *
+     * @return list<list<string>>
+     */
+    public static function codebookRows(array $questions, array $options): array
+    {
+        $optionsById = [];
+        foreach ($options as $list) {
+            foreach ($list as $o) {
+                $optionsById[(int)$o['option_id']] = $o;
+            }
+        }
+        $codes = self::optionCodes($options);
+        $rule = static function (int $qid, int $oid) use ($codes, $optionsById): string {
+            if ($qid <= 0 || $oid <= 0) {
+                return '';
+            }
+            return 'Q' . $qid . ' = ' . ($codes[$oid] ?? $oid) . ' (' . (string)($optionsById[$oid]['label'] ?? '#' . $oid) . ')';
+        };
+        $measures = [
+            'multi' => '1 = selected, 0 = not selected', 'matrix' => 'column value (value_num, else column code)',
+            'rank' => 'rank, 1 = top', 'wins' => 'matchups won (tie = 0.5); blank = option not shown in a matchup',
+            'other' => 'write-in text',
+        ];
+        $out = [['variable', 'question_id', 'type', 'measure', 'prompt', 'item', 'value', 'value_label', 'value_num', 'show_if']];
+        foreach (self::ANALYSIS_META as $m) {
+            $out[] = [$m, '', 'meta', 'response metadata (consent-scrubbed as in the standard export)', '', '', '', '', '', ''];
+        }
+        foreach (self::analysisColumns($questions, $options) as $c) {
+            $q = $questions[$c['question_id']];
+            $type = (string)$q['type'];
+            $pageRule = $rule((int)$q['page_show_if_question_id'], (int)$q['page_show_if_option_id']);
+            $showIf = trim(($pageRule !== '' ? 'page: ' . $pageRule . '; ' : '')
+                . $rule((int)$q['show_if_question_id'], (int)$q['show_if_option_id']), '; ');
+            $isChoice = in_array($type, ['single', 'dropdown', 'yesno'], true);
+            $measure = $measures[$c['kind']] ?? ($isChoice ? 'option code' : (in_array($type, ['rating', 'nps', 'number'], true) ? 'number' : 'text'));
+            $out[] = [$c['code'], (string)$c['question_id'], $type, $measure, (string)$q['prompt'], $c['item'], '', '', '', $showIf];
+            $valueRole = $c['kind'] === 'matrix' ? 'column' : (($c['kind'] === 'value' && $isChoice) ? 'choice' : null);
+            if ($valueRole !== null) {
+                foreach ($options[$c['question_id']] ?? [] as $o) {
+                    if ((string)($o['role'] ?? 'choice') !== $valueRole) {
+                        continue;
+                    }
+                    $num = $o['value_num'] ?? null;
+                    $v = ($c['kind'] === 'matrix' && $num !== null) ? self::formatNumber((float)$num) : (string)($codes[(int)$o['option_id']] ?? '');
+                    $out[] = [$c['code'], '', '', '', '', '', $v, (string)$o['label'], $num === null ? '' : self::formatNumber((float)$num), ''];
+                }
+            }
+            if ($showIf !== '') {
+                $out[] = [$c['code'], '', '', '', '', '', self::NOT_SHOWN, 'Not shown (show-if not met)', '', ''];
+            }
+        }
+        return $out;
+    }
+
+    /** The codebook CSV (UTF-8 BOM, CRLF). Structure only: no response data. */
+    public function codebookCsv(int $surveyId): string
+    {
+        $surveyId = (int)$surveyId;
+        $out = "\xEF\xBB\xBF";
+        foreach (self::codebookRows($this->questions($surveyId), $this->options($surveyId)) as $line) {
+            $out .= self::csvLine($line);
+        }
+        return $out;
+    }
+
+    /**
+     * The analysis-ready wide CSV: same filters, consent scrub, is_test
+     * handling, row order and audit as csvStream(), but coded columns from
+     * analysisColumns() instead of display strings.
+     *
+     * Performance: the column plan, option codes, per-question column slices
+     * and the set of rule-bearing questions are built once; rows stream in
+     * 500-id batches off one ordered id list (no re-sort, no OFFSET scan); each
+     * batch costs exactly two queries (responses, answers) regardless of
+     * question count, and show-if is evaluated only for questions that have a
+     * rule.
+     *
+     * @param callable(string):void $emit
+     */
+    public function analysisStream(int $surveyId, array $filters, callable $emit, int $actorId = 0): void
+    {
+        $surveyId = (int)$surveyId;
+        $f = self::clientFilters($filters);
+        if ($actorId > 0 && $f['consent'] !== 'anonymous') {
+            $log = new Survey();
+            $log->setActor($actorId);
+            $log->logActivity($surveyId, 'export', $f + ['format' => 'analysis']);
+        }
+        $questions = $this->questions($surveyId);
+        $options = $this->options($surveyId);
+        $ctx = $this->rowContext($surveyId, $f);
+        $where = $ctx['where'];
+        $cells = $ctx['cells'];
+
+        $optionsById = [];
+        foreach ($options as $list) {
+            foreach ($list as $o) {
+                $optionsById[(int)$o['option_id']] = $o;
+            }
+        }
+        $codes = self::optionCodes($options);
+        $columns = self::analysisColumns($questions, $options);
+        $byQuestion = [];
+        $header = self::ANALYSIS_META;
+        foreach ($columns as $c) {
+            $byQuestion[$c['question_id']][] = $c;
+            $header[] = $c['code'];
+        }
+        $ruled = [];
+        foreach ($byQuestion as $qid => $unused) {
+            $q = $questions[$qid];
+            $ruled[$qid] = ((int)$q['show_if_question_id'] > 0 && (int)$q['show_if_option_id'] > 0)
+                || ((int)$q['page_show_if_question_id'] > 0 && (int)$q['page_show_if_option_id'] > 0);
+        }
+
+        $emit("\xEF\xBB\xBF" . self::csvLine($header));
+
+        $orderedIds = $this->orderedResponseIds($surveyId, $where);
+        $batch = 500;
+        for ($offset = 0; $offset < count($orderedIds); $offset += $batch) {
+            $slice = array_slice($orderedIds, $offset, $batch);
+            $rows = $this->responsePage($surveyId, $where, $offset, $batch, $cells, $slice);
+            if (!$rows) {
+                continue;
+            }
+            $grouped = [];
+            $this->db->Clear();
+            $rs = $this->db->DataSet(
+                'SELECT a.response_id, a.question_id, a.option_id, a.row_option_id, a.value_text, a.value_num
+                   FROM ' . DB_PREFIX . 'survey_answer a
+                  WHERE a.response_id IN (' . implode(',', array_map('intval', array_keys($rows))) . ')
+                  ORDER BY a.answer_id ASC'
+            );
+            if ($rs) {
+                while ($rs->Next()) {
+                    $grouped[(int)$rs->response_id][(int)$rs->question_id][] = self::answerRow($rs);
+                }
+            }
+            $chunk = '';
+            foreach ($rows as $rid => $r) {
+                $answers = $grouped[$rid] ?? [];
+                $selections = [];
+                foreach ($answers as $qid => $qRows) {
+                    foreach ($qRows as $a) {
+                        if ($a['option_id'] !== null) {
+                            $selections[$qid][] = (int)$a['option_id'];
+                        }
+                    }
+                }
+                $line = [
+                    (string)$r['response_id'],
+                    $r['consent'],
+                    $r['persona'] ?? '',
+                    $r['mundane_id'] === null ? '' : (string)$r['mundane_id'],
+                    $r['kingdom'] ?? '',
+                    $r['tenure_label'] ?? '',
+                    $r['masked'] ? 'yes' : '',
+                    $r['submitted_at'],
+                    $r['duration_seconds'] === null ? '' : (string)$r['duration_seconds'],
+                ];
+                foreach ($byQuestion as $qid => $qCols) {
+                    $qRows = $answers[$qid] ?? [];
+                    $shown = !$ruled[$qid] || self::analysisShown($questions[$qid], $selections, $qRows !== []);
+                    array_push($line, ...self::analysisCells($questions[$qid]['type'], $qCols, $qRows, $shown, $optionsById, $codes));
+                }
+                $chunk .= self::csvLine($line);
+            }
+            $emit($chunk);
+        }
     }
 
     /**
@@ -2448,6 +3158,9 @@ class SurveyReport
         if (!empty($f['park_id'])) {
             $w[] = 'r.park_id = ' . (int)$f['park_id'];
         }
+        if (isset($f['max_response_id'])) {
+            $w[] = 'r.response_id <= ' . (int)$f['max_response_id'];
+        }
 
         return implode(' AND ', $w);
     }
@@ -2469,12 +3182,14 @@ class SurveyReport
             return $where;
         }
 
+        // Small kingdoms are judged over the view WITHOUT its snapshot cap, so
+        // a capped view is exactly a prefix of the uncapped one (sharedWatermark()).
         $partialByKingdom = [];
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT r.kingdom_id, COUNT(*) AS c
                FROM ' . DB_PREFIX . 'survey_response r
-              WHERE ' . $where . " AND r.consent = 'partial'
+              WHERE ' . $this->responseWhere($surveyId, ['max_response_id' => null] + $f) . " AND r.consent = 'partial'
               GROUP BY r.kingdom_id"
         );
         if ($rs) {
@@ -2599,18 +3314,25 @@ class SurveyReport
               ORDER BY a.answer_id ASC'
         );
 
-        $flat = [];
+        // Only rows carrying text (free text, write-ins) are ever listed, so
+        // only they need the keyed permutation; choice/number rows are counted
+        // and keep answer_id order, skipping the sort.
+        $out = [];
+        $texts = [];
         if ($rs) {
             while ($rs->Next()) {
                 $row = self::answerRow($rs);
                 $row['question_id'] = (int)$rs->question_id;
+                if ($row['value_text'] === null) {
+                    $out[$row['question_id']][] = $row;
+                    continue;
+                }
                 $row['day'] = (string)$rs->day;
-                $flat[] = $row;
+                $texts[] = $row;
             }
         }
 
-        $out = [];
-        foreach (self::displayOrder($flat, self::orderKey($surveyId)) as $row) {
+        foreach (self::displayOrder($texts, self::orderKey($surveyId)) as $row) {
             $out[$row['question_id']][] = $row;
         }
         return $out;

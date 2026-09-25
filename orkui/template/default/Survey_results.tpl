@@ -72,6 +72,7 @@ if ($_svr_scope_type === 'kingdom') {
    response panel. */
 $_svr_js_qs    = [];
 $_svr_crosstab = [];
+$_svr_xt_targets = 0;
 foreach ($_svr_qs as $_q) {
 	$_t = (string) ($_q['type'] ?? '');
 	if ($_t === '' || !in_array($_t, $AnswerableTypes ?? [], true)) {
@@ -83,6 +84,9 @@ foreach ($_svr_qs as $_q) {
 		'prompt'      => (string) ($_q['prompt'] ?? ''),
 		'num'         => count($_svr_js_qs) + 1,
 	];
+	if (in_array($_t, $CrosstabTargets ?? [], true)) {
+		$_svr_xt_targets++;
+	}
 	/* Cross-tab sources are single-answer choice questions: every response falls
 	   in exactly one bucket. */
 	if (in_array($_t, $CrosstabSources ?? [], true)) {
@@ -97,6 +101,11 @@ foreach ($_svr_qs as $_q) {
 /* The kingdom filter only earns its space when the responses span more than
    one kingdom (#33). */
 $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
+
+/* The report never splits the source question by itself, so the cross-tab
+   earns its field only with a source plus one other question to split (#9).
+   A source is itself a target, hence two targets. */
+$_svr_show_crosstab = $_svr_crosstab && $_svr_xt_targets >= 2;
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__ . '/style/reports.css')?>">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/survey.css?v=<?=filemtime(__DIR__ . '/style/survey.css')?>">
@@ -148,8 +157,11 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 		<div class="rp-header-actions">
 <?php if (!$_svr_shared) : ?>
 			<a class="rp-btn-ghost" id="svr-export" href="<?=UIR?>Survey/export/<?=$_svr_id?>"><i class="fas fa-download"></i> Export CSV</a>
+			<a class="rp-btn-ghost" id="svr-export-analysis" href="<?=UIR?>Survey/export/<?=$_svr_id?>&format=analysis" data-tip="Analysis CSV: one coded column per answer (Q{id}, _o multi 0/1, _r matrix rows, _rank_o, _wins_o), -99 = not shown, blank = skipped. Pair it with the codebook."><i class="fas fa-table"></i> Analysis CSV</a>
+			<a class="rp-btn-ghost" id="svr-export-codebook" href="<?=UIR?>Survey/export/<?=$_svr_id?>&format=codebook" data-tip="Codebook for the Analysis CSV: every column code, its question, type, option codes and values, and show-if rules."><i class="fas fa-book"></i> Codebook</a>
 			<a class="rp-btn-ghost" href="<?=UIR?>Survey/build/<?=$_svr_id?>"><i class="fas fa-pen-to-square"></i> Builder</a>
 			<a class="rp-btn-ghost" href="<?=UIR?>Survey/take/<?=$_svr_id?>/preview"><i class="fas fa-eye"></i> Preview</a>
+			<button type="button" class="rp-btn-ghost svr-btn-danger" id="svr-clear" data-tip="Permanently delete every response, test and real. Attendance credits already posted stay."><i class="fas fa-trash-can"></i> Clear Results</button>
 <?php endif; ?>
 			<button type="button" class="rp-btn-ghost" id="svr-summary-toggle" aria-pressed="false" data-tip="Charts only, with the filters and response count in a caption: no row-level data and no written comments. Safe to print for court."><i class="fas fa-file-lines"></i> Summary for sharing</button>
 <?php if (!$_svr_shared) : ?>
@@ -245,15 +257,20 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 					<fieldset class="svr-fieldset">
 						<legend class="svr-field-label">Kingdom</legend>
 						<div class="svr-checklist" aria-describedby="svr-kingdom-hint">
+<?php if ($_svr_shared) : /* A shared viewer picks all kingdoms or ONE the server allows ($Kingdoms is SurveyReport::sharedKingdomChoices() for them, served counts); the server refuses anything else. */ ?>
+							<label class="svr-check"><input type="radio" name="svr-kingdom" class="svr-kingdom" value="0" data-name="All kingdoms" checked> <span>All kingdoms</span></label>
+<?php endif; ?>
 <?php foreach ($_svr_kingdoms as $_k) : ?>
 <?php 	$_kid = (int) ($_k['kingdom_id'] ?? ($_k['scope_id'] ?? 0)); $_kname = (string) ($_k['name'] ?? ''); ?>
-							<label class="svr-check"><input type="checkbox" class="svr-kingdom" value="<?=$_kid?>" data-name="<?=htmlspecialchars($_kname)?>"> <span><?=htmlspecialchars($_kname)?> <span class="svr-count">(<?=(int) ($_k['count'] ?? 0)?>)</span></span></label>
+<?php 	if ($_svr_shared && (int) ($_k['count'] ?? 0) < 5) { continue; } ?>
+							<label class="svr-check"><input type="<?=$_svr_shared ? 'radio' : 'checkbox'?>"<?=$_svr_shared ? ' name="svr-kingdom"' : ''?> class="svr-kingdom" value="<?=$_kid?>" data-name="<?=htmlspecialchars($_kname)?>"> <span><?=htmlspecialchars($_kname)?> <span class="svr-count">(<?=(int) ($_k['count'] ?? 0)?>)</span></span></label>
 <?php endforeach; ?>
 						</div>
 						<p class="svr-field-hint" id="svr-kingdom-hint">Anonymous responses have no kingdom and are excluded when this filter is set.</p>
 					</fieldset>
 <?php endif; ?>
 
+<?php if (!$_svr_shared) : /* No consent pick for a shared viewer: 'any' minus 'full' would isolate a few partial/anonymous respondents (the server forces 'any'). */ ?>
 					<div class="svr-field">
 						<label class="svr-field-label" for="svr-consent">Consent level</label>
 						<select class="sv-select" id="svr-consent">
@@ -263,6 +280,7 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 							<option value="anonymous">Anonymous</option>
 						</select>
 					</div>
+<?php endif; ?>
 
 <?php if (!$_svr_shared) : /* No date bounds for a shared viewer: home-park credits are public and dated the day taken, so two date windows would name a respondent's answers (the server drops them too). */ ?>
 					<div class="svr-field">
@@ -282,6 +300,7 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 					</div>
 <?php endif; ?>
 
+<?php if (!$_svr_shared && $_svr_show_crosstab) : /* No cross-tab for a shared viewer: group g across two views isolates the remainder respondents in g (the server drops it too). */ ?>
 					<div class="svr-field">
 						<label class="svr-field-label" for="svr-crosstab">Cross-tab by</label>
 						<select class="sv-select" id="svr-crosstab">
@@ -291,6 +310,7 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 <?php endforeach; ?>
 						</select>
 					</div>
+<?php endif; ?>
 
 <?php if (!$_svr_shared) : ?>
 					<div class="svr-field">
@@ -310,6 +330,10 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 		<!-- Charts + rows -->
 		<div class="svr-main">
 			<div class="sv-notice sv-notice-warn" id="svr-notice" role="status" hidden></div>
+<?php if (!$_svr_shared) : ?>
+			<!-- One-shot status after Clear Results (set by survey-results.js). -->
+			<div class="sv-notice svr-cleared-notice" id="svr-cleared" role="status" hidden></div>
+<?php endif; ?>
 			<!-- Page-level minimum-cell notice (#4). -->
 			<div class="sv-notice svr-suppressed-notice" id="svr-suppressed" role="status" hidden></div>
 			<p class="svr-field-hint svr-rule-note" id="svr-rule-note" hidden></p>
@@ -350,19 +374,37 @@ $_svr_show_kingdoms = count($_svr_kingdoms) > 1;
 		</div>
 		<div class="svr-panel-body" id="svr-panel-body"></div>
 	</aside>
+
+	<!-- Clear Results confirm (shared .sv-overlay shell; never a native confirm).
+	     The confirm button stays disabled through a 5-second countdown. -->
+	<div class="sv-overlay" id="svr-clear-overlay">
+		<div class="sv-modal sv-scope" role="dialog" aria-modal="true" aria-labelledby="svr-clear-heading" aria-describedby="svr-clear-body">
+			<h4 class="sv-modal-title" id="svr-clear-heading">Clear Results</h4>
+			<div class="sv-modal-body" id="svr-clear-body">
+				<p id="svr-clear-count">Counting responses&hellip;</p>
+				<p>This cannot be undone. Answers, completion records and in-progress drafts are deleted, and everyone can take the survey again.</p>
+				<p>Attendance credits already posted stay in place; retaking does not earn a second credit.</p>
+				<div class="sv-modal-error" id="svr-clear-error" role="alert"></div>
+			</div>
+			<div class="sv-modal-footer">
+				<button type="button" class="sv-modal-btn sv-modal-cancel" id="svr-clear-cancel">Cancel</button>
+				<button type="button" class="sv-modal-btn sv-modal-ok sv-modal-danger" id="svr-clear-ok" disabled aria-disabled="true">Clear results (5)</button>
+			</div>
+		</div>
+	</div>
 <?php endif; ?>
 </div><!-- /.rp-root -->
 
 <script>
 window.SvConfig = {
-	uir      : <?=json_encode(UIR)?>,
+	uir      : <?=json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
 	surveyId : <?=$_svr_id?>,
-	csrf     : <?=json_encode($SurveyCsrf ?? '')?>,
-	questions: <?=json_encode($_svr_js_qs)?>,
-	access   : <?=json_encode($_svr_shared ? 'shared' : 'manage')?>,
-	context  : <?=json_encode((string) ($ResultsContext ?? ''))?>,
-	lens     : <?=json_encode($_svr_shared ? (string) $_svr_lens : '')?>,
-	lensOrg  : <?=json_encode($_svr_shared ? (string) ($ResultsAccess['org_name'] ?? '') : '')?>
+	csrf     : <?=json_encode($SurveyCsrf ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
+	questions: <?=json_encode($_svr_js_qs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
+	access   : <?=json_encode($_svr_shared ? 'shared' : 'manage', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
+	context  : <?=json_encode((string) ($ResultsContext ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
+	lens     : <?=json_encode($_svr_shared ? (string) $_svr_lens : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>,
+	lensOrg  : <?=json_encode($_svr_shared ? (string) ($ResultsAccess['org_name'] ?? '') : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>
 };
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>

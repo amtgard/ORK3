@@ -378,17 +378,17 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 	<div class="rp-stats-row">
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-poll"></i></div>
-			<div class="rp-stat-number"><?=number_format($_total)?></div>
+			<div class="rp-stat-number" data-sv-stat="total"><?=number_format($_total)?></div>
 			<div class="rp-stat-label">Total Surveys</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-door-open"></i></div>
-			<div class="rp-stat-number"><?=number_format($_open)?></div>
+			<div class="rp-stat-number" data-sv-stat="open"><?=number_format($_open)?></div>
 			<div class="rp-stat-label">Open</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-pencil-alt"></i></div>
-			<div class="rp-stat-number"><?=number_format($_drafts)?></div>
+			<div class="rp-stat-number" data-sv-stat="draft"><?=number_format($_drafts)?></div>
 			<div class="rp-stat-label">Drafts</div>
 		</div>
 		<div class="rp-stat-card">
@@ -481,7 +481,15 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 	$_sid    = (int) $_row['survey_id'];
 	$_status = (string) $_row['status'];
 	$_label  = $_status_labels[$_status] ?? ucfirst($_status);
+	// Past its scheduled close_at it takes no responses, whatever the status says.
+	if (!empty($_row['ClosedScheduled'])) { $_label = 'Closed (scheduled)'; }
 	$_opened = !empty($_row['opened_at']) ? date('M j, Y', strtotime((string) $_row['opened_at'])) : 'Not opened';
+	// Still 'open' in status, but its open_at is ahead: respondents are told it
+	// is not open yet, so the list says Scheduled and when it opens.
+	if (!empty($_row['OpensScheduled'])) {
+		$_label  = 'Scheduled';
+		$_opened = 'Opens ' . date('M j, Y', strtotime((string) $_row['open_at']));
+	}
 	$_closes = !empty($_row['close_at']) ? date('M j, Y', strtotime((string) $_row['close_at'])) : '—';
 	// Sort keys (DataTables reads data-order / data-search off the cell): status
 	// sorts live-first, then by close date soonest-first with no close date last.
@@ -518,9 +526,12 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 									<a class="sv-row-btn" href="<?=UIR?>Survey/results/<?=$_sid?>" data-tip="Results: charts, responses and export"><i class="fas fa-chart-bar" aria-hidden="true"></i> <span class="sv-row-btn-label">Results</span></a>
 									<a class="sv-row-btn" href="<?=UIR?>Survey/take/<?=$_sid?>/preview" target="_blank" rel="noopener" data-tip="Preview: take the survey without saving (opens a new tab)"><i class="fas fa-eye" aria-hidden="true"></i> <span class="sv-row-btn-label">Preview</span></a>
 									<button type="button" class="sv-row-btn sv-clone-btn" data-sid="<?=$_sid?>" data-tip="Clone: copy it into a new draft"><i class="fas fa-clone" aria-hidden="true"></i> <span class="sv-row-btn-label">Clone</span></button>
-									<button type="button" class="sv-row-btn sv-copylink-btn" data-slug="<?=htmlspecialchars((string)$_row['slug'])?>" data-tip="Copy link: copy the share link to your clipboard"><i class="fas fa-link" aria-hidden="true"></i> <span class="sv-row-btn-label">Copy link</span></button>
+									<button type="button" class="sv-row-btn sv-copylink-btn" data-link="<?=htmlspecialchars(HTTP_UI_REMOTE . 'index.php?Route=Survey/s/' . rawurlencode((string)$_row['slug']))?>" data-tip="Copy link: copy the share link to your clipboard"><i class="fas fa-link" aria-hidden="true"></i> <span class="sv-row-btn-label">Copy link</span></button>
 <?php if ($_status !== 'archived'): ?>
 									<button type="button" class="sv-row-btn sv-archive-btn" data-sid="<?=$_sid?>" data-title="<?=htmlspecialchars((string)$_row['title'])?>" data-tip="Archive: stop collecting responses and hide it"><i class="fas fa-box-archive" aria-hidden="true"></i> <span class="sv-row-btn-label">Archive</span></button>
+<?php endif; ?>
+<?php if ($_status === 'draft' && (int)$_row['ResponseCount'] === 0): /* Survey::delete refuses anything else */ ?>
+									<button type="button" class="sv-row-btn sv-delete-btn" data-sid="<?=$_sid?>" data-title="<?=htmlspecialchars((string)$_row['title'])?>" data-tip="Delete: remove this draft for good"><i class="fas fa-trash" aria-hidden="true"></i> <span class="sv-row-btn-label">Delete</span></button>
 <?php endif; ?>
 <?php endif; /* Access === manage */ ?>
 <?php if ($_row['Access'] === 'shared'): ?>
@@ -552,7 +563,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 ?>
 									<button type="button" class="sv-row-btn<?=$_cred_on ? ' sv-row-btn-on' : ''?>" data-sv-credit="<?=$_sid?>"
 									        data-sv-grantor="<?=htmlspecialchars((string)$_row['CreditGrantor'])?>" data-sv-title="<?=htmlspecialchars((string)$_row['title'])?>"
-									        data-tip="<?=htmlspecialchars($_cred_tip)?>"><i class="fas <?=$_cred_on ? 'fa-circle-check' : 'fa-award'?>" aria-hidden="true"></i> <span class="sv-row-btn-label">Credits</span><span class="sv-visually-hidden sv-credit-state"><?=$_cred_on ? ', on' : ''?></span></button>
+									        data-tip="<?=htmlspecialchars($_cred_tip)?>" aria-label="<?=$_cred_on ? 'Credits (on)' : 'Credits (off)'?>"><i class="fas <?=$_cred_on ? 'fa-circle-check' : 'fa-award'?>" aria-hidden="true"></i> <span class="sv-row-btn-label">Credits</span></button>
 <?php endif; ?>
 								</div>
 <?php if (!empty($_row['ResultsPending'])): ?>
@@ -607,6 +618,18 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 		<div class="sv-modal-footer">
 			<button type="button" class="sv-modal-btn sv-modal-cancel" id="sv-archive-cancel">Cancel</button>
 			<button type="button" class="sv-modal-btn sv-modal-ok sv-modal-danger" id="sv-archive-ok">Archive</button>
+		</div>
+	</div>
+</div>
+
+<!-- Delete confirm modal (drafts with no responses only) -->
+<div class="sv-overlay" id="sv-delete-overlay">
+	<div class="sv-modal sv-scope" role="dialog" aria-modal="true" aria-labelledby="sv-delete-heading">
+		<h4 class="sv-modal-title" id="sv-delete-heading">Delete Survey</h4>
+		<div class="sv-modal-body" id="sv-delete-body"></div>
+		<div class="sv-modal-footer">
+			<button type="button" class="sv-modal-btn sv-modal-cancel" id="sv-delete-cancel">Cancel</button>
+			<button type="button" class="sv-modal-btn sv-modal-ok sv-modal-danger" id="sv-delete-ok">Delete</button>
 		</div>
 	</div>
 </div>
@@ -894,7 +917,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 
 	// ----- Copy link -----
 	delegate('.sv-copylink-btn', function(btn) {
-		var url = window.location.origin + UIR_BASE + 'Survey/s/' + btn.getAttribute('data-slug');
+		var url = btn.getAttribute('data-link');
 		if (navigator.clipboard && navigator.clipboard.writeText) {
 			navigator.clipboard.writeText(url).then(function() {
 				notice('Share link copied.');
@@ -920,8 +943,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 				b.setAttribute('data-tip', 'Attendance credit is on');
 				var ic = b.querySelector('i');
 				if (ic) { ic.className = 'fas fa-circle-check'; }
-				var st = b.querySelector('.sv-credit-state');
-				if (st) { st.textContent = ', on'; }
+				b.setAttribute('aria-label', 'Credits (on)');
 			}
 		});
 	});
@@ -952,6 +974,52 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 				if (!j.csrf) { notice(j.error || 'Could not archive the survey.'); }
 			})
 			.catch(function() { okBtn.disabled = false; closeOverlay('sv-archive-overlay'); notice('Network error archiving the survey.'); });
+	});
+
+	// ----- Delete (never-answered drafts) -----
+	var deleteBtn = null;
+	delegate('.sv-delete-btn', function(btn) {
+		deleteBtn = btn;
+		document.getElementById('sv-delete-body').textContent =
+			'Delete "' + btn.getAttribute('data-title') + '"? Its questions, pages and images are removed for good. This cannot be undone.';
+		openOverlay('sv-delete-overlay', 'sv-delete-cancel');
+	});
+	document.getElementById('sv-delete-cancel').addEventListener('click', function() { closeOverlay('sv-delete-overlay'); });
+	document.getElementById('sv-delete-ok').addEventListener('click', function() {
+		if (!deleteBtn) { return; }
+		var okBtn = this, btn = deleteBtn;
+		okBtn.disabled = true;
+		post('delete', { SurveyId: btn.getAttribute('data-sid') })
+			.then(function(j) {
+				okBtn.disabled = false;
+				closeOverlay('sv-delete-overlay');
+				if (j.status !== 0) {
+					if (!j.csrf) { notice(j.error || 'Could not delete the survey.'); }
+					return;
+				}
+				deleteBtn = null;
+				var tr = btn.closest('tr');
+				// Keep the stat tiles in step: Total, plus the tile for this row's status.
+				var rowStatus = tr ? tr.getAttribute('data-sv-status') : null;
+				['total', rowStatus].forEach(function(key) {
+					var tile = key ? document.querySelector('[data-sv-stat="' + key + '"]') : null;
+					if (!tile) { return; }
+					var n = parseInt(tile.textContent.replace(/[^0-9]/g, ''), 10) || 0;
+					tile.textContent = Math.max(0, n - 1).toLocaleString('en-US');
+				});
+				var section = btn.closest('.sv-list-section');
+				var tableEl = btn.closest('table');
+				var dt = null;
+				if (tableEl && window.jQuery && window.jQuery.fn && window.jQuery.fn.DataTable
+					&& window.jQuery.fn.DataTable.isDataTable(tableEl)) {
+					dt = window.jQuery(tableEl).DataTable();
+				}
+				if (dt) { dt.row(tr).remove().draw(false); } else if (tr) { tr.remove(); }
+				var count = section ? section.querySelector('.sv-list-section-count') : null;
+				if (count) { count.textContent = String(Math.max(0, (parseInt(count.textContent, 10) || 1) - 1)); }
+				notice('Survey deleted.');
+			})
+			.catch(function() { okBtn.disabled = false; closeOverlay('sv-delete-overlay'); notice('Network error deleting the survey.'); });
 	});
 
 	// ----- Share link fallback modal -----

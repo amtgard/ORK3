@@ -4,6 +4,7 @@
    One IIFE, configured by window.SvConfig emitted by Survey_take.tpl:
 
        { uir: 'index.php?Route=', surveyId: 123, preview: false, canManage: false,
+         viewer: 42, definition: {<definition payload>} | null,
          csrf: '<session token>' }
 
    Every SurveyAjax POST mutation (draft_save, submit) sends csrf as the
@@ -48,7 +49,12 @@
     var CSRF = String(CFG.csrf || '');
     // Preview keeps its own mirror: a manager's abandoned preview must never
     // pre-fill their real run of the same survey (and vice versa).
-    var SS_KEY = 'sv:answers:' + SURVEY_ID + (IS_PREVIEW ? ':preview' : '');
+    // Keyed and stamped by player too: on a shared device the next player must
+    // never inherit (and submit) the last one's answers and consent (#6).
+    var VIEWER = parseInt(CFG.viewer, 10) || 0;
+    var SS_PREFIX = 'sv:answers:';
+    var SS_OWN = SS_PREFIX + VIEWER + ':';
+    var SS_KEY = SS_OWN + SURVEY_ID + (IS_PREVIEW ? ':preview' : '');
     var MIRROR_DELAY = 300;   // ms — sessionStorage write debounce (#25)
     var DRAFT_DELAY = 1500;   // ms — server draft autosave debounce (#26)
     // Pairwise picks land every 1.5-2.5s for 36-78 matchups, so the 1500ms
@@ -98,6 +104,12 @@
         if (String((s && s.scope_type) || '') === 'ork') {
             who = 'The ORK administrators who run this survey, now and in future administrations, ' +
                 'will see my name beside my answers, including in exported spreadsheets.';
+        } else if (String((s && s.manager_label) || '').trim()) {
+            // The server names the whole management chain (park -> kingdom ->
+            // parent kingdom), exactly who canManage lets see names and CSVs.
+            who = String(s.manager_label).trim() +
+                ' who run this survey, now and in future reigns, ' +
+                'will see my name beside my answers, including in exported spreadsheets.';
         } else {
             // Kingdom names often carry their own article ("The Kingdom of …"):
             // never print "The The Kingdom of … officers".
@@ -139,6 +151,8 @@
     var saveState = '';      // '' | 'saved' | 'failed' — what the status line shows
 
     var stage, titleEl, metaEl, progressEl, barEl, progressTextEl, liveEl, politeEl, saveEl;
+    // True while the assertive region still holds a "check your answers" message.
+    var liveIsValidation = false;
 
     // -------------------------------------------------------------- helpers
 
@@ -150,7 +164,18 @@
     function el(id) { return document.getElementById(id); }
 
     function announce(msg) {
+        liveIsValidation = false;
         if (liveEl) { liveEl.textContent = String(msg || ''); }
+    }
+
+    function announceValidation(msg) {
+        announce(msg);
+        liveIsValidation = true;
+    }
+
+    /** Once no flagged question is left on the page, drop the stale validation message. */
+    function clearStaleValidation() {
+        if (liveIsValidation && stage && !stage.querySelector('.sv-q-invalid')) { announce(''); }
     }
 
     /** Non-urgent news (a question appeared below) — never interrupts. */
@@ -368,6 +393,7 @@
         if (!force && !resumeAllowed()) { return; }
         try {
             window.sessionStorage.setItem(SS_KEY, JSON.stringify({
+                owner: VIEWER,
                 answers: answers,
                 idx: idx,
                 startedAt: startedAt,
@@ -394,8 +420,23 @@
             var raw = window.sessionStorage.getItem(SS_KEY);
             if (!raw) { return null; }
             var v = JSON.parse(raw);
-            return (v && typeof v === 'object') ? v : null;
+            if (!v || typeof v !== 'object') { return null; }
+            if (v.owner !== VIEWER) { mirrorClear(); return null; }
+            return v;
         } catch (e) { return null; }
+    }
+
+    /** Drop every other player's mirror left in this tab (shared device, #6). */
+    function mirrorPurgeOthers() {
+        var ss, i, k, drop = [];
+        try {
+            ss = window.sessionStorage;
+            for (i = 0; i < ss.length; i++) {
+                k = ss.key(i);
+                if (k && k.indexOf(SS_PREFIX) === 0 && k.indexOf(SS_OWN) !== 0) { drop.push(k); }
+            }
+            for (i = 0; i < drop.length; i++) { ss.removeItem(drop[i]); }
+        } catch (e) { /* storage blocked — nothing to purge */ }
     }
 
     function mirrorClear() {
@@ -540,10 +581,20 @@
     }
 
     /** "September 30, 2026" (+ " at 5:00 PM" unless it closes at the end of the day). */
-    function closeLabel(v) {
+    function closeLabel(v, ts) {
         var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(String(v || ''));
-        var mon, out, h, mi;
+        var mon, out, h, mi, d;
         if (!m) { return ''; }
+        // A timed close is an instant: show it in the viewer's own clock
+        // (close_at is the server's wall time with no zone). An end-of-day
+        // close stays the nominal date the builder picked.
+        if (typeof ts === 'number' && isFinite(ts) && m[4] !== undefined && !(m[4] === '23' && m[5] === '59')) {
+            d = new Date(ts * 1000);
+            h = d.getHours();
+            mi = ('0' + d.getMinutes()).slice(-2);
+            return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() +
+                ' at ' + (h % 12 === 0 ? 12 : h % 12) + ':' + mi + ' ' + (h < 12 ? 'AM' : 'PM');
+        }
         mon = parseInt(m[2], 10) - 1;
         if (mon < 0 || mon > 11) { return ''; }
         out = MONTHS[mon] + ' ' + parseInt(m[3], 10) + ', ' + m[1];
@@ -574,7 +625,7 @@
     function metaParts() {
         var s = (def && def.survey) || {};
         var parts = [lengthLabel()];
-        var closes = closeLabel(s.close_at);
+        var closes = closeLabel(s.close_at, s.close_ts);
         if (closes) { parts.push('Closes ' + closes); }
         return parts;
     }
@@ -793,6 +844,7 @@
             roots[i].hidden = want;
             if (want) { R.setError(roots[i], null); }
         }
+        clearStaleValidation();
 
         empty = stage.querySelector('.sv-page-empty');
         if (empty) { empty.hidden = scr.questions.length > 0; }
@@ -871,13 +923,16 @@
             esc(UIR) + 'Player/index">Back to My Amtgard</a></div>';
     }
 
-    function renderThanks(html, credit) {
+    function renderThanks(html, credit, announceText) {
         var out = '<section class="sv-card sv-thanks">';
         finished = true;
         if (draftTimer) { window.clearTimeout(draftTimer); draftTimer = null; }
         draftSeq++;           // a draft reply still in flight must not repaint the status
         setSaveStatus('');
         out += '<h2 class="sv-card-title"><i class="fas fa-circle-check" aria-hidden="true"></i> Thank you</h2>';
+        if (def && def.survey && def.survey.thanks_image_url) {
+            out += '<div class="sv-q-image"><img class="sv-q-image-img" src="' + esc(def.survey.thanks_image_url) + '" alt=""></div>';
+        }
         out += '<div class="sv-intro">' + (html ? safe(html) : '<p>Your response has been recorded.</p>') + '</div>';
         if (credit === 'granted') {
             out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your attendance credit has been added.</span></p>';
@@ -892,7 +947,7 @@
         if (metaEl) { metaEl.hidden = true; }
         // The submit button just vanished from under the user's focus.
         focusScreenStart();
-        announce('Thank you. Your response has been recorded.');
+        announce(announceText || 'Thank you. Your response has been recorded.');
         window.scrollTo(0, 0);
     }
 
@@ -924,7 +979,7 @@
         serverErrors = null;
         if (first) {
             focusQuestion(first);
-            announce('Please check your answers.');
+            announceValidation('Please check your answers.');
         }
     }
 
@@ -941,6 +996,7 @@
         }
 
         wireRankings();
+        if (R.enhanceDates) { R.enhanceDates(stage); }
         headerPaint();
         paintServerErrors();
         window.scrollTo(0, 0);
@@ -1028,7 +1084,7 @@
     }
 
     function focusQuestion(root) {
-        var control = root.querySelector('input, select, textarea, button');
+        var control = root.querySelector('input:not([type="hidden"]), select, textarea, button');
         if (control && control.focus) {
             try { control.focus({ preventScroll: true }); } catch (e) { control.focus(); }
         }
@@ -1116,7 +1172,7 @@
 
         if (first) {
             focusQuestion(first);
-            announce('Please check the highlighted question before continuing.');
+            announceValidation('Please check the highlighted question before continuing.');
             return false;
         }
         return true;
@@ -1131,7 +1187,10 @@
         qid = toInt(root.getAttribute('data-qid'));
         for (i = 0; i < scr.questions.length; i++) {
             if (toInt(scr.questions[i].question_id) === qid) {
-                if (!validateQuestion(scr.questions[i], answers[qid])) { R.setError(root, null); }
+                if (!validateQuestion(scr.questions[i], answers[qid])) {
+                    R.setError(root, null);
+                    clearStaleValidation();
+                }
                 return;
             }
         }
@@ -1222,7 +1281,7 @@
         if (IS_PREVIEW && !isTest) {
             mirrorClear();
             renderThanks('<p>Preview complete — nothing was saved.</p>' +
-                (s.thanks_html || ''));
+                (s.thanks_html || ''), 'none', 'Preview complete. Nothing was saved.');
             return;
         }
 
@@ -1244,6 +1303,9 @@
 
             if (r && r.status === 0) {
                 mirrorClear();
+                // The site banner promoting this survey is stale once it is answered.
+                var banner = document.getElementById('ork-survey-banner');
+                if (banner && +banner.getAttribute('data-survey-id') === +SURVEY_ID) { banner.remove(); }
                 renderThanks(r.thanks_html || s.thanks_html || '', r.credit || 'none');
                 return;
             }
@@ -1417,8 +1479,10 @@
             if (!mirroredIdx && typeof draft.page_index === 'number') { idx = draft.page_index; }
             resumed = true;
         }
-        if (draft && draft.started_at) {
-            startMs = Date.parse(String(draft.started_at).replace(' ', 'T'));
+        if (draft && typeof draft.started_ts === 'number') {
+            // Epoch seconds from the server: started_at itself is the server's
+            // zone-less wall time, which the browser would misread as local.
+            startMs = draft.started_ts * 1000;
             // The earliest trustworthy start wins, so a reload never shortens
             // the recorded duration.
             if (saneStart(startMs) && startMs < startedAt) { startedAt = startMs; }
@@ -1438,6 +1502,8 @@
 
         if (!stage || !R) { return; }
 
+        mirrorPurgeOthers();
+
         stage.addEventListener('click', onStageClick);
         stage.addEventListener('change', onStageChange);
         stage.addEventListener('input', onStageInput);
@@ -1455,7 +1521,12 @@
                 .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
         }
 
-        post('definition', { SurveyId: SURVEY_ID, Preview: IS_PREVIEW ? 1 : 0 }).then(function (r) {
+        // The page embeds the definition (no round trip on a weak signal); POST
+        // for it only when the embed is absent — any server-side failure.
+        var embedded = CFG.definition && typeof CFG.definition === 'object' ? CFG.definition : null;
+        CFG.definition = null;
+        (embedded ? Promise.resolve(embedded)
+            : post('definition', { SurveyId: SURVEY_ID, Preview: IS_PREVIEW ? 1 : 0 })).then(function (r) {
             if (!r) {
                 renderNotice('This survey could not be loaded.', 'sv-notice-error');
                 return;

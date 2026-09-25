@@ -26,6 +26,16 @@ class SurveyCredit
     /** ork_event.name is varchar(100). */
     public const EVENT_NAME_MAX = 100;
 
+    /**
+     * A web request (enable, the panel's reconcile) posts at most this many
+     * credits, and stops early after SYNC_SECONDS; the rest are left owed for
+     * the next panel open or the hourly bin/survey-credit-sweep.php.
+     */
+    public const SYNC_GRANT_CAP = 200;
+    public const SYNC_SECONDS = 10.0;
+
+    /** SYNC_GRANT_CAP, overridable by tests. */
+    private int $syncCap = self::SYNC_GRANT_CAP;
 
     private $db;
 
@@ -167,6 +177,18 @@ class SurveyCredit
     private static function activeParkSql(string $column): string
     {
         return 'CASE WHEN p.active = \'Active\' THEN ' . $column . ' ELSE NULL END';
+    }
+
+    /**
+     * 1 while the ork_mundane row LEFT JOINed as `m` is banned (penalty_box) or
+     * currently suspended (no end date, or an end date not yet passed), else 0.
+     * A held player's credit stays owed and posts once the sanction lifts. A
+     * missing mundane row is not held (the grant itself decides).
+     */
+    private static function heldSql(): string
+    {
+        return 'COALESCE(m.penalty_box <> 0 OR (m.suspended = 1 AND (m.suspended_until IS NULL'
+            . ' OR m.suspended_until = \'0000-00-00\' OR m.suspended_until >= CURDATE())), 0)';
     }
 
     // -----------------------------------------------------------------------
@@ -314,13 +336,16 @@ class SurveyCredit
         }
 
         $visibleId = $this->visibleIds($configs, $survey, $manage, $grantor);
+        $shown     = array_values(array_filter($configs, static fn (array $c): bool => isset($visibleId[(int) $c['credit_id']])));
+        $events    = $this->eventNames($shown);
         $visible   = [];
-        foreach ($configs as $c) {
-            if (isset($visibleId[(int) $c['credit_id']])) {
-                $visible[] = $this->configOut($c, $counts[(int) $c['credit_id']] ?? 0);
-            }
+        foreach ($shown as $c) {
+            $visible[] = $this->configOut($c, $counts[(int) $c['credit_id']] ?? 0, $events[(int) ($c['event_id'] ?? 0)] ?? '');
         }
 
+        // Each owed list is read once and shared: both previews and the
+        // pending count used to re-read it (five queries, now at most two).
+        $owed = null;
         $mine = null;
         if ($grantor !== null) {
             $own = null;
@@ -330,17 +355,21 @@ class SurveyCredit
                 }
             }
             $problem = $own !== null ? '' : $this->enableProblem($survey, $grantor);
+            if ($own === null) {
+                $owed      = $this->owedResponses($surveyId);
+                $unnoticed = $this->owedResponses($surveyId, false);
+            }
             $mine = [
                 'grantor_type'   => $grantor['type'],
                 'grantor_id'     => (int) $grantor['id'],
-                'name'           => $this->survey()->scopeName($grantor['type'], (int) $grantor['id']),
+                'name'           => $this->orgName($grantor['type'], (int) $grantor['id']),
                 'config_id'      => $own !== null ? (int) $own['credit_id'] : null,
                 'can_enable'     => $own === null && $problem === '',
                 'blocked_reason' => $problem,
                 'covered_by'     => $own === null ? $this->coveredBy($configs, $grantor, $survey) : null,
                 'preview'        => $own === null ? [
-                    'home_park' => $this->preview($survey, $configs, $grantor, 'home_park', $parentOf),
-                    'event'     => $this->preview($survey, $configs, $grantor, 'event', $parentOf),
+                    'home_park' => $this->preview($survey, $configs, $grantor, 'home_park', $parentOf, $owed, $unnoticed),
+                    'event'     => $this->preview($survey, $configs, $grantor, 'event', $parentOf, $owed, $unnoticed),
                 ] : null,
             ];
         }
@@ -354,7 +383,9 @@ class SurveyCredit
             'configs'       => $visible,
             'mine'          => $mine,
             // Owed credits under the configs shown, never a hidden one's count.
-            'pending'       => $this->pendingCount($survey, $configs, $parentOf, $visibleId),
+            'pending'       => $this->pendingCount($survey, $configs, $parentOf, $visibleId, $owed),
+            // Owed to banned or suspended players: posts once the sanction lifts.
+            'held'          => $this->pendingCount($survey, $configs, $parentOf, $visibleId, null, true),
         ]]);
     }
 
@@ -379,28 +410,42 @@ class SurveyCredit
         if (!$this->survey()->canCreate($uid, (string) $grantor['type'], (int) $grantor['id'])) {
             return $this->denied('You cannot turn on credits for this survey.');
         }
-        $problem = $this->enableProblem($survey, $grantor);
-        if ($problem !== '') {
-            return $this->fail($problem);
-        }
-
         $sid = (int) $survey['survey_id'];
-        if (!$this->exec('INSERT INTO ' . DB_PREFIX . 'survey_credit
-                          (survey_id, grantor_type, grantor_id, mode, enabled_by, enabled_at)
-                          VALUES (' . $sid . ', \'' . $grantor['type'] . '\', ' . (int) $grantor['id'] . ', \''
-                          . $mode . '\', ' . $uid . ', \'' . date('Y-m-d H:i:s') . '\')')) {
-            return $this->fail('Credits are already on for this organization.');
+        // A retry of an enable that already committed (the first request timed
+        // out in its backfill) is a success with the same config's status.
+        $row = $this->ownConfig($sid, $grantor);
+        $already = $row !== null && (string) $row['mode'] === $mode;
+        if (!$already) {
+            $problem = $this->enableProblem($survey, $grantor);
+            if ($problem !== '') {
+                return $this->fail($problem);
+            }
+            if (!$this->exec('INSERT INTO ' . DB_PREFIX . 'survey_credit
+                              (survey_id, grantor_type, grantor_id, mode, enabled_by, enabled_at)
+                              VALUES (' . $sid . ', \'' . $grantor['type'] . '\', ' . (int) $grantor['id'] . ', \''
+                              . $mode . '\', ' . $uid . ', \'' . date('Y-m-d H:i:s') . '\')')) {
+                // A concurrent identical enable won the unique key: same answer as a retry.
+                $row = $this->ownConfig($sid, $grantor);
+                if ($row === null || (string) $row['mode'] !== $mode) {
+                    return $this->fail('Credits are already on for this organization.');
+                }
+                $already = true;
+            } else {
+                // Read back by the unique key: LAST_INSERT_ID() is not a duplicate signal.
+                $row = $this->ownConfig($sid, $grantor);
+            }
         }
-        // Read back by the unique key: LAST_INSERT_ID() is not a duplicate signal.
-        $row = $this->fetchRow('SELECT credit_id FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $sid
-            . ' AND grantor_type = \'' . $grantor['type'] . '\' AND grantor_id = ' . (int) $grantor['id']);
         $creditId = $row ? (int) $row['credit_id'] : 0;
 
-        // The backfill posts every owed credit, but the caller reads counts
-        // only for the configs its panel shows (status()): another kingdom's
-        // numbers would leak how many of that kingdom answered.
+        // The backfill posts owed credits (bounded: the rest are Remaining, for
+        // the sweep), but the caller reads counts only for the configs its
+        // panel shows (status()): another kingdom's numbers would leak how
+        // many of that kingdom answered.
         $visible = $this->visibleIds($this->configs($sid), $survey, $this->survey()->canManage($uid, $survey), $grantor);
-        [$res, $byCredit] = $this->reconcileRun($sid, $visible);
+        [$res, $byCredit, $remaining] = $this->reconcileRun($sid, $visible, true);
+        if ($already) {
+            return $this->ok(['CreditId' => $creditId, 'Already' => true, 'Remaining' => $remaining] + $res);
+        }
 
         $log = $this->survey();
         $log->setActor($uid);
@@ -409,7 +454,14 @@ class SurveyCredit
             'mode' => $mode, 'backfilled' => $byCredit[$creditId] ?? 0,
         ]);
 
-        return $this->ok(['CreditId' => $creditId] + $res);
+        return $this->ok(['CreditId' => $creditId, 'Already' => false, 'Remaining' => $remaining] + $res);
+    }
+
+    /** $grantor's own config on this survey, or null. */
+    private function ownConfig(int $surveyId, array $grantor): ?array
+    {
+        return $this->fetchRow('SELECT credit_id, mode FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $surveyId
+            . ' AND grantor_type = \'' . $this->esc($grantor['type']) . '\' AND grantor_id = ' . (int) $grantor['id']);
     }
 
     /** reconcile() for a panel viewer: a manager, or someone acting for $grantor. */
@@ -424,9 +476,11 @@ class SurveyCredit
         if (!$this->mayView($survey, $manage, $acting)) {
             return $this->denied('You cannot manage attendance credits for this survey.');
         }
-        // Posts everything owed; reports only what the caller's panel shows.
+        // Posts what is owed, bounded (Remaining is left for the sweep);
+        // reports only what the caller's panel shows.
         $visible = $this->visibleIds($this->configs($surveyId), $survey, $manage, $acting ? $grantor : null);
-        return $this->ok($this->reconcileRun($surveyId, $visible)[0]);
+        [$res, , $remaining] = $this->reconcileRun($surveyId, $visible, true);
+        return $this->ok($res + ['Remaining' => $remaining]);
     }
 
     // -----------------------------------------------------------------------
@@ -451,26 +505,32 @@ class SurveyCredit
      * credit is still posted. A no-home-park skip counts when a config in
      * $countIds is the one that could not place the player.
      *
-     * @return array{0: array{Granted:int, SkippedNoPark:int, Pending:int}, 1: array<int,int>}
-     *         the counts, and credits granted per credit_id (every config)
+     * $bounded (a web request) attempts at most syncCap grants and stops after
+     * SYNC_SECONDS; the owed credits it did not reach stay owed and are
+     * counted (for $countIds) as the third element.
+     *
+     * @return array{0: array{Granted:int, SkippedNoPark:int, Pending:int}, 1: array<int,int>, 2: int}
+     *         the counts, credits granted per credit_id (every config), and
+     *         owed credits left for later
      */
-    private function reconcileRun(int $surveyId, ?array $countIds): array
+    private function reconcileRun(int $surveyId, ?array $countIds, bool $bounded = false): array
     {
         $out      = ['Granted' => 0, 'SkippedNoPark' => 0, 'Pending' => 0];
         $byCredit = [];
         $survey   = $this->survey()->getRow($surveyId);
         if ($survey === null) {
-            return [$out, $byCredit];
+            return [$out, $byCredit, 0];
         }
         $configs = $this->withEvents($this->configs($surveyId), $survey);
         if (!$configs) {
-            return [$out, $byCredit];
+            return [$out, $byCredit, 0];
         }
         $byId     = array_column($configs, null, 'credit_id');
         $parentOf = $this->parentMap();
         $counted  = $countIds === null ? $configs
             : array_values(array_filter($configs, static fn (array $c): bool => isset($countIds[(int) $c['credit_id']])));
 
+        $todo = [];   // [response, credit_id] in response order
         foreach ($this->owedResponses($surveyId) as $r) {
             $cov = self::coverage($configs, $r, $survey, $parentOf);
             if ($cov['credit_id'] === null) {
@@ -479,17 +539,60 @@ class SurveyCredit
                 }
                 continue;
             }
-            $cid   = (int) $cov['credit_id'];
-            $count = $countIds === null || isset($countIds[$cid]);
-            $res   = $this->grant($survey, $byId[$cid], $r);
-            if ($res === 'granted') {
-                $byCredit[$cid] = ($byCredit[$cid] ?? 0) + 1;
-                $out['Granted'] += $count ? 1 : 0;
-            } elseif ($res === 'pending') {
-                $out['Pending'] += $count ? 1 : 0;
+            $todo[] = [$r, (int) $cov['credit_id']];
+        }
+
+        $started = microtime(true);
+        $done    = 0;
+        $work    = $bounded ? array_slice($todo, 0, $this->syncCap) : $todo;
+        foreach (array_chunk($work, max(1, $this->syncCap)) as $chunk) {
+            // Last class for the whole chunk in one query, not one per grant.
+            $classes = $this->lastClasses(array_map(static fn (array $t): int => (int) $t[0]['mundane_id'], $chunk));
+            foreach ($chunk as [$r, $cid]) {
+                if ($bounded && microtime(true) - $started >= self::SYNC_SECONDS) {
+                    break 2;
+                }
+                $done++;
+                $count = $countIds === null || isset($countIds[$cid]);
+                $res   = $this->grant($survey, $byId[$cid], $r, $classes[(int) $r['mundane_id']] ?? 0);
+                if ($res === 'granted') {
+                    $byCredit[$cid] = ($byCredit[$cid] ?? 0) + 1;
+                    $out['Granted'] += $count ? 1 : 0;
+                } elseif ($res === 'pending') {
+                    $out['Pending'] += $count ? 1 : 0;
+                }
             }
         }
-        return [$out, $byCredit];
+        $remaining = 0;
+        foreach (array_slice($todo, $done) as [, $cid]) {
+            $remaining += ($countIds === null || isset($countIds[$cid])) ? 1 : 0;
+        }
+        return [$out, $byCredit, $remaining];
+    }
+
+    /**
+     * Each player's last class (the class of their latest attendance, 0 when
+     * that row has none or they have no attendance), for many players in ONE
+     * query. Same answer as Attendance::GetPlayerLastClass().
+     *
+     * @param list<int> $mundaneIds
+     * @return array<int,int> mundane_id => class_id
+     */
+    private function lastClasses(array $mundaneIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $mundaneIds))));
+        if (!$ids) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->fetchAll('SELECT mundane_id, class_id FROM (
+                                    SELECT mundane_id, class_id, ROW_NUMBER() OVER (
+                                           PARTITION BY mundane_id ORDER BY date DESC, attendance_id DESC) AS rn
+                                      FROM ' . DB_PREFIX . 'attendance WHERE mundane_id IN (' . implode(',', $ids) . ')
+                                  ) t WHERE rn = 1') as $row) {
+            $out[(int) $row['mundane_id']] = max(0, (int) $row['class_id']);
+        }
+        return $out;
     }
 
     /** The live grant after a submit commits (§3.5). Never throws for a missing config. */
@@ -504,12 +607,15 @@ class SurveyCredit
             return 'granted';
         }
         // Only a non-test Any ORK Data response whose data gate showed a credit
-        // line is ever credited (D1).
+        // line is ever credited (D1), and never while the player is banned or
+        // suspended: it stays owed, and a sweep posts it once the sanction lifts.
         $r = $this->fetchRow('SELECT r.response_id, r.mundane_id, ' . self::activeParkSql('r.park_id') . ' AS park_id, r.kingdom_id, r.submitted_at
                                 FROM ' . DB_PREFIX . 'survey_response r
                                 LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = r.park_id
+                                LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
                                WHERE r.survey_id = ' . (int) $surveyId . ' AND r.mundane_id = ' . (int) $uid . '
-                                 AND r.consent = \'full\' AND r.is_test = 0 AND r.credit_notice = 1 LIMIT 1');
+                                 AND r.consent = \'full\' AND r.is_test = 0 AND r.credit_notice = 1
+                                 AND ' . self::heldSql() . ' = 0 LIMIT 1');
         if ($r === null) {
             return 'none';
         }
@@ -570,10 +676,14 @@ class SurveyCredit
         if (!$gated || $uid <= 0) {
             return $out;
         }
+        // A survey already credited to this player promises nothing more (a retake
+        // after cleared results cannot earn a second grant), so its configs drop out here.
         $bySurvey = [];
-        foreach ($this->fetchAll('SELECT * FROM ' . DB_PREFIX . 'survey_credit
-                                  WHERE survey_id IN (' . implode(',', array_keys($gated)) . ')
-                                  ORDER BY enabled_at ASC, credit_id ASC') as $c) {
+        foreach ($this->fetchAll('SELECT c.* FROM ' . DB_PREFIX . 'survey_credit c
+                                  WHERE c.survey_id IN (' . implode(',', array_keys($gated)) . ')
+                                    AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'survey_credit_grant g
+                                                     WHERE g.survey_id = c.survey_id AND g.mundane_id = ' . (int) $uid . ')
+                                  ORDER BY c.enabled_at ASC, c.credit_id ASC') as $c) {
             $bySurvey[(int) $c['survey_id']][] = $c;
         }
         if (!$bySurvey) {
@@ -716,7 +826,7 @@ class SurveyCredit
      * its players chose Any ORK Data without being shown a credit line, who
      * therefore get none (no_notice, D1).
      */
-    private function preview(array $survey, array $configs, array $grantor, string $mode, array $parentOf): array
+    private function preview(array $survey, array $configs, array $grantor, string $mode, array $parentOf, array $owed, array $unnoticed): array
     {
         $hyp = ['credit_id' => PHP_INT_MAX, 'grantor_type' => $grantor['type'], 'grantor_id' => (int) $grantor['id'],
                 'mode' => $mode, 'enabled_at' => '9999-12-31 23:59:59'];
@@ -727,13 +837,13 @@ class SurveyCredit
         // includes someone with no Active home park: they get nothing either
         // way, and counting them here keeps the warning's total the same as
         // event mode's rather than dropping them from every count.
-        foreach ($this->owedResponses((int) $survey['survey_id'], false) as $r) {
+        foreach ($unnoticed as $r) {
             $cov = self::coverage(array_merge($configs, [$hyp]), $r, $survey, $parentOf);
             $noNotice += ($cov['credit_id'] === PHP_INT_MAX
                 || ($cov['credit_id'] === null && $mode === 'home_park'
                     && self::coverage([$hyp], $r, $survey, $parentOf)['no_home_park'])) ? 1 : 0;
         }
-        foreach ($this->owedResponses((int) $survey['survey_id']) as $r) {
+        foreach ($owed as $r) {
             $cov = self::coverage(array_merge($configs, [$hyp]), $r, $survey, $parentOf);
             if ($cov['credit_id'] === PHP_INT_MAX) {
                 $n++;
@@ -749,15 +859,16 @@ class SurveyCredit
      * Owed credits whose winning config is in $countIds (credit_id => true).
      * Coverage still runs over EVERY config, so precedence is the real one: a
      * player owed under a hidden earlier config is not counted against a later
-     * visible one.
+     * visible one. $held counts the ones held for a banned or suspended player.
+     * $owed is the caller's already-read owedResponses() list (null reads it).
      */
-    private function pendingCount(array $survey, array $configs, array $parentOf, array $countIds): int
+    private function pendingCount(array $survey, array $configs, array $parentOf, array $countIds, ?array $owed = null, bool $held = false): int
     {
         if (!$configs || !$countIds) {
             return 0;
         }
         $n = 0;
-        foreach ($this->owedResponses((int) $survey['survey_id']) as $r) {
+        foreach ($owed ?? $this->owedResponses((int) $survey['survey_id'], true, $held) as $r) {
             $id = self::coverage($configs, $r, $survey, $parentOf)['credit_id'];
             $n += ($id !== null && isset($countIds[$id])) ? 1 : 0;
         }
@@ -770,16 +881,20 @@ class SurveyCredit
      * showed a credit line are owed (D1): a backfill never puts a public,
      * dated credit on someone who chose Any ORK Data without being told.
      * $noticed = false lists the others instead (the panel's no_notice count).
+     * A banned or currently suspended player's response is held, not owed
+     * (heldSql()); $held = true lists those instead (the panel's held count).
      */
-    private function owedResponses(int $surveyId, bool $noticed = true): array
+    private function owedResponses(int $surveyId, bool $noticed = true, bool $held = false): array
     {
         return $this->fetchAll(
             'SELECT r.response_id, r.mundane_id, ' . self::activeParkSql('r.park_id') . ' AS park_id, r.kingdom_id, r.submitted_at
                FROM ' . DB_PREFIX . 'survey_response r
                LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = r.park_id
                LEFT JOIN ' . DB_PREFIX . 'survey_credit_grant g ON g.survey_id = r.survey_id AND g.mundane_id = r.mundane_id
+               LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
               WHERE r.survey_id = ' . (int) $surveyId . ' AND r.is_test = 0 AND r.consent = \'full\'
                 AND r.credit_notice = ' . ($noticed ? 1 : 0) . '
+                AND ' . self::heldSql() . ' = ' . ($held ? 1 : 0) . '
                 AND r.mundane_id IS NOT NULL AND g.mundane_id IS NULL
               ORDER BY r.response_id'
         );
@@ -831,6 +946,11 @@ class SurveyCredit
             }
         }
         if ($start === null) {
+            return $config;
+        }
+        if (method_exists($this->db, 'InTrans') && $this->db->InTrans()) {
+            // create_system_event refuses too; say which caller broke the rule.
+            $this->logFailure((int) $survey['survey_id'], 0, 'create_event', 'ensureEvent called inside an open transaction');
             return $config;
         }
         $isPark = $config['grantor_type'] === 'park';
@@ -885,10 +1005,12 @@ class SurveyCredit
      * One credit: attendance row + ledger row in ONE transaction, rolled back on
      * either failure. Callers pass only non-test `full` responses (owedResponses(),
      * grantFor()). Opens no nested transaction: events already exist by now.
+     * $lastClass is the player's last class when the caller fetched it for a
+     * batch (lastClasses()); null looks it up.
      *
      * @return 'granted'|'already'|'pending'
      */
-    private function grant(array $survey, array $config, array $response): string
+    private function grant(array $survey, array $config, array $response, ?int $lastClass = null): string
     {
         $sid = (int) $survey['survey_id'];
         $uid = (int) $response['mundane_id'];
@@ -915,7 +1037,7 @@ class SurveyCredit
                       'KingdomId' => (int) $park['kingdom_id'], 'EventId' => 0, 'EventCalendarDetailId' => 0];
         }
 
-        $class = self::classFor((int) Ork3::$Lib->attendance->GetPlayerLastClass(['MundaneId' => $uid]));
+        $class = self::classFor($lastClass ?? (int) Ork3::$Lib->attendance->GetPlayerLastClass(['MundaneId' => $uid]));
 
         if (!$this->exec('START TRANSACTION')) {
             $this->logFailure($sid, $uid, 'begin', '');
@@ -949,18 +1071,27 @@ class SurveyCredit
         return 'granted';
     }
 
-    private function configOut(array $c, int $granted): array
+    /** @return array<int,string> event_id => name for these configs' events, in ONE query. */
+    private function eventNames(array $configs): array
     {
-        $eventLabel = '';
-        if ((int) ($c['event_id'] ?? 0) > 0) {
-            $e = $this->fetchRow('SELECT name FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int) $c['event_id']);
-            $eventLabel = $e ? (string) $e['name'] : '';
+        $ids = array_values(array_unique(array_filter(array_map(static fn (array $c): int => (int) ($c['event_id'] ?? 0), $configs))));
+        if (!$ids) {
+            return [];
         }
+        $out = [];
+        foreach ($this->fetchAll('SELECT event_id, name FROM ' . DB_PREFIX . 'event WHERE event_id IN (' . implode(',', $ids) . ')') as $e) {
+            $out[(int) $e['event_id']] = (string) $e['name'];
+        }
+        return $out;
+    }
+
+    private function configOut(array $c, int $granted, string $eventLabel): array
+    {
         return [
             'credit_id'               => (int) $c['credit_id'],
             'grantor_type'            => (string) $c['grantor_type'],
             'grantor_id'              => (int) $c['grantor_id'],
-            'grantor_name'            => $this->survey()->scopeName((string) $c['grantor_type'], (int) $c['grantor_id']),
+            'grantor_name'            => $this->orgName((string) $c['grantor_type'], (int) $c['grantor_id']),
             'mode'                    => (string) $c['mode'],
             'event_id'                => (int) ($c['event_id'] ?? 0) ?: null,
             'event_calendardetail_id' => (int) ($c['event_calendardetail_id'] ?? 0) ?: null,
@@ -1012,10 +1143,31 @@ class SurveyCredit
      * Run one write. Returns false when the statement really failed, so a
      * transactional block can ROLLBACK instead of committing a half-mutation
      * (Execute() alone reports nothing — PDO runs in ERRMODE_WARNING).
+     *
+     * START TRANSACTION / COMMIT / ROLLBACK go through YapoMysql's depth-counted
+     * BeginTrans/CommitTrans/RollbackTrans: a raw second START TRANSACTION
+     * silently commits the open one in MariaDB, a nested BeginTrans does not.
      */
     private function exec(string $sql): bool
     {
         $this->db->Clear();
+        if (method_exists($this->db, 'BeginTrans')) {
+            switch ($sql) {
+                case 'START TRANSACTION':
+                    // BeginTrans() always returns true; InTrans() catches a failed PDO begin.
+                    // On failure unwind the depth BeginTrans() raised, so callers fail closed cleanly.
+                    if ($this->db->BeginTrans() && $this->db->InTrans()) {
+                        return true;
+                    }
+                    $this->db->RollbackTrans();
+                    return false;
+                case 'COMMIT':
+                    return (bool) $this->db->CommitTrans();
+                case 'ROLLBACK':
+                    // Depth 0 (after a failed COMMIT): end whatever the server still holds.
+                    return $this->db->RollbackTrans() || !$this->db->InTrans() || (bool) $this->db->ExecuteChecked('ROLLBACK');
+            }
+        }
         if (method_exists($this->db, 'ExecuteChecked')) {
             return (bool) $this->db->ExecuteChecked($sql);
         }

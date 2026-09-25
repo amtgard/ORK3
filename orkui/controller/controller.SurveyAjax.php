@@ -32,9 +32,13 @@ class Controller_SurveyAjax extends Controller
      * SameSite attribute (class.Session.php), so only a browser's own Lax
      * default, where it has one, stops a cross-site POST carrying it; do not
      * count on that.
+     *
+     * `definition` (inserts ork_survey_start) and `rows` (writes a rows_view
+     * audit row) are NOT here: both write, and every caller already sends the
+     * token. SurveyPureTest pins this list.
      */
     private const CSRF_EXEMPT = [
-        'available', 'definition', 'get', 'scopes', 'results', 'rows', 'help',
+        'available', 'get', 'scopes', 'results', 'help',
         'preview_md', 'dismiss_banner', 'event_options', 'credit_status',
     ];
 
@@ -238,7 +242,15 @@ class Controller_SurveyAjax extends Controller
     public function scopes($p = null)
     {
         $uid = $this->requireLogin();
-        $this->jsonOut(['status' => 0, 'scopes' => $this->Survey->manageable_scopes($uid)]);
+        $out = ['status' => 0, 'scopes' => $this->Survey->manageable_scopes($uid)];
+        // The builder's consent preview names who can manage its survey,
+        // worded exactly as the runner's Any ORK Data option.
+        $surveyId = (int) ($_POST['SurveyId'] ?? 0);
+        if ($surveyId > 0) {
+            $row = $this->requireManage($uid, $surveyId);
+            $out['manager_label'] = $this->Survey->manager_label((string) $row['scope_type'], (int) $row['scope_id']);
+        }
+        $this->jsonOut($out);
     }
 
     public function create($p = null)
@@ -296,6 +308,9 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
+        // The acting manager's memoised banner / Available Surveys must not
+        // keep offering the survey as it was before this change.
+        $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0, 'survey' => $r['Survey']]);
     }
 
@@ -323,6 +338,9 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
+        // The acting manager's memoised banner / Available Surveys must not
+        // keep offering the survey as it was before this change.
+        $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0, 'survey' => $r['Survey']]);
     }
 
@@ -349,7 +367,35 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
+        // The acting manager's memoised banner / Available Surveys must not
+        // keep offering the survey as it was before this change.
+        $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0]);
+    }
+
+    /**
+     * Clear Results (manager-only, CSRF-checked): every response goes; posted
+     * credits stay. Without Confirm=1 it only counts what would go (the
+     * confirm modal's number), so a request missing the flag deletes nothing.
+     */
+    public function clear_results($p = null)
+    {
+        $uid      = $this->requireLogin();
+        $surveyId = (int) ($_POST['SurveyId'] ?? 0);
+        $this->requireManage($uid, $surveyId);
+
+        $confirm = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && $this->truthy($_POST['Confirm'] ?? 0);
+        $r       = $this->Survey->clear_results($surveyId, $uid, !$confirm);
+        if ((int) $r['Status'] !== 0) {
+            $this->envelopeFail($r);
+        }
+        if ($confirm) {
+            // The manager's own cleared response no longer counts as done.
+            $this->bust_survey_banner_cache();
+        }
+        $this->jsonOut($confirm
+            ? ['status' => 0, 'cleared' => (int) $r['Cleared']]
+            : ['status' => 0, 'count' => (int) $r['Count']]);
     }
 
     public function page_add($p = null)
@@ -551,6 +597,15 @@ class Controller_SurveyAjax extends Controller
         $this->requireManage($uid, $surveyId);
 
         $file = $_FILES['Image'] ?? null;
+        // PHP drops an over-limit file before we see it (tmp_name is empty), so
+        // say why instead of "No file was uploaded."
+        $err = is_array($file) ? (int) ($file['error'] ?? UPLOAD_ERR_OK) : UPLOAD_ERR_NO_FILE;
+        if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+            $this->jsonOut(['status' => 1, 'error' => 'That image is too large (max 2 MB).']);
+        }
+        if ($err !== UPLOAD_ERR_OK && $err !== UPLOAD_ERR_NO_FILE) {
+            $this->jsonOut(['status' => 1, 'error' => 'The upload failed. Try again.']);
+        }
         if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
             $this->jsonOut(['status' => 1, 'error' => 'No file was uploaded.']);
         }
@@ -603,6 +658,8 @@ class Controller_SurveyAjax extends Controller
             // canManage itself before bypassing the audience gate.
             $this->requireManage($uid, $surveyId);
         }
+        // Nothing below writes the session: release its lock (as export() does).
+        session_write_close();
 
         $r = $this->Survey->definition_for_respondent($surveyId, $uid, $preview);
         if ((int) ($r['Status'] ?? 0) !== 0) {
@@ -630,6 +687,8 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
+        // The memoised "Available Surveys" row must flip to "Continue".
+        $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0]);
     }
 
@@ -657,7 +716,10 @@ class Controller_SurveyAjax extends Controller
     public function available($p = null)
     {
         $uid = $this->requireLogin();
-        $this->jsonOut(['status' => 0, 'surveys' => $this->Survey->available_for($uid)]);
+        // Served from the page shell's memoised entry (and warms it on a miss).
+        $surveys = $this->survey_surfaces($uid)['available'];
+        session_write_close();
+        $this->jsonOut(['status' => 0, 'surveys' => $surveys]);
     }
 
     public function dismiss_banner($p = null)
@@ -676,6 +738,7 @@ class Controller_SurveyAjax extends Controller
     public function results($p = null)
     {
         $uid      = $this->requireLogin();
+        session_write_close();
         $surveyId = (int) ($_POST['SurveyId'] ?? 0);
         $row      = $this->Survey->get_row($surveyId);
         if ($row === null) {
@@ -707,6 +770,7 @@ class Controller_SurveyAjax extends Controller
         $uid      = $this->requireLogin();
         $surveyId = (int) ($_POST['SurveyId'] ?? 0);
         $this->requireManage($uid, $surveyId);
+        session_write_close();
 
         $offset  = (int) ($_POST['Offset'] ?? 0);
         $limit   = (int) ($_POST['Limit'] ?? 100);
@@ -724,6 +788,7 @@ class Controller_SurveyAjax extends Controller
     public function credit_status($p = null)
     {
         $uid = $this->requireLogin();
+        session_write_close();
         $r   = $this->Survey->credit_status($uid, (int) ($_POST['SurveyId'] ?? 0), $this->orgParam($_POST['Grantor'] ?? ''));
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
@@ -744,8 +809,12 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
+        // The acting manager's memoised banner / Available Surveys must not
+        // keep offering the survey as it was before this change.
+        $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0, 'credit_id' => $r['CreditId'], 'granted' => $r['Granted'],
-                        'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending']]);
+                        'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending'],
+                        'remaining' => $r['Remaining'], 'already' => $r['Already']]);
     }
 
     public function credit_reconcile($p = null)
@@ -755,6 +824,7 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
-        $this->jsonOut(['status' => 0, 'granted' => $r['Granted'], 'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending']]);
+        $this->jsonOut(['status' => 0, 'granted' => $r['Granted'], 'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending'],
+                        'remaining' => $r['Remaining']]);
     }
 }

@@ -35,13 +35,17 @@
          Renders or clears <div class="sv-q-error" role="alert"> as the last
          child of the root, and toggles .sv-q-invalid on the root.
 
+     enhanceDates(scopeEl) -> void
+         Attaches Flatpickr (readable altInput, ISO value underneath) to every
+         date input under scopeEl, when Flatpickr is loaded; a no-op otherwise.
+
      block(q) -> HTML string
          Renders the presentational types 'section' and 'image'.
 
      escape(s) -> string           HTML-escape a value for text/attribute use.
-     sanitize(html) -> string      DOMPurify.sanitize() when DOMPurify is loaded
-                                   (the runner), else the server-sanitised HTML
-                                   unchanged (the builder). md() is an alias.
+     sanitize(html) -> string      DOMPurify.sanitize() plus the survey image
+                                   allowlist; escaped text when DOMPurify is
+                                   missing (fails closed). md() is an alias.
      isAnswerable(type) -> bool    Mirrors SurveyTypes::ANSWERABLE.
      reindexRank(listEl) -> void   Renumber a .sv-rank list's position badges
                                    and aria-disable its end buttons.
@@ -364,16 +368,51 @@
     function isOther(opt) { return !!(opt && (opt.is_other === 1 || opt.is_other === true || opt.is_other === '1')); }
 
     /* Builder-authored HTML (help, section bodies, welcome/thanks copy) arrives
-       as Parsedown safe-mode output. When DOMPurify is on the page (the runner
-       loads it) that HTML is sanitised again before it reaches innerHTML. The
-       builder does not load DOMPurify, so there the server-sanitised HTML is
-       used as it came. */
+       as Parsedown safe-mode output, sanitised again by DOMPurify (both the
+       runner and the builder load it) before it reaches innerHTML. Allowlist:
+       an <img> keeps src only when it is one of this module's uploads on this
+       origin, so survey copy cannot carry a remote tracking pixel; links get
+       rel=noopener noreferrer + referrerpolicy=no-referrer. Fails CLOSED: with
+       no DOMPurify (CDN blocked) the HTML is shown as escaped text. */
+    var SURVEY_IMG_PATH = /\/assets\/survey(?:-test)?\/[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,5}$/;
+    var purifyHooked = false;
+
+    function isSurveyImageSrc(src) {
+        var u;
+        try { u = new URL(String(src || ''), window.location.href); } catch (e) { return false; }
+        // Host, not origin: stored URLs may be http:// on an https page (config
+        // builds HTTP_ASSETS with a fixed scheme), which the browser upgrades.
+        return (u.protocol === 'https:' || u.protocol === 'http:') &&
+               u.host === window.location.host && !u.search && !u.hash &&
+               SURVEY_IMG_PATH.test(u.pathname);
+    }
+
+    function hookPurify(P) {
+        if (purifyHooked || typeof P.addHook !== 'function') { return; }
+        purifyHooked = true;
+        P.addHook('uponSanitizeAttribute', function (node, data) {
+            if (node.nodeName === 'IMG' && (data.attrName === 'src' || data.attrName === 'srcset') &&
+                !(data.attrName === 'src' && isSurveyImageSrc(data.attrValue))) {
+                data.keepAttr = false;
+            }
+        });
+        P.addHook('afterSanitizeAttributes', function (node) {
+            if (node.nodeName === 'A') {
+                node.setAttribute('rel', 'noopener noreferrer');
+                node.setAttribute('referrerpolicy', 'no-referrer');
+            }
+        });
+    }
+
     function sanitize(html) {
         var s = (html === null || html === undefined) ? '' : String(html);
-        if (s !== '' && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
-            return String(window.DOMPurify.sanitize(s));
+        if (s === '') { return ''; }
+        var P = window.DOMPurify;
+        if (P && typeof P.sanitize === 'function' && typeof P.addHook === 'function') {
+            hookPurify(P);
+            return String(P.sanitize(s));
         }
-        return s;
+        return escapeHtml(s);
     }
 
     /** Help HTML: prefer server-rendered help_html, fall back to escaped help_md. */
@@ -994,6 +1033,49 @@
                ' aria-labelledby="' + ctx.promptId + '"' + ctx.req + ctx.desc + ctx.tab + '>';
     }
 
+    /*
+     * Date questions render a native <input type="date"> (the fallback when
+     * Flatpickr is absent, e.g. the builder preview). enhanceDates() swaps each
+     * one on a desktop browser for a Flatpickr altInput that shows a readable
+     * date ("September 25, 2026") while the original input — now hidden — keeps
+     * the ISO Y-m-d value that readDate() returns. On touch devices Flatpickr
+     * would substitute a native picker anyway, so the native input is kept as is.
+     */
+    var FP_MOBILE_UA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+    var FP_COPY_ATTRS = ['aria-labelledby', 'aria-describedby', 'aria-required', 'aria-invalid', 'tabindex'];
+
+    function enhanceDates(scope) {
+        var inputs, i, el, j, alt;
+        if (!scope || typeof window.flatpickr !== 'function') { return; }
+        if (FP_MOBILE_UA.test(navigator.userAgent || '')) { return; }
+        inputs = scope.querySelectorAll('input.sv-input-date');
+        for (i = 0; i < inputs.length; i++) {
+            el = inputs[i];
+            if (el._flatpickr) { continue; }
+            window.flatpickr(el, {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'F j, Y',
+                altInputClass: 'sv-input sv-input-date-alt',
+                allowInput: true,
+                disableMobile: true,
+                minDate: el.getAttribute('min') || null,
+                maxDate: el.getAttribute('max') || null
+            });
+            alt = el._flatpickr && el._flatpickr.altInput;
+            if (!alt) { continue; }
+            // The visible field carries the name, description and error wiring
+            // the native input had.
+            for (j = 0; j < FP_COPY_ATTRS.length; j++) {
+                if (el.hasAttribute(FP_COPY_ATTRS[j])) {
+                    alt.setAttribute(FP_COPY_ATTRS[j], el.getAttribute(FP_COPY_ATTRS[j]));
+                }
+            }
+            alt.setAttribute('autocomplete', 'off');
+            alt.setAttribute('placeholder', 'Month day, year');
+        }
+    }
+
     // --------------------------------------------------------------- rendering
 
     function block(q) {
@@ -1287,7 +1369,9 @@
             case 'number':
             case 'date':
                 el = root.querySelector('.sv-input');
-                if (el) { el.value = (value === null || value === undefined) ? '' : String(value); }
+                if (el && el._flatpickr) {
+                    if (value === null || value === undefined || value === '') { el._flatpickr.clear(false); } else { el._flatpickr.setDate(String(value), false); }
+                } else if (el) { el.value = (value === null || value === undefined) ? '' : String(value); }
                 break;
             case 'paragraph':
                 el = root.querySelector('.sv-textarea');
@@ -1495,6 +1579,7 @@
         read: read,
         write: write,
         setError: setError,
+        enhanceDates: enhanceDates,
         escape: escapeHtml,
         md: sanitize,
         sanitize: sanitize,

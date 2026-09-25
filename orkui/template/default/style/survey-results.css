@@ -315,6 +315,18 @@
 .svr-nomatch-reset { margin-left: auto; }
 .svr-empty-nomatch { font-style: normal; }
 .svr-empty-nomatch > i { margin-right: 4px; }
+/* A held share (fewer than the minimum matched so far): a neutral info
+   statement, not the filtered-out styling. */
+.svr-empty-held {
+    margin       : 8px 0 4px;
+    font-style   : normal;
+    color        : var(--svr-text);
+    background   : var(--sv-l2);
+    border       : 1px solid var(--svr-border);
+    border-left  : 3px solid var(--svr-accent);
+    border-radius: var(--sv-radius-l2);
+}
+.svr-empty-held > i { margin-right: 6px; color: var(--svr-accent); }
 .svr-rule-note { margin: -6px 0 12px; }
 
 /* Cross-tab head: the split question + the % / count switch (#29). */
@@ -409,6 +421,26 @@
     border-color: #fff;
     color       : #312e81;
 }
+
+/* Clear Results: a destructive ghost on the indigo header band (red-tinted
+   text and edge; the solid red lives on the modal's confirm button). */
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger {
+    color       : #fecaca;
+    border-color: rgba(248, 113, 113, 0.6);
+}
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:hover,
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:focus-visible {
+    background  : rgba(220, 38, 38, 0.35);
+    border-color: #f87171;
+    color       : #fff;
+}
+/* The countdown confirm: grayed out (not a faded red) while disabled, with
+   text that still reads, and a fixed width so the ticking number does not
+   shift the footer. */
+#svr-clear-ok { min-width: 148px; font-variant-numeric: tabular-nums; }
+#svr-clear-ok[disabled] { background: #cbd5e0; color: #4a5568; opacity: 1; }
+#svr-clear-body p { margin: 0 0 10px; }
+.svr-cleared-notice { display: flex; align-items: flex-start; gap: 8px; }
 
 /* Security-token notice (#43). */
 /* The Reload link reuses survey.css's .sv-notice-link. */
@@ -721,6 +753,7 @@
 html[data-theme="dark"] .svr-root { --svr-text-muted: var(--ork-text-muted, #a0aec0); }
 
 html[data-theme="dark"] .svr-status-pill { color: #fff; }
+html[data-theme="dark"] .svr-empty-held { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.14); border-left-color: var(--svr-accent); }
 
 /* reports.css's `html[data-theme="dark"] .rp-context { border-color }` (0,2,1)
    repaints all four sides grey; restate the accent edge above it (0,3,1).
@@ -737,6 +770,13 @@ html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost[aria-pressed=
     color       : #1e1b4b;
 }
 html[data-theme="dark"] .svr-panel { box-shadow: -8px 0 24px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger { color: #fca5a5; border-color: rgba(248, 113, 113, 0.5); }
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:hover,
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:focus-visible { background: rgba(220, 38, 38, 0.3); color: #fff; }
+html[data-theme="dark"] #svr-clear-ok[disabled] { background: #4a5568; color: #e2e8f0; }
+@media (prefers-reduced-motion: reduce) {
+    .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger { transition: none; }
+}
 
 /* Fight the global html[data-theme="dark"] h1–h6 pill box, which carries more
    type selectors than a bare class and otherwise wins the tie. */
@@ -891,7 +931,8 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
 .svr-pw-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
 .svr-pw-table .svr-pw-abbr { cursor: help; }
 /* DataTables gives every header 10px + a 26px sort-arrow gutter and every cell
-   10px a side: seven columns of that outgrew a half-width card and pushed
+   10px a side: the columns (Rank · Option · Strength · Win % · W · T · L ·
+   Matchups, plus the hidden sort key) outgrew a half-width card and pushed
    Matchups out of view. Tighter cells, the arrows tucked in, numbers on one
    line; the Option column takes what is left and wraps.
    The narrowest card is the 420px grid track less its padding and border
@@ -911,18 +952,32 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
 .svr-pw-table td:nth-child(n+3) { white-space: nowrap; }
 /* The sort-key column; DataTables drops it from the DOM, this covers the page without DataTables. */
 .svr-pw-table .svr-pw-sortkey { display: none; }
-/* Phones: the card is the whole width (~330px), and five one-line number
-   columns left Option one character wide, so nearly every label broke
-   mid-word and the table still overflowed. Rank, Option, Win % and Matchups
-   carry the ranking; the W / T / L split stays in the chart's tooltip, and
-   Option breaks only between words. */
-@media (max-width: 600px) {
-    .svr-card table.svr-pw-table th:nth-child(4),
+/* With the Strength column all eight columns need ~440px (~460px when a Rank
+   cell reads "Too few matchups"), more than the 386px half-width card. A card
+   under 480px drops the W / T / L split (columns 5-7; the chart's tooltip
+   keeps it), leaving Rank, Option, Strength, Win % and Matchups in ~355px. */
+.svr-pw-tablewrap { container-type: inline-size; }
+@container (max-width: 480px) {
     .svr-card table.svr-pw-table th:nth-child(5),
     .svr-card table.svr-pw-table th:nth-child(6),
-    .svr-card table.svr-pw-table td:nth-child(4),
+    .svr-card table.svr-pw-table th:nth-child(7),
     .svr-card table.svr-pw-table td:nth-child(5),
-    .svr-card table.svr-pw-table td:nth-child(6) { display: none; }
+    .svr-card table.svr-pw-table td:nth-child(6),
+    .svr-card table.svr-pw-table td:nth-child(7) { display: none; }
+}
+/* Phones: the card is the whole width (~330px), and the one-line number
+   columns left Option one character wide, so nearly every label broke
+   mid-word and the table still overflowed. Rank, Option, Strength, Win % and
+   Matchups carry the ranking; the W / T / L split (columns 5-7) stays in the
+   chart's tooltip, and Option breaks only between words. This repeats the
+   container rule above for browsers without container queries. */
+@media (max-width: 600px) {
+    .svr-card table.svr-pw-table th:nth-child(5),
+    .svr-card table.svr-pw-table th:nth-child(6),
+    .svr-card table.svr-pw-table th:nth-child(7),
+    .svr-card table.svr-pw-table td:nth-child(5),
+    .svr-card table.svr-pw-table td:nth-child(6),
+    .svr-card table.svr-pw-table td:nth-child(7) { display: none; }
     .svr-card table.svr-pw-table td:nth-child(2) { overflow-wrap: break-word; }
 }
 .svr-cell-clamp {

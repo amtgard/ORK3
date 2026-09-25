@@ -6,18 +6,20 @@
  * and no chart library: it is the one survey surface a player opens on a phone,
  * so it links only survey.css plus the shared renderer, the shared tip engine
  * (script/survey-tip.js) and its own IIFE, and
- * one pinned cdnjs helper: DOMPurify (builder-authored HTML is sanitised again
- * before innerHTML). Every script is `defer`: nothing here may block the first
+ * two pinned cdnjs helpers: DOMPurify (builder-authored HTML is sanitised again
+ * before innerHTML) and Flatpickr (date questions show a readable date; the same
+ * build and SRI hash as Survey_build.tpl). Every script is `defer`: nothing here may block the first
  * paint of the frame. SortableJS (drag for ranking questions) is not loaded
  * here at all — survey-take.js pulls it in, same pinned version and SRI hash,
  * only when the definition actually contains a ranking question, and the page
  * works minus drag if it never arrives.
  *
  * Everything below #sv-stage is drawn by script/survey-take.js from the JSON
- * that SurveyAjax/definition returns; the server renders only the frame.
+ * definition payload, embedded below as SvConfig.definition (the runner POSTs
+ * SurveyAjax/definition only when it is absent); the server renders the frame.
  *
  * Controller: Controller_Survey::take() / ::s() -> SurveyId, IsPreview, CanManage,
- * SurveyCsrf (sent as X-CSRF-Token on every SurveyAjax POST mutation).
+ * ViewerId, Definition (definition payload or null), SurveyCsrf (sent as X-CSRF-Token on every SurveyAjax POST mutation).
  */
 
 $_svStyle      = __DIR__ . '/style/survey.css';
@@ -28,7 +30,17 @@ $_svSurveyId   = isset($SurveyId) ? (int) $SurveyId : 0;
 $_svIsPreview  = !empty($IsPreview);
 $_svCanManage  = !empty($CanManage);
 $_svCsrf       = isset($SurveyCsrf) ? (string) $SurveyCsrf : '';
+$_svViewerId   = isset($ViewerId) ? (int) $ViewerId : 0;
+// The definition payload, embedded so the runner skips its first POST (null ->
+// the runner fetches it). HEX flags keep it inert inside <script>; unescaped
+// unicode/slashes keep it small (PHP still escapes U+2028/U+2029).
+$_svDefinition = isset($Definition) && is_array($Definition)
+	? json_encode($Definition, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE)
+	: false;
 ?>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
+	integrity="sha512-MQXduO8IQnJVq1qmySpN87QQkiR1bZHtorbJBD0tzy7/0U9+YIC93QWHeGTEoojMVHWWNkoCp8V6OzVSYrX0oQ=="
+	crossorigin="anonymous" referrerpolicy="no-referrer">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/survey.css?v=<?= filemtime($_svStyle) ?>">
 
 <?php if ($_svError !== '' || $_svSurveyId <= 0) : ?>
@@ -74,15 +86,20 @@ $_svCsrf       = isset($SurveyCsrf) ? (string) $SurveyCsrf : '';
 
 	<script>
 		window.SvConfig = {
-			uir: <?= json_encode(UIR) ?>,
+			uir: <?= json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
 			surveyId: <?= $_svSurveyId ?>,
 			preview: <?= $_svIsPreview ? 'true' : 'false' ?>,
 			canManage: <?= $_svCanManage ? 'true' : 'false' ?>,
-			csrf: <?= json_encode($_svCsrf) ?>
+			viewer: <?= $_svViewerId ?>,
+			definition: <?= $_svDefinition !== false ? $_svDefinition : 'null' ?>,
+			csrf: <?= json_encode($_svCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 		};
 	</script>
 	<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"
 		integrity="sha512-jB0TkTBeQC9ZSkBqDhdmfTv1qdfbWpGE72yJ/01Srq6hEzZIz2xkz1e57p9ai7IeHMwEG7HpzG6NdptChif5Pg=="
+		crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+	<script defer src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"
+		integrity="sha512-K/oyQtMXpxI4+K0W7H25UopjM8pzq0yrVdFdG21Fh5dBe91I40pDd9A4lzNlHPHBIP2cwZuoxaUSX0GJSObvGA=="
 		crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 	<script defer src="<?= HTTP_TEMPLATE ?>default/script/survey-render.js?v=<?= filemtime($_svRenderJs) ?>"></script>
 	<script defer src="<?= HTTP_TEMPLATE ?>default/script/survey-tip.js?v=<?= filemtime(__DIR__ . '/script/survey-tip.js') ?>"></script>

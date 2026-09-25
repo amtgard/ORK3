@@ -169,6 +169,57 @@ final class SurveyTest extends TestCase
     }
 
     /**
+     * setStatus() follows the transition map: nothing returns to draft once
+     * opened, and archived leaves only through the builder's Reopen (-> open).
+     */
+    public function testStatusTransitionsFollowTheLifecycle(): void
+    {
+        $ctx = $this->buildSurvey();
+        $sid = $ctx['survey_id'];
+        $status = fn () => (string) $this->survey->getRow($sid)['status'];
+
+        $this->assertSame(1, $this->survey->setStatus($sid, 'closed')['Status'], 'draft -> closed');
+        $this->assertSame(0, $this->survey->setStatus($sid, 'open')['Status']);
+        $openedAt = (string) $this->survey->getRow($sid)['opened_at'];
+        $this->submitThree($ctx);
+
+        $back = $this->survey->setStatus($sid, 'draft');
+        $this->assertSame(1, $back['Status']);
+        $this->assertSame('This survey has been opened, so it cannot go back to draft.', $back['Error']);
+        $this->assertSame('open', $status());
+        $this->assertSame($openedAt, (string) $this->survey->getRow($sid)['opened_at']);
+
+        $this->assertSame(1, $this->survey->setStatus($sid, 'open')['Status'], 'open -> open');
+        $this->assertSame(0, $this->survey->setStatus($sid, 'closed')['Status']);
+        $this->assertSame(1, $this->survey->setStatus($sid, 'draft')['Status'], 'closed -> draft');
+        $this->assertSame(0, $this->survey->setStatus($sid, 'open')['Status'], 'closed -> open');
+        $this->assertSame(0, $this->survey->setStatus($sid, 'archived')['Status'], 'open -> archived');
+
+        foreach (['draft', 'closed', 'archived'] as $to) {
+            $this->assertSame(1, $this->survey->setStatus($sid, $to)['Status'], 'archived -> ' . $to);
+            $this->assertSame('archived', $status());
+        }
+        $this->assertSame(0, $this->survey->setStatus($sid, 'open')['Status'], 'archived -> open (Reopen)');
+        $this->assertSame('open', $status());
+    }
+
+    /** Row stamps come from PHP's clock, the same one setStatus() stamps with. */
+    public function testCreatedAtUsesThePhpClock(): void
+    {
+        $before = date('Y-m-d H:i:s');
+        $r = $this->survey->create($this->officerId, 'kingdom', $this->kingdomId, self::MARKER . ' Clock');
+        $after = date('Y-m-d H:i:s');
+        $this->assertSame(0, $r['Status']);
+        $this->surveyIds[] = (int) $r['SurveyId'];
+
+        $row = $this->survey->getRow((int) $r['SurveyId']);
+        $this->assertGreaterThanOrEqual($before, (string) $row['created_at']);
+        $this->assertLessThanOrEqual($after, (string) $row['created_at']);
+        $this->assertGreaterThanOrEqual($before, (string) $row['updated_at']);
+        $this->assertLessThanOrEqual($after, (string) $row['updated_at']);
+    }
+
+    /**
      * questionUpdate(['Type' => …]) is what the builder's footer type picker calls
      * (plan Task 10 Step 2). The prompt survives, options survive where the new
      * type owns their role, and settings reset to the new type's defaults.
@@ -522,6 +573,199 @@ final class SurveyTest extends TestCase
         );
     }
 
+    public function testClearResultsDeletesEveryResponseButKeepsPostedCredits(): void
+    {
+        $ctx = $this->buildSurvey();
+        $sid = $ctx['survey_id'];
+        $this->fx['survey'][] = $sid;   // the fixture also sweeps starts, activity, credits and grants
+        $p = DB_PREFIX;
+        $this->assertSame(0, $this->survey->setStatus($sid, 'open')['Status']);
+        $openedAt = (string) $this->survey->getRow($sid)['opened_at'];
+
+        $this->submitThree($ctx);
+        $test = (new SurveyResponse())->submit($sid, $this->officerId, [$ctx['q_single'] => $ctx['opt_a']], 'anonymous', 10, true);
+        $this->assertSame(0, $test['Status'], (string) ($test['Error'] ?? ''));
+        $draft = $this->response->draftSave($sid, $this->editorId, [$ctx['q_single'] => $ctx['opt_b']], 0);
+        $this->assertSame(0, $draft['Status'], (string) ($draft['Error'] ?? ''));
+        $this->pdo->exec("INSERT IGNORE INTO {$p}survey_start (survey_id, mundane_id) VALUES ({$sid}, " . $this->editorId . ')');
+
+        // One credit already posted to p1: a config, its attendance row and the ledger row.
+        $this->pdo->exec("INSERT INTO {$p}survey_credit (survey_id, grantor_type, grantor_id, mode, enabled_by, enabled_at)
+                          VALUES ({$sid}, 'park', " . $this->parkId . ", 'home_park', " . $this->officerId . ', NOW())');
+        $creditId = (int) $this->pdo->lastInsertId();
+        $st = $this->pdo->prepare("INSERT INTO {$p}attendance
+            (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id,
+             event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entry_method, entered_at)
+            VALUES (?, 6, CURDATE(), YEAR(CURDATE()), MONTH(CURDATE()), 1, 1, ?, ?, 0, 0, 1, '', '', ?, ?, 'survey', NOW())");
+        $st->execute([$this->players['p1'], $this->parkId, $this->kingdomId, 'Survey #' . $sid, $this->officerId]);
+        $attendanceId = (int) $this->pdo->lastInsertId();
+        $this->pdo->exec("INSERT INTO {$p}survey_credit_grant (survey_id, mundane_id, credit_id, attendance_id)
+                          VALUES ({$sid}, " . $this->players['p1'] . ", {$creditId}, {$attendanceId})");
+
+        $count = fn (string $table): int => (int) $this->pdo->query("SELECT COUNT(*) FROM {$p}{$table} WHERE survey_id = {$sid}")->fetchColumn();
+        $this->assertSame(4, $count('survey_response'));
+
+        // Non-managers are refused and nothing moves: another kingdom's officer, an
+        // edit-only officer of this kingdom, and a respondent.
+        foreach ([$this->outsiderId, $this->editorId, $this->players['p1']] as $uid) {
+            $this->assertSame(3, $this->survey->clearResults($sid, $uid)['Status']);
+            $this->assertSame(3, $this->survey->clearResults($sid, $uid, true)['Status']);
+        }
+        $this->assertSame(4, $count('survey_response'));
+
+        // The dry run (the modal's count) counts test and real, and deletes nothing.
+        $dry = $this->survey->clearResults($sid, $this->officerId, true);
+        $this->assertSame(0, $dry['Status']);
+        $this->assertSame(4, $dry['Count']);
+        $this->assertSame(4, $count('survey_response'));
+
+        $r = $this->survey->clearResults($sid, $this->officerId);
+        $this->assertSame(0, $r['Status'], (string) $r['Error']);
+        $this->assertSame(4, $r['Cleared']);
+
+        foreach (['survey_response', 'survey_participation', 'survey_start', 'survey_draft'] as $table) {
+            $this->assertSame(0, $count($table), $table . ' must be empty after Clear Results');
+        }
+        $this->assertSame(0, (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM {$p}survey_answer a LEFT JOIN {$p}survey_response r ON r.response_id = a.response_id WHERE r.response_id IS NULL"
+        )->fetchColumn(), 'no orphaned answers');
+        $row = $this->survey->getRow($sid);
+        $this->assertSame(0, (int) $row['response_count']);
+        $this->assertSame($openedAt, (string) $row['opened_at'], 'the structure lock stays');
+        $this->assertSame('open', (string) $row['status']);
+
+        // Posted credits stay, so a retake cannot earn a second one.
+        $this->assertSame(1, $count('survey_credit'));
+        $this->assertSame(1, $count('survey_credit_grant'));
+        $this->assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM {$p}attendance WHERE attendance_id = {$attendanceId}")->fetchColumn());
+
+        // Audit row with the number cleared, and a report that no longer counts anyone.
+        $act = $this->pdo->query("SELECT detail FROM {$p}survey_activity WHERE survey_id = {$sid} AND action = 'clear_results'")->fetchAll(PDO::FETCH_COLUMN);
+        $this->assertCount(1, $act);
+        $this->assertSame(['responses' => 4], json_decode((string) $act[0], true));
+        $this->assertSame(0, (int) $this->report->summary($sid, ['include_test' => true])['responses']);
+
+        // Everyone may take it again.
+        $again = (new SurveyResponse())->eligibility($this->survey->getRow($sid), $this->players['p1']);
+        $this->assertTrue($again['eligible']);
+    }
+
+    public function testTestSubmitLeavesTheManagersRealDraftAlone(): void
+    {
+        $ctx = $this->buildSurvey();
+        $this->assertSame(0, $this->survey->setStatus($ctx['survey_id'], 'open')['Status']);
+
+        $saved = $this->response->draftSave($ctx['survey_id'], $this->officerId, [$ctx['q_single'] => $ctx['opt_a']], 1);
+        $this->assertSame(0, $saved['Status'], (string) ($saved['Error'] ?? ''));
+        $this->pdo->exec(
+            'UPDATE ' . DB_PREFIX . 'survey_draft SET started_at = \'2020-01-01 00:00:00\''
+            . ' WHERE survey_id = ' . $ctx['survey_id'] . ' AND mundane_id = ' . $this->officerId
+        );
+
+        $r = (new SurveyResponse())->submit(
+            $ctx['survey_id'],
+            $this->officerId,
+            [$ctx['q_single'] => $ctx['opt_a']],
+            'anonymous',
+            10,
+            true
+        );
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+
+        $draft = $this->response->draftLoad($ctx['survey_id'], $this->officerId);
+        $this->assertNotNull($draft, 'A test submit must not delete the real draft.');
+        $this->assertSame(1, $draft['page_index']);
+        $this->assertSame(strtotime('2020-01-01 00:00:00'), $draft['started_ts']);
+
+        $started = (string) $this->pdo->query(
+            'SELECT started_at FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $ctx['survey_id']
+            . ' AND is_test = 1 LIMIT 1'
+        )->fetchColumn();
+        $this->assertNotSame('2020-01-01 00:00:00', $started, 'A test submit stamps its own start.');
+    }
+
+    public function testStartedAtAndDurationDescribeTheSameInterval(): void
+    {
+        $ctx = $this->buildSurvey();
+        $sid = $ctx['survey_id'];
+        $this->assertSame(0, $this->survey->setStatus($sid, 'open')['Status']);
+
+        $setDraftStart = function (int $uid, string $stamp) use ($sid, $ctx): void {
+            $saved = $this->response->draftSave($sid, $uid, [$ctx['q_single'] => $ctx['opt_a']], 0);
+            $this->assertSame(0, $saved['Status'], (string) ($saved['Error'] ?? ''));
+            $this->pdo->exec(
+                'UPDATE ' . DB_PREFIX . 'survey_draft SET started_at = \'' . $stamp . '\''
+                . ' WHERE survey_id = ' . $sid . ' AND mundane_id = ' . $uid
+            );
+        };
+        $submit = function (int $uid, int $duration) use ($sid, $ctx): array {
+            // Opening the runner records the (timestamp-free) survey_start row.
+            $this->response->definitionForRespondent($sid, $uid, false);
+            $r = (new SurveyResponse())->submit($sid, $uid, [$ctx['q_single'] => $ctx['opt_a']], 'full', $duration, false);
+            $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+            $row = $this->pdo->query(
+                'SELECT started_at, submitted_at, duration_seconds FROM ' . DB_PREFIX . 'survey_response
+                  WHERE response_id = ' . (int) $r['ResponseId']
+            )->fetch(PDO::FETCH_ASSOC);
+            $span = strtotime((string) $row['submitted_at']) - strtotime((string) $row['started_at']);
+            $this->assertGreaterThanOrEqual(0, $span, 'started_at is never after submitted_at.');
+            if (null !== $row['duration_seconds']) {
+                $this->assertLessThanOrEqual($span, (int) $row['duration_seconds'], 'duration never exceeds the stored span.');
+            }
+            return $row + ['span' => $span];
+        };
+
+        // No draft: the start is the client timer's start, not the submit instant.
+        $noDraft = $submit($this->players['p1'], 45);
+        $this->assertSame(45, (int) $noDraft['duration_seconds']);
+        $this->assertSame(45, $noDraft['span']);
+
+        // Draft saved 18s ago but the page loaded 45s ago: the earlier start wins,
+        // and the client duration is kept (the median reads duration_seconds).
+        $setDraftStart($this->players['p2'], date('Y-m-d H:i:s', time() - 18));
+        $recent = $submit($this->players['p2'], 45);
+        $this->assertSame(45, (int) $recent['duration_seconds']);
+        $this->assertGreaterThanOrEqual(45, $recent['span']);
+
+        // Draft older than the client timer: the draft's start is kept verbatim.
+        $old = date('Y-m-d H:i:s', time() - 600);
+        $setDraftStart($this->players['p3'], $old);
+        $resumed = $submit($this->players['p3'], 45);
+        $this->assertSame($old, (string) $resumed['started_at']);
+        $this->assertSame(45, (int) $resumed['duration_seconds']);
+
+        // Clamp: a draft stamped in the future (bad clock) with no client timer
+        // never yields a start after the submission or a negative duration.
+        $late = $this->player('late', $this->parkId, $this->kingdomId);
+        $setDraftStart($late, date('Y-m-d H:i:s', time() + 3600));
+        $future = $submit($late, 0);
+        $this->assertSame(0, $future['span']);
+        $this->assertNull($future['duration_seconds']);
+    }
+
+    public function testManagerLabelNamesTheWholeManagementChain(): void
+    {
+        $child = $this->kingdom('child', $this->kingdomId);
+        $park  = $this->park($child, 'childpark');
+        $names = [];
+        foreach ([['park', $park], ['kingdom', $child], ['kingdom', $this->kingdomId]] as [$t, $id]) {
+            $names[$t . $id] = (string) $this->pdo->query(
+                'SELECT name FROM ' . DB_PREFIX . $t . ' WHERE ' . $t . '_id = ' . (int) $id
+            )->fetchColumn();
+        }
+
+        $this->assertSame(
+            'The ' . $names['park' . $park] . ' officers, the ' . $names['kingdom' . $child]
+            . ' officers, the ' . $names['kingdom' . $this->kingdomId] . ' officers, and ORK administrators',
+            $this->response->managerLabel('park', $park)
+        );
+        $this->assertSame(
+            'The ' . $names['kingdom' . $this->kingdomId] . ' officers and ORK administrators',
+            $this->response->managerLabel('kingdom', $this->kingdomId)
+        );
+        $this->assertSame('The ORK administrators', $this->response->managerLabel('ork', 0));
+    }
+
     // ------------------------------------------------------------------
     // Case 4 — reporting
     // ------------------------------------------------------------------
@@ -687,6 +931,64 @@ final class SurveyTest extends TestCase
                 'SELECT COUNT(*) FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $newId
             )->fetchColumn()
         );
+    }
+
+    public function testCloneResetsTheScheduleAndOwnsItsImagesAfterTheSourceIsDeleted(): void
+    {
+        $p = DB_PREFIX;
+        $r = $this->survey->create($this->officerId, 'kingdom', $this->kingdomId, self::MARKER . ' Clone Source');
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $sourceId = (int) $r['SurveyId'];
+        $this->surveyIds[] = $sourceId;
+
+        // One image, named by URL in the source's welcome copy.
+        $token = '0123456789abcdef';
+        $this->pdo->exec(
+            "INSERT INTO {$p}survey_image (survey_id, ext, token, width, height, created_by, created_at)
+             VALUES ({$sourceId}, 'png', '{$token}', 1, 1, {$this->officerId}, NOW())"
+        );
+        $imageId = (int) $this->pdo->lastInsertId();
+        $srcName = sprintf('%06d-%s.png', $imageId, $token);
+        file_put_contents(DIR_SURVEY_IMAGE . $srcName, 'x');
+        $this->pdo->prepare(
+            "UPDATE {$p}survey SET welcome_md = ?, open_at = '2026-01-01 00:00:00', close_at = '2026-01-31 00:00:00',
+                    show_banner = 1 WHERE survey_id = ?"
+        )->execute(['![map](' . HTTP_SURVEY_IMAGE . $srcName . ')', $sourceId]);
+
+        $clone = $this->survey->cloneSurvey($sourceId, $this->officerId);
+        $this->assertSame(0, $clone['Status'], (string) ($clone['Error'] ?? ''));
+        $cloneId = (int) $clone['SurveyId'];
+        $this->surveyIds[] = $cloneId;
+
+        // #11: the copy starts unscheduled, with no banner.
+        $row = $this->survey->getRow($cloneId);
+        $this->assertNull($row['open_at']);
+        $this->assertNull($row['close_at']);
+        $this->assertNull($row['audience_event_calendardetail_id']);
+        $this->assertSame(0, (int) $row['show_banner']);
+
+        // #12: the copy's markdown names the copy's own file.
+        $img = $this->pdo->query("SELECT image_id, token FROM {$p}survey_image WHERE survey_id = {$cloneId}")->fetch(PDO::FETCH_ASSOC);
+        $cloneName = sprintf('%06d-%s.png', (int) $img['image_id'], (string) $img['token']);
+        $this->assertSame('![map](' . HTTP_SURVEY_IMAGE . $cloneName . ')', (string) $row['welcome_md']);
+        $this->assertFileExists(DIR_SURVEY_IMAGE . $cloneName);
+
+        // A survey that still names the source's file by URL (an old verbatim clone).
+        $r = $this->survey->create($this->officerId, 'kingdom', $this->kingdomId, self::MARKER . ' Old Clone');
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $oldCloneId = (int) $r['SurveyId'];
+        $this->surveyIds[] = $oldCloneId;
+        $this->pdo->prepare("UPDATE {$p}survey SET thanks_md = ? WHERE survey_id = ?")
+            ->execute(['![map](' . HTTP_SURVEY_IMAGE . $srcName . ')', $oldCloneId]);
+
+        try {
+            $del = $this->survey->delete($sourceId);
+            $this->assertSame(0, $del['Status'], (string) ($del['Error'] ?? ''));
+            $this->assertFileExists(DIR_SURVEY_IMAGE . $cloneName);
+            $this->assertFileExists(DIR_SURVEY_IMAGE . $srcName, 'a file another survey still names must survive the delete');
+        } finally {
+            @unlink(DIR_SURVEY_IMAGE . $srcName);
+        }
     }
 
     // ------------------------------------------------------------------

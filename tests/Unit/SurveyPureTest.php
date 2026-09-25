@@ -32,6 +32,35 @@ final class SurveyPureTest extends TestCase
         $this->assertSame('', $this->survey()->renderMarkdown('   '));
     }
 
+    public function testRenderMarkdownKeepsOnlySurveyUploadImages(): void
+    {
+        $own  = HTTP_SURVEY_IMAGE . '000007-0123456789abcdef.png';
+        $html = $this->survey()->renderMarkdown(
+            "![ours]($own)\n\n![pixel](https://evil.example/t.gif?u=1)\n\n"
+            . "![ref][r]\n\n[r]: //evil.example/p.png\n\n"
+            . '![up](' . HTTP_SURVEY_IMAGE . '../players/1.png) ![data](data:image/png;base64,AAAA)'
+        );
+        $this->assertStringContainsString('src="' . htmlspecialchars($own, ENT_QUOTES) . '"', $html);
+        $this->assertSame(1, substr_count($html, '<img'));
+        $this->assertStringNotContainsString('evil.example', $html);
+        $this->assertStringNotContainsString('players', $html);
+        $this->assertStringContainsString('pixel', $html); // alt text survives as text
+    }
+
+    public function testIsSurveyImageSrcAllowlist(): void
+    {
+        $s    = $this->survey();
+        $path = (string) parse_url(HTTP_SURVEY_IMAGE, PHP_URL_PATH);
+        $this->assertTrue($s->isSurveyImageSrc(HTTP_SURVEY_IMAGE . '000009.jpg'));
+        $this->assertTrue($s->isSurveyImageSrc($path . '000009.jpg'));
+        $this->assertFalse($s->isSurveyImageSrc('https://evil.example' . $path . '000009.jpg'));
+        $this->assertFalse($s->isSurveyImageSrc(HTTP_SURVEY_IMAGE . '000009.jpg?x=1'));
+        $this->assertFalse($s->isSurveyImageSrc(HTTP_SURVEY_IMAGE . 'sub/000009.jpg'));
+        $this->assertFalse($s->isSurveyImageSrc(HTTP_SURVEY_IMAGE . '000009.jpg' . "\n"));
+        $this->assertFalse($s->isSurveyImageSrc('//evil.example/x.png'));
+        $this->assertFalse($s->isSurveyImageSrc(''));
+    }
+
     // ---------------------------------------------------------------- images
 
     public function testImageUrlUsesZeroPaddedIdAndExtension(): void
@@ -212,6 +241,194 @@ final class SurveyPureTest extends TestCase
         $this->assertSame('Results will be shared with you 24 hours after the survey closes.', Survey::sharingPendingText(null));
     }
 
+    // ------------------------------------------------ schedule sanity (#11)
+
+    public function testScheduleProblemRefusesACloseAtOrBeforeTheOpen(): void
+    {
+        $msg = 'The closing date must be after the opening date.';
+        $this->assertSame($msg, Survey::scheduleProblem('2026-10-01 12:00:00', '2026-09-30 12:00:00'));
+        $this->assertSame($msg, Survey::scheduleProblem('2026-10-01 12:00:00', '2026-10-01 12:00:00'));
+        $this->assertSame('', Survey::scheduleProblem('2026-10-01 12:00:00', '2026-10-01 12:01:00'));
+        // Either side unset is no conflict.
+        $this->assertSame('', Survey::scheduleProblem(null, '2026-09-30 12:00:00'));
+        $this->assertSame('', Survey::scheduleProblem('2026-10-01 12:00:00', null));
+        $this->assertSame('', Survey::scheduleProblem('', ''));
+    }
+
+    public function testScheduleInstantsRoundTripThroughTheWallTime(): void
+    {
+        $wall = '2026-09-28 17:00:00';
+        $ts   = Survey::wallToInstant($wall);
+        // Same reading the runner's close_ts uses (strtotime on PHP's clock).
+        $this->assertSame(strtotime($wall), $ts);
+        $this->assertSame($wall, Survey::instantToWall($ts));
+        $this->assertNull(Survey::wallToInstant(null));
+        $this->assertNull(Survey::wallToInstant(''));
+        $this->assertNull(Survey::wallToInstant('0000-00-00 00:00:00'));
+
+        $row = Survey::withInstants(['open_at' => null, 'close_at' => $wall]);
+        $this->assertNull($row['open_ts']);
+        $this->assertSame($ts, $row['close_ts']);
+        $this->assertNull(Survey::withInstants(null));
+    }
+
+    public function testNormalizeDateTimeTakesAnInstantOrTheSqlString(): void
+    {
+        $m = new ReflectionMethod(Survey::class, 'normalizeDateTime');
+        $ts = (int) strtotime('2026-09-28 17:00:00');
+        $this->assertSame('2026-09-28 17:00:00', $m->invoke($this->survey(), (string) $ts));
+        // Older callers that send the wall string keep working.
+        $this->assertSame('2026-09-28 17:00:00', $m->invoke($this->survey(), '2026-09-28 17:00:00'));
+        $this->assertSame('2026-09-28 17:00:00', $m->invoke($this->survey(), '2026-09-28T17:00'));
+        $this->assertNull($m->invoke($this->survey(), 'soon'));
+    }
+
+    public function testCloseAtPassed(): void
+    {
+        $now = $this->at('2026-09-20 12:00:00');
+        $this->assertTrue(Survey::closeAtPassed(['close_at' => '2026-09-20 12:00:00'], $now));
+        $this->assertTrue(Survey::closeAtPassed(['close_at' => '2026-09-01 00:00:00'], $now));
+        $this->assertFalse(Survey::closeAtPassed(['close_at' => '2026-09-20 12:00:01'], $now));
+        $this->assertFalse(Survey::closeAtPassed(['close_at' => null], $now));
+        $this->assertFalse(Survey::closeAtPassed([], $now));
+    }
+
+    public function testOpenAtPending(): void
+    {
+        $now = $this->at('2026-09-20 12:00:00');
+        $this->assertTrue(Survey::openAtPending(['open_at' => '2026-09-20 12:00:01'], $now));
+        $this->assertTrue(Survey::openAtPending(['open_at' => '2026-10-01 00:00:00'], $now));
+        $this->assertFalse(Survey::openAtPending(['open_at' => '2026-09-20 12:00:00'], $now));
+        $this->assertFalse(Survey::openAtPending(['open_at' => '2026-09-01 00:00:00'], $now));
+        $this->assertFalse(Survey::openAtPending(['open_at' => null], $now));
+        $this->assertFalse(Survey::openAtPending(['open_at' => '0000-00-00 00:00:00'], $now));
+        $this->assertFalse(Survey::openAtPending([], $now));
+    }
+
+    public function testOpeningPastTheScheduledCloseIsRefused(): void
+    {
+        foreach (['draft', 'closed'] as $from) {   // first open and reopen
+            $db = new SurveyPureFakeDb();
+            $db->routes['/FROM ' . DB_PREFIX . 'survey WHERE survey_id = 5/'] = [[
+                'survey_id' => 5, 'status' => $from, 'opened_at' => null, 'close_at' => date('Y-m-d H:i:s', time() - 60),
+            ]];
+
+            $r = $this->withFakes($db, null, fn () => (new Survey())->setStatus(5, 'open'));
+
+            $this->assertSame(1, $r['Status']);
+            $this->assertSame('The closing date has passed; change or clear it before opening.', $r['Error']);
+            $this->assertSame([], $db->writes);
+        }
+    }
+
+    // ------------------------------------------------ status transitions
+
+    /** @return list<array{string, bool, string}> [from, opened?, to] */
+    public static function allowedTransitions(): array
+    {
+        return [
+            ['draft', false, 'open'],
+            ['draft', false, 'archived'],
+            ['open', true, 'closed'],
+            ['open', true, 'archived'],
+            ['closed', true, 'open'],
+            ['closed', true, 'archived'],
+            ['archived', true, 'open'],   // the builder's "Reopen survey"
+            ['archived', false, 'open'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('allowedTransitions')]
+    public function testStatusTransitionAllowed(string $from, bool $opened, string $to): void
+    {
+        $row = ['status' => $from, 'opened_at' => $opened ? '2026-09-01 10:00:00' : null];
+        $this->assertNull(Survey::statusTransitionError($row, $to));
+    }
+
+    /** @return list<array{string, bool, string, string}> [from, opened?, to, error] */
+    public static function refusedTransitions(): array
+    {
+        $back = 'This survey has been opened, so it cannot go back to draft.';
+        return [
+            ['open', true, 'draft', $back],
+            ['closed', true, 'draft', $back],
+            ['archived', true, 'draft', $back],
+            ['archived', false, 'draft', 'A survey that is archived cannot be moved to draft.'],
+            ['draft', false, 'draft', 'This survey is already draft.'],
+            ['draft', false, 'closed', 'A survey that is draft cannot be moved to closed.'],
+            ['open', true, 'open', 'This survey is already open.'],
+            ['closed', true, 'closed', 'This survey is already closed.'],
+            ['archived', true, 'closed', 'A survey that is archived cannot be moved to closed.'],
+            ['archived', true, 'archived', 'This survey is already archived.'],
+            ['', false, 'open', 'A survey that is in an unknown state cannot be moved to open.'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('refusedTransitions')]
+    public function testStatusTransitionRefused(string $from, bool $opened, string $to, string $error): void
+    {
+        $row = ['status' => $from, 'opened_at' => $opened ? '2026-09-01 10:00:00' : null];
+        $this->assertSame($error, Survey::statusTransitionError($row, $to));
+    }
+
+    public function testSetStatusRefusesDraftOnAnOpenedSurveyWithoutWriting(): void
+    {
+        $db = new SurveyPureFakeDb();
+        $db->routes['/FROM ' . DB_PREFIX . 'survey WHERE survey_id = 5/'] = [[
+            'survey_id' => 5, 'status' => 'closed', 'opened_at' => '2026-09-01 10:00:00', 'close_at' => null,
+        ]];
+
+        $r = $this->withFakes($db, null, fn () => (new Survey())->setStatus(5, 'draft'));
+
+        $this->assertSame(1, $r['Status']);
+        $this->assertSame('This survey has been opened, so it cannot go back to draft.', $r['Error']);
+        $this->assertSame([], $db->writes);
+    }
+
+    // ------------------------------------------ event audience picker (#7)
+
+    public function testEventPickerExcludesCreditPlaceholdersAndUsesThePhpClock(): void
+    {
+        $m   = new ReflectionMethod(Survey::class, 'eventOccurrenceSql');
+        $sql = $m->invoke($this->survey(), ['scope_type' => 'park', 'scope_id' => 9], '', true);
+
+        $prefix = SurveyCredit::EVENT_PREFIX;
+        $this->assertStringContainsString(
+            "LEFT(e.name, " . mb_strlen($prefix) . ") <> '" . str_replace("'", "''", $prefix) . "'",
+            $sql
+        );
+        $this->assertStringNotContainsString('NOW()', $sql);
+        $this->assertMatchesRegularExpression("/BETWEEN '\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d' - INTERVAL 12 MONTH/", $sql);
+    }
+
+    public function testRowStampsUseThePhpClockNotSqlNow(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.Survey.php');
+        $code = preg_replace('~//[^\n]*|/\*.*?\*/~s', '', $src);
+        $this->assertStringNotContainsString('NOW()', $code);
+
+        $m = new ReflectionMethod(Survey::class, 'stampSql');
+        $before = date('Y-m-d H:i:s');
+        $stamp  = $m->invoke($this->survey());
+        $this->assertMatchesRegularExpression("/^updated_at = '(\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d)'/", $stamp);
+        preg_match("/'(.+?)'/", $stamp, $mm);
+        $this->assertGreaterThanOrEqual($before, $mm[1]);
+    }
+
+    public function testUpdateRefusesACloseBeforeTheStoredOpen(): void
+    {
+        $db = new SurveyPureFakeDb();
+        $db->routes['/FROM ' . DB_PREFIX . 'survey WHERE survey_id = 5/'] = [[
+            'survey_id' => 5, 'scope_type' => 'kingdom', 'open_at' => '2026-10-10 09:00:00', 'close_at' => null,
+        ]];
+
+        $r = $this->withFakes($db, null, fn () => (new Survey())->update(5, ['CloseAt' => '2026-10-01 09:00']));
+
+        $this->assertSame(1, $r['Status']);
+        $this->assertSame('The closing date must be after the opening date.', $r['Error']);
+        $this->assertSame([], $db->writes);
+    }
+
     // -------------------------------------------- manageable scopes (#47)
 
     /**
@@ -273,6 +490,26 @@ final class SurveyPureTest extends TestCase
         sort($forwarded);
         $this->assertSame($domain, $forwarded);
         $this->assertContains('ResultsShare', $forwarded);
+    }
+
+    /**
+     * CSRF_EXEMPT holds only read-only actions plus the owner-approved
+     * dismiss_banner write. `definition` (ork_survey_start) and `rows` (audit
+     * row) write, so they must present X-CSRF-Token.
+     */
+    public function testSurveyAjaxCsrfExemptIsReadOnlyPlusDismissBanner(): void
+    {
+        require_once DIR_UI . 'controller/controller.SurveyAjax.php';
+        $exempt = (new ReflectionClass(Controller_SurveyAjax::class))->getConstant('CSRF_EXEMPT');
+        $this->assertIsArray($exempt);
+        sort($exempt);
+        $expected = [
+            'available', 'credit_status', 'dismiss_banner', 'event_options', 'get',
+            'help', 'preview_md', 'results', 'scopes',
+        ];
+        $this->assertSame($expected, $exempt);
+        $this->assertNotContains('definition', $exempt);
+        $this->assertNotContains('rows', $exempt);
     }
 
     /**

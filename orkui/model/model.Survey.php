@@ -37,6 +37,11 @@ class Model_Survey extends Model
         return $this->_survey()->scopeName($scopeType, $scopeId);
     }
 
+    public function manager_label(string $scopeType, int $scopeId): string
+    {
+        return $this->_response()->managerLabel($scopeType, $scopeId);
+    }
+
     public function get_row(int $surveyId): ?array
     {
         return $this->_survey()->getRow($surveyId);
@@ -106,6 +111,12 @@ class Model_Survey extends Model
     public function delete(int $surveyId): array
     {
         return $this->_survey()->delete($surveyId);
+    }
+
+    /** Clear Results: delete every response (credits already posted stay); $dryRun only counts. */
+    public function clear_results(int $surveyId, int $uid, bool $dryRun = false): array
+    {
+        return $this->_survey()->clearResults($surveyId, $uid, $dryRun);
     }
 
     public function page_add(int $surveyId): array
@@ -272,6 +283,12 @@ class Model_Survey extends Model
         return $this->_response()->bannerFor($uid);
     }
 
+    /** @return array{available: list<array<string, mixed>>, banner: ?array<string, mixed>} */
+    public function available_and_banner_for(int $uid): array
+    {
+        return $this->_response()->availableAndBannerFor($uid);
+    }
+
     public function dismiss_banner(int $surveyId, int $uid): void
     {
         $this->_response()->dismissBanner($surveyId, $uid);
@@ -310,6 +327,12 @@ class Model_Survey extends Model
         return SurveyReport::CROSSTAB_SOURCES;
     }
 
+    /** @return string[] Question types a cross-tab splits by its source. */
+    public function crosstab_targets(): array
+    {
+        return SurveyReport::CROSSTAB_TARGETS;
+    }
+
     public function summary(int $surveyId, array $filters): array
     {
         return $this->_report()->summary($surveyId, $filters);
@@ -342,10 +365,28 @@ class Model_Survey extends Model
         $this->_report()->csvStream($surveyId, $filters, $emit, (int) ($this->session->user_id ?? 0));
     }
 
+    /** Emit the coded analysis CSV (#36) in 500-row batches through $emit. */
+    public function analysis_stream(int $surveyId, array $filters, callable $emit): void
+    {
+        $this->_report()->analysisStream($surveyId, $filters, $emit, (int) ($this->session->user_id ?? 0));
+    }
+
+    /** The analysis export's codebook CSV (structure only, no response data). */
+    public function analysis_codebook(int $surveyId): string
+    {
+        return $this->_report()->codebookCsv($surveyId);
+    }
+
     /** Kingdoms present in the survey's non-test responses, with counts (results filter). */
     public function kingdoms_present(int $surveyId): array
     {
         return $this->_report()->kingdomsPresent($surveyId);
+    }
+
+    /** A shared viewer's allowed one-kingdom picks: kingdom_id => served count. */
+    public function shared_kingdom_choices(int $surveyId, array $lens): array
+    {
+        return $this->_report()->sharedKingdomChoices($surveyId, $lens);
     }
 
     // -----------------------------------------------------------------------

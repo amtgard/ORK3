@@ -1699,13 +1699,16 @@ html[data-theme="dark"] .sv-credit-warning { background: rgba(214, 158, 46, 0.12
 html[data-theme="dark"] .sv-tip { background: #0f1420; color: #e2e8f0; border: 1px solid #4a5568; }
 @media print { .sv-tip { display: none !important; } }
 
-/* ── Flatpickr dark palette (builder and results pages) ──────────────────
+/* ── Flatpickr dark palette (builder, results and runner pages) ─────────
    Flatpickr hangs its calendar off <body>, so the dark palette cannot be
    scoped to .sv-scope. revised.css already carries these rules for the event
    pages, but no .rp-* page loads that sheet (it is a whole-frontend
    stylesheet and would restyle this one), so the calendar's dark palette is
    restated here against the same tokens. The time-picker rules only reach
-   the builder's date-time fields; the results filter is date-only. */
+   the builder's date-time fields; the results filter and the runner's date
+   questions are date-only. The runner's visible date field is Flatpickr's
+   altInput, which carries .sv-input, so it takes the text-control rules above
+   in both themes. */
 html[data-theme="dark"] .flatpickr-calendar {
     background: var(--ork-card-bg);
     border-color: var(--ork-border);

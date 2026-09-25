@@ -84,13 +84,16 @@
 
     var sel       = 0;      // selected question_id, 0 = nothing selected
     var scopes    = null;   // SurveyAjax/scopes, lazy
+    var managerLabel = '';  // SurveyAjax/scopes manager_label: who manages this survey
     var creditOn  = false;  // the owner's attendance credit is on (credit_status mine.config_id)
     var pending   = {};     // debounce buckets, keyed
-    var inflight  = 0;      // every request on the wire
+    var optBusy   = {};     // option_set key -> { again }: its save is on the wire
+    var inflight  = 0;     // every request on the wire
     var inflightWrites = 0; // ...of which change something (not READ_ACTIONS)
     var retyping  = {};     // question_id -> type a retype is on the wire for
     var held      = {};     // save key -> { msg, loc }: a value deliberately NOT sent (blank)
     var pwBase    = {};     // question_id -> pairwise options before the save waiting in its debounce
+    var reloadingOnPurpose = false; // the author followed a notice's own "Reload the page" link
     var failed    = {};     // save key -> { msg, loc }: a change the server refused / never got
     var idleWaiters = [];   // run once nothing is on the wire (see whenIdle)
     var events    = null;   // SurveyAjax/event_options, lazy; null = not loaded yet
@@ -105,13 +108,15 @@
        §2). Kept here read-only for the Privacy section so a builder can see
        exactly what they are asking; the runner remains the single place it is
        authored, so any change there is repeated here word for word. The "full"
-       option names who will see the respondent's name: the scope's officers
-       for a park or kingdom survey, the ORK administrators for an ORK-wide one
-       (consentOptions). */
+       option names who will see the respondent's name: every officer level that
+       manages a park or kingdom survey (the server's manager_label), the ORK
+       administrators for an ORK-wide one (consentOptions). */
     var CONSENT_COPY = {
         intro:   'Your answers are recorded either way. Choose what the ORK may attach to them:',
         notice:  'At the end you\'ll choose whether your answers are linked to your profile, kept to your kingdom and years played, or fully anonymous.',
         full:    'Link my answers to my ORK profile. The {scope} officers and ORK administrators who run this survey, now and in future reigns, will see my name beside my answers, including in exported spreadsheets.',
+        // {managers} is the server's manager_label, the whole management chain.
+        fullChain: 'Link my answers to my ORK profile. {managers} who run this survey, now and in future reigns, will see my name beside my answers, including in exported spreadsheets.',
         fullOrk: 'Link my answers to my ORK profile. The ORK administrators who run this survey, now and in future administrations, will see my name beside my answers, including in exported spreadsheets.',
         partial: 'Record only my kingdom and a years-played range, such as 3–5 years. No name, no profile link.',
         anon:    'Record nothing about me.',
@@ -389,7 +394,7 @@
      * (blank) or refused, "Saved" only when neither is the case.
      */
     function refreshPill() {
-        if (inflightWrites > 0 || hasKeys(pending)) { setSaveState('saving'); return; }
+        if (inflightWrites > 0 || hasKeys(pending) || hasKeys(optBusy)) { setSaveState('saving'); return; }
         setSaveState(hasKeys(held) || hasKeys(failed) ? 'error' : 'saved');
     }
 
@@ -434,13 +439,13 @@
 
     /** Run fn once no request is on the wire (flush() first to include debounced edits). */
     function whenIdle(fn) {
-        if (inflight === 0) { fn(); return; }
+        if (inflight === 0 && !hasKeys(optBusy)) { fn(); return; }
         idleWaiters.push(fn);
     }
 
     function drainIdle() {
         var list;
-        if (inflight !== 0 || !idleWaiters.length) { return; }
+        if (inflight !== 0 || hasKeys(optBusy) || !idleWaiters.length) { return; }
         list = idleWaiters;
         idleWaiters = [];
         list.forEach(function (fn) { fn(); });
@@ -579,6 +584,7 @@
         p.onOk   = onOk;
         p.node   = (opts && opts.node) || p.node || null;
         p.onFailExtra = (opts && opts.onFail) || p.onFailExtra || null;
+        p.onSent = (opts && opts.onSent) || p.onSent || null;
         p.onFail = function (data) {
             saveFailed(p.node, data);
             if (p.onFailExtra) { p.onFailExtra(data); }
@@ -587,8 +593,10 @@
 
         if (p.timer) { window.clearTimeout(p.timer); }
         p.timer = window.setTimeout(function () {
+            var req;
             delete pending[key];
-            post(p.action, p.fields, p.onOk, p.onFail, { key: key, node: p.node });
+            req = post(p.action, p.fields, p.onOk, p.onFail, { key: key, node: p.node });
+            if (p.onSent) { p.onSent(req); }
         }, SAVE_MS);
         refreshPill();
     }
@@ -600,10 +608,38 @@
     function flush(keepalive) {
         Object.keys(pending).forEach(function (key) {
             var p = pending[key];
+            var req;
             if (p.timer) { window.clearTimeout(p.timer); }
             delete pending[key];
-            post(p.action, p.fields, p.onOk, p.onFail, { key: key, node: p.node, keepalive: !!keepalive });
+            req = post(p.action, p.fields, p.onOk, p.onFail, { key: key, node: p.node, keepalive: !!keepalive });
+            if (p.onSent) { p.onSent(req); }
         });
+    }
+
+    /**
+     * option_set replaces a role's whole list, and a new option learns its id
+     * only from the reply. So one such save per key is on the wire at a time
+     * (#29): an edit made meanwhile only records how to redo itself, and once
+     * the reply has written the real ids back — or the save failed — that
+     * rebuilds the payload from the current state and sends it.
+     */
+    function optionSetSent(key) {
+        return function (req) {
+            if (!req || !req.then) { return; }
+            optBusy[key] = { again: null };
+            req.then(function () {
+                var b = optBusy[key];
+                delete optBusy[key];
+                // Idle waiters (retype, duplicate, reload…) must see the
+                // resend, so send it now and let them wait for its reply.
+                if (b && b.again) {
+                    b.again();
+                    if (idleWaiters.length && hasKeys(pending)) { flush(); }
+                }
+                refreshPill();
+                drainIdle();
+            });
+        };
     }
 
     /** Forget every queued, held or refused edit of a question that no longer exists. */
@@ -1009,7 +1045,11 @@
         html += '<button type="button" class="svb-md-btn" data-md-cmd="image" data-md-for="' + id + '" data-tip="Upload and insert an image" aria-label="Insert image"><i class="fas fa-image" aria-hidden="true"></i></button>';
         html += '</div>';
         html += '<textarea class="sv-textarea svb-md-input" id="' + id + '" rows="3" ' + dataAttr + '>' + esc(value || '') + '</textarea>';
-        html += '<div class="svb-md-preview" data-md-preview="' + id + '">' + mdHtml(value) + '</div>';
+        html += '<div class="svb-md-preview" data-md-preview="' + id + '">' + mdPreviewHtml(value) + '</div>';
+        // First paint is the local guess; swap in the server's rendering once the editor is in the DOM.
+        if (value && !Object.prototype.hasOwnProperty.call(mdServerCache, String(value))) {
+            window.setTimeout(function () { fetchMdPreview(id); }, 0);
+        }
         if (hint) { html += '<p class="svb-hint">' + esc(hint) + '</p>'; }
         html += '</div>';
         return html;
@@ -1697,9 +1737,9 @@
      * textarea's text, so a redraw of the open card puts it back, and closing
      * the card says the last saved options were kept (dropPairwiseHold).
      */
-    function commitPairwise(questionId) {
+    function commitPairwise(questionId, keep) {
         var card  = cardEl(questionId);
-        var area  = card ? el('.svb-pw-lines', card) : null;
+        var area  = (card ? el('.svb-pw-lines', card) : null) || keep || null;
         var q     = questionById(questionId);
         var key   = 'opts:' + questionId + ':choice';
         var seen  = {}, byLabel = {}, used = {}, dup = null, problem = '', lines, saved, list;
@@ -1729,6 +1769,7 @@
                 delete pending[key];
                 if (pwBase[questionId]) { q.options = pwBase[questionId]; }
             }
+            if (optBusy[key]) { optBusy[key].again = null; }
             delete pwBase[questionId];
             held[key] = { msg: problem, loc: locOf(area), text: area.value, pw: true };
             fieldError(area, problem);
@@ -1765,6 +1806,13 @@
                      label: o.label, value_num: null, is_other: 0 };
         });
 
+        // The last list is still on the wire: its reply carries the new
+        // options' ids, and this list is rebuilt against them then (#29).
+        if (optBusy[key]) {
+            optBusy[key].again = function () { commitPairwise(questionId, area); };
+            refreshPill();
+            return;
+        }
         save(key, 'option_set', {
             QuestionId: questionId,
             Role:       'choice',
@@ -1776,7 +1824,7 @@
             // A newer save already queued would fall back to this, the saved list.
             if (pending[key]) { pwBase[questionId] = cur.options; }
             if (parseInt(questionId, 10) !== sel) { refreshCard(questionId); }
-        }, { node: area });
+        }, { node: area, onSent: optionSetSent(key) });
         refreshPill();
     }
 
@@ -2149,12 +2197,14 @@
 
     /**
      * An <input> gives no ellipsis, so on a narrow header a long title simply
-     * ends mid-word with no sign there is more. The native tooltip puts the
-     * whole string one hover or long-press away. (The visually-hidden <label>
+     * ends mid-word with no sign there is more. The shared data-tip tooltip
+     * (survey-tip.js) puts the whole string one hover or long-press away. (The visually-hidden <label>
      * stays the accessible name — the value is not a label.)
      */
     function mirrorTitleTip(node) {
-        if (node) { node.title = String(node.value || ''); }
+        if (!node) { return; }
+        node.removeAttribute('title');
+        node.setAttribute('data-tip', String(node.value || ''));
     }
 
     function renderHeader() {
@@ -2350,13 +2400,14 @@
         html += section('audience', 'Audience', 'fa-users', body);
 
         /* Schedule. Both fields are Flatpickr pickers with altInput on, so the
-           box a builder reads says "September 12, 2026  6:00 PM" while the
-           real input underneath still carries the 'Y-m-d H:i:S' string the
-           `update` action stores (empty clears the date). initSchedulePickers()
-           attaches them after this HTML lands. */
-        body  = fieldRow(dateField('svb-f-openat', 'OpenAt', s.open_at, 'No opening date set.'),
+           box a builder reads says "September 12, 2026 at 06:00 PM" in the
+           viewer's own clock (seeded from open_ts / close_ts). A save sends
+           the picked instant, which the server stores as its wall time
+           (empty clears the date). initSchedulePickers() attaches them after
+           this HTML lands. */
+        body  = fieldRow(dateField('svb-f-openat', 'OpenAt', s.open_at, 'No opening date set.', s.open_ts),
                          'Opens', 'A survey never opens by itself — this only stops it being taken early.', 'svb-f-openat');
-        body += fieldRow(dateField('svb-f-closeat', 'CloseAt', s.close_at, 'No closing date set.'),
+        body += fieldRow(dateField('svb-f-closeat', 'CloseAt', s.close_at, 'No closing date set.', s.close_ts),
                          'Closes', null, 'svb-f-closeat');
         html += section('schedule', 'Schedule', 'fa-calendar-days', body);
 
@@ -2382,7 +2433,7 @@
                 [['ongoing', 'Ongoing — as results come in'], ['after_close', 'After close — 24 hours after the survey ends']],
                 s.results_share_timing || 'after_close',
                 'data-sv-field="ResultsShareTiming"' + ((s.results_share || 'none') === 'none' ? ' disabled' : ''),
-                'The survey ends when you close it or its closing date passes, whichever comes first. Your own results are always live.');
+                'The survey ends when you close it or its closing date passes, whichever comes first. Ongoing shared results update in batches of at least 5 responses. Your own results are always live.');
         }
         html += section('privacy', 'Privacy', 'fa-user-shield', body);
 
@@ -2444,6 +2495,8 @@
         var name = scopes === null ? 'survey\'s' : scopeName(s);
         var full = String(s.scope_type) === 'ork'
             ? CONSENT_COPY.fullOrk
+            : managerLabel
+            ? CONSENT_COPY.fullChain.replace('{managers}', managerLabel)
             : (/^the\s/i.test(name)
                 ? CONSENT_COPY.full.replace('The {scope}', name)
                 : CONSENT_COPY.full.replace('{scope}', name));
@@ -2580,20 +2633,23 @@
 
     /* A raw <input type="datetime-local"> shows "2026-09-12T18:00", which is
        not how this project writes a date to a human (see the Flatpickr
-       altInput/altFormat pairing every other date field in the app uses). The
-       real input below keeps the exact 'Y-m-d H:i:S' string the `update`
-       action already expects — Flatpickr only paints a readable twin over it. */
+       altInput/altFormat pairing every other date field in the app uses).
+       Flatpickr paints a readable twin over the real input; what is saved is
+       the picked instant (dateFieldValue), never the viewer-local string. */
 
     var FP_SQL    = 'Y-m-d H:i:S';
-    var FP_PRETTY = 'F j, Y  h:i K';
+    var FP_PRETTY = 'F j, Y \\a\\t h:i K';
     var schedFps  = [];
 
     /** The real (Flatpickr-backed) datetime input for a schedule field, plus
-        the clear button that replaces the native datetime-local one. */
-    function dateField(id, field, value, placeholder) {
+        the clear button that replaces the native datetime-local one. ts is the
+        stored wall time as an instant (open_ts / close_ts): the picker is
+        seeded from it so it shows the viewer's own clock, like the runner. */
+    function dateField(id, field, value, placeholder, ts) {
         return '<div class="svb-daterow">' +
                '<input type="text" class="sv-input svb-date" id="' + id + '"' +
                ' data-sv-field="' + field + '" autocomplete="off"' +
+               (typeof ts === 'number' && isFinite(ts) ? ' data-ts="' + ts + '"' : '') +
                ' placeholder="' + esc(placeholder) + '"' +
                ' value="' + esc(value ? String(value) : '') + '">' +
                '<button type="button" class="svb-link svb-date-clear" data-act="date-clear"' +
@@ -2601,6 +2657,22 @@
                (value ? '' : ' disabled') + '>' +
                '<i class="fas fa-xmark" aria-hidden="true"></i> Clear</button>' +
                '</div>';
+    }
+
+    /** Enable / disable the Clear button beside a schedule input. */
+    function dateClearSync(input, hasValue) {
+        var row = input && input.closest ? input.closest('.svb-daterow') : null;
+        var clr = row ? row.querySelector('.svb-date-clear') : null;
+        if (clr) { clr.disabled = !hasValue; }
+    }
+
+    /** What a schedule input sends: the picked instant (epoch seconds), '' when
+        empty; the raw string only without Flatpickr (the server takes both). */
+    function dateFieldValue(node) {
+        var fp = node._flatpickr, d;
+        if (!fp) { return node.value; }
+        d = fp.selectedDates && fp.selectedDates[0];
+        return d ? String(Math.floor(d.getTime() / 1000)) : '';
     }
 
     /* Flatpickr hangs its calendar off document.body, so a sidebar repaint
@@ -2614,12 +2686,16 @@
     }
 
     function initSchedulePickers() {
-        var ids = ['svb-f-openat', 'svb-f-closeat'], i, node, fp;
+        var ids = ['svb-f-openat', 'svb-f-closeat'], i, node, fp, ts;
         if (typeof window.flatpickr !== 'function') { return; }
         for (i = 0; i < ids.length; i++) {
             node = $(ids[i]);
             if (!node) { continue; }
+            ts = parseInt(node.getAttribute('data-ts') || '', 10);
             fp = window.flatpickr(node, {
+                /* The instant, not the server's zone-less string: Flatpickr
+                   would read that as the viewer's local time. */
+                defaultDate:   isFinite(ts) ? new Date(ts * 1000) : null,
                 enableTime:    true,
                 dateFormat:    FP_SQL,
                 altInput:      true,
@@ -2633,6 +2709,11 @@
                    resizing every other ORK date field on the site. */
                 onReady: function (dates, str, inst) {
                     if (inst.calendarContainer) { inst.calendarContainer.classList.add('svb-fp'); }
+                },
+                /* The Clear button follows the value as it changes, not on
+                   the next sidebar repaint. */
+                onChange: function (dates, str, inst) {
+                    dateClearSync(inst.input, !!dates.length);
                 }
             });
             /* Flatpickr copies the placeholder onto the alt input at build
@@ -2691,9 +2772,48 @@
         node.dispatchEvent(ev);
     }
 
+    /* The preview draws with the respondent's renderer (Survey::renderMarkdown
+       via SurveyAjax/preview_md), not marked, so what the author sees is what
+       the runner shows. Debounced per editor; only the latest request for an
+       editor may paint, and the box keeps its current content while waiting
+       (or when a request fails). */
+    var mdServerCache = {};  // markdown source -> server HTML
+    var mdPreviewSeq  = {};  // editor id -> sequence number of its latest request
+    var mdPreviewTimer = {}; // editor id -> debounce timer
+
+    function mdPreviewHtml(src) {
+        src = (src === null || src === undefined) ? '' : String(src);
+        return Object.prototype.hasOwnProperty.call(mdServerCache, src) ? mdServerCache[src] : mdHtml(src);
+    }
+
+    function fetchMdPreview(id) {
+        var area = $(id), box = el('[data-md-preview="' + id + '"]');
+        var src, seq, body;
+        if (!area || !box) { return; }
+        src = String(area.value || '');
+        seq = mdPreviewSeq[id] = (mdPreviewSeq[id] || 0) + 1;
+        if (src === '' || Object.prototype.hasOwnProperty.call(mdServerCache, src)) {
+            box.innerHTML = src === '' ? '' : mdServerCache[src];
+            return;
+        }
+        body = new window.FormData();
+        body.append('Md', src);
+        window.fetch(UIR + 'SurveyAjax/preview_md', {
+            method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-CSRF-Token': CSRF }
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            var b;
+            if (!data || parseInt(data.status, 10) !== 0) { return; }
+            mdServerCache[src] = String(data.html || '');
+            if (mdPreviewSeq[id] !== seq) { return; }  // a newer request owns this preview
+            b = el('[data-md-preview="' + id + '"]');
+            if (b) { b.innerHTML = mdServerCache[src]; }
+        })['catch'](function () { /* keep what the preview shows now */ });
+    }
+
     function refreshMdPreview(area) {
-        var box = el('[data-md-preview="' + area.id + '"]');
-        if (box) { box.innerHTML = mdHtml(area.value); }
+        var id = area.id;
+        window.clearTimeout(mdPreviewTimer[id]);
+        mdPreviewTimer[id] = window.setTimeout(function () { fetchMdPreview(id); }, 350);
     }
 
     function autoGrow(area) {
@@ -2761,22 +2881,43 @@
         input.click();
     }
 
+    /* The server takes 2 MB (Survey::IMAGE_MAX_BYTES, also PHP's
+       upload_max_filesize); aim a little under it. */
+    var IMAGE_UPLOAD_MAX = 2097152 - 65536;
+
     function onFileChosen() {
         var input = $('svb-file');
-        var fd, job = fileJob;
+        var file, isPng, job = fileJob;
         if (!input || !input.files || !input.files.length || !job) { return; }
-
-        fd = new window.FormData();
-        fd.append('SurveyId', SURVEY_ID);
-        fd.append('Image', input.files[0]);
+        file = input.files[0];
         fileJob = null;
 
-        post('image_upload', fd, function (data) {
-            S.images.push({ image_id: data.image_id, url: data.url, width: data.width, height: data.height });
-            applyUpload(job, data);
-        }, function (data) {
-            notice((data && data.error) || 'That image could not be uploaded.', 'error');
-        });
+        function send(blob, name) {
+            var fd = new window.FormData();
+            fd.append('SurveyId', SURVEY_ID);
+            if (name) { fd.append('Image', blob, name); } else { fd.append('Image', blob); }
+            post('image_upload', fd, function (data) {
+                S.images.push({ image_id: data.image_id, url: data.url, width: data.width, height: data.height });
+                applyUpload(job, data);
+            }, function (data) {
+                notice((data && data.error) || 'That image could not be uploaded.', 'error');
+            });
+        }
+
+        /* Too big to upload: shrink it first with the helper heraldry and
+           player photos use (orkui.js), rather than refuse it. */
+        if (file.size > IMAGE_UPLOAD_MAX && typeof window.resizeImageToLimit === 'function') {
+            isPng = file.type === 'image/png';
+            notice('Resizing the image to fit\u2026');
+            window.resizeImageToLimit(file, IMAGE_UPLOAD_MAX, function (blob) {
+                notice('');
+                send(blob, String(file.name || 'image').replace(/\.[^.]*$/, '') + (isPng ? '.png' : '.jpg'));
+            }, function (msg) {
+                notice(msg || 'That image could not be resized.', 'error');
+            }, isPng);
+            return;
+        }
+        send(file);
     }
 
     function applyUpload(job, data) {
@@ -2794,10 +2935,34 @@
                 : { SurveyId: SURVEY_ID, ThanksImageId: data.image_id }, function (r) {
                 S.survey = r.survey || S.survey;
                 renderSettings();
+                refreshImagePicker(job);
             });
         } else if (job.indexOf('md:') === 0) {
             area = $(job.slice(3));
             if (area) { insertAtCursor(area, '\n![](' + data.url + ')\n'); }
+        }
+    }
+
+    /* renderSettings() leaves the sidebar alone while it holds focus, and it
+       does right after Upload / Remove is clicked. Swap just this image slot
+       (thumbnail + Remove) so the change shows now; focus moves to the slot's
+       Upload / Replace button since the one clicked may be gone. */
+    function refreshImagePicker(job) {
+        var s = S.survey || {};
+        var btn = el('#svb-settings [data-upload="' + job + '"]');
+        var field = btn ? btn.closest('.svb-field') : null;
+        var hadFocus, wrap, next;
+        if (!field) { return; }
+        hadFocus = field.contains(document.activeElement);
+        wrap = document.createElement('div');
+        wrap.innerHTML = job === 'survey-welcome'
+            ? imagePicker('Welcome image', s.welcome_image_id, 'survey-welcome')
+            : imagePicker('Thank-you image', s.thanks_image_id, 'survey-thanks');
+        next = wrap.firstChild;
+        field.parentNode.replaceChild(next, field);
+        if (hadFocus) {
+            btn = next.querySelector('[data-upload]');
+            if (btn) { btn.focus(); }
         }
     }
 
@@ -2816,6 +2981,7 @@
                 : { SurveyId: SURVEY_ID, ThanksImageId: 0 }, function (r) {
                 S.survey = r.survey || S.survey;
                 renderSettings();
+                refreshImagePicker(job);
             });
         }
     }
@@ -3522,9 +3688,9 @@
      *     gets a label again.
      * Every other relabel, reorder and removal commits as usual.
      */
-    function commitOptions(questionId, role) {
+    function commitOptions(questionId, role, keep) {
         var card = cardEl(questionId);
-        var wrap = card ? el('.svb-opts[data-role="' + role + '"]', card) : null;
+        var wrap = (card ? el('.svb-opts[data-role="' + role + '"]', card) : null) || keep || null;
         var q    = questionById(questionId);
         var list = [], sent = [], other = [], key;
         if (!wrap || !q) { return; }
@@ -3565,6 +3731,13 @@
             };
         }));
 
+        // The last list is still on the wire: its reply writes the new rows'
+        // ids back, and these rows are re-read and sent then (#29).
+        if (optBusy[key]) {
+            optBusy[key].again = function () { commitOptions(questionId, role, wrap); };
+            refreshPill();
+            return;
+        }
         save(key, 'option_set', {
             QuestionId: questionId,
             Role:       role,
@@ -3576,15 +3749,17 @@
             if (!cur) { return; }
             (cur.options || []).forEach(function (o) { if (String(o.role || 'choice') !== role) { kept.push(o); } });
             cur.options = kept.concat(opts);
+            // A closed card's rows are kept too: an edit waiting on this reply
+            // is re-read from them (#29).
             sent.forEach(function (row, i) {
-                if (opts[i] && document.contains(row)) { row.setAttribute('data-oid', parseInt(opts[i].option_id, 10)); }
+                if (opts[i]) { row.setAttribute('data-oid', parseInt(opts[i].option_id, 10)); }
             });
             if (document.contains(wrap)) { refreshOptionRowStates(wrap); }
             // The domain cleared every skip rule that read a removed option.
             pruneShowIf(questionId, (function (ids) { return function (oid) { return !!ids[oid]; }; }(optionIdSet(cur))));
             // A card that closed while this was in flight shows the saved rows.
             if (parseInt(questionId, 10) !== sel) { refreshCard(questionId); }
-        }, { node: wrap });
+        }, { node: wrap, onSent: optionSetSent(key) });
         refreshPill();
     }
 
@@ -3708,7 +3883,17 @@
         if (item) {
             e.preventDefault();
             select(item.getAttribute('data-qid'));
+            return;
         }
+        /* A click on empty canvas lets go of the open card, like Escape —
+           but never off a control, a drag handle, the confirm strip, or the
+           end of a text drag-select. */
+        if (!sel || confirmOpen() || !e.target.closest) { return; }
+        if (e.target.closest('input, textarea, select, button, a, label, [contenteditable="true"], ' +
+                             '[data-tip], .svb-page-handle, .svb-handle, #svb-confirm')) { return; }
+        if (window.getSelection && String(window.getSelection() || '') !== '') { return; }
+        flush();
+        select(0);
     }
 
     function handleAct(btn) {
@@ -3879,6 +4064,20 @@
                 fields = {};
                 fields.SurveyId = SURVEY_ID;
                 fields[btn.getAttribute('data-field')] = '';
+                /* Empty the picker here: renderSettings() below skips the
+                   sidebar while it holds focus, and it does after this click.
+                   clear(false) skips onChange, so no second save goes out. */
+                (function (inp) {
+                    if (inp && inp._flatpickr) { inp._flatpickr.clear(false); } else if (inp) { inp.value = ''; }
+                }(el('.svb-date[data-sv-field="' + btn.getAttribute('data-field') + '"]')));
+                btn.disabled = true;
+                /* A pick still waiting in its debounce would land after this
+                   and put the date back. */
+                if (pending['survey:' + btn.getAttribute('data-field')]) {
+                    window.clearTimeout(pending['survey:' + btn.getAttribute('data-field')].timer);
+                    delete pending['survey:' + btn.getAttribute('data-field')];
+                    refreshPill();
+                }
                 post('update', fields, function (r) {
                     S.survey = r.survey || S.survey;
                     renderSettings();
@@ -3957,6 +4156,12 @@
             saveSettings(q, t);
             // A picker that changes what the respondent sees redraws the preview.
             if (kind === 'select') { refreshTypeEditor(q, t.getAttribute('data-q-setting')); }
+            return;
+        }
+        /* Text boxes already saved on 'input'; their blur 'change' would send
+           the same value again. */
+        if ((t.tagName === 'TEXTAREA') ||
+            (t.tagName === 'INPUT' && !/^(checkbox|radio|file|color|range|date|datetime-local|time|month|week)$/.test(t.type))) {
             return;
         }
         onCanvasInput(e);
@@ -4259,6 +4464,8 @@
 
         if (node.type === 'checkbox') {
             value = node.checked ? 1 : 0;
+        } else if (key === 'OpenAt' || key === 'CloseAt') {
+            value = dateFieldValue(node);
         } else if (key === 'AudienceKingdomIds') {
             value = JSON.stringify(els('option', node).filter(function (o) { return o.selected; })
                 .map(function (o) { return parseInt(o.value, 10); }));
@@ -4272,6 +4479,7 @@
         save('survey:' + key, 'update', fields, function (data) {
             S.survey = data.survey || S.survey;
             renderHeader();
+            if (key === 'OpenAt' || key === 'CloseAt') { dateClearSync(node, value !== ''); }
         }, { node: node, onFail: function () {
             if (node.type !== 'checkbox') { return; }
             /* A refused toggle (e.g. the data-gate lock while credits are on)
@@ -4336,7 +4544,13 @@
                 surveyId: SURVEY_ID,
                 grantor: creditGrantor(),
                 title: S.survey.title,
-                onChange: loadCreditState
+                // Called only once this org's credit is on (survey-credit.js), and
+                // the modal re-reads credit_status itself, so no second fetch here.
+                onChange: function () {
+                    var label = $('svb-credit-label');
+                    creditOn = true;
+                    if (label) { label.textContent = creditButtonLabel(); }
+                }
             });
             return;
         }
@@ -4353,12 +4567,12 @@
         flush();
         if (target === 'open' && !s.opened_at) {
             askConfirm('Open this survey? Its questions, options and pages lock once it opens — wording stays editable.',
-                       'Open survey', false, function () { setStatus('open'); });
+                       'Open survey', false, function () { whenIdle(function () { setStatus('open'); }); });
         } else if (target === 'open') {
-            askConfirm('Reopen this survey to respondents?', 'Reopen survey', false, function () { setStatus('open'); });
+            askConfirm('Reopen this survey to respondents?', 'Reopen survey', false, function () { whenIdle(function () { setStatus('open'); }); });
         } else {
             askConfirm('Close this survey? Nobody will be able to answer it until you reopen it.',
-                       'Close survey', false, function () { setStatus('closed'); });
+                       'Close survey', false, function () { whenIdle(function () { setStatus('closed'); }); });
         }
     }
 
@@ -4422,6 +4636,9 @@
         // Every notice carries its own Dismiss button.
         on($('svb-notice'), 'click', function (e) {
             var x = e.target.closest ? e.target.closest('.svb-notice-close') : null;
+            /* The notice itself told them to reload (a refused CSRF token), so
+               the leave-page prompt would only argue with it. */
+            if (e.target.closest && e.target.closest('.svb-notice-link')) { reloadingOnPurpose = true; }
             if (!x) { return; }
             e.preventDefault();
             notice('');
@@ -4638,9 +4855,10 @@
         }
 
         // Scope name for the header chip, and the kingdom list for an ork-scoped audience.
-        post('scopes', {}, function (data) {
+        post('scopes', { SurveyId: SURVEY_ID }, function (data) {
             var chip = $('svb-scopename'), i, sc;
             scopes = data.scopes || [];
+            managerLabel = String(data.manager_label || '').trim();
             for (i = 0; i < scopes.length; i++) {
                 sc = scopes[i];
                 if (sc.scope_type === S.survey.scope_type && parseInt(sc.scope_id, 10) === parseInt(S.survey.scope_id, 10)) {
@@ -4662,9 +4880,9 @@
            was still unsent, on the wire, held (blank) or refused, the browser's
            own leave-page prompt asks first — a browser prompt, not a JS dialog. */
         window.addEventListener('beforeunload', function (e) {
-            var dirty = hasKeys(pending) || inflightWrites > 0 || hasKeys(held) || hasKeys(failed);
+            var dirty = hasKeys(pending) || inflightWrites > 0 || hasKeys(optBusy) || hasKeys(held) || hasKeys(failed);
             if (hasKeys(pending)) { flush(true); }
-            if (!dirty) { return undefined; }
+            if (!dirty || reloadingOnPurpose) { return undefined; }
             e.preventDefault();
             e.returnValue = '';
             return '';

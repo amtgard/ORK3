@@ -460,19 +460,40 @@ class SurveyResponse
         $scopeType = (string) ($surveyRow['scope_type'] ?? '');
         $scopeId   = (int) ($surveyRow['scope_id'] ?? 0);
         $eventId   = (int) ($surveyRow['audience_event_calendardetail_id'] ?? 0);
+        // An event audience is driven from the event's attendance rows (keyed
+        // by event_calendardetail_id) rather than probing attendance per player.
+        $from = DB_PREFIX . 'mundane m';
+        $count = 'COUNT(*)';
         if ($eventId > 0) {
-            $where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'attendance ae
-                                WHERE ae.mundane_id = m.mundane_id
-                                  AND ae.event_calendardetail_id = ' . $eventId . ')';
+            $from = DB_PREFIX . 'attendance ae JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ae.mundane_id';
+            $count = 'COUNT(DISTINCT m.mundane_id)';
+            $where[] = 'ae.event_calendardetail_id = ' . $eventId;
         } elseif ('park' === $scopeType && $scopeId > 0) {
             $where[] = 'm.park_id = ' . $scopeId;
-        } elseif ('kingdom' === $scopeType && $scopeId > 0) {
-            $where[] = '(m.kingdom_id = ' . $scopeId . ' OR k.parent_kingdom_id = ' . $scopeId . ')';
-        } elseif ('ork' === $scopeType) {
-            $list = self::kingdomIdList($surveyRow['audience_kingdom_ids'] ?? null);
+        } elseif (('kingdom' === $scopeType && $scopeId > 0) || 'ork' === $scopeType) {
+            $list = 'kingdom' === $scopeType
+                ? [$scopeId]
+                : self::kingdomIdList($surveyRow['audience_kingdom_ids'] ?? null);
             if (null !== $list) {
+                // Resolve kingdoms + their principalities up front so the count
+                // is a plain indexable m.kingdom_id IN (...), not an OR across
+                // the mundane and kingdom tables.
                 $in = implode(', ', array_map('intval', $list));
-                $where[] = '(m.kingdom_id IN (' . $in . ') OR k.parent_kingdom_id IN (' . $in . '))';
+                $this->db->Clear();
+                $kr = $this->db->DataSet(
+                    'SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom
+                     WHERE kingdom_id IN (' . $in . ') OR parent_kingdom_id IN (' . $in . ')'
+                );
+                $kids = [];
+                if ($kr) {
+                    while ($kr->Next()) {
+                        $kids[] = (int) $kr->kingdom_id;
+                    }
+                }
+                if (!$kids) {
+                    return 0;
+                }
+                $where[] = 'm.kingdom_id IN (' . implode(', ', $kids) . ')';
             }
         } else {
             return 0;
@@ -499,8 +520,7 @@ class SurveyResponse
 
         $this->db->Clear();
         $r = $this->db->DataSet(
-            'SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'mundane m
-             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = m.kingdom_id
+            'SELECT ' . $count . ' AS n FROM ' . $from . '
              WHERE ' . implode(' AND ', $where)
         );
         return ($r && $r->Next()) ? (int) $r->n : 0;
@@ -620,34 +640,6 @@ class SurveyResponse
              WHERE survey_id = ' . (int) $surveyId . ' AND mundane_id = ' . (int) $uid . ' LIMIT 1'
         );
         return (bool) ($r && $r->Next());
-    }
-
-    /**
-     * Batched hasParticipated(): the ids among $surveyIds this player has answered.
-     *
-     * @param  array<int|string, mixed> $surveyIds
-     * @return array<int, true> survey_id => true
-     */
-    private function participatedMap(array $surveyIds, int $uid): array
-    {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $surveyIds), static function (int $id): bool {
-            return $id > 0;
-        })));
-        if (!$ids || $uid <= 0) {
-            return [];
-        }
-        $this->db->Clear();
-        $r = $this->db->DataSet(
-            'SELECT survey_id FROM ' . DB_PREFIX . 'survey_participation
-             WHERE mundane_id = ' . (int) $uid . ' AND survey_id IN (' . implode(', ', $ids) . ')'
-        );
-        $out = [];
-        if ($r) {
-            while ($r->Next()) {
-                $out[(int) $r->survey_id] = true;
-            }
-        }
-        return $out;
     }
 
     // -----------------------------------------------------------------------
@@ -826,8 +818,11 @@ class SurveyResponse
             'data_gate_enabled' => (int) $survey['data_gate_enabled'],
             'accent_color'      => $survey['accent_color'] ?: null,
             'close_at'          => $survey['close_at'] ?: null,
+            // close_at is the builder's PHP-local wall time; close_ts is the instant.
+            'close_ts'          => self::stamp($survey['close_at'] ?? null),
             'scope_type'        => (string) $survey['scope_type'],
             'scope_label'       => $this->scopeLabel((string) $survey['scope_type'], (int) $survey['scope_id']),
+            'manager_label'     => $this->managerLabel((string) $survey['scope_type'], (int) $survey['scope_id']),
             'audience_recent_months'           => (int) ($survey['audience_recent_months'] ?? 0),
             'audience_event_calendardetail_id' => (int) ($survey['audience_event_calendardetail_id'] ?? 0) > 0
                 ? (int) $survey['audience_event_calendardetail_id']
@@ -1133,6 +1128,9 @@ class SurveyResponse
             'answers'    => $answers,
             'page_index' => (int) $r->page_index,
             'started_at' => (string) $r->started_at,
+            // started_at is PHP-local wall time with no zone (nowStamp());
+            // the runner needs an absolute instant to time a resumed run.
+            'started_ts' => self::stamp($r->started_at),
         ];
     }
 
@@ -1288,20 +1286,35 @@ class SurveyResponse
         $notice = $creditNotice && !$isTest && 'full' === $storedConsent;
 
         $player = $this->player($uid);
-        $draft  = $this->draftLoad($surveyId, $uid);
+        // A test submit (preview) never touches the manager's own real draft.
+        $draft  = $isTest ? null : $this->draftLoad($surveyId, $uid);
 
         $duration = (int) $durationSeconds;
         if ($duration < 0 || $duration > self::MAX_DURATION_SECONDS) {
             $duration = 0;
         }
 
+        // started_at and duration_seconds must describe the same interval.
+        // survey_start carries no timestamp by design, so the start is the
+        // earlier of the draft's first save and the client timer's start
+        // (page load, or the resumed draft's start: survey-take.js). A draft
+        // stamp later than now is a bad clock and is ignored.
+        $submittedTs = time();
+        $startTs     = $submittedTs;
+        $draftTs     = $draft['started_ts'] ?? null;
+        if (null !== $draftTs && $draftTs <= $submittedTs) {
+            $startTs = $draftTs;
+        }
+        $startTs  = min($startTs, $submittedTs - $duration);
+        $duration = max(0, min($duration, $submittedTs - $startTs));
+
         $row = self::scrubForConsent([
             'mundane_id'       => $uid,
             'kingdom_id'       => $player ? (int) $player['kingdom_id'] : null,
             'park_id'          => ($player && (int) $player['park_id'] > 0) ? (int) $player['park_id'] : null,
             'tenure_months'    => $this->tenureMonths($uid),
-            'started_at'       => ($draft && !empty($draft['started_at'])) ? $draft['started_at'] : self::nowStamp(),
-            'submitted_at'     => self::nowStamp(),
+            'started_at'       => date('Y-m-d H:i:s', $startTs),
+            'submitted_at'     => date('Y-m-d H:i:s', $submittedTs),
             'duration_seconds' => $duration > 0 ? $duration : null,
         ], $storedConsent);
 
@@ -1347,12 +1360,16 @@ class SurveyResponse
             foreach (array_chunk($check['rows'], 200) as $chunk) {
                 $values = [];
                 foreach ($chunk as $r) {
+                    $num = self::sqlNum($r['value_num'] ?? null);
+                    if (null === $num) {
+                        return $this->rollback('Your answers could not be saved.', 'non_finite_number', $surveyId, $uid);
+                    }
                     $values[] = '(' . $responseId . ', '
                         . (int) $r['question_id'] . ', '
                         . self::sqlInt($r['option_id'] ?? null) . ', '
                         . self::sqlInt($r['row_option_id'] ?? null) . ', '
                         . $this->sqlStr($r['value_text'] ?? null) . ', '
-                        . self::sqlNum($r['value_num'] ?? null) . ')';
+                        . $num . ')';
                 }
                 $this->db->Clear();
                 error_clear_last();
@@ -1389,13 +1406,15 @@ class SurveyResponse
             }
         }
 
-        $this->db->Clear();
-        error_clear_last();
-        if (!$this->exec(
-            'DELETE FROM ' . DB_PREFIX . 'survey_draft
-             WHERE survey_id = ' . $surveyId . ' AND mundane_id = ' . $uid
-        )) {
-            return $this->rollback('Your answers could not be saved.', 'delete_draft', $surveyId, $uid);
+        if (!$isTest) {
+            $this->db->Clear();
+            error_clear_last();
+            if (!$this->exec(
+                'DELETE FROM ' . DB_PREFIX . 'survey_draft
+                 WHERE survey_id = ' . $surveyId . ' AND mundane_id = ' . $uid
+            )) {
+                return $this->rollback('Your answers could not be saved.', 'delete_draft', $surveyId, $uid);
+            }
         }
 
         $this->db->Clear();
@@ -1458,7 +1477,7 @@ class SurveyResponse
         }
 
         $this->db->Clear();
-        $this->db->Execute('ROLLBACK');
+        $this->exec('ROLLBACK');
 
         $trace = [
             'survey_id' => (int) $surveyId,
@@ -1481,9 +1500,30 @@ class SurveyResponse
      * failed INSERT inside a transaction would otherwise look like a success and
      * get committed as a half-written response. ExecuteChecked() returns false on
      * a real failure; fall back to Execute() only if the handle predates it.
+     *
+     * START TRANSACTION / COMMIT / ROLLBACK go through YapoMysql's depth-counted
+     * BeginTrans/CommitTrans/RollbackTrans: a raw second START TRANSACTION
+     * silently commits the open one in MariaDB, a nested BeginTrans does not.
      */
     private function exec(string $sql): bool
     {
+        if (method_exists($this->db, 'BeginTrans')) {
+            switch ($sql) {
+                case 'START TRANSACTION':
+                    // BeginTrans() always returns true; InTrans() catches a failed PDO begin.
+                    // On failure unwind the depth BeginTrans() raised, so callers fail closed cleanly.
+                    if ($this->db->BeginTrans() && $this->db->InTrans()) {
+                        return true;
+                    }
+                    $this->db->RollbackTrans();
+                    return false;
+                case 'COMMIT':
+                    return (bool) $this->db->CommitTrans();
+                case 'ROLLBACK':
+                    // Depth 0 (after a failed COMMIT): end whatever the server still holds.
+                    return $this->db->RollbackTrans() || !$this->db->InTrans() || (bool) $this->db->ExecuteChecked('ROLLBACK');
+            }
+        }
         if (method_exists($this->db, 'ExecuteChecked')) {
             return (bool) $this->db->ExecuteChecked($sql);
         }
@@ -1527,30 +1567,91 @@ class SurveyResponse
      */
     public function availableFor(int $uid): array
     {
+        return $this->availableAndBannerFor($uid)['available'];
+    }
+
+    /**
+     * availableFor() and bannerFor() from ONE candidate pass — what the page
+     * shell memoises per viewer, so the profile widget and the site banner never
+     * run the candidate/eligibility/credit work twice. The banner is the first
+     * eligible show_banner survey, in the same order, that the viewer has not
+     * dismissed, and reuses that survey's already-built widget row.
+     *
+     * @return array{available: list<array<string, mixed>>, banner: ?array<string, mixed>}
+     */
+    public function availableAndBannerFor(int $uid): array
+    {
         $candidates = $this->candidateSurveys($uid, false, 0);
-        // The "already answered" check every survey pays, in one query rather
-        // than one per candidate; rule-specific checks stay in eligibility().
-        $participated = $this->participatedMap(array_column($candidates, 'survey_id'), $uid);
         $eligible = [];
         foreach ($candidates as $survey) {
-            if ($this->eligibility($survey, $uid, isset($participated[(int) $survey['survey_id']]))['eligible']) {
+            // candidateSurveys() already excluded answered surveys in SQL, so
+            // "participated" is known false: no participation query at all.
+            if ($this->eligibility($survey, $uid, false)['eligible']) {
                 $eligible[] = $survey;
             }
         }
         if (!$eligible) {
-            return [];
+            return ['available' => [], 'banner' => null];
         }
 
         // Scope names in at most two queries, not one per survey (review #38),
         // and the credit flags in at most three.
         $labels = $this->scopeLabels($eligible);
         $credit = (new SurveyCredit())->creditAvailableMap($eligible, $uid);
+        // Drafts in one query, not one hasDraft() per resumable survey.
+        $drafts = [];
+        $resumeIds = [];
+        foreach ($eligible as $survey) {
+            if (!empty($survey['allow_resume'])) {
+                $resumeIds[] = (int) $survey['survey_id'];
+            }
+        }
+        if ($resumeIds) {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT survey_id FROM ' . DB_PREFIX . 'survey_draft
+                 WHERE mundane_id = ' . (int) $uid . ' AND survey_id IN (' . implode(', ', $resumeIds) . ')'
+            );
+            while ($r && $r->Next()) {
+                $drafts[(int) $r->survey_id] = true;
+            }
+        }
         $out = [];
+        $bannerIds = [];
         foreach ($eligible as $survey) {
             $sid   = (int) $survey['survey_id'];
-            $out[] = $this->widgetRow($survey, $uid, $labels[$sid] ?? null, $credit[$sid] ?? false);
+            $out[] = $this->widgetRow($survey, $uid, $labels[$sid] ?? null, $credit[$sid] ?? false, isset($drafts[$sid]));
+            if (!empty($survey['show_banner'])) {
+                $bannerIds[] = $sid;
+            }
         }
-        return $out;
+
+        // Dismissals: one query, and only when a banner-flagged survey is eligible.
+        $banner = null;
+        if ($bannerIds) {
+            $dismissed = [];
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT survey_id FROM ' . DB_PREFIX . 'survey_dismissal
+                 WHERE mundane_id = ' . (int) $uid . ' AND survey_id IN (' . implode(', ', $bannerIds) . ')'
+            );
+            while ($r && $r->Next()) {
+                $dismissed[(int) $r->survey_id] = true;
+            }
+            foreach ($out as $row) {
+                if (in_array($row['survey_id'], $bannerIds, true) && !isset($dismissed[$row['survey_id']])) {
+                    $banner = $row;
+                    break;
+                }
+            }
+        }
+        // The Available Surveys widget never renders the description; only the
+        // banner does, so keep it off the (session-cached) list rows.
+        $available = array_map(static function (array $row): array {
+            unset($row['description']);
+            return $row;
+        }, $out);
+        return ['available' => $available, 'banner' => $banner];
     }
 
     /**
@@ -1567,7 +1668,8 @@ class SurveyResponse
     {
         $rows = $this->candidateSurveys($uid, true, 50); // eligibility is evaluated after the query; keep the window wide
         foreach ($rows as $survey) {
-            if ($this->eligibility($survey, $uid)['eligible']) {
+            // The SQL already excluded answered surveys: skip the per-row participation lookup.
+            if ($this->eligibility($survey, $uid, false)['eligible']) {
                 return $this->widgetRow($survey, $uid);
             }
         }
@@ -1657,9 +1759,10 @@ class SurveyResponse
      * @param  array<string, mixed> $survey
      * @param  ?string              $scopeLabel      pre-resolved label (availableFor batches them), or null to look it up
      * @param  ?bool                $creditAvailable pre-resolved credit flag (availableFor batches them), or null to look it up
+     * @param  ?bool                $hasDraft        pre-resolved draft flag (availableFor batches them), or null to look it up
      * @return array{survey_id: int, title: string, description: string, scope_label: string, close_at: ?string, in_progress: bool, credit_available: bool}
      */
-    private function widgetRow(array $survey, int $uid, ?string $scopeLabel = null, ?bool $creditAvailable = null): array
+    private function widgetRow(array $survey, int $uid, ?string $scopeLabel = null, ?bool $creditAvailable = null, ?bool $hasDraft = null): array
     {
         return [
             'survey_id'   => (int) $survey['survey_id'],
@@ -1668,7 +1771,7 @@ class SurveyResponse
             'description' => (string) ($survey['description'] ?? ''),
             'scope_label' => $scopeLabel ?? $this->scopeLabel((string) $survey['scope_type'], (int) $survey['scope_id']),
             'close_at'    => $survey['close_at'] ?: null,
-            'in_progress' => !empty($survey['allow_resume']) && $this->hasDraft((int) $survey['survey_id'], $uid),
+            'in_progress' => !empty($survey['allow_resume']) && ($hasDraft ?? $this->hasDraft((int) $survey['survey_id'], $uid)),
             'credit_available' => $creditAvailable ?? (new SurveyCredit())->creditAvailableFor($survey, $uid),
         ];
     }
@@ -1765,6 +1868,60 @@ class SurveyResponse
             return ($r && $r->Next()) ? (string) $r->name : 'Park';
         }
         return '';
+    }
+
+    /**
+     * Who can manage this survey, for the Any-ORK-Data consent copy. Mirrors the
+     * HasAuthority chain Survey::canManage() rides: a park climbs to its
+     * kingdom, and a kingdom (principality) climbs its parent_kingdom_id chain.
+     * "The {Park} officers, the {Kingdom} officers, and ORK administrators".
+     */
+    public function managerLabel(string $scopeType, int $scopeId): string
+    {
+        if ('ork' === $scopeType) {
+            return 'The ORK administrators';
+        }
+        $names     = [];
+        $kingdomId = 0;
+        if ('park' === $scopeType && $scopeId > 0) {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name, kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . (int) $scopeId . ' LIMIT 1'
+            );
+            if ($r && $r->Next()) {
+                $names[]   = (string) $r->name;
+                $kingdomId = (int) $r->kingdom_id;
+            }
+        } elseif ('kingdom' === $scopeType) {
+            $kingdomId = (int) $scopeId;
+        }
+        $visited = [];
+        while ($kingdomId > 0 && !isset($visited[$kingdomId]) && count($visited) < 10) {
+            $visited[$kingdomId] = true;
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name, parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdomId . ' LIMIT 1'
+            );
+            if (!$r || !$r->Next()) {
+                break;
+            }
+            $names[]   = (string) $r->name;
+            $kingdomId = (int) $r->parent_kingdom_id;
+        }
+        $parts = [];
+        foreach ($names as $i => $name) {
+            $name = trim($name);
+            if ('' === $name) {
+                continue;
+            }
+            // Kingdom names often carry their own article ("The Kingdom of …").
+            $bare    = preg_match('/^the\s+/i', $name) ? preg_replace('/^the\s+/i', '', $name) : $name;
+            $parts[] = (0 === count($parts) ? 'The ' : 'the ') . $bare . ' officers';
+        }
+        if (!$parts) {
+            return 'The survey\'s officers and ORK administrators';
+        }
+        return implode(', ', $parts) . (count($parts) > 1 ? ', and' : ' and') . ' ORK administrators';
     }
 
     // -----------------------------------------------------------------------
@@ -1900,10 +2057,20 @@ class SurveyResponse
         return (null === $v || '' === $v) ? 'NULL' : (string) (int) $v;
     }
 
-    /** @param mixed $v */
-    private static function sqlNum($v): string
+    /**
+     * SQL literal for a numeric answer, or null to refuse a non-finite value (a
+     * bare INF/NAN in SQL is a syntax error). Validation rejects these first;
+     * this is the backstop, and the caller rolls back rather than write it.
+     *
+     * @param mixed $v
+     */
+    private static function sqlNum($v): ?string
     {
-        return (null === $v || '' === $v) ? 'NULL' : (string) (float) $v;
+        if (null === $v || '' === $v) {
+            return 'NULL';
+        }
+        $f = (float) $v;
+        return is_finite($f) ? (string) $f : null;
     }
 
     /** @param mixed $v */

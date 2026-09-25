@@ -35,7 +35,7 @@ class Survey
     private const DRAFT_RETENTION_DAYS = 60;
 
     /** Actions the activity log records (ork_survey_activity.action). */
-    private const ACTIVITY_ACTIONS = ['create', 'update', 'structure', 'status', 'clone', 'delete', 'rows_view', 'export', 'credit'];
+    private const ACTIVITY_ACTIONS = ['create', 'update', 'structure', 'status', 'clone', 'delete', 'rows_view', 'export', 'credit', 'clear_results'];
 
     /**
      * Actions an autosaving builder or a scrolling results table repeats: an entry
@@ -117,7 +117,7 @@ class Survey
             $dup = $this->fetchRow(
                 'SELECT activity_id FROM ' . DB_PREFIX . 'survey_activity
                  WHERE survey_id = ' . (int) $surveyId . '
-                   AND created_at >= NOW() - INTERVAL ' . self::ACTIVITY_COALESCE_MINUTES . ' MINUTE
+                   AND created_at >= ' . self::nowSql() . ' - INTERVAL ' . self::ACTIVITY_COALESCE_MINUTES . ' MINUTE
                    AND mundane_id = ' . $this->actor . '
                    AND action = \'' . $action . '\'
                    AND detail <=> ' . $detailSql . '
@@ -130,7 +130,7 @@ class Survey
 
         $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey_activity (survey_id, mundane_id, action, detail, created_at)
-             VALUES (' . (int) $surveyId . ', ' . $this->actor . ', \'' . $action . '\', ' . $detailSql . ', NOW())'
+             VALUES (' . (int) $surveyId . ', ' . $this->actor . ', \'' . $action . '\', ' . $detailSql . ', ' . self::nowSql() . ')'
         );
     }
 
@@ -250,6 +250,70 @@ class Survey
             return null;
         }
         return date('Y-m-d H:i:s', min($ends) + self::SHARE_DELAY_HOURS * 3600);
+    }
+
+    /**
+     * PURE. Why an open_at/close_at pair is refused, or '' when it is fine: a
+     * close at or before the open would end the survey before it starts.
+     */
+    public static function scheduleProblem(?string $openAt, ?string $closeAt): string
+    {
+        $open  = strtotime((string) $openAt);
+        $close = strtotime((string) $closeAt);
+        if ($open && $close && $close <= $open) {
+            return 'The closing date must be after the opening date.';
+        }
+        return '';
+    }
+
+    /**
+     * PURE. A stored open_at/close_at (zone-less wall time on PHP's clock, the
+     * app timezone) => the unix instant, or null when unset. Read the same way
+     * SurveyResponse::stamp() derives the runner's close_ts, so the builder and
+     * the runner agree on the instant.
+     */
+    public static function wallToInstant($wall): ?int
+    {
+        $s = trim((string) $wall);
+        if ($s === '' || $s === '0000-00-00 00:00:00' || $s === '0000-00-00') {
+            return null;
+        }
+        $t = strtotime($s);
+        return $t === false ? null : $t;
+    }
+
+    /** PURE. A unix instant => the 'Y-m-d H:i:s' wall time stored for it (PHP's clock). */
+    public static function instantToWall(int $ts): string
+    {
+        return date('Y-m-d H:i:s', $ts);
+    }
+
+    /**
+     * PURE. The builder's survey row plus open_ts/close_ts: the schedule as
+     * instants, so the builder shows it in the viewer's clock like the runner.
+     */
+    public static function withInstants(?array $surveyRow): ?array
+    {
+        if ($surveyRow === null) {
+            return null;
+        }
+        $surveyRow['open_ts']  = self::wallToInstant($surveyRow['open_at'] ?? null);
+        $surveyRow['close_ts'] = self::wallToInstant($surveyRow['close_at'] ?? null);
+        return $surveyRow;
+    }
+
+    /** PURE. True when the row's scheduled close_at is set and has passed at $now. */
+    public static function closeAtPassed(array $surveyRow, int $now): bool
+    {
+        $closeAt = strtotime((string) ($surveyRow['close_at'] ?? ''));
+        return $closeAt && $closeAt <= $now;
+    }
+
+    /** PURE. True when the row's scheduled open_at is set and still ahead of $now. */
+    public static function openAtPending(array $surveyRow, int $now): bool
+    {
+        $openAt = self::wallToInstant($surveyRow['open_at'] ?? null);
+        return $openAt !== null && $openAt > $now;
     }
 
     /**
@@ -526,7 +590,7 @@ class Survey
         }
 
         return $this->ok([
-            'Survey'    => $survey,
+            'Survey'    => self::withInstants($survey),
             'Pages'     => $pages,
             'Questions' => $questions,
             'Images'    => $images,
@@ -625,6 +689,12 @@ class Survey
             $rows[$i]['ScopeName']     = $name;
             $rows[$i]['ResponseCount'] = (int) $r['response_count'];
             $rows[$i]['Locked']        = $this->isStructureLocked($r);
+            // Still 'open' in status, but past its scheduled close: it takes no
+            // responses, so the list must not call it Open.
+            $rows[$i]['ClosedScheduled'] = (string) $r['status'] === 'open' && self::closeAtPassed($r, time());
+            // Still 'open' in status, but its open_at is ahead: the runner says
+            // not open yet (SurveyResponse), so the list must not call it Open.
+            $rows[$i]['OpensScheduled'] = (string) $r['status'] === 'open' && self::openAtPending($r, time());
         }
 
         return $rows;
@@ -726,7 +796,8 @@ class Survey
 
         if ($page['type'] === 'kingdom') {
             $fam = implode(',', array_map('intval', $this->kingdomFamily($page['id'])));
-            $labels['kingdom'] = $this->scopeName('kingdom', $page['id']);
+            // A missing kingdom has no name; the heading still needs words.
+            $labels['kingdom'] = $this->scopeName('kingdom', $page['id']) ?: 'Kingdoms';
             $labels['park']    = 'Parks';
             $rows = array_merge(
                 $rows,
@@ -739,8 +810,8 @@ class Survey
 
         [$kingdomId, $parentId] = $credit->orgKingdom('park', $page['id']);
         $reach = array_filter([$kingdomId, $parentId]);
-        $labels['kingdom'] = $kingdomId > 0 ? $this->scopeName('kingdom', $kingdomId) : 'Kingdom';
-        $labels['park']    = $this->scopeName('park', $page['id']);
+        $labels['kingdom'] = ($kingdomId > 0 ? $this->scopeName('kingdom', $kingdomId) : '') ?: 'Kingdom';
+        $labels['park']    = $this->scopeName('park', $page['id']) ?: 'Parks';
         if ($reach) {
             $rows = array_merge($rows, $this->fetchAll('SELECT * FROM ' . DB_PREFIX . 'survey WHERE scope_type = \'kingdom\'
                                                          AND scope_id IN (' . implode(',', array_map('intval', $reach)) . ')' . $live . $order));
@@ -781,7 +852,7 @@ class Survey
             'INSERT INTO ' . DB_PREFIX . 'survey
              (scope_type, scope_id, title, slug, status, created_by, updated_by, created_at, updated_at)
              VALUES (\'' . $scopeType . '\', ' . $scopeId . ', \'' . $this->esc($title) . '\', \'' . $this->esc($slug) . '\',
-                     \'draft\', ' . (int) $uid . ', ' . (int) $uid . ', NOW(), NOW())'
+                     \'draft\', ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . ')'
         );
         $surveyId = $ok ? $this->lastInsertId() : 0;
         if ($surveyId <= 0) {
@@ -857,6 +928,7 @@ class Survey
                     $v = trim((string) $raw);
                     if ($v === '') {
                         $sets[] = $column . ' = NULL';
+                        $survey[$column] = null;
                         break;
                     }
                     $dt = $this->normalizeDateTime($v);
@@ -864,6 +936,7 @@ class Survey
                         return $this->fail('That is not a valid date and time.');
                     }
                     $sets[] = $column . ' = \'' . $dt . '\'';
+                    $survey[$column] = $dt;
                     break;
 
                 case 'intlist':
@@ -949,6 +1022,17 @@ class Survey
             }
         }
 
+        // $survey now carries the dates as they would be saved (the datetime
+        // case writes them back), so a change to either side is checked
+        // against the other's stored value. Only when a date is being saved,
+        // so an unrelated edit never trips over an old stored pair.
+        if (array_key_exists('OpenAt', $fields) || array_key_exists('CloseAt', $fields)) {
+            $scheduleProblem = self::scheduleProblem($survey['open_at'] ?? null, $survey['close_at'] ?? null);
+            if ($scheduleProblem !== '') {
+                return $this->fail($scheduleProblem);
+            }
+        }
+
         if ($sets) {
             if (!$this->exec('UPDATE ' . DB_PREFIX . 'survey SET ' . implode(', ', $sets)
                 . ', ' . $this->stampSql() . ' WHERE survey_id = ' . $surveyId)) {
@@ -969,7 +1053,36 @@ class Survey
             (new SurveyCredit())->onStartChanged($surveyId);
         }
 
-        return $this->ok(['Survey' => $this->getRow($surveyId)]);
+        return $this->ok(['Survey' => self::withInstants($this->getRow($surveyId))]);
+    }
+
+    /**
+     * Status moves setStatus() allows, keyed on the current status. Nothing goes
+     * back to draft: once opened_at is set the structure lock (keyed on it) would
+     * outlive the status, and the survey would vanish from respondents. The one
+     * way out of archived is the builder's deliberate "Reopen survey" (-> open).
+     */
+    private const STATUS_TRANSITIONS = [
+        'draft'    => ['open', 'archived'],
+        'open'     => ['closed', 'archived'],
+        'closed'   => ['open', 'archived'],
+        'archived' => ['open'],
+    ];
+
+    /** Why $survey cannot move to $to, or null when the move is allowed. PURE. */
+    public static function statusTransitionError(array $survey, string $to): ?string
+    {
+        $from = (string) ($survey['status'] ?? '');
+        if (in_array($to, self::STATUS_TRANSITIONS[$from] ?? [], true)) {
+            return null;
+        }
+        if ($to === 'draft' && !empty($survey['opened_at'])) {
+            return 'This survey has been opened, so it cannot go back to draft.';
+        }
+        if ($from === $to) {
+            return 'This survey is already ' . $to . '.';
+        }
+        return 'A survey that is ' . ($from !== '' ? $from : 'in an unknown state') . ' cannot be moved to ' . $to . '.';
     }
 
     /**
@@ -987,6 +1100,10 @@ class Survey
         if (!in_array($status, ['draft', 'open', 'closed', 'archived'], true)) {
             return $this->fail('That is not a valid survey status.');
         }
+        $refused = self::statusTransitionError($survey, $status);
+        if ($refused !== null) {
+            return $this->fail($refused);
+        }
 
         $sets = ['status = \'' . $status . '\''];
         // PHP's clock, never SQL NOW(): the DB server runs its own zone (UTC in
@@ -996,6 +1113,12 @@ class Survey
         $now = date('Y-m-d H:i:s');
 
         if ($status === 'open') {
+            // Opening (or reopening) past the scheduled close would report the
+            // survey as open while it refuses every response, and would unlock
+            // after-close result sharing at once.
+            if (self::closeAtPassed($survey, time())) {
+                return $this->fail('The closing date has passed; change or clear it before opening.');
+            }
             $problems = $this->validateDefinition($surveyId);
             if ($problems['Errors'] || $problems['Error'] !== '') {
                 return [
@@ -1029,7 +1152,7 @@ class Survey
             (new SurveyCredit())->onOpened($surveyId);
         }
 
-        return $this->ok(['Survey' => $this->getRow($surveyId)]);
+        return $this->ok(['Survey' => self::withInstants($this->getRow($surveyId))]);
     }
 
     /** Drop every in-progress answer set for a survey. */
@@ -1079,6 +1202,9 @@ class Survey
             return $this->fail('Could not copy the survey.');
         }
 
+        // The schedule, banner and event audience are NOT copied: the source's
+        // dates are usually past (a clone would open already closed, and
+        // after-close sharing would unlock at once), and its event is over.
         $ok = $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey
              (scope_type, scope_id, title, slug, description, welcome_md, thanks_md, status,
@@ -1088,10 +1214,10 @@ class Survey
               created_by, updated_by, created_at, updated_at)
              SELECT scope_type, scope_id, \'' . $this->esc($title) . '\', \'' . $this->esc($slug) . '\',
                     description, welcome_md, thanks_md, \'draft\',
-                    open_at, close_at, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
-                    audience_recent_months, audience_event_calendardetail_id,
-                    data_gate_enabled, results_share, results_share_timing, show_banner, show_progress, allow_resume, accent_color,
-                    ' . (int) $uid . ', ' . (int) $uid . ', NOW(), NOW()
+                    NULL, NULL, audience_kingdom_ids, audience_active_only, audience_min_tenure_months,
+                    audience_recent_months, NULL,
+                    data_gate_enabled, results_share, results_share_timing, 0, show_progress, allow_resume, accent_color,
+                    ' . (int) $uid . ', ' . (int) $uid . ', ' . self::nowSql() . ', ' . self::nowSql() . '
              FROM ' . DB_PREFIX . 'survey WHERE survey_id = ' . $surveyId
         );
         $newId = $ok ? $this->lastInsertId() : 0;
@@ -1103,12 +1229,13 @@ class Survey
         // Files are copied after COMMIT so a rolled-back clone leaves none behind.
         $imageMap   = [];
         $imageFiles = [];
+        $nameMap    = [];
         foreach ($images as $img) {
             $token = $this->newImageToken();
             $ok    = $this->exec(
                 'INSERT INTO ' . DB_PREFIX . 'survey_image (survey_id, ext, token, width, height, created_by, created_at)
                  VALUES (' . $newId . ', \'' . $this->esc((string) $img['ext']) . '\', \'' . $token . '\',
-                         ' . (int) $img['width'] . ', ' . (int) $img['height'] . ', ' . (int) $uid . ', NOW())'
+                         ' . (int) $img['width'] . ', ' . (int) $img['height'] . ', ' . (int) $uid . ', ' . self::nowSql() . ')'
             );
             $newImageId = $ok ? $this->lastInsertId() : 0;
             if ($newImageId <= 0) {
@@ -1118,6 +1245,22 @@ class Survey
             $newRow       = ['image_id' => $newImageId, 'ext' => $img['ext'], 'token' => $token];
             $imageFiles[] = [$this->imagePath($img), $this->imagePath($newRow)];
             $imageFiles[] = [$this->imageSmallPath($img), $this->imageSmallPath($newRow)];
+            $nameMap[$this->imageFileName($img)]      = $this->imageFileName($newRow);
+            $nameMap[$this->imageSmallFileName($img)] = $this->imageSmallFileName($newRow);
+        }
+
+        // The copy's markdown must name the copy's files, not the source's:
+        // otherwise it shows files a later delete of the source removes, while
+        // its own copies sit unreferenced and the orphan sweep takes them.
+        $mdSets = [];
+        foreach (['description', 'welcome_md', 'thanks_md'] as $col) {
+            $renamed = self::renameImageReferences($survey[$col] ?? null, $nameMap);
+            if ($renamed !== ($survey[$col] ?? null)) {
+                $mdSets[] = $col . ' = ' . $this->nullableText($renamed);
+            }
+        }
+        if ($mdSets && !$this->exec('UPDATE ' . DB_PREFIX . 'survey SET ' . implode(', ', $mdSets) . ' WHERE survey_id = ' . $newId)) {
+            return $this->abort('Could not copy the survey.');
         }
 
         $pageMap = [];
@@ -1125,7 +1268,7 @@ class Survey
             $ok = $this->exec(
                 'INSERT INTO ' . DB_PREFIX . 'survey_page (survey_id, sort_order, title, description_md)
                  VALUES (' . $newId . ', ' . (int) $p['sort_order'] . ', '
-                . $this->nullableText($p['title']) . ', ' . $this->nullableText($p['description_md']) . ')'
+                . $this->nullableText($p['title']) . ', ' . $this->nullableText(self::renameImageReferences($p['description_md'], $nameMap)) . ')'
             );
             $newPageId = $ok ? $this->lastInsertId() : 0;
             if ($newPageId <= 0) {
@@ -1145,8 +1288,8 @@ class Survey
                  (survey_id, page_id, sort_order, type, prompt, help_md, image_id, required, settings, created_at, updated_at)
                  VALUES (' . $newId . ', ' . (int) ($pageMap[(int) $q['page_id']] ?? 0) . ', ' . (int) $q['sort_order'] . ',
                          \'' . $this->esc((string) $q['type']) . '\', \'' . $this->esc((string) $q['prompt']) . '\',
-                         ' . $this->nullableText($q['help_md']) . ', ' . ($newImg === null ? 'NULL' : $newImg) . ',
-                         ' . ((int) $q['required'] ? 1 : 0) . ', ' . $this->nullableText($q['settings']) . ', NOW(), NOW())'
+                         ' . $this->nullableText(self::renameImageReferences($q['help_md'], $nameMap)) . ', ' . ($newImg === null ? 'NULL' : $newImg) . ',
+                         ' . ((int) $q['required'] ? 1 : 0) . ', ' . $this->nullableText($q['settings']) . ', ' . self::nowSql() . ', ' . self::nowSql() . ')'
             );
             $newQid = $ok ? $this->lastInsertId() : 0;
             if ($newQid <= 0) {
@@ -1294,6 +1437,11 @@ class Survey
             Ork3::$Lib->eventplanning->bust_deleted_system_event((int) $eventId, $keys);
         }
 
+        // This survey's rows are gone now, so any markdown still naming one of
+        // its files belongs to another survey (a clone made before clones
+        // renamed their references): that file stays.
+        $images = array_column($images, null, 'image_id');
+        $images = array_diff_key($images, $this->imagesNamedInMarkdown($images));
         foreach ($images as $img) {
             $path = $this->imagePath($img);
             if (is_file($path)) {
@@ -1304,6 +1452,67 @@ class Survey
         $this->logActivity($surveyId, 'delete', ['title' => (string) $survey['title']]);
 
         return $this->ok();
+    }
+
+    /**
+     * Clear Results: permanently delete every response to a survey (test and
+     * real) with its answers, completion markers, starts and in-progress
+     * drafts, and reset response_count — in one transaction. Attendance
+     * credits already posted (ork_attendance + the ork_survey_credit_grant
+     * ledger) stay, so retaking cannot earn a second credit. The structure
+     * lock (opened_at) is untouched. updated_at moves in the same statement,
+     * so every SurveyReport cache key (count + max id + updated_at) changes
+     * and no aggregate, snapshot or audience count built before is served.
+     *
+     * $dryRun only counts (the confirm modal's "N responses will be deleted"),
+     * after the same permission check, and deletes nothing.
+     *
+     * @return array{Status:int,Error:string,Cleared?:int,Count?:int}
+     */
+    public function clearResults(int $surveyId, int $byMundaneId, bool $dryRun = false): array
+    {
+        $survey = $this->getRow($surveyId);
+        if ($survey === null) {
+            return $this->fail('Survey not found.');
+        }
+        if (!$this->canManage($byMundaneId, $survey)) {
+            return $this->denied('You do not have permission to manage this survey.');
+        }
+        $surveyId = (int) $survey['survey_id'];
+        if ($dryRun) {
+            $count = $this->fetchRow('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $surveyId);
+            return $this->ok(['Count' => $count === null ? 0 : (int) $count['cnt']]);
+        }
+        $this->setActor($byMundaneId);
+
+        if (!$this->exec('START TRANSACTION')) {
+            return $this->fail('Could not clear the results.');
+        }
+        // Lock the survey row first: a submit bumps response_count on it, so it
+        // waits for this clear instead of landing between the count and the reset.
+        $this->fetchRow('SELECT survey_id FROM ' . DB_PREFIX . 'survey WHERE survey_id = ' . $surveyId . ' FOR UPDATE');
+        $count = $this->fetchRow('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $surveyId);
+        $cleared = $count === null ? 0 : (int) $count['cnt'];
+
+        $ok = $this->execAll([
+            'DELETE a FROM ' . DB_PREFIX . 'survey_answer a
+             JOIN ' . DB_PREFIX . 'survey_response r ON r.response_id = a.response_id
+             WHERE r.survey_id = ' . $surveyId,
+            'DELETE FROM ' . DB_PREFIX . 'survey_response WHERE survey_id = ' . $surveyId,
+            'DELETE FROM ' . DB_PREFIX . 'survey_participation WHERE survey_id = ' . $surveyId,
+            'DELETE FROM ' . DB_PREFIX . 'survey_start WHERE survey_id = ' . $surveyId,
+            'DELETE FROM ' . DB_PREFIX . 'survey_draft WHERE survey_id = ' . $surveyId,
+            'UPDATE ' . DB_PREFIX . 'survey SET response_count = 0, ' . $this->stampSql() . ' WHERE survey_id = ' . $surveyId,
+        ]);
+        if (!$ok) {
+            return $this->abort('Could not clear the results.');
+        }
+        if (!$this->exec('COMMIT')) {
+            return $this->abort('Could not clear the results.');
+        }
+        $this->logActivity($surveyId, 'clear_results', ['responses' => $cleared]);
+
+        return $this->ok(['Cleared' => $cleared]);
     }
 
     // -----------------------------------------------------------------------
@@ -1437,7 +1646,7 @@ class Survey
         if (!$this->execAll([
             'START TRANSACTION',
             'UPDATE ' . DB_PREFIX . 'survey_question
-             SET page_id = ' . $target . ', sort_order = sort_order + ' . $offset . ', updated_at = NOW()
+             SET page_id = ' . $target . ', sort_order = sort_order + ' . $offset . ', updated_at = ' . self::nowSql() . '
              WHERE page_id = ' . $pageId,
             'DELETE FROM ' . DB_PREFIX . 'survey_page WHERE page_id = ' . $pageId,
             'COMMIT',
@@ -1536,7 +1745,7 @@ class Survey
             'INSERT INTO ' . DB_PREFIX . 'survey_question
              (survey_id, page_id, sort_order, type, prompt, required, settings, created_at, updated_at)
              VALUES (' . $surveyId . ', ' . $pageId . ', ' . $order . ', \'' . $this->esc($type) . '\',
-                     \'' . $this->esc($prompt) . '\', 0, \'' . $this->esc($settings) . '\', NOW(), NOW())',
+                     \'' . $this->esc($prompt) . '\', 0, \'' . $this->esc($settings) . '\', ' . self::nowSql() . ', ' . self::nowSql() . ')',
         ]);
         $questionId = $ok ? $this->lastInsertId() : 0;
         if ($questionId <= 0) {
@@ -1601,7 +1810,7 @@ class Survey
                      ' . ($imageId > 0 ? $imageId : 'NULL') . ', ' . ((int) $question['required'] ? 1 : 0) . ',
                      ' . $this->nullableText($question['settings']) . ',
                      ' . ($srcQ > 0 && $srcO > 0 ? $srcQ : 'NULL') . ', ' . ($srcQ > 0 && $srcO > 0 ? $srcO : 'NULL') . ',
-                     NOW(), NOW())',
+                     ' . self::nowSql() . ', ' . self::nowSql() . ')',
         ]);
         $newId = $ok ? $this->lastInsertId() : 0;
         if ($newId <= 0) {
@@ -1741,7 +1950,7 @@ class Survey
         }
 
         if ($sets && !$this->exec('UPDATE ' . DB_PREFIX . 'survey_question SET ' . implode(', ', $sets)
-            . ', updated_at = NOW() WHERE question_id = ' . $questionId)) {
+            . ', updated_at = ' . self::nowSql() . ' WHERE question_id = ' . $questionId)) {
             return $this->fail('Could not save the question.');
         }
         if ($sets || $retyped) {
@@ -1777,7 +1986,7 @@ class Survey
         if (!$this->execAll([
             'START TRANSACTION',
             'UPDATE ' . DB_PREFIX . 'survey_question
-             SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = NOW()
+             SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = ' . self::nowSql() . '
              WHERE show_if_question_id = ' . $questionId,
             'UPDATE ' . DB_PREFIX . 'survey_page
              SET show_if_question_id = NULL, show_if_option_id = NULL
@@ -1907,7 +2116,7 @@ class Survey
         if (!in_array($newType, SurveyTypes::SHOW_IF_SOURCES, true)) {
             $statements = [
                 'UPDATE ' . DB_PREFIX . 'survey_question
-                 SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = NOW()
+                 SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = ' . self::nowSql() . '
                  WHERE show_if_question_id = ' . $questionId,
                 'UPDATE ' . DB_PREFIX . 'survey_page
                  SET show_if_question_id = NULL, show_if_option_id = NULL
@@ -1916,7 +2125,7 @@ class Survey
         } else {
             $statements = [
                 'UPDATE ' . DB_PREFIX . 'survey_question
-                 SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = NOW()
+                 SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = ' . self::nowSql() . '
                  WHERE show_if_question_id = ' . $questionId . '
                    AND show_if_option_id NOT IN (SELECT option_id FROM ' . DB_PREFIX . 'survey_option
                                                   WHERE question_id = ' . $questionId . ')',
@@ -1931,7 +2140,7 @@ class Survey
                          SET type = \'' . $this->esc($newType) . '\',
                              settings = \'' . $this->esc((string) $settings) . '\',
                              required = ' . $required . ',
-                             updated_at = NOW()
+                             updated_at = ' . self::nowSql() . '
                          WHERE question_id = ' . $questionId;
         $statements[] = 'COMMIT';
         if (!$this->execAll($statements)) {
@@ -1973,7 +2182,7 @@ class Survey
             if (!isset($known[$qid])) {
                 continue;
             }
-            $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_question SET sort_order = ' . $order . ', updated_at = NOW()
+            $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_question SET sort_order = ' . $order . ', updated_at = ' . self::nowSql() . '
                              WHERE question_id = ' . $qid;
             $order++;
         }
@@ -2008,7 +2217,7 @@ class Survey
 
         if (!$this->execAll([
             'START TRANSACTION',
-            'UPDATE ' . DB_PREFIX . 'survey_question SET page_id = ' . $pageId . ', sort_order = 32000, updated_at = NOW()
+            'UPDATE ' . DB_PREFIX . 'survey_question SET page_id = ' . $pageId . ', sort_order = 32000, updated_at = ' . self::nowSql() . '
              WHERE question_id = ' . $questionId,
         ])) {
             return $this->abort('Could not move the question.');
@@ -2022,7 +2231,7 @@ class Survey
         array_splice($ids, min($index, count($ids)), 0, [$questionId]);
         $statements = [];
         foreach ($ids as $order => $qid) {
-            $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_question SET sort_order = ' . (int) $order . ', updated_at = NOW()
+            $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_question SET sort_order = ' . (int) $order . ', updated_at = ' . self::nowSql() . '
                              WHERE question_id = ' . (int) $qid;
         }
         $statements[] = 'COMMIT';
@@ -2081,6 +2290,13 @@ class Survey
             $id = (int) ($o['option_id'] ?? 0);
             if ($id > 0 && !isset($existingIds[$id])) {
                 return $this->fail('That option does not belong to this question.');
+            }
+            if (array_key_exists('value_num', $o) && $o['value_num'] !== '' && $o['value_num'] !== null) {
+                // value_num is DECIMAL(12,3): refuse what would clamp or break the SQL.
+                $numError = SurveyTypes::numberStorageError((float) $o['value_num']);
+                if ($numError !== null) {
+                    return $this->fail('Column value for "' . mb_substr($label, 0, 60) . '": ' . $numError);
+                }
             }
             $clean[] = [
                 'option_id' => $id,
@@ -2175,7 +2391,7 @@ class Survey
         if ($dropped) {
             $list = implode(',', $dropped);
             $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_question
-                             SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = NOW()
+                             SET show_if_question_id = NULL, show_if_option_id = NULL, updated_at = ' . self::nowSql() . '
                              WHERE show_if_option_id IN (' . $list . ')';
             $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_page
                              SET show_if_question_id = NULL, show_if_option_id = NULL
@@ -2291,7 +2507,7 @@ class Survey
         $ok    = $this->exec('START TRANSACTION') && $this->exec(
             'INSERT INTO ' . DB_PREFIX . 'survey_image (survey_id, ext, token, width, height, created_by, created_at)
              VALUES (' . $surveyId . ', \'' . $ext . '\', \'' . $token . '\', ' . (int) $width . ', ' . (int) $height . ',
-                     ' . (int) $uid . ', NOW())'
+                     ' . (int) $uid . ', ' . self::nowSql() . ')'
         );
         $imageId = $ok ? $this->lastInsertId() : 0;
         if ($imageId <= 0) {
@@ -2376,7 +2592,7 @@ class Survey
         $images   = $this->fetchAll(
             'SELECT image_id, ext, token FROM ' . DB_PREFIX . 'survey_image
              WHERE survey_id = ' . $surveyId . '
-               AND created_at < NOW() - INTERVAL ' . self::IMAGE_ORPHAN_GRACE_MINUTES . ' MINUTE'
+               AND created_at < ' . self::nowSql() . ' - INTERVAL ' . self::IMAGE_ORPHAN_GRACE_MINUTES . ' MINUTE'
         );
         if (!$images) {
             return 0;
@@ -2403,38 +2619,7 @@ class Survey
             return 0;
         }
 
-        // Markdown copy can name an image by URL. Look in EVERY survey's copy,
-        // not just this one's: a clone carries the source's markdown verbatim,
-        // so the source's file may be what the copy displays. File names are
-        // digits, hex, '-' and '.', so they need no LIKE escaping.
-        $likes = [];
-        foreach ($orphans as $img) {
-            $likes[] = '%' . $this->imageFileName($img) . '%';
-        }
-        $match = static function (string $column) use ($likes): string {
-            $or = [];
-            foreach ($likes as $l) {
-                $or[] = $column . ' LIKE \'' . $l . '\'';
-            }
-            return '(' . implode(' OR ', $or) . ')';
-        };
-        $md = '';
-        foreach ($this->fetchAll(
-            'SELECT welcome_md AS md FROM ' . DB_PREFIX . 'survey WHERE ' . $match('welcome_md') . '
-             UNION ALL SELECT thanks_md FROM ' . DB_PREFIX . 'survey WHERE ' . $match('thanks_md') . '
-             UNION ALL SELECT description FROM ' . DB_PREFIX . 'survey WHERE ' . $match('description') . '
-             UNION ALL SELECT description_md FROM ' . DB_PREFIX . 'survey_page WHERE ' . $match('description_md') . '
-             UNION ALL SELECT help_md FROM ' . DB_PREFIX . 'survey_question WHERE ' . $match('help_md')
-        ) as $r) {
-            $md .= "\n" . (string) $r['md'];
-        }
-        if ($md !== '') {
-            foreach ($orphans as $id => $img) {
-                if (strpos($md, $this->imageFileName($img)) !== false) {
-                    unset($orphans[$id]);
-                }
-            }
-        }
+        $orphans = array_diff_key($orphans, $this->imagesNamedInMarkdown($orphans));
         if (!$orphans) {
             return 0;
         }
@@ -2465,6 +2650,53 @@ class Survey
         return count($orphans);
     }
 
+    /**
+     * The subset of $images (keyed by image_id) whose file name some survey's
+     * markdown still names by URL. Looks in EVERY survey's copy, not just one:
+     * a clone made before clones renamed their references carries the source's
+     * markdown verbatim, so the source's file may be what the copy displays.
+     * File names are digits, hex, '-' and '.', so they need no LIKE escaping.
+     *
+     * @param array<int, array> $images
+     * @return array<int, array>
+     */
+    private function imagesNamedInMarkdown(array $images): array
+    {
+        if (!$images) {
+            return [];
+        }
+        $likes = [];
+        foreach ($images as $img) {
+            $likes[] = '%' . $this->imageFileName($img) . '%';
+        }
+        $match = static function (string $column) use ($likes): string {
+            $or = [];
+            foreach ($likes as $l) {
+                $or[] = $column . ' LIKE \'' . $l . '\'';
+            }
+            return '(' . implode(' OR ', $or) . ')';
+        };
+        $md = '';
+        foreach ($this->fetchAll(
+            'SELECT welcome_md AS md FROM ' . DB_PREFIX . 'survey WHERE ' . $match('welcome_md') . '
+             UNION ALL SELECT thanks_md FROM ' . DB_PREFIX . 'survey WHERE ' . $match('thanks_md') . '
+             UNION ALL SELECT description FROM ' . DB_PREFIX . 'survey WHERE ' . $match('description') . '
+             UNION ALL SELECT description_md FROM ' . DB_PREFIX . 'survey_page WHERE ' . $match('description_md') . '
+             UNION ALL SELECT help_md FROM ' . DB_PREFIX . 'survey_question WHERE ' . $match('help_md')
+        ) as $r) {
+            $md .= "\n" . (string) $r['md'];
+        }
+        $named = [];
+        if ($md !== '') {
+            foreach ($images as $id => $img) {
+                if (strpos($md, $this->imageFileName($img)) !== false) {
+                    $named[$id] = $img;
+                }
+            }
+        }
+        return $named;
+    }
+
     /** Delete an image, its file, and every reference to it. */
     public function imageDelete(int $imageId): array
     {
@@ -2477,7 +2709,7 @@ class Survey
 
         if (!$this->execAll([
             'START TRANSACTION',
-            'UPDATE ' . DB_PREFIX . 'survey_question SET image_id = NULL, updated_at = NOW()
+            'UPDATE ' . DB_PREFIX . 'survey_question SET image_id = NULL, updated_at = ' . self::nowSql() . '
              WHERE image_id = ' . $imageId,
             'UPDATE ' . DB_PREFIX . 'survey SET welcome_image_id = NULL WHERE welcome_image_id = ' . $imageId,
             'UPDATE ' . DB_PREFIX . 'survey SET thanks_image_id = NULL WHERE thanks_image_id = ' . $imageId,
@@ -2623,6 +2855,25 @@ class Survey
     }
 
     /**
+     * PURE. $md with every old image file name in $names (old => new) swapped
+     * for its new one, in one pass so a new name is never rewritten again. As in
+     * rewriteImageReferences(), a preceding digit refuses the match.
+     */
+    private static function renameImageReferences(?string $md, array $names): ?string
+    {
+        if ($md === null || $md === '' || !$names) {
+            return $md;
+        }
+        $alts = array_map(static fn ($n) => preg_quote((string) $n, '/'), array_keys($names));
+        $out  = preg_replace_callback(
+            '/(?<![0-9])(?:' . implode('|', $alts) . ')/',
+            static fn ($m) => $names[$m[0]] ?? $m[0],
+            $md
+        );
+        return is_string($out) ? $out : $md;
+    }
+
+    /**
      * Replace the file name $from with $to in every survey markdown column the
      * orphan sweep reads (sweepOrphanImages()). A legacy name is digits, so the
      * match refuses a preceding digit: '000005.png' must not hit '1000005.png'.
@@ -2660,6 +2911,9 @@ class Survey
     /**
      * Render survey markdown to HTML. Safe mode is on: survey copy is written by
      * officers, but it is rendered to every respondent, so raw HTML never passes.
+     * Images are allowlisted to this module's own uploads (isSurveyImageSrc());
+     * any other image renders as its alt text, so survey copy cannot carry a
+     * remote tracking pixel that reports a respondent's IP and answer time.
      * PURE (no DB).
      */
     public function renderMarkdown(?string $md): string
@@ -2669,11 +2923,64 @@ class Survey
             return '';
         }
         require_once DIR_SYSTEM . 'lib/Parsedown.php';
-        $pd = new Parsedown();
+        $allow = function (string $src): bool {
+            return $this->isSurveyImageSrc($src);
+        };
+        $pd = new class ($allow) extends Parsedown {
+            /** @var callable(string): bool */
+            private $allowSrc;
+
+            public function __construct(callable $allowSrc)
+            {
+                $this->allowSrc = $allowSrc;
+            }
+
+            protected function inlineImage($Excerpt)
+            {
+                $inline = parent::inlineImage($Excerpt);
+                if (!is_array($inline)) {
+                    return $inline;
+                }
+                $src = (string) ($inline['element']['attributes']['src'] ?? '');
+                if (($this->allowSrc)($src)) {
+                    return $inline;
+                }
+                // Not one of ours: keep the alt text (escaped), never the fetch.
+                return [
+                    'extent'  => $inline['extent'],
+                    'element' => ['text' => (string) ($inline['element']['attributes']['alt'] ?? '')],
+                ];
+            }
+        };
         $pd->setSafeMode(true);
         $pd->setBreaksEnabled(true); // survey copy is typed in a textarea; honour the author's line breaks
 
         return (string) $pd->text($md);
+    }
+
+    /**
+     * Is $src one of this module's uploaded images? Allowlist: a single flat
+     * file name directly under HTTP_SURVEY_IMAGE's path, either root-relative or
+     * absolute on HTTP_SURVEY_IMAGE's own host (http or https — stored copy may
+     * predate a scheme change). Everything else is refused. PURE (no DB).
+     */
+    public function isSurveyImageSrc(string $src): bool
+    {
+        $base = parse_url(HTTP_SURVEY_IMAGE);
+        if (!is_array($base) || empty($base['path'])) {
+            return false;
+        }
+        $path = '/' . trim((string) $base['path'], '/') . '/';
+        $host = isset($base['host']) ? (string) $base['host'] : '';
+        if (isset($base['port'])) {
+            $host .= ':' . (int) $base['port'];
+        }
+        $origin = $host !== '' ? '(?:https?://' . preg_quote($host, '#') . ')?' : '';
+
+        return 1 === preg_match(
+            '#^' . $origin . preg_quote($path, '#') . '[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,5}$#Di',
+            $src
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2953,10 +3260,21 @@ class Survey
         }
     }
 
+    /**
+     * 'now' as a quoted SQL literal from PHP's clock, never SQL NOW(): the DB
+     * server runs its own zone (UTC in the shipped stack), while setStatus() and
+     * SurveyResponse::nowStamp() stamp with PHP date(). Every survey row stamp,
+     * and every comparison of a stored stamp against 'now', uses this one clock.
+     */
+    private static function nowSql(): string
+    {
+        return '\'' . date('Y-m-d H:i:s') . '\'';
+    }
+
     /** SET fragment marking a survey row edited now, by the actor when there is one. */
     private function stampSql(): string
     {
-        return 'updated_at = NOW()' . ($this->actor > 0 ? ', updated_by = ' . $this->actor : '');
+        return 'updated_at = ' . self::nowSql() . ($this->actor > 0 ? ', updated_by = ' . $this->actor : '');
     }
 
     // -----------------------------------------------------------------------
@@ -2995,8 +3313,10 @@ class Survey
                 FROM ' . DB_PREFIX . 'event_calendardetail cd
                 JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
                 WHERE e.status = \'published\' AND ' . $scope
+            // The placeholder events event-mode credits create are not events anyone attended.
+            . ' AND LEFT(e.name, ' . mb_strlen(SurveyCredit::EVENT_PREFIX) . ') <> \'' . $this->esc(SurveyCredit::EVENT_PREFIX) . '\''
             . ($extraWhere !== '' ? ' AND ' . $extraWhere : '')
-            . ($window ? ' AND cd.event_start BETWEEN NOW() - INTERVAL 12 MONTH AND NOW() + INTERVAL 6 MONTH' : '')
+            . ($window ? ' AND cd.event_start BETWEEN ' . self::nowSql() . ' - INTERVAL 12 MONTH AND ' . self::nowSql() . ' + INTERVAL 6 MONTH' : '')
             . ' ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC LIMIT 100';
     }
 
@@ -3160,6 +3480,11 @@ class Survey
         if ($value === '') {
             return null;
         }
+        // The builder sends an instant (epoch seconds); store it as the wall
+        // time on PHP's clock, the zone the runner's close_ts reads it back in.
+        if (preg_match('/^\d{1,11}$/', $value)) {
+            return self::instantToWall((int) $value);
+        }
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
             $value .= ' 00:00:00';
         } elseif (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $value)) {
@@ -3247,10 +3572,31 @@ class Survey
      * Run one write. Returns false when the statement really failed, so a
      * transactional block can ROLLBACK instead of committing a half-mutation
      * (Execute() alone reports nothing — PDO runs in ERRMODE_WARNING).
+     *
+     * START TRANSACTION / COMMIT / ROLLBACK go through YapoMysql's depth-counted
+     * BeginTrans/CommitTrans/RollbackTrans: a raw second START TRANSACTION
+     * silently commits the open one in MariaDB, a nested BeginTrans does not.
      */
     private function exec(string $sql): bool
     {
         $this->db->Clear();
+        if (method_exists($this->db, 'BeginTrans')) {
+            switch ($sql) {
+                case 'START TRANSACTION':
+                    // BeginTrans() always returns true; InTrans() catches a failed PDO begin.
+                    // On failure unwind the depth BeginTrans() raised, so callers fail closed cleanly.
+                    if ($this->db->BeginTrans() && $this->db->InTrans()) {
+                        return true;
+                    }
+                    $this->db->RollbackTrans();
+                    return false;
+                case 'COMMIT':
+                    return (bool) $this->db->CommitTrans();
+                case 'ROLLBACK':
+                    // Depth 0 (after a failed COMMIT): end whatever the server still holds.
+                    return $this->db->RollbackTrans() || !$this->db->InTrans() || (bool) $this->db->ExecuteChecked('ROLLBACK');
+            }
+        }
         if (method_exists($this->db, 'ExecuteChecked')) {
             return (bool) $this->db->ExecuteChecked($sql);
         }
