@@ -190,22 +190,38 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 		</table>
 <?php endif; ?>
 
-<?php $_au = isset($api_usage) && is_array($api_usage) ? $api_usage : array(); ?>
-<?php if ($_au !== array()) : ?>
-		<h3 class="trends-subhead">Service calls, last 7 days</h3>
+<?php
+	$_auC = (isset($api_usage['Clients'])   && is_array($api_usage['Clients']))   ? $api_usage['Clients']   : array();
+	$_auE = (isset($api_usage['Endpoints']) && is_array($api_usage['Endpoints'])) ? $api_usage['Endpoints'] : array();
+?>
+<?php if ($_auC !== array()) : ?>
+		<h3 class="trends-subhead">Who calls the web service, last 7 days</h3>
 		<p class="recap-digest recap-muted">
-			Which clients call the ORK web service, and what they ask for. Sessions
-			above count logins; an app that signs in once and then works for a month
-			only shows up here. Ordered by total server time rather than call count —
-			a fast endpoint called constantly and a slow one called rarely look alike
-			in a bare tally and are very different problems. Counts only, never who.
+			Sessions above count logins. A client that signs in once and then works
+			for a month only appears here. Counts only, never who.
 		</p>
-		<table class="trends-table"><tr><th>Client</th><th>Endpoint</th><th>Calls</th><th>Avg ms</th><th>Total s</th></tr>
-<?php foreach ($_au as $_row) : ?>
-			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=htmlspecialchars($_row['Endpoint'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['AvgMs'], 1)?></td><td><?=number_format($_row['TotalMs'] / 1000, 1)?></td></tr>
+		<table class="trends-table"><tr><th>Client</th><th>Calls</th><th>Endpoints</th><th>Total s</th></tr>
+<?php foreach ($_auC as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['Endpoints'])?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
 <?php endforeach; ?>
 		</table>
 <?php endif; ?>
+
+<?php if ($_auE !== array()) : ?>
+		<h3 class="trends-subhead">Where the time goes, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			The ten costliest endpoints, ranked by total server time rather than by
+			how often they are called — a fast endpoint called constantly and a slow
+			one called rarely look alike in a bare tally and are very different
+			problems.
+		</p>
+		<table class="trends-table"><tr><th>Endpoint</th><th>Calls</th><th>Avg ms</th><th>Total s</th></tr>
+<?php foreach ($_auE as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Endpoint'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['AvgMs'], 1)?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
 	</section>
 <?php endif; ?>
 
