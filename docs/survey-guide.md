@@ -111,9 +111,10 @@ the banner setting can all be changed after opening.
 A survey can't be opened until it has at least one question that records an answer (a Section or
 Image alone won't do) and every question's settings are valid.
 
-**Clone** copies a survey's full definition, images included, into a new draft. **Delete** only
-works on a draft that has never collected a response. Once responses exist, close or archive the
-survey instead.
+**Clone** copies a survey's full definition, images included, into a new draft. The copy starts
+with no open/close dates, no event audience and the banner off, so set its schedule before opening
+it. **Delete** (a row action on the survey list) only works on a draft that has never collected a
+response. Once responses exist, close or archive the survey instead.
 
 ---
 
@@ -273,12 +274,17 @@ On the last screen they choose:
 > **Help us understand these results**
 >
 > Your answers are recorded either way. Choose what the ORK may attach to them:
-> - **Any ORK Data** — Link my answers to my ORK profile. The *(your kingdom or park)* officers and
->   ORK administrators who run this survey, now and in future reigns, will see my name beside my
->   answers, including in exported spreadsheets.
+> - **Any ORK Data** — Link my answers to my ORK profile. The *(every org that can manage the
+>   survey: the park, its kingdom, and any parent kingdom)* officers and ORK administrators who run
+>   this survey, now and in future reigns, will see my name beside my answers, including in
+>   exported spreadsheets.
 > - **My Kingdom and How Long I've Been Playing** — Record only my kingdom and a years-played
 >   range, such as 3–5 years. No name, no profile link.
 > - **Anonymous Only** — Record nothing about me.
+
+On a park survey that reads, for example, *"The Rivermoor officers, the Kingdom of the Wetlands
+officers, and ORK administrators…"*: kingdom officers can manage every park survey in their kingdom,
+and a parent kingdom's officers can manage its principality's surveys, so the copy names them too.
 
 On an ORK-wide survey the first option says *"The ORK administrators who run this survey, now and
 in future administrations, will see my name…"*.
@@ -329,6 +335,7 @@ responses*.
   Any ORK Data show the day they were submitted but not the time. Click a row to read that whole
   response as question-and-answer pairs, and step through with Prev/Next.
 - **Export CSV** downloads exactly the rows your filters show, with the same protections.
+- **Analysis CSV** and **Codebook** are for statistics tools: the same rows, one coded column per answer (a 0/1 column per multi-select option, one per matrix row, ranking position, pairwise wins), `-99` where skip logic never showed the question and blank where it was skipped; the codebook explains every column code and option value.
 
 ### Why a number shows "—"
 
@@ -384,15 +391,34 @@ Printing without Summary for sharing prints everything on the page, names includ
 
 Keep the responses table, the individual-response view and exported spreadsheets off shared
 screens and out of group chats. They can carry players' names beside their answers, and
-players were told only the survey's officers and ORK administrators would see them. If you want
+players were told only the officers of every level that manages the survey and ORK
+administrators would see them. If you want
 to quote a written comment, read it first and make sure nothing in it identifies the writer.
+
+---
+
+## Clearing results
+
+Survey managers see a **Clear Results** button at the top of the results page. Officers who can
+only see shared results don't get it. It permanently deletes **every** response, test and real,
+along with their answers, the record of who has completed the survey, who has started it, and
+any answers still in progress. Everyone can then take the survey again.
+
+- A confirmation window says how many responses will be deleted. The **Clear results** button
+  stays greyed out for a 5-second countdown before you can press it.
+- This can't be undone. Export the spreadsheet first if you might need the answers later.
+- **Attendance credits already posted stay in place.** A player who retakes the survey doesn't
+  earn a second credit.
+- The questions stay locked if the survey has been opened before, and the survey keeps its open
+  or closed status.
+- The clear is recorded in the activity log with the number of responses deleted.
 
 ---
 
 ## What the ORK records about managing a survey
 
 Each survey keeps an **activity log** of who did what: creating, editing (grouped, not one entry
-per keystroke), opening and closing, cloning, deleting, viewing the responses table, and exporting
+per keystroke), opening and closing, cloning, deleting, clearing results, viewing the responses table, and exporting
 the spreadsheet, along with the filters used. The responses table loads whenever you open the
 results page, so an ordinary visit is recorded; opening straight into Summary for sharing is not.
 Viewing only Anonymous Only responses isn't logged either, because that view carries no names.

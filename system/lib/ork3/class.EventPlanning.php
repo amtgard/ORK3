@@ -1514,6 +1514,13 @@ class EventPlanning extends Ork3
      */
     public function create_system_event(array $r): array
     {
+        // Enforced, not just documented: inside a caller's transaction this
+        // commit would be a no-op and the caller's rollback would take the
+        // event with it after the caches were busted.
+        if ($this->db->InTrans()) {
+            error_log('[eventplanning] create_system_event refused: called inside an open transaction');
+            return ['Status' => 1, 'Error' => 'create_system_event cannot run inside another transaction.'];
+        }
         $parkId    = (int) ($r['ParkId'] ?? 0);
         $kingdomId = (int) ($r['KingdomId'] ?? 0);
         $name      = mb_substr(trim((string) ($r['Name'] ?? '')), 0, 100);
@@ -1534,7 +1541,12 @@ class EventPlanning extends Ork3
         }
 
         $this->db->Clear();
-        $this->db->Execute('START TRANSACTION');
+        $this->db->BeginTrans();
+        if (!$this->db->InTrans()) {
+            // PDO begin failed (BeginTrans() still returns true): unwind the depth, fail closed.
+            $this->db->RollbackTrans();
+            return ['Status' => 1, 'Error' => 'The event could not be created.'];
+        }
         $this->db->Clear();
         $ok = $this->db->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . "event (kingdom_id, park_id, mundane_id, unit_id, name, has_heraldry, status)
@@ -1542,8 +1554,7 @@ class EventPlanning extends Ork3
         );
         $eventId = $ok ? $this->lastId() : 0;
         if ($eventId <= 0) {
-            $this->db->Clear();
-            $this->db->Execute('ROLLBACK');
+            $this->db->RollbackTrans();
             return ['Status' => 1, 'Error' => 'The event could not be created.'];
         }
 
@@ -1560,13 +1571,13 @@ class EventPlanning extends Ork3
         );
         $detailId = $ok ? $this->lastId() : 0;
         if ($detailId <= 0) {
-            $this->db->Clear();
-            $this->db->Execute('ROLLBACK');
+            $this->db->RollbackTrans();
             return ['Status' => 1, 'Error' => 'The event occurrence could not be created.'];
         }
 
-        $this->db->Clear();
-        $this->db->Execute('COMMIT');
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => 1, 'Error' => 'The event could not be created.'];
+        }
         $this->bustEventScopeCaches($eventId);
 
         return ['Status' => 0, 'Error' => '', 'EventId' => $eventId, 'DetailId' => $detailId];

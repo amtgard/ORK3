@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * The pairwise ranking table (Rank · Option · Win % · W · T · L · Matchups)
+ * The pairwise ranking table (Rank · Option · Strength · Win % · W · T · L · Matchups)
  * must fit the narrowest results card: the 420px grid track less its padding
  * and border, 386px. The number columns are one line each, so their header
  * gutters and a breakable Option column are what keep the table's minimum
@@ -76,16 +76,40 @@ final class SurveyResultsPairwiseTableCssTest extends TestCase
             'no phone block for the pairwise table'
         );
         $block = $m[1];
-        foreach ([4, 5, 6] as $col) {
+        // W / T / L sit at 5-7, after Rank · Option · Strength · Win %.
+        foreach ([5, 6, 7] as $col) {
             foreach (['th', 'td'] as $cell) {
                 $this->assertStringContainsString('.svr-card table.svr-pw-table ' . $cell . ':nth-child(' . $col . ')', $block);
             }
         }
-        $this->assertMatchesRegularExpression('/:nth-child\(6\)\s*\{\s*display:\s*none;/', $block);
+        $this->assertStringNotContainsString(':nth-child(4)', $block, 'Win % must stay on phones');
+        $this->assertMatchesRegularExpression('/:nth-child\(7\)\s*\{\s*display:\s*none;/', $block);
         $this->assertMatchesRegularExpression(
             '/\.svr-card table\.svr-pw-table td:nth-child\(2\)\s*\{\s*overflow-wrap:\s*break-word;/',
             $block
         );
+    }
+
+    /**
+     * With the Strength column the eight columns need ~440-460px, more than
+     * the 386px half-width card, so a narrow card drops W / T / L too.
+     */
+    public function testNarrowCardsDropTheWinTieLossSplit(): void
+    {
+        $this->rule(self::HEAD);   // loads the stylesheet
+        $this->assertMatchesRegularExpression('/\.svr-pw-tablewrap\s*\{[^}]*container-type:\s*inline-size;/', (string) self::$css);
+        $this->assertSame(
+            1,
+            preg_match('/@container \(max-width: (\d+)px\)\s*\{((?:[^{}]*\{[^}]*\})+)\s*\}/', (string) self::$css, $m),
+            'no narrow-card block for the pairwise table'
+        );
+        $this->assertGreaterThanOrEqual(386, (int) $m[1]);
+        foreach ([5, 6, 7] as $col) {
+            foreach (['th', 'td'] as $cell) {
+                $this->assertStringContainsString('.svr-card table.svr-pw-table ' . $cell . ':nth-child(' . $col . ')', $m[2]);
+            }
+        }
+        $this->assertMatchesRegularExpression('/:nth-child\(7\)\s*\{\s*display:\s*none;/', $m[2]);
     }
 
     public function testSortArrowsDoNotRunIntoTheHeaderText(): void

@@ -53,7 +53,7 @@ function sandbox() {
     vm.createContext(box);
     vm.runInContext(
         'var S = { locked: false }, sel = 0, SAVE_MS = 400;' +
-        'var pending = {}, held = {}, failed = {}, pwBase = {};' +
+        'var pending = {}, held = {}, failed = {}, pwBase = {}, optBusy = {};' +
         'var Q = null, AREA = null, CARD = {};' +
         'function questionById() { return Q; }' +
         'function cardEl() { return CARD; }' +
@@ -69,8 +69,11 @@ function sandbox() {
         'function fire() {}' +
         'function markBlankRows() { return true; }' +
         'function dropPairwiseHold(id) { drops.push(id); }' +
-        'function post(action, fields) { posts.push({ action: action, fields: JSON.parse(JSON.stringify(fields)) }); }' +
-        ['pairwiseLines', 'optionsOf', 'save', 'commitPairwise', 'syncMarks', 'onCanvasPaste'].map(lift).join('\n'),
+        'var inflight = 0, idleWaiters = [], ASYNC = null;' +
+        'function post(action, fields, onOk) { posts.push({ action: action, fields: JSON.parse(JSON.stringify(fields)) });' +
+        '  return ASYNC ? ASYNC(fields, onOk) : undefined; }' +
+        ['pairwiseLines', 'optionsOf', 'save', 'flush', 'hasKeys', 'whenIdle', 'drainIdle', 'optionSetSent',
+         'commitPairwise', 'syncMarks', 'onCanvasPaste'].map(lift).join('\n'),
         box);
     return box;
 }
@@ -157,4 +160,52 @@ var out = {};
     };
 }());
 
-process.stdout.write(JSON.stringify(out) + '\n');
+/* resend: a line edited while an option_set is on the wire waits in
+   optBusy; an idle waiter (retype, duplicate, reload) registered meanwhile
+   must not run until that edit's resend has gone out, with the reply's real
+   ids, and come back. post() here returns a promise the test settles. */
+function resendScenario() {
+    var box = pairwiseQuestion(sandbox());
+    var replies = [], events = [], nextId = 5000;
+    box.events = events;
+    box.ASYNC = function (fields, onOk) {
+        var sent = JSON.parse(fields.Options);
+        events.push('post');
+        return new Promise(function (resolve) {
+            replies.push(function () {
+                onOk({ options: sent.map(function (o, i) {
+                    return { option_id: o.option_id || nextId++, question_id: 666, role: 'choice', sort_order: i, label: o.label };
+                }) });
+                resolve({});
+            });
+        });
+    };
+    function tick() { return new Promise(function (r) { setTimeout(r, 0); }); }
+    vm.runInContext('AREA.value = ' + JSON.stringify(LABELS.join('\n') + '\nWinter court') + '; commitPairwise(666);', box);
+    box.runTimers();
+    vm.runInContext('AREA.value += "\\nHarvest games"; commitPairwise(666);', box);
+    var r = {
+        busyWaiting: vm.runInContext('!!(optBusy["opts:666:choice"] && optBusy["opts:666:choice"].again)', box),
+        pendingWhileBusy: vm.runInContext('Object.keys(pending)', box)
+    };
+    vm.runInContext('whenIdle(function () { events.push("idle"); });', box);
+    r.idleBeforeReply = events.indexOf('idle') >= 0;
+    replies.shift()();
+    return tick().then(function () {
+        var sent = box.posts.length > 1 ? JSON.parse(box.posts[1].fields.Options) : [];
+        r.afterFirstReply = events.slice();
+        r.pendingAfterFirstReply = vm.runInContext('Object.keys(pending)', box);
+        r.resendLabels = sent.map(function (o) { return o.label; });
+        r.resendWinterId = (sent.filter(function (o) { return o.label === 'Winter court'; })[0] || {}).option_id;
+        replies.shift()();
+        return tick();
+    }).then(function () {
+        r.afterSecondReply = events.slice();
+        r.busyAfter = vm.runInContext('Object.keys(optBusy)', box);
+        out.resend = r;
+    });
+}
+
+resendScenario().then(function () {
+    process.stdout.write(JSON.stringify(out) + '\n');
+});

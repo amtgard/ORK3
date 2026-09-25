@@ -175,7 +175,9 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	#ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
 	#ork-survey-banner .svb-close { flex-shrink:0; box-sizing:border-box; background:none; border:none; color:#2b6cb0; font-size:20px; line-height:1; cursor:pointer; padding:10px; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
 	#ork-survey-banner .svb-close:hover { color:#1a4971; }
-	@media (max-width:600px) { #ork-survey-banner { flex-direction:column; align-items:stretch; text-align:center; } #ork-survey-banner .svb-cta, #ork-survey-banner .svb-close { width:100%; justify-content:center; } }
+	/* Phones: the close button is a 44px corner icon, not a full-width row; the
+	   side padding keeps the centred text clear of it. */
+	@media (max-width:600px) { #ork-survey-banner { position:relative; flex-direction:column; align-items:stretch; text-align:center; padding:10px 52px; } #ork-survey-banner .svb-cta { width:100%; justify-content:center; } #ork-survey-banner .svb-close { position:absolute; top:0; right:0; width:44px; height:44px; padding:0; } }
 	html[data-theme="dark"] #ork-survey-banner { background:#1e3a5f; border-color:#2c5282; color:#bee3f8; }
 	html[data-theme="dark"] #ork-survey-banner .svb-close { color:#bee3f8; }
 	html[data-theme="dark"] #ork-survey-banner .svb-close:hover { color:#fff; }
@@ -208,11 +210,19 @@ $downtime_note  = 'Potential Downtime for an upgrade';
 			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
 		</div>
 <?php endif; ?>
-<?php if (!empty($SurveyBanner)): ?>
-		<div id="ork-survey-banner">
+<?php
+	// No banner on the runner (Survey/take, Survey/s) for the very survey it promotes.
+	$_svbPath = $this->__data['path'] ?? [];
+	$_svbOnRunner = !empty($SurveyBanner)
+		&& ($_svbPath[0] ?? '') === 'Controller_Survey'
+		&& in_array($_svbPath[1] ?? '', ['take', 's'], true)
+		&& (int) ($this->__data['SurveyId'] ?? 0) === (int) $SurveyBanner['survey_id'];
+?>
+<?php if (!empty($SurveyBanner) && !$_svbOnRunner): ?>
+		<div id="ork-survey-banner" data-survey-id="<?= (int)$SurveyBanner['survey_id'] ?>">
 			<i class="fas fa-poll svb-icon" aria-hidden="true"></i>
 			<span class="svb-text"><span class="svb-title"><?= htmlspecialchars($SurveyBanner['title']) ?></span><?php if (!empty($SurveyBanner['description'])): ?> <span class="svb-desc">&mdash; <?= htmlspecialchars($SurveyBanner['description']) ?></span><?php endif; ?></span>
-			<a class="svb-cta" href="<?= UIR ?>Survey/take/<?= (int)$SurveyBanner['survey_id'] ?>">Take survey</a>
+			<a class="svb-cta" href="<?= UIR ?>Survey/take/<?= (int)$SurveyBanner['survey_id'] ?>"><?= !empty($SurveyBanner['in_progress']) ? 'Continue' : 'Take survey' ?></a>
 			<button type="button" class="svb-close" aria-label="Dismiss" onclick="svBannerDismiss(<?= (int)$SurveyBanner['survey_id'] ?>)">&times;</button>
 		</div>
 		<div id="ork-survey-banner-status" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;"></div>

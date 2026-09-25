@@ -48,6 +48,34 @@ final class SurveyTypes
     /** Maximum stored length of an "Other (please specify)" write-in (column is VARCHAR(255)). */
     public const OTHER_MAX_LENGTH = 255;
 
+    /** Largest magnitude a DECIMAL(12,3) value column holds; anything past it would clamp under sql_mode=''. */
+    public const NUM_ABS_MAX = 999999999.999;
+
+    /** Decimal places a DECIMAL(12,3) value column keeps. */
+    public const NUM_DECIMALS = 3;
+
+    /**
+     * Why a number cannot be stored in a DECIMAL(12,3) column, or null when it can:
+     * non-finite values ('1e400' parses to INF), magnitudes past the column range,
+     * and more than three decimal places are all refused rather than clamped.
+     */
+    public static function numberStorageError(float $n): ?string
+    {
+        if (!is_finite($n)) {
+            return 'Please enter a number.';
+        }
+        if (abs($n) > self::NUM_ABS_MAX) {
+            return 'Please enter a number between -999,999,999.999 and 999,999,999.999.';
+        }
+        // Absolute tolerance, plus float noise at the column's top end: a
+        // relative 1e-9 reached 0.001 past 1,000,000 and let a 4th decimal
+        // through for MySQL to round silently.
+        if (abs($n - round($n, self::NUM_DECIMALS)) > max(1e-9, abs($n) * 1e-15)) {
+            return 'Please use no more than 3 decimal places.';
+        }
+        return null;
+    }
+
     /** Fixed NPS scale. */
     public const NPS_MIN = 0;
     public const NPS_MAX = 10;
@@ -735,6 +763,10 @@ final class SurveyTypes
             return self::answerError('Please enter a number.');
         }
         $num = (float) $value;
+        $storageError = self::numberStorageError($num);
+        if (null !== $storageError) {
+            return self::answerError($storageError);
+        }
         $min = isset($settings['min']) && null !== $settings['min'] ? (float) $settings['min'] : null;
         $max = isset($settings['max']) && null !== $settings['max'] ? (float) $settings['max'] : null;
         $step = isset($settings['step']) ? (float) $settings['step'] : 1.0;

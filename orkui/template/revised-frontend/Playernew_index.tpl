@@ -1577,7 +1577,26 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<!-- Sidebar -->
 					<div class="pna-sidebar">
 
-						<div id="pna-surveys-body"></div>
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* rendered server-side from the page shell's memoised survey entry: no fetch, no layout shift */ ?>
+							<div class="pna-card"><div class="pna-card-title"><i class="fas fa-poll"></i> Available Surveys</div>
+							<?php foreach ($SurveyAvailable as $_sv):
+								$_svScope = htmlspecialchars((string) ($_sv['scope_label'] ?? ''));
+								$_svCloseTs = !empty($_sv['close_at']) ? strtotime((string) $_sv['close_at']) : false;
+								$_svClose = $_svCloseTs ? 'closes ' . date('M j', $_svCloseTs) : '';
+								$_svCta = !empty($_sv['in_progress']) ? 'Continue' : 'Take survey';
+							?>
+								<div class="pna-feed-row pna-survey-row">
+									<span class="pna-feed-label"><?= htmlspecialchars((string) $_sv['title']) ?></span>
+									<?php if (!empty($_sv['credit_available'])): ?><span class="pna-survey-credit"><i class="fas fa-award" aria-hidden="true"></i> Earns an attendance credit</span><?php endif; ?>
+									<span class="pna-survey-meta">
+										<?php if ($_svScope !== ''): ?><span class="pna-feed-sub pna-survey-scope"><?= $_svScope ?></span><?php endif; ?>
+										<?php if ($_svClose !== ''): ?><span class="pna-feed-sub pna-survey-close"><?= $_svScope !== '' ? '&middot; ' : '' ?><?= $_svClose ?></span><?php endif; ?>
+										<a class="pna-survey-cta" aria-label="<?= htmlspecialchars($_svCta . ': ' . (string) $_sv['title']) ?>" href="<?= UIR ?>Survey/take/<?= (int) $_sv['survey_id'] ?>"><?= $_svCta ?></a>
+									</span>
+								</div>
+							<?php endforeach; ?>
+							</div>
+						<?php endif; ?></div>
 
 						<!-- Tenure -->
 						<?php $_maFirstDate = (!empty($Player['PlayerSinceDate']) && $Player['PlayerSinceDate'] !== '0000-00-00' && $Player['PlayerSinceDate'] !== '1970-01-01') ? $Player['PlayerSinceDate'] : null; ?>
@@ -7476,40 +7495,7 @@ $(function() {
 			// ---- My Amtgard sections (own profile only) ----
 			if (!PnConfig.isOwnProfile) return;
 
-			// Available Surveys
-			var svBody = document.getElementById('pna-surveys-body');
-			if (svBody) {
-				fetch(PnConfig.uir + 'SurveyAjax/available', { method: 'POST', body: new FormData() })
-					.then(function(resp) { return resp.json(); })
-					.then(function(r) {
-						var surveys = (r.status === 0) ? (r.surveys || []) : [];
-						if (!surveys.length) { svBody.innerHTML = ''; return; }
-						var months3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-						var esc = function(s) { return $('<div>').text(s || '').html(); };
-						var escAttr = function(s) { return esc(s).replace(/"/g, '&quot;'); };
-						var svHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-poll"></i> Available Surveys</div>';
-						surveys.forEach(function(sv) {
-							var subScope = esc(sv.scope_label || '');
-							var subClose = '';
-							if (sv.close_at) {
-								var cd = new Date(sv.close_at.replace(' ', 'T'));
-								if (!isNaN(cd.getTime())) {
-									subClose = 'closes ' + months3[cd.getMonth()] + ' ' + cd.getDate();
-								}
-							}
-							svHtml += '<div class="pna-feed-row pna-survey-row">'
-								+ '<span class="pna-feed-label">' + esc(sv.title) + '</span>'
-								+ (sv.credit_available ? '<span class="pna-survey-credit"><i class="fas fa-award" aria-hidden="true"></i> Earns an attendance credit</span>' : '')
-								+ '<span class="pna-survey-meta">'
-								+ (subScope ? '<span class="pna-feed-sub pna-survey-scope">' + subScope + '</span>' : '')
-								+ (subClose ? '<span class="pna-feed-sub pna-survey-close">' + (subScope ? '&middot; ' : '') + subClose + '</span>' : '')
-								+ '<a class="pna-survey-cta" aria-label="' + escAttr((sv.in_progress ? 'Continue' : 'Take survey') + ': ' + (sv.title || '')) + '" href="' + PnConfig.uir + 'Survey/take/' + parseInt(sv.survey_id) + '">' + (sv.in_progress ? 'Continue' : 'Take survey') + '</a>'
-								+ '</span></div>';
-						});
-						svBody.innerHTML = svHtml + '</div>';
-					})
-					.catch(function() { /* widget silently omits itself on error */ });
-			}
+			// Available Surveys: rendered server-side into #pna-surveys-body (no fetch).
 
 			// Class Progress
 			var cpBody = document.getElementById('pna-class-progress-body');

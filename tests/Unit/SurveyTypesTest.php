@@ -475,6 +475,47 @@ final class SurveyTypesTest extends TestCase
         $this->assertTrue(SurveyTypes::validateAnswer($free, [], 2.5)['ok']);
     }
 
+    /** Review #31: DECIMAL(12,3) range and scale are enforced, never clamped or written as INF. */
+    public function testNumberRefusesWhatTheColumnCannotHold(): void
+    {
+        // No author min/max: only the column bounds apply.
+        $whole = ['type' => 'number', 'required' => 1, 'settings' => ['step' => 1]];
+        foreach (['1e400', '-1e400'] as $bad) {
+            $r = SurveyTypes::validateAnswer($whole, [], $bad);
+            $this->assertFalse($r['ok'], $bad . ' (INF) must be refused, not pass the step check');
+            $this->assertSame('Please enter a number.', $r['error']);
+        }
+        foreach ([1e10, '1000000000', '-1000000000'] as $bad) {
+            $r = SurveyTypes::validateAnswer($whole, [], $bad);
+            $this->assertFalse($r['ok'], var_export($bad, true) . ' must be refused, not clamped');
+            $this->assertStringContainsString('999,999,999.999', (string) $r['error']);
+        }
+        foreach (['999999999', '-999999999'] as $good) {
+            $this->assertTrue(SurveyTypes::validateAnswer($whole, [], $good)['ok'], $good . ' fits');
+        }
+
+        $fine = ['type' => 'number', 'required' => 1, 'settings' => ['step' => 0.001]];
+        $r = SurveyTypes::validateAnswer($fine, [], '1.2345');
+        $this->assertFalse($r['ok']);
+        $this->assertSame('Please use no more than 3 decimal places.', $r['error']);
+        foreach (['0.125', 0.1 + 0.2] as $good) {
+            $this->assertTrue(SurveyTypes::validateAnswer($fine, [], $good)['ok'], var_export($good, true) . ' fits');
+        }
+
+        $this->assertNull(SurveyTypes::numberStorageError(999999999.999));
+        // A 4th decimal on a large number must not slip through to be rounded by MySQL.
+        foreach ([1000000.0005, 12345678.1234, 999999999.0001] as $bad) {
+            $this->assertNotNull(SurveyTypes::numberStorageError($bad), var_export($bad, true) . ' has a 4th decimal');
+        }
+        foreach ([987654321.987, 123456789.123] as $good) {
+            $this->assertNull(SurveyTypes::numberStorageError($good), var_export($good, true) . ' fits');
+        }
+        $this->assertNotNull(SurveyTypes::numberStorageError(-1000000000.0));
+        $this->assertNull(SurveyTypes::numberStorageError(12.5));
+        $this->assertNotNull(SurveyTypes::numberStorageError(INF));
+        $this->assertNotNull(SurveyTypes::numberStorageError(NAN));
+    }
+
     public function testDateIsoOnly(): void
     {
         $q = ['type' => 'date', 'required' => 1, 'settings' => []];

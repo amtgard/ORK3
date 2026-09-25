@@ -21,6 +21,35 @@ class Controller
         unset($this->session->{self::SURVEY_BANNER_CACHE_KEY});
     }
 
+    /**
+     * The viewer's survey promotion banner and "Available Surveys" list, from
+     * one memoised entry (one candidate pass on a miss, zero queries on a hit).
+     * Same TTL and bust points as the banner: dismiss, draft save and submit.
+     *
+     * @return array{available: list<array<string, mixed>>, banner: ?array<string, mixed>}
+     */
+    protected function survey_surfaces(int $uid): array
+    {
+        $c = $this->session->{self::SURVEY_BANNER_CACHE_KEY};
+        if (
+            is_array($c)
+            && (int) ($c['uid'] ?? 0) === $uid
+            && array_key_exists('available', $c)
+            && (time() - (int) ($c['at'] ?? 0)) < self::SURVEY_BANNER_TTL
+        ) {
+            return ['available' => $c['available'], 'banner' => $c['banner']];
+        }
+        $this->load_model('Survey');
+        $s = $this->Survey->available_and_banner_for($uid);
+        $this->session->{self::SURVEY_BANNER_CACHE_KEY} = [
+            'uid'       => $uid,
+            'at'        => time(),
+            'banner'    => $s['banner'],
+            'available' => $s['available'],
+        ];
+        return $s;
+    }
+
     // Status 5 is NoAuthorization -- "you are not allowed to do that". It is NOT
     // "your session expired". Controllers uniformly mapped it to a redirect to
     // Login/login/..., so a still-logged-in officer who hit a permission boundary
@@ -139,25 +168,14 @@ class Controller
         // busts the entry when the viewer dismisses a banner or submits a
         // response, so those stay immediate. Skipped on Ajax controllers so
         // the banner never rides along on a JSON response.
+        // The same entry carries the "Available Surveys" list (SurveyAvailable),
+        // which the own-profile sidebar renders server-side.
         $this->data['SurveyBanner'] = null;
+        $this->data['SurveyAvailable'] = [];
         if ($_uid > 0 && substr(get_class($this), -4) !== 'Ajax') {
-            $_banner_cache = $this->session->{self::SURVEY_BANNER_CACHE_KEY};
-            if (
-                is_array($_banner_cache)
-                && (int) ($_banner_cache['uid'] ?? 0) === $_uid
-                && (time() - (int) ($_banner_cache['at'] ?? 0)) < self::SURVEY_BANNER_TTL
-            ) {
-                $this->data['SurveyBanner'] = $_banner_cache['banner'];
-            } else {
-                $this->load_model('Survey');
-                $_banner = $this->Survey->banner_for($_uid);
-                $this->session->{self::SURVEY_BANNER_CACHE_KEY} = [
-                    'uid'    => $_uid,
-                    'at'     => time(),
-                    'banner' => $_banner,
-                ];
-                $this->data['SurveyBanner'] = $_banner;
-            }
+            $_surveys = $this->survey_surfaces($_uid);
+            $this->data['SurveyBanner'] = $_surveys['banner'];
+            $this->data['SurveyAvailable'] = $_surveys['available'];
         }
 
         $this->data[ 'controller_title' ] = get_class($this);

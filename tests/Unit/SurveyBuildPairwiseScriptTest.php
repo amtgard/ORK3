@@ -53,6 +53,20 @@ final class SurveyBuildPairwiseScriptTest extends TestCase
         $this->assertSame(9, $f['keptIds'], 'saved lines keep their option ids');
     }
 
+    public function testIdleWaiterRunsOnlyAfterTheQueuedOptionSetResendReturns(): void
+    {
+        $r = $this->harness()['resend'];
+        $this->assertTrue($r['busyWaiting'], 'the edit made during the save waits in optBusy');
+        $this->assertSame([], $r['pendingWhileBusy'], 'no second option_set is queued while one is on the wire');
+        $this->assertFalse($r['idleBeforeReply'], 'a busy option_set is not idle');
+        $this->assertSame(['post', 'post'], $r['afterFirstReply'], 'the resend posts before the idle waiter runs');
+        $this->assertSame([], $r['pendingAfterFirstReply'], 'with a waiter, the resend is flushed, not debounced');
+        $this->assertSame('Harvest games', end($r['resendLabels']));
+        $this->assertSame(5000, $r['resendWinterId'], 'the resend carries the id the first reply returned');
+        $this->assertSame(['post', 'post', 'idle'], $r['afterSecondReply']);
+        $this->assertSame([], $r['busyAfter']);
+    }
+
     public function testRedrawingTheOpenCardPutsTheHeldReasonBack(): void
     {
         $r = $this->harness()['redraw'];

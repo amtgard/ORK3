@@ -227,6 +227,40 @@ final class SurveyAggregateTest extends TestCase
         $this->assertNull($a['rows'][0]['weighted_mean']);
     }
 
+    /** Review #34: an N/A column is left out of the mean instead of voiding it. */
+    public function testAggregateMatrixMeanExcludesUnvaluedColumns(): void
+    {
+        $options = [
+            $this->opt(100, 'Fighting', 'row'),
+            $this->opt(200, 'Poor', 'column', 1.0),
+            $this->opt(201, 'Good', 'column', 3.0),
+            $this->opt(202, 'N/A', 'column'),
+        ];
+        $rows = [
+            $this->row(1, 200, null, null, 100),
+            $this->row(2, 201, null, null, 100),
+            $this->row(3, 201, null, null, 100),
+            $this->row(4, 202, null, null, 100),
+        ];
+        $a = SurveyReport::aggregateType('matrix', $rows, $options, []);
+        $row = $a['rows'][0];
+        $this->assertSame(4, $row['n'], 'N/A still counts toward the row and its percentages');
+        $this->assertSame([25.0, 50.0, 25.0], array_column($row['counts'], 'pct'));
+        $this->assertSame(2.333, $row['weighted_mean'], '(1 + 3 + 3) / 3, N/A excluded');
+        $this->assertSame(3, $row['mean_n']);
+
+        // One valued column is not a scale: no mean.
+        $one = [$this->opt(100, 'Fighting', 'row'), $this->opt(200, 'Yes', 'column', 1.0), $this->opt(202, 'N/A', 'column')];
+        $b = SurveyReport::aggregateType('matrix', [$this->row(1, 200, null, null, 100)], $one, []);
+        $this->assertNull($b['rows'][0]['weighted_mean']);
+        $this->assertNull($b['rows'][0]['mean_n']);
+
+        // Only N/A answers: a scale, but nothing to average.
+        $c = SurveyReport::aggregateType('matrix', [$this->row(1, 202, null, null, 100)], $options, []);
+        $this->assertNull($c['rows'][0]['weighted_mean']);
+        $this->assertSame(0, $c['rows'][0]['mean_n']);
+    }
+
     public function testAggregateMatrixUnansweredRowHasNullPct(): void
     {
         $options = [
@@ -986,6 +1020,79 @@ final class SurveyAggregateTest extends TestCase
         $this->assertSame('full', $c['consent']);
     }
 
+    /** An unfiltered 'all' share is still a shared view: MIN_CELL applies to it. */
+    public function testEverySharedLensIsNarrowingAndClientsCannotSetTheMarkers(): void
+    {
+        $f = SurveyReport::applyLens([], ['shared' => true]);
+        $this->assertTrue($f['shared']);
+        $this->assertTrue(SurveyReport::isNarrowing($f));
+        $this->assertTrue(SurveyReport::isSuppressed(SurveyReport::isNarrowing($f), 1));
+        $this->assertTrue(SurveyReport::normalizeFilters($f)['shared'], 'survives renormalizing');
+
+        $c = SurveyReport::clientFilters(['shared' => true, 'max_response_id' => 3]);
+        $this->assertFalse($c['shared']);
+        $this->assertNull($c['max_response_id']);
+        $this->assertFalse(SurveyReport::isNarrowing(SurveyReport::clientFilters([])), 'a manager view is not');
+    }
+
+    /** [A,B] minus [A] isolates B: a shared pick is the whole lens or one kingdom. */
+    public function testSharedKingdomPickIsTheWholeLensOrOneKingdom(): void
+    {
+        $lens = ['shared' => true, 'kingdom_ids' => [17, 44, 45]];
+        $this->assertTrue(SurveyReport::applyLens(['kingdom_ids' => [17, 44]], $lens)['impossible'], 'a multi-kingdom subset');
+        $this->assertFalse(SurveyReport::applyLens(['kingdom_ids' => [45, 17, 44]], $lens)['impossible'], 'the whole lens, any order');
+        $this->assertFalse(SurveyReport::applyLens(['kingdom_ids' => [44]], $lens)['impossible'], 'one kingdom (its count is checked server-side)');
+        $this->assertTrue(SurveyReport::applyLens(['kingdom_ids' => [17, 44]], ['shared' => true])['impossible'], "an 'all' share too");
+        $this->assertFalse(SurveyReport::applyLens(['kingdom_ids' => [17]], ['shared' => true])['impossible']);
+        $this->assertFalse(SurveyReport::applyLens(['kingdom_ids' => [17, 44]], [])['impossible'], 'managers keep multi-kingdom filters');
+    }
+
+    /** Complementary suppression over one-kingdom picks (whole minus the allowed picks is 0 or 5+). */
+    public function testAllowedKingdomPicksWithholdsUntilTheRemainderIsSafe(): void
+    {
+        $this->assertSame([44], SurveyReport::allowedKingdomPicks([17 => 10, 44 => 10, 45 => 1], 21), '10/10/1: one big kingdom goes too (ties to the lower id)');
+        $this->assertSame([17], SurveyReport::allowedKingdomPicks([17 => 6, 44 => 5], 12), 'a lone anonymous row: the smaller goes');
+        $this->assertSame([17, 44], SurveyReport::allowedKingdomPicks([17 => 6, 44 => 5], 11), 'remainder 0');
+        $this->assertSame([17, 44], SurveyReport::allowedKingdomPicks([17 => 6, 44 => 5, 45 => 2, 46 => 3], 16), 'remainder 5');
+        $this->assertSame([], SurveyReport::allowedKingdomPicks([17 => 6, 44 => 2], 8), 'whole minus the one pick is 2');
+        $this->assertSame([], SurveyReport::allowedKingdomPicks([17 => 4], 4));
+    }
+
+    public function testSharedLensIgnoresTheConsentPickExceptAParkLensForcesFull(): void
+    {
+        foreach (['full', 'partial', 'anonymous'] as $c) {
+            $this->assertSame('any', SurveyReport::applyLens(['consent' => $c], ['shared' => true])['consent']);
+            $this->assertSame('any', SurveyReport::applyLens(['consent' => $c], ['shared' => true, 'kingdom_ids' => [17]])['consent']);
+        }
+        $this->assertSame('full', SurveyReport::applyLens(['consent' => 'full'], [])['consent'], 'managers keep it');
+        $this->assertSame('full', SurveyReport::applyLens([], ['shared' => true, 'park_id' => 9])['consent']);
+    }
+
+    public function testSharedLensDropsTheCrosstab(): void
+    {
+        $this->assertNull(SurveyReport::applyLens(['crosstab_question_id' => 5], ['shared' => true])['crosstab_question_id']);
+        $this->assertNull(SurveyReport::applyLens(['crosstab_question_id' => 5], ['shared' => true, 'kingdom_ids' => [17]])['crosstab_question_id']);
+        $this->assertSame(5, SurveyReport::applyLens(['crosstab_question_id' => 5], [])['crosstab_question_id'], 'managers keep it');
+    }
+
+    public function testStripVerbatimKeepsCountsAndDropsEveryText(): void
+    {
+        $payload = ['questions' => [
+            ['question_id' => 1, 'type' => 'paragraph', 'n' => 6, 'agg' => ['n' => 6, 'texts' => ['a', 'b']]],
+            ['question_id' => 2, 'type' => 'single', 'n' => 6, 'agg' => ['n' => 6, 'counts' => [], 'other_texts' => ['x', 'y', 'z']],
+             'crosstab' => ['groups' => [['n' => 5, 'agg' => ['n' => 5, 'other_texts' => ['x']]], ['n' => null, 'suppressed' => true]]]],
+            ['question_id' => 3, 'type' => 'rating', 'n' => null, 'agg' => ['suppressed' => true]],
+        ]];
+        $out = SurveyReport::stripVerbatim($payload);
+        $json = (string) json_encode($out);
+        $this->assertStringNotContainsString('"texts"', $json);
+        $this->assertStringNotContainsString('"other_texts"', $json);
+        $this->assertSame(6, $out['questions'][0]['agg']['n']);
+        $this->assertSame(3, $out['questions'][1]['agg']['other_count']);
+        $this->assertSame(1, $out['questions'][1]['crosstab']['groups'][0]['agg']['other_count']);
+        $this->assertSame(['suppressed' => true], $out['questions'][2]['agg']);
+    }
+
     public function testRedactForLensDropsPerDayCountsForEverySharedViewer(): void
     {
         $summary = ['responses' => 12, 'by_day' => [['day' => '2026-09-10', 'count' => 12]], 'median_duration' => 300];
@@ -1031,33 +1138,117 @@ final class SurveyAggregateTest extends TestCase
             $byLabel[$o['label']] = $o;
         }
         // C: beat B, beat A, tied A = 2.5 / 3
+        // A small set (every matchup offered to everyone) ranks every option
+        // it has seen, however few matchups: the minimum is for sliced sets.
         $this->assertSame(
-            ['appearances' => 3, 'wins' => 2, 'ties' => 1, 'losses' => 0, 'win_pct' => 83.3, 'rank' => 1],
-            array_intersect_key($byLabel['C'], array_flip(['appearances', 'wins', 'ties', 'losses', 'win_pct', 'rank']))
+            ['appearances' => 3, 'wins' => 2, 'ties' => 1, 'losses' => 0, 'win_pct' => 83.3, 'rank' => 1, 'too_few' => false],
+            array_intersect_key($byLabel['C'], array_flip(['appearances', 'wins', 'ties', 'losses', 'win_pct', 'rank', 'too_few']))
         );
         // A: beat B, tied C, lost to B, lost to C = 1.5 / 4
         $this->assertSame(37.5, $byLabel['A']['win_pct']);
         // B: lost to A, lost to C, beat A = 1 / 3
         $this->assertSame(33.3, $byLabel['B']['win_pct']);
-        // D never came up: unranked, last.
+        // D never came up: unranked, last, and not "too few" (it had none).
         $this->assertNull($byLabel['D']['win_pct']);
         $this->assertNull($byLabel['D']['rank']);
+        $this->assertFalse($byLabel['D']['too_few']);
         $this->assertSame(['C', 'A', 'B', 'D'], array_column($a['options'], 'label'));
+        $this->assertSame([1, 2, 3, null], array_column($a['options'], 'rank'));
+        $this->assertSame([false, false, false, false], array_column($a['options'], 'too_few'));
     }
 
     public function testAggregatePairwiseSharedRankAndTieBreaks(): void
     {
         $options = [$this->opt(10, 'Zed'), $this->opt(11, 'Amy'), $this->opt(12, 'Bo')];
-        // Zed beats Bo, Amy beats Bo, Zed ties Amy: Zed and Amy both 1.5 / 2 = 75.0
-        // over 2 appearances each, Bo 0 / 2.
-        $rows = [
-            $this->row(1, 10, 1.0, null, 12),
-            $this->row(1, 11, 1.0, null, 12),
-            $this->row(1, 10, 0.5, null, 11),
-        ];
+        // Zed beats Bo, Amy beats Bo, Zed ties Amy, from five respondents: Zed
+        // and Amy both 7.5 / 10 = 75.0 over 10 appearances each, Bo 0 / 10.
+        $rows = [];
+        for ($r = 1; $r <= 5; $r++) {
+            $rows[] = $this->row($r, 10, 1.0, null, 12);
+            $rows[] = $this->row($r, 11, 1.0, null, 12);
+            $rows[] = $this->row($r, 10, 0.5, null, 11);
+        }
         $a = SurveyReport::aggregateType('pairwise', $rows, $options, []);
-        $this->assertSame(['Amy', 'Zed', 'Bo'], array_column($a['options'], 'label'), 'equal win % sorts by label');
+        $this->assertSame(['Amy', 'Zed', 'Bo'], array_column($a['options'], 'label'), 'equal strength sorts by label');
         $this->assertSame([1, 1, 3], array_column($a['options'], 'rank'), 'competition ranking: 1, 1, 3');
+    }
+
+    /**
+     * Review #35: ranks come from a Bradley-Terry fit, so beating a strong
+     * opponent counts for more than beating a weak one, and an option seen
+     * in too few matchups (2/2) is listed unranked instead of on top. The
+     * minimum applies to a sliced set: nine options are 36 matchups, over
+     * PAIRWISE_SMALL_MAX (Z1-Z4 never come up).
+     */
+    public function testAggregatePairwiseBradleyTerryRanksAndMinimumSample(): void
+    {
+        $options = [$this->opt(10, 'A'), $this->opt(11, 'C'), $this->opt(12, 'Strong'), $this->opt(13, 'Weak'), $this->opt(14, 'Lucky'),
+            $this->opt(15, 'Z1'), $this->opt(16, 'Z2'), $this->opt(17, 'Z3'), $this->opt(18, 'Z4')];
+        $rows = [];
+        $rid = 1;
+        $add = function (int $left, int $right, int $wins, int $n) use (&$rows, &$rid): void {
+            for ($i = 0; $i < $n; $i++) {
+                $rows[] = $this->row($rid++, $left, $i < $wins ? 1.0 : 0.0, null, $right);
+            }
+        };
+        $add(10, 12, 6, 12);   // A splits with Strong: 50%
+        $add(11, 13, 8, 12);   // C beats Weak 8 of 12: 66.7%
+        $add(12, 13, 11, 12);  // Strong dominates Weak
+        $add(14, 13, 2, 2);    // Lucky: 2 of 2 against Weak
+        $a = SurveyReport::aggregateType('pairwise', $rows, $options, []);
+
+        $byLabel = array_column($a['options'], null, 'label');
+        $this->assertSame(50.0, $byLabel['A']['win_pct']);
+        $this->assertSame(66.7, $byLabel['C']['win_pct']);
+        $this->assertGreaterThan($byLabel['C']['strength'], $byLabel['A']['strength'], 'A beat a stronger field than C');
+        $this->assertSame(36, $a['possible']);
+        $this->assertSame(['Strong', 'A', 'C', 'Weak', 'Lucky', 'Z1', 'Z2', 'Z3', 'Z4'], array_column($a['options'], 'label'));
+        $this->assertSame([1, 2, 3, 4, null, null, null, null, null], array_column($a['options'], 'rank'));
+        $this->assertTrue($byLabel['Lucky']['too_few']);
+        $this->assertSame(100.0, $byLabel['Lucky']['win_pct'], 'win % stays as a column');
+        $this->assertFalse($byLabel['A']['too_few']);
+        $this->assertFalse($byLabel['Z1']['too_few'], 'never matched is not "too few"');
+
+        // The same matchups in a small set (5 options, 10 matchups, all offered
+        // to everyone) rank Lucky with the rest: no minimum there.
+        $small = SurveyReport::aggregateType('pairwise', $rows, array_slice($options, 0, 5), []);
+        $smallBy = array_column($small['options'], null, 'label');
+        $this->assertFalse($smallBy['Lucky']['too_few']);
+        $this->assertNotNull($smallBy['Lucky']['rank']);
+        $this->assertSame([], array_filter(array_column($small['options'], 'rank'), 'is_null'), 'every option ranks');
+    }
+
+    public function testBradleyTerryIsFiniteForUndefeatedAndCentredOnATypicalOption(): void
+    {
+        // X beat Y ten times out of ten: the prior keeps both finite.
+        $p = SurveyReport::bradleyTerry([1 => [2 => 10], 2 => [1 => 10]], [1 => [2 => 10.0], 2 => [1 => 0.0]]);
+        $this->assertTrue(is_finite($p[1]) && is_finite($p[2]));
+        $this->assertGreaterThan($p[2], $p[1]);
+        $this->assertEqualsWithDelta(1.0, $p[1] * $p[2], 1e-9, 'geometric mean strength is 1');
+
+        // All draws: equal strengths.
+        $d = SurveyReport::bradleyTerry([1 => [2 => 4], 2 => [1 => 4]], [1 => [2 => 2.0], 2 => [1 => 2.0]]);
+        $this->assertEqualsWithDelta($d[1], $d[2], 1e-9);
+        $this->assertSame([], SurveyReport::bradleyTerry([], []));
+    }
+
+    /** Review #33: other_texts share the free-text cap and carry the full count; group aggregates drop text lists. */
+    public function testOtherTextsCappedAndDroppedFromCrosstabGroups(): void
+    {
+        $options = [$this->opt(10, 'Fighter'), $this->opt(11, 'Other', 'choice', null, 1)];
+        $rows = [];
+        $total = SurveyReport::TEXT_SAMPLE_LIMIT + 3;
+        for ($i = 1; $i <= $total; $i++) {
+            $rows[] = $this->row($i, 11, null, 'write-in ' . $i);
+        }
+        $a = SurveyReport::aggregateType('single', $rows, $options, []);
+        $this->assertCount(SurveyReport::TEXT_SAMPLE_LIMIT, $a['other_texts']);
+        $this->assertSame($total, $a['other_texts_n']);
+
+        $g = SurveyReport::crosstabGroup(10, 'Group', $a);
+        $this->assertArrayNotHasKey('other_texts', $g['agg']);
+        $this->assertArrayNotHasKey('other_texts_n', $g['agg']);
+        $this->assertSame($total, $g['agg']['n']);
     }
 
     public function testAggregatePairwiseEmpty(): void
@@ -1082,5 +1273,103 @@ final class SurveyAggregateTest extends TestCase
             '3 of 3: Hawk > Owl; Wolf = Hawk; Wolf > Owl',
             SurveyReport::displayAnswer('pairwise', $rows, $byId, 3)
         );
+    }
+
+    /** @return array<int,array> questions keyed by id, in analysis-test shape */
+    private function analysisQuestions(): array
+    {
+        $q = static function (int $id, string $type, int $sq = 0, int $so = 0): array {
+            return ['question_id' => $id, 'type' => $type, 'prompt' => 'P' . $id, 'settings' => [], 'page_id' => 1,
+                'show_if_question_id' => $sq, 'show_if_option_id' => $so,
+                'page_show_if_question_id' => 0, 'page_show_if_option_id' => 0];
+        };
+        return [
+            1 => $q(1, 'single'), 2 => $q(2, 'multi', 1, 11), 3 => $q(3, 'matrix'), 4 => $q(4, 'ranking'),
+            5 => $q(5, 'pairwise'), 6 => $q(6, 'section'), 7 => $q(7, 'number'),
+        ];
+    }
+
+    private function analysisOptions(): array
+    {
+        return [
+            1 => [$this->opt(10, 'Yes'), $this->opt(11, 'No'), $this->opt(12, 'Other', 'choice', null, 1)],
+            2 => [$this->opt(20, 'A'), $this->opt(21, 'B')],
+            3 => [$this->opt(30, 'R1', 'row'), $this->opt(31, 'R2', 'row'), $this->opt(32, 'Low', 'column', 1.0), $this->opt(33, 'High', 'column', 5.0)],
+            4 => [$this->opt(40, 'X'), $this->opt(41, 'Y')],
+            5 => [$this->opt(50, 'Hawk'), $this->opt(51, 'Owl'), $this->opt(52, 'Wolf')],
+        ];
+    }
+
+    public function testAnalysisColumnCodes(): void
+    {
+        $cols = SurveyReport::analysisColumns($this->analysisQuestions(), $this->analysisOptions());
+        $this->assertSame([
+            'Q1', 'Q1_other', 'Q2_o20', 'Q2_o21', 'Q3_r30', 'Q3_r31', 'Q4_rank_o40', 'Q4_rank_o41',
+            'Q5_wins_o50', 'Q5_wins_o51', 'Q5_wins_o52', 'Q7',
+        ], array_column($cols, 'code'));
+    }
+
+    public function testOptionCodesArePerRolePositions(): void
+    {
+        $codes = SurveyReport::optionCodes($this->analysisOptions());
+        $this->assertSame(3, $codes[12]);
+        $this->assertSame(2, $codes[31]);
+        $this->assertSame(1, $codes[32]);
+    }
+
+    public function testAnalysisNotShownIsMinus99AndSkippedIsBlank(): void
+    {
+        $q = $this->analysisQuestions()[2];   // shown only when Q1 = option 11
+        $this->assertFalse(SurveyReport::analysisShown($q, [1 => [10]]));
+        $this->assertTrue(SurveyReport::analysisShown($q, [1 => [11]]));
+        $this->assertTrue(SurveyReport::analysisShown($q, [], true));   // answered => shown
+        $cols = array_values(array_filter(SurveyReport::analysisColumns($this->analysisQuestions(), $this->analysisOptions()), static function ($c) {
+            return $c['question_id'] === 2;
+        }));
+        $this->assertSame(['-99', '-99'], SurveyReport::analysisCells('multi', $cols, [], false, [], []));
+        $this->assertSame(['', ''], SurveyReport::analysisCells('multi', $cols, [], true, [], []));
+        $this->assertSame(['0', '1'], SurveyReport::analysisCells('multi', $cols, [$this->row(1, 21)], true, [], []));
+    }
+
+    public function testAnalysisCellsCodeEachType(): void
+    {
+        $qs = $this->analysisQuestions();
+        $opts = $this->analysisOptions();
+        $byId = [];
+        foreach ($opts as $list) {
+            foreach ($list as $o) {
+                $byId[$o['option_id']] = $o;
+            }
+        }
+        $codes = SurveyReport::optionCodes($opts);
+        $slice = [];
+        foreach (SurveyReport::analysisColumns($qs, $opts) as $c) {
+            $slice[$c['question_id']][] = $c;
+        }
+        $this->assertSame(['3', 'Bard'], SurveyReport::analysisCells('single', $slice[1], [$this->row(1, 12, null, 'Bard')], true, $byId, $codes));
+        $this->assertSame(['5', ''], SurveyReport::analysisCells('matrix', $slice[3], [$this->row(1, 33, null, null, 30)], true, $byId, $codes));
+        $this->assertSame(['2', '1'], SurveyReport::analysisCells('ranking', $slice[4], [$this->row(1, 40, 2.0), $this->row(1, 41, 1.0)], true, $byId, $codes));
+        $this->assertSame(['1.5', '0', '0.5'], SurveyReport::analysisCells('pairwise', $slice[5], [
+            $this->row(1, 50, 1.0, null, 51),
+            $this->row(1, 52, 0.5, null, 50),
+        ], true, $byId, $codes));
+        $this->assertSame(['4.5'], SurveyReport::analysisCells('number', $slice[7], [$this->row(1, null, 4.5)], true, $byId, $codes));
+    }
+
+    public function testCodebookListsCodesValuesAndShowIf(): void
+    {
+        $rows = SurveyReport::codebookRows($this->analysisQuestions(), $this->analysisOptions());
+        $this->assertSame('variable', $rows[0][0]);
+        $q2 = array_values(array_filter($rows, static function ($r) {
+            return $r[0] === 'Q2_o20';
+        }));
+        $this->assertSame('Q1 = 2 (No)', $q2[0][9]);
+        $this->assertSame('-99', $q2[1][6]);
+        $matrixValues = array_values(array_filter($rows, static function ($r) {
+            return $r[0] === 'Q3_r30' && $r[6] !== '';
+        }));
+        $this->assertSame([['1', 'Low'], ['5', 'High']], array_map(static function ($r) {
+            return [$r[6], $r[7]];
+        }, $matrixValues));
     }
 }

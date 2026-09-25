@@ -175,10 +175,10 @@ $_svShareLink = HTTP_UI_REMOTE . 'index.php?Route=Survey/s/' . rawurlencode((str
 
 <script>
 window.SvConfig = {
-	uir:      <?= json_encode(UIR) ?>,
-	csrf:     <?= json_encode($SurveyCsrf ?? '') ?>,
+	uir:      <?= json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+	csrf:     <?= json_encode($SurveyCsrf ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
 	surveyId: <?= (int) $SurveyId ?>,
-	survey:   <?= json_encode($_svBoot) ?>
+	survey:   <?= json_encode($_svBoot, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 };
 </script>
 <!-- No `defer` on these four: survey-build.js is a plain script that renders the
@@ -198,6 +198,6 @@ window.SvConfig = {
 	crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-render.js?v=<?= filemtime(__DIR__ . '/script/survey-render.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-tip.js?v=<?= filemtime(__DIR__ . '/script/survey-tip.js') ?>"></script>
-<script>window.SvCreditConfig = { uir: <?=json_encode(UIR)?>, csrf: <?=json_encode((string)($SurveyCsrf ?? ''))?> };</script>
+<script>window.SvCreditConfig = { uir: <?=json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>, csrf: <?=json_encode((string)($SurveyCsrf ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?> };</script>
 <?php include __DIR__ . '/_survey_credit_modal.tpl'; ?>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-build.js?v=<?= filemtime(__DIR__ . '/script/survey-build.js') ?>"></script>

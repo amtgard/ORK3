@@ -43,6 +43,11 @@
 
     function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
+    /* A web request posts a bounded batch; the hourly sweep posts the rest. */
+    function moreText(remaining) {
+        return (remaining | 0) > 0 ? ' ' + (remaining | 0) + ' more will post within the hour.' : '';
+    }
+
     function post(action, fields) {
         var fd = new FormData();
         Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
@@ -104,6 +109,10 @@
         if (data.configs.length) {
             html += '<p class="sv-credit-sub">This survey’s credits</p><ul class="sv-credit-list">' +
                 data.configs.map(configLine).join('') + '</ul>';
+        }
+        if ((data.held | 0) > 0) {
+            html += '<p class="sv-credit-sub">' + esc(plural(data.held | 0, 'credit is', 'credits are')) +
+                ' on hold for banned or suspended players and will post once the sanction lifts.</p>';
         }
 
         enableBtn.hidden = true;
@@ -181,7 +190,8 @@
                     // No onChange here: the credits posted may be another org's,
                     // and this org's credit is exactly as on (or off) as it was.
                     if (r && r.status === 0 && (r.granted | 0) > 0 && current === cur) {
-                        load('<div class="sv-notice" role="status">Posted ' + plural(r.granted | 0, 'owed credit', 'owed credits') + '.</div>');
+                        load('<div class="sv-notice" role="status">Posted ' + plural(r.granted | 0, 'owed credit', 'owed credits') + '.' +
+                            esc(moreText(r.remaining)) + '</div>');
                     }
                 });
             }
@@ -203,8 +213,9 @@
                 keepFocusInside();
                 return;
             }
-            var msg = 'Credits are on. Posted ' + plural(j.granted | 0, 'credit', 'credits') + '.';
+            var msg = (j.already ? 'Credits were already on. ' : 'Credits are on. ') + 'Posted ' + plural(j.granted | 0, 'credit', 'credits') + '.';
             if ((j.pending | 0) > 0) { msg += ' ' + plural(j.pending | 0, 'credit is', 'credits are') + ' still pending and will be retried.'; }
+            msg += moreText(j.remaining);
             if (current === cur) { load('<div class="sv-notice" role="status">' + esc(msg) + '</div>'); }
             if (cur.onChange) { cur.onChange(); }
         });
