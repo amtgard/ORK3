@@ -106,6 +106,6 @@
 //]]>
 </script>
 
-<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=initMap" type="text/javascript"></script>
+<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=initMap&region=CA" type="text/javascript"></script>
 
 

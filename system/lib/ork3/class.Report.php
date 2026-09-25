@@ -4257,7 +4257,9 @@ class Report extends Ork3
 					   JSON_EXTRACT(payload_json, '$.PlatformStats.Requests')            AS requests,
 					   JSON_EXTRACT(payload_json, '$.PlatformStats.BlockedOrChallenged') AS blocked,
 					   JSON_EXTRACT(payload_json, '$.PlatformStats.CacheHits')           AS cache_hits,
-					   JSON_EXTRACT(payload_json, '$.PlatformStats.Bytes')               AS bytes
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.Bytes')               AS bytes,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.RequestsGlobal')      AS requests_global,
+					   JSON_EXTRACT(payload_json, '$.PlatformStats.BlockedGlobal')       AS blocked_global
 				FROM " . DB_PREFIX . "weekly_recap
 				ORDER BY week_start";
         $r = $this->db->query($sql);
@@ -4266,13 +4268,18 @@ class Report extends Ork3
             while ($r->next()) {
                 // JSON_EXTRACT yields the string 'null' for JSON null and PHP
                 // null for a missing key; is_numeric() folds both to null here.
+                // RequestsGlobal/BlockedGlobal are absent on every week computed
+                // before the ORK-scoping fix (2026-08-27) — those weeks render as
+                // a gap on the worldwide chart, same as any other missing source.
                 $out[] = array(
-                    'WeekStart' => $r->week_start,
-                    'Visitors'  => is_numeric($r->visitors) ? (int)$r->visitors : null,
-                    'Requests'  => is_numeric($r->requests) ? (int)$r->requests : null,
-                    'Blocked'   => is_numeric($r->blocked) ? (int)$r->blocked : null,
-                    'CacheHits' => is_numeric($r->cache_hits) ? (int)$r->cache_hits : null,
-                    'Bytes'     => is_numeric($r->bytes) ? (float)$r->bytes : null,
+                    'WeekStart'      => $r->week_start,
+                    'Visitors'       => is_numeric($r->visitors) ? (int)$r->visitors : null,
+                    'Requests'       => is_numeric($r->requests) ? (int)$r->requests : null,
+                    'Blocked'        => is_numeric($r->blocked) ? (int)$r->blocked : null,
+                    'CacheHits'      => is_numeric($r->cache_hits) ? (int)$r->cache_hits : null,
+                    'Bytes'          => is_numeric($r->bytes) ? (float)$r->bytes : null,
+                    'RequestsGlobal' => is_numeric($r->requests_global) ? (int)$r->requests_global : null,
+                    'BlockedGlobal'  => is_numeric($r->blocked_global) ? (int)$r->blocked_global : null,
                 );
             }
         }
@@ -4352,6 +4359,91 @@ class Report extends Ork3
     }
 
     /**
+     * JSON-service usage over the last N days (ork_api_tally, written by
+     * JsonServer::call_endpoint), as TWO small summaries rather than one long
+     * client-x-endpoint grid.
+     *
+     * GetCommunityAppVersions answers "who is logged in"; this answers "who is
+     * actually CALLING us", which for a client that authenticates once a month
+     * is a completely different question.
+     *
+     * Returns ['Clients' => [...], 'Endpoints' => [...]] because those are two
+     * separate questions -- "who uses the service" and "what does it cost us" --
+     * and a combined grid answers neither at a glance. The full client-x-endpoint
+     * detail stays in the table for ad-hoc queries; it just is not a thing anyone
+     * should have to read forty rows of every week.
+     *
+     * Endpoints are ranked by TOTAL TIME, not call count, because that is the
+     * number worth acting on: one answering in 4ms half a million times and one
+     * taking 900ms a hundred times rank identically by popularity and could
+     * hardly differ more by cost. AvgMs rides alongside so a slow-but-rare
+     * endpoint stays visible instead of being buried.
+     *
+     * Aggregate counts only, no identities -- see the table's own comment.
+     *
+     * @param int $days how far back to sum (default 7)
+     * @return array{Clients: array, Endpoints: array}
+     */
+    public function GetApiUsage($days = 7)
+    {
+        $days = max(1, min(90, (int)$days));
+        $key  = Ork3::$Lib->ghettocache->key(array('api-usage-v2', $days));
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
+        $since = "day >= DATE_SUB(CURDATE(), INTERVAL " . $days . " DAY)";
+        $out   = array('Clients' => array(), 'Endpoints' => array());
+
+        // Who is calling: one row per client. Short by construction -- `client`
+        // is the collapsed bucket from ork_session_client_label().
+        $r = $this->db->query(
+            "SELECT client,
+			        SUM(calls)             AS calls,
+			        COUNT(DISTINCT endpoint) AS endpoints,
+			        SUM(ms_total)          AS total_ms
+			   FROM " . DB_PREFIX . "api_tally
+			  WHERE {$since}
+			  GROUP BY client
+			  ORDER BY calls DESC
+			  LIMIT 15"
+        );
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $out['Clients'][] = array(
+                    'Client'    => (string)$r->client,
+                    'Calls'     => (int)$r->calls,
+                    'Endpoints' => (int)$r->endpoints,
+                    'TotalMs'   => (int)$r->total_ms,
+                );
+            }
+        }
+
+        // What it costs: top endpoints across all clients.
+        $r2 = $this->db->query(
+            "SELECT endpoint,
+			        SUM(calls)    AS calls,
+			        SUM(ms_total) AS total_ms
+			   FROM " . DB_PREFIX . "api_tally
+			  WHERE {$since}
+			  GROUP BY endpoint
+			  ORDER BY total_ms DESC, calls DESC
+			  LIMIT 10"
+        );
+        if ($r2 !== false && $r2->size() > 0) {
+            while ($r2->next()) {
+                $calls = (int)$r2->calls;
+                $out['Endpoints'][] = array(
+                    'Endpoint' => (string)$r2->endpoint,
+                    'Calls'    => $calls,
+                    'TotalMs'  => (int)$r2->total_ms,
+                    'AvgMs'    => $calls > 0 ? round((int)$r2->total_ms / $calls, 1) : 0.0,
+                );
+            }
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
      * Distinct players credited with attendance per week (Monday-anchored,
      * matching the recap window), across all recorded history — the long
      * participation curve of the game itself, independent of web analytics.
@@ -4387,10 +4479,22 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
     }
 
-    // Fetches NA-only Cloudflare traffic totals for the week. Returns null on any
-    // failure (missing credentials, HTTP error, malformed response, timeout) so the
-    // rest of the recap still ships. CF retains ~30-90 days of analytics depending
-    // on plan tier — historical backfills past that horizon will get null here.
+    // Fetches Cloudflare traffic totals for the week, in TWO scopes:
+    //   - ork.amtgard.com, US+Canada only  (the "for the ORK" numbers the recap
+    //     chart has always claimed to show)
+    //   - the whole amtgard.com zone, every country (ORK + wiki + play + go +
+    //     idp + staging + everything else sharing CF_ZONE_ID), unrestricted
+    // CF_ZONE_ID is the shared zone for the whole domain, not the ORK alone, so
+    // the first scope needs an explicit host filter — its absence (until
+    // 2026-08-27) meant the "ORK" chart was silently reporting the second
+    // scope's numbers under the first scope's label. Both are kept, on two
+    // separate charts, because their scales differ by roughly 3x and plotting
+    // them together on one axis would flatten the smaller (correct) line.
+    //
+    // Returns null on any failure (missing credentials, HTTP error, malformed
+    // response, timeout) so the rest of the recap still ships. CF retains
+    // ~30-90 days of analytics depending on plan tier — historical backfills
+    // past that horizon will get null here.
     //
     // Credentials: prefers PHP constants CF_API_TOKEN / CF_ZONE_ID (the established
     // pattern in config.php, matching SENDGRID_API_KEY etc.); falls back to env
@@ -4408,22 +4512,58 @@ class Report extends Ork3
         $since = gmdate('Y-m-d\TH:i:s\Z', strtotime($win['StartDt']));
         $until = gmdate('Y-m-d\TH:i:s\Z', strtotime($win['EndDt']));
 
+        $ork = $this->_cfRequestTotals($token, $zone, $since, $until, 'ork.amtgard.com', array('US', 'CA'));
+        if ($ork === null) {
+            return null;
+        }
+        $global = $this->_cfRequestTotals($token, $zone, $since, $until, null, null);
+
+        return array(
+            'Requests'             => $ork['requests'],
+            'Bytes'                => $ork['bytes'],
+            'CacheHits'            => $ork['cacheHits'],
+            'CachedBytes'          => $ork['cachedBytes'],
+            'OriginBytes'          => $ork['originBytes'],
+            'RequestsUS'           => $ork['byCountry']['US'] ?? 0,
+            'RequestsCA'           => $ork['byCountry']['CA'] ?? 0,
+            'BlockedOrChallenged'  => $this->_cfFirewallTotal($token, $zone, $win, 'ork.amtgard.com', array('US', 'CA')),
+            'RequestsGlobal'       => $global['requests'] ?? null,
+            'BytesGlobal'          => $global['bytes'] ?? null,
+            'BlockedGlobal'        => $global !== null ? $this->_cfFirewallTotal($token, $zone, $win, null, null) : null,
+        );
+    }
+
+    // One httpRequestsAdaptiveGroups round trip for a given (optional) host and
+    // (optional) country-list scope. $host/$countries null means "no filter on
+    // that dimension" — used for the whole-zone/worldwide numbers.
+    private function _cfRequestTotals($token, $zone, $since, $until, $host, $countries)
+    {
+        $filterParts = array('datetime_geq:$since', 'datetime_leq:$until');
+        if ($host !== null) {
+            $filterParts[] = 'clientRequestHTTPHost:"' . $host . '"';
+        }
+        if ($countries !== null) {
+            $filterParts[] = 'clientCountryName_in:["' . implode('","', $countries) . '"]';
+        }
+        $filter = '{' . implode(', ', $filterParts) . '}';
+        $cacheFilterParts = $filterParts;
+        $cacheFilterParts[] = 'cacheStatus:"hit"';
+        $cacheFilter = '{' . implode(', ', $cacheFilterParts) . '}';
+
         $gql = 'query($zone:String!,$since:Time!,$until:Time!) {
 			viewer { zones(filter:{zoneTag:$zone}) {
-				totals: httpRequestsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"]}) {
+				totals: httpRequestsAdaptiveGroups(limit:1, filter:' . $filter . ') {
 					count sum { edgeResponseBytes }
 				}
-				byCountry: httpRequestsAdaptiveGroups(limit:2, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"]}, orderBy:[count_DESC]) {
+				byCountry: httpRequestsAdaptiveGroups(limit:2, filter:' . $filter . ', orderBy:[count_DESC]) {
 					count dimensions { clientCountryName }
 				}
-				cacheHit: httpRequestsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"], cacheStatus:"hit"}) {
+				cacheHit: httpRequestsAdaptiveGroups(limit:1, filter:' . $cacheFilter . ') {
 					count sum { edgeResponseBytes }
 				}
 			} }
 		}';
-        $json = $this->_cfGraphQL($token, $gql, array(
-            'zone' => $zone, 'since' => $since, 'until' => $until,
-        ));
+        $json = $this->_cfGraphQL($token, $gql, array('zone' => $zone, 'since' => $since, 'until' => $until));
         $zones = $json['data']['viewer']['zones'][0] ?? null;
         if (!is_array($zones) || empty($zones['totals'][0])) {
             return null;
@@ -4438,14 +4578,12 @@ class Report extends Ork3
         $total_bytes  = (int)$totals['sum']['edgeResponseBytes'];
         $cached_bytes = (int)($cache['sum']['edgeResponseBytes'] ?? 0);
         return array(
-            'Requests'             => (int)$totals['count'],
-            'Bytes'                => $total_bytes,
-            'CacheHits'            => (int)$cache['count'],
-            'CachedBytes'          => $cached_bytes,
-            'OriginBytes'          => max(0, $total_bytes - $cached_bytes),
-            'RequestsUS'           => (int)($by_country['US'] ?? 0),
-            'RequestsCA'           => (int)($by_country['CA'] ?? 0),
-            'BlockedOrChallenged'  => $this->_cfFirewallTotal($token, $zone, $win),
+            'requests'    => (int)$totals['count'],
+            'bytes'       => $total_bytes,
+            'cacheHits'   => (int)$cache['count'],
+            'cachedBytes' => $cached_bytes,
+            'originBytes' => max(0, $total_bytes - $cached_bytes),
+            'byCountry'   => $by_country,
         );
     }
 
@@ -4598,7 +4736,12 @@ class Report extends Ork3
     //
     // firewallEventsAdaptiveGroups has a 3-day max range per query on Pro plans,
     // so we chunk the weekly window into three calls and sum.
-    private function _cfFirewallTotal($token, $zone, $win)
+    // $host/$countries null means unfiltered on that dimension (the whole-zone,
+    // worldwide scope). When set, matches the scope _cfRequestTotals() used for
+    // the "delivered" side, so the two numbers describe the same population —
+    // this used to be worldwide-always regardless of what Delivered measured,
+    // silently mismatching Delivered's US/CA-only scope.
+    private function _cfFirewallTotal($token, $zone, $win, $host = null, $countries = null)
     {
         $start_ts = strtotime($win['StartDt']);
         $end_ts   = strtotime($win['EndDt']);
@@ -4607,9 +4750,21 @@ class Report extends Ork3
         }
         $chunk_s  = (int)ceil(($end_ts - $start_ts) / 3);
 
+        $filterParts = array(
+            'datetime_geq:$since', 'datetime_leq:$until',
+            'action_in:["block","managed_challenge","challenge","js_challenge"]',
+        );
+        if ($host !== null) {
+            $filterParts[] = 'clientRequestHTTPHost:"' . $host . '"';
+        }
+        if ($countries !== null) {
+            $filterParts[] = 'clientCountryName_in:["' . implode('","', $countries) . '"]';
+        }
+        $filter = '{' . implode(', ', $filterParts) . '}';
+
         $gql = 'query($zone:String!,$since:Time!,$until:Time!) {
 			viewer { zones(filter:{zoneTag:$zone}) {
-				fw: firewallEventsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, action_in:["block","managed_challenge","challenge","js_challenge"]}) {
+				fw: firewallEventsAdaptiveGroups(limit:1, filter:' . $filter . ') {
 					count
 				}
 			} }
@@ -5193,6 +5348,24 @@ class Report extends Ork3
         $qualQActive   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE status = 'active'");
         $qualQArchived = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE status = 'archived'");
         $qualImported  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question` WHERE source_question_id IS NOT NULL");
+        // The pool others can actually import from. Mirrors the joins in
+        // QualTest::getLibraryQuestions() so the tile and the library agree:
+        // sharing turned on AND the question sits in a PUBLISHED set (a draft
+        // must never leak) AND it is active. Reeve-only, because the library
+        // itself is — Corpora questions are never shared. This is the global
+        // pool; no single kingdom sees all of it, since the library excludes
+        // your own kingdom and dedups against what you already hold.
+        $qualShared    = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT q.qual_question_id) AS c
+			   FROM `{$p}qual_question` q
+			   JOIN `{$p}qual_config` c
+			     ON c.kingdom_id = q.kingdom_id AND c.test_type = 'reeve' AND c.share_questions = 1
+			   JOIN `{$p}qual_set_question` sq ON sq.qual_question_id = q.qual_question_id
+			   JOIN `{$p}qual_question_set` s
+			     ON s.qual_question_set_id = sq.qual_question_set_id
+			    AND s.kingdom_id = q.kingdom_id AND s.test_type = 'reeve' AND s.status = 'published'
+			  WHERE q.test_type = 'reeve' AND q.status = 'active'"
+        );
         $qualSets      = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question_set`");
         $qualSetsLive  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}qual_question_set` WHERE status = 'published'");
         $qualFlagged   = $this->_rfuScalar("SELECT COUNT(DISTINCT qual_question_id) AS c FROM `{$p}qual_report`");
@@ -5223,6 +5396,7 @@ class Report extends Ork3
                 $this->_rfuKpi('Questions created', $qualQuestions, null, null, 'rows in qual question'),
                 $this->_rfuKpi('Active questions', $qualQActive, null, null, 'questions available to be drawn into a test'),
                 $this->_rfuKpi('Archived questions', $qualQArchived, null, null, 'questions retired from the bank'),
+                $this->_rfuKpi('Available in the shared library', $qualShared, null, null, "active Reeve's-test questions offered by kingdoms that both share AND have a published version — the pool others can import from (Corpora questions are never shared)"),
                 $this->_rfuKpi('Imported from the shared library', $qualImported, null, null, 'questions copied from another kingdom rather than written locally'),
                 $this->_rfuKpi('Test versions created', $qualSets, null, null, 'rows in qual question set'),
                 $this->_rfuKpi('Published (live) versions', $qualSetsLive, null, null, "versions with status 'published' — one per kingdom and test type"),

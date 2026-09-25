@@ -799,7 +799,7 @@
 									$loC = $_pdFC['lo_f'] !== null ? round(($_pdFC['lo_f']-32)*5/9) : null;
 							?>
 								<?php $_pdBadges = wx_badges_for_date($park_id, $_pdNext); ?>
-								<div class="pk-schedule-forecast" style="margin-top:6px;padding:6px 8px;background:var(--ork-bg-secondary,#f7fafc);border-radius:4px;font-size:11px;color:var(--ork-text-muted,#718096)">
+								<div class="pk-schedule-forecast" style="margin-top:6px;padding:6px 8px;background:var(--ork-card-bg,#fff);border-radius:4px;font-size:11px;color:var(--ork-text-muted,#718096)">
 									<?php if ($_pdNext !== $parkLocalToday): ?><em style="opacity:.75;margin-right:3px">forecast</em><?php endif; ?>
 									<span style="font-size:13px"><?= $ic ?></span>
 									<span style="color:var(--ork-text,#2d3748);font-weight:600;margin-left:4px"><?= round($_pdFC['hi_f']) ?>/<?= $hiC ?>°</span>
@@ -859,7 +859,7 @@
 
 				<!-- Map view (lazy-loaded Google Maps) -->
 				<div id="pk-events-map-wrap" style="position:relative;display:none">
-					<div id="pk-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="pk-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid var(--ork-border);"></div>
 					<div id="pk-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
 				</div>
 
@@ -1789,7 +1789,7 @@ var PkBannerConfig = {
 					<div id="pk-att-link-result" style="display:none;margin-top:12px">
 						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
 							<input type="text" id="pk-att-link-url" readonly
-								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid var(--ork-input-border);border-radius:4px;background:var(--ork-input-bg)">
 							<button class="pk-btn pk-btn-secondary" id="pk-att-link-copy-btn" style="white-space:nowrap">
 								<i class="fas fa-copy"></i> Copy
 							</button>
@@ -1806,7 +1806,7 @@ var PkBannerConfig = {
 						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
 					</div>
 					<!-- Active links (always visible — typically 0-3 at any time) -->
-					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
+					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid var(--ork-divider);padding-top:10px">
 						<div style="font-size:12px;color:#4a5568;font-weight:600">
 							Active Links <span id="pk-att-links-count" style="color:#a0aec0;font-weight:400"></span>
 						</div>
@@ -1855,12 +1855,12 @@ var PkBannerConfig = {
 
 <!-- QR Code Modal -->
 <div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top);align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
-	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+	<div style="background:var(--ork-card-bg);border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
 			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
 		</div>
-		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid var(--ork-border);border-radius:6px;display:block;margin:0 auto 14px">
 		<div id="pk-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
 		<a id="pk-qr-download" href="" download="signin-qr.png" class="pk-btn pk-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
 			<i class="fas fa-download"></i> Download PNG
@@ -2285,13 +2285,13 @@ tr:hover .pk-copy-link { opacity: 1; }
 	transition: opacity 0.2s, visibility 0s 0s;
 }
 #pk-selfreg-overlay .pk-modal-box {
-	background: #fff; border-radius: 12px;
+	background: var(--ork-card-bg); border-radius: 12px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 	max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
 }
 #pk-selfreg-overlay .pk-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-divider); flex-shrink: 0;
 }
 #pk-selfreg-overlay .pk-modal-title {
 	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
@@ -2305,7 +2305,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 	padding: 20px; overflow-y: auto; flex: 1;
 }
 #pk-selfreg-overlay .pk-modal-footer {
-	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+	padding: 14px 20px; border-top: 1px solid var(--ork-divider);
 	display: flex; align-items: center; flex-shrink: 0;
 }
 
@@ -2616,7 +2616,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 				</div>
 			</div>
 
-		<div id="pk-addday-delete-section" style="display:none;border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;">
+		<div id="pk-addday-delete-section" style="display:none;border-top:1px solid var(--ork-divider);margin-top:16px;padding-top:16px;">
 				<button class="pk-btn pk-btn-danger" id="pk-addday-delete" type="button" style="width:100%"><i class="fas fa-trash-alt"></i> Delete Park Day</button>
 			</div>
 
@@ -2683,7 +2683,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 .pk-mp-toggle-btn:hover { border-color:#a0aec0; }
 .pk-mp-toggle-btn.pk-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
 .pk-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.pk-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.pk-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid var(--ork-input-border); border-radius:6px; background:var(--ork-input-bg); color:#4a5568; }
 .pk-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 
 /* ===================================================================
@@ -2806,12 +2806,12 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 /* ============================================================
 
 /* ---- Copy from past event (pk-cfe-*) ---- */
-.pk-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.pk-cfe-wrap { border: 1px solid var(--ork-border); border-radius: 6px; background: var(--ork-bg-inset); overflow: hidden; }
 .pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
-.pk-cfe-toggle:hover { background: #edf2f7; }
+.pk-cfe-toggle:hover { background: var(--ork-card-bg); }
 .pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
 .pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
-.pk-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.pk-cfe-body { padding: 12px; border-top: 1px solid var(--ork-divider); background: var(--ork-card-bg); }
 .pk-cfe-field { position: relative; }
 .pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
 .pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
@@ -2819,7 +2819,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 .pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
 .pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
-.pk-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.pk-cfe-mod-all { border-bottom: 1px solid var(--ork-divider); padding-bottom: 8px; margin-bottom: 4px; }
 .pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
 
 #pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
@@ -2851,8 +2851,8 @@ html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 /* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */
 /* The shared .pk-addday-field rule in revised.css covers input[type=text|time]
    and select, but NOT input[type=date]. Mirror that styling for the date input. */
-#pk-addday-startdate { padding:7px 9px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; width:100%; }
-#pk-addday-startdate:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+#pk-addday-startdate { padding:7px 9px; border:1.5px solid var(--ork-input-border); border-radius:6px; font-size:13px; color:#2d3748; background:var(--ork-input-bg); box-sizing:border-box; width:100%; }
+#pk-addday-startdate:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); background:var(--ork-card-bg); }
 html[data-theme="dark"] #pk-addday-startdate,
 html[data-theme="dark"] #pk-addday-interval { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
 html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }

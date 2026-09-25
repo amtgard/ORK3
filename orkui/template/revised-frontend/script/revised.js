@@ -2604,7 +2604,9 @@ function knActivateTab(tab) {
     if (tab === 'map' && !knMapLoaded && knMapLocations.length > 0) {
         knMapLoaded = true;
         var s = document.createElement('script');
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker';
+        // region pins label naming so every viewer sees the same map, and
+        // matches the OSM-based Live/Weather maps. Keep it on every loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker&region=CA';
         document.head.appendChild(s);
     }
     if (tab === 'events' && knCalendar) {
@@ -17427,7 +17429,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
             cb();
         };
         var s = document.createElement('script');
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly';
+        // region pinned, as in knInitMap's loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly&region=CA';
         s.async = true; s.defer = true;
         document.head.appendChild(s);
     }

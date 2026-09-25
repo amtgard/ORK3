@@ -233,8 +233,9 @@ class Controller_Kingdom extends Controller
         $og = array(
             'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
             'url'         => UIR . 'Kingdom/profile/' . (int)$kingdom_id,
-            'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
-                . ' — parks, players, events and awards on the ORK.',
+            'description' => (string)($_ogKi['KingdomName'] ?? '') . ' — an Amtgard LARP '
+                . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
+                . ': parks, players, events and awards on the ORK.',
         );
         if (!empty($_ogKi['HasHeraldry']) && !empty($this->data['kingdom_info']['HeraldryUrl']['Url'])) {
             $og['image'] = (string)$this->data['kingdom_info']['HeraldryUrl']['Url'];
@@ -329,6 +330,13 @@ class Controller_Kingdom extends Controller
             $this->data['StatsParkCount'] = $ownParkCount + $prinzParkCount;
         } else {
             $this->data['StatsParkCount'] = $ownParkCount;
+        }
+        // Fold the chapter count into the search snippet / link card now that
+        // it is known — makes each kingdom's description distinct and useful.
+        if (!empty($this->data['StatsParkCount']) && !empty($this->data['og']['description'])) {
+            $this->data['og']['description'] = rtrim($this->data['og']['description'], '.')
+                . ', with ' . (int)$this->data['StatsParkCount']
+                . ' active chapter' . ($this->data['StatsParkCount'] == 1 ? '' : 's') . '.';
         }
 
         $this->data['park_edit_lookup'] = [];

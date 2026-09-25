@@ -35,7 +35,11 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
+<?php /* Search snippet: reuse the page's link-card description when the
+         controller published one ($og['description'] — park/kingdom/player/
+         event pages), else the generic site line. Without this every page
+         shared one duplicated description, which search tools flag. */ ?>
+		<meta name="description" content="<?= htmlspecialchars(!empty($og['description']) ? preg_replace('/\s+/', ' ', trim((string)$og['description'])) : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
 <?php /* Per-page link-preview tags — controllers override via $this->data['og'];
          defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
 <?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
@@ -186,6 +190,10 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	html[data-theme="dark"] #ork-survey-banner .svb-cta { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
 	html[data-theme="dark"] #ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
 
+	/* Site footer: sits on the page ground in light; keeps its band in dark. */
+	.ork-site-footer { background: transparent; color: var(--ork-text-on-ground, #5f6b7a); }
+	html[data-theme="dark"] .ork-site-footer { background: var(--ork-bg-secondary); }
+
 	</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
@@ -200,8 +208,8 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 // Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
 // Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
 $downtime_start = ''; // set to a UTC ISO string (e.g. '2026-07-16T02:00:00Z') to show the banner
-$downtime_end   = '2026-08-18T14:00:00Z'; // 2026-08-18 10:00 AM EDT (UTC-4)
-$downtime_note  = 'Potential Downtime for an upgrade';
+$downtime_end   = '2026-09-11T02:00:00Z'; // 2026-09-10 10:00 PM EDT (UTC-4)
+$downtime_note  = 'Database maintenance — likely only a few minutes';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
@@ -1045,10 +1053,10 @@ endif;
 </script>
 <?php endif; ?>
 
-<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
+<footer class="ork-site-footer" style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);font-size:11px;text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
-  <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">ORK v<?=ORK_VERSION?></a>
+  <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-on-ground,#5f6b7a);text-decoration:none;border-bottom:1px dotted var(--ork-text-on-ground,#5f6b7a);">ORK v<?=ORK_VERSION?></a>
   &nbsp;&middot;&nbsp;
 <?php
     // Pre-render today's E.P. summary so opening the popover doesn't need
@@ -1059,12 +1067,12 @@ endif;
 ?>
   <button type="button" id="ork-ep-footer-btn"
           onclick="orkOpenEpPopover()"
-          style="background:none;border:none;padding:0;font:inherit;color:var(--ork-text-muted,#94a3b8);cursor:pointer;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">
+          style="background:none;border:none;padding:0;font:inherit;color:var(--ork-text-on-ground,#5f6b7a);cursor:pointer;border-bottom:1px dotted var(--ork-text-on-ground,#5f6b7a);">
     <?= htmlspecialchars(EraPhoenice::format($_epToday)) ?>
   </button>
 <?php if (!empty($IsOwnProfile)): ?>
   &nbsp;&middot;&nbsp;
-  <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
+  <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-on-ground,#5f6b7a);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
 <?php endif; ?>
 </footer>
 
