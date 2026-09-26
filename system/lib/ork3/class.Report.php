@@ -1627,7 +1627,27 @@ class Report extends Ork3
             $order_by = 'duespaid desc,'.$order_by;
         }
         $select_list[] = 'k.parent_kingdom_id';
-        $select_list[] = 'MAX(att.date) as last_sign_in';
+        // Scalar subquery, NOT a join+MAX. Joining ork_attendance here multiplied
+        // every player by their attendance rows (~20 each) only for GROUP BY to
+        // collapse them straight back down: the largest kingdom built a 320k-row
+        // temporary table to produce 15,829 answers. The subquery instead reads
+        // idx_sor_mundane_date (mundane_id, date) once per player.
+        //
+        // Verified identical -- same row count, ids and last_sign_in -- for all 29
+        // kingdoms with players, and for the Park, Unit and DuesPaid variants.
+        //
+        // The gain is concentrated, NOT across the board. Warm, per kingdom:
+        //   kingdom 10 (15,829 players)  976ms -> 414ms
+        //   kingdom 21 (15,128 players)  685ms -> 359ms
+        //   everything smaller           within noise, a few 5-10% SLOWER
+        // Below roughly 200k intermediate rows the old join was already cheap and
+        // N index probes cost slightly more. It was kept because the tail matters
+        // more than the median here: over 8 alternating runs of kingdom 10 the old
+        // query ran 966-2263ms (the temp table spilling under memory pressure)
+        // while this one held 418-428ms. Predictable beats occasionally-fast.
+        //
+        // GROUP BY stays -- see the note at the query below.
+        $select_list[] = '(select MAX(a2.date) from ' . DB_PREFIX . 'attendance a2 where a2.mundane_id = m.mundane_id) as last_sign_in';
         $select_list = array_merge($select_list, array());
         if (strlen($request['Token']) > 0
                 && ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -1641,13 +1661,26 @@ class Report extends Ork3
 						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						left join " . DB_PREFIX . "mundane suspended_by on m.suspended_by_id = suspended_by.mundane_id
-						left join " . DB_PREFIX . "attendance att on att.mundane_id = m.mundane_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause) ? "where" : "")."
 						".implode(' and ', $restrict_clause)."
+					/* GROUP BY is load-bearing beyond the (now removed) attendance join:
+					   the dues clause INNER JOINs a per-split subquery, so a player with two
+					   qualifying dues splits returns two rows, and the AUTH_UNIT/AUTH_EVENT
+					   join clause can duplicate a player with several unit_mundane rows.
+					   Dropping it benchmarked no faster and would reintroduce those dupes.
+					   Block comments, not -- : these are inside a double-quoted PHP string
+					   that is logged and reformatted, and a collapsed newline would comment
+					   out the rest of the statement. For the same reason the PHP variable
+					   names are spelled out in prose -- writing them would interpolate. */
 					GROUP BY m.mundane_id
-					ORDER BY $order_by, m.persona, m.surname, m.given_name
+					/* m.mundane_id is a final tie-breaker, not decoration. The five preceding
+					   keys tie for genuinely duplicated entries (two players sharing a persona
+					   at one park, blank personas, doubled-up records), leaving their relative
+					   order up to the plan -- so changing the plan silently reshuffled them in
+					   8 of 29 kingdoms. Same rows either way, but this pins the order. */
+					ORDER BY $order_by, m.persona, m.surname, m.given_name, m.mundane_id
 		";
         logtrace('GetPlayerRoster()', array($sql, $restrict_clause));
         $r = $this->db->query($sql);
