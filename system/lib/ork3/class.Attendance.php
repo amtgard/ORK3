@@ -242,8 +242,19 @@ class Attendance extends Ork3
             default:
                 return InvalidParameter('No valid Filter selected.');
         }
-        $r = $this->db->query($sql);
-        return $r->has_attendance;
+        // YapoMysql::DataSet() hands back a result set with the cursor before the
+        // first row, so reading $r->has_attendance without calling Next() first
+        // always produced null. This guard has therefore never fired once, and
+        // deleting an occurrence silently orphaned its attendance rows.
+        //
+        // Fails closed: if the query itself fails we report "has attendance" so a
+        // delete is refused rather than allowed on the strength of a broken read.
+        $this->db->Clear();
+        $r = $this->db->DataSet($sql);
+        if (!$r || !$r->Next()) {
+            return 1;
+        }
+        return (int)$r->has_attendance;
     }
 
     public function AttendanceAuthority($request)

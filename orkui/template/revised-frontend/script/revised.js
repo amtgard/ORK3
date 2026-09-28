@@ -2606,7 +2606,9 @@ function knActivateTab(tab) {
     if (tab === 'map' && !knMapLoaded && knMapLocations.length > 0) {
         knMapLoaded = true;
         var s = document.createElement('script');
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker';
+        // region pins label naming so every viewer sees the same map, and
+        // matches the OSM-based Live/Weather maps. Keep it on every loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker&region=CA';
         document.head.appendChild(s);
     }
     if (tab === 'events' && knCalendar) {
@@ -15877,6 +15879,24 @@ window.orkInitDataTable = function($table, opts) {
     // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
     if ($table.closest('.dataTables_scroll').length) return null;
     if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    // Honor data-sorttype="numeric" headers explicitly. These columns can carry
+    // HTML around the number (trend arrows, spinners) and several are
+    // AJAX-filled after init, so neither DataTables' type sniffing nor the
+    // built-in html-num type gets a clean read. An orthogonal render runs at
+    // every draw against the CURRENT cell content and extracts the leading
+    // number; unfilled cells sort to the bottom.
+    var typeDefs = [];
+    $table.find('thead th').each(function(i) {
+        if ($(this).data('sorttype') === 'numeric') {
+            typeDefs.push({ targets: i, type: 'num', render: function(data, type) {
+                if (type === 'sort' || type === 'type') {
+                    var m = String(data).replace(/<[^>]*>/g, '').match(/-?\d+(\.\d+)?/);
+                    return m ? parseFloat(m[0]) : -Infinity;
+                }
+                return data;
+            } });
+        }
+    });
     var dt = $table.DataTable($.extend(true, {
         dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
         pageLength: 25,
@@ -15885,7 +15905,7 @@ window.orkInitDataTable = function($table, opts) {
         autoWidth: false,
         scrollX: true,
         order: (opts.order || []),
-        columnDefs: (opts.columnDefs || []),
+        columnDefs: (opts.columnDefs || []).concat(typeDefs),
         language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
     }, opts.dt || {}));
     var $top = $(dt.table().container()).find('.ork-dt-top');
@@ -17511,7 +17531,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
             cb();
         };
         var s = document.createElement('script');
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly';
+        // region pinned, as in knInitMap's loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly&region=CA';
         s.async = true; s.defer = true;
         document.head.appendChild(s);
     }

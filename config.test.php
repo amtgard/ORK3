@@ -112,6 +112,7 @@ define('SENDGRID_API_KEY', '');
 define('BEHOLD_KEY', '');
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
+define('CARTO_API_KEY', '');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');

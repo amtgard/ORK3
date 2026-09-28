@@ -653,7 +653,6 @@ class Player extends Ork3
             $result = json_decode($response);
             return $result->result;
         } else {
-            error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
             return NoAuthorization();
         }
 
@@ -726,15 +725,26 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                    || $mundane_id == $request['MundaneId'])) {
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+            // Notes are an officer-facing record: they are how a park's monarchy
+            // documents a player. The guard used to also accept
+            // "|| $mundane_id == $request['MundaneId']", which let any
+            // non-officer author, edit and delete notes on their own profile
+            // through the endpoint even though the UI never offers the
+            // controls ($canEditNotes is officer-only). Self-service is
+            // limited to ClearNotes, which is a deliberate, advertised feature
+            // for closing out historically imported notes.
             $this->notes->clear();
             $this->notes->mundane_id = $request['MundaneId'];
             $this->notes->note = $request['Note'];
             $this->notes->description = $request['Description'];
             $this->notes->given_by = $request['GivenBy'];
-            $this->notes->date = date('Y-m-d', strtotime($request['Date']));
-            $this->notes->date_complete = date('Y-m-d', strtotime($request['DateComplete']));
+            // strtotime('') is false, and date('Y-m-d', false) is 1969-12-31 -- a
+            // blank completion date was being stored as the epoch and shown to
+            // users in the notes table (16,550 rows already carry it). EditNote
+            // already guarded this correctly; the two paths now agree.
+            $this->notes->date = $request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : '';
+            $this->notes->date_complete = $request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '';
             $this->notes->save();
             return Success($this->notes->mundane_note_id);
         } else {
@@ -754,9 +764,9 @@ class Player extends Ork3
             if ($this->notes->find()) {
                 $thePlayer = $this->player_info($this->notes->mundane_id);
 
+                // Officer-only: see AddNote.
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                        && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                            || $mundane_id == $request['MundaneId'])) {
+                        && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
 
                     $note->mundane_note_id = $this->notes->mundane_note_id;
                     $note->mundane_id = $this->notes->mundane_id;
@@ -790,12 +800,17 @@ class Player extends Ork3
             return InvalidParameter('Cannot find Note.');
         }
         $thePlayer = $this->player_info($this->notes->mundane_id);
+        // Officer-only: see AddNote.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                || $mundane_id == $request['MundaneId'])) {
+            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
             $this->notes->note         = $request['Note'];
             $this->notes->description  = $request['Description'];
-            $this->notes->date         = date('Y-m-d', strtotime($request['Date']));
+            // Same epoch trap AddNote guards against: strtotime('') is false and
+            // date('Y-m-d', false) is 1969-12-31. date_complete was already
+            // guarded here, but `date` was not, so clearing a note's date in the
+            // edit form still stamped the epoch. The two fields -- and the two
+            // methods -- now agree.
+            $this->notes->date         = ($request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : '');
             $this->notes->date_complete = ($request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '');
             $this->notes->save();
             return Success($this->notes->mundane_note_id);
@@ -818,7 +833,33 @@ class Player extends Ork3
         if (!$isOwn && !$isAdmin) {
             return NoAuthorization();
         }
-        $this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . intval($request['MundaneId']));
+
+        // Capture what is about to be wiped. RemoveNote audits a single-note
+        // deletion; ClearNotes -- a bulk wipe of officer-visible history -- wrote
+        // nothing at all, which was the sharpest asymmetry in the audit trail.
+        $_mid = (int)$request['MundaneId'];
+        $prior_notes = array();
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT * FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . $_mid);
+        if ($rs) {
+            while ($rs->Next()) {
+                $prior_notes[] = $rs->CurrentFieldSet();
+            }
+        }
+        // Without this Clear() the leftover bind params from the SELECT above are
+        // handed to the placeholder-free DELETE, which then fails silently under
+        // PDO's ERRMODE_WARNING and the notes are never removed.
+        $this->db->Clear();
+        $this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . $_mid);
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $request,
+            'Player',
+            $_mid,
+            ['notes' => $prior_notes, 'count' => count($prior_notes)],
+            null
+        );
         return Success();
     }
 
@@ -1746,7 +1787,6 @@ class Player extends Ork3
             $park->clear();
             $park->park_id = $request['ParkId'];
             if ($park->find()) {
-                error_log('ORK_DEBUG Player->CreatePlayer: ' . json_encode($request));
                 $username = $this->unique_username(trim($request['UserName']), 4);
                 if ($username === false) {
                     return InvalidParameter('No UserName could be generated for this player.  Please try again.');
@@ -1939,8 +1979,14 @@ class Player extends Ork3
             return InvalidParameter('Link not found.');
         }
 
-        // A11: Loose NULL check for used_by (yapo may return '' for DB NULL)
-        if (!empty($this->selfreg_link->used_by) && (int)$this->selfreg_link->used_by > 0) {
+        // Compare the value directly. The previous form led with
+        // !empty($this->selfreg_link->used_by), and empty() on a yapo field goes
+        // through __isset() -- which yapo did not implement -- so it was always
+        // true and the guard never fired once. A consumed link kept serving the
+        // live registration form with a running countdown; SelfRegister() re-reads
+        // FOR UPDATE and rejects the reuse, so there was no data impact, but a
+        // player could fill in the whole form before being told the code was dead.
+        if ((int)$this->selfreg_link->used_by > 0) {
             return InvalidParameter('This registration link has already been used.');
         }
 
@@ -2266,7 +2312,15 @@ class Player extends Ork3
                 return InvalidParameter("One of the players could not be found.");
             }
 
-            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['FromMundaneId'], $from_player['Player'], $to_player['Player']);
+            // Both snapshots are taken before the merge (the source row is about to
+            // be deleted), but they are recorded as one prior_state -- filing the
+            // destination's PRE-merge state under post_state, as this used to,
+            // described a state that never existed after the operation. The real
+            // post_state is written after the merge completes, below.
+            $_merge_prior = [
+                'from' => $from_player['Player'],
+                'to'   => $to_player['Player'],
+            ];
 
             $sql = "DELETE FROM
 						" . DB_PREFIX . "attendance
@@ -2367,6 +2421,13 @@ class Player extends Ork3
             // mundane_design: TO player keeps its own design; drop the FROM player's orphaned row.
             $sql = "DELETE FROM " . DB_PREFIX . "mundane_design WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
+            // selfreg_link: both mundane references were left pointing at the row we
+            // just deleted, so a consumed self-registration link and the officer
+            // credit for issuing it both dangled after a merge.
+            $sql = "UPDATE " . DB_PREFIX . "selfreg_link SET used_by = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE used_by = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+            $this->db->query($sql);
+            $sql = "UPDATE " . DB_PREFIX . "selfreg_link SET created_by = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE created_by = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+            $this->db->query($sql);
             // Bust the merged-into player's class cache; the source row is gone.
             $_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$toMundane['id']]);
             Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
@@ -2374,6 +2435,16 @@ class Player extends Ork3
             // players' Report.PlayerAwardRecommendations cache scopes.
             $this->bust_player_award_recs_cache((int)$fromMundane['id'], (int)$fromMundane['kingdom_id'], (int)$fromMundane['park_id']);
             $this->bust_player_award_recs_cache((int)$toMundane['id'], (int)$toMundane['kingdom_id'], (int)$toMundane['park_id']);
+
+            $_merged = $this->GetPlayer(array('MundaneId' => $request['ToMundaneId']));
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . "::" . __FUNCTION__,
+                $request,
+                'Player',
+                $request['FromMundaneId'],
+                $_merge_prior,
+                ($_merged['Status']['Status'] == 0) ? $_merged['Player'] : null
+            );
             return Success();
         } else {
             return NoAuthorization();
@@ -2395,9 +2466,43 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)		// New Kingdom
-                    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $_srcKingdom = (int)$this->mundane->kingdom_id;
+        $_dstKingdom = (int)$park->kingdom_id;
+
+        // Park-level authority over EITHER end is enough to move a player. The
+        // OR is deliberate and the source comments say so: recruitment normally
+        // means the destination park's officer pulls a player in, and a park
+        // losing a member should be able to push them out. That stays.
+        $_parkAuthority =
+               Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)          // destination
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT); // source
+
+        // What was NOT deliberate is that ONE park-level grant also rewrites the
+        // player's KINGDOM: a park officer in one kingdom could pull any player
+        // in the world across a kingdom boundary with no authority of any kind
+        // over the kingdom they were taken from. A move that changes the kingdom
+        // therefore needs more than a single park grant.
+        //
+        // It does NOT need kingdom-level authority, though. Requiring that broke
+        // the ordinary relocation: a player moves house, the receiving park's
+        // Prime Minister transfers them in from the park page's Move Player
+        // modal, and that PM holds park authority only. Holding AUTH_PARK EDIT
+        // over BOTH ends is the real-world "both PMs agree" transfer and is
+        // accepted here. What stays blocked is the one-sided pull -- authority
+        // over the destination alone, or the source alone, across a kingdom
+        // boundary.
+        //
+        // HasAuthority traverses upward (a kingdom grant satisfies a park check)
+        // but never downward, so a kingdom officer passes the both-ends test for
+        // any park in their kingdom, and an unscoped ORK admin passes everything.
+        $_crossKingdomAuthority = ($_srcKingdom === $_dstKingdom)
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_dstKingdom, AUTH_EDIT)
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_srcKingdom, AUTH_EDIT)
+            || (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT));
+
+        if ($mundane_id > 0 && $_parkAuthority && $_crossKingdomAuthority) {
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
@@ -2413,8 +2518,9 @@ class Player extends Ork3
             $this->mundane->save();
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
-            error_log('ORK_DEBUG MovePlayer(): Success: ' . json_encode($request));
             return Success();
+        } elseif ($mundane_id > 0 && $_parkAuthority && !$_crossKingdomAuthority) {
+            return NoAuthorization('Moving a player between kingdoms requires authority over both the park they are leaving and the park they are joining, or kingdom-level authority over either kingdom.');
         } else {
             return NoAuthorization();
         }
@@ -2616,7 +2722,9 @@ class Player extends Ork3
 
         if (trimlen($request['UserName']) > 0) {
             $this->mundane->clear();
-            $this->mundane->username = $request['UserName'];
+            // Trim before the uniqueness check so it is asking about the same
+            // value that will actually be stored below.
+            $this->mundane->username = trim($request['UserName']);
             if ($this->mundane->find()) {
                 if ($this->mundane->mundane_id != $request['MundaneId']) {
                     return InvalidParameter('This username is already in use.');
@@ -2638,13 +2746,20 @@ class Player extends Ork3
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
-                error_log('ORK_DEBUG Updating player: ' . json_encode($request));
 
                 $this->mundane->modified = date('Y-m-d H:i:s', time());
                 $this->mundane->given_name = is_null($request['GivenName']) ? $this->mundane->given_name : $request['GivenName'];
                 $this->mundane->surname = is_null($request['Surname']) ? $this->mundane->surname : $request['Surname'];
                 $this->mundane->other_name = is_null($request['OtherName']) ? $this->mundane->other_name : $request['OtherName'];
-                $this->mundane->username = is_null($request['UserName']) ? $this->mundane->username : $request['UserName'];
+                // Trim on write. An untrimmed username is a self-inflicted
+                // lockout: a player renaming themselves in the account-details
+                // modal who leaves a trailing space stores it, and every later
+                // login has to match it. Player 170872 did exactly that on
+                // 2026-07-22 and could not log in again -- see the note on the
+                // username lookup in Authorization::Authorize_h. The lookup now
+                // forgives it; trimming here stops the bad data being created.
+                // Matches the self-registration path, which already trims.
+                $this->mundane->username = is_null($request['UserName']) ? $this->mundane->username : trim($request['UserName']);
                 // Profanity check on persona (display name) before save.
                 if (!is_null($request['Persona']) && trim($request['Persona']) !== '') {
                     require_once(__DIR__ . '/class.ProfanityFilter.php');
@@ -2836,11 +2951,9 @@ class Player extends Ork3
                 }
                 return Success($notices);
             } else {
-                error_log('ORK_DEBUG No Player found.: ' . json_encode(null));
                 return InvalidParameter();
             }
         } else {
-            error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
             return NoAuthorization();
         }
     }
@@ -2896,39 +3009,74 @@ class Player extends Ork3
         return $request;
     }
 
+    // Returns a REAL Status. This used to return Success() on every path --
+    // oversized, wrong mime, undecodable bytes, failed write -- so mORK and the
+    // website were both told an upload worked when nothing had been written and
+    // no error was shown anywhere. Same class as the F004/F013/F015/F016/F018/
+    // F019/F023 "reported work it had not done" batch; set_image was missed.
+    //
+    // The detail strings are deliberately specific: they are the only signal a
+    // client gets, and distinguishing "wrong mime" from "bytes would not decode"
+    // is what identifies e.g. an iOS photo picker handing over HEIC labelled
+    // image/jpeg (GD cannot decode HEIC, so decode fails while the mime gate
+    // passes).
     public function set_image($request)
     {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
-        if (strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
-            $playerimage = imagecreatefromstring(base64_decode($request['Image']));
-            if ($playerimage !== false) {
-                $base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
-                $use_png = Common::gd_has_transparency($playerimage);
 
-                if (file_exists($base . '.jpg')) {
-                    unlink($base . '.jpg');
-                }
-                if (file_exists($base . '.png')) {
-                    unlink($base . '.png');
-                }
+        $payload = (string) ($request['Image'] ?? '');
+        $mime     = (string) ($request['ImageMimeType'] ?? '');
 
-                if ($use_png) {
-                    imagealphablending($playerimage, false);
-                    imagesavealpha($playerimage, true);
-                    imagepng($playerimage, $base . '.png');
-                } else {
-                    imagejpeg($playerimage, $base . '.jpg');
-                }
-                $this->mundane->has_image = 1;
-            } else {
-                $notices .= "Image could not be decoded.";
-            }
-        } else {
-            $notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 1MB.<br />';
+        // No image in this request at all. UpdatePlayer calls set_image() on
+        // every profile save, image or not, so "nothing supplied" must stay a
+        // success -- otherwise every ordinary edit would report a failure.
+        if (strlen($payload) === 0) {
+            return Success();
         }
-        logtrace("set_image() complete", array($request, $notices));
-        return Success($notices);
+
+        if (strlen($payload) >= 1365334) {
+            return InvalidParameter('Image is too large (limit is about 1MB; received ' . strlen($payload) . ' base64 characters).');
+        }
+
+        if (!Common::supported_mime_types($mime) || Common::is_pdf_mime_type($mime)) {
+            return InvalidParameter('Unsupported image type "' . $mime . '". Images must be jpeg, gif, or png.');
+        }
+
+        $playerimage = @imagecreatefromstring(base64_decode($payload));
+        if ($playerimage === false) {
+            return InvalidParameter('Image data could not be decoded (declared ' . $mime . ', ' . strlen($payload) . ' base64 characters). The file may not really be a jpeg/gif/png.');
+        }
+
+        $base    = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
+        $use_png = Common::gd_has_transparency($playerimage);
+        $target  = $base . ($use_png ? '.png' : '.jpg');
+
+        if (file_exists($base . '.jpg')) {
+            unlink($base . '.jpg');
+        }
+        if (file_exists($base . '.png')) {
+            unlink($base . '.png');
+        }
+
+        if ($use_png) {
+            imagealphablending($playerimage, false);
+            imagesavealpha($playerimage, true);
+            $written = imagepng($playerimage, $target);
+        } else {
+            $written = imagejpeg($playerimage, $target);
+        }
+
+        // GD returns false on a failed write, but also check the file landed --
+        // both old files were just unlinked, so a silent write failure would
+        // leave the player with no image at all while reporting success.
+        if ($written === false || !file_exists($target) || filesize($target) === 0) {
+            return ProcessingError('Image could not be written to storage.');
+        }
+
+        $this->mundane->has_image = 1;
+        logtrace("set_image() complete", array('target' => $target, 'bytes' => filesize($target)));
+        return Success();
     }
 
     private function resolve_player_image_url($mundane_id, $modified)
@@ -3210,17 +3358,46 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // A bulk clear of every waiver in a park or kingdom wrote no audit row at
+        // all. Record which players were actually cleared, so the change is
+        // reviewable and reversible.
         if (valid_id($request['KingdomId'])) {
-            $sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-            $this->db->query($sql);
-            return Success('Waivers have been reset for all players in the kingdom.');
+            $scope_col = 'kingdom_id';
+            $scope_id  = (int)$request['KingdomId'];
+            $entity    = 'Kingdom';
+            $message   = 'Waivers have been reset for all players in the kingdom.';
         } elseif (valid_id($request['ParkId'])) {
-            $sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-            $this->db->query($sql);
-            return Success('Waivers have been reset for all players in the park.');
+            $scope_col = 'park_id';
+            $scope_id  = (int)$request['ParkId'];
+            $entity    = 'Park';
+            $message   = 'Waivers have been reset for all players in the park.';
+        } else {
+            return InvalidParameter('Either KingdomId or ParkId must be specified.');
         }
 
-        return InvalidParameter('Either KingdomId or ParkId must be specified.');
+        $cleared = array();
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1"
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $cleared[] = (int)$rs->mundane_id;
+            }
+        }
+        $this->db->Clear();
+        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id);
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $request,
+            $entity,
+            $scope_id,
+            ['waivered_mundane_ids' => $cleared, 'count' => count($cleared)],
+            ['waivered' => 0]
+        );
+
+        return Success($message);
     }
 
     public function AddAward($request)
@@ -3406,13 +3583,25 @@ class Player extends Ork3
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->stripped_from, $this->get_award($awards));
 
+            $_awards_id            = (int)$awards->awards_id;
             $awards->mundane_id    = $awards->stripped_from;
             $awards->stripped_from = 0;
             $awards->revoked       = 0;
-            $awards->revoked_at    = null;
-            $awards->revocation    = null;
+            // yapo drops null-valued fields from the UPDATE entirely, so assigning
+            // null left revoked_at and revocation at their old values -- a
+            // reactivated award kept the reason and timestamp of a revocation that
+            // had been undone. (revoked_by_id cleared only because 0 is not null.)
+            // revocation is varchar NOT NULL, so '' both clears it and survives
+            // yapo's null-skip.
+            $awards->revocation    = '';
             $awards->revoked_by_id = 0;
             $awards->save();
+            // revoked_at is a nullable DATE. Assigning '' would store the zero
+            // date rather than NULL (yapo passes the value straight through --
+            // ValidateField is commented out in Yapo::__set), so it is cleared
+            // with an explicit statement to get a true NULL.
+            $this->db->Clear();
+            $this->db->Execute('UPDATE ' . DB_PREFIX . 'awards SET revoked_at = NULL WHERE awards_id = ' . $_awards_id);
 
             return Success($awards->awards_id);
         } else {
@@ -3662,32 +3851,70 @@ class Player extends Ork3
     public function AddDues($request)
     {
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $dues = new yapo($this->db, DB_PREFIX . 'dues');
-        $dues->clear();
-
-        if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
-            $dues->mundane_id = $request['MundaneId'];
-            $dues->created_by = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-            $dues->created_on = date('Y-m-d');
-            $dues->park_id = $request['ParkId'];
-            $dues->kingdom_id = $request['KingdomId'];
-            $dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
-            if (!empty($request['Months'])) {
-                $n    = max(1, (int)$request['Months']);
-                $unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
-                $dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
-                $dues->terms = $n;
-            } else {
-                $dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
-                $dues->terms = $request['Terms'];
-            }
-            $dues->dues_for_life = $request['DuesForLife'];
-            $dues->save();
-
-            return Success($dues->dues_id);
-        } else {
+        if (!valid_id($mundane_id)) {
             return NoAuthorization();
         }
+        if (!valid_id($request['MundaneId'] ?? 0)) {
+            return InvalidParameter('A player must be selected.');
+        }
+
+        // Authorize against the target player's OWN park, never the ParkId that
+        // came in on the request. That value arrives from a hidden form input,
+        // so trusting it let an officer write a dues row for a player in a park
+        // they hold no authority over -- and because the row was then stamped
+        // with the attacker's park, the victim park never saw it while
+        // RevokeDues (which authorizes on the *player's* park) refused to undo
+        // it. RevokeDues is the correct model; this follows it.
+        $thePlayer = $this->player_info($request['MundaneId']);
+        if (!$thePlayer || !valid_id($thePlayer['ParkId'])) {
+            return InvalidParameter('Cannot find player.');
+        }
+
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        $dues = new yapo($this->db, DB_PREFIX . 'dues');
+        $dues->clear();
+        $dues->mundane_id = $request['MundaneId'];
+        $dues->created_by = $mundane_id;
+        $dues->created_on = date('Y-m-d');
+        // Stamp the row with the player's real scope so the park that actually
+        // holds the player can see and revoke it.
+        $dues->park_id = $thePlayer['ParkId'];
+        $dues->kingdom_id = $thePlayer['KingdomId'];
+        $dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
+        if (!empty($request['Months'])) {
+            $n    = max(1, (int)$request['Months']);
+            $unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
+            $dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
+            $dues->terms = $n;
+        } else {
+            $dues->dues_until = $this->determine_dues_until($thePlayer['KingdomId'], $request['DuesFrom'], $request['Terms']);
+            $dues->terms = $request['Terms'];
+        }
+        $dues->dues_for_life = $request['DuesForLife'];
+        $dues->save();
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . "::" . __FUNCTION__,
+            $request,
+            'Player',
+            (int)$request['MundaneId'],
+            null,
+            [
+                'dues_id'       => (int)$dues->dues_id,
+                'mundane_id'    => (int)$request['MundaneId'],
+                'park_id'       => (int)$thePlayer['ParkId'],
+                'kingdom_id'    => (int)$thePlayer['KingdomId'],
+                'dues_from'     => $dues->dues_from,
+                'dues_until'    => $dues->dues_until,
+                'terms'         => $dues->terms,
+                'dues_for_life' => (int)$dues->dues_for_life,
+            ]
+        );
+
+        return Success($dues->dues_id);
     }
 
     private function determine_dues_until($kingdom_id, $dues_from = null, $terms = null)
@@ -3777,7 +4004,7 @@ class Player extends Ork3
                 return NoAuthorization();
             }
         } else {
-            return InvalidParamter();
+            return InvalidParameter();
         }
     }
 

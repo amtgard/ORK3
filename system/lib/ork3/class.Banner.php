@@ -183,8 +183,23 @@ class Banner extends Ork3
         }
 
         $base = $meta['dir'] . sprintf('%0' . $meta['pad'] . 'd', $id);
+        $removedFiles = array();
+        foreach (array('.jpg', '.png') as $_ext) {
+            if (file_exists($base . $_ext)) {
+                $removedFiles[] = basename($base . $_ext);
+            }
+        }
         $this->deleteBannerFiles($base);
         $this->bustEventCacheIfNeeded($type, $id);
+        // Removing a banner unlinks a file from disk and wrote no audit row.
+        Ork3::$Lib->dangeraudit->audit(
+            $type . '::RemoveBanner',
+            ['Type' => $type, 'Id' => $id],
+            $type,
+            $id,
+            ['has_banner' => 1, 'files' => $removedFiles],
+            ['has_banner' => 0]
+        );
 
         return Success();
     }

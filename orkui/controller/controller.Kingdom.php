@@ -2,10 +2,27 @@
 
 class Controller_Kingdom extends Controller
 {
+    // Data endpoints that must NOT repaint the visitor's navigation context.
+    // The kingdom profile page background-fetches several of these for each
+    // child principality (Kingdomnew_index.tpl ~line 2660), and the last async
+    // response to land was silently re-pointing session->kingdom_id at a
+    // principality — breadcrumbs and every session-scoped report (attendance
+    // explorer, knights list) then showed the principality instead of the
+    // kingdom the visitor was on. All of these take an explicit id argument
+    // and never read the session context they were overwriting.
+    private static $CONTEXT_FREE_METHODS = array(
+        'park_monthly_json', 'park_averages_json', 'players_json',
+        'events_more', 'recommendations_panel', 'ics',
+    );
+
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
         $id = preg_replace('/[^0-9]/', '', $id);
+
+        if (in_array($this->method, self::$CONTEXT_FREE_METHODS, true)) {
+            return;
+        }
 
         if ($id != $this->session->kingdom_id) {
             unset($this->session->kingdom_id);
@@ -209,6 +226,24 @@ class Controller_Kingdom extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Link-preview card: kingdom heraldry over the site logo when it
+        // exists (Ken's call).
+        $_ogKi = $this->data['kingdom_info']['Info']['KingdomInfo'];
+        $og = array(
+            'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
+            'url'         => UIR . 'Kingdom/profile/' . (int)$kingdom_id,
+            'description' => (string)($_ogKi['KingdomName'] ?? '') . ' — an Amtgard LARP '
+                . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
+                . ': parks, players, events and awards on the ORK.',
+        );
+        if (!empty($_ogKi['HasHeraldry']) && !empty($this->data['kingdom_info']['HeraldryUrl']['Url'])) {
+            $og['image'] = (string)$this->data['kingdom_info']['HeraldryUrl']['Url'];
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
+
         $this->data['kingdom_officers']    = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 
@@ -296,6 +331,13 @@ class Controller_Kingdom extends Controller
         } else {
             $this->data['StatsParkCount'] = $ownParkCount;
         }
+        // Fold the chapter count into the search snippet / link card now that
+        // it is known — makes each kingdom's description distinct and useful.
+        if (!empty($this->data['StatsParkCount']) && !empty($this->data['og']['description'])) {
+            $this->data['og']['description'] = rtrim($this->data['og']['description'], '.')
+                . ', with ' . (int)$this->data['StatsParkCount']
+                . ' active chapter' . ($this->data['StatsParkCount'] == 1 ? '' : 's') . '.';
+        }
 
         $this->data['park_edit_lookup'] = [];
         if (is_array($rawParks['Parks'])) {
@@ -332,8 +374,12 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
+        // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
+        // must mirror that check exactly; gating it on kingdom authority showed
+        // monarchy an Add Park button whose submit the service always refused.
         $this->data['CanAddPark'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 

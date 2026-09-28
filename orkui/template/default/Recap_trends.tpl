@@ -5,10 +5,13 @@
  * $trend_series   : rows of WeekStart/Visitors/Requests/Blocked/CacheHits/Bytes
  *                   (nulls where a source wasn't available — charts show gaps).
  * $players_series : rows of WeekStart/Players across all recorded history.
+ * $signin_series  : rows of Day/Browsers/InApp/Apps/Total — anonymous daily
+ *                   sign-in counts (tally starts 2026-08-22).
  */
 
 $_ts  = is_array($trend_series)   ? $trend_series   : array();
 $_ps  = is_array($players_series) ? $players_series : array();
+$_ss  = is_array($signin_series)  ? $signin_series  : array();
 
 // Highcharts datetime series: [ms, value|null]. INTERIOR gaps stay gaps — the
 // honest rendering for "we don't trust / don't have data for this week" — but
@@ -25,17 +28,26 @@ $_trim = function ($points) {
 $_visitors = array();
 $_requests = array();
 $_blocked  = array();
+$_requests_global = array();
+$_blocked_global  = array();
 foreach ($_ts as $_row) {
 	$_ms = strtotime($_row['WeekStart']);
 	if ($_ms === false) continue;
 	$_ms *= 1000;
-	$_visitors[] = array($_ms, $_row['Visitors']);
-	$_requests[] = array($_ms, $_row['Requests']);
-	$_blocked[]  = array($_ms, $_row['Blocked']);
+	$_visitors[]        = array($_ms, $_row['Visitors']);
+	$_requests[]        = array($_ms, $_row['Requests']);
+	$_blocked[]         = array($_ms, $_row['Blocked']);
+	$_requests_global[] = array($_ms, $_row['RequestsGlobal'] ?? null);
+	$_blocked_global[]  = array($_ms, $_row['BlockedGlobal']  ?? null);
 }
 $_visitors = $_trim($_visitors);
 $_requests = $_trim($_requests);
 $_blocked  = $_trim($_blocked);
+// RequestsGlobal/BlockedGlobal only exist on weeks computed since 2026-08-27 —
+// trimming leading nulls means this chart naturally starts there instead of
+// padding out a year of empty axis.
+$_requests_global = $_trim($_requests_global);
+$_blocked_global  = $_trim($_blocked_global);
 
 $_players = array();
 foreach ($_ps as $_row) {
@@ -43,6 +55,18 @@ foreach ($_ps as $_row) {
 	$_ms = strtotime((string)$_row['WeekStart']);
 	if ($_ms === false || $_ms < strtotime('2004-12-01')) continue;
 	$_players[] = array($_ms * 1000, $_row['Players']);
+}
+
+$_si_browsers = array();
+$_si_inapp    = array();
+$_si_apps     = array();
+foreach ($_ss as $_row) {
+	$_ms = strtotime((string)$_row['Day']);
+	if ($_ms === false) continue;
+	$_ms *= 1000;
+	$_si_browsers[] = array($_ms, $_row['Browsers']);
+	$_si_inapp[]    = array($_ms, $_row['InApp']);
+	$_si_apps[]     = array($_ms, $_row['Apps']);
 }
 
 $_fmt = function ($n) {
@@ -55,17 +79,20 @@ $_fmt = function ($n) {
 <style>
 .recap-root { max-width: 900px; margin: 1.5em auto 3em; padding: 0 1em;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-	color: #222; line-height: 1.5; }
+	color: #222; line-height: 1.5;
+	/* White paper surface on the gray page ground (editorial document look) */
+	background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 12px;
+	box-shadow: var(--ork-shadow-card); padding-inline: 1.5em; padding-bottom: 1.5em; }
 .recap-root h1, .recap-root h2 { background: transparent; border: none;
 	text-shadow: none; padding: 0; border-radius: 0; }
 .recap-hero { text-align: center; padding: 1.5em 0 1.8em; margin-bottom: 1.5em;
 	border-bottom: 2px solid #f0e5d0; }
-.recap-hero-eyebrow { color: #c89b3f; font-size: 0.78em; letter-spacing: 0.22em;
+.recap-hero-eyebrow { color: #7a5d1c; font-size: 0.78em; letter-spacing: 0.22em;
 	text-transform: uppercase; font-weight: 700; margin-bottom: 0.4em; }
 .recap-hero-eyebrow .fas { margin-right: 0.4em; }
 .recap-hero h1 { font-size: 1.65em; margin: 0; font-weight: 600; color: #2a2a2a; }
-.recap-hero-sub { color: #999; font-size: 0.82em; margin-top: 0.7em; font-style: italic; }
-.recap-section { background: #fafaf7; border: 1px solid #ececec;
+.recap-hero-sub { color: var(--ork-text-on-ground); font-size: 0.82em; margin-top: 0.7em; font-style: italic; }
+.recap-section { background: var(--ork-bg-inset); border: 1px solid var(--ork-border);
 	border-radius: 10px; padding: 1.1em 1.4em 1em; margin-bottom: 1em; }
 .recap-section h2 { font-size: 1.08em; margin: 0 0 0.6em 0; color: #2a2a2a;
 	font-weight: 600; display: flex; align-items: center; gap: 0.55em; }
@@ -81,15 +108,23 @@ $_fmt = function ($n) {
 .recap-section details summary::-webkit-details-marker { display: none; }
 .recap-section details summary::before { content: '▸ '; color: #c89b3f; font-size: 0.9em; }
 .recap-section details[open] summary::before { content: '▾ '; }
+.trends-subhead { margin: 1.2em 0 0.2em; font-size: 1em; color: #555; }
 .trends-table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 0.5em; }
 .trends-table th, .trends-table td { text-align: right; padding: 3px 8px; border-bottom: 1px solid #eee9dc; }
 .trends-table th:first-child, .trends-table td:first-child { text-align: left; }
 .trends-table th { color: #888; font-weight: 600; }
-.recap-foot { text-align: center; color: #aaa; font-size: 0.8em; margin-top: 1.5em; }
+.recap-foot { text-align: center; color: var(--ork-text-on-ground); font-size: 0.8em; margin-top: 1.5em; }
 .recap-foot a { color: #1a4c8c; text-decoration: none; }
 .recap-foot a:hover { text-decoration: underline; }
 
 html[data-theme="dark"] .recap-root { color: #cbd5e0; }
+html[data-theme="dark"] .recap-root h1, html[data-theme="dark"] .recap-root h2 { background: transparent; border: none; }
+/* Dark keeps its original layout: no paper surface, sections sit on the page */
+html[data-theme="dark"] .recap-root { background: transparent; border-color: transparent; box-shadow: none;
+	padding-inline: 1em; padding-bottom: 0; }
+html[data-theme="dark"] .recap-hero-eyebrow { color: #c89b3f; }
+html[data-theme="dark"] .recap-hero-sub,
+html[data-theme="dark"] .recap-foot { color: #999; }
 html[data-theme="dark"] .recap-hero { border-bottom-color: #3a3325; }
 html[data-theme="dark"] .recap-hero h1 { color: #e2e8f0; }
 html[data-theme="dark"] .recap-section { background: #1e2533; border-color: #2d3748; }
@@ -125,6 +160,71 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 		</details>
 	</section>
 
+<?php if ($_ss !== array()) : ?>
+	<section class="recap-section">
+		<h2><span class="recap-section-icon"><i class="fas fa-sign-in-alt"></i></span> Signing in</h2>
+		<p class="recap-digest recap-muted">
+			Successful sign-ins per day, by kind of app — browsers, links opened inside
+			apps like Discord, and community-built tools (mORK, jsork). Counted anonymously:
+			the ORK keeps daily totals only, never who signed in.
+		</p>
+		<div id="trends-signins" class="trends-chart"></div>
+		<details><summary>Data table (recent 30 days)</summary>
+			<table class="trends-table"><tr><th>Day</th><th>Browsers &amp; other</th><th>In-app</th><th>Community apps</th><th>Total</th></tr>
+<?php foreach (array_slice(array_reverse($_ss), 0, 30) as $_row) : ?>
+				<tr><td><?=htmlspecialchars($_row['Day'])?></td><td><?=number_format($_row['Browsers'])?></td><td><?=number_format($_row['InApp'])?></td><td><?=number_format($_row['Apps'])?></td><td><?=number_format($_row['Total'])?></td></tr>
+<?php endforeach; ?>
+			</table>
+		</details>
+<?php $_av = isset($app_versions) && is_array($app_versions) ? $app_versions : array(); ?>
+<?php if ($_av !== array()) : ?>
+		<h3 class="trends-subhead">Community app versions right now</h3>
+		<p class="recap-digest recap-muted">
+			Currently active sessions per app version — how each community app's
+			latest release is rolling out. Counts only, never who.
+		</p>
+		<table class="trends-table"><tr><th>App version</th><th>Sessions</th><th>Players</th></tr>
+<?php foreach ($_av as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=number_format($_row['Sessions'])?></td><td><?=number_format($_row['Players'])?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
+<?php
+	$_auC = (isset($api_usage['Clients'])   && is_array($api_usage['Clients']))   ? $api_usage['Clients']   : array();
+	$_auE = (isset($api_usage['Endpoints']) && is_array($api_usage['Endpoints'])) ? $api_usage['Endpoints'] : array();
+?>
+<?php if ($_auC !== array()) : ?>
+		<h3 class="trends-subhead">Who calls the web service, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			Sessions above count logins. A client that signs in once and then works
+			for a month only appears here. Counts only, never who.
+		</p>
+		<table class="trends-table"><tr><th>Client</th><th>Calls</th><th>Endpoints</th><th>Total s</th></tr>
+<?php foreach ($_auC as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['Endpoints'])?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
+<?php if ($_auE !== array()) : ?>
+		<h3 class="trends-subhead">Where the time goes, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			The ten costliest endpoints, ranked by total server time rather than by
+			how often they are called — a fast endpoint called constantly and a slow
+			one called rarely look alike in a bare tally and are very different
+			problems.
+		</p>
+		<table class="trends-table"><tr><th>Endpoint</th><th>Calls</th><th>Avg ms</th><th>Total s</th></tr>
+<?php foreach ($_auE as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Endpoint'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['AvgMs'], 1)?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
+	</section>
+<?php endif; ?>
+
 	<section class="recap-section">
 		<h2><span class="recap-section-icon"><i class="fas fa-fist-raised"></i></span> Players on the field</h2>
 		<p class="recap-digest recap-muted">
@@ -141,16 +241,35 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 	</section>
 
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> Traffic and the bot wall</h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK traffic and the bot wall (US + Canada)</h2>
 		<p class="recap-digest recap-muted">
-			Weekly requests Cloudflare delivered for the ORK (US + Canada), and the requests it
-			blocked or challenged as malicious before they reached the site.
+			Weekly requests Cloudflare delivered to ork.amtgard.com from US and Canadian
+			clients, and the requests it blocked or challenged as malicious before they
+			reached the site. Same scope on both lines.
 		</p>
 		<div id="trends-requests" class="trends-chart"></div>
 		<details><summary>Data table</summary>
 			<table class="trends-table"><tr><th>Week</th><th>Delivered</th><th>Blocked</th></tr>
 <?php foreach (array_reverse($_ts) as $_row) : if ($_row['Requests'] === null) continue; ?>
 				<tr><td><?=htmlspecialchars($_row['WeekStart'])?></td><td><?=$_fmt($_row['Requests'])?></td><td><?=$_fmt($_row['Blocked'])?></td></tr>
+<?php endforeach; ?>
+			</table>
+		</details>
+	</section>
+
+	<section class="recap-section">
+		<h2><span class="recap-section-icon"><i class="fas fa-globe"></i></span> All of amtgard.com, worldwide</h2>
+		<p class="recap-digest recap-muted">
+			The same measurement across every site sharing our Cloudflare zone — ORK, wiki,
+			and everything else — with no country restriction. A different, larger scope
+			than the chart above; shown on its own axis since the two aren't the same size.
+			Starts 2026-08-27, when this breakdown was introduced.
+		</p>
+		<div id="trends-requests-global" class="trends-chart"></div>
+		<details><summary>Data table</summary>
+			<table class="trends-table"><tr><th>Week</th><th>Delivered</th><th>Blocked</th></tr>
+<?php foreach (array_reverse($_ts) as $_row) : if (($_row['RequestsGlobal'] ?? null) === null) continue; ?>
+				<tr><td><?=htmlspecialchars($_row['WeekStart'])?></td><td><?=$_fmt($_row['RequestsGlobal'])?></td><td><?=$_fmt($_row['BlockedGlobal'])?></td></tr>
 <?php endforeach; ?>
 			</table>
 		</details>
@@ -169,6 +288,11 @@ jQuery(document).ready(function() {
 	var PLAYERS  = <?=json_encode($_players)?>;
 	var REQUESTS = <?=json_encode($_requests)?>;
 	var BLOCKED  = <?=json_encode($_blocked)?>;
+	var REQUESTS_GLOBAL = <?=json_encode($_requests_global)?>;
+	var BLOCKED_GLOBAL  = <?=json_encode($_blocked_global)?>;
+	var SI_BROWSERS = <?=json_encode($_si_browsers)?>;
+	var SI_INAPP    = <?=json_encode($_si_inapp)?>;
+	var SI_APPS     = <?=json_encode($_si_apps)?>;
 
 	function palette() {
 		var dk = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -176,6 +300,7 @@ jQuery(document).ready(function() {
 			dk:      dk,
 			blue:    dk ? '#3987e5' : '#2a78d6',
 			orange:  dk ? '#d95926' : '#eb6834',
+			green:   dk ? '#2f9e63' : '#1f8a52',
 			text:    dk ? '#cbd5e0' : '#333',
 			muted:   dk ? '#a0aec0' : '#666',
 			grid:    dk ? '#2d3748' : '#e6e6e6',
@@ -215,6 +340,20 @@ jQuery(document).ready(function() {
 		o1.series = [{ name: 'Visitors', data: VISITORS, color: p.blue }];
 		charts.push(new Highcharts.Chart(o1));
 
+		if (document.getElementById('trends-signins')) {
+			var oS = baseOptions('trends-signins', p);
+			// Daily series, unlike the weekly charts — say the actual day.
+			oS.tooltip.xDateFormat = '%A, %b %e, %Y';
+			oS.legend = { enabled: true, itemStyle: { color: p.text, fontWeight: 'normal' },
+				itemHoverStyle: { color: p.text } };
+			oS.series = [
+				{ name: 'Browsers & other', data: SI_BROWSERS, color: p.blue },
+				{ name: 'In-app links', data: SI_INAPP, color: p.green },
+				{ name: 'Community apps', data: SI_APPS, color: p.orange }
+			];
+			charts.push(new Highcharts.Chart(oS));
+		}
+
 		var o2 = baseOptions('trends-players', p);
 		o2.legend = { enabled: false };
 		o2.series = [{ name: 'Players', data: PLAYERS, color: p.blue }];
@@ -228,6 +367,15 @@ jQuery(document).ready(function() {
 			{ name: 'Blocked or challenged', data: BLOCKED, color: p.orange }
 		];
 		charts.push(new Highcharts.Chart(o3));
+
+		var o4 = baseOptions('trends-requests-global', p);
+		o4.legend = { enabled: true, itemStyle: { color: p.text, fontWeight: 'normal' },
+			itemHoverStyle: { color: p.text } };
+		o4.series = [
+			{ name: 'Delivered', data: REQUESTS_GLOBAL, color: p.blue },
+			{ name: 'Blocked or challenged', data: BLOCKED_GLOBAL, color: p.orange }
+		];
+		charts.push(new Highcharts.Chart(o4));
 	}
 
 	build();

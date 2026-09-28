@@ -213,7 +213,7 @@ class Controller_Unit extends Controller
                     header('Location: ' . UIR . "Unit/index/$unit_id");
                     exit;
                 } else {
-                    $this->data['SaveError'] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                    $this->data['SaveError'] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
                 }
             }
         }
@@ -386,8 +386,9 @@ class Controller_Unit extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Unit_create');
                     header('Location: '.UIR.'Unit/index/' . $r['Detail']);
+                    exit;
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Unit/create/' . $mundane_id);
+                    $this->no_authorization('Unit/create/' . $mundane_id);
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }

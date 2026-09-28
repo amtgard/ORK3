@@ -237,7 +237,7 @@ class Live extends Ork3
 
         $this->db->Clear(); // shared $DB: stray bindings on a placeholder-free query fail silently (ERRMODE_WARNING)
         $rs = $this->db->DataSet("
-			SELECT entered_at, park_id, event_id, event_calendardetail_id, mundane_id
+			SELECT entered_at, park_id, event_id, event_calendardetail_id, mundane_id, entry_method
 			FROM " . DB_PREFIX . "attendance
 			WHERE date >= '" . $date_floor . "' AND entered_at >= '" . $cutoff_24h . "'
 			ORDER BY entered_at DESC
@@ -255,6 +255,9 @@ class Live extends Ork3
                     'event_id'   => (int)$rs->event_id,
                     'cdid'       => (int)$rs->event_calendardetail_id,
                     'mundane_id' => (int)$rs->mundane_id,
+                    // Self-service check-ins (QR sign-in links / self-reg) get a
+                    // ticker badge — quiet advertising for the feature.
+                    'is_self'    => in_array($rs->entry_method, array('signin_link', 'self_reg'), true) ? 1 : 0,
                 );
                 $mundane_ids[(int)$rs->mundane_id] = 1;
                 if ((int)$rs->park_id > 0) {
@@ -328,6 +331,7 @@ class Live extends Ork3
                 $s['event_id'],
                 $s['cdid'],
                 $is_first,
+                $s['is_self'],
             );
         }
 

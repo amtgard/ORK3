@@ -15,7 +15,7 @@
 .sr-wrap {
 	max-width: 520px;
 	margin: 32px auto;
-	background: #fff;
+	background: var(--ork-card-bg);
 	border-radius: 12px;
 	box-shadow: 0 4px 24px rgba(0,0,0,0.12);
 	overflow: hidden;
@@ -63,8 +63,8 @@
 	opacity: 0.85;
 }
 .sr-intro {
-	background: #f7fafc;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-bg-inset);
+	border: 1px solid var(--ork-border);
 	border-left: 4px solid #276749;
 	border-radius: 6px;
 	padding: 14px 16px;
@@ -112,13 +112,15 @@
 .sr-field input[type=password] {
 	width: 100%;
 	padding: 10px 12px;
-	border: 1px solid #e2e8f0;
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 6px;
 	font-size: 16px;
 	box-sizing: border-box;
 	transition: border-color 0.15s;
 }
 .sr-field input:focus {
+	background: var(--ork-card-bg);
 	border-color: #276749;
 	outline: none;
 	box-shadow: 0 0 0 3px rgba(39,103,73,0.1);

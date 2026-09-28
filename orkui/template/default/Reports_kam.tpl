@@ -203,7 +203,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 				<tbody>
 <?php if (is_array($Awards)) : ?>
 <?php 	foreach ($Awards as $award) : ?>
-				<tr>
+				<tr<?=!empty($award['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : ''?>>
 <?php 		if (!isset($this->__session->kingdom_id)) : ?>
 					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>

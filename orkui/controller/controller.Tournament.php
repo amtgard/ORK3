@@ -73,8 +73,9 @@ class Controller_Tournament extends Controller
                 if (isset($r) && $r['Status'] == 0) {
                     $this->request->clear('Tournament_worksheet');
                 } elseif (isset($r) && $r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Tournament/worksheet');
-                    exit;
+                    // Reached only from inside the logged-in branch: Status 5 is
+                    // NoAuthorization, reported rather than disguised as a logout.
+                    $this->no_authorization('Tournament/worksheet/' . $tournament_id);
                 } elseif (isset($r)) {
                     $this->data['Error'] = $r['Error'] . (strlen(trim((string)($r['Detail'] ?? ''))) ? ':<p>' . $r['Detail'] : '');
                 }

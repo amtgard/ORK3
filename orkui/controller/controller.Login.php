@@ -28,6 +28,7 @@ class Controller_Login extends Controller
         $this->session->location = null;
         $this->Login->logout($userid);
         header('Location: ' . UIR);
+        exit;
     }
 
     // "Log out everywhere" — destroys all of the account's sessions (all
@@ -37,6 +38,7 @@ class Controller_Login extends Controller
         $this->session->location = null;
         $this->Login->logout_all($userid);
         header('Location: ' . UIR);
+        exit;
     }
 
     public function login($location = null)
@@ -59,9 +61,11 @@ class Controller_Login extends Controller
             if ($this->session->location == null) {
                 $uid = (int)$this->session->user_id;
                 header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+                exit;
             } else {
                 //$this->session->location = null;
                 header('Location: ' . UIR . $this->session->location);
+                exit;
             }
         } else {
             $this->data["error"] = $r['Status']['Error'];
@@ -126,11 +130,13 @@ class Controller_Login extends Controller
             return;
         }
 
-        error_log("Amtgard IDP OAuth callback: User Data: " . print_r($user_data, true));
+        // Payload deliberately not logged: $user_data carries live OAuth tokens.
+        error_log("Amtgard IDP OAuth callback: user info received");
 
         $result = $this->authorizeUser($user_data, $token_data);
 
-        error_log("Amtgard IDP OAuth callback: AuthorizeIdp Result: " . print_r($result, true));
+        // Payload deliberately not logged: $result carries the issued session token.
+        error_log("Amtgard IDP OAuth callback: AuthorizeIdp status " . (int)($result['Status'] ?? -1));
 
         if ($result['Status']['Status'] === 0) {
             $this->session->user_id = $result['UserId'];
@@ -140,9 +146,11 @@ class Controller_Login extends Controller
             if (!empty($this->session->location)) {
                 $_dest = $this->session->location;
                 header('Location: ' . UIR . $_dest);
+                exit;
             } else {
                 $uid = (int)$this->session->user_id;
                 header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+                exit;
             }
         } else {
             $this->data['error'] = $result['Status']['Error'];
