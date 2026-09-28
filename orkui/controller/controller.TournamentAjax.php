@@ -9,6 +9,11 @@ class Controller_TournamentAjax extends Controller
         // Backend Detail can carry internal specifics; only expose it to authenticated
         // callers. Spectator (no-session) endpoints get a generic message. (#17)
         $det = isset($this->session->user_id) ? trim((string)($r['Detail'] ?? '')) : '';
+        if ($det !== '' && $msg === ServiceErrorMessages::InvalidParameter) {
+            // The generic "You have set a parameter incorrectly." prefix adds nothing when
+            // a specific Detail explains the problem; show the Detail alone.
+            return json_encode(['status' => $r['Status'], 'error' => $det]);
+        }
         return json_encode(['status' => $r['Status'], 'error' => $det !== '' ? "$msg: $det" : $msg]);
     }
 
@@ -176,10 +181,18 @@ class Controller_TournamentAjax extends Controller
                     'BracketId' => $bid,
                     'Style'     => $b['Style']  ?? '',
                     'Method'    => $b['Method'] ?? '',
+                    'StyleNote' => $b['StyleNote'] ?? '',
+                    'Status'    => $b['Status'] ?? '',
                 ];
-                $mr = $this->Tournament->get_matches(['BracketId' => $bid]);
-                if ($mr['Status'] != 0 || empty($mr['Detail'])) {
-                    continue;
+                // Points brackets have no matches (scores live in point_score), so include
+                // them once they are underway regardless of match count.
+                $isLivePoints = ($b['Method'] ?? '') === 'points'
+                    && in_array($b['Status'] ?? '', ['active', 'complete', 'finalized'], true);
+                if (!$isLivePoints) {
+                    $mr = $this->Tournament->get_matches(['BracketId' => $bid]);
+                    if ($mr['Status'] != 0 || empty($mr['Detail'])) {
+                        continue;
+                    }
                 }
                 $sr = $this->Tournament->get_standings($bid);
                 if ($sr['Status'] == 0) {
@@ -310,12 +323,23 @@ class Controller_TournamentAjax extends Controller
                 'Token'        => $this->session->token,
                 'TournamentId' => $tournament_id,
                 'BracketId'    => $bracket_id,
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'bracketId' => (int)($r['Detail'] ?? 0)])
                 : $this->modelError($r);
 
         } elseif ($action === 'updatebracket') {
+            // Manage-permission check first, so a non-manager gets NoAuthorization rather
+            // than field-validation feedback. UpdateBracket re-checks it in the lib.
+            $auth = $this->Tournament->auth_check([
+                'Token'        => $this->session->token,
+                'TournamentId' => $tournament_id,
+            ]);
+            if ($auth['Status'] != 0) {
+                echo $this->modelError($auth);
+                exit;
+            }
             $bracket_id = (int)($_POST['BracketId'] ?? 0);
             if (!valid_id($bracket_id)) {
                 echo json_encode(['status' => 1, 'error' => 'BracketId required.']);
@@ -347,6 +371,7 @@ class Controller_TournamentAjax extends Controller
                 'PointRounds'    => (int)($_POST['PointRounds'] ?? 0),
                 'PointMode'      => trim($_POST['PointMode'] ?? ''),
                 'PointScale'     => trim($_POST['PointScale'] ?? ''),
+                'ActionId'       => trim($_POST['ActionId'] ?? ''),
             // Only forward FirstRoundMode when the client actually sent it, so an edit
             // that didn't offer the control leaves the stored value untouched.
             ], isset($_POST['FirstRoundMode']) ? ['FirstRoundMode' => trim($_POST['FirstRoundMode'])] : []));
@@ -425,6 +450,7 @@ class Controller_TournamentAjax extends Controller
                 'TournamentId' => $tournament_id,
                 'BracketId'    => $bracket_id,
                 'WaiveReset'   => (int)($_POST['WaiveReset'] ?? 0),
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'bracketId' => $bracket_id])
@@ -441,6 +467,7 @@ class Controller_TournamentAjax extends Controller
                 'Token'        => $this->session->token,
                 'TournamentId' => $tournament_id,
                 'BracketId'    => $bracket_id,
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'bracketId' => $bracket_id])
@@ -522,6 +549,7 @@ class Controller_TournamentAjax extends Controller
                 'ParkId'                => (int)($_POST['ParkId']                ?? 0),
                 'KingdomId'             => (int)($_POST['KingdomId']             ?? 0),
                 'EventCalendarDetailId' => (int)($_POST['EventCalendarDetailId'] ?? 0),
+                'ActionId'              => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => $tournament_id])
@@ -576,6 +604,7 @@ class Controller_TournamentAjax extends Controller
                     'status'            => 0,
                     'participantNumber' => is_array($detail) ? (int)($detail['ParticipantNumber'] ?? 0) : 0,
                     'registrationId'    => is_array($detail) ? (int)($detail['RegistrationId'] ?? 0) : (int)$detail,
+                    'alreadyRegistered' => is_array($detail) && !empty($detail['AlreadyRegistered']),
                 ]);
             } else {
                 echo $this->modelError($r);
@@ -727,6 +756,14 @@ class Controller_TournamentAjax extends Controller
                 ? json_encode(['status' => 0, 'matches' => $r['Detail'] ?? []])
                 : $this->modelError($r);
             exit;
+
+        } elseif ($action === 'pointstandings') {
+            // Points-bracket per-cell scores for collab sync (same data the profile page renders publicly).
+            $r = $this->Tournament->get_point_standings(['BracketId' => $bracket_id]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'standings' => $r['Detail'] ?? []])
+                : $this->modelError($r);
+            exit;
         }
 
         // ── All other bracket actions require a logged-in session ──
@@ -832,6 +869,7 @@ class Controller_TournamentAjax extends Controller
                 'Token'        => $this->session->token,
                 'TournamentId' => $tid,
                 'BracketId'    => $bracket_id,
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
@@ -947,6 +985,7 @@ class Controller_TournamentAjax extends Controller
                 'BracketId'     => $bracket_id,
                 'ParticipantId' => $participant_id,
                 'Alias'         => trim($_POST['Alias'] ?? ''),
+                'ActionId'      => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'participantId' => (int)($r['Detail']['ParticipantId'] ?? $participant_id), 'alias' => $r['Detail']['Alias'] ?? ''])
@@ -1142,7 +1181,8 @@ class Controller_TournamentAjax extends Controller
 
     /**
      * Event autocomplete search.
-     * Route: TournamentAjax/eventsearch?q={term}
+     * Route: TournamentAjax/eventsearch&q={term}&KingdomId={kid}
+     * KingdomId (optional) scopes results to that kingdom's events.
      */
     public function eventsearch($p = null)
     {
@@ -1157,7 +1197,7 @@ class Controller_TournamentAjax extends Controller
             exit;
         }
         $this->load_model('Tournament');
-        $r = $this->Tournament->search_events($q);
+        $r = $this->Tournament->search_events($q, (int)($_GET['KingdomId'] ?? 0));
         echo json_encode(($r['Status'] == 0) ? ($r['Detail'] ?? []) : []);
         exit;
     }

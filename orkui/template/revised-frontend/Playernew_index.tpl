@@ -2465,7 +2465,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 								<?php if (!empty($_t['StyleNote'])): ?><span style="color:#718096;font-size:0.85em"> (<?= htmlspecialchars($_t['StyleNote']) ?>)</span><?php endif; ?>
 								<span style="color:#a0aec0;font-size:0.8em;display:block"><?= ucfirst($_t['Method']) ?><?= $_t['ParticipantType'] === 'team' ? ' &middot; Team' : '' ?></span>
 							</td>
-							<td class="pn-col-nowrap"><?php if ($_t['Placement'] !== null): ?><?= $_t['Placement'] ?> of <?= $_t['TotalInBracket'] ?><?php else: ?>&mdash;<?php endif; ?></td>
+							<td class="pn-col-nowrap"><?php if ($_t['Placement'] !== null): ?><?= $_t['Placement'] ?> of <?= $_t['TotalInBracket'] ?><?= !empty($_t['Provisional']) ? ' (in progress)' : '' ?><?php else: ?>&mdash;<?php endif; ?></td>
 						</tr>
 						<?php endforeach; ?>
 					</tbody>

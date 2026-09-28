@@ -592,6 +592,7 @@
 				<li data-pktab="events" class="">
 					<i class="fas fa-flag"></i><span class="pk-tab-label"> Events</span>
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
+					<?php $_tnN = count($tournamentList); if ($_tnN > 0): ?><span class="pk-tab-count pk-tab-count-tn">&middot; <?= $_tnN ?> tournament<?= $_tnN === 1 ? '' : 's' ?></span><?php endif; ?>
 				</li>
 				<li data-pktab="players">
 					<i class="fas fa-users"></i><span class="pk-tab-label"> Players</span>
@@ -982,27 +983,24 @@
 					<?php endif; ?>
 				</div>
 				<?php if (count($tournamentList) > 0): ?>
-					<table class="pk-table" id="pk-tournaments-table">
+					<table class="pk-table pk-tournaments-dt" id="pk-tournaments-table">
 						<thead>
 							<tr>
-								<th data-sorttype="text">Tournament</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="date">Date</th>
+								<th>Tournament</th>
+								<th>Event</th>
+								<th>Date</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($tournamentList as $t): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"'> 
-								<td><?= htmlspecialchars($t['Name']) ?></td>
+							<tr onclick='window.location.href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"'>
+								<td><a href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a></td>
 								<td><?= htmlspecialchars($t['EventName']) ?></td>
-								<td class="pk-date-col" data-sortval="<?= $t['DateTime'] ?>">
-									<?= date('M. j, Y', strtotime($t['DateTime'])) ?>
-								</td>
+								<td class="pk-date-col" data-order="<?= (int)strtotime($t['DateTime']) ?>"><?= date('M j, Y', strtotime($t['DateTime'])) ?></td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table>
-					<div class="pk-pagination" id="pk-tournaments-table-pages"></div>
 				<?php else: ?>
 					<div class="pk-empty">No tournaments found</div>
 				<?php endif; ?>
@@ -1937,9 +1935,13 @@ var PkBannerConfig = {
 	</div>
 </div>
 
-<?php if ($CanAdminPark ?? false): ?>
+<?php if (!empty($CanManagePark)): ?>
+<?php /* Flatpickr: event modal (CanAdminPark) + Add Tournament date (CanManagePark, a superset) */ ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<?php endif; ?>
+
+<?php if ($CanAdminPark ?? false): ?>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
@@ -2287,6 +2289,10 @@ tr:hover .pk-copy-link { opacity: 1; }
 @keyframes pkCopiedFade {
 	0%,70% { opacity: 1; } 100% { opacity: 0; }
 }
+/* Tournaments list: real row links (keyboard / middle-click), styled like the Kingdom table */
+#pk-tournaments-table a { color: var(--pk-accent-mid, #0e7490); text-decoration: none; }
+#pk-tournaments-table a:hover { text-decoration: underline; }
+html[data-theme="dark"] #pk-tournaments-table a { color: var(--ork-link-bright); }
 </style>
 
 <?php if ($CanAdminPark ?? false): ?>
@@ -3130,7 +3136,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 			</div>
 			<div class="pk-addday-field">
 				<label for="pk-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
-				<input type="date" id="pk-addtournament-when" />
+				<input type="text" id="pk-addtournament-when" autocomplete="off" placeholder="Select date…" />
 			</div>
 			<div class="pk-addday-field">
 				<label for="pk-addtournament-desc">Description <span style="color:var(--ork-text-muted,#a0aec0);font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>

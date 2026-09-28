@@ -1,5 +1,7 @@
 <?php /* Tournament Report — rp- shell (header / context / stats) + tabbed detail views */ ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>revised-frontend/style/ork-datatables.css?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/style/ork-datatables.css')?>">
 <?php
 	$T          = $ProgramStats['Totals'] ?? [];
 	$scopeType  = $ScopeType;                       // 'kingdom' | 'park' | ''
@@ -77,7 +79,7 @@
 			<div class="rp-stat-label">Tournaments</div>
 		</div>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="Distinct players who competed.">?</span></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="Distinct linked players entered in an individual bracket (matches the Fighters list).">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-users"></i></div>
 			<div class="rp-stat-number"><?=number_format((int)($T['UniqueParticipants']??0))?></div>
 			<div class="rp-stat-label">Unique Fighters</div>
@@ -132,25 +134,23 @@
 <?php endif; ?>
 
 </div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<?php /* revised.js provides the shared window.orkInitDataTable used by the Kingdom/Park tournament tables. */ ?>
+<script src="<?=HTTP_TEMPLATE?>revised-frontend/script/revised.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/revised.js')?>"></script>
 <script>window.__tnrSectionBase = <?=json_encode($sectionBase)?>;</script>
 <script>
 (function(){
   var root = document.getElementById('tnr-report'); if(!root) return;
 
-  // Sortable-table headers — idempotent so freshly injected lazy panels bind once.
-  function bindSortable(scope){
-    scope.querySelectorAll('.tnr-sortable th[data-sort]').forEach(function(th){
-      if(th.__tnrSort) return; th.__tnrSort=1;
-      th.style.cursor='pointer';
-      th.addEventListener('click', function(){
-        var table=th.closest('table'), tbody=table.tBodies[0], idx=Array.from(th.parentNode.children).indexOf(th);
-        var num=th.dataset.sort==='num', dir=th.__asc=!th.__asc?1:-1;
-        Array.from(tbody.rows).sort(function(a,b){
-          var x=a.cells[idx].textContent.trim(), y=b.cells[idx].textContent.trim();
-          if(num){ x=parseFloat(x)||0; y=parseFloat(y)||0; return (x-y)*dir; }
-          return x.localeCompare(y)*dir;
-        }).forEach(function(r){tbody.appendChild(r);});
-      });
+  // Leaderboard tables → shared ORK DataTables init (same as the Kingdom/Park tournament
+  // tables). Runs after a lazy section's HTML is injected; order [] keeps the server ranking.
+  function bindDataTables(scope){
+    if(!window.jQuery || !jQuery.fn.dataTable || typeof window.orkInitDataTable!=='function') return;
+    scope.querySelectorAll('table.tnr-dt').forEach(function(t){
+      if(jQuery.fn.dataTable.isDataTable(t)) return;
+      window.orkInitDataTable(jQuery(t), { order: [], csvName: t.getAttribute('data-csv-name') || 'Tournament Report' });
     });
   }
 
@@ -166,7 +166,7 @@
     });
   }
 
-  function bindPanel(scope){ bindSortable(scope); bindShowmore(scope); }
+  function bindPanel(scope){ bindDataTables(scope); bindShowmore(scope); }
 
   // Fetch a non-Overview tab body once, on first activation, then cache it in the DOM.
   function loadSection(panel){
@@ -204,7 +204,7 @@
 
   if(window.flatpickr){
     root.querySelectorAll('.tnr-date').forEach(function(el){
-      flatpickr(el,{altInput:true,altFormat:'F j, Y',dateFormat:'Y-m-d'});
+      flatpickr(el,{altInput:true,altFormat:'M j, Y',dateFormat:'Y-m-d'});
     });
   }
 

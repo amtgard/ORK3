@@ -428,13 +428,16 @@ class Controller_KingdomAjax extends Controller
             $this->load_model('Player');
             $mundane_id = (int)($_POST['MundaneId']       ?? 0);
             $award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
+            // Global award id (e.g. the tournament Recommend modal): the model resolves
+            // it to the recipient's own kingdom award, as Player/profile/addrecommendation does.
+            $global_award_id = (int)($_POST['AwardId'] ?? 0);
             $rank       = (int)($_POST['Rank']            ?? 0);
             $reason     = trim($_POST['Reason']           ?? '');
             if (!valid_id($mundane_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
                 exit;
             }
-            if (!valid_id($award_id)) {
+            if (!valid_id($award_id) && !valid_id($global_award_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
                 exit;
             }
@@ -445,6 +448,7 @@ class Controller_KingdomAjax extends Controller
             $r = $this->Player->add_player_recommendation([
                 'Token'          => $this->session->token,
                 'MundaneId'      => $mundane_id,
+                'AwardId'        => valid_id($global_award_id) ? $global_award_id : 0,
                 'KingdomAwardId' => $award_id,
                 'Rank'           => $rank > 0 ? $rank : null,
                 'GivenById'      => $this->session->user_id,
@@ -535,7 +539,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo (!isset($r['Status']) || $r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (trim((string)($r['Detail'] ?? '')) !== '' ? ': ' . $r['Detail'] : '')]);
 
         } elseif ($action === 'deletetournament') {
             $this->load_model('Tournament');
@@ -550,7 +554,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (trim((string)($r['Detail'] ?? '')) !== '' ? ': ' . $r['Detail'] : '')]);
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;

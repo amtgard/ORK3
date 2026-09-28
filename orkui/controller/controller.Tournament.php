@@ -76,7 +76,7 @@ class Controller_Tournament extends Controller
                     header('Location: '.UIR.'Login/login/Tournament/worksheet');
                     exit;
                 } elseif (isset($r)) {
-                    $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+                    $this->data['Error'] = $r['Error'] . (strlen(trim((string)($r['Detail'] ?? ''))) ? ':<p>' . $r['Detail'] : '');
                 }
             }
         }
@@ -115,7 +115,7 @@ class Controller_Tournament extends Controller
                     // surface an inline error and fall through to re-render the form.
                     $this->data['Error'] = 'You do not have authority to create a tournament here, or no kingdom or park was specified.';
                 } elseif (isset($r)) {
-                    $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+                    $this->data['Error'] = $r['Error'] . (strlen(trim((string)($r['Detail'] ?? ''))) ? ':<p>' . $r['Detail'] : '');
                 }
             }
         }
@@ -153,6 +153,9 @@ class Controller_Tournament extends Controller
             exit;
         }
         $this->data['tournament'] = $tournament;
+
+        // Effective kingdom for scoping player searches (tournament > park > event).
+        $this->data['SearchKingdomId'] = $this->Tournament->get_search_kingdom_id($tournament);
 
         // Build formatted event label for Edit modal pre-fill
         $this->data['tournament_event_label'] = '';
@@ -297,12 +300,30 @@ class Controller_Tournament extends Controller
         $standingsData = [];
         foreach ($brackets as $b) {
             $bid = (int)$b['BracketId'];
-            if (!empty($bracketData[$bid]['Matches'])) {
+            // Points brackets have no matches (scores live in point_score), so include
+            // them once they are underway regardless of match count.
+            $isLivePoints = ($b['Method'] ?? '') === 'points'
+                && in_array($b['Status'] ?? '', ['active', 'complete', 'finalized'], true);
+            if (!empty($bracketData[$bid]['Matches']) || $isLivePoints) {
                 $sr = $this->Tournament->get_standings($bid);
                 $standingsData[$bid] = $sr['Detail'] ?? [];
             }
         }
         $this->data['standings_data'] = $standingsData;
+
+        // Elimination placements (same resolver as the Tournament Report podium) for
+        // completed single/double brackets — standings Points/Losses can't tell the
+        // runner-up from the 3rd-place winner.
+        $placementsData = [];
+        foreach ($brackets as $b) {
+            $bid = (int)$b['BracketId'];
+            if (!empty($standingsData[$bid]) && in_array($b['Status'] ?? '', ['complete', 'finalized'], true)
+                && in_array($b['Method'] ?? '', ['single', 'double'], true)) {
+                $_pl = $this->Tournament->get_bracket_placements($bid);
+                $placementsData[$bid] = $_pl['Placements'] ?? [];
+            }
+        }
+        $this->data['placements_data'] = $placementsData;
 
         // Tournament-level registrants (roster: registered, with their bracket assignments)
         $_regs = $this->Tournament->get_registrants(['TournamentId' => $tournament_id]);
@@ -325,11 +346,22 @@ class Controller_Tournament extends Controller
         $_rt = $this->Tournament->get_registered_teams(['TournamentId' => $tournament_id]);
         $this->data['registered_teams'] = ($_rt['Status'] == 0) ? ($_rt['Detail'] ?? []) : [];
 
-        // Breadcrumb / nav menu
-        if (valid_id($tournament['KingdomId'])) {
+        // Breadcrumb / nav menu — built from the tournament alone. The constructors seed
+        // kingdom/park crumbs from the VIEWER's session park; drop those so a kingdom-level
+        // tournament doesn't show the viewer's home park. Re-added in kingdom > park order.
+        unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['tournament']);
+        $_crumbKid   = (int)($tournament['KingdomId'] ?? 0);
+        $_crumbKname = $tournament['KingdomName'] ?? '';
+        if (!valid_id($_crumbKid) && valid_id($tournament['ParkId'])) {
+            // Park-only tournament: take the kingdom from its park.
+            $_cpi        = $this->Park->get_park_info((int)$tournament['ParkId']);
+            $_crumbKid   = (int)($_cpi['KingdomInfo']['KingdomId'] ?? 0);
+            $_crumbKname = $_cpi['KingdomInfo']['KingdomName'] ?? '';
+        }
+        if (valid_id($_crumbKid)) {
             $this->data['menu']['kingdom'] = [
-                'url'     => UIR . 'Kingdom/profile/' . $tournament['KingdomId'],
-                'display' => $tournament['KingdomName'],
+                'url'     => UIR . 'Kingdom/profile/' . $_crumbKid,
+                'display' => $_crumbKname,
             ];
         }
         if (valid_id($tournament['ParkId'])) {

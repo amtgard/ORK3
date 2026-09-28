@@ -1872,7 +1872,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php // ---- Tournaments Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-tournaments">
 				<?php if ($tourneyCount > 0): ?>
-				<table class="ev-table">
+				<table class="ev-table" id="ev-tournaments-table">
 					<thead>
 						<tr>
 							<th>Tournament</th>
@@ -1887,7 +1887,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 									<?= htmlspecialchars($t['Name'] ?? 'Tournament') ?>
 								</a>
 							</td>
-							<td><?= $t['EventStart'] ? date('M j, Y', strtotime($t['EventStart'])) : '—' ?></td>
+							<?php $_tnTs = !empty($t['DateTime']) ? strtotime($t['DateTime']) : false; ?>
+							<td data-order="<?= (int)$_tnTs ?>"><?= $_tnTs ? date('M j, Y', $_tnTs) : '—' ?></td>
 						</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -2861,6 +2862,7 @@ var EvConfig = {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 <style>
 html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button,
 html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button:hover {
@@ -3088,6 +3090,15 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		});
 		window._evAttDt = _evAttDt;
 	}
+	// Tournaments tab → shared ORK DataTables init (same as the Kingdom/Park tournament tables).
+	var _evTnDt = null;
+	function initEvTnDt() {
+		if (_evTnDt || !$.fn || !$.fn.DataTable || typeof window.orkInitDataTable !== 'function') return;
+		_evTnDt = window.orkInitDataTable($('#ev-tournaments-table'), {
+			order: [[1, 'desc']],
+			csvName: 'Event Tournaments'
+		});
+	}
 	// Keep the address bar in sync with the visible tab so a copied URL reopens here.
 	// The schedule tab contributes its own view/day suffix via evScheduleHashSuffix.
 	window.evWriteHash = function(tabId) {
@@ -3103,6 +3114,9 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		if (tabId === 'ev-tab-attendance') {
 			setTimeout(function() { initEvAttDt(); }, 0);
 		}
+		if (tabId === 'ev-tab-tournaments') {
+			setTimeout(function() { initEvTnDt(); }, 0);
+		}
 		if (tabId === 'ev-tab-rsvp') {
 			evPulseRsvpCredits();
 		}
@@ -3111,6 +3125,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 	// Init now if the attendance tab is already visible on page load
 	$(function() {
 		if (document.querySelector('#ev-tab-attendance.ev-tab-visible')) initEvAttDt();
+		if (document.querySelector('#ev-tab-tournaments.ev-tab-visible')) initEvTnDt();
 	});
 	window.evInitAttDt = initEvAttDt;
 })();

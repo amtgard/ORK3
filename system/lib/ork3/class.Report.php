@@ -173,28 +173,60 @@ class Report extends Ork3
         return $response;
     }
 
-	public function TournamentReport($request) {
+    public function TournamentReport($request)
+    {
 
-		$key = Ork3::$Lib->ghettocache->key($request);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false)
-			return $cache;
+        // Fold the tournament write generation into the key: Tournament::bustTournamentReportCache()
+        // rotates it on every tournament write, so every request shape (legacy list, Event page,
+        // Kingdom/Park profiles, single-tournament profile) is invalidated at once.
+        $gen = Ork3::$Lib->ghettocache->counterGet('tournaments.gen');
+        if ($gen === false) {
+            $gen = Ork3::$Lib->ghettocache->counterSet('tournaments.gen', uniqid(), 2592000);
+        }
+        $key = $gen . '.' . Ork3::$Lib->ghettocache->key($request);
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
 
-		if (valid_id($request['KingdomId']))             $where .= " and (t.kingdom_id = " . (int)$request['KingdomId'] . " or e.kingdom_id = " . (int)$request['KingdomId'] . ")";
-		if (valid_id($request['ParkId']))               $where .= " and (t.park_id = " . (int)$request['ParkId'] . " or e.park_id = " . (int)$request['ParkId'] . ")";
-		if (valid_id($request['EventId']))              $where .= " and e.event_id = " . (int)$request['EventId'];
-		if (valid_id($request['TournamentId']))         $where .= " and t.tournament_id = " . (int)$request['TournamentId'];
-		if (valid_id($request['EventCalendarDetailId'])) $where .= " and d.event_calendardetail_id = " . (int)$request['EventCalendarDetailId'];
+        if (valid_id($request['KingdomId'])) {
+            $where .= " and (t.kingdom_id = " . (int)$request['KingdomId'] . " or e.kingdom_id = " . (int)$request['KingdomId'] . " or park.kingdom_id = " . (int)$request['KingdomId'] . ")";
+        }
+        if (valid_id($request['ParkId'])) {
+            $where .= " and (t.park_id = " . (int)$request['ParkId'] . " or e.park_id = " . (int)$request['ParkId'] . ")";
+        }
+        if (valid_id($request['EventId'])) {
+            $where .= " and e.event_id = " . (int)$request['EventId'];
+        }
+        if (valid_id($request['TournamentId'])) {
+            $where .= " and t.tournament_id = " . (int)$request['TournamentId'];
+        }
+        if (valid_id($request['EventCalendarDetailId'])) {
+            $where .= " and d.event_calendardetail_id = " . (int)$request['EventCalendarDetailId'];
+        }
 
-		if (valid_id($request['ParticipantMundaneId'])) $where .= " and pm.mundane_id = " . (int)$request['ParticipantMundaneId'];
-		if (valid_id($request['ParticipantUnitId']))    $where .= " and p.unit_id = " . (int)$request['ParticipantUnitId'];
-		if (valid_id($request['ParticipantParkId']))    $where .= " and p.park_id = " . (int)$request['ParticipantParkId'];
-		if (valid_id($request['ParticipantKingdomId'])) $where .= " and p.kingdom_id = " . (int)$request['ParticipantKingdomId'];
+        if (valid_id($request['ParticipantMundaneId'])) {
+            $where .= " and pm.mundane_id = " . (int)$request['ParticipantMundaneId'];
+        }
+        if (valid_id($request['ParticipantUnitId'])) {
+            $where .= " and p.unit_id = " . (int)$request['ParticipantUnitId'];
+        }
+        if (valid_id($request['ParticipantParkId'])) {
+            $where .= " and p.park_id = " . (int)$request['ParticipantParkId'];
+        }
+        if (valid_id($request['ParticipantKingdomId'])) {
+            $where .= " and p.kingdom_id = " . (int)$request['ParticipantKingdomId'];
+        }
 
-		if (valid_id($request['Limit'])) $limit = " limit " . (int)$request['Limit'];
+        if (valid_id($request['Limit'])) {
+            $limit = " limit " . (int)$request['Limit'];
+        }
 
-		$sql = "select t.*, k.name as kingdom_name, k.parent_kingdom_id, park.name as park_name, e.name as event_name, d.event_start,
+        $sql = "select t.*, k.name as kingdom_name, k.parent_kingdom_id, park.name as park_name, e.name as event_name, d.event_id as ecd_event_id, d.event_start,
 						(SELECT COUNT(*) FROM " . DB_PREFIX . "bracket b WHERE b.tournament_id = t.tournament_id) as bracket_count,
-						(SELECT COUNT(DISTINCT pm2.mundane_id) FROM " . DB_PREFIX . "participant_mundane pm2 WHERE pm2.tournament_id = t.tournament_id) as participant_count
+						(SELECT COUNT(DISTINCT CASE WHEN pm2.mundane_id > 0 THEN CONCAT('m', pm2.mundane_id) WHEN p2.participant_number > 0 THEN CONCAT('a', p2.participant_number) END)
+							FROM " . DB_PREFIX . "participant p2
+								LEFT JOIN " . DB_PREFIX . "participant_mundane pm2 ON pm2.participant_id = p2.participant_id
+							WHERE p2.tournament_id = t.tournament_id) as participant_count
 					from " . DB_PREFIX . "tournament t
 						left join " . DB_PREFIX . "event_calendardetail d on d.event_calendardetail_id = t.event_calendardetail_id
 							left join " . DB_PREFIX . "event e on d.event_id = e.event_id
@@ -208,47 +240,53 @@ class Report extends Ork3
 					order by t.date_time
 					$limit";
 
-		$r = $this->db->query($sql);
-		$response = array();
-		if ($r !== false) {
-			$response['Tournaments'] = array();
-			if ($r->size() > 0) {
-				while($r->next()) {
-					$response['Tournaments'][] = array(
-							'TournamentId' => $r->tournament_id,
-							'KingdomId' => $r->kingdom_id,
-							'KingdomName' => $r->kingdom_name,
-							'ParentKingdomId' => $r->parent_kingdom_id,
-							'ParkId' => $r->park_id,
-							'ParkName' => $r->park_name,
-							'EventCalendarDetailId' => $r->event_calendardetail_id,
-							'EventName' => $r->event_name,
-							'Name' => $r->name,
-							'Description' => $r->description,
-							'Url' => $r->url,
-							'DateTime' => $r->date_time,
-							'BracketCount' => (int)$r->bracket_count,
-							'ParticipantCount' => (int)$r->participant_count
-						);
-				}
-			}
-			$response['Status'] = Success();
-		} else {
-      logtrace("Tournaments", $sql);
-			$response['Status'] = InvalidParameter();
-		}
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
-	}
+        $r = $this->db->query($sql);
+        $response = array();
+        if ($r !== false) {
+            $response['Tournaments'] = array();
+            if ($r->size() > 0) {
+                while ($r->next()) {
+                    $response['Tournaments'][] = array(
+                            'TournamentId' => $r->tournament_id,
+                            'KingdomId' => $r->kingdom_id,
+                            'KingdomName' => $r->kingdom_name,
+                            'ParentKingdomId' => $r->parent_kingdom_id,
+                            'ParkId' => $r->park_id,
+                            'ParkName' => $r->park_name,
+                            'EventCalendarDetailId' => $r->event_calendardetail_id,
+                            'EventId' => (int)$r->ecd_event_id,
+                            'EventName' => $r->event_name,
+                            'Name' => $r->name,
+                            'Description' => $r->description,
+                            'Url' => $r->url,
+                            'DateTime' => $r->date_time,
+                            'EventStart' => $r->event_start,
+                            'BracketCount' => (int)$r->bracket_count,
+                            'ParticipantCount' => (int)$r->participant_count
+                        );
+                }
+            }
+            $response['Status'] = Success();
+        } else {
+            logtrace("Tournaments", $sql);
+            $response['Status'] = InvalidParameter();
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+    }
 
-	public function GetPlayerTournamentHistory($request) {
-		$mundane_id = (int)($request['MundaneId'] ?? 0);
-		if ($mundane_id < 1) return Success([]);
+    public function GetPlayerTournamentHistory($request)
+    {
+        $mundane_id = (int)($request['MundaneId'] ?? 0);
+        if ($mundane_id < 1) {
+            return Success([]);
+        }
 
-		$key = Ork3::$Lib->ghettocache->key($request);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false)
-			return $cache;
+        $key = Ork3::$Lib->ghettocache->key($request);
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false) {
+            return $cache;
+        }
 
-		$sql = "SELECT
+        $sql = "SELECT
 					p.participant_id,
 					t.tournament_id,
 					t.name AS tournament_name,
@@ -275,32 +313,32 @@ class Report extends Ork3
 				WHERE pm.mundane_id = $mundane_id
 				ORDER BY t.date_time DESC, t.tournament_id, b.bracket_id";
 
-		$r = $this->db->query($sql);
-		$rows = [];
-		if ($r !== false && $r->size() > 0) {
-			while ($r->next()) {
-				$rows[] = [
-					'ParticipantId'         => (int)$r->participant_id,
-					'TournamentId'          => (int)$r->tournament_id,
-					'TournamentName'        => $r->tournament_name,
-					'DateTime'              => $r->date_time,
-					'BracketId'             => (int)$r->bracket_id,
-					'Style'                 => $r->style,
-					'StyleNote'             => $r->style_note,
-					'Method'                => $r->method,
-					'ParticipantType'       => $r->participant_type,
-					'ParkName'              => $r->park_name,
-					'KingdomName'           => $r->kingdom_name,
-					'EventName'             => $r->event_name,
-					'EventId'               => (int)$r->event_id,
-					'EventDetailId'         => (int)$r->event_calendardetail_id,
-					'TotalInBracket'        => (int)$r->total_in_bracket,
-				];
-			}
-		}
-		$response = Success($rows);
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
-	}
+        $r = $this->db->query($sql);
+        $rows = [];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $rows[] = [
+                    'ParticipantId'         => (int)$r->participant_id,
+                    'TournamentId'          => (int)$r->tournament_id,
+                    'TournamentName'        => $r->tournament_name,
+                    'DateTime'              => $r->date_time,
+                    'BracketId'             => (int)$r->bracket_id,
+                    'Style'                 => $r->style,
+                    'StyleNote'             => $r->style_note,
+                    'Method'                => $r->method,
+                    'ParticipantType'       => $r->participant_type,
+                    'ParkName'              => $r->park_name,
+                    'KingdomName'           => $r->kingdom_name,
+                    'EventName'             => $r->event_name,
+                    'EventId'               => (int)$r->event_id,
+                    'EventDetailId'         => (int)$r->event_calendardetail_id,
+                    'TotalInBracket'        => (int)$r->total_in_bracket,
+                ];
+            }
+        }
+        $response = Success($rows);
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+    }
 
     public function ClassMasters($request)
     {

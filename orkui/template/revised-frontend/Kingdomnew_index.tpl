@@ -329,6 +329,7 @@
 				<li data-kntab="events">
 					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>
 					<span class="kn-tab-count">(<?= count($eventList) ?>)</span>
+					<?php $_tnN = count($tournamentList); if ($_tnN > 0): ?><span class="kn-tab-count kn-tab-count-tn">&middot; <?= $_tnN ?> tournament<?= $_tnN === 1 ? '' : 's' ?></span><?php endif; ?>
 				</li>
 				<li data-kntab="map">
 					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
@@ -772,21 +773,21 @@
 					<?php endif; ?>
 				</div>
 				<?php if (count($tournamentList) > 0): ?>
-					<table class="kn-table kn-sortable" id="kn-tournaments-table">
+					<table class="kn-table" id="kn-tournaments-table">
 						<thead>
 							<tr>
-								<th data-sorttype="date">Date</th>
-								<th data-sorttype="text">Tournament</th>
-								<th data-sorttype="text">Park</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="num">Brackets</th>
-								<th data-sorttype="num">Participants</th>
+								<th>Date</th>
+								<th>Tournament</th>
+								<th>Park</th>
+								<th>Event</th>
+								<th>Brackets</th>
+								<th>Participants</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($tournamentList as $t): ?>
 								<tr class="kn-row-link" data-type="<?= (int)($t['ParkId'] ?? 0) > 0 ? 'park-event' : 'kingdom-event' ?>" onclick="window.location.href='<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>'">
-									<td class="kn-col-nowrap"><?= date("M j, Y", strtotime($t['DateTime'])) ?></td>
+									<td class="kn-col-nowrap" data-order="<?= (int)strtotime($t['DateTime']) ?>"><?= date("M j, Y", strtotime($t['DateTime'])) ?></td>
 									<td>
 										<a href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a>
 									</td>
@@ -2594,7 +2595,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 			</div>
 			<div class="kn-acct-field">
 				<label for="kn-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
-				<input type="date" id="kn-addtournament-when" />
+				<input type="text" id="kn-addtournament-when" autocomplete="off" placeholder="Select date…" />
 			</div>
 			<div class="kn-acct-field">
 				<label for="kn-addtournament-desc">Description <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>

@@ -8,6 +8,7 @@ class Model_Tournament extends Model
         $this->Report          = new APIModel('Report');
         $this->Tournament      = new APIModel('Tournament');
         $this->TournamentExport = new APIModel('TournamentExport');
+        $this->TournamentReport = new APIModel('TournamentReport');
     }
 
     public function get_tournies($request)
@@ -215,9 +216,43 @@ class Model_Tournament extends Model
         return $this->Tournament->SearchParks($query);
     }
 
-    public function search_events($query)
+    public function search_events($query, $kingdom_id = 0)
     {
-        return $this->Tournament->SearchEvents($query);
+        return $this->Tournament->SearchEvents($query, $kingdom_id);
+    }
+
+    /**
+     * Kingdom used to scope tournament player searches: the tournament's own
+     * kingdom, else its park's kingdom, else its event's kingdom (0 if none).
+     */
+    public function get_search_kingdom_id(array $tournament): int
+    {
+        $kid = (int)($tournament['KingdomId'] ?? 0);
+        if (valid_id($kid)) {
+            return $kid;
+        }
+        $pid = (int)($tournament['ParkId'] ?? 0);
+        if (valid_id($pid)) {
+            $pr  = (new APIModel('Park'))->GetParkShortInfo(['ParkId' => $pid]);
+            $kid = (int)($pr['ParkInfo']['KingdomId'] ?? 0);
+            if (valid_id($kid)) {
+                return $kid;
+            }
+        }
+        $ecd = (int)($tournament['EventCalendarDetailId'] ?? 0);
+        if (valid_id($ecd)) {
+            $event = new APIModel('Event');
+            $dr    = $event->GetEventDetail(['EventCalendarDetailId' => $ecd]);
+            $eid   = (int)($dr['CalendarEventDetails'][0]['EventId'] ?? 0);
+            if (valid_id($eid)) {
+                $er  = $event->GetEvent(['EventId' => $eid]);
+                $kid = (int)($er['KingdomId'] ?? 0);
+                if (valid_id($kid)) {
+                    return $kid;
+                }
+            }
+        }
+        return 0;
     }
 
     public function get_tournament_event_label($tournament_id)
@@ -233,6 +268,11 @@ class Model_Tournament extends Model
     public function get_standings($bracket_id)
     {
         return $this->Tournament->GetStandings(['BracketId' => $bracket_id]);
+    }
+
+    public function get_bracket_placements($bracket_id)
+    {
+        return $this->TournamentReport->GetBracketPlacements(['BracketId' => (int)$bracket_id]);
     }
 
     public function export_workbook($tournament_id)

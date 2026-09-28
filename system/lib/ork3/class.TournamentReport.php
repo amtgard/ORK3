@@ -396,6 +396,10 @@ class TournamentReport extends Ork3
             if ($pid <= 0) {
                 continue;
             }
+            // Annulled withdrawals (all their matches voided) are excluded from placement.
+            if (($row['WithdrawMode'] ?? '') === 'annul' && !in_array((string)($row['Status'] ?? ''), ['', 'active'], true)) {
+                continue;
+            }
             $pos++;
             $rank = (int)($row['Rank'] ?? 0);
             if ($rank <= 0) {
@@ -523,12 +527,12 @@ class TournamentReport extends Ork3
     }
 
     /** SQL IN-list (quoted) of result enum values that mean participant_1 won. */
-    private static function sqlP1Wins()
+    public static function sqlP1Wins()
     {
         return "'1-wins','2-forfeits','2-is-disqualified','2-is-bye'";
     }
     /** SQL IN-list (quoted) of result enum values that mean participant_2 won. */
-    private static function sqlP2Wins()
+    public static function sqlP2Wins()
     {
         return "'2-wins','forfeit','disqualified','1-forfeits','1-is-disqualified','1-is-bye'";
     }
@@ -553,7 +557,10 @@ class TournamentReport extends Ork3
     {
         $w = '';
         if (valid_id($request['KingdomId'] ?? 0)) {
-            $w .= " AND $alias.kingdom_id = " . (int)$request['KingdomId'];
+            // Park-only tournaments (kingdom_id 0) belong to the kingdom via their park.
+            $kid = (int)$request['KingdomId'];
+            $w .= " AND ($alias.kingdom_id = " . $kid
+                . " OR $alias.park_id IN (SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = " . $kid . "))";
         }
         if (valid_id($request['ParkId'] ?? 0)) {
             $w .= " AND $alias.park_id = "    . (int)$request['ParkId'];
@@ -591,12 +598,26 @@ class TournamentReport extends Ork3
 
         $where = $this->scopeWhere($request, 't');
 
+        // ork_tournament.status is written once at create and never advanced, so the
+        // lifecycle is derived from bracket statuses instead: complete = at least one
+        // bracket and every bracket complete/finalized; active = any bracket active;
+        // otherwise setup. The LEFT JOIN keeps bracketless tournaments (as setup).
         $row = $this->db->query(
             "SELECT COUNT(*) AS total,
-			        SUM(t.status='setup')    AS setup,
-			        SUM(t.status='active')   AS active,
-			        SUM(t.status='complete') AS complete
-			 FROM " . DB_PREFIX . "tournament t WHERE 1 $where"
+			        SUM(d.st='setup')    AS setup,
+			        SUM(d.st='active')   AS active,
+			        SUM(d.st='complete') AS complete
+			 FROM (
+			   SELECT t.tournament_id,
+			          CASE WHEN COUNT(b.bracket_id) > 0
+			                AND SUM(b.status IN ('complete','finalized')) = COUNT(b.bracket_id) THEN 'complete'
+			               WHEN SUM(b.status = 'active') > 0 THEN 'active'
+			               ELSE 'setup' END AS st
+			   FROM " . DB_PREFIX . "tournament t
+			   LEFT JOIN " . DB_PREFIX . "bracket b ON b.tournament_id = t.tournament_id
+			   WHERE 1 $where
+			   GROUP BY t.tournament_id
+			 ) d"
         );
         $total = $setup = $active = $complete = 0;
         if ($row !== false && $row->size() > 0) {
@@ -610,10 +631,12 @@ class TournamentReport extends Ork3
         // avg_wl must average only INDIVIDUAL-bracket snapshots: a team-bracket
         // participant row carries the team's SUMMED warrior_level, which would inflate
         // the field average. The bracket LEFT JOIN is 1:1 (participant.bracket_id), so it
-        // does not fan out; the CASE keeps uniq/part_rows counting every entrant (team +
+        // does not fan out; the CASE keeps part_rows counting every entrant (team +
         // unassigned included) while excluding non-individual rows from the average.
+        // uniq matches the Fighters list: player-linked rows in individual brackets only
+        // (no tournament-level registration rows, no team rows).
         $prow = $this->db->query(
-            "SELECT COUNT(DISTINCT pm.mundane_id) AS uniq,
+            "SELECT COUNT(DISTINCT CASE WHEN p.bracket_id > 0 AND b.participants = 'individual' AND pm.mundane_id > 0 THEN pm.mundane_id END) AS uniq,
 			        AVG(NULLIF(CASE WHEN b.participants = 'individual' THEN p.warrior_level END, 0)) AS avg_wl,
 			        COUNT(p.participant_id) AS part_rows
 			 FROM " . DB_PREFIX . "participant p
@@ -632,8 +655,10 @@ class TournamentReport extends Ork3
             $part_rows = (int)$prow->part_rows;
         }
 
-        $byStyle  = $this->groupCount("SELECT b.style AS k, COUNT(*) AS c FROM " . DB_PREFIX . "bracket b JOIN " . DB_PREFIX . "tournament t ON t.tournament_id=b.tournament_id WHERE 1 $where GROUP BY b.style ORDER BY c DESC");
-        $byMethod = $this->groupCount("SELECT b.method AS k, COUNT(*) AS c FROM " . DB_PREFIX . "bracket b JOIN " . DB_PREFIX . "tournament t ON t.tournament_id=b.tournament_id WHERE 1 $where GROUP BY b.method ORDER BY c DESC");
+        // Legacy brackets stored with an empty ENUM value group under 'Unspecified' rather
+        // than rendering as an unlabeled row.
+        $byStyle  = $this->groupCount("SELECT COALESCE(NULLIF(b.style, ''), 'Unspecified') AS k, COUNT(*) AS c FROM " . DB_PREFIX . "bracket b JOIN " . DB_PREFIX . "tournament t ON t.tournament_id=b.tournament_id WHERE 1 $where GROUP BY k ORDER BY c DESC");
+        $byMethod = $this->groupCount("SELECT COALESCE(NULLIF(b.method, ''), 'Unspecified') AS k, COUNT(*) AS c FROM " . DB_PREFIX . "bracket b JOIN " . DB_PREFIX . "tournament t ON t.tournament_id=b.tournament_id WHERE 1 $where GROUP BY k ORDER BY c DESC");
 
         // Monthly tournaments + participants, zero-filled across a continuous month axis.
         $raw = [];
@@ -1141,29 +1166,34 @@ class TournamentReport extends Ork3
         // ranked fighters in SQL (rn <= 8) instead of materializing every fighter row just to
         // array_slice it away. Field-wide ParticipantCount + WarriorStats come from a separate
         // lightweight aggregate below (which needs every mundane, but no match fan-out).
-        $sql = "SELECT q.tournament_id, q.name, q.date_time, q.park_name, q.mundane_id, q.persona, q.wl, q.wins, q.losses
-		       FROM (
+        //
+        // Every tournament in scope is listed (LEFT JOIN onto the top-fighter rows), so
+        // alias-only and team-only tournaments still appear with an empty roster.
+        $sql = "SELECT t.tournament_id, t.name, t.date_time, COALESCE(pk.name,'') AS park_name,
+		              q.mundane_id, q.persona, q.wl, q.wins, q.losses
+		       FROM " . DB_PREFIX . "tournament t
+		         LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = t.park_id
+		         LEFT JOIN (
 		         SELECT g.*, ROW_NUMBER() OVER (PARTITION BY g.tournament_id ORDER BY g.wins DESC, g.losses ASC) AS rn
 		         FROM (
-		           SELECT t.tournament_id, t.name, t.date_time, COALESCE(pk.name,'') AS park_name,
+		           SELECT t.tournament_id,
 		                  pm.mundane_id, mn.persona, MAX(p.warrior_level) AS wl,
 		                  SUM((m.participant_1_id=p.participant_id AND m.result IN ($p1w))
 		                    OR (m.participant_2_id=p.participant_id AND m.result IN ($p2w))) AS wins,
 		                  SUM((m.participant_1_id=p.participant_id AND m.result IN ($p2w))
 		                    OR (m.participant_2_id=p.participant_id AND m.result IN ($p1w))) AS losses
 		           FROM " . DB_PREFIX . "tournament t
-		             LEFT JOIN " . DB_PREFIX . "park pk ON pk.park_id = t.park_id
 		             JOIN " . DB_PREFIX . "participant p ON p.tournament_id = t.tournament_id
 		             JOIN " . DB_PREFIX . "bracket b ON b.bracket_id = p.bracket_id AND b.participants = 'individual'
 		             JOIN " . DB_PREFIX . "participant_mundane pm ON pm.participant_id = p.participant_id
 		             LEFT JOIN " . DB_PREFIX . "mundane mn ON mn.mundane_id = pm.mundane_id
 		             LEFT JOIN " . DB_PREFIX . "match m ON (m.participant_1_id=p.participant_id OR m.participant_2_id=p.participant_id) AND m.bracket_id=p.bracket_id AND m.voided = 0
 		           WHERE 1 $where AND pm.mundane_id > 0
-		           GROUP BY t.tournament_id, t.name, t.date_time, park_name, pm.mundane_id, mn.persona
+		           GROUP BY t.tournament_id, pm.mundane_id, mn.persona
 		         ) g
-		       ) q
-		       WHERE q.rn <= 8
-		       ORDER BY q.date_time DESC, q.tournament_id DESC, q.rn ASC";
+		       ) q ON q.tournament_id = t.tournament_id AND q.rn <= 8
+		       WHERE 1 $where
+		       ORDER BY t.date_time DESC, t.tournament_id DESC, q.rn ASC";
 
         $tours = [];   // tournament_id => meta + top rows
         $r = $this->db->query($sql);
@@ -1197,16 +1227,23 @@ class TournamentReport extends Ork3
             return ['Tournaments' => [], 'Status' => Success()];
         }
 
-        // Field-wide participant count + warrior-level list per tournament (every mundane, not
+        // Field-wide participant count + warrior-level list per tournament (every entrant, not
         // just the top 8). No match join — this only needs the per-mundane warrior_level, so it
         // avoids the fan-out that made the ranked query expensive.
-        $statsSql = "SELECT t.tournament_id, pm.mundane_id, MAX(p.warrior_level) AS wl
+        // The count uses the same identity as Report::TournamentReport's participant_count
+        // (linked player once, alias-only entrant by participant_number; team identity rows
+        // have number 0 and drop out). WarriorStats stay linked players in individual brackets.
+        $statsSql = "SELECT t.tournament_id,
+		              CASE WHEN pm.mundane_id > 0 THEN CONCAT('m', pm.mundane_id)
+		                   WHEN p.participant_number > 0 THEN CONCAT('a', p.participant_number) END AS ident,
+		              MAX(CASE WHEN pm.mundane_id > 0 AND b.participants = 'individual' THEN p.warrior_level END) AS wl
 		       FROM " . DB_PREFIX . "tournament t
 		         JOIN " . DB_PREFIX . "participant p ON p.tournament_id = t.tournament_id
-		         JOIN " . DB_PREFIX . "bracket b ON b.bracket_id = p.bracket_id AND b.participants = 'individual'
-		         JOIN " . DB_PREFIX . "participant_mundane pm ON pm.participant_id = p.participant_id
-		       WHERE 1 $where AND pm.mundane_id > 0
-		       GROUP BY t.tournament_id, pm.mundane_id";
+		         LEFT JOIN " . DB_PREFIX . "bracket b ON b.bracket_id = p.bracket_id
+		         LEFT JOIN " . DB_PREFIX . "participant_mundane pm ON pm.participant_id = p.participant_id
+		       WHERE 1 $where
+		       GROUP BY t.tournament_id, ident
+		       HAVING ident IS NOT NULL";
         $sr = $this->db->query($statsSql);
         if ($sr !== false) {
             while ($sr->next()) {
@@ -1214,11 +1251,9 @@ class TournamentReport extends Ork3
                 if (!isset($tours[$tid])) {
                     continue;
                 }
-                $mid = (int)$sr->mundane_id;
-                if ($mid < 1) {
-                    continue;
+                if ($sr->wl !== null && $sr->wl !== '') {
+                    $tours[$tid]['_levels'][] = (int)$sr->wl;
                 }
-                $tours[$tid]['_levels'][] = (int)$sr->wl;
                 $tours[$tid]['_count']++;
             }
         }

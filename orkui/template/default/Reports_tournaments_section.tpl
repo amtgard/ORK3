@@ -49,7 +49,7 @@
 		<div class="tnr-tcard-top">
 			<div class="tnr-tcard-info">
 				<a class="tnr-tcard-name" href="<?=UIR?>Tournament/profile/<?=(int)$tour['TournamentId']?>"><?=htmlspecialchars($tour['Name'])?></a>
-				<div class="tnr-tcard-meta"><?=date('M j, Y', strtotime($tour['DateTime']))?><?php if ($scopeType==='kingdom' && $tour['ParkName']): ?> &middot; <?=htmlspecialchars($tour['ParkName'])?><?php endif; ?> &middot; <?=(int)$tour['BracketCount']?> bracket<?=$tour['BracketCount']==1?'':'s'?> &middot; <?=(int)$tour['ParticipantCount']?> fighters</div>
+				<div class="tnr-tcard-meta"><?=date('M j, Y', strtotime($tour['DateTime']))?><?php if ($scopeType==='kingdom' && $tour['ParkName']): ?> &middot; <?=htmlspecialchars($tour['ParkName'])?><?php endif; ?> &middot; <?=(int)$tour['BracketCount']?> bracket<?=$tour['BracketCount']==1?'':'s'?> &middot; <?=(int)$tour['ParticipantCount']?> entrant<?=$tour['ParticipantCount']==1?'':'s'?></div>
 				<div class="tnr-warstats">
 					<span class="tnr-warstat tnr-warstat-hi" data-tip="Highest Order of the Warrior in the field">Highest: <b><?=htmlspecialchars($warriorLabel($w['HighestLevel'] ?? 0))?></b></span>
 					<span class="tnr-warstat" data-tip="Average Order-of-the-Warrior level of the field"><b><?=htmlspecialchars($w['AvgLevel'])?></b> avg Warrior</span>
@@ -77,6 +77,9 @@
 					<td><?=(int)$p['Wins']?></td><td><?=(int)$p['Losses']?></td><td><?=(int)$p['WinPct']?>%</td><td><?=(int)$p['WarriorLevel']?></td>
 				</tr>
 <?php endforeach; ?>
+<?php if (empty($tour['TopParticipants'])): ?>
+				<tr><td colspan="6" class="tnr-tstandings-empty"><?=(int)($tour['ParticipantCount'] ?? 0) === 0 ? 'No entrants yet' : 'No ranked fighters &mdash; only linked players in individual brackets are ranked (alias-only and team entrants aren&rsquo;t)'?></td></tr>
+<?php endif; ?>
 			</tbody>
 		</table>
 <?php if (count($tour['TopParticipants']) > 4): ?>
@@ -87,14 +90,16 @@
 <?php if (empty($TournamentList['Tournaments'])): ?><div class="tnr-empty">No tournaments in range.</div><?php endif; ?>
 
 <?php elseif ($section === 'fighters'): ?>
-	<table class="tnr-table tnr-sortable" id="tnr-fighters">
+<?php if (!empty($Leaderboard['Fighters'])): ?>
+	<div class="rp-table-area">
+	<table class="tnr-table tnr-dt" id="tnr-fighters" data-csv-name="Tournament Fighters">
 		<thead><tr>
-			<th data-sort="text">Fighter</th>
-			<th data-sort="num" data-tip="Order of the Warrior 0-12">Warrior</th>
-			<th data-sort="num">Tournaments</th>
-			<th data-sort="num">W</th><th data-sort="num">L</th><th data-sort="num">Win %</th>
-			<th data-sort="num">Championships</th><th data-sort="num">Podiums</th>
-			<th data-sort="num">Streak</th><th data-sort="num" data-tip="Wins vs fighters 3+ Warrior levels higher">Upsets</th>
+			<th>Fighter</th>
+			<th data-tip="Order of the Warrior 0-12">Warrior</th>
+			<th>Tournaments</th>
+			<th>W</th><th>L</th><th>Win %</th>
+			<th>Championships</th><th>Podiums</th>
+			<th>Streak</th><th data-tip="Wins vs fighters 3+ Warrior levels higher">Upsets</th>
 		</tr></thead>
 		<tbody>
 <?php foreach (($Leaderboard['Fighters']??[]) as $f): ?>
@@ -102,14 +107,15 @@
 				<td><a href="<?=UIR?>Player/profile/<?=(int)$f['MundaneId']?>"><?=htmlspecialchars($f['Persona'])?></a></td>
 				<td><?=(int)$f['WarriorLevel']?></td>
 				<td><?=(int)$f['TournamentsEntered']?></td>
-				<td><?=(int)$f['Wins']?></td><td><?=(int)$f['Losses']?></td><td><?=(int)$f['WinPct']?>%</td>
+				<td><?=(int)$f['Wins']?></td><td><?=(int)$f['Losses']?></td><td data-order="<?=(int)$f['WinPct']?>"><?=(int)$f['WinPct']?>%</td>
 				<td><?=(int)$f['Championships']?></td><td><?=(int)$f['Podiums']?></td>
 				<td><?=(int)$f['MaxStreak']?></td><td><?=(int)$f['UpsetWins']?></td>
 			</tr>
 <?php endforeach; ?>
 		</tbody>
 	</table>
-<?php if (empty($Leaderboard['Fighters'])): ?><div class="tnr-empty">No individual-bracket results in range.</div><?php endif; ?>
+	</div>
+<?php else: ?><div class="tnr-empty">No individual-bracket results in range.</div><?php endif; ?>
 
 <?php elseif ($section === 'awards'): ?>
 <?php foreach (($AwardCandidates['Candidates']??[]) as $c): ?>
@@ -126,8 +132,10 @@
 <?php if (empty($AwardCandidates['Candidates'])): ?><div class="tnr-empty">No recognition candidates meet the thresholds in range.</div><?php endif; ?>
 
 <?php elseif ($section === 'parks'): ?>
-	<table class="tnr-table tnr-sortable" id="tnr-parks">
-		<thead><tr><th data-sort="text">Park</th><th data-sort="num">Tournaments Hosted</th><th data-sort="num">Participants</th><th data-sort="num">Championships</th><th data-sort="num">Avg Warrior</th></tr></thead>
+<?php if (!empty($ParkComparison['Parks'])): ?>
+	<div class="rp-table-area">
+	<table class="tnr-table tnr-dt" id="tnr-parks" data-csv-name="Tournament Parks">
+		<thead><tr><th>Park</th><th>Tournaments Hosted</th><th>Participants</th><th>Championships</th><th>Avg Warrior</th></tr></thead>
 		<tbody>
 <?php foreach (($ParkComparison['Parks']??[]) as $p): ?>
 			<tr>
@@ -138,7 +146,8 @@
 <?php endforeach; ?>
 		</tbody>
 	</table>
-<?php if (empty($ParkComparison['Parks'])): ?><div class="tnr-empty">No park-hosted tournaments in range.</div><?php endif; ?>
+	</div>
+<?php else: ?><div class="tnr-empty">No park-hosted tournaments in range.</div><?php endif; ?>
 
 <?php elseif ($section === 'teams'): ?>
 	<p class="tnr-context">Team brackets that have concluded &mdash; champion and runner-up teams with their member rosters.</p>
