@@ -22,11 +22,11 @@ html[data-theme="dark"] .se-header-title,
 html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
 }
-.se-header-sub { font-size:13px; color:#718096; margin-top:1px; }
+.se-header-sub { font-size:13px; color:var(--ork-text-on-ground); margin-top:1px; }
 
 /* ── Search bar ── */
 .se-search-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	padding:16px 20px; display:flex; align-items:center; gap:14px;
 }
 .se-search-label {
@@ -37,13 +37,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 .se-search-input-wrap { flex:1; position:relative; }
 .se-search-input {
 	width:100%; padding:8px 12px 8px 36px;
-	border:1px solid #cbd5e0; border-radius:6px;
-	font-size:14px; color:#2d3748;
+	border:1px solid var(--ork-input-border); border-radius:6px;
+	font-size:14px; color:#2d3748; background:var(--ork-input-bg);
 	outline:none; box-sizing:border-box;
 	transition:border-color .15s, box-shadow .15s;
 }
 .se-search-input:focus {
-	border-color:#3182ce;
+	border-color:#3182ce; background:var(--ork-card-bg);
 	box-shadow:0 0 0 3px rgba(49,130,206,.15);
 }
 .se-search-icon {
@@ -54,13 +54,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 /* ── Results cards ── */
 .se-results-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	overflow:hidden;
 }
 .se-results-header {
 	display:flex; align-items:center; justify-content:space-between;
-	padding:10px 16px; border-bottom:1px solid #e2e8f0;
-	background:#f7fafc;
+	padding:10px 16px; border-bottom:1px solid var(--ork-divider);
+	background:var(--ork-bg-secondary);
 }
 .se-results-title {
 	font-size:13px; font-weight:700; color:#2d3748;
@@ -82,7 +82,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	font-size:11px; font-weight:700; text-transform:uppercase;
 	letter-spacing:.06em; color:#718096;
 	padding:9px 14px; text-align:left;
-	border-bottom:1px solid #e2e8f0; background:#f7fafc;
+	border-bottom:1px solid var(--ork-divider); background:var(--ork-bg-secondary);
 }
 .se-table td {
 	padding:10px 14px; font-size:13px; color:#4a5568;

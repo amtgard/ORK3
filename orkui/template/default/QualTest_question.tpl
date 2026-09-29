@@ -21,27 +21,32 @@
 </style>
 
 <style>
-.qt-form-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 22px 24px; }
+.qt-form-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px; padding: 22px 24px; }
+/* Light only: .rp-table-area is pure layout on this page; .qt-form-card is the
+   L1 surface, so drop the wrapper chrome. Dark keeps its #1e2433 frame. */
+html:not([data-theme="dark"]) .rp-table-area {
+	background: transparent; border-color: transparent; box-shadow: none; padding: 0;
+}
 .qt-field { margin-bottom: 18px; }
 .qt-field label { display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
                   letter-spacing: 0.05em; color: var(--rp-text-muted); margin-bottom: 6px; }
 .qt-field textarea, .qt-field input[type=text] {
-	width: 100%; padding: 8px 10px; border: 1px solid var(--rp-border); border-radius: 4px;
+	width: 100%; padding: 8px 10px; border: 1px solid var(--ork-input-border); background: var(--ork-input-bg); border-radius: 4px;
 	font-size: 0.9rem; font-family: inherit; box-sizing: border-box; color: var(--rp-text);
 }
 .qt-field textarea { min-height: 80px; resize: vertical; }
-.qt-field textarea:focus, .qt-field input[type=text]:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); }
+.qt-field textarea:focus, .qt-field input[type=text]:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.35); background: var(--ork-card-bg); }
 .qt-answers-list { list-style: none; padding: 0; margin: 0; }
 .qt-answer-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .qt-answer-row input[type=radio] { width: 16px; height: 16px; accent-color: #2b6cb0; flex-shrink: 0; }
-.qt-answer-row input[type=text] { flex: 1; padding: 7px 10px; border: 1px solid var(--rp-border);
+.qt-answer-row input[type=text] { flex: 1; padding: 7px 10px; border: 1px solid var(--ork-input-border); background: var(--ork-input-bg);
                                    border-radius: 4px; font-size: 0.9rem; }
 .qt-remove-btn { background: none; border: none; color: #c05621; cursor: pointer; font-size: 1rem; padding: 2px 4px; }
 .qt-remove-btn:hover { color: #9c4221; }
 .qt-add-answer-btn { background: none; border: none; color: #2b6cb0; cursor: pointer; font-size: 0.82rem;
                      text-decoration: underline; padding: 0; margin-top: 4px; }
 .qt-field-hint { font-size: 0.75rem; color: var(--rp-text-muted); margin-top: 4px; }
-.qt-form-actions { display: flex; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rp-border); }
+.qt-form-actions { display: flex; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rp-divider); }
 /* Editing a question that is in the LIVE set changes the running test immediately. */
 .qt-live-edit-warning { display:flex; align-items:flex-start; gap:10px; margin:0 0 18px; padding:12px 14px;
 	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:6px;

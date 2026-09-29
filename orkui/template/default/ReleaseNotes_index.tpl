@@ -13,11 +13,11 @@ $version = $ork_version ?? '3.x';
 }
 
 .rn-release {
-	background: #fff;
+	background: var(--ork-card-bg);
 	border: 1px solid var(--rp-border);
 	border-radius: 8px;
 	margin-bottom: 20px;
-	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+	box-shadow: var(--ork-shadow-card);
 	overflow: hidden;
 }
 
@@ -27,7 +27,7 @@ $version = $ork_version ?? '3.x';
 	justify-content: space-between;
 	padding: 14px 20px;
 	background: var(--rp-bg-light);
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 }
 
 .rn-release-title {
@@ -54,7 +54,7 @@ $version = $ork_version ?? '3.x';
 	align-items: flex-start;
 	gap: 14px;
 	padding: 14px 20px;
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 }
 
 .rn-item:last-child {

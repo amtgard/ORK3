@@ -54,7 +54,7 @@ class Controller_Event extends Controller
                 $this->Event->toggle_rsvp($detail_id, $uid, (string)($this->session->token ?? ''));
             }
             header('Location: ' . UIR . 'Event/index/' . $event_id);
-            return;
+            exit;
         }
 
         $can_manage = $uid > 0 && valid_id($event_id)
@@ -210,10 +210,101 @@ class Controller_Event extends Controller
             }
         }
 
+        // A detail_id that no longer exists (deleted duplicate occurrence) or
+        // belongs to a different event would render a self-canonical "TBD"
+        // shell — which Google then indexes as real content. 301 to the
+        // event's current occurrence instead; permanent, because a deleted
+        // occurrence URL is never coming back.
+        if ($detail_id > 0) {
+            $_detailCheck = $this->Attendance->get_eventdetail_info($detail_id);
+            if (!is_array($_detailCheck) || (int)($_detailCheck['EventId'] ?? 0) !== $event_id) {
+                $_pickedDetail = $this->Event->get_default_occurrence_id($event_id);
+                header('Location: ' . UIR . 'Event/detail/' . (int)$event_id . ($_pickedDetail > 0 ? '/' . $_pickedDetail : ''), true, 301);
+                exit;
+            }
+        }
+
         $this->data['EventInfo']  = $info;
         $this->data['event_id']   = $event_id;
         $this->data['detail_id']  = $detail_id;
         $this->data['page_title'] = $info['Name'] ?? $this->data['page_title'];
+
+        // Link-preview card: event links are what get pasted into Discord
+        // most, so the embed should carry the event's own name, date and
+        // location instead of the site-generic blurb. Text-only for now —
+        // og:image policy (banners/heraldry) is a pending product decision.
+        $ogParts = array();
+        if (!empty($info['NextDate']) && strtotime($info['NextDate']) !== false) {
+            $ogParts[] = date('M j, Y', strtotime($info['NextDate']));
+        }
+        $ogWhere = trim(implode(', ', array_filter(array($info['ParkName'] ?? '', $info['KingdomName'] ?? ''))));
+        if ($ogWhere !== '') {
+            $ogParts[] = $ogWhere;
+        }
+        // Social proof sells events better than anything else on the card.
+        $ogGoing = (int)($info['RsvpGoing'] ?? 0);
+        if ($ogGoing > 0) {
+            $ogParts[] = $ogGoing . ' going';
+        }
+        $ogDesc = implode(' · ', $ogParts);
+        // Strip markdown heading/emphasis markers — descriptions are authored
+        // in the event editor's markdown and render literally in an embed.
+        $ogBlurb = trim(preg_replace('/[#*_>`]+/', ' ', strip_tags(html_entity_decode((string)($info['ShortDescription'] ?? '')))));
+        // Some organizers put ONLY a link in the description (e.g. Pacwar).
+        // A bare URL is useless as card/search-result prose — drop it and let
+        // the date/place line carry the description instead.
+        if (preg_match('#^https?://\S*$#', $ogBlurb)) {
+            $ogBlurb = '';
+        }
+        if ($ogBlurb !== '') {
+            if (function_exists('mb_substr')) {
+                $ogBlurb = mb_substr($ogBlurb, 0, 180);
+            } else {
+                $ogBlurb = substr($ogBlurb, 0, 180);
+            }
+            $ogDesc .= ($ogDesc !== '' ? ' — ' : '') . $ogBlurb;
+        }
+        $og = array(
+            'title'       => (string)($info['Name'] ?? 'Amtgard Event'),
+            'url'         => UIR . 'Event/detail/' . (int)$event_id . ($detail_id > 0 ? '/' . (int)$detail_id : ''),
+            'description' => $ogDesc !== '' ? $ogDesc : 'An Amtgard event on the ORK.',
+        );
+        // Event heraldry over the site logo when it exists (Ken's call).
+        // Same resolve pattern as the event page header.
+        if (!empty($info['HasHeraldry'])) {
+            $ogHerFile = Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event_id));
+            if ($ogHerFile !== '' && file_exists(DIR_EVENT_HERALDRY . $ogHerFile)) {
+                $og['image'] = HTTP_EVENT_HERALDRY . $ogHerFile . '?v=' . filemtime(DIR_EVENT_HERALDRY . $ogHerFile);
+                $og['image:width'] = '';
+                $og['image:height'] = '';
+            }
+        }
+        $this->data['og'] = $og;
+
+        // schema.org Event structured data for Google rich results — built
+        // from this occurrence's own dates and street address. Venue-local
+        // naive datetimes on purpose; see ork_event_jsonld().
+        if ($detail_id > 0) {
+            $ogDetail = $this->Attendance->get_eventdetail_info($detail_id);
+            if (is_array($ogDetail) && !empty($ogDetail['EventStart'])) {
+                $this->data['jsonld'] = ork_event_jsonld(array(
+                    'name'        => (string)($info['Name'] ?? ''),
+                    'start'       => (string)$ogDetail['EventStart'],
+                    'end'         => (string)($ogDetail['EventEnd'] ?? ''),
+                    'description' => $ogBlurb,
+                    'image'       => (string)($og['image'] ?? ''),
+                    'venue'       => (string)($info['ParkName'] ?? ''),
+                    'street'      => (string)($ogDetail['Address'] ?? ''),
+                    'city'        => (string)($ogDetail['City'] ?? ''),
+                    'province'    => (string)($ogDetail['Province'] ?? ''),
+                    'postal'      => (string)($ogDetail['PostalCode'] ?? ''),
+                    'country'     => (string)($ogDetail['Country'] ?? ''),
+                    'organizer'   => (string)($info['KingdomName'] ?? ''),
+                    'organizer_url' => !empty($info['KingdomId']) ? UIR . 'Kingdom/profile/' . (int)$info['KingdomId'] : '',
+                    'url'         => $og['url'],
+                ));
+            }
+        }
 
         unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['event']);
         if (!empty($info['KingdomId'])) {
@@ -294,18 +385,18 @@ class Controller_Event extends Controller
         if ($action === 'rsvp' && $uid > 0) {
             if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                 header('Location: ' . UIR . 'Event/index/' . $event_id);
-                return;
+                exit;
             }
             $cdCheck = $this->Attendance->get_eventdetail_info($detail_id);
             $_refDate = $cdCheck['EventEnd'] ?: ($cdCheck['EventStart'] ?? '');
             if ($_refDate && strtotime(date('Y-m-d', strtotime($_refDate))) < strtotime(date('Y-m-d'))) {
                 header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
-                return;
+                exit;
             }
             $status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
             $this->Event->set_rsvp($detail_id, $uid, $status, (string)($this->session->token ?? ''));
             header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
-            return;
+            exit;
         }
 
         $cdInfo = $this->Attendance->get_eventdetail_info($detail_id);
@@ -386,7 +477,14 @@ class Controller_Event extends Controller
                     }
                     $new_detail_id = $this->Event->reconcile_past_attendance($this->session->token, $event_id, $detail_id);
                     if ($new_detail_id > 0) {
-                        header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '?reconciled=1');
+                        // UIR is "index.php?Route=", so a '?' here is swallowed
+                        // into the Route value: the detail id parsed out of
+                        // "9014?reconciled=1" became 90141 and the officer
+                        // landed on an occurrence that does not exist,
+                        // rendering TBD/0/0 with an Edit form pointed at the
+                        // bogus id and no success message. Query parameters
+                        // appended to a UIR link must use '&'.
+                        header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '&reconciled=1');
                         exit;
                     }
                     $attData = $this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
@@ -591,7 +689,7 @@ class Controller_Event extends Controller
 
         if (!$uid || !$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
             header('Location: ' . UIR . 'Login');
-            return;
+            exit;
         }
 
         if (!empty($_POST)) {
@@ -654,7 +752,7 @@ class Controller_Event extends Controller
                     $this->data['Error'] = 'New occurrence created, but failed to save ' . implode(' and ', $_failed) . '. Please edit the occurrence to retry.';
                 }
                 header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
-                return;
+                exit;
             } elseif ($this->Event->event_api_status($r) != 5) {
                 $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
             }

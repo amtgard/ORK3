@@ -210,28 +210,28 @@
 	.wx-map-card .wx-map { height: 320px; }
 	.wx-lists > .wx-events { margin-top: 12px; }
 }
-.wx-rundown { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.wx-rundown { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 20px; box-shadow: var(--ork-shadow-card); }
 /* Fixed rundown height so warning-heavy days don't push the map down.
    Short days have some breathing room; long days scroll internally. */
 .wx-rundown { height: 140px; overflow-y: auto; }
 .wx-rundown h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-rundown p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; color: var(--ork-text, #2d3748); }
 .wx-rundown p:last-child { margin-bottom: 0; }
-.wx-rundown .wx-freshness { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted, #718096); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-border, #edf2f7); }
+.wx-rundown .wx-freshness { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted, #718096); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-divider, #e2e8f0); }
 .wx-rundown .wx-jump-park { color: var(--ork-link-bright, #2b6cb0); font-weight: 600; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .wx-rundown .wx-jump-park:hover { border-bottom-style: solid; }
 .wx-rundown .wx-events-link { color: var(--ork-link-bright, #2b6cb0); text-decoration: none; border-bottom: 1px dotted currentColor; }
 .wx-rundown .wx-events-link::after { content: ' ↓'; opacity: .6; }
 .wx-rundown .wx-events-link:hover { border-bottom-style: solid; }
 
-.wx-events { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-events-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); flex: 0 0 auto; }
+.wx-events { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-events-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); flex: 0 0 auto; }
 .wx-events-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-events-header .wx-events-attr { font-size: 11px; color: var(--ork-text-muted, #a0aec0); }
 .wx-events-header .wx-events-attr a { color: inherit; text-decoration: none; }
 .wx-events-header .wx-events-attr a:hover { color: var(--ork-link); }
 
-.wx-event { display: grid; grid-template-columns: 70px 1fr auto; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--ork-border, #edf2f7); align-items: center; }
+.wx-event { display: grid; grid-template-columns: 70px 1fr auto; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--ork-divider, #e2e8f0); align-items: center; }
 .wx-event[data-lat]:hover, .wx-event[data-park-id]:hover { background: var(--ork-bg-secondary, #f7fafc); cursor: pointer; }
 .wx-event:last-child { border-bottom: 0; }
 .wx-event-date { font-size: 12px; color: var(--ork-text-muted, #718096); font-variant-numeric: tabular-nums; text-align: center; }
@@ -276,8 +276,8 @@ html[data-theme="dark"] .wx-pill:focus-visible { box-shadow: 0 0 0 2px #63b3ed; 
 .wx-pill-dot { display: block; width: 7px; height: 7px; border-radius: 50%; margin: 5px auto 0; }
 
 /* Play list */
-.wx-play { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-play-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); flex: 0 0 auto; }
+.wx-play { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-play-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); flex: 0 0 auto; }
 .wx-play-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-play-controls { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ork-text-muted, #a0aec0); }
 /* Fixed widths on count + toggle so changing mode/search doesn't reflow the header. */
@@ -289,8 +289,8 @@ html[data-theme="dark"] .wx-play-toggle:hover { background: rgba(255,255,255,0.0
 /* Mode is conveyed by label text + the banner — no loud active-fill needed. */
 .wx-play-toggle.active { background: rgba(43, 108, 176, 0.10); border-color: var(--ork-link-bright, #2b6cb0); }
 html[data-theme="dark"] .wx-play-toggle.active { background: rgba(99, 179, 237, 0.12); border-color: #63b3ed; color: #63b3ed; }
-.wx-play-search { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #cbd5e0); border-radius: 6px; padding: 3px 8px; font-size: 12px; color: var(--ork-text, #2d3748); width: 130px; outline: none; }
-.wx-play-search:focus { border-color: var(--ork-link-bright, #2b6cb0); }
+.wx-play-search { background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 6px; padding: 3px 8px; font-size: 12px; color: var(--ork-text, #2d3748); width: 130px; outline: none; }
+.wx-play-search:focus { border-color: var(--ork-link-bright, #2b6cb0); background: var(--ork-card-bg); }
 html[data-theme="dark"] .wx-play-search { background: var(--ork-bg-secondary, #1a202c); color: var(--ork-text, #e2e8f0); }
 .wx-play-row.wx-filtered { display: none; }
 
@@ -302,7 +302,7 @@ html[data-theme="dark"] .wx-play-search { background: var(--ork-bg-secondary, #1
 .wx-play.is-flagged-mode .wx-play-mode { display: flex; }
 html[data-theme="dark"] .wx-play-mode { background: #422006; color: #fcd34d; border-color: #78350f; }
 html[data-theme="dark"] .wx-play-mode .wx-play-mode-clear { color: #fcd34d; }
-.wx-play-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--ork-border, #edf2f7); align-items: center; }
+.wx-play-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--ork-divider, #e2e8f0); align-items: center; }
 .wx-play-row[data-park-id]:hover { background: var(--ork-bg-secondary, #f7fafc); cursor: pointer; }
 .wx-play-row:last-child { border-bottom: 0; }
 .wx-play-main { min-width: 0; }
@@ -317,8 +317,8 @@ html[data-theme="dark"] .wx-play-mode .wx-play-mode-clear { color: #fcd34d; }
 .wx-loading { padding: 20px; text-align: center; color: var(--ork-text-muted, #a0aec0); font-style: italic; }
 
 /* Map */
-.wx-map-card { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; }
-.wx-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); gap: 10px; }
+.wx-map-card { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; box-shadow: var(--ork-shadow-card); }
+.wx-map-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-divider, #e2e8f0); gap: 10px; }
 .wx-map-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 #wx-zoom-out { display: none; background: transparent; border: 1px solid var(--ork-border, #cbd5e0); color: var(--ork-text-muted, #718096); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 #wx-zoom-out:hover { background: var(--ork-bg-secondary, #f7fafc); color: var(--ork-text, #2d3748); }
@@ -768,12 +768,14 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 		}
 		setZoomedIn(false);
 	}
+	// CARTO's free tiles now require a key -- mirrored in Live_index.tpl,
+	// update both if this ever changes.
+	var WX_CARTO_KEY = <?= json_encode(CARTO_API_KEY) ?>;
 	function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 	function wxApplyMapTheme() {
 		if (!wxMap) return;
-		var url = isDarkTheme()
-			? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-			: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+		var style = isDarkTheme() ? 'dark_all' : 'light_all';
+		var url = 'https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(WX_CARTO_KEY);
 		if (wxTileLayer) wxMap.removeLayer(wxTileLayer);
 		wxTileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(wxMap);
 	}

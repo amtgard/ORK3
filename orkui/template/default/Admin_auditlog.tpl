@@ -1281,25 +1281,29 @@ function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity, $entityTy
 .al-layout        { display:flex; gap:18px; align-items:flex-start; margin-top:16px; }
 .al-sidebar       { width:220px; flex-shrink:0; }
 .al-main          { flex:1; min-width:0; }
-.al-filter-card   { background:#fff; border:1px solid var(--rp-border); border-radius:8px; padding:16px; }
+.al-filter-card   { background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px; padding:16px; }
 .al-filter-card h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
                      color:var(--rp-text-muted); margin:0 0 12px; background:transparent; border:none; text-shadow:none; padding:0; }
 .al-form-group    { display:flex; flex-direction:column; gap:3px; margin-bottom:10px; }
 .al-form-group label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--rp-text-muted); }
-.al-form-input    { border:1px solid var(--rp-border); border-radius:5px; padding:6px 8px; font-size:13px;
-                    color:var(--rp-text); background:#fff; box-sizing:border-box; width:100%; }
-.al-form-input:focus { outline:none; border-color:#6366f1; }
+.al-form-input    { border:1px solid var(--ork-input-border); border-radius:5px; padding:6px 8px; font-size:13px;
+                    color:var(--rp-text); background:var(--ork-input-bg); box-sizing:border-box; width:100%; }
+.al-form-input:focus { outline:none; border-color:#6366f1; background:var(--ork-card-bg); }
 .al-btn-run       { width:100%; padding:8px 0; background:#4338ca; color:#fff; border:none; border-radius:6px;
                     font-size:13px; font-weight:700; cursor:pointer; margin-top:4px; }
 .al-btn-run:hover { background:#3730a3; }
 .al-btn-clear     { width:100%; padding:6px 0; background:transparent; color:var(--rp-text-muted);
                     border:1px solid var(--rp-border); border-radius:6px; font-size:12px; cursor:pointer; margin-top:6px; }
 .al-table-wrap    { overflow-x:auto; }
+/* Light only: the results table sits in .al-main with no card, so give its wrap
+   the L1 card treatment (row dividers would vanish on the gray ground otherwise).
+   Dark keeps its existing transparent look. */
+html:not([data-theme="dark"]) .al-table-wrap { background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px; box-shadow:var(--ork-shadow-card); }
 .al-table         { width:100%; border-collapse:collapse; font-size:13px; }
-.al-table th      { background:#f7fafc; border-bottom:2px solid var(--rp-border); padding:8px 10px;
+.al-table th      { background:var(--ork-bg-secondary); border-bottom:2px solid var(--rp-divider); padding:8px 10px;
                     text-align:left; font-size:11px; font-weight:700; text-transform:uppercase;
                     letter-spacing:.04em; color:var(--rp-text-muted); white-space:nowrap; }
-.al-table td      { padding:8px 10px; border-bottom:1px solid var(--rp-border); vertical-align:top; }
+.al-table td      { padding:8px 10px; border-bottom:1px solid var(--rp-divider); vertical-align:top; }
 .al-table tbody tr:hover { background:#fafafa; }
 .al-action-badge  { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px;
                     font-size:11px; font-weight:600; white-space:nowrap; }
@@ -1325,7 +1329,7 @@ html[data-theme="dark"] .al-badge-default { background:#2d3748; color:#a0aec0; }
 .al-detail-row td { background:#f7fafc; border-bottom:1px solid var(--rp-border); padding:12px 16px; }
 .al-diff-table    { width:100%; border-collapse:collapse; font-size:12px; }
 .al-diff-table th { background:#edf2f7; padding:5px 8px; text-align:left; font-weight:700; color:#4a5568; }
-.al-diff-table td { padding:5px 8px; border-top:1px solid #e2e8f0; }
+.al-diff-table td { padding:5px 8px; border-top:1px solid var(--ork-divider); }
 .al-diff-field    { font-weight:600; color:#4a5568; width:130px; }
 .al-diff-old      { color:#c53030; text-decoration:line-through; max-width:220px; word-break:break-all; }
 .al-diff-new      { color:#276749; max-width:220px; word-break:break-all; }
@@ -1341,8 +1345,8 @@ html[data-theme="dark"] .al-badge-default { background:#2d3748; color:#a0aec0; }
 .al-page-link:hover { background:#eef2ff; }
 .al-page-link.al-page-active { background:var(--rp-accent); color:#fff; border-color:var(--rp-accent); font-weight:700; }
 .al-page-link.al-page-disabled { color:var(--rp-text-muted); pointer-events:none; }
-.al-page-info     { color:var(--rp-text-muted); font-size:12px; margin-left:auto; }
-.al-empty         { padding:40px 20px; text-align:center; color:var(--rp-text-muted); font-size:14px; }
+.al-page-info     { color:var(--ork-text-on-ground); font-size:12px; margin-left:auto; }
+.al-empty         { padding:40px 20px; text-align:center; color:var(--ork-text-on-ground); font-size:14px; }
 .al-empty i       { font-size:32px; display:block; margin-bottom:10px; opacity:.4; }
 .al-entity-note   { font-size:10px; color:var(--rp-text-hint); display:block; }
 
@@ -1578,7 +1582,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 				$_prev = null;
 				foreach ($_showPages as $_pg):
 					if ($_prev !== null && $_pg - $_prev > 1): ?>
-					<span style="color:var(--rp-text-muted)">…</span>
+					<span style="color:var(--ork-text-on-ground)">…</span>
 					<?php endif;
 					$_pUrl = _auditPageUrl($_pg, $StartDate, $EndDate, $MethodFilter, $ByWhomFilter, $EntityFilter, $EntityTypeFilter ?? '');
 				?>

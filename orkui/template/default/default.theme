@@ -11,7 +11,22 @@
 		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
-		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
+<?php
+// Non-prod indicator (title prefix + banner below the nav). PROD renders
+// nothing; the staging host gets STAGING, everything else DEV/TEST — so a
+// prod tab and a staging tab are never mistaken for each other.
+// Fail-closed opt-in: prod fpm workers run with ENVIRONMENT unset (config
+// selection falls through to config.php), so "not PROD" is NOT a safe test —
+// only an explicit DEV/TEST env or the staging host shows the banner.
+$ork_env_label = '';
+$_ork_env = getenv('ENVIRONMENT');
+if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
+	$ork_env_label = 'STAGING';
+} elseif ($_ork_env === 'DEV' || $_ork_env === 'TEST') {
+	$ork_env_label = $_ork_env;
+}
+?>
+		<title><?php echo ($ork_env_label !== '' ? "[{$ork_env_label}] " : '').(strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
 		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
@@ -20,16 +35,28 @@
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
-		<?php if ($page_title === 'Home') : ?>
-		<meta property="og:type" content="website">
-		<meta property="og:site_name" content="ORK 3 - Amtgard Online Record Keeper">
-		<meta property="og:title" content="ORK 3 - Amtgard Online Record Keeper">
-		<meta property="og:description" content="The Online Record Keeper for the Amtgard International LARP.">
-		<meta property="og:image" content="<?= HTTP_ASSETS ?>images/clippy_large.png">
-		<meta property="og:image:width" content="1075">
-		<meta property="og:image:height" content="1075">
-		<?php endif; ?>
+<?php /* Search snippet: reuse the page's link-card description when the
+         controller published one ($og['description'] — park/kingdom/player/
+         event pages), else the generic site line. Without this every page
+         shared one duplicated description, which search tools flag. */ ?>
+		<meta name="description" content="<?= htmlspecialchars(!empty($og['description']) ? preg_replace('/\s+/', ' ', trim((string)$og['description'])) : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
+<?php /* Per-page link-preview tags — controllers override via $this->data['og'];
+         defaults render the site-wide generic card. See ork_og_meta_tags(). */ ?>
+<?= ork_og_meta_tags(isset($og) ? $og : array()) ?>
+<?php /* rel=canonical from the same per-page URL as og:url — Facebook honors
+         og:url but Google only respects this tag. Consolidates parameter
+         variants (&rev=, ordering, aliases) into one indexed URL. Only pages
+         that declare a canonical emit it; occurrence-changing aliases (e.g.
+         Event/detail/<id> without a detail id) 302-redirect before rendering,
+         so the tag never points across content. */ ?>
+<?php if (!empty($og['url'])) : ?>
+		<link rel="canonical" href="<?= htmlspecialchars($og['url'], ENT_QUOTES) ?>">
+<?php endif; ?>
+<?php /* Structured data for search engines (schema.org JSON-LD) — set per
+         page via $this->data['jsonld']; e.g. Event rich results. */ ?>
+<?php if (!empty($jsonld)) : ?>
+		<script type="application/ld+json"><?= json_encode($jsonld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+<?php endif; ?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
 
@@ -96,6 +123,8 @@
 
 	/* What's New dark mode */
 	html[data-theme="dark"] .wn-overlay { background: rgba(0,0,0,0.7); }
+	/* Never print the What's New modal over report/page content. */
+	@media print { .wn-overlay { display: none !important; } }
 	html[data-theme="dark"] .wn-modal { background: #2d3748; color: #e2e8f0; }
 	html[data-theme="dark"] .wn-title { color: #e2e8f0; }
 	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
@@ -134,6 +163,10 @@
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 
+	/* Site footer: sits on the page ground in light; keeps its band in dark. */
+	.ork-site-footer { background: transparent; color: var(--ork-text-on-ground, #5f6b7a); }
+	html[data-theme="dark"] .ork-site-footer { background: var(--ork-bg-secondary); }
+
 	</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
@@ -148,11 +181,16 @@
 // Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
 // Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
 $downtime_start = ''; // set to a UTC ISO string (e.g. '2026-07-16T02:00:00Z') to show the banner
-$downtime_end   = '2026-08-18T14:00:00Z'; // 2026-08-18 10:00 AM EDT (UTC-4)
-$downtime_note  = 'Potential Downtime for an upgrade';
+$downtime_end   = '2026-09-11T02:00:00Z'; // 2026-09-10 10:00 PM EDT (UTC-4)
+$downtime_note  = 'Database maintenance — likely only a few minutes';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
+<?php if ($ork_env_label !== ''): ?>
+		<div id="ork-env-banner" style="background:<?= $ork_env_label === 'STAGING' ? '#6d28d9' : '#0f766e' ?>;color:#fff;text-align:center;padding:5px 12px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;">
+			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
+		</div>
+<?php endif; ?>
 <?php if (!empty($downtime_start)): ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
 			<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
@@ -192,8 +230,14 @@ if (!function_exists('nav_session_client_label')) {
 		if (stripos($ua, 'jsork') !== false) return $ua;
 		if (stripos($ua, 'curl') === 0) return 'API client (curl)';
 		if (stripos($ua, 'Mozilla') === false) return substr($ua, 0, 40);
+		// iOS browsers use distinct UA tokens (CriOS/FxiOS/EdgiOS) AND append a
+		// compat "Safari/" token — check them first so iOS Chrome/Firefox/Edge
+		// don't mislabel as "Safari on iOS". Mirrors ork_session_client_label().
 		$browser = 'Browser';
-		if (stripos($ua, 'Edg/') !== false) $browser = 'Edge';
+		if (stripos($ua, 'CriOS/') !== false) $browser = 'Chrome';
+		elseif (stripos($ua, 'FxiOS/') !== false) $browser = 'Firefox';
+		elseif (stripos($ua, 'EdgiOS/') !== false) $browser = 'Edge';
+		elseif (stripos($ua, 'Edg/') !== false) $browser = 'Edge';
 		elseif (stripos($ua, 'OPR/') !== false) $browser = 'Opera';
 		elseif (stripos($ua, 'Chrome/') !== false) $browser = 'Chrome';
 		elseif (stripos($ua, 'Firefox/') !== false) $browser = 'Firefox';
@@ -204,6 +248,10 @@ if (!function_exists('nav_session_client_label')) {
 		elseif (stripos($ua, 'Macintosh') !== false) $os = 'Mac';
 		elseif (stripos($ua, 'Windows') !== false) $os = 'Windows';
 		elseif (stripos($ua, 'Linux') !== false) $os = 'Linux';
+		// In-app webviews (Discord/Facebook links): iOS WebViews omit "Safari/",
+		// Android's carries a "; wv)" marker.
+		if ($browser === 'Browser' && $os === 'iOS') $browser = 'In-app browser';
+		elseif (stripos($ua, '; wv)') !== false) $browser = 'In-app browser';
 		return $os !== '' ? "$browser on $os" : $browser;
 	}
 }
@@ -943,10 +991,10 @@ endif;
 </script>
 <?php endif; ?>
 
-<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
+<footer class="ork-site-footer" style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);font-size:11px;text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
-  <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">ORK v<?=ORK_VERSION?></a>
+  <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-on-ground,#5f6b7a);text-decoration:none;border-bottom:1px dotted var(--ork-text-on-ground,#5f6b7a);">ORK v<?=ORK_VERSION?></a>
   &nbsp;&middot;&nbsp;
 <?php
     // Pre-render today's E.P. summary so opening the popover doesn't need
@@ -957,12 +1005,12 @@ endif;
 ?>
   <button type="button" id="ork-ep-footer-btn"
           onclick="orkOpenEpPopover()"
-          style="background:none;border:none;padding:0;font:inherit;color:var(--ork-text-muted,#94a3b8);cursor:pointer;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">
+          style="background:none;border:none;padding:0;font:inherit;color:var(--ork-text-on-ground,#5f6b7a);cursor:pointer;border-bottom:1px dotted var(--ork-text-on-ground,#5f6b7a);">
     <?= htmlspecialchars(EraPhoenice::format($_epToday)) ?>
   </button>
 <?php if (!empty($IsOwnProfile)): ?>
   &nbsp;&middot;&nbsp;
-  <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
+  <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-on-ground,#5f6b7a);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
 <?php endif; ?>
 </footer>
 

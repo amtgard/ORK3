@@ -40,7 +40,7 @@ class Controller_KingdomAjax extends Controller
             $errors  = [];
             foreach ($results as $r) {
                 if (isset($r['Status']) && $r['Status'] != 0) {
-                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                    $errors[] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
                 }
             }
 
@@ -63,7 +63,7 @@ class Controller_KingdomAjax extends Controller
             if (!isset($r['Status']) || $r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
 
         } elseif ($action === 'setstatus') {
@@ -78,7 +78,7 @@ class Controller_KingdomAjax extends Controller
                 : $this->Kingdom->RetireKingdom(['Token'  => $this->session->token, 'KingdomId' => $kingdom_id]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'active' => $active])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setdetails') {
             $this->load_model('Kingdom');
@@ -114,7 +114,7 @@ class Controller_KingdomAjax extends Controller
             $r = $this->Kingdom->set_kingdom_details($request);
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setconfig') {
             $this->load_model('Kingdom');
@@ -150,7 +150,7 @@ class Controller_KingdomAjax extends Controller
             }
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setparktitles') {
             $this->load_model('Kingdom');
@@ -191,7 +191,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'deletetitle') {
             $this->load_model('Kingdom');
@@ -209,7 +209,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setaward') {
             $this->load_model('Kingdom');
@@ -252,7 +252,7 @@ class Controller_KingdomAjax extends Controller
 
             echo (!isset($r['Status']) || $r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'updateparks') {
             $this->load_model('Kingdom');
@@ -291,7 +291,7 @@ class Controller_KingdomAjax extends Controller
                     exit;
                 }
                 if (isset($r['Status']) && $r['Status'] != 0) {
-                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                    $errors[] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
                 }
             }
 
@@ -310,7 +310,7 @@ class Controller_KingdomAjax extends Controller
             if ($r['Status'] == 5) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
             } elseif ($r['Status'] != 0) {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             } else {
                 echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
             }
@@ -324,12 +324,19 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $this->Kingdom->RemoveAward([
+            // The return value used to be discarded and status 0 echoed
+            // unconditionally, so a *denied* delete still reported "Award
+            // deleted." and the JS removed the row from the table while the award
+            // was still in the database. setaward next to it handled status
+            // correctly; only this branch swallowed it.
+            $r = $this->Kingdom->RemoveAward([
                 'Token'          => $this->session->token,
                 'KingdomId'      => $kingdom_id,
                 'KingdomAwardId' => $kawId,
             ]);
-            echo json_encode(['status' => 0]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setheraldry') {
             $this->load_model('Kingdom');
@@ -350,7 +357,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'removeheraldry') {
             $this->load_model('Kingdom');
@@ -360,7 +367,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'moveplayer') {
             $uid = (int)$this->session->user_id;
@@ -386,7 +393,7 @@ class Controller_KingdomAjax extends Controller
             $r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'parkId' => $dest_park_id])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'checkparkabbr') {
             $park_id = (int)($_POST['ParkId'] ?? 0);
@@ -425,7 +432,7 @@ class Controller_KingdomAjax extends Controller
             if ($r['Status'] == 0) {
                 echo json_encode(['status' => 0]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
 
         } elseif ($action === 'addrecommendation') {
@@ -462,7 +469,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'dismissrecommendation') {
             $this->load_model('Player');
@@ -479,7 +486,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
@@ -556,7 +563,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'snoozerecommendation') {
             $this->load_model('Player');
@@ -626,7 +633,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo (!isset($r['Status']) || $r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'deletetournament') {
             $this->load_model('Tournament');
@@ -641,7 +648,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;
@@ -708,7 +715,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'getparks') {
             // Always return family parks (kingdom + child principalities) for dropdowns.
@@ -747,7 +754,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'checkabbr') {
             $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
@@ -921,7 +928,7 @@ class Controller_KingdomAjax extends Controller
         ]);
         echo ($r === null || (isset($r['Status']) && $r['Status'] == 0))
             ? json_encode(['status' => 0])
-            : json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            : json_encode(['status' => $r['Status'] ?? 1, 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
         exit;
     }
 

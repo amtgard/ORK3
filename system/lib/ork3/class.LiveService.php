@@ -5,12 +5,13 @@
  */
 class LiveService extends Ork3
 {
+    // PUBLIC (opened 2026-08-23, Ken's call): the Live page no longer requires
+    // login. Both feeds are park-level aggregates with mundane_id deliberately
+    // stripped before the wire (class.Live), and both sit behind short
+    // GhettoCache TTLs (~30s/~10s) that bound origin load for any viewer count.
+    // $Token retained for caller compatibility; unused.
     public function GetStats($Token = null): array
     {
-        if (Ork3::$Lib->authorization->IsAuthorized($Token ?? '') <= 0) {
-            return array_merge(BadToken(), ['now' => null, 'parks' => [], 'events' => [], 'active_3h' => 0]);
-        }
-
         $live = new Live();
 
         return $live->stats();
@@ -18,10 +19,6 @@ class LiveService extends Ork3
 
     public function GetRecent($Token = null): array
     {
-        if (Ork3::$Lib->authorization->IsAuthorized($Token ?? '') <= 0) {
-            return array_merge(BadToken(), ['signins' => [], 'now' => null]);
-        }
-
         $live = new Live();
 
         return $live->recent();

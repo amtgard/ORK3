@@ -33,7 +33,7 @@ $rfu_fmt_date = static function ($d) {
 
 /* ── Jump nav ── */
 .rfu-nav-card {
-	background: var(--rp-bg-table, #fff);
+	background: var(--rp-bg-table, var(--ork-card-bg));
 	border: 1px solid var(--rp-border);
 	border-radius: 10px;
 	overflow: hidden;
@@ -42,7 +42,7 @@ $rfu_fmt_date = static function ($d) {
 	font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
 	color: var(--rp-text-muted);
 	padding: 11px 14px 9px;
-	border-bottom: 1px solid var(--rp-border);
+	border-bottom: 1px solid var(--rp-divider);
 	background: var(--rp-bg-light);
 }
 .rfu-nav-link {
@@ -52,7 +52,7 @@ $rfu_fmt_date = static function ($d) {
 	color: var(--rp-text-body);
 	transition: background .12s, border-color .12s, color .12s;
 }
-.rfu-nav-link + .rfu-nav-link { border-top: 1px solid var(--rp-border); }
+.rfu-nav-link + .rfu-nav-link { border-top: 1px solid var(--rp-divider); }
 .rfu-nav-link:hover { background: var(--rp-bg-light); border-left-color: var(--rp-accent-mid); }
 .rfu-nav-link.is-active { background: var(--rp-bg-light); border-left-color: var(--rp-accent); }
 .rfu-nav-ver  { font-weight: 800; font-size: 12.5px; color: var(--rp-accent); letter-spacing: .02em; }
@@ -64,14 +64,14 @@ $rfu_fmt_date = static function ($d) {
 	display: flex; flex-wrap: wrap; gap: 0;
 	border: 1px solid var(--rp-border);
 	border-radius: 10px;
-	background: var(--rp-bg-table, #fff);
+	background: var(--rp-bg-table, var(--ork-card-bg));
 	overflow: hidden;
 	margin-bottom: 22px;
 }
 .rfu-total {
 	flex: 1 1 0; min-width: 150px;
 	padding: 14px 18px;
-	border-right: 1px solid var(--rp-border);
+	border-right: 1px solid var(--rp-divider);
 }
 .rfu-total:last-child { border-right: none; }
 .rfu-total-num   { font-size: 26px; font-weight: 800; color: var(--rp-text); line-height: 1.1; letter-spacing: -.01em; }
@@ -97,12 +97,12 @@ $rfu_fmt_date = static function ($d) {
 	/* defeat orkui.css h1-h6 gray box */
 	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
 }
-.rfu-release-date { font-size: 12.5px; color: var(--rp-text-muted); font-weight: 600; }
+.rfu-release-date { font-size: 12.5px; color: var(--ork-text-on-ground); font-weight: 600; }
 .rfu-release-blurb { width: 100%; font-size: 13.5px; color: var(--rp-text-body); line-height: 1.5; margin-top: 2px; }
 
 /* ── Feature card ── */
 .rfu-card {
-	background: var(--rp-bg-table, #fff);
+	background: var(--rp-bg-table, var(--ork-card-bg));
 	border: 1px solid var(--rp-border);
 	border-radius: 12px;
 	padding: 18px 20px 20px;
@@ -210,7 +210,7 @@ $rfu_fmt_date = static function ($d) {
 	line-height: 1.35;
 }
 .rfu-link-item { padding: 5px 0; min-width: 0; }
-.rfu-link-item + .rfu-link-item { border-top: 1px solid var(--rp-border); }
+.rfu-link-item + .rfu-link-item { border-top: 1px solid var(--rp-divider); }
 .rfu-link-a {
 	display: inline-flex; align-items: baseline; gap: 6px;
 	font-size: 13px; font-weight: 600; line-height: 1.4;
@@ -224,12 +224,28 @@ $rfu_fmt_date = static function ($d) {
 	overflow-wrap: anywhere;
 }
 
-.rfu-empty-state { padding: 48px 16px; text-align: center; color: var(--rp-text-muted); font-size: 14px; }
+.rfu-empty-state { padding: 48px 16px; text-align: center; color: var(--ork-text-on-ground); font-size: 14px; }
 .rfu-empty-state i { font-size: 30px; display: block; margin-bottom: 12px; opacity: .4; }
 
 @media (max-width: 820px) {
 	.rfu-shell { flex-direction: column; }
 	.rfu-nav { position: static; flex-basis: auto; width: 100%; }
+}
+
+/* ── Print: full-width content, no chrome, stable KPI grid ─────────────
+   The release rail duplicates the section headings, the site nav is
+   noise on paper, and the narrow print viewport otherwise trips the
+   820px mobile styles (stacking KPI cards one per row across 30+ pages).
+   Chart SVGs are resized by the beforeprint hook below. */
+@media print {
+	#newmenu, .rfu-nav, .rp-header-actions, .rp-context { display: none !important; }
+	body { padding-top: 0 !important; }
+	.rfu-shell { display: block; }
+	.rfu-main { width: 100%; }
+	.rfu-kpis { grid-template-columns: repeat(3, 1fr); }
+	.rfu-kpi, .rfu-feature, .rfu-total { break-inside: avoid; }
+	.rfu-release-head { break-after: avoid; }
+	.rfu-charts > div { max-width: 100% !important; }
 }
 </style>
 
@@ -533,6 +549,15 @@ $rfu_fmt_date = static function ($d) {
 
 	buildAll();
 	new MutationObserver(rebuildAll).observe(document.documentElement, { attributeFilter: ['data-theme'] });
+
+	/* Print: Highcharts renders SVG at the on-screen container width, which
+	   clips on paper. Force a page-width render before printing, restore after. */
+	window.addEventListener('beforeprint', function () {
+		charts.forEach(function (c) { try { c.setSize(640, c.chartHeight, false); } catch (e) {} });
+	});
+	window.addEventListener('afterprint', function () {
+		charts.forEach(function (c) { try { c.setSize(null, null, false); c.reflow(); } catch (e) {} });
+	});
 }());
 </script>
 <?php endif; ?>

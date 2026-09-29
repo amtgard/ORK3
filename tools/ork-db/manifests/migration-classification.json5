@@ -91,6 +91,12 @@
     "2026-07-11-court-stage-finalize.sql": { "class": "S", "render": "full", "notes": "Court run/plan mode, finalize stamps, staged award status" },
     "2026-07-12-court-grant-safety.sql": { "class": "S", "render": "full", "notes": "Optimistic-concurrency row_version on court awards" },
     "2026-07-13-add-ork-session-table.sql": { "class": "S", "render": "full", "notes": "Multi-device session table; backfill INSERT IGNORE is a no-op on synthetic data" },
+    "2026-08-07-unit-role-add-organizer.sql": { "class": "S", "render": "full", "notes": "Adds organizer (and catches up owner) in the unit role enum; blank-role backfill is least-privilege and harmless on synthetic data" },
+    "2026-08-07-scrub-audit-credentials.sql": { "class": "PB", "render": "skip", "notes": "Redacts credentials from real prod audit rows; manual, maintenance window (~800k rows)" },
+    "2026-08-07-repair-epoch-note-dates.sql": { "class": "PB", "render": "skip", "notes": "Resets 1969-12-31 note dates on real prod rows; manual" },
+    "2026-08-07-orphaned-attendance-diagnostic.sql": { "class": "PB", "render": "skip", "notes": "Read-only diagnostic; never applied anywhere — product decision pending on the 4,978 orphans" },
+    "README-2026-08-07-regression-fixes.md": { "class": "ES", "render": "skip", "notes": "Documentation for the 2026-08-07 regression-fix migrations; not a migration" },
+    "2026-08-21-innodb-merge-tables.sql": { "class": "S", "render": "full", "notes": "Engine conversion so merge transactions actually roll back; idempotent ALTERs" },
     "2026-07-14-qualification-tests.sql": { "class": "S+RC", "render": "full", "notes": "Qualification test schema plus idempotent per-kingdom config defaults" },
     "2026-08-18-session-device-metadata-columns.sql": { "class": "S", "render": "full", "notes": "Idempotent repair: adds ork_session user_agent/ip on DBs that ran the pre-metadata version of the 2026-07-13 migration" },
     "2026-09-01-court-recorder.sql": { "class": "S", "render": "full", "notes": "Names the officer responsible for recording a court's grants" },
@@ -99,6 +105,7 @@
     "2026-09-09-recommendation-snooze-scope.sql": { "class": "S", "render": "full", "notes": "Records which kingdom/park throne a recommendation snooze was taken against" },
     "2026-09-09-court-planner-review-fixes.sql": { "class": "S", "render": "full", "notes": "Unique court/recommendation pair, finalize-error column, giver snapshot, cleared-citation flag" },
     "2026-09-09-recommendations-cluster-index.sql": { "class": "S", "render": "full", "notes": "Composite index backing the Recommendations Manager cluster paging query" },
-    "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" }
+    "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
+    "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" }
   }
 }

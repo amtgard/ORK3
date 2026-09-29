@@ -119,8 +119,14 @@ class Authorization extends Ork3
 	{
 		$response = array();
 		$this->mundane->clear();
-		$this->mundane->like('username', trim($request['UserName']));
-		$this->mundane->like('email', trim($request['Email']));
+		// Exact match, not like(): see the note in Authorize_h below. Same
+		// two failure modes here, and this is the flow a locked-out player
+		// would reach for -- an account whose stored username or email
+		// carries a trailing space could neither log in nor reset.
+		// '_' is especially common in email addresses, where like() would
+		// treat it as a single-character wildcard.
+		$this->mundane->username = trim($request['UserName']);
+		$this->mundane->email = trim($request['Email']);
 		if ($this->mundane->find()) {
 			$password = substr(md5(microtime()), 2, 11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
@@ -214,12 +220,13 @@ class Authorization extends Ork3
 					// Any call to an Authorization may have side-effects in the Auth table
 					$response = $this->remove_auth_h($request);
 				} else if ($type == AUTH_UNIT) {
-					$mundane = Ork3::$Lib->player->player_info($requester_id);
-
-					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-						$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+					// KPM unit bypass, scoped to the parks/kingdoms the unit's roster
+					// actually sits in rather than the requester's own.
+					if ($this->HasUnitOfficerAuthority($requester_id, $id)) {
 						logtrace("RemoveAuthorization(): KPM Unit Bypass: ", $requester_id);
 						$response = $this->remove_auth_h($request);
+					} else {
+						$response = NoAuthorization();
 					}
 				} else {
 					$response = NoAuthorization();
@@ -322,7 +329,23 @@ class Authorization extends Ork3
 		$this->mundane->clear();
 
 		if ($request['Token'] == null) {
-			$this->mundane->like('username', trim($request['UserName']));
+			// Exact match, not like(). like() built a LIKE clause, which
+			// broke logins two ways:
+			//   1. MySQL's PAD SPACE collation makes '=' ignore trailing
+			//      spaces, but LIKE does NOT -- so a stored username of
+			//      'Bunkydoodle ' never matched the typed 'Bunkydoodle',
+			//      and find() failed before the password was ever checked.
+			//      Prod had 69 such accounts, 45 of them active and with no
+			//      SSO fallback: locked out entirely, and no password an
+			//      officer set could ever work.
+			//   2. '_' and '%' in a username were wildcards, so a lookup
+			//      could match a different account and find() take the
+			//      wrong row.
+			// '=' fixes both and changes nothing else: the collation is
+			// utf8mb4_unicode_ci so matching stays case-insensitive, and
+			// internal spaces were always literal. Leading spaces are still
+			// not forgiven by '=', but prod has none.
+			$this->mundane->username = trim($request['UserName']);
 			if ($this->mundane->find()) {
 				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
@@ -333,7 +356,9 @@ class Authorization extends Ork3
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$_sessionToken = $this->CreateSession($this->mundane->mundane_id);
+						// jsork (and mORK, which embeds it) self-identifies via a
+						// Client field on the login request — see CreateSession.
+						$_sessionToken = $this->CreateSession($this->mundane->mundane_id, $request['Client'] ?? null);
 						if ($_sessionToken === '') {
 							$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
 						} else {
@@ -406,7 +431,8 @@ class Authorization extends Ork3
 			'ExpiresAt' => $_SESSION['Session_Vars']['ExpiresAt'],
 		];
 
-		error_log("AuthorizeIdp: Request: " . print_r($request, true));
+		// Payload deliberately not logged: $request carries the IDP access token.
+		error_log("AuthorizeIdp: request received for IdpUserId " . ($request['IdpUserId'] ?? '?'));
 		$this->idp_auth->clear();
 		$this->idp_auth->idp_user_id = $request['IdpUserId'];
 
@@ -596,11 +622,27 @@ class Authorization extends Ork3
 		];
 		$DB->Clear();
 
+		// Refuse to delete a grant that an officer position depends on. The
+		// permissions table renders "via officer" instead of a Remove button for
+		// these, but that was the only thing stopping it -- there was no
+		// server-side check, so anything reaching this endpoint directly left
+		// ork_officer.authorization_id pointing at a row that no longer exists.
+		// The officer kept their title and silently lost all authority.
+		$_officerRs = $DB->DataSet("SELECT officer_id FROM " . DB_PREFIX . "officer WHERE authorization_id = " . $_auth_id . " LIMIT 1");
+		$_backs_officer = $_officerRs && $_officerRs->Next();
+		$DB->Clear();
+		if ($_backs_officer) {
+			return InvalidParameter('This permission comes from an officer position. Remove the officer position instead -- deleting the permission on its own would leave the officer holding a title with no authority.');
+		}
+
 		$this->auth->clear();
 		$this->auth->authorization_id = $_auth_id;
 		if ($this->auth->find()) {
 			$_audit_req = $request;
 			unset($_audit_req['Token']);
+			// $requester_id was never defined in this scope -- the removal was logged
+			// against a null actor. Resolve it from the caller's session/token.
+			$requester_id = $this->IsAuthorized($request['Token'] ?? null);
 			$this->log->Write('Authorization', $requester_id, LOG_REMOVE, $request);
 			// Anchor the audit to the affected player so the entry surfaces on
 			// the grantee's audit history. Authority changes are security-relevant
@@ -634,14 +676,17 @@ class Authorization extends Ork3
 			$response = $this->add_auth_h($request);
 			return $response;
 		} else if (AUTH_UNIT == $request['Type']) {
-			$mundane = Ork3::$Lib->player->player_info($requester_id);
-
-			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-				$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+			// KPM unit bypass, scoped to the parks/kingdoms the unit's roster
+			// actually sits in rather than the requester's own.
+			if ($this->HasUnitOfficerAuthority($requester_id, $request['Id'])) {
 				$this->log->Write('Authorization:KPM Unit Bypass', $requester_id, LOG_ADD, $request);
 				$response = $this->add_auth_h($request);
 				return $response;
 			}
+			// Previously this path fell off the end returning a bare array(). The
+			// controller reads $r['Status'], null == 0 is true in PHP, so a denied
+			// grant reported success and wrote a phantom audit row.
+			$response = NoAuthorization();
 		} else {
 			$response = NoAuthorization();
 		}
@@ -733,6 +778,67 @@ class Authorization extends Ork3
 			$id = $this->auth->authorization_id;
 		}
 		return array($type, $id);
+	}
+
+	// A unit carries no scope of its own -- ork_unit has neither park_id nor
+	// kingdom_id -- so "the unit's scope" is the set of parks and kingdoms its
+	// roster actually sits in. Officer authority over a unit must be checked
+	// against THAT set. The KPM unit bypass used to check the *requester's* own
+	// park and kingdom instead, which meant any park monarch anywhere passed the
+	// guard for any unit in the world.
+	public function HasUnitOfficerAuthority($mundane_id, $unit_id)
+	{
+		if (!valid_id($mundane_id) || !valid_id($unit_id)) {
+			return false;
+		}
+		// Unscoped global admins keep system-wide authority.
+		if ($this->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return true;
+		}
+
+		$scopes = $this->unit_roster_scopes($unit_id, true);
+		if (count($scopes) === 0) {
+			// A unit with no active roster has no derivable scope. Fall back to
+			// everyone who has ever been on it so an emptied unit does not end up
+			// beyond every officer's reach.
+			$scopes = $this->unit_roster_scopes($unit_id, false);
+		}
+
+		foreach ($scopes as $scope) {
+			if (valid_id($scope['kingdom_id'])
+				&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $scope['kingdom_id'], AUTH_EDIT)) {
+				return true;
+			}
+			if (valid_id($scope['park_id'])
+				&& $this->HasAuthority($mundane_id, AUTH_PARK, $scope['park_id'], AUTH_EDIT)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Distinct (park_id, kingdom_id) pairs across a unit's roster. The result set
+	// is drained completely before any HasAuthority call runs, because those
+	// calls issue their own queries on the same shared handle.
+	private function unit_roster_scopes($unit_id, $active_only)
+	{
+		global $DB;
+		$sql = "SELECT DISTINCT m.park_id, m.kingdom_id FROM " . DB_PREFIX . "unit_mundane um"
+			. " JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = um.mundane_id"
+			. " WHERE um.unit_id = " . (int)$unit_id;
+		if ($active_only) {
+			$sql .= " AND um.active = 'Active'";
+		}
+		$DB->Clear();
+		$rs = $DB->DataSet($sql);
+		$scopes = array();
+		if ($rs) {
+			while ($rs->Next()) {
+				$scopes[] = array('park_id' => (int)$rs->park_id, 'kingdom_id' => (int)$rs->kingdom_id);
+			}
+		}
+		$DB->Clear();
+		return $scopes;
 	}
 
 	public function HasAuthority($mundane_id, $type, $id, $role, $visited = array())
@@ -950,7 +1056,20 @@ class Authorization extends Ork3
 	 * validity; ork_mundane.token is retained only as a vestigial pointer.
 	 */
 
-	public function CreateSession($mundane_id)
+	// Normalize a client-supplied session label: trimmed, control characters
+	// collapsed to spaces, capped at the column width. Returns null for an
+	// empty/absent value so callers can fall through to header/User-Agent.
+	private static function sanitizeClientLabel($value)
+	{
+		$value = trim((string)$value);
+		if ($value === '') {
+			return null;
+		}
+		$value = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
+		return substr($value, 0, 255);
+	}
+
+	public function CreateSession($mundane_id, $client_label = null)
 	{
 		global $DB;
 		$mundane_id = (int)$mundane_id;
@@ -964,10 +1083,13 @@ class Authorization extends Ork3
 		// with a fresh token on failure (also covers the astronomically rare
 		// UNIQUE(token) collision).
 		// Device metadata: lets the session UI label entries ("Chrome on Mac
-		// from 203.0.x.x") and lets ops trace a hijacked token. Clients that
-		// can't (jsork, in-browser) or don't want to change their User-Agent
-		// may self-identify with an X-ORK-Client header, which wins.
-		$user_agent = substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+		// from 203.0.x.x") and lets ops trace a hijacked token. Clients may
+		// self-identify three ways, most-deliberate first: a Client field in
+		// the login request body (CORS-safe for embedded jsork — a custom
+		// header would force a preflight the service has never answered),
+		// an X-ORK-Client header (native clients, curl), then User-Agent.
+		$user_agent = self::sanitizeClientLabel($client_label)
+			?? substr((string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? $_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 		// Client IP: behind Cloudflare + the host nginx proxy, REMOTE_ADDR is
 		// just the docker bridge gateway — same value for every visitor.
 		// Prefer Cloudflare's CF-Connecting-IP (trustworthy because all prod
@@ -996,6 +1118,17 @@ class Authorization extends Ork3
 			$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
 			if ($rs && $rs->Next()) {
 				$this->evictLruSessions($mundane_id);
+				// Anonymous sign-in tally: one (day, client-bucket) counter,
+				// deliberately WITHOUT mundane_id/ip/token — per-player login
+				// tracking is an overreach; daily counts by client are the
+				// usage signal (Release Feature Utilization report). If the
+				// table doesn't exist yet (code deployed before migration),
+				// ERRMODE_WARNING swallows the failure and login is unaffected.
+				$DB->Clear();
+				$DB->client = ork_session_client_label($user_agent);
+				$DB->Execute("INSERT INTO " . DB_PREFIX . "signin_tally (day, client, signins) "
+					. "VALUES (CURDATE(), :client, 1) "
+					. "ON DUPLICATE KEY UPDATE signins = signins + 1");
 				return $token;
 			}
 		}

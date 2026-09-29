@@ -12,7 +12,7 @@
 .fp-wrap {
 	max-width: 420px;
 	margin: 40px auto;
-	background: #fff;
+	background: var(--ork-card-bg);
 	border-radius: 12px;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.12);
 	padding: 44px 40px 36px;
@@ -65,11 +65,11 @@
 .fp-input {
 	width: 100%;
 	padding: 10px 12px;
-	border: 1px solid #cbd5e0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 14px;
 	color: #2d3748;
-	background: var(--ork-surface-light);
+	background: var(--ork-input-bg);
 	transition: border-color 0.15s, box-shadow 0.15s;
 	box-sizing: border-box;
 }
@@ -77,7 +77,7 @@
 	outline: none;
 	border-color: #4299e1;
 	box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
-	background: #fff;
+	background: var(--ork-card-bg);
 }
 .fp-divider {
 	display: flex;
@@ -92,7 +92,7 @@
 	content: '';
 	flex: 1;
 	height: 1px;
-	background: var(--ork-border);
+	background: var(--ork-divider);
 }
 .fp-btn {
 	width: 100%;

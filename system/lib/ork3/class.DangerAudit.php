@@ -8,6 +8,54 @@ class Dangeraudit extends Ork3
         $this->audit = new yapo($this->db, DB_PREFIX . 'danger_audit');
     }
 
+    // Credentials and session material that must never be persisted into an
+    // audit row. Callers used to be responsible for stripping these themselves
+    // and mostly did not: 642,535 existing rows carry a live session Token
+    // verbatim in `parameters`. Only remove_auth_h ever unset() it, which is why
+    // the practice looked inconsistent. Scrubbing centrally here means no caller
+    // can get it wrong.
+    // Listed in normalized form: lower-cased with underscores and dashes removed,
+    // which is how scrub() compares them.
+    private static $REDACTED_KEYS = [
+        'token', 'password', 'passwordconfirm', 'confirmpassword', 'newpassword',
+        'oldpassword', 'currentpassword', 'appsecret', 'apikey', 'secret',
+        'sessionid', 'csrf', 'csrftoken', 'applicationauthorizationkey',
+        'appauthkey', 'passwordsalt',
+    ];
+
+    // Recursively drop credential-bearing keys. Matching is case-insensitive and
+    // ignores underscores/dashes so Token / token / password_salt all hit.
+    private function scrub($value, $depth = 0)
+    {
+        if ($depth > 8) {
+            return $value;
+        }
+        // Some callers hand us a stdClass state snapshot rather than an array.
+        // json_encode renders both as a JSON object, so normalizing is lossless.
+        if (is_object($value) && !($value instanceof JsonSerializable)) {
+            $value = get_object_vars($value);
+        }
+        if (!is_array($value)) {
+            return $value;
+        }
+        $clean = array();
+        foreach ($value as $k => $v) {
+            $needle = strtolower(str_replace(array('_', '-'), '', (string)$k));
+            if (in_array($needle, self::$REDACTED_KEYS, true)) {
+                $clean[$k] = '[redacted]';
+                continue;
+            }
+            // Recurse into objects as well as arrays. Only the TOP-LEVEL value
+            // was being normalized from an object, so a state snapshot that
+            // nested a stdClass (a DataSet row, a decoded config blob) carried
+            // its Token/Password/secret straight into the audit table. scrub()
+            // returns scalars and JsonSerializable objects untouched, so this is
+            // safe to call on every value.
+            $clean[$k] = (is_array($v) || is_object($v)) ? $this->scrub($v, $depth + 1) : $v;
+        }
+        return $clean;
+    }
+
     public function audit($call, $parameters, $entity, $entity_id, $prior_state = null, $post_state = null)
     {
         // Read the cached actor id directly. IsAuthorized() expects a TOKEN, not a
@@ -17,11 +65,11 @@ class Dangeraudit extends Ork3
         $mundane_id = (int)($_SESSION['is_authorized_mundane_id'] ?? 0);
         $this->audit->clear();
         $this->audit->method_call = $call;
-        $this->audit->parameters = json_encode($parameters);
+        $this->audit->parameters = json_encode($this->scrub($parameters));
         $this->audit->entity = $entity;
         $this->audit->entity_id = $entity_id;
-        $this->audit->prior_state = json_encode($prior_state);
-        $this->audit->post_state = json_encode($post_state);
+        $this->audit->prior_state = json_encode($this->scrub($prior_state));
+        $this->audit->post_state = json_encode($this->scrub($post_state));
         $this->audit->by_whom_id = $mundane_id;
         $this->audit->modified_at = date('Y-m-d H:i:s');
         $this->audit->save();

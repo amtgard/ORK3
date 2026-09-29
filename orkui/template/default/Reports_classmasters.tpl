@@ -201,7 +201,7 @@ html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
 				<tbody>
 <?php if (is_array($Awards)) : ?>
 <?php 	foreach ($Awards as $award) : ?>
-				<tr>
+				<tr<?=!empty($award['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : ''?>>
 <?php 		if (($report_type ?? null) !== 'Kingdom') : ?>
 					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>

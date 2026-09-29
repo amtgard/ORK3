@@ -355,5 +355,59 @@ $server->wsdl->addComplexType(
 				'Roster'=>array('name'=>'ActivePlayerSummary','type'=>'tns:GetPlayerRosterListType')
 			)
 	);
-	
+
+$server->wsdl->addComplexType(
+		'RecentParkAttendeesRequest',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
+				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
+			)
+	);
+
+/* LastSignIn is MAX(attendance.date) -- a DATE ('2026-08-15'), not a timestamp,
+   so it is typed as a string here exactly like GetPlayerRosterItemType's. */
+$server->wsdl->addComplexType(
+		'RecentParkAttendeeItemType',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
+				'Persona'=>array('name'=>'Persona','type'=>'xsd:string'),
+				'ClassId'=>array('name'=>'ClassId','type'=>'xsd:int'),
+				'ClassName'=>array('name'=>'ClassName','type'=>'xsd:string'),
+				'LastSignIn'=>array('name'=>'LastSignIn','type'=>'xsd:string')
+			)
+	);
+
+$server->wsdl->addComplexType(
+		'RecentParkAttendeeListType',
+		'complexType',
+		'array',
+		'',
+		'SOAP-ENC:Array',
+		array(),
+		array(
+			array('ref'=>'SOAP-ENC:arrayType', 'wsdl:arrayType'=> 'tns:RecentParkAttendeeItemType[]')
+			),
+		'tns:RecentParkAttendeeItemType'
+	);
+
+$server->wsdl->addComplexType(
+		'RecentParkAttendeesResponse',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Status'=>array('name'=>'Status','type'=>'tns:StatusType'),
+				'Attendees'=>array('name'=>'Attendees','type'=>'tns:RecentParkAttendeeListType')
+			)
+	);
+
 ?>
