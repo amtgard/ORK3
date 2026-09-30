@@ -80,7 +80,7 @@ html[data-theme="dark"] .cr-head h1 { background: none; border: none; padding: 0
 				<?php foreach ($Awards as $a): ?>
 				<tr>
 					<td class="cr-recipient">
-						<a href="<?= UIR ?>Playernew/index/<?= (int)$a['MundaneId'] ?>"><?= htmlspecialchars($a['Persona']) ?></a>
+						<a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>"><?= htmlspecialchars($a['Persona']) ?></a>
 						<?php if (!empty($a['ParkAbbrev'])): ?><span class="cr-rank"><?= htmlspecialchars($a['ParkAbbrev']) ?></span><?php endif; ?>
 					</td>
 					<td class="cr-award">
@@ -90,7 +90,7 @@ html[data-theme="dark"] .cr-head h1 { background: none; border: none; padding: 0
 					<td class="cr-giver" data-label="Granted By">
 						<?php if (!empty($a['GivenByPersona'])): ?>
 							<?php if (!empty($a['GivenByMundaneId'])): ?>
-								<a href="<?= UIR ?>Playernew/index/<?= (int)$a['GivenByMundaneId'] ?>"><?= htmlspecialchars($a['GivenByPersona']) ?></a>
+								<a href="<?= UIR ?>Player/profile/<?= (int)$a['GivenByMundaneId'] ?>"><?= htmlspecialchars($a['GivenByPersona']) ?></a>
 							<?php else: ?>
 								<?= htmlspecialchars($a['GivenByPersona']) ?>
 							<?php endif; ?>

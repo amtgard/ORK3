@@ -611,6 +611,13 @@ class Report extends Ork3
                     // aggregation needed, just carry it through to the template layer.
                     'IsRetired'      => !empty($rec['IsRetired']),
                     'AlreadyHas'     => !empty($rec['AlreadyHas']),
+                    // Why AlreadyHas is set, not just that it is. A Master peerage that
+                    // supersedes the order is not the same thing as having been granted
+                    // it, and a reviewer triaging a long queue treats the two
+                    // differently. The Court Planner's picker already draws the
+                    // distinction; without carrying the flag this far the Recommendations
+                    // Manager could only ever say "already has" for both.
+                    'CoveredByMaster' => !empty($rec['CoveredByMaster']),
                     'CurrentRank'    => isset($rec['CurrentRank']) ? (int)$rec['CurrentRank'] : null,
                     'HeldRank'       => (int)($rec['HeldRank'] ?? 0),
                     'Members'        => [],

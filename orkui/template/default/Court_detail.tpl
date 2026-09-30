@@ -110,7 +110,8 @@ if (!function_exists('cp_track_label')) {
 #cp-note-popup-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #a0aec0; }
 #cp-note-popup-close { background: none; border: none; color: #718096; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; margin-left: 12px; flex-shrink: 0; }
 #cp-note-popup-close:hover { color: #fff; }
-.cp-award-rank { color: #a0aec0; font-size: 12px; flex-shrink: 0; }
+.cp-award-rank:not(.ladder-rank) { color: #a0aec0; font-size: 12px; flex-shrink: 0; }
+.cp-award-rank.ladder-rank { font-size: 12px; flex-shrink: 0; }
 .cp-award-flags { display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
 .cp-award-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .cp-flag-local { background: #fff3cd; color: #856404; border: 1px solid #ffc107; width: 20px; height: 20px; border-radius: 50%; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: default; }
@@ -131,12 +132,23 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-expand-val { font-size: 13px; color: #2d3748; }
 /* Base font-size for the maker autocompletes; was inline, moved here so the
    pointer:coarse 16px rule can win without an inline style outranking it. */
-.cp-maker-ac { font-size: 13px; }
+/* box-sizing, so the two maker inputs actually sit in their grid cells. Each
+   carries an inline width:100% with 8px side padding and a 1px border, and
+   there is no global border-box reset on this page -- .cp-field input and
+   .cp-notes-area each set it themselves, and this one was missed. The inputs
+   therefore measured 18px wider than their column and swallowed the 12px
+   .cp-expand-grid gap, so Scroll Maker and Regalia Maker ran together. */
+.cp-maker-ac { font-size: 13px; box-sizing: border-box; }
 .cp-notes-area { width: 100%; border: 1px solid #cbd5e0; border-radius: 5px; padding: 7px 10px; font-size: 13px; resize: vertical; min-height: 60px; box-sizing: border-box; }
 .cp-pc-label-row { display: flex; align-items: center; gap: 8px; }
 .cp-rec-hint-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 12px; color: #3182ce; line-height: 1; }
 .cp-rec-hint-btn:hover { text-decoration: underline; }
 .cp-pubcomment-wrap { position: relative; }
+/* No placeholder when the rec-reason ghost text is showing. .cp-rec-hint is an
+   absolutely-positioned overlay sitting on the textarea, and the browser paints
+   the placeholder on the same empty field, so the two rendered on top of each
+   other. The hint is the more useful of the two -- it is the actual wording
+   being offered -- so the generic placeholder stands down while it is shown. */
 .cp-rec-hint { position: absolute; top: 1px; left: 1px; right: 1px; padding: 7px 10px; font-size: 13px; line-height: 1.35; color: #718096; font-style: italic; white-space: normal; overflow: hidden; pointer-events: none; box-sizing: border-box; max-height: calc(100% - 2px); }
 /* Item 4: a DELIBERATELY cleared citation must not look like an untouched one — an
    untouched row still shows the rec text as a ghost hint, a cleared row shows this. */
@@ -144,7 +156,13 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-pc-cleared i { margin-right: 4px; color: #b7791f; }
 .cp-pc-cleared .cp-rec-hint-btn { margin-left: 4px; font-size: 11px; }
 .cp-artisan-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
-.cp-expand-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+/* Right-aligned: Save and Remove act on the whole award row, but sitting
+   left-aligned directly beneath "Add Artisan" they read as part of the
+   artisan block above them. Pushing them to the opposite edge breaks that
+   association. The <=600px rule below still gives Remove its own
+   margin-left:auto so the destructive button stays away from Save under a
+   thumb. */
+.cp-expand-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
 /* Pass-to-Local: the LABEL carries the hit area (see the coarse-pointer block). */
 .cp-ptl-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .cp-ptl-check { width: auto; }
@@ -170,7 +188,15 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-rm-search:focus { border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
 .cp-rm-meta { font-size: 12px; color: #718096; margin-bottom: 10px; }
 .cp-rm-meta strong { color: #2b6cb0; }
-.cp-rm-list { max-height: 460px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+/* A FIXED height, not max-height. The list is the only thing in this modal
+   that changes size, so with max-height the whole dialog grew and shrank as
+   the filter matched more or fewer rows -- typing a name made it jump under
+   the cursor. Pinning the height keeps the dialog, the search box and the
+   footer buttons still while the contents scroll. min() rather than a flat
+   460px so a short viewport does not end up with the list taller than the
+   dialog that holds it (.cp-modal caps at 90vh and .cp-modal-body scrolls,
+   which would otherwise give two nested scrollbars). */
+.cp-rm-list { height: min(460px, 52vh); overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
 .cp-rm-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid #edf2f7; cursor: pointer; transition: background .1s; position: relative; }
 .cp-rm-row:last-child { border-bottom: none; }
 .cp-rm-row:hover:not(.already) { background: #f7fafc; }
@@ -181,23 +207,49 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-rm-main { flex: 1; min-width: 0; }
 /* Header line: persona · award · rank · date — all on one row, bullet-separated */
 .cp-rm-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; line-height: 1.25; }
-.cp-rm-persona { font-weight: 700; font-size: 13px; color: #1a202c; flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The award name used to be the ONLY shrinkable item in .cp-rm-head -- persona,
+   rank, date and the qualified pill were all flex-shrink:0 -- so every squeeze
+   landed on it alone and it collapsed to its 60px min ('Order of...'), which is
+   the one field you actually need to judge the row. The persona now shrinks
+   first (and twice as fast), which costs less: it repeats down the list and is
+   usually the same player several rows running. */
+.cp-rm-persona { font-weight: 700; font-size: 13px; color: #1a202c; flex-shrink: 2; min-width: 90px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-rm-park    { font-size: 11px; font-weight: 400; color: #a0aec0; letter-spacing: .2px; flex-shrink: 0; }
-.cp-rm-award   { font-size: 12px; color: #4a5568; flex-shrink: 1; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-rm-award   { font-size: 12px; color: #4a5568; flex-shrink: 1; min-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-rm-rank    { display: inline-block; background: #edf2f7; color: #4a5568; border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; flex-shrink: 0; }
 .cp-rm-date    { font-size: 11px; color: #a0aec0; white-space: nowrap; flex-shrink: 0; }
 .cp-rm-sep     { color: #cbd5e0; font-size: 11px; flex-shrink: 0; user-select: none; }
 .cp-rm-reason  { font-size: 11px; color: #718096; line-height: 1.35; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; }
 .cp-rm-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .cp-rm-in-plan { background: #fefcbf; color: #744210; border: 1px solid #f6e05e; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+/* Icon only. The words 'Can't add' cost more width than they earned: this
+   badge sits at the right-hand end of a row that was already squeezing the
+   award name, and it pushed the green 'Already has' pill out of view. The
+   reason now lives entirely in the tooltip and the aria-label, which say
+   'Cannot be added: <why>' rather than restating the pill next to it. */
+.cp-rm-cantadd { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; }
 .cp-rm-check { width: 20px; height: 20px; border-radius: 50%; background: #2c5282; color: #fff; display: none; align-items: center; justify-content: center; font-size: 11px; }
 .cp-rm-row.selected .cp-rm-check { display: flex; }
 .cp-rm-empty { text-align: center; padding: 28px 16px; color: #a0aec0; font-size: 13px; }
-.cp-rm-trash { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #fed7d7; cursor: pointer; font-size: 13px; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity .15s, color .15s; }
+/* A FLEX CHILD, not absolutely positioned. .cp-rm-check is a flex child that
+   lands at the right-hand end of the row, so an absolute trash at right:8px
+   sat on top of it -- but only on .selected rows, because the check is
+   display:none otherwise. Worse than cosmetic: the check won a hover fight it
+   should never have been in, so the trash's tooltip could not be triggered at
+   all on exactly the rows where both buttons were visible.
+   ORDER, not margin-left:auto: the trash is FIRST in the markup (before the
+   avatar), and .cp-rm-main is flex:1 so it absorbs the free space -- auto
+   margins therefore have nothing to distribute and the trash just stays on the
+   left. Explicit order puts the pair at the right-hand end, check then trash,
+   without touching the two places that render this row. */
+.cp-rm-trash { order: 3; flex: none; position: relative; background: none; border: none; color: #fed7d7; cursor: pointer; font-size: 13px; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity .15s, color .15s; }
+.cp-rm-check { order: 2; }
 .cp-rm-row:hover .cp-rm-trash { opacity: 1; }
 .cp-rm-trash:hover { color: #e53e3e; background: #fff5f5; }
-.cp-rm-trash[data-tip] { position: absolute; }
-.cp-rm-trash[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
+/* Visual spec only -- see the catch-all suppression further down. Nothing here
+   paints: cpTipShow() in court-planner.js renders a position:fixed node on
+   <body> instead, because .cp-rm-list clips its descendants. */
+.cp-rm-trash[data-tip]:hover::after { content: attr(data-tip); position: absolute; right: 0; top: 100%; margin-top: 4px; width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 1001; pointer-events: none; }
 html[data-theme="dark"] .cp-rm-trash[data-tip]:hover::after { background: #000; }
 .cp-flag-rec[data-tip] { position: relative; }
 .cp-flag-rec[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: max-content; max-width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
@@ -205,8 +257,15 @@ html[data-theme="dark"] .cp-flag-rec[data-tip]:hover::after { background: #000; 
 .cp-send-local-btn { position: relative; }
 .cp-send-local-btn[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
 html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: #000; }
+/* Catch-all: every ::after tooltip on this page is replaced by the .cp-jstip
+   node from court-planner.js. The per-element rules above are left in place
+   as the visual spec that node copies, but none of them may paint -- they
+   are clipped by .cp-award-list / .cp-rm-list / .cp-sidebar-card, which is
+   the whole reason for the JS node. !important because several of those
+   rules tie on specificity with the suppression in court-planner.css and
+   would win on order, this stylesheet being the later one. */
+[data-tip]:hover::after { display: none !important; }
 .cp-rm-row.dismissing { opacity: 0; transition: opacity .3s; }
-.cp-rm-add-count { font-size: 12px; color: #718096; align-self: center; margin-right: 4px; }
 .cp-rm-controls { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .cp-rm-sort-label { font-size: 11px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: .4px; margin-right: 2px; }
 .cp-rm-sort-btn { background: #edf2f7; border: 1px solid #e2e8f0; color: #4a5568; padding: 4px 10px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; transition: background .1s, border-color .1s; white-space: nowrap; }
@@ -591,7 +650,8 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-cell-recipient .cp-note-btn:hover { color: #4a5568; }
 .cp-cell-award   { color: #4a5568; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
 .cp-cell-award .cp-award-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.cp-cell-award .cp-award-rank      { color: #a0aec0; font-size: 11px; flex-shrink: 0; font-weight: 600; }
+.cp-cell-award .cp-award-rank:not(.ladder-rank) { color: #a0aec0; font-size: 11px; flex-shrink: 0; font-weight: 600; }
+.cp-cell-award .cp-award-rank.ladder-rank { font-size: 11px; flex-shrink: 0; font-weight: 600; }
 .cp-cell-type    { display: flex; align-items: center; }
 .cp-cell-type > * { width: 100%; text-align: center; }
 .cp-cell-flags   { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; overflow: hidden; }
@@ -873,7 +933,6 @@ html[data-theme="dark"] .cp-rm-seconds  { color: #9ae6b4; }
 html[data-theme="dark"] .cp-rm-onother  { background: rgba(159,122,234,.16); border-color: rgba(159,122,234,.4); color: #d6bcfa; }
 html[data-theme="dark"] .cp-rm-qualified { background: rgba(72,187,120,.16); border-color: rgba(72,187,120,.4); color: #9ae6b4; }
 html[data-theme="dark"] .cp-rm-snooze-chip { background: rgba(160,174,192,.12); border-color: rgba(160,174,192,.3); color: #cbd5e0; }
-html[data-theme="dark"] .cp-rm-add-count { color: #a0aec0; }
 
 /* Expand area inner controls */
 html[data-theme="dark"] .cp-expand-label { color: #a0aec0; }
@@ -978,9 +1037,16 @@ html[data-theme="dark"] .cp-sb-sync[data-state="reconnecting"] { color: #fbd38d;
 
 /* QW#8 contrast — retire #a0aec0-on-white for load-bearing small text (row #, rank,
    dates) → ≥ #6b7280; darken muted park/body text → ≥ #5a6472. Dark equivalents kept legible. */
+/* :not(.ladder-rank) — a rank is rendered two different ways. Plain text on the
+   card background, which is what this contrast fix is for, and the coloured
+   ladder pill (class="ladder-rank cp-award-rank"), which carries its own
+   saturated background and white text from rank-pill.css. Both selectors are
+   (0,2,0), and this inline <style> loads AFTER that stylesheet, so the tie went
+   to grey-on-blue and the pill became unreadable in light mode. Dark mode looked
+   fine only because its override is (0,3,0) and happened to pick a light colour. */
 .cp-cell-num,
-.cp-cell-award .cp-award-rank,
-.cp-award-rank,
+.cp-cell-award .cp-award-rank:not(.ladder-rank),
+.cp-award-rank:not(.ladder-rank),
 .cp-rm-date,
 .cp-script-num { color: #6b7280; }
 .cp-award-park,
@@ -988,8 +1054,8 @@ html[data-theme="dark"] .cp-sb-sync[data-state="reconnecting"] { color: #fbd38d;
 .cp-rm-park,
 .cp-script-park { color: #5a6472; }
 html[data-theme="dark"] .cp-cell-num,
-html[data-theme="dark"] .cp-cell-award .cp-award-rank,
-html[data-theme="dark"] .cp-award-rank,
+html[data-theme="dark"] .cp-cell-award .cp-award-rank:not(.ladder-rank),
+html[data-theme="dark"] .cp-award-rank:not(.ladder-rank),
 html[data-theme="dark"] .cp-rm-date,
 html[data-theme="dark"] .cp-script-num,
 html[data-theme="dark"] .cp-award-park,
@@ -1539,9 +1605,11 @@ $_total_awards = count($courtAwards ?? []);
                              data-rec-engaged="<?= $pcCleared ? '1' : '0' ?>"
                              data-rec-cleared="<?= $pcCleared ? '1' : '0' ?>"
                              <?= $pcCleared ? 'data-rec-text="' . htmlspecialchars($pcRecReason) . '"' : '' ?>>
+                            <?php /* see the .cp-rec-hint note in the stylesheet: the ghost text and
+                                     the placeholder both paint on an empty textarea, so only one is emitted */ ?>
                             <textarea class="cp-notes-area" id="cp-pubcomment-<?= $pcCaid ?>"
                                       aria-label="Public comment (shown on the Court Report)"
-                                      placeholder="Shown on the public Court Report…"<?= ($pcTriggered && !$pcCleared) ? ' onfocus="cpRecHintFocus(' . $pcCaid . ')"' : '' ?>><?= htmlspecialchars($pcSaved) ?></textarea>
+                                      <?= ($pcTriggered && !$pcCleared) ? '' : 'placeholder="Shown on the public Court Report…"' ?><?= ($pcTriggered && !$pcCleared) ? ' onfocus="cpRecHintFocus(' . $pcCaid . ')"' : '' ?>><?= htmlspecialchars($pcSaved) ?></textarea>
                             <?php if ($pcTriggered): ?>
                             <div class="cp-rec-hint" id="cp-rec-hint-<?= $pcCaid ?>"<?= $pcCleared ? ' style="display:none"' : '' ?>><?= htmlspecialchars($pcRecReason) ?></div>
                             <?php endif; ?>
@@ -1674,7 +1742,7 @@ $_total_awards = count($courtAwards ?? []);
         <div class="cp-modal-body" style="padding-bottom:8px">
             <div class="cp-rm-search-wrap">
                 <i class="fas fa-search"></i>
-                <input class="cp-rm-search" id="cp-rm-filter" type="text" placeholder="Filter by name or award…" oninput="cpRmFilter()" autocomplete="off">
+                <input class="cp-rm-search" id="cp-rm-filter" type="text" placeholder="Filter by persona or award…" oninput="cpRmFilter()" autocomplete="off">
             </div>
             <div class="cp-rm-controls">
                 <span class="cp-rm-sort-label">View:</span>
@@ -1724,16 +1792,23 @@ $_total_awards = count($courtAwards ?? []);
                     elseif  ($d < 180) { $ageLbl = round($d/30) . 'mo';                 $ageCls = 'cp-age-orange'; }
                     else               { $ageLbl = round($d/365) . 'y+';                $ageCls = 'cp-age-red'; }
 
-                    // Already-qualified inline reason
+                    // Already-qualified inline reason. NOT htmlspecialchars'd here --
+                    // every use site escapes on output, and escaping twice turned a
+                    // date's characters into entities.
+                    $cantAddTip = '';
                     if ($alreadyHas) {
                         if ($coveredMaster) {
                             $qualifiedTip = 'Covered by a Master peerage';
                         } elseif ((int)($rec['CurrentRank'] ?? 0) > 0) {
                             $qualifiedTip = 'Held at Rank ' . (int)$rec['CurrentRank']
-                                . (!empty($rec['CurrentRankDate']) ? ' since ' . htmlspecialchars($rec['CurrentRankDate']) : '');
+                                . (!empty($rec['CurrentRankDate']) ? ' since ' . $rec['CurrentRankDate'] : '');
                         } else {
                             $qualifiedTip = 'Already granted';
                         }
+                        // The right-hand slot says what you cannot do; it has to carry the
+                        // reason itself rather than leaning on the green pill beside it,
+                        // because the two are read independently.
+                        $cantAddTip = 'Cannot be added: ' . $qualifiedTip;
                     }
                 ?>
                 <div class="cp-rm-row<?= $disabled ? ' already' : '' ?><?= $isSnoozed ? ' cp-rm-snoozed' : '' ?>"
@@ -1760,7 +1835,7 @@ $_total_awards = count($courtAwards ?? []);
                             <span class="cp-rm-persona"><?= htmlspecialchars($rec['Persona']) ?></span>
                             <?php if (!empty($rec['ParkAbbrev'])): ?><span class="cp-rm-park"><?= htmlspecialchars($rec['ParkAbbrev']) ?></span><?php endif; ?>
                             <span class="cp-rm-sep">&middot;</span>
-                            <span class="cp-rm-award"><?= htmlspecialchars($rec['AwardName']) ?></span>
+                            <span class="cp-rm-award" data-tip="<?= htmlspecialchars($rec['AwardName']) ?>"><?= htmlspecialchars($rec['AwardName']) ?></span>
                             <?php if ($rec['IsLadder'] && $rec['Rank'] > 0): ?><span class="cp-rm-rank">Rank <?= (int)$rec['Rank'] ?></span><?php endif; ?>
                             <?php if ($rec['DateRecommended']): ?>
                             <span class="cp-rm-sep">&middot;</span>
@@ -1794,7 +1869,11 @@ $_total_awards = count($courtAwards ?? []);
                     </div>
                     <div class="cp-rm-right">
                         <?php if ($alreadyHas): ?>
-                        <span class="cp-rm-in-plan"><i class="fas fa-check" style="margin-right:3px"></i>Already Has</span>
+                        <?php /* "Can't add", not "Already Has": this slot replaces the selection
+                                 checkmark and answers "can I tick this?". The green .cp-rm-qualified
+                                 pill to its left already states that the player holds the honour, so
+                                 repeating it here said the same thing twice in two colours. */ ?>
+                        <span class="cp-rm-in-plan cp-rm-cantadd" role="img" data-tip="<?= htmlspecialchars($cantAddTip) ?>" aria-label="<?= htmlspecialchars($cantAddTip) ?>"><i class="fas fa-ban"></i></span>
                         <?php else: ?>
                         <div class="cp-rm-check"><i class="fas fa-check"></i></div>
                         <?php endif; ?>
@@ -1807,8 +1886,7 @@ $_total_awards = count($courtAwards ?? []);
         </div>
         <div class="cp-modal-footer" style="align-items:center">
             <button class="cp-btn-outline" onclick="cpCloseRecModal()">Cancel</button>
-            <span class="cp-rm-add-count" id="cp-rm-count" style="display:none"></span>
-            <button class="cp-btn-primary" id="cp-rm-add-btn" onclick="cpSubmitRecs()">
+            <button class="cp-btn-primary" id="cp-rm-add-btn" onclick="cpSubmitRecs()" disabled>
                 <i class="fas fa-plus"></i> <span id="cp-rm-add-label">Add Selected</span>
             </button>
         </div>
@@ -1826,7 +1904,7 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-field">
                 <label for="cp-adhoc-persona">Recipient <span style="color:#e53e3e">*</span></label>
                 <div class="cp-ac-wrap">
-                    <input type="text" id="cp-adhoc-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-adhoc-ac','cp-adhoc-mundane-id')">
+                    <input type="text" id="cp-adhoc-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-adhoc-ac','cp-adhoc-mundane-id',cpAdhocRecipientPicked)">
                     <div class="cp-ac-dropdown" id="cp-adhoc-ac"></div>
                 </div>
                 <input type="hidden" id="cp-adhoc-mundane-id">
@@ -1840,7 +1918,7 @@ $_total_awards = count($courtAwards ?? []);
                 <input type="hidden" id="cp-adhoc-award-id">
             </div>
             <div class="cp-field" id="cp-adhoc-rank-wrap" style="display:none">
-                <label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">— select the rank being awarded</span></label>
+                <label>Rank <span id="cp-adhoc-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">— select the rank being awarded</span></label>
                 <div class="cp-rank-pills" id="cp-adhoc-rank-pills"></div>
                 <input type="hidden" id="cp-adhoc-rank-val" value="">
             </div>
@@ -2090,6 +2168,10 @@ $_total_awards = count($courtAwards ?? []);
             foreach (($g['options'] ?? []) as $o) {
                 $flat[] = [
                     'id'     => (int)$o['KingdomAwardId'],
+                    // The ledger's held-rank map is keyed by the BASE award_id, not the
+                    // kingdom's own row, so the pill painter needs both. Already 0 for
+                    // pseudo-ladders, which have no ledger award to look up.
+                    'awardId' => (int)($o['AwardId'] ?? 0),
                     'name'   => $o['Name'],
                     'ladder' => (bool)$o['IsLadder'],
                     'title'  => (bool)$o['IsTitle'],
@@ -2935,7 +3017,7 @@ $_total_awards = count($courtAwards ?? []);
             // predicate and the reconcile sync both read dataset.recCleared, and an
             // absent attribute reads as undefined rather than '0'.
             '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="0" data-rec-cleared="0">' +
-            '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" placeholder="Shown on the public Court Report…"' + taFocus + '>' + esc(publicComment) + '</textarea>' +
+            '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '"' + (triggered ? '' : ' placeholder="Shown on the public Court Report…"') + taFocus + '>' + esc(publicComment) + '</textarea>' +
             hint + '</div>';
     }
 
@@ -3351,17 +3433,16 @@ $_total_awards = count($courtAwards ?? []);
     // ---- Rec modal ----
     var selectedRecs = [];
 
+    // The button is the only place the count appears -- a separate "N selected"
+    // label beside a button reading "Add N" said the same thing twice. It is
+    // also disabled at zero: "Add Selected" with nothing selected was clickable
+    // and submitted an empty list.
     function cpRmUpdateCount() {
         var n = selectedRecs.length;
-        var countEl = gid('cp-rm-count');
         var labelEl = gid('cp-rm-add-label');
-        if (n > 0) {
-            if (countEl) { countEl.textContent = n + ' selected'; countEl.style.display = ''; }
-            if (labelEl) labelEl.textContent = 'Add ' + n;
-        } else {
-            if (countEl) countEl.style.display = 'none';
-            if (labelEl) labelEl.textContent = 'Add Selected';
-        }
+        var btnEl   = gid('cp-rm-add-btn');
+        if (labelEl) labelEl.textContent = n > 0 ? 'Add ' + n : 'Add Selected';
+        if (btnEl)   btnEl.disabled = (n === 0);
     }
 
     var cpRmCurrentSort = 'az';
@@ -3418,11 +3499,20 @@ $_total_awards = count($courtAwards ?? []);
 
     window.cpRmFilter = function() {
         var q = (gid('cp-rm-filter').value || '').toLowerCase().trim();
+        // EVERY whitespace-separated term must appear, in any order, rather than
+        // the whole query having to occur as one contiguous run. data-search is
+        // "persona awardname", so a single indexOf meant "augustus crown" found
+        // nothing even though both words are there -- the user had to know which
+        // order they were concatenated in. NOTE data-search is built from Persona
+        // and AwardName only, so a username or real name still will not match;
+        // that needs a field adding upstream in Report::PlayerAwardRecommendations.
+        var terms = q ? q.split(/\s+/) : [];
         var rows = document.querySelectorAll('#cp-rec-list .cp-rm-row');
         var visible = 0;
         rows.forEach(function(row) {
             var inView = cpRmViewMatch(row, cpRmCurrentView);
-            var match  = inView && (!q || (row.dataset.search || '').indexOf(q) !== -1);
+            var hay    = row.dataset.search || '';
+            var match  = inView && (!terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; }));
             row.style.display = match ? '' : 'none';
             if (match) visible++;
         });
@@ -3484,7 +3574,20 @@ $_total_awards = count($courtAwards ?? []);
                 });
         }
         // QW#9: in-product confirm only — cpConfirm falls back to a DOM dialog, never confirm().
-        cpConfirm({ title: 'Dismiss recommendation?', body: 'Already given out previously? No plans to award this? You can dismiss this rec.', confirmLabel: 'Dismiss', danger: true, onConfirm: doDismiss });
+        // The body says where it goes, not just what the button is called. Dismissing
+        // is a soft delete on the recommendation itself, so it leaves the kingdom's
+        // list for everyone rather than only this court -- and the way back is on a
+        // different page entirely, which nobody would guess from here. Plain text:
+        // both orkConfirm and cpFallbackConfirm run the body through esc().
+        cpConfirm({
+            title: 'Dismiss this recommendation?',
+            body: 'It will be removed from the kingdom\'s recommendation list for everyone, not just from this court. '
+                + 'Nothing is deleted permanently \u2014 to bring it back later, open the Kingdom page, go to the '
+                + 'Recommendations tab and expand "Show Deleted Recommendations", then choose Restore.',
+            confirmLabel: 'Dismiss',
+            danger: true,
+            onConfirm: doDismiss
+        });
     };
 
     window.cpToggleRec = function(el) {
@@ -3667,6 +3770,7 @@ $_total_awards = count($courtAwards ?? []);
         // award must get the rank pills here too, or it stages at rank 0.
         input.dataset.ladder = cpIsLadder(o) ? '1' : '0';
         gid('cp-adhoc-award-id').value = o.id;
+        input.dataset.awardId = o.awardId || 0;
         var drop = gid('cp-adhoc-award-ac');
         drop.style.display = 'none';
         drop.innerHTML = '';
@@ -3688,17 +3792,78 @@ $_total_awards = count($courtAwards ?? []);
         }
     };
 
+    // ---- What the recipient already holds ------------------------------------
+    // Two different "already has" answers matter here and they do not agree:
+    //   ledger  - ranks granted in the past, from PlayerAjax/{id}/awardranks
+    //             (keyed by BASE award_id, hence cpAwardOptions.awardId)
+    //   planned - ranks already sitting on THIS court, unfinalised, which the
+    //             ledger cannot know about. Without it, adding a second Crown to
+    //             a player who is queued for rank 9 would again suggest 9.
+    // Neither blocks anything: a court may legitimately record a rank out of
+    // order, backfill history, or correct a mistake. They only inform.
+    var cpAdhocHeldRanks = {};   // mundaneId -> { awardId: maxRank }
+    window.cpAdhocRecipientPicked = function(p) {
+        var id = p && p.MundaneId ? String(p.MundaneId) : '';
+        if (!id || cpAdhocHeldRanks[id]) { cpAdhocAwardChange(); return; }
+        // PlayerAjax/player/{id}/{action} -- the id is $parts[0] of player($p),
+        // so the 'player/' segment is required. Without it the route never reaches
+        // the awardranks branch and every rank comes back unheld.
+        fetch(uir + 'PlayerAjax/player/' + id + '/awardranks')
+            .then(function(r) { return r.json(); })
+            .then(function(d) { cpAdhocHeldRanks[id] = d || {}; cpAdhocAwardChange(); })
+            .catch(function() { cpAdhocHeldRanks[id] = {}; cpAdhocAwardChange(); });
+    };
+    function cpAdhocLedgerRank() {
+        var mid = gid('cp-adhoc-mundane-id').value;
+        var awardId = gid('cp-adhoc-award-search').dataset.awardId || 0;
+        if (!mid || !awardId) { return 0; }
+        var map = cpAdhocHeldRanks[String(mid)] || {};
+        return parseInt(map[String(awardId)], 10) || 0;
+    }
+    // Highest rank of this same award already queued on this court for this player.
+    function cpAdhocPlannedRank() {
+        var mid = parseInt(gid('cp-adhoc-mundane-id').value, 10) || 0;
+        var kaId = parseInt(gid('cp-adhoc-award-id').value, 10) || 0;
+        if (!mid || !kaId || !window.courtAwards) { return 0; }
+        var best = 0;
+        window.courtAwards.forEach(function(aw) {
+            if (parseInt(aw.MundaneId, 10) === mid && parseInt(aw.KingdomAwardId, 10) === kaId) {
+                best = Math.max(best, parseInt(aw.Rank, 10) || 0);
+            }
+        });
+        return best;
+    }
+
     // Build clickable rank pills (1..maxRank) using the shared .ladder-rank
     // component for colour; maxRank follows the standard Add Award modal's
-    // zodiac heuristic. Default-selects rank 1.
+    // zodiac heuristic. Ranks the recipient already holds, or is already queued
+    // for on this court, are marked, and the first unclaimed rank is preselected.
     window.cpBuildAdhocRankPills = function(awardName) {
         var maxRank = /zodiac/i.test(awardName || '') ? 12 : 10;
+        var held    = cpAdhocLedgerRank();
+        var planned = cpAdhocPlannedRank();
         var html = '';
         for (var i = 1; i <= maxRank; i++) {
-            html += '<button type="button" class="ladder-rank cp-rank-pill" data-lvl="' + Math.min(i, 10) + '" data-rank="' + i + '" onclick="cpSelectAdhocRank(' + i + ')">' + i + '</button>';
+            var cls = 'ladder-rank cp-rank-pill';
+            var tip = '';
+            if (i <= held)         { cls += ' cp-rank-pill-held';    tip = ' data-tip="Already awarded"'; }
+            else if (i <= planned) { cls += ' cp-rank-pill-planned'; tip = ' data-tip="Already on this court"'; }
+            html += '<button type="button" class="' + cls + '" data-lvl="' + Math.min(i, 10) + '" data-rank="' + i + '"' + tip + ' onclick="cpSelectAdhocRank(' + i + ')">' + i + '</button>';
         }
         gid('cp-adhoc-rank-pills').innerHTML = html;
-        cpSelectAdhocRank(1);
+        var hint = gid('cp-adhoc-rank-hint');
+        if (hint) {
+            if (held || planned) {
+                hint.textContent = held && planned
+                    ? '\u2014 green: already awarded (to ' + held + '). amber: already on this court (to ' + planned + ').'
+                    : (held ? '\u2014 green ranks have already been awarded (to ' + held + ').'
+                            : '\u2014 amber ranks are already on this court (to ' + planned + ').');
+            } else {
+                hint.textContent = '\u2014 select the rank being awarded';
+            }
+        }
+        // Land on the first rank not already held or queued, but never past the end.
+        cpSelectAdhocRank(Math.min(Math.max(held, planned) + 1, maxRank));
     };
 
     window.cpSelectAdhocRank = function(rank) {
@@ -3867,9 +4032,26 @@ $_total_awards = count($courtAwards ?? []);
     };
 
     window.cpRemoveArtisan = function(artId) {
+        // Name who is being removed, and what they did. "Remove this artisan?"
+        // restated the button and told the user nothing -- with several artisans
+        // on one award there was no way to tell from the dialog which row the X
+        // belonged to. Both facts are already in the row, so read them from the
+        // DOM rather than threading them through every call site; the markup is
+        // identical whether the row came from PHP or from cpAddArtisan().
+        var row  = gid('cp-art-' + artId);
+        var who  = row && row.querySelector('strong') ? row.querySelector('strong').textContent.trim() : '';
+        var what = row && row.querySelector('span') ? row.querySelector('span').textContent.replace(/^\s*[\u2014-]\s*/, '').trim() : '';
+        var body;
+        if (who && what) {
+            body = 'Remove ' + who + ' (' + what + ') from this award\u2019s artisans? They will no longer be credited on the court report.';
+        } else if (who) {
+            body = 'Remove ' + who + ' from this award\u2019s artisans? They will no longer be credited on the court report.';
+        } else {
+            body = 'Remove this artisan? They will no longer be credited on the court report.';
+        }
         cpConfirm({
             title: 'Remove artisan',
-            body: 'Remove this artisan?',
+            body: body,
             confirmLabel: 'Remove',
             danger: true,
             onConfirm: function() { cpDoRemoveArtisan(artId); }

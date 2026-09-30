@@ -9361,7 +9361,7 @@ $(document).ready(function() {
         function evSchedLeadsCell(leads) {
             if (!leads || !leads.length) return '';
             return leads.map(function(l) {
-                return '<a href="' + EvConfig.uir + 'Playernew/index/' + l.MundaneId + '">' + escHtmlSt(l.Persona) + '</a>';
+                return '<a href="' + EvConfig.uir + 'Player/profile/' + l.MundaneId + '">' + escHtmlSt(l.Persona) + '</a>';
             }).join(', ');
         }
 

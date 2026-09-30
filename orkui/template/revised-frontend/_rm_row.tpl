@@ -67,14 +67,22 @@
           data-membersfull='<?= $membersFullJson ?>'>
         <td class="rm-col-sel"><label><input type="checkbox" class="rm-rowsel" aria-label="Select <?= $rowLabelEsc ?>"></label></td>
         <td class="rm-col-recip">
-          <a href="<?= UIR ?>Playernew/index/<?= $gMid ?>"><?= htmlspecialchars($group['Persona'] ?? '') ?></a>
+          <a href="<?= UIR ?>Player/profile/<?= $gMid ?>"><?= htmlspecialchars($group['Persona'] ?? '') ?></a>
         </td>
         <td class="rm-col-park">
           <?php if ($abbrev) { ?><a class="rm-park" href="<?= UIR ?>Park/profile/<?= $pid ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($abbrev) ?></a><?php } else { ?><span class="rm-empty">&mdash;</span><?php } ?>
         </td>
         <td class="rm-col-award">
           <?= htmlspecialchars($group['AwardName'] ?? '') ?>
-          <?php if (!empty($group['AlreadyHas'])) { ?><span class="rm-badge rm-badge-has">already has</span><?php } ?>
+          <?php if (!empty($group['AlreadyHas'])) {
+                    /* "covered by master" is NOT "already has": the recipient was never
+                       given this order -- a Master peerage supersedes it. The generic
+                       wording reads as "granted, nothing to do", which is the wrong call
+                       when triaging a long queue. The Court Planner's picker already
+                       separates the two; this keeps the screens consistent. */
+                    $rmCovered = !empty($group['CoveredByMaster']); ?>
+            <span class="rm-badge <?= $rmCovered ? 'rm-badge-master' : 'rm-badge-has' ?>" data-tip="<?= $rmCovered ? 'Covered by a Master peerage &mdash; the recipient was not granted this order.' : 'The recipient already holds this award.' ?>"><?= $rmCovered ? 'covered by master' : 'already has' ?></span>
+          <?php } ?>
           <?php if (!empty($group['PassedToLocal'])) { ?><span class="rm-badge rm-badge-passlocal" data-tip="Passed to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php } ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
           <?php if (!empty($group['IsRetired'])) { ?><span class="rm-badge rm-badge-retired" data-tip="This recipient is retired or deceased in the ORK. Memorial honors are legitimate &mdash; just confirm before granting or staging this on a live court.">retired</span><?php } ?>

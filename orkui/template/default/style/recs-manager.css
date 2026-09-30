@@ -188,6 +188,11 @@ a.rm-park:hover { color: var(--rm-accent); border-color: var(--rm-accent); }
     border: 1px solid var(--rm-line);
 }
 .rm-badge-has { color: #8a6d00; background: rgba(240, 200, 0, 0.14); border-color: rgba(240, 200, 0, 0.4); }
+/* Distinct from rm-badge-has on purpose: a Master peerage superseding the order
+   is a different state from having been granted it, and green matches how the
+   Court Planner already shows the same fact. */
+.rm-badge-master { color: #276749; background: rgba(72, 187, 120, 0.14); border-color: rgba(72, 187, 120, 0.45); }
+html[data-theme="dark"] .rm-badge-master { color: #9ae6b4; border-color: rgba(72,187,120,.4); }
 .rm-badge-below { color: var(--rm-danger); background: rgba(176, 48, 48, 0.10); border-color: rgba(176, 48, 48, 0.35); }
 html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
 /* The dark block re-tuned every other badge but left this one on the light-mode

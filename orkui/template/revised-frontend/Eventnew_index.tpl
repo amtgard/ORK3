@@ -1342,7 +1342,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							?></td>
 							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
-							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
+							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Player/profile/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td class="ev-sched-desc"><?= ev_autolink($item['Description']) ?></td>
 							<?php if ($canManageSchedule): ?>
 							<td class="ev-del-cell">

@@ -7,5 +7,5 @@
 -- (park_id = 0 for a kingdom-level snooze). NULL means a pre-existing snooze
 -- with no recorded scope; the reads fall back to the recipient's park for those.
 ALTER TABLE ork_recommendations
-  ADD COLUMN snoozed_kingdom_id INT NULL DEFAULT NULL AFTER snoozed_regent_id,
-  ADD COLUMN snoozed_park_id    INT NULL DEFAULT NULL AFTER snoozed_kingdom_id;
+  ADD COLUMN IF NOT EXISTS snoozed_kingdom_id INT NULL DEFAULT NULL AFTER snoozed_regent_id,
+  ADD COLUMN IF NOT EXISTS snoozed_park_id    INT NULL DEFAULT NULL AFTER snoozed_kingdom_id;

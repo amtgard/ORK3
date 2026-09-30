@@ -136,16 +136,29 @@
         clearTimeout(cpAcTimer);
         cpAcTimer = setTimeout(function () {
             var c = cfg();
-            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q))
+            // scope=all, not the endpoint's 'own' default. Without it playersearch
+            // applies "AND m.kingdom_id IN (family)" and only this kingdom's players
+            // are reachable -- but a scroll maker, regalia maker or contributing
+            // artisan is routinely from somewhere else, and the abbreviation prefix
+            // was the only way to reach them. kingdom_all drops the filter and keeps
+            // the ordering, floating this kingdom to the top before everyone else.
+            // c.kingdomId is the COURT's kingdom, not the signed-in user's.
+            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 drop.innerHTML = '';
                 if (!data || !data.length) {
-                    drop.innerHTML = '<div class="cp-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                    drop.innerHTML = '<div class="cp-ac-item cp-ac-empty" style="color:#a0aec0;cursor:default">No players found</div>';
+                    drop._acInput = input;
+                    drop._acIndex = -1;
                     cpPositionAc(input, drop);
                     drop.style.display = 'block';
                     return;
                 }
+                // Keyboard state lives on the drop so the document-level handler can
+                // find it without every call site wiring up its own listeners.
+                drop._acInput = input;
+                drop._acIndex = -1;
                 data.slice(0, 12).forEach(function (p) {
                     var div = document.createElement('div');
                     div.className = 'cp-ac-item';
@@ -168,6 +181,113 @@
             });
         }, 200);
     }
+
+    // ---- Keyboard navigation -------------------------------------------------
+    // Down/Up to move, Enter to choose, Escape to close. One delegated handler
+    // rather than per-input wiring: the makers, the artisan picker, the ad-hoc
+    // recipient and the recorder all open their dropdowns through cpAcSearch, so
+    // they all get this at once, including rows added to the DOM later.
+    function cpAcItems(drop) {
+        return Array.prototype.filter.call(
+            drop.querySelectorAll('.cp-ac-item'),
+            function (n) { return !n.classList.contains('cp-ac-empty'); }
+        );
+    }
+    function cpAcHighlight(drop, items) {
+        items.forEach(function (n, i) {
+            var on = (i === drop._acIndex);
+            n.classList.toggle('cp-ac-active', on);
+            if (on && n.scrollIntoView) { n.scrollIntoView({ block: 'nearest' }); }
+        });
+        // Announce the active option to assistive tech without moving focus.
+        if (drop._acInput) {
+            var act = items[drop._acIndex];
+            if (act) {
+                if (!act.id) { act.id = 'cp-ac-opt-' + Math.random().toString(36).slice(2, 9); }
+                drop._acInput.setAttribute('aria-activedescendant', act.id);
+            } else {
+                drop._acInput.removeAttribute('aria-activedescendant');
+            }
+        }
+    }
+    document.addEventListener('keydown', function (e) {
+        var drop = window.cpAcOpenDrop;
+        if (!drop || drop.style.display === 'none') { return; }
+        if (drop._acInput && e.target !== drop._acInput) { return; }
+        var k = e.key;
+        if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'Enter' && k !== 'Escape') { return; }
+        var items = cpAcItems(drop);
+        if (k === 'Escape') {
+            drop.style.display = 'none';
+            cpAcUnbind();
+            e.preventDefault();
+            return;
+        }
+        if (!items.length) { return; }
+        if (k === 'ArrowDown') {
+            drop._acIndex = (typeof drop._acIndex === 'number' ? drop._acIndex : -1) + 1;
+            if (drop._acIndex >= items.length) { drop._acIndex = 0; }
+            cpAcHighlight(drop, items);
+            e.preventDefault();
+        } else if (k === 'ArrowUp') {
+            drop._acIndex = (typeof drop._acIndex === 'number' ? drop._acIndex : 0) - 1;
+            if (drop._acIndex < 0) { drop._acIndex = items.length - 1; }
+            cpAcHighlight(drop, items);
+            e.preventDefault();
+        } else if (k === 'Enter') {
+            // Enter with nothing highlighted is left alone, so it can still submit
+            // whatever form the input sits in rather than silently doing nothing.
+            if (drop._acIndex >= 0 && items[drop._acIndex]) {
+                items[drop._acIndex].click();
+                e.preventDefault();
+            }
+        }
+    });
+
+    // ---- Tooltips ------------------------------------------------------------
+    // One position:fixed node on <body>, not a CSS ::after on each element.
+    // The planner is full of scroll/clip containers -- .cp-award-list
+    // (overflow-x:auto, which forces overflow-y to auto), .cp-rm-list
+    // (overflow-y:auto), .cp-sidebar-card (overflow:hidden) -- and a container
+    // clips its descendants however high their z-index, so a ::after tooltip is
+    // unreadable near the edges of any of them. Rendering outside the flow is
+    // the only fix that does not need every container to cooperate.
+    var cpTipEl = null;
+    function cpTipShow(el) {
+        var text = el.getAttribute('data-tip');
+        if (!text) { cpTipHide(); return; }
+        if (!cpTipEl) {
+            cpTipEl = document.createElement('div');
+            cpTipEl.className = 'cp-jstip';
+            document.body.appendChild(cpTipEl);
+        }
+        cpTipEl.textContent = text;
+        cpTipEl.style.display = 'block';
+        var r = el.getBoundingClientRect();
+        var t = cpTipEl.getBoundingClientRect();
+        var top = r.bottom + 6;
+        if (top + t.height > window.innerHeight - 8) { top = r.top - t.height - 6; }
+        var left = r.right - t.width;
+        if (left < 8) { left = 8; }
+        if (left + t.width > window.innerWidth - 8) { left = window.innerWidth - t.width - 8; }
+        cpTipEl.style.top  = Math.max(8, top) + 'px';
+        cpTipEl.style.left = left + 'px';
+    }
+    function cpTipHide() { if (cpTipEl) { cpTipEl.style.display = 'none'; } }
+    // Delegated on document, scoped to the same roots the old CSS rule used, so
+    // it also covers rows and modals rendered after load.
+    document.addEventListener('mouseover', function (e) {
+        var el = e.target.closest ? e.target.closest('[data-tip]') : null;
+        if (el && el.closest('.cp-page, .cp-overlay, #cp-note-popup')) { cpTipShow(el); }
+        else { cpTipHide(); }
+    });
+    // Any press dismisses it: several buttons rewrite their own data-tip when
+    // clicked (the scroll/regalia tracking glyphs cycle state), and an already
+    // painted tooltip would otherwise sit there describing the previous state.
+    // Capturing, so it runs before the handler that does the rewriting.
+    document.addEventListener('mousedown', cpTipHide, true);
+    document.addEventListener('scroll', cpTipHide, true);
+    window.addEventListener('resize', cpTipHide);
 
     window.cpPositionAc      = cpPositionAc;
     window.cpAcUnbind        = cpAcUnbind;

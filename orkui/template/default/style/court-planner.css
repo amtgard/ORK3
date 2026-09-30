@@ -58,7 +58,11 @@
 
 /* ---- Buttons ---- */
 .cp-btn-primary { background: #2c5282; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.cp-btn-primary:hover { background: #2a4a7f; }
+.cp-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
+/* Primary actions can now be genuinely unavailable -- the court modal's
+   Add button is disabled until something is selected -- so the state needs
+   to read as disabled rather than merely not respond. */
+.cp-btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 .cp-btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
 .cp-btn-outline { background: #fff; border: 1px solid #cbd5e0; color: #4a5568; padding: 7px 14px; border-radius: 5px; font-size: 13px; cursor: pointer; }
 .cp-btn-outline:hover { background: #f7fafc; }
@@ -84,7 +88,11 @@
 /* ---- Tooltips (data-tip, never native title=) ---- */
 /* Generic data-tip tooltips (converted from native title=) — reuses the pattern above */
 .cp-page [data-tip], #cp-note-popup [data-tip], .cp-overlay [data-tip] { position: relative; }
-.cp-page [data-tip]:hover::after, #cp-note-popup [data-tip]:hover::after, .cp-overlay [data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 1001; pointer-events: none; }
+/* SUPPRESSED in favour of the .cp-jstip node built in court-planner.js. Kept,
+   rather than deleted, because it is the visual spec the JS node copies -- and
+   because a ::after here is clipped by .cp-award-list / .cp-rm-list /
+   .cp-sidebar-card, which is why the JS node exists at all. */
+.cp-page [data-tip]:hover::after, #cp-note-popup [data-tip]:hover::after, .cp-overlay [data-tip]:hover::after { display: none !important; content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 1001; pointer-events: none; }
 /* Right-anchor tooltips in the tracking / flags columns so they don't overflow the row edge */
 .cp-tracking-icon[data-tip]:hover::after, .cp-hdr-scroll[data-tip]:hover::after, .cp-hdr-regalia[data-tip]:hover::after, .cp-flag-local[data-tip]:hover::after,
 .cp-rm-qualified[data-tip]:hover::after, .cp-rm-snooze-chip[data-tip]:hover::after, .cp-rm-onother[data-tip]:hover::after, .cp-rm-seconds[data-tip]:hover::after, .cp-rm-age-badge[data-tip]:hover::after, .cp-btn-undo[data-tip]:hover::after { left: auto; right: 0; }
@@ -97,8 +105,14 @@
 /* ---- Autocomplete ---- */
 .cp-ac-wrap { position: relative; }
 .cp-ac-dropdown { position: fixed; top: 0; left: 0; width: 0; background: #fff; border: 1px solid #cbd5e0; border-radius: 5px; box-shadow: 0 4px 12px rgba(0,0,0,.1); z-index: 1100; max-height: 200px; overflow-y: auto; display: none; }
+/* The one tooltip node, positioned by cpTipShow(). z-index clears the modals
+   (.cp-overlay is 1000) so it stays readable over a dialog too. */
+.cp-jstip { position: fixed; display: none; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 2000; pointer-events: none; }
+html[data-theme="dark"] .cp-jstip { background: #000; }
 .cp-ac-item { padding: 8px 12px; cursor: pointer; font-size: 13px; }
-.cp-ac-item:hover { background: #ebf8ff; }
+/* .cp-ac-active mirrors :hover so the keyboard-highlighted row and the
+   mouse-hovered row look the same. Arrow keys move it; Enter picks it. */
+.cp-ac-item:hover, .cp-ac-item.cp-ac-active { background: #ebf8ff; }
 .cp-ac-group { padding: 5px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #718096; background: #f7fafc; border-bottom: 1px solid #edf2f7; cursor: default; position: sticky; top: 0; }
 
 /* ---- Giver quick-pick pills (grant modal, Record view's giver popover) ---- */
@@ -113,6 +127,12 @@
 .cp-rank-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .cp-rank-pill { width: auto; padding: 3px 11px; font-size: 12px; cursor: pointer; opacity: .5; transition: opacity .12s ease, box-shadow .12s ease; }
 .cp-rank-pill:hover { opacity: .85; }
+/* Held / planned marking on the ad-hoc rank picker. Informational only -- a
+   court may record a rank out of order or backfill history, so neither state
+   disables the pill. !important because .ladder-rank[data-lvl=N] sets a
+   per-level background these must sit on top of. */
+.cp-rank-pills .cp-rank-pill.cp-rank-pill-held    { background: #48bb78 !important; color: #fff; opacity: 1; }
+.cp-rank-pills .cp-rank-pill.cp-rank-pill-planned { background: #ed8936 !important; color: #fff; opacity: 1; }
 .cp-rank-pill-selected { opacity: 1; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2b6cb0; }
 
 /* ---- Tracking icons ---- */
@@ -224,7 +244,8 @@ html[data-theme="dark"] .cp-field textarea:focus { border-color: #4299e1; box-sh
 
 html[data-theme="dark"] .cp-ac-dropdown { background: #1f2733 !important; border-color: #2d3748 !important; box-shadow: 0 4px 12px rgba(0,0,0,.4) !important; }
 html[data-theme="dark"] .cp-ac-item { color: #cbd5e0; }
-html[data-theme="dark"] .cp-ac-item:hover { background: #2d3748 !important; }
+html[data-theme="dark"] .cp-ac-item:hover,
+html[data-theme="dark"] .cp-ac-item.cp-ac-active { background: #2d3748 !important; }
 html[data-theme="dark"] .cp-ac-group { color: #a0aec0; background: #171e28 !important; border-bottom-color: #2d3748 !important; }
 
 html[data-theme="dark"] .cp-giver-pill { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
@@ -326,6 +347,9 @@ html[data-theme="dark"] .cp-tracking-icon[data-status="2"]::after { color: #9ae6
     #cp-grant-confirm { min-width: 140px; justify-content: center; }
     .cp-rm-row { min-height: 44px; }
     .cp-rm-check { width: 28px; height: 28px; font-size: 14px; }
+    /* Same slot, same size as the checkmark it stands in for. Not a tap target --
+       it is informational -- so it does not need the 44px minimum. */
+    .cp-rm-cantadd { width: 28px; height: 28px; font-size: 14px; }
     .cp-rm-sort-btn, .cp-rm-view-btn { min-height: 44px; padding: 6px 14px; }
     .cp-giver-pill { min-height: 44px; padding: 6px 14px; }
     .cp-expand-actions button { min-height: 44px; }

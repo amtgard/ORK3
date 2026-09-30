@@ -1,12 +1,12 @@
 -- Feature 4: Scroll/regalia maker assignment
 ALTER TABLE ork_court_award
-    ADD COLUMN scroll_maker_id  INT UNSIGNED NULL DEFAULT NULL,
-    ADD COLUMN regalia_maker_id INT UNSIGNED NULL DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS scroll_maker_id  INT UNSIGNED NULL DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS regalia_maker_id INT UNSIGNED NULL DEFAULT NULL;
 
 -- Feature 9: Award context preservation
 ALTER TABLE ork_awards
-    ADD COLUMN court_award_id  INT UNSIGNED NULL DEFAULT NULL,
-    ADD COLUMN source_reason   VARCHAR(400) NULL DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS court_award_id  INT UNSIGNED NULL DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS source_reason   VARCHAR(400) NULL DEFAULT NULL;
 
 -- Feature 11: Recommendation seconding
 CREATE TABLE IF NOT EXISTS ork_recommendation_support (

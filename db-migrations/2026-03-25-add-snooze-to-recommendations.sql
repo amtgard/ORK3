@@ -6,6 +6,6 @@
 -- The rec stays snoozed while BOTH stored values match current officers.
 
 ALTER TABLE ork_recommendations
-  ADD COLUMN snoozed_by_id      INT NULL DEFAULT NULL,
-  ADD COLUMN snoozed_monarch_id INT NULL DEFAULT NULL,
-  ADD COLUMN snoozed_regent_id  INT NULL DEFAULT NULL;
+  ADD COLUMN IF NOT EXISTS snoozed_by_id      INT NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS snoozed_monarch_id INT NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS snoozed_regent_id  INT NULL DEFAULT NULL;

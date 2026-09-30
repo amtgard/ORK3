@@ -6,14 +6,14 @@
 
 -- Run vs Plan intent + finalize audit trail.
 ALTER TABLE ork_court
-    ADD COLUMN mode ENUM('run','plan') NOT NULL DEFAULT 'run' AFTER status,
-    ADD COLUMN finalized_at DATETIME NULL DEFAULT NULL,
-    ADD COLUMN finalized_by INT NULL DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS mode ENUM('run','plan') NOT NULL DEFAULT 'run' AFTER status,
+    ADD COLUMN IF NOT EXISTS finalized_at DATETIME NULL DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS finalized_by INT NULL DEFAULT NULL;
 
 -- Captured grant metadata (who granted) + the committed-award linkage set at finalize.
 ALTER TABLE ork_court_award
-    ADD COLUMN given_by_mundane_id INT NULL DEFAULT NULL AFTER mundane_id,
-    ADD COLUMN award_id INT NULL DEFAULT NULL AFTER recommendations_id;
+    ADD COLUMN IF NOT EXISTS given_by_mundane_id INT NULL DEFAULT NULL AFTER mundane_id,
+    ADD COLUMN IF NOT EXISTS award_id INT NULL DEFAULT NULL AFTER recommendations_id;
 
 -- ork_court_award.status is an ENUM on this database (probed via SHOW COLUMNS),
 -- so widen it to add the new 'staged' value while keeping every existing value.

@@ -8,4 +8,4 @@
 -- controller emits a non-destructive 409 "this row changed — reload".
 
 ALTER TABLE ork_court_award
-    ADD COLUMN row_version INT NOT NULL DEFAULT 0 AFTER modified;
+    ADD COLUMN IF NOT EXISTS row_version INT NOT NULL DEFAULT 0 AFTER modified;
