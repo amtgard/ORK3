@@ -1138,6 +1138,7 @@ class Controller_Reports extends Controller
 
         $this->data['pe_no_scope'] = false;
         $this->data['pe_scope_name'] = $this->_resolve_scope_name($type, $id);
+        $this->_pe_scope_breadcrumb($type, $id, $this->data['pe_scope_name']);
         $this->data['pe_registry'] = $this->Reports->population_registry($token, $type, $id);
         if (empty($this->data['pe_registry']['criteria'])) {
             $this->data['pe_load_error'] = true; // authorized, but the options could not be read
@@ -1153,6 +1154,28 @@ class Controller_Reports extends Controller
                 $this->data['pe_link_error'] = $d['error'];
             }
         }
+    }
+
+    /**
+     * Breadcrumb follows the report's scope, not the session's kingdom/park (the base
+     * Controller seeds those from the session). Same approach as event_attendance.
+     */
+    private function _pe_scope_breadcrumb($type, $id, $scopeName)
+    {
+        $reportsUrl = $this->data['menu']['reports']['url'];
+        unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['reports']);
+        if ($type === 'Park') {
+            $info = $this->Park->get_park_info($id); // Park model is loaded by _resolve_scope_name
+            $kid = (int)($info['ParkInfo']['KingdomId'] ?? 0);
+            $kname = (string)($info['KingdomInfo']['KingdomName'] ?? '');
+            if (valid_id($kid) && $kname !== '') {
+                $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $kid, 'display' => $kname];
+            }
+            $this->data['menu']['park'] = ['url' => UIR . 'Park/profile/' . (int)$id, 'display' => $scopeName !== '' ? $scopeName : 'Park'];
+        } else {
+            $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . (int)$id, 'display' => $scopeName !== '' ? $scopeName : 'Kingdom'];
+        }
+        $this->data['menu']['reports'] = ['url' => $reportsUrl, 'display' => 'Reports'];
     }
 
     public function population_explorer_json()
