@@ -113,8 +113,13 @@ One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
   `(select max(a.date) from ork_attendance a where a.mundane_id = m.mundane_id)`,
   the existing `idx_sor_mundane_date` pattern)
 - output columns as scalar subqueries, **lazy** (only selected columns cost anything)
-- `GROUP BY m.mundane_id` plus `m.mundane_id` as the final ORDER BY tiebreaker,
-  matching `GetPlayerRoster`
+- no outer `GROUP BY` (every join is 1:1 on a primary key and every fragment is a
+  scalar subquery or `EXISTS`, so rows cannot multiply); `m.mundane_id` is the final
+  ORDER BY tiebreaker
+- the `count(*)` query runs only when the row query hits the cap; otherwise
+  Total = number of rows returned
+- both statements run under a MariaDB statement timeout (10 s); a timeout is
+  reported to the officer as "query took too long — narrow your filter"
 - result cap **5,000 rows**; the response carries `truncated: true` and the true
   total (`count(*)` of the same predicate) so the UI can say "showing 5,000 of N"
 
@@ -125,8 +130,10 @@ Semantics fixed here:
   `coalesce(stripped_from,0) = 0`; `stripped_from` is NULL or 0 on normal rows) whose `ork_award.peerage` is Knight / Master / Paragon /
   Squire / Page / Man-At-Arms; the knight "order" is the award itself
   (Flame, Sword, Crown, Serpent…).
-- **Dues Paid** = `ork_split.is_dues = 1` with `dues_through >= curdate()` within
-  scope, as the existing Dues report computes it.
+- **Dues Paid / Dues Through** are computed exactly as the existing Dues report
+  (`Report::GetDuesPaidList`) computes them, from the live `ork_dues` table
+  (including lifetime dues), within scope. (The legacy `ork_split` ledger is not
+  used: it holds only a handful of recent dues rows.)
 - **Active / Waivered / Suspended / Banned** map to `m.active`, `m.waivered`,
   `m.suspended`, `m.penalty_box`.
 
@@ -154,8 +161,8 @@ Semantics fixed here:
 | Location | Home Kingdom; Home Park; Last Sign-in Park | `IS  IS NOT  IN  NOT IN` |
 | Status | Dues Paid; Waivered; Active; Suspended; Banned | `IS Yes / No` |
 | Status | Dues Through date | date operands |
-| Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
-| Awards | Has award X; award count; awarded after / before date | has / has not; number and date operands |
+| Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held (exactly those three; Lords-Page and Apprentice are not included) | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
+| Awards | Has award X; award count; awarded after / before date | has / has not; number operands; date operands `>  ≥  <  ≤  between` (no `=`/`≠`) |
 | Qualifications | Reeve qualified; Corpora qualified | `IS Yes / No` |
 
 **Output columns:** Persona (always), Home Park, Home Kingdom, Last Sign-In Date,
