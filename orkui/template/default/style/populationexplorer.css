@@ -704,12 +704,12 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-input { font-size: 16px; }   /* stop iOS zooming on focus */
     .pe-chips input.pe-chip-input { font-size: 16px; height: 36px; }
     .pe-btn-remove { width: 44px; height: 44px; }
-    .pe-banner-dismiss { width: 40px; height: 40px; margin: -10px -10px -10px 0; }
+    .pe-banner-dismiss { width: 44px; height: 44px; margin: -12px -12px -12px 0; }
     .pe-rule-remove { margin-top: 0; }
     .pe-btn-add { height: 44px; padding: 0 12px; }
     .pe-seg-btn { height: 44px; min-width: 56px; }
-    .pe-chip { min-height: 40px; padding-left: 12px; }
-    .pe-chip-x { width: 40px; height: 40px; font-size: 13px; }
+    .pe-chip { min-height: 44px; padding: 0 2px 0 12px; }
+    .pe-chip-x { width: 44px; height: 44px; margin: -1px 0; font-size: 13px; }
     .pe-chip-opt { padding: 12px 10px; }
     .pe-group { padding: 8px 8px 10px; }
     .pe-group-root { padding: 0; }
@@ -718,6 +718,7 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-connector { padding-left: 4px; }
     .pe-action-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
     .pe-btn-run { min-height: 44px; }
+    .pe-root .dt-buttons .dt-button.pe-dt-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; }
     .pe-btn-link { min-height: 44px; }
     .pe-dirty-hint { justify-content: center; }
     .pe-action-bar-end { margin-left: 0; }
@@ -787,7 +788,10 @@ html[data-theme="dark"] .pe-root .pe-input {
 html[data-theme="dark"] .pe-root .pe-input::placeholder,
 html[data-theme="dark"] .pe-root input.flatpickr-input::placeholder,
 html[data-theme="dark"] .pe-chips input.pe-chip-input::placeholder { color: var(--ork-text-muted, #a0aec0); opacity: 1; }
+html[data-theme="dark"] #theme_container .pe-root .pe-input:focus,
 html[data-theme="dark"] .pe-root .pe-input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.25); }
+html[data-theme="dark"] .pe-chips.is-open,
+html[data-theme="dark"] .pe-chips:focus-within { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.25); }
 html[data-theme="dark"] .pe-btn-add { color: #a5b4fc; border-color: #4a5568; }
 html[data-theme="dark"] .pe-btn-add:hover:not(.is-disabled) { border-color: #818cf8; background: rgba(99,102,241,0.15); }
 html[data-theme="dark"] .pe-btn-link { color: #a5b4fc; }
@@ -1100,7 +1104,7 @@ html[data-theme="dark"] .pe-help-overlay h4.pe-help-h4 {
     .pe-help-close { width: 44px; height: 44px; }
     .pe-help-body { padding: 4px 16px 24px; }
     .pe-help-body .pe-help-toc ol { columns: 1; }
-    .pe-help-toc a { display: inline-block; padding: 4px 0; }
+    .pe-help-toc a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; }
     .pe-help-op { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) {
