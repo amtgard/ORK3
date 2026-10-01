@@ -20,7 +20,7 @@ if (!defined('ORK_VERSION')) {
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
     ['version' => '3.5.6 Hydra', 'date' => '2026-09-30', 'items' => [
-        ['icon' => 'fas fa-users-viewfinder', 'title' => 'Population Explorer', 'body' => 'Officers can now build their own player lists. Combine conditions such as attendance, dues, waivers, awards and last sign-in with AND, OR and NOT, choose the columns you want, then export to a spreadsheet or share a link to the exact report. Find it in the Reports tab of your kingdom or park.'],
+        ['icon' => 'fas fa-users-viewfinder', 'title' => 'Population Explorer', 'body' => 'Officers can now build their own player lists. Combine conditions such as attendance, dues, waivers, awards and last sign-in in AND and OR groups (with \'is not\' and \'has none of\' rules to leave people out), choose the columns you want, then export to a spreadsheet or share a link to the exact report. Find it in the Reports tab of your kingdom or park.'],
     ]],
     ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
