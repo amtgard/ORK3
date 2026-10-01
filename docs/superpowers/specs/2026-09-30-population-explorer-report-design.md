@@ -99,7 +99,7 @@ user tree, so no tree can widen it:
 - Kingdom: `k.kingdom_id IN (stats ids)` via the same
   `Ork3::$Lib->kingdom->GetStatsKingdomIds()` helper `GetPlayerRoster` uses
   (includes principalities per the statistics setting).
-- Park: `m.park_id = ?` plus its kingdom.
+- Park: `m.park_id = P AND m.kingdom_id = <P's kingdom>` (same as `GetPlayerRoster`'s park scope).
 - Global admin may supply a `kingdom_id`; for anyone else a supplied id is
   checked with the same authority helpers the other report scopes use and
   otherwise rejected with a `status: 5`-style authorization error (never silently
@@ -126,6 +126,18 @@ One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
 Semantics fixed here:
 
 - **Last Class** = class on the player's most recent sign-in that has a class.
+- **Player Since** = the player's first sign-in date on or after `1988-01-01`, the same
+  floor `Player::get_earliest_attendance_date` uses for the profile (earlier rows are
+  `0000-00-00` or typo dates). `player_since_override` is not used: that column is not
+  on master.
+- **Last Sign-in Park** = the park of the most recent sign-in, with ties broken by the
+  highest attendance id. An event sign-in with no park (`park_id = 0`) counts as no park,
+  so the column is blank and park filters treat it as NULL (no match for IS NOT / NOT IN).
+- **Award dates** (`award_date_any`) ignore held awards dated before `1980-01-01`
+  (`0000-00-00` or typo years mean "unknown"), per the awards data-mining convention.
+- **Classes played in last N months** with IS NOT / NOT IN means "did not play those
+  classes in the window", so it also matches players with no sign-ins in the window.
+  The operand note says so.
 - **Peerage held** counts non-revoked, non-stripped awards (`revoked = 0` and
   `coalesce(stripped_from,0) = 0`; `stripped_from` is NULL or 0 on normal rows) whose `ork_award.peerage` is Knight / Master / Paragon /
   Squire / Page / Man-At-Arms; the knight "order" is the award itself
