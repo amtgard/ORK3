@@ -103,10 +103,14 @@ user tree, so no tree can widen it:
 - **Access:** any valid session token may use any existing kingdom or park as its
   scope. A missing or non-existent scope id is rejected. The scope comes from the
   request (`KingdomId`/`ParkId`) or, failing that, from the session's park/kingdom.
-- **Officer authority** over the scope is global admin, kingdom `AUTH_EDIT` for that
-  kingdom (principalities resolve through `HasAuthority`'s parent walk), or park
-  `AUTH_CREATE` for that park, which is the old `Report::_authorizeKingdomParkReportScope`
-  rule. It only unlocks **restricted criteria** (`suspended`, `banned`):
+- **Officer authority** over the scope is:
+  - global admin;
+  - kingdom `AUTH_EDIT` for that kingdom (principalities resolve through `HasAuthority`'s
+    parent walk);
+  - for a park: park `AUTH_CREATE` for that park, **or** kingdom `AUTH_EDIT` for the
+    park's kingdom, so kingdom officers are officers for their own parks (owner intent
+    "park or kingdom level officer", ruling A1, 2026-10-01). The old
+    `Report::_authorizeKingdomParkReportScope` rule did not include that last case. It only unlocks **restricted criteria** (`suspended`, `banned`):
   - for non-officers they are left out of `PublicRegistry` (not in the picker);
   - `NormalizeTree` rejects them on that rule with "This filter requires officer
     access for this kingdom or park.", whether they arrive in the JSON body, a
@@ -232,7 +236,7 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
   extra `N` input for the "last N months" criteria.
 - Columns card: grouped checkboxes, Persona locked, sensible defaults, Reset.
   Order follows the checkbox order.
-- Run is explicit (button), not on keystroke. Results: DataTables table,
+- Run is explicit (button), not on keystroke. Run, Copy link and Export sit in one action bar OUTSIDE the collapsible Filters and Columns cards (always visible, between the cards and Results). A successful Run collapses both cards unless the builder was edited while that run was in flight; in that case the cards stay open, the results are marked "Filters changed since last run", and focus is not moved. Results: DataTables table,
   **Export** and **Copy link** buttons, `.rp-empty-state`, a loading state, and
   per-rule inline validation errors.
 - Tooltips use `data-tip`, never `title`. No native `alert/confirm/prompt`.
