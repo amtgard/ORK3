@@ -156,6 +156,7 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 .pe-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .pe-toast-ok    { border-left: 4px solid #48bb78; }
 .pe-toast-error { border-left: 4px solid #fc8181; }
+.pe-toast-warn  { border-left: 4px solid #f6ad55; }
 
 /* ── Controls ────────────────────────────────────────────── */
 .pe-input {

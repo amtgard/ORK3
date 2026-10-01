@@ -23,6 +23,9 @@ class PopulationExplorer extends Ork3
     /** RuntimeException code _select() uses for a statement killed by the timeout. */
     public const TIMEOUT_CODE = 1969;
     public const TIMEOUT_MESSAGE = 'This query took too long — narrow your filter.';
+    /** Named-lock prefix (+ mundane_id): one Run at a time per player, server-wide. */
+    public const RUN_LOCK_PREFIX = 'pe:';
+    public const BUSY_MESSAGE = 'Another Population Explorer run of yours is still in progress — please wait for it to finish.';
 
     public const OPS_CMP = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'];
     public const OPS_SET = ['is', 'is_not', 'in', 'not_in'];
@@ -1422,6 +1425,61 @@ class PopulationExplorer extends Ork3
             return ['Status' => $denied];
         }
 
+        // One run at a time per player (BuildExport runs through here too): a second
+        // request while one is still going is refused at once, not queued behind it.
+        $lock = $this->_acquireRunLock($token);
+        if ($lock === null) {
+            return ['Status' => ProcessingError(self::BUSY_MESSAGE), 'Busy' => true];
+        }
+        try {
+            return $this->_runAuthorized($request, $started, $scopeType, $scopeId, $token);
+        } finally {
+            $this->_releaseRunLock($lock);
+        }
+    }
+
+    /**
+     * GET_LOCK(RUN_LOCK_PREFIX + the player's mundane_id, no wait) on this request's
+     * connection; MariaDB also drops it if the connection ends. Returns the lock
+     * name, null when another connection holds it, or '' when no lock could be
+     * taken (a DB error): the run then goes ahead unguarded, since the lock only
+     * spares the database, it does not protect data.
+     */
+    private function _acquireRunLock(string $token): ?string
+    {
+        try {
+            $mid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
+            if ($mid <= 0) {
+                return '';
+            }
+            $name = self::RUN_LOCK_PREFIX . $mid;
+            $r = $this->_select("SELECT GET_LOCK('" . $name . "', 0) AS got");
+            $got = $r->next() ? $r->got : null;
+            if ($got === null) {
+                return '';
+            }
+            return (int)$got === 1 ? $name : null;
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run lock failure', $e->getMessage());
+            return '';
+        }
+    }
+
+    private function _releaseRunLock(string $name): void
+    {
+        if ($name === '') {
+            return;
+        }
+        try {
+            $this->_select("SELECT RELEASE_LOCK('" . $name . "') AS released");
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run unlock failure', $e->getMessage()); // dropped with the connection anyway
+        }
+    }
+
+    /** Run() after the scope check, under the run lock. */
+    private function _runAuthorized(array $request, float $started, string $scopeType, int $scopeId, string $token): array
+    {
         // Columns: whitelist, persona always first, request order, no duplicates.
         $registryCols = $this->_columnDefs();
         $colIds = ['persona'];
@@ -1561,8 +1619,10 @@ class PopulationExplorer extends Ork3
         $r = $this->Run($request);
         if (($r['Status']['Status'] ?? 1) != 0) {
             $out = ['Status' => $r['Status']];
-            if (isset($r['RulePath'])) {
-                $out['RulePath'] = $r['RulePath'];
+            foreach (['RulePath', 'TimedOut', 'Busy'] as $k) { // the controller maps these to HTTP codes
+                if (isset($r[$k])) {
+                    $out[$k] = $r[$k];
+                }
             }
             return $out;
         }

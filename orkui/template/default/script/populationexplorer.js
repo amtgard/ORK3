@@ -1139,6 +1139,13 @@
             announce('Your session has ended. Log in again and re-run.');
             return;
         }
+        // Another run of this player's is still going (another tab, or a reload while
+        // one ran): nothing is wrong with this filter, so say so as a notice, not an error.
+        if (j.busy) {
+            showMsg('warn', '<i class="fas fa-hourglass-half"></i> <span>' + esc(msg) + '</span>');
+            announce(msg + (stale ? STALE_SAY : ''));
+            return;
+        }
         if (Array.isArray(j.rule_path)) {
             var node = findPath(root, j.rule_path);
             if (node) {
@@ -1354,6 +1361,7 @@
         body.set('payload', JSON.stringify(requestFor(lastRun)));
         fetch(PE.urls.export, { method: 'POST', credentials: 'same-origin', body: body }).then(function (res) {
             if (res.status === 401 || isLoginRedirect(res)) { return { login: true }; }
+            if (res.status === 429) { return res.text().then(function (t) { return { busy: String(t || '').trim() || 'Another run of yours is still in progress. Please wait for it to finish.' }; }); }
             var type = res.headers.get('Content-Type') || '';
             if (!res.ok || type.indexOf('spreadsheetml') < 0) {
                 return res.text().then(function (t) {
@@ -1368,6 +1376,7 @@
         }).then(function (out) {
             setExportBusy(false);
             if (out.login) { showMsg('error', loginPromptHtml()); announce('Your session has ended. Log in again to export.'); return; }
+            if (out.busy) { toast(out.busy, 'warn'); announce(out.busy); return; }
             if (out.error) { toast(out.error, 'error'); announce(out.error); return; }
             toast('Excel file downloaded.', 'ok');
         }, function () {

@@ -1130,6 +1130,12 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertTrue($r['TimedOut'] ?? false);
         $this->assertStringContainsString('took too long', (string) $r['Status']['Detail']);
         $this->assertArrayNotHasKey('Rows', $r);
+
+        // The export reports it the same way, so the endpoint can answer 503, not 500.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $x = $p->BuildExport($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('signins_last_n_months', 'gte', 0, 60))));
+        $this->assertTrue($x['TimedOut'] ?? false);
+        $this->assertArrayNotHasKey('Path', $x);
     }
 
     public function testPersonaIsUnslashedInOnePlaceAndOtherTextIsNot(): void
@@ -1333,6 +1339,62 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame($this->sorted([$o, $t, $n]), $this->matchAmong($or($this->leaf('has_award', 'not_in', [$k1]), $this->leaf('has_award', 'not_in', [$k2])), $mine));
         $this->assertSame($this->sorted([$o, $t, $b]), $this->matchAmong($or($this->leaf('knighthood', 'is', 'yes'), $this->leaf('has_award', 'in', [$k2])), $mine));
         $this->assertSame([$n], $this->matchAmong($this->tree($this->leaf('knighthood', 'is', 'no'), $this->leaf('has_award', 'not_in', [$k2]), $this->leaf('knighthood', 'is', 'no')), $mine));
+    }
+
+    // ---------------------------------------------------------------- one run at a time per player
+
+    private function lockFree(int $mundaneId): bool
+    {
+        return (int) $this->fixture->pdo()->query("SELECT IS_FREE_LOCK('" . PopulationExplorer::RUN_LOCK_PREFIX . $mundaneId . "')")->fetchColumn() === 1;
+    }
+
+    public function testASecondRunWhileOneIsInProgressIsRefusedNotQueued(): void
+    {
+        $name = PopulationExplorer::RUN_LOCK_PREFIX . $this->admin['mundane_id'];
+        $other = $this->fixture->pdo(); // another connection: the run in progress
+        $this->assertSame(1, (int) $other->query("SELECT GET_LOCK('$name', 0)")->fetchColumn());
+        try {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+            $this->assertSame(PopulationExplorer::BUSY_MESSAGE, $r['Status']['Detail']);
+            $this->assertTrue($r['Busy'] ?? false);
+            $this->assertArrayNotHasKey('Rows', $r);
+
+            $x = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertTrue($x['Busy'] ?? false, 'export is the same run');
+            $this->assertArrayNotHasKey('Path', $x);
+
+            // Someone else is not blocked by this player's run.
+            $plain = $this->player('pe-lock-other');
+            $r2 = $this->exec($this->req($plain['token'], 'Park', $this->parkId));
+            $this->assertSame(0, $r2['Status']['Status']);
+        } finally {
+            $other->query("SELECT RELEASE_LOCK('$name')")->fetchColumn();
+        }
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(0, $r['Status']['Status'], 'free again once the other run ends');
+        $this->assertTrue($this->lockFree($this->admin['mundane_id']), 'released after the run');
+    }
+
+    public function testTheLockIsReleasedWhenARunFailsOrIsRejected(): void
+    {
+        $p = $this->probe();
+        $p->failPattern = '/COUNT\(\*\) OVER \(\) AS matches/';
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertTrue($this->lockFree($this->admin['mundane_id']), 'after a DB failure');
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('total_signins', 'gt', 'x'))));
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']['Status']);
+        $this->assertTrue($this->lockFree($this->admin['mundane_id']), 'after a rejected filter');
+
+        $p = $this->probe();
+        $p->timeout = 0.000001;
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $p->Run($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('total_signins', 'gt', 1))));
+        $this->assertTrue($r['TimedOut'] ?? false);
+        $this->assertTrue($this->lockFree($this->admin['mundane_id']), 'after a timeout');
     }
 
     public function testClassesPlayedInLastNMonths(): void

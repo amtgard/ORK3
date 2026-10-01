@@ -1324,6 +1324,9 @@ class Controller_Reports extends Controller
         if (!empty($r['TimedOut'])) {
             $out['timeout'] = true;
         }
+        if (!empty($r['Busy'])) {
+            $out['busy'] = true;
+        }
         return $out;
     }
 
@@ -1337,6 +1340,9 @@ class Controller_Reports extends Controller
         }
         if (!empty($r['TimedOut'])) {
             return [503, PopulationExplorer::TIMEOUT_MESSAGE];
+        }
+        if (!empty($r['Busy'])) {
+            return [429, PopulationExplorer::BUSY_MESSAGE];
         }
         if ($st === ServiceErrorIds::InvalidParameter) {
             return [400, 'The export could not be created: ' . ($detail !== '' ? $detail : 'check the filter and try again.')];

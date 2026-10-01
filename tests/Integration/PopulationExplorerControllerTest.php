@@ -92,6 +92,11 @@ final class PopulationExplorerControllerTest extends TestCase
             ['status' => 3, 'error' => PopulationExplorer::TIMEOUT_MESSAGE, 'timeout' => true],
             $this->call('_pe_json_error', ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true])
         );
+        // Another run of this player's is still going: flagged so the page can say so calmly.
+        $this->assertSame(
+            ['status' => 3, 'error' => PopulationExplorer::BUSY_MESSAGE, 'busy' => true],
+            $this->call('_pe_json_error', ['Status' => ProcessingError(PopulationExplorer::BUSY_MESSAGE), 'Busy' => true])
+        );
     }
 
     public function testExportFailureCodes(): void
@@ -104,6 +109,7 @@ final class PopulationExplorerControllerTest extends TestCase
         $this->assertSame(400, $bad[0]);
         $this->assertStringContainsString('Value must be a number', $bad[1]);
         $this->assertSame([503, PopulationExplorer::TIMEOUT_MESSAGE], $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true]));
+        $this->assertSame([429, PopulationExplorer::BUSY_MESSAGE], $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::BUSY_MESSAGE), 'Busy' => true]));
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => ProcessingError('x')])[0]);
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => Success()])[0], 'success without a file is a failure');
     }
