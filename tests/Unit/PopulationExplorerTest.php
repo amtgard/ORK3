@@ -241,6 +241,35 @@ final class PopulationExplorerTest extends TestCase
         }
     }
 
+    public function testAwardDateAnyOperandsAreRangesOnly(): void
+    {
+        $def = $this->pe->Registry()['criteria']['award_date_any'];
+        $this->assertSame(['gt', 'gte', 'lt', 'lte', 'between'], $def['operands']);
+        foreach (['eq', 'ne'] as $o) {
+            $r = $this->norm(['op' => 'AND', 'children' => [$this->leaf('award_date_any', $o, '2025-01-01')]]);
+            $this->assertFalse($r['ok'], $o);
+            $this->assertStringContainsStringIgnoringCase('operand', $r['error']);
+        }
+        $this->assertTrue($this->norm(['op' => 'AND', 'children' => [$this->leaf('award_date_any', 'gt', '2025-01-01')]])['ok']);
+    }
+
+    public function testLesserPeerageLabelNamesItsThreeOrders(): void
+    {
+        $crit = $this->pe->Registry()['criteria'];
+        $this->assertArrayHasKey('lesser_peerage', $crit);
+        $this->assertSame('Squire / Page / Man-At-Arms held', $crit['lesser_peerage']['label']);
+        $this->assertSame(['Squire', 'Page', 'Man-At-Arms'], $crit['lesser_peerage']['peerage']);
+    }
+
+    public function testColumnsCarryNoSqlClosuresAndPeerageColumnsUsePeerageIn(): void
+    {
+        foreach ($this->pe->Registry()['columns'] as $id => $def) {
+            $this->assertArrayNotHasKey('sql', $def, $id);
+        }
+        $this->assertStringContainsString("aw.peerage IN ('Knight')", $this->pe->ColumnSelectSql('knighthoods', []));
+        $this->assertStringContainsString("aw.peerage IN ('Master')", $this->pe->ColumnSelectSql('masterhoods', []));
+    }
+
     public function testEveryCriterionHasASqlBuilder(): void
     {
         foreach ($this->pe->Registry()['criteria'] as $id => $def) {

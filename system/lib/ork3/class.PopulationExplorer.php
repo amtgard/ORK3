@@ -8,8 +8,6 @@
  * CompileTree() / ColumnSelectSql() turn a canonical tree into a SQL boolean
  * over alias `m` (ork_mundane). Only ints and validated dates ever reach SQL.
  */
-require_once __DIR__ . '/../vendor/SimpleXlsx.php';
-
 class PopulationExplorer extends Ork3
 {
     public const MAX_DEPTH = 6;
@@ -37,7 +35,7 @@ class PopulationExplorer extends Ork3
 
     public function Registry(): array
     {
-        return ['criteria' => $this->_criteria(), 'columns' => $this->_columns()];
+        return ['criteria' => $this->_criteria(), 'columns' => $this->_columnDefs()];
     }
 
     private function _opsFor(string $type): array
@@ -97,10 +95,11 @@ class PopulationExplorer extends Ork3
             'knighthood'            => $this->_crit('Knighthood', 'Peerage', 'peerage_set', ['peerage' => ['Knight']]),
             'masterhood'            => $this->_crit('Masterhood', 'Peerage', 'peerage_set', ['peerage' => ['Master']]),
             'paragon'               => $this->_crit('Paragon', 'Peerage', 'peerage_set', ['peerage' => ['Paragon']]),
-            'lesser_peerage'        => $this->_crit('Lesser peerage', 'Peerage', 'peerage_set', ['peerage' => ['Squire', 'Page', 'Man-At-Arms']]),
+            // Exactly these three (spec §4): Lords-Page and Apprentice are not included, hence the explicit label.
+            'lesser_peerage'        => $this->_crit('Squire / Page / Man-At-Arms held', 'Peerage', 'peerage_set', ['peerage' => ['Squire', 'Page', 'Man-At-Arms']]),
             'has_award'             => $this->_crit('Has award', 'Awards', 'enum_set', ['set' => 'award']),
             'award_count'           => $this->_crit('Award count', 'Awards', 'number'),
-            'award_date_any'        => $this->_crit('Any award received date', 'Awards', 'date'),
+            'award_date_any'        => $this->_crit('Any award received date', 'Awards', 'date', ['operands' => ['gt', 'gte', 'lt', 'lte', 'between']]),
             'reeve_qualified'       => $this->_crit('Reeve qualified', 'Qualifications', 'bool'),
             'corpora_qualified'     => $this->_crit('Corpora qualified', 'Qualifications', 'bool'),
         ];
@@ -108,19 +107,7 @@ class PopulationExplorer extends Ork3
 
     private function _col(string $label, string $group, string $type, bool $default = false): array
     {
-        return ['label' => $label, 'group' => $group, 'type' => $type, 'default' => $default, 'sql' => null];
-    }
-
-    private function _columns(): array
-    {
-        $list = $this->_columnDefs();
-        foreach ($list as $id => &$def) {
-            $def['sql'] = function (array $ctx) use ($id): string {
-                return $this->_columnSql($id, $ctx);
-            };
-        }
-        unset($def);
-        return $list;
+        return ['label' => $label, 'group' => $group, 'type' => $type, 'default' => $default];
     }
 
     private function _columnDefs(): array
@@ -156,7 +143,7 @@ class PopulationExplorer extends Ork3
     public function NormalizeTree(array $tree, ?array $known = null): array
     {
         $known = $known ?? $this->LoadKnown();
-        $registry = $this->_criteria();
+        $registry = $this->_criteriaDefs(); // validation needs operands/param only, not the SQL closures
         $leafCount = 0;
         $r = $this->_normNode($tree, 1, $leafCount, [], $registry, $known);
         if (isset($r['error'])) {
@@ -740,7 +727,7 @@ class PopulationExplorer extends Ork3
             case 'paragons':
                 $pe = ['knighthoods' => 'Knight', 'masterhoods' => 'Master', 'paragons' => 'Paragon'][$id];
                 return "(SELECT GROUP_CONCAT(DISTINCT aw.name ORDER BY aw.name SEPARATOR ', ') "
-                    . $this->_heldAwardsFrom("AND aw.peerage = '$pe'") . ')';
+                    . $this->_heldAwardsFrom('AND ' . $this->_peerageIn([$pe])) . ')';
             case 'award_count':
                 return '(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')';
             case 'reeve_qualified':
@@ -767,12 +754,10 @@ class PopulationExplorer extends Ork3
     private function _compileNode(array $node, array $registry, array $ctx): string
     {
         if (isset($node['children'])) {
+            // NormalizeTree drops empty groups and CompileTree handles an empty root.
             $parts = [];
             foreach ($node['children'] as $child) {
                 $parts[] = $this->_compileNode($child, $registry, $ctx);
-            }
-            if (count($parts) === 0) {
-                return '1=1';
             }
             return '(' . implode($node['op'] === 'OR' ? ' OR ' : ' AND ', $parts) . ')';
         }
@@ -864,7 +849,7 @@ class PopulationExplorer extends Ork3
         }
 
         // Columns: whitelist, persona always first, request order, no duplicates.
-        $registryCols = $this->_columns();
+        $registryCols = $this->_columnDefs();
         $colIds = ['persona'];
         foreach ((array)($request['Columns'] ?? []) as $c) {
             if (is_string($c) && isset($registryCols[$c]) && !in_array($c, $colIds, true)) {
@@ -977,6 +962,9 @@ class PopulationExplorer extends Ork3
      */
     public function BuildExport(array $request): array
     {
+        if (!class_exists('SimpleXlsx', false)) {
+            require_once __DIR__ . '/../vendor/SimpleXlsx.php'; // only export requests pay for it
+        }
         $r = $this->Run($request);
         if (($r['Status']['Status'] ?? 1) != 0) {
             $out = ['Status' => $r['Status']];
@@ -1007,7 +995,7 @@ class PopulationExplorer extends Ork3
                     $d = (string)$v;
                     $line[] = ['v' => (preg_match('/^\d{4}-\d{2}-\d{2}/', $d) ? substr($d, 0, 10) : $d), 't' => 's'];
                 } else {
-                    $line[] = ['v' => stripslashes((string)$v), 't' => 's'];
+                    $line[] = ['v' => (string)$v, 't' => 's']; // persona was unslashed by _cell()
                 }
             }
             $rows[] = $line;
@@ -1037,6 +1025,7 @@ class PopulationExplorer extends Ork3
     /**
      * Normalise a raw DB cell by column type: numbers/bools to ints, NULL stays null.
      * Lifetime dues (LIFETIME_DATE) show as LIFETIME_LABEL in both JSON and xlsx.
+     * Persona (only) is stripslashes()'d here; other text keeps its backslashes.
      */
     private function _cell(string $id, string $type, $v)
     {
@@ -1048,6 +1037,9 @@ class PopulationExplorer extends Ork3
         }
         if ($id === 'dues_through' && (string)$v === self::LIFETIME_DATE) {
             return self::LIFETIME_LABEL;
+        }
+        if ($id === 'persona') {
+            return stripslashes((string)$v); // magic-quotes-era escapes; the one place, for JSON and xlsx
         }
         return (string)$v;
     }
@@ -1118,7 +1110,6 @@ class PopulationExplorer extends Ork3
         }
         $columns = [];
         foreach ($this->_columnDefs() as $id => $def) {
-            unset($def['sql']);
             $columns[$id] = $def;
         }
 
@@ -1132,12 +1123,15 @@ class PopulationExplorer extends Ork3
         foreach ($orderPeerage as $pe) {
             $options['order'][$pe] = [];
         }
-        $r = $this->_select('SELECT award_id, name, peerage FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name');
+        // Retired (deprecated) awards stay listed, labelled, so an old share link
+        // that names one still shows its name instead of a bare id.
+        $r = $this->_select('SELECT award_id, name, peerage, deprecate FROM ' . $this->_t('award') . ' ORDER BY deprecate, name');
         while ($r->next()) {
             $pe = (string)$r->peerage;
-            $options['award'][] = [(int)$r->award_id, (string)$r->name, $pe];
+            $name = (string)$r->name . ((int)$r->deprecate === 1 ? ' (retired)' : '');
+            $options['award'][] = [(int)$r->award_id, $name, $pe];
             if (isset($options['order'][$pe])) {
-                $options['order'][$pe][] = [(int)$r->award_id, (string)$r->name];
+                $options['order'][$pe][] = [(int)$r->award_id, $name];
             }
         }
 

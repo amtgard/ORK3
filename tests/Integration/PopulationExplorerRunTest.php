@@ -878,4 +878,51 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertStringContainsString('took too long', (string) $r['Status']['Detail']);
         $this->assertArrayNotHasKey('Rows', $r);
     }
+
+    public function testPersonaIsUnslashedInOnePlaceAndOtherTextIsNot(): void
+    {
+        $pl = $this->player('pe-slash');
+        $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?')
+            ->execute(["O\\'Brien \\ T10", $pl['mundane_id']]);
+        $parkName = $this->fixture->parkName($this->parkId);
+        $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'park SET name = ? WHERE park_id = ?')
+            ->execute([$parkName . ' C:\\Dir', $this->parkId]);
+        try {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'home_park']));
+            $row = array_values(array_filter($r['Rows'], static fn (array $x): bool => $x['MundaneId'] === $pl['mundane_id']))[0];
+            $this->assertSame("O'Brien  T10", $row['persona']);
+            $this->assertSame($parkName . ' C:\\Dir', $row['home_park'], 'only persona is unslashed');
+
+            $x = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'home_park']));
+            try {
+                $sheet = $this->readXlsx($x['Path'])['xl/worksheets/sheet1.xml'];
+                $this->assertStringContainsString('Brien  T10', $sheet);
+                $this->assertStringNotContainsString('O\\', $sheet, 'persona unslashed in the xlsx');
+                $this->assertStringContainsString('C:\\Dir', $sheet, 'park name keeps its backslash');
+            } finally {
+                @unlink($x['Path']);
+            }
+        } finally {
+            $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'park SET name = ? WHERE park_id = ?')->execute([$parkName, $this->parkId]);
+        }
+    }
+
+    public function testRegistryOffersRetiredAwardsSoOldLinksShowNames(): void
+    {
+        $retired = $this->fixture->pdo()->query('SELECT award_id, name, peerage FROM ' . DB_PREFIX . 'award WHERE deprecate = 1 ORDER BY award_id LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+        if ($retired === false) {
+            $this->markTestSkipped('No deprecated award in the test DB.');
+        }
+        $reg = $this->pe->PublicRegistry('Park', $this->parkId);
+        $byId = [];
+        foreach ($reg['options']['award'] as $o) {
+            $byId[$o[0]] = $o;
+        }
+        $id = (int) $retired['award_id'];
+        $this->assertArrayHasKey($id, $byId);
+        $this->assertSame($retired['name'] . ' (retired)', $byId[$id][1]);
+        // and a current award keeps its plain name
+        $live = (int) $this->fixture->pdo()->query('SELECT award_id FROM ' . DB_PREFIX . 'award WHERE deprecate = 0 ORDER BY award_id LIMIT 1')->fetchColumn();
+        $this->assertStringNotContainsString('(retired)', $byId[$live][1]);
+    }
 }

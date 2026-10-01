@@ -1169,16 +1169,7 @@ class Controller_Reports extends Controller
             echo json_encode($out);
             exit;
         }
-        $rows = $r['Rows'] ?? [];
-        foreach ($rows as &$row) {
-            if (isset($row['persona']) && is_string($row['persona'])) {
-                $row['persona'] = stripslashes($row['persona']);
-            }
-            if (isset($row['Persona']) && is_string($row['Persona'])) {
-                $row['Persona'] = stripslashes($row['Persona']);
-            }
-        }
-        unset($row);
+        $rows = $r['Rows'] ?? []; // persona is already unslashed by the domain
         echo json_encode([
             'status'     => 0,
             'columns'    => $r['Columns'] ?? [],
