@@ -702,6 +702,97 @@ class PopulationExplorer extends Ork3
             . ($extraWhere !== '' ? ' ' . $extraWhere : '');
     }
 
+    /**
+     * Held, NOT aliased award rows of the player in alias `m` whose effective award
+     * is in $ids: the same rows as _heldAwardsFrom() + `aw.award_id IN ($ids)`, for
+     * rows with no alias_award_id. Faster because it never joins ork_award (every id
+     * in $ids is a validated ork_award id, so that join could only drop rows the IN
+     * already drops), and because `w.award_id IN (0, ids)` (the effective id is
+     * award_id when it is not 0, else ka.award_id) is checked on the
+     * (mundane_id, award_id, ...) index before a row is read.
+     * Aliased rows are the caller's job: see _aliasHolders().
+     *
+     * @param int[] $ids non-empty, positive
+     */
+    private function _heldNonAliasFrom(array $ids, string $join = ''): string
+    {
+        $in = $this->_idList($ids);
+        return 'FROM ' . $this->_t('awards') . ' w LEFT JOIN ' . $this->_t('kingdomaward') . ' ka ON ka.kingdomaward_id = w.kingdomaward_id'
+            . ($join !== '' ? ' ' . $join : '')
+            . ' WHERE w.mundane_id = m.mundane_id AND w.award_id IN (0,' . $in . ')'
+            . ' AND COALESCE(w.alias_award_id, 0) = 0 AND w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'
+            . ' AND COALESCE(NULLIF(w.award_id, 0), ka.award_id) IN (' . $in . ')';
+    }
+
+    /**
+     * True for players in alias `m` with a held row aliased to one of $ids. Not
+     * correlated, so MariaDB materializes it once per statement (idx_alias_award_id;
+     * aliased rows are a handful).
+     *
+     * @param int[] $ids non-empty, positive
+     */
+    private function _aliasHolders(array $ids): string
+    {
+        return 'm.mundane_id IN (SELECT wa.mundane_id FROM ' . $this->_t('awards') . ' wa WHERE wa.alias_award_id IN (' . $this->_idList($ids) . ')'
+            . ' AND wa.revoked = 0 AND COALESCE(wa.stripped_from, 0) = 0)';
+    }
+
+    /**
+     * Holds at least one award in $ids (the effective, alias-aware id; never NULL).
+     * `(SELECT 1 ... LIMIT 1) IS NOT NULL` is EXISTS written so MariaDB keeps it a
+     * per-player index probe: it rewrites a correlated EXISTS into a materialized
+     * scan of all of ork_awards, about 15x slower here.
+     *
+     * @param int[] $ids
+     */
+    private function _holdsAny(array $ids): string
+    {
+        if (count($ids) === 0) {
+            return '(0=1)'; // no award qualifies, so nobody holds one
+        }
+        return '((SELECT 1 ' . $this->_heldNonAliasFrom($ids) . ' LIMIT 1) IS NOT NULL OR ' . $this->_aliasHolders($ids) . ')';
+    }
+
+    /** @param int[] $ids @return string comma-separated positive ints */
+    private function _idList(array $ids): string
+    {
+        $out = [];
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id <= 0) {
+                throw new InvalidArgumentException('bad id');
+            }
+            $out[] = $id;
+        }
+        if (count($out) === 0) {
+            throw new InvalidArgumentException('empty id list');
+        }
+        return implode(',', array_values(array_unique($out)));
+    }
+
+    /**
+     * Award ids carrying these peerages, from ctx['peerageIds'] (LoadKnown's
+     * peerage => ids map; ork_award.peerage is an ENUM, so the map is exactly
+     * `aw.peerage IN (...)`), or null when the context does not carry the map.
+     *
+     * @return int[]|null
+     */
+    private function _peerageIds(array $peerage, array $ctx): ?array
+    {
+        if (!isset($ctx['peerageIds']) || !is_array($ctx['peerageIds'])) {
+            return null;
+        }
+        $ids = [];
+        foreach ($peerage as $pe) {
+            foreach ((array)($ctx['peerageIds'][$pe] ?? []) as $id) {
+                if ((int)$id > 0) {
+                    $ids[] = (int)$id;
+                }
+            }
+        }
+        return array_values(array_unique($ids));
+    }
+
     private function _peerageIn(array $peerage): string
     {
         $lits = [];
@@ -734,37 +825,53 @@ class PopulationExplorer extends Ork3
         if ($id <= 0) {
             throw new InvalidArgumentException('bad ladder');
         }
+        $rank = 'SELECT GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*)) ';
         switch ($ladder['kind'] ?? '') {
             case 'award':
-                $from = $this->_heldAwardsFrom('AND aw.award_id = ' . $id);
-                break;
+                // Players with an aliased row in this ladder (a handful) take the exact
+                // alias-aware form; everyone else, the index probe over the same rows.
+                return '(CASE WHEN ' . $this->_aliasHolders([$id])
+                    . ' THEN (' . $rank . $this->_heldAwardsFrom('AND aw.award_id = ' . $id) . ')'
+                    . ' ELSE (' . $rank . $this->_heldNonAliasFrom([$id]) . ') END)';
             case 'kingdomaward':
-                $from = $this->_heldAwardsFrom('AND w.kingdomaward_id = ' . $id, false);
-                break;
-            default:
-                throw new InvalidArgumentException('bad ladder');
+                return '(' . $rank . $this->_heldAwardsFrom('AND w.kingdomaward_id = ' . $id, false) . ')';
         }
-        return '(SELECT GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*)) ' . $from . ')';
+        throw new InvalidArgumentException('bad ladder');
     }
 
-    private function _awardSetSql(string $o, $v, ?string $peerageFilter): string
+    /**
+     * $peerage: the peerage criterion's peerages, or null for has_award. Ids are
+     * validated ork_award ids (NormalizeTree), so "holds one of $ids" is _holdsAny.
+     */
+    private function _awardSetSql(string $o, $v, ?array $peerage, array $ctx): string
     {
         // Peerage criteria only (has_award passes null): `is` takes yes|no.
-        if ($peerageFilter !== null && $o === 'is') {
-            return ($v ? 'EXISTS' : 'NOT EXISTS') . ' (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $peerageFilter) . ')';
+        if ($peerage !== null && $o === 'is') {
+            $ids = $this->_peerageIds($peerage, $ctx);
+            if ($ids === null) { // no peerage map in the context: the join form
+                return ($v ? 'EXISTS' : 'NOT EXISTS') . ' (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $this->_peerageIn($peerage)) . ')';
+            }
+            return ($v ? '' : 'NOT ') . $this->_holdsAny($ids);
         }
         // has_award is an enum_set criterion, so also accept the set operands.
         $map = ['in' => 'has_any', 'is' => 'has_any', 'not_in' => 'has_none', 'is_not' => 'has_none'];
         $o = $map[$o] ?? $o;
         $ids = array_values(array_unique(array_map('intval', (array)$v)));
-        $in = 'aw.award_id IN (' . implode(',', $ids) . ')';
+        if (count($ids) === 0) {
+            throw new InvalidArgumentException('empty award list');
+        }
         switch ($o) {
             case 'has_any':
-                return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $in) . ')';
+                return $this->_holdsAny($ids);
             case 'has_none':
-                return 'NOT EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $in) . ')';
+                return 'NOT ' . $this->_holdsAny($ids);
             case 'has_all':
-                return '(SELECT COUNT(DISTINCT aw.award_id) ' . $this->_heldAwardsFrom('AND ' . $in) . ') = ' . count($ids);
+                // COUNT(DISTINCT effective id) over $ids = count($ids), as one probe per id.
+                $parts = [];
+                foreach ($ids as $id) {
+                    $parts[] = $this->_holdsAny([$id]);
+                }
+                return '(' . implode(' AND ', $parts) . ')';
         }
         throw new InvalidArgumentException('bad operand');
     }
@@ -821,13 +928,14 @@ class PopulationExplorer extends Ork3
                 case 'masterhood':
                 case 'paragon':
                 case 'lesser_peerage':
-                    return $this->_awardSetSql($o, $v, $this->_peerageIn($def['peerage']));
+                    return $this->_awardSetSql($o, $v, $def['peerage'], $ctx);
                 case 'has_award':
-                    return $this->_awardSetSql($o, $v, null);
+                    return $this->_awardSetSql($o, $v, null, $ctx);
                 case 'award_count':
                     return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')', 'number', $o, $v);
                 case 'award_date_any':
-                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom("AND w.date >= '" . self::AWARD_DATE_FLOOR . "' AND " . $this->_cmp('w.date', 'date', $o, $v), false) . ')';
+                    // EXISTS as a probe (see _holdsAny): MariaDB would scan all of ork_awards.
+                    return '(SELECT 1 ' . $this->_heldAwardsFrom("AND w.date >= '" . self::AWARD_DATE_FLOOR . "' AND " . $this->_cmp('w.date', 'date', $o, $v), false) . ' LIMIT 1) IS NOT NULL';
                 case 'reeve_qualified':
                 case 'corpora_qualified':
                     $e = $this->_qualifiedExpr($id === 'reeve_qualified' ? 'reeve' : 'corpora');
@@ -876,8 +984,19 @@ class PopulationExplorer extends Ork3
             case 'masterhoods':
             case 'paragons':
                 $pe = ['knighthoods' => 'Knight', 'masterhoods' => 'Master', 'paragons' => 'Paragon'][$id];
-                return "(SELECT GROUP_CONCAT(DISTINCT aw.name ORDER BY aw.name SEPARATOR ', ') "
-                    . $this->_heldAwardsFrom('AND ' . $this->_peerageIn([$pe])) . ')';
+                $names = "SELECT GROUP_CONCAT(DISTINCT aw.name ORDER BY aw.name SEPARATOR ', ') ";
+                $exact = '(' . $names . $this->_heldAwardsFrom('AND ' . $this->_peerageIn([$pe])) . ')';
+                $ids = $this->_peerageIds([$pe], $ctx);
+                if ($ids === null) {
+                    return $exact;
+                }
+                if (count($ids) === 0) {
+                    return 'NULL'; // no award carries the peerage: GROUP_CONCAT of no rows
+                }
+                // Players with an aliased row of the peerage (a handful) take the exact
+                // alias-aware form; everyone else, the index probe over the same rows.
+                return 'CASE WHEN ' . $this->_aliasHolders($ids) . ' THEN ' . $exact
+                    . ' ELSE (' . $names . $this->_heldNonAliasFrom($ids, 'JOIN ' . $this->_t('award') . ' aw ON aw.award_id = COALESCE(NULLIF(w.award_id, 0), ka.award_id)') . ') END';
             case 'award_count':
                 return '(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')';
             case 'reeve_qualified':
@@ -1226,6 +1345,9 @@ class PopulationExplorer extends Ork3
         }
         list($scopeSql, $duesScope) = $clauses;
         $ctx = ['duesScope' => $duesScope, 'ladders' => $known['ladders'] ?? []];
+        if (isset($known['peerage']) && is_array($known['peerage'])) {
+            $ctx['peerageIds'] = $known['peerage']; // peerage criteria and columns probe these ids
+        }
         try {
             $treeSql = $this->CompileTree($norm['tree'], $ctx);
             $selects = ['m.mundane_id AS mundane_id'];

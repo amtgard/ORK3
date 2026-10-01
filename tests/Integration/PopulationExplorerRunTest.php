@@ -1191,6 +1191,78 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertNull($names[$none['mundane_id']]);
     }
 
+    /**
+     * The effective award of a row is alias_award_id, else award_id, else the
+     * kingdom award's award_id (award_id 0); revoked and stripped rows are not held.
+     * Every award criterion and the peerage column must agree on that for each
+     * kind of row, whatever SQL shape they compile to.
+     */
+    public function testEffectiveAwardResolutionForEveryKindOfRow(): void
+    {
+        [[$ka1, $k1], [$ka2, $k2]] = $this->peerageAwards('Knight', 2);
+        $plainAward = (int) $this->fixture->pdo()->query(
+            "SELECT award_id FROM " . DB_PREFIX . "award WHERE peerage = 'None' AND is_ladder = 0 ORDER BY award_id LIMIT 1"
+        )->fetchColumn();
+        $this->assertGreaterThan(0, $plainAward);
+        $grant = function (array $pl, int $kaId, int $awardId, array $set = []): int {
+            $id = $this->fixture->insertLadderAward($pl['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+            foreach ($set as $col => $val) {
+                $this->sql('UPDATE ' . DB_PREFIX . 'awards SET ' . $col . ' = ? WHERE awards_id = ?', [$val, $id]);
+            }
+
+            return $id;
+        };
+        $plain = $this->player('pe-eff-plain');         // award_id = K1
+        $fallback = $this->player('pe-eff-fallback');   // award_id 0 -> ka.award_id = K1
+        $alias = $this->player('pe-eff-alias');         // a plain award aliased to K1
+        $aliasAway = $this->player('pe-eff-aliasaway'); // award_id = K1 aliased to a plain award: not K1
+        $revoked = $this->player('pe-eff-revoked');
+        $stripped = $this->player('pe-eff-stripped');
+        $noKa = $this->player('pe-eff-noka');           // award_id 0 and no kingdom award: no award
+        $both = $this->player('pe-eff-both');           // K1 by alias + K2 plain
+        $none = $this->player('pe-eff-none');
+        $grant($plain, $ka1, $k1);
+        $grant($fallback, $ka1, 0);
+        $grant($alias, 0, $plainAward, ['alias_award_id' => $k1]);
+        $grant($aliasAway, $ka1, $k1, ['alias_award_id' => $plainAward]);
+        $grant($revoked, $ka1, $k1, ['revoked' => 1]);
+        $st = $grant($stripped, $ka1, $k1);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET stripped_from = ? WHERE awards_id = ?', [$st, $st]);
+        $grant($noKa, 999999999, 0);
+        $grant($both, 0, $plainAward, ['alias_award_id' => $k1]);
+        $grant($both, $ka2, $k2);
+        $mine = array_map(static fn (array $p): int => $p['mundane_id'], [$plain, $fallback, $alias, $aliasAway, $revoked, $stripped, $noKa, $both, $none]);
+        $holdK1 = $this->sorted([$plain['mundane_id'], $fallback['mundane_id'], $alias['mundane_id'], $both['mundane_id']]);
+        $notK1 = $this->sorted(array_values(array_diff($mine, $holdK1)));
+
+        $this->assertSame($holdK1, $this->matchAmong($this->tree($this->leaf('has_award', 'in', [$k1])), $mine), 'has_award in');
+        $this->assertSame($holdK1, $this->matchAmong($this->tree($this->leaf('has_award', 'is', $k1)), $mine), 'has_award is');
+        $this->assertSame($notK1, $this->matchAmong($this->tree($this->leaf('has_award', 'not_in', [$k1])), $mine), 'has_award not_in');
+        $this->assertSame($holdK1, $this->matchAmong($this->tree($this->leaf('knighthood', 'has_any', [$k1])), $mine), 'knighthood has_any');
+        $this->assertSame($notK1, $this->matchAmong($this->tree($this->leaf('knighthood', 'has_none', [$k1])), $mine), 'knighthood has_none');
+        $this->assertSame([$both['mundane_id']], $this->matchAmong($this->tree($this->leaf('knighthood', 'has_all', [$k1, $k2])), $mine), 'has_all over an alias and a plain row');
+        $this->assertSame($holdK1, $this->matchAmong($this->tree($this->leaf('knighthood', 'is', 'yes')), $mine), 'knighthood yes');
+        $this->assertSame($notK1, $this->matchAmong($this->tree($this->leaf('knighthood', 'is', 'no')), $mine), 'knighthood no');
+        $this->assertSame([$both['mundane_id']], $this->matchAmong($this->tree($this->leaf('has_award', 'in', [$k1]), $this->leaf('has_award', 'in', [$k2])), $mine));
+
+        $names = $this->fixture->pdo()->query('SELECT award_id, name FROM ' . DB_PREFIX . 'award WHERE award_id IN (' . $k1 . ',' . $k2 . ')')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $both2 = [$names[$k1], $names[$k2]];
+        sort($both2);
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'knighthoods', 'award_count']));
+        $col = array_column($r['Rows'], 'knighthoods', 'MundaneId');
+        $cnt = array_column($r['Rows'], 'award_count', 'MundaneId');
+        foreach ([$plain, $fallback, $alias] as $p) {
+            $this->assertSame($names[$k1], $col[$p['mundane_id']], $p['persona'] ?? 'player');
+        }
+        $this->assertSame(implode(', ', $both2), $col[$both['mundane_id']]);
+        foreach ([$aliasAway, $revoked, $stripped, $noKa, $none] as $p) {
+            $this->assertNull($col[$p['mundane_id']]);
+        }
+        $this->assertSame(1, $cnt[$noKa['mundane_id']], 'award count counts every held row');
+        $this->assertSame(0, $cnt[$revoked['mundane_id']]);
+        $this->assertSame(0, $cnt[$stripped['mundane_id']]);
+    }
+
     public function testClassesPlayedInLastNMonths(): void
     {
         $classId = (int) $this->fixture->pdo()->query('SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id LIMIT 1')->fetchColumn();

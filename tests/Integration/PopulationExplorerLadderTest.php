@@ -247,6 +247,28 @@ final class PopulationExplorerLadderTest extends TestCase
         ), $mine));
     }
 
+    /** award_id 0 falls back to the kingdom award; a row aliased away from the ladder is not in it. */
+    public function testLadderRankFollowsTheKingdomAwardFallbackAndIgnoresRowsAliasedAway(): void
+    {
+        $ka = $this->kaFor(self::ROSE);
+        $plainAward = (int) $this->fixture->pdo()->query('SELECT award_id FROM ' . DB_PREFIX . 'award WHERE is_ladder = 0 ORDER BY award_id LIMIT 1')->fetchColumn();
+        $fallback = $this->player('pe-lad-fallback'); // two award_id-0 Rose rows, ranks 0 and 2 -> 2
+        $away = $this->player('pe-lad-away');         // a Rose row aliased to a plain award -> 0
+        $mixed = $this->player('pe-lad-mixed');       // one Rose by alias (rank 6) + one plain Rose (rank 1) -> 6
+        $mine = [$fallback['mundane_id'], $away['mundane_id'], $mixed['mundane_id']];
+        $this->grant($fallback['mundane_id'], $ka, 0, [0, 2]);
+        [$aw] = $this->grant($away['mundane_id'], $ka, self::ROSE, [9]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET alias_award_id = ? WHERE awards_id = ?', [$plainAward, $aw]);
+        [$al] = $this->grant($mixed['mundane_id'], 0, $plainAward, [6]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET alias_award_id = ? WHERE awards_id = ?', [self::ROSE, $al]);
+        $this->grant($mixed['mundane_id'], $ka, self::ROSE, [1]);
+
+        $c = 'ladder_a' . self::ROSE;
+        $this->assertSame([$fallback['mundane_id']], $this->matchAmong($this->tree($this->leaf($c, 'eq', 2)), $mine));
+        $this->assertSame([$away['mundane_id']], $this->matchAmong($this->tree($this->leaf($c, 'eq', 0)), $mine));
+        $this->assertSame([$mixed['mundane_id']], $this->matchAmong($this->tree($this->leaf($c, 'eq', 6)), $mine));
+    }
+
     public function testKingdomOnlyLadderMatchesOnItsKingdomAwardAndIsScoped(): void
     {
         $other = $this->otherKingdomId();

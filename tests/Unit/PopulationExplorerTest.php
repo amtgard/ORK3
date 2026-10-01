@@ -203,10 +203,11 @@ final class PopulationExplorerTest extends TestCase
         $any  = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_any', [17, 20])]]);
         $all  = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_all', [17, 20])]]);
         $none = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_none', [17])]]);
-        $this->assertStringContainsString('aw.award_id IN (17,20)', $any);
-        $this->assertStringContainsString('COUNT(DISTINCT aw.award_id)', $all);
-        $this->assertStringContainsString(') = 2', $all);
-        $this->assertStringContainsString('NOT EXISTS', $none);
+        $this->assertStringContainsString('COALESCE(NULLIF(w.award_id, 0), ka.award_id) IN (17,20)', $any);
+        $this->assertStringContainsString('wa.alias_award_id IN (17,20)', $any, 'alias-aware');
+        $this->assertStringContainsString('ka.award_id) IN (17)', $all);
+        $this->assertStringContainsString('ka.award_id) IN (20)', $all);
+        $this->assertStringStartsWith('((NOT ', $none);
         $this->assertStringContainsString('w.revoked = 0', $any);
         $this->assertStringContainsString('stripped_from', $any);
     }
@@ -292,17 +293,17 @@ final class PopulationExplorerTest extends TestCase
     public function testHasAwardSetOperands(): void
     {
         $cases = [
-            ['is', 17, 'aw.award_id IN (17)', true],
-            ['is_not', 17, 'aw.award_id IN (17)', false],
-            ['in', [17, 20], 'aw.award_id IN (17,20)', true],
-            ['not_in', [17, 20], 'aw.award_id IN (17,20)', false],
+            ['is', 17, 'ka.award_id) IN (17)', true],
+            ['is_not', 17, 'ka.award_id) IN (17)', false],
+            ['in', [17, 20], 'ka.award_id) IN (17,20)', true],
+            ['not_in', [17, 20], 'ka.award_id) IN (17,20)', false],
         ];
-        foreach ($cases as [$o, $v, $needle, $exists]) {
+        foreach ($cases as [$o, $v, $needle, $holds]) {
             $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('has_award', $o, $v)]]);
             $this->assertStringContainsString($needle, $s, $o);
             $this->assertStringNotContainsString('1=1', $s, $o);
-            $this->assertSame($exists, strpos($s, 'NOT EXISTS') === false, $o);
-            $this->assertStringContainsString('EXISTS', $s, $o);
+            $this->assertSame($holds, strpos($s, '((NOT ') !== 0, $o);
+            $this->assertStringContainsString('LIMIT 1) IS NOT NULL', $s, $o);
         }
     }
 
@@ -650,11 +651,12 @@ final class PopulationExplorerTest extends TestCase
         $this->assertTrue($n['ok'], $n['error'] ?? '');
         $sql = $this->pe->CompileTree($n['tree'], ['ladders' => $this->ladders()]);
 
-        $this->assertSame(2, substr_count($sql, 'GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*))'));
+        $this->assertSame(3, substr_count($sql, 'GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*))'), 'global: aliased + probe branches; kingdom-only: one');
         $this->assertStringContainsString('aw.award_id = 21', $sql, 'global ladder: resolved (alias-aware) award id');
         $this->assertStringContainsString('COALESCE(NULLIF(w.alias_award_id, 0)', $sql);
         $this->assertStringContainsString('w.kingdomaward_id = 7070', $sql, 'kingdom-only ladder');
-        $this->assertSame(2, substr_count($sql, 'w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'), 'held awards only');
+        $this->assertSame(3, substr_count($sql, 'w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'), 'held awards only');
+        $this->assertStringContainsString('wa.revoked = 0 AND COALESCE(wa.stripped_from, 0) = 0', $sql, 'aliased rows: held only');
         $this->assertStringContainsString(') >= 2', $sql);
         $this->assertStringContainsString(') <> 0', $sql);
         // Only the registry's ints: no other digits than the ids, the values and the SQL's own 0s.
@@ -831,5 +833,74 @@ final class PopulationExplorerTest extends TestCase
         foreach (['ne' => '<> 5', 'lte' => '<= 5', 'eq' => '= 5'] as $o => $tail) {
             $this->assertStringEndsWith($tail . '))', $this->sql(['op' => 'AND', 'children' => [$this->leaf('last_signin_days_ago', $o, 5)]]));
         }
+    }
+
+    // ---------------------------------------------------------------- held-award probes (performance)
+    // Shape only: the integration tests and the data-verification oracles pin the results.
+
+    private function peerageCtx(): array
+    {
+        return ['duesScope' => '1=1', 'peerageIds' => $this->known['peerage']];
+    }
+
+    public function testHasAwardMatchesTheResolvedIdWithoutJoiningTheAwardTable(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('has_award', 'in', [17, 20])]]);
+        $this->assertStringNotContainsString(DB_PREFIX . 'award aw', $s, 'no join to ork_award');
+        $this->assertStringContainsString('w.award_id IN (0,17,20)', $s, 'index pre-filter on (mundane_id, award_id)');
+        $this->assertStringContainsString('COALESCE(w.alias_award_id, 0) = 0', $s);
+        $this->assertStringContainsString('COALESCE(NULLIF(w.award_id, 0), ka.award_id) IN (17,20)', $s);
+        $this->assertStringContainsString('m.mundane_id IN (SELECT wa.mundane_id FROM ' . DB_PREFIX . 'awards wa WHERE wa.alias_award_id IN (17,20)', $s, 'aliased rows: one uncorrelated lookup');
+        $this->assertStringContainsString('LIMIT 1) IS NOT NULL', $s, 'a per-player probe, not an EXISTS MariaDB turns into a full scan');
+        $this->assertStringNotContainsString('EXISTS', $s);
+        $none = $this->sql(['op' => 'AND', 'children' => [$this->leaf('has_award', 'not_in', [17, 20])]]);
+        $this->assertStringStartsWith('((NOT ((SELECT 1 ', $none);
+    }
+
+    public function testPeerageHasAllIsOneProbePerId(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_all', [17, 20])]]);
+        $this->assertSame(2, substr_count($s, 'LIMIT 1) IS NOT NULL'));
+        $this->assertStringContainsString('w.award_id IN (0,17)', $s);
+        $this->assertStringContainsString('w.award_id IN (0,20)', $s);
+        $this->assertStringNotContainsString('COUNT(DISTINCT', $s);
+        $this->assertStringNotContainsString(DB_PREFIX . 'award aw', $s);
+    }
+
+    public function testPeerageYesNoProbesThePeerageIdsWhenTheContextCarriesThem(): void
+    {
+        $yes = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'is', 'yes')]], $this->peerageCtx());
+        $this->assertStringContainsString('w.award_id IN (0,17,18,19,20)', $yes);
+        $this->assertStringNotContainsString('aw.peerage', $yes);
+        $no = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'is', 'no')]], $this->peerageCtx());
+        $this->assertStringStartsWith('((NOT ((SELECT 1 ', $no);
+        // No award carries the peerage: nobody holds one.
+        $this->assertSame('(((0=1)))', $this->sql(['op' => 'AND', 'children' => [$this->leaf('paragon', 'is', 'yes')]], $this->peerageCtx()));
+        $this->assertSame('((NOT (0=1)))', $this->sql(['op' => 'AND', 'children' => [$this->leaf('lesser_peerage', 'is', 'no')]], $this->peerageCtx()));
+    }
+
+    public function testPeerageColumnsProbeTheIdsUnlessThePlayerHasAnAliasedRow(): void
+    {
+        $col = $this->pe->ColumnSelectSql('knighthoods', $this->peerageCtx());
+        $this->assertStringStartsWith('CASE WHEN m.mundane_id IN (SELECT wa.mundane_id FROM ' . DB_PREFIX . 'awards wa WHERE wa.alias_award_id IN (17,18,19,20)', $col);
+        $this->assertStringContainsString("aw.peerage IN ('Knight')", $col, 'aliased players: the exact alias-aware form');
+        $this->assertStringContainsString('w.award_id IN (0,17,18,19,20)', $col, 'everyone else: the index probe');
+        $this->assertSame('NULL', $this->pe->ColumnSelectSql('paragons', $this->peerageCtx()));
+    }
+
+    public function testGlobalLadderRankProbesTheIdUnlessThePlayerHasAnAliasedRow(): void
+    {
+        $n = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf('ladder_a21', 'gte', 2)]], $this->withLadders());
+        $sql = $this->pe->CompileTree($n['tree'], ['ladders' => $this->ladders()]);
+        $this->assertStringContainsString('CASE WHEN m.mundane_id IN (SELECT wa.mundane_id FROM ' . DB_PREFIX . 'awards wa WHERE wa.alias_award_id IN (21)', $sql);
+        $this->assertStringContainsString('w.award_id IN (0,21)', $sql);
+        $this->assertSame(2, substr_count($sql, 'GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*))'), 'both branches: the same rank rule');
+    }
+
+    public function testAwardDateAnyIsAProbeNotAnExists(): void
+    {
+        $s = $this->compileLeaf('award_date_any', 'gte', '2024-01-01');
+        $this->assertStringContainsString('LIMIT 1) IS NOT NULL', $s);
+        $this->assertStringNotContainsString('EXISTS', $s);
     }
 }
