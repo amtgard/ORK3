@@ -983,7 +983,9 @@ final class PopulationExplorerRunTest extends TestCase
         $rowSql = $p->statements[$rowIdx[0]];
         $this->assertTrue($p->timed[$rowIdx[0]], 'row query runs under the statement timeout');
         $this->assertStringNotContainsString('GROUP BY', $rowSql);
-        $this->assertStringContainsString('ORDER BY m.persona, m.mundane_id', $rowSql);
+        // CONCAT(persona) sorts exactly like persona (same value, same collation) but
+        // keeps MariaDB off a LIMIT-driven walk of the whole persona index.
+        $this->assertStringContainsString('ORDER BY CONCAT(m.persona), m.mundane_id LIMIT', $rowSql);
 
         $p = $this->probe();
         $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 3]));
@@ -993,6 +995,21 @@ final class PopulationExplorerRunTest extends TestCase
         $countIdx = array_search($this->filteredCounts($p)[0], $p->statements, true);
         $this->assertTrue($p->timed[$countIdx], 'COUNT runs under the statement timeout');
         $this->assertSame(PopulationExplorer::STATEMENT_TIMEOUT_S, 10);
+    }
+
+    public function testRowsAreInPersonaOrderLikeTheTable(): void
+    {
+        foreach (['zeta', 'Alpha', 'alpha', 'Ålpha', 'beta ', 'Beta', '', 'éclair', 'Eclair'] as $i => $persona) {
+            $pl = $this->player('pe-order-' . $i);
+            $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?', [$persona, $pl['mundane_id']]);
+        }
+        $expected = array_map('intval', $this->fixture->pdo()->query(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid . ' ORDER BY persona, mundane_id'
+        )->fetchAll(PDO::FETCH_COLUMN));
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame($expected, array_map(static fn (array $row): int => $row['MundaneId'], $r['Rows']));
+        $capped = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 4]));
+        $this->assertSame(array_slice($expected, 0, 4), array_map(static fn (array $row): int => $row['MundaneId'], $capped['Rows']));
     }
 
     public function testEveryColumnYieldsOneRowPerPlayer(): void

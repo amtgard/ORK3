@@ -1370,7 +1370,10 @@ class PopulationExplorer extends Ork3
             . ' FROM ' . $this->_t('mundane') . ' m'
             . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = m.kingdom_id'
             . ' LEFT JOIN ' . $this->_t('park') . ' p ON p.park_id = m.park_id '
-            . $where . ' ORDER BY m.persona, m.mundane_id LIMIT ' . (int)$cap;
+            // CONCAT(m.persona) is the same value in the same collation, so the order is
+            // unchanged; it only keeps MariaDB from walking the whole persona index (all
+            // players, every kingdom) to satisfy the LIMIT instead of sorting the scope.
+            . $where . ' ORDER BY CONCAT(m.persona), m.mundane_id LIMIT ' . (int)$cap;
         $countSql = 'SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m ' . $where;
         logtrace('PopulationExplorer::Run', [$sql, $countSql]);
 
