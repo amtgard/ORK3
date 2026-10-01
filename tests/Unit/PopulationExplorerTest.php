@@ -240,4 +240,32 @@ final class PopulationExplorerTest extends TestCase
             $this->assertIsCallable($def['sql'], $id);
         }
     }
+
+    public function testHasAwardSetOperands(): void
+    {
+        $cases = [
+            ['is', 17, 'aw.award_id IN (17)', true],
+            ['is_not', 17, 'aw.award_id IN (17)', false],
+            ['in', [17, 20], 'aw.award_id IN (17,20)', true],
+            ['not_in', [17, 20], 'aw.award_id IN (17,20)', false],
+        ];
+        foreach ($cases as [$o, $v, $needle, $exists]) {
+            $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('has_award', $o, $v)]]);
+            $this->assertStringContainsString($needle, $s, $o);
+            $this->assertStringNotContainsString('1=1', $s, $o);
+            $this->assertSame($exists, strpos($s, 'NOT EXISTS') === false, $o);
+            $this->assertStringContainsString('EXISTS', $s, $o);
+        }
+    }
+
+    public function testPeerageIsYesNoRegression(): void
+    {
+        $yes = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'is', 'yes')]]);
+        $no  = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'is', 'no')]]);
+        $this->assertStringContainsString("aw.peerage IN ('Knight')", $yes);
+        $this->assertStringNotContainsString('NOT EXISTS', $yes);
+        $this->assertStringContainsString('EXISTS', $yes);
+        $this->assertStringContainsString("aw.peerage IN ('Knight')", $no);
+        $this->assertStringContainsString('NOT EXISTS', $no);
+    }
 }

@@ -512,9 +512,10 @@ class PopulationExplorer extends Ork3
         return "(m.suspended = 0 AND m.{$kind}_qualified = 1 AND COALESCE(m.{$kind}_qualified_until >= CURDATE(), 0))";
     }
 
-    private function _awardSetSql(string $o, $v, string $peerageFilter): string
+    private function _awardSetSql(string $o, $v, ?string $peerageFilter): string
     {
-        if ($o === 'is') {
+        // Peerage criteria only (has_award passes null): `is` takes yes|no.
+        if ($peerageFilter !== null && $o === 'is') {
             return ($v ? 'EXISTS' : 'NOT EXISTS') . ' (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $peerageFilter) . ')';
         }
         // has_award is an enum_set criterion, so also accept the set operands.
@@ -582,7 +583,7 @@ class PopulationExplorer extends Ork3
                 case 'lesser_peerage':
                     return $this->_awardSetSql($o, $v, $this->_peerageIn($def['peerage']));
                 case 'has_award':
-                    return $this->_awardSetSql($o, $v, '1=1');
+                    return $this->_awardSetSql($o, $v, null);
                 case 'award_count':
                     return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom() . ')', 'number', $o, $v);
                 case 'award_date_any':
