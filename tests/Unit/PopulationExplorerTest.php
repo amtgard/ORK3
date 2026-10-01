@@ -915,4 +915,64 @@ final class PopulationExplorerTest extends TestCase
         $this->assertStringContainsString("a.date >= '1988-01-01' ORDER BY a.date LIMIT 1", $since);
         $this->assertStringNotContainsString('MIN(', $since);
     }
+
+    // ---------------------------------------------------------------- compile-time simplification
+
+    public function testIdenticalSiblingRulesCompileOnce(): void
+    {
+        foreach (['OR', 'AND'] as $op) {
+            $s = $this->sql(['op' => $op, 'children' => [
+                $this->leaf('last_signin_park', 'in', [5]),
+                $this->leaf('active', 'is', 'yes'),
+                $this->leaf('last_signin_park', 'in', [5]),
+            ]]);
+            $this->assertSame(1, substr_count($s, 'NULLIF(a.park_id, 0)'), $op . ': X ' . $op . ' X is X');
+            $this->assertStringContainsString('m.active = 1', $s);
+        }
+        // Different values are different rules.
+        $s = $this->sql(['op' => 'OR', 'children' => [$this->leaf('last_signin_park', 'in', [5]), $this->leaf('last_signin_park', 'in', [6])]]);
+        $this->assertSame(2, substr_count($s, 'NULLIF(a.park_id, 0)'));
+    }
+
+    public function testHeldAwardRulesUnderOrBecomeOneProbe(): void
+    {
+        $s = $this->sql(['op' => 'OR', 'children' => [
+            $this->leaf('has_award', 'in', [17]),
+            $this->leaf('active', 'is', 'yes'),
+            $this->leaf('knighthood', 'has_any', [20]),
+            $this->leaf('has_award', 'is', 18),
+            $this->leaf('knighthood', 'is', 'yes'),
+        ]], $this->peerageCtx());
+        $this->assertSame(1, substr_count($s, 'LIMIT 1) IS NOT NULL'), 'holds any of A or B = holds any of A u B');
+        $this->assertStringContainsString('w.award_id IN (0,17,20,18,19)', $s);
+        $this->assertStringContainsString('wa.alias_award_id IN (17,20,18,19)', $s);
+        $this->assertStringContainsString('m.active = 1', $s);
+        // Without the peerage map, peerage yes is not a probe and stays its own rule.
+        $s = $this->sql(['op' => 'OR', 'children' => [$this->leaf('has_award', 'in', [17]), $this->leaf('knighthood', 'is', 'yes')]]);
+        $this->assertSame(1, substr_count($s, 'LIMIT 1) IS NOT NULL'));
+        $this->assertStringContainsString("aw.peerage IN ('Knight')", $s);
+    }
+
+    public function testHeldAwardExclusionsUnderAndBecomeOneProbe(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [
+            $this->leaf('has_award', 'not_in', [17]),
+            $this->leaf('knighthood', 'has_none', [20]),
+            $this->leaf('has_award', 'is_not', 1),
+            $this->leaf('paragon', 'is', 'no'),
+        ]], $this->peerageCtx());
+        $this->assertSame(1, substr_count($s, 'LIMIT 1) IS NOT NULL'), 'holds none of A and none of B = holds none of A u B');
+        $this->assertStringContainsString('NOT ((SELECT 1 ', $s);
+        $this->assertStringContainsString('w.award_id IN (0,17,20,1)', $s);
+    }
+
+    public function testHeldAwardRulesAreNotMergedAcrossTheWrongOperator(): void
+    {
+        $and = $this->sql(['op' => 'AND', 'children' => [$this->leaf('has_award', 'in', [17]), $this->leaf('has_award', 'in', [20])]]);
+        $this->assertSame(2, substr_count($and, 'LIMIT 1) IS NOT NULL'), 'holds A and holds B is not holds A u B');
+        $or = $this->sql(['op' => 'OR', 'children' => [$this->leaf('has_award', 'not_in', [17]), $this->leaf('has_award', 'not_in', [20])]]);
+        $this->assertSame(2, substr_count($or, 'LIMIT 1) IS NOT NULL'));
+        $all = $this->sql(['op' => 'OR', 'children' => [$this->leaf('knighthood', 'has_all', [17, 20]), $this->leaf('has_award', 'in', [18])]]);
+        $this->assertSame(3, substr_count($all, 'LIMIT 1) IS NOT NULL'), 'has all is never merged');
+    }
 }

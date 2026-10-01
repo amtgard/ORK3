@@ -1311,6 +1311,30 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame(0, $cnt[$stripped['mundane_id']]);
     }
 
+    public function testMergedAndDeduplicatedAwardRulesKeepTheirMeaning(): void
+    {
+        [[$ka1, $k1], [$ka2, $k2]] = $this->peerageAwards('Knight', 2);
+        $one = $this->player('pe-merge-one');
+        $two = $this->player('pe-merge-two');
+        $both = $this->player('pe-merge-both');
+        $none = $this->player('pe-merge-none');
+        $this->fixture->insertLadderAward($one['mundane_id'], $this->parkId, $this->kid, $ka1, $k1, 0);
+        $this->fixture->insertLadderAward($two['mundane_id'], $this->parkId, $this->kid, $ka2, $k2, 0);
+        $this->fixture->insertLadderAward($both['mundane_id'], $this->parkId, $this->kid, $ka1, $k1, 0);
+        $this->fixture->insertLadderAward($both['mundane_id'], $this->parkId, $this->kid, $ka2, $k2, 0);
+        $mine = [$one['mundane_id'], $two['mundane_id'], $both['mundane_id'], $none['mundane_id']];
+        [$o, $t, $b, $n] = $mine;
+        $or = static fn (array ...$c): array => ['op' => 'OR', 'children' => $c];
+
+        $this->assertSame($this->sorted([$o, $t, $b]), $this->matchAmong($or($this->leaf('has_award', 'in', [$k1]), $this->leaf('knighthood', 'has_any', [$k2])), $mine));
+        $this->assertSame($this->sorted([$o, $t, $b]), $this->matchAmong($or($this->leaf('has_award', 'is', $k1), $this->leaf('has_award', 'is', $k1), $this->leaf('has_award', 'is', $k2)), $mine));
+        $this->assertSame([$n], $this->matchAmong($this->tree($this->leaf('has_award', 'not_in', [$k1]), $this->leaf('knighthood', 'has_none', [$k2])), $mine));
+        $this->assertSame([$b], $this->matchAmong($this->tree($this->leaf('has_award', 'in', [$k1]), $this->leaf('has_award', 'in', [$k2])), $mine));
+        $this->assertSame($this->sorted([$o, $t, $n]), $this->matchAmong($or($this->leaf('has_award', 'not_in', [$k1]), $this->leaf('has_award', 'not_in', [$k2])), $mine));
+        $this->assertSame($this->sorted([$o, $t, $b]), $this->matchAmong($or($this->leaf('knighthood', 'is', 'yes'), $this->leaf('has_award', 'in', [$k2])), $mine));
+        $this->assertSame([$n], $this->matchAmong($this->tree($this->leaf('knighthood', 'is', 'no'), $this->leaf('has_award', 'not_in', [$k2]), $this->leaf('knighthood', 'is', 'no')), $mine));
+    }
+
     public function testClassesPlayedInLastNMonths(): void
     {
         $classId = (int) $this->fixture->pdo()->query('SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id LIMIT 1')->fetchColumn();

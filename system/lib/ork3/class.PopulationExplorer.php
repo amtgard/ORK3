@@ -1027,21 +1027,81 @@ class PopulationExplorer extends Ork3
         return $this->_compileNode($normalizedTree, $registry, $ctx);
     }
 
+    /**
+     * SQL emission only simplifies; the normalized tree (and so every RulePath) is
+     * untouched. Within one group:
+     * - a rule identical to an earlier sibling is dropped (X OR X = X AND X = X);
+     * - under OR, the "holds one of these awards" rules become one probe over the
+     *   union of their ids (holds any of A, or any of B = holds any of A u B); under
+     *   AND, the "holds none of these" rules do (De Morgan). None of these is ever
+     *   NULL, so three-valued logic does not change the result.
+     */
     private function _compileNode(array $node, array $registry, array $ctx): string
     {
         if (isset($node['children'])) {
             // NormalizeTree drops empty groups and CompileTree handles an empty root.
+            $or = $node['op'] === 'OR';
             $parts = [];
+            $seen = [];
+            $held = null;   // ids of the merged held-award rules
+            $heldAt = null; // their place: where the first of them was
             foreach ($node['children'] as $child) {
-                $parts[] = $this->_compileNode($child, $registry, $ctx);
+                $h = isset($child['children']) ? null : $this->_heldAwardLeaf($child, $registry, $ctx);
+                if ($h !== null && $h['none'] === !$or) {
+                    if ($heldAt === null) {
+                        $heldAt = count($parts);
+                        $parts[] = '';
+                    }
+                    $held = array_merge($held ?? [], $h['ids']);
+                    continue;
+                }
+                $sql = $this->_compileNode($child, $registry, $ctx);
+                if (!isset($seen[$sql])) {
+                    $seen[$sql] = true;
+                    $parts[] = $sql;
+                }
             }
-            return '(' . implode($node['op'] === 'OR' ? ' OR ' : ' AND ', $parts) . ')';
+            if ($heldAt !== null) {
+                $parts[$heldAt] = '(' . ($or ? '' : 'NOT ') . $this->_holdsAny(array_values(array_unique($held))) . ')';
+            }
+            return '(' . implode($or ? ' OR ' : ' AND ', $parts) . ')';
         }
         if (!isset($registry[$node['c']])) {
             throw new InvalidArgumentException('unknown criterion');
         }
         $fn = $registry[$node['c']]['sql'];
         return '(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')';
+    }
+
+    /**
+     * A leaf that compiles to "holds one of $ids" (none = false) or "holds none of
+     * $ids" (none = true) through _holdsAny, else null: has_award, peerage
+     * has_any / has_none, and peerage yes / no when ctx carries the peerage ids.
+     *
+     * @return array{ids:int[], none:bool}|null
+     */
+    private function _heldAwardLeaf(array $leaf, array $registry, array $ctx): ?array
+    {
+        $def = $registry[$leaf['c'] ?? ''] ?? null;
+        $o = $leaf['o'] ?? '';
+        if ($def === null) {
+            return null;
+        }
+        if (($leaf['c'] ?? '') === 'has_award') {
+            $none = ['in' => false, 'is' => false, 'not_in' => true, 'is_not' => true][$o] ?? null;
+            return $none === null ? null : ['ids' => array_map('intval', (array)$leaf['v']), 'none' => $none];
+        }
+        if (!isset($def['peerage'])) {
+            return null;
+        }
+        if ($o === 'has_any' || $o === 'has_none') {
+            return ['ids' => array_map('intval', (array)$leaf['v']), 'none' => $o === 'has_none'];
+        }
+        if ($o === 'is') {
+            $ids = $this->_peerageIds($def['peerage'], $ctx);
+            return $ids === null ? null : ['ids' => $ids, 'none' => (int)$leaf['v'] !== 1];
+        }
+        return null; // has_all
     }
 
     // ---------------------------------------------------------------- scope, authorization, execution
