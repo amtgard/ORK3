@@ -1363,41 +1363,45 @@ class PopulationExplorer extends Ork3
             return ['Status' => InvalidParameter($e->getMessage())];
         }
 
+        // Two statements. 1: the matching ids in report order, at most $cap of them,
+        // with COUNT(*) OVER () = every match (the true Total) from the same single
+        // evaluation of the tree. 2: the columns for those ids only.
         // No outer GROUP BY: k and p join on primary keys and every criterion and
         // column is a scalar subquery or EXISTS, so rows cannot multiply.
-        $where = 'WHERE (' . $scopeSql . ') AND (' . $treeSql . ')';
-        $sql = 'SELECT ' . implode(', ', $selects)
-            . ' FROM ' . $this->_t('mundane') . ' m'
-            . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = m.kingdom_id'
-            . ' LEFT JOIN ' . $this->_t('park') . ' p ON p.park_id = m.park_id '
-            // CONCAT(m.persona) is the same value in the same collation, so the order is
-            // unchanged; it only keeps MariaDB from walking the whole persona index (all
-            // players, every kingdom) to satisfy the LIMIT instead of sorting the scope.
-            . $where . ' ORDER BY CONCAT(m.persona), m.mundane_id LIMIT ' . (int)$cap;
-        $countSql = 'SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m ' . $where;
-        logtrace('PopulationExplorer::Run', [$sql, $countSql]);
+        // CONCAT(m.persona) is the same value in the same collation, so the order is
+        // unchanged; it only keeps MariaDB from walking the whole persona index (all
+        // players, every kingdom) to satisfy the LIMIT instead of sorting the scope.
+        $order = ' ORDER BY CONCAT(m.persona), m.mundane_id';
+        $idSql = 'SELECT m.mundane_id AS mundane_id, COUNT(*) OVER () AS matches FROM ' . $this->_t('mundane') . ' m'
+            . ' WHERE (' . $scopeSql . ') AND (' . $treeSql . ')' . $order . ' LIMIT ' . (int)$cap;
+        logtrace('PopulationExplorer::Run', $idSql);
 
         $rows = [];
         $total = 0;
         $scopeTotal = 0;
         try {
-            $r = $this->_select($sql, true);
+            $ids = [];
+            $r = $this->_select($idSql, true);
             while ($r->next()) {
-                $row = ['MundaneId' => (int)$r->mundane_id];
-                foreach ($colIds as $id) {
-                    $field = 'c_' . $id;
-                    $row[$id] = $this->_cell($id, $registryCols[$id]['type'], $r->$field);
-                }
-                $rows[] = $row;
+                $ids[] = (int)$r->mundane_id;
+                $total = (int)$r->matches;
             }
-            if (count($rows) < $cap) {
-                $total = count($rows); // under the cap: the rows are the whole answer
-            } else {
-                $c = $this->_select($countSql, true);
-                if (!$c->next()) {
-                    throw new RuntimeException('count returned no row');
+            if (count($ids) > 0) {
+                $sql = 'SELECT ' . implode(', ', $selects)
+                    . ' FROM ' . $this->_t('mundane') . ' m'
+                    . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = m.kingdom_id'
+                    . ' LEFT JOIN ' . $this->_t('park') . ' p ON p.park_id = m.park_id'
+                    . ' WHERE m.mundane_id IN (' . implode(',', $ids) . ')' . $order;
+                logtrace('PopulationExplorer::Run columns', $sql);
+                $r = $this->_select($sql, true);
+                while ($r->next()) {
+                    $row = ['MundaneId' => (int)$r->mundane_id];
+                    foreach ($colIds as $id) {
+                        $field = 'c_' . $id;
+                        $row[$id] = $this->_cell($id, $registryCols[$id]['type'], $r->$field);
+                    }
+                    $rows[] = $row;
                 }
-                $total = (int)$c->n;
             }
             // Everyone in the authorized scope, ignoring the tree (for "% of scope").
             $sc = $this->_select('SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m WHERE (' . $scopeSql . ')', true);

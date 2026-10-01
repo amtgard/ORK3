@@ -967,34 +967,65 @@ final class PopulationExplorerRunTest extends TestCase
         return array_values(array_filter($p->statements, static fn (string $s): bool => (bool) preg_match('/COUNT\(\*\) AS n FROM \w+ m WHERE \(.*\) AND \(/s', $s)));
     }
 
-    public function testQueryShapeTimeoutNoGroupByAndCountOnlyWhenCapped(): void
+    /** @return list<int> indexes of the statements that list matching ids (the tree runs here, once) */
+    private function idQueries(PopulationExplorerProbe $p): array
+    {
+        return array_keys(array_filter($p->statements, static fn (string $s): bool => str_contains($s, 'COUNT(*) OVER () AS matches')));
+    }
+
+    public function testQueryShapeTimeoutNoGroupByAndOneEvaluationOfTheTree(): void
     {
         for ($i = 0; $i < 4; $i++) {
             $this->player('pe-shape-' . $i);
         }
-        $p = $this->probe();
-        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'last_signin']));
-        $this->assertSame(0, $r['Status']['Status']);
-        $this->assertFalse($r['Truncated']);
-        $this->assertSame(count($r['Rows']), $r['Total']);
-        $this->assertSame([], $this->filteredCounts($p), 'no COUNT when the rows are under the cap');
-        $rowIdx = array_keys(array_filter($p->statements, static fn (string $s): bool => str_contains($s, 'AS c_persona')));
-        $this->assertCount(1, $rowIdx);
-        $rowSql = $p->statements[$rowIdx[0]];
-        $this->assertTrue($p->timed[$rowIdx[0]], 'row query runs under the statement timeout');
-        $this->assertStringNotContainsString('GROUP BY', $rowSql);
-        // CONCAT(persona) sorts exactly like persona (same value, same collation) but
-        // keeps MariaDB off a LIMIT-driven walk of the whole persona index.
-        $this->assertStringContainsString('ORDER BY CONCAT(m.persona), m.mundane_id LIMIT', $rowSql);
+        $expected = (int) $this->fixture->pdo()->query(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
+        )->fetchColumn();
+        foreach ([[5000, false], [3, true]] as [$cap, $truncated]) {
+            $p = $this->probe();
+            $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'last_signin'], ['RowCap' => $cap]));
+            $this->assertSame(0, $r['Status']['Status']);
+            $this->assertSame($truncated, $r['Truncated']);
+            $this->assertSame($expected, $r['Total'], 'Total is the true count');
+            $this->assertCount(min($cap, $expected), $r['Rows']);
+            $this->assertSame([], $this->filteredCounts($p), 'the tree is never evaluated a second time for the total');
 
-        $p = $this->probe();
-        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 3]));
-        $this->assertTrue($r['Truncated']);
-        $this->assertCount(3, $r['Rows']);
-        $this->assertCount(1, $this->filteredCounts($p), 'COUNT runs when the cap is hit');
-        $countIdx = array_search($this->filteredCounts($p)[0], $p->statements, true);
-        $this->assertTrue($p->timed[$countIdx], 'COUNT runs under the statement timeout');
+            // 1: ids in report order with the match count, capped.
+            $idIdx = $this->idQueries($p);
+            $this->assertCount(1, $idIdx);
+            $idSql = $p->statements[$idIdx[0]];
+            $this->assertTrue($p->timed[$idIdx[0]], 'id query runs under the statement timeout');
+            // CONCAT(persona) sorts exactly like persona (same value, same collation) but
+            // keeps MariaDB off a LIMIT-driven walk of the whole persona index.
+            $this->assertStringEndsWith('ORDER BY CONCAT(m.persona), m.mundane_id LIMIT ' . $cap, $idSql);
+            $this->assertStringNotContainsString('c_persona', $idSql, 'no columns for rows past the cap');
+
+            // 2: the columns for exactly those ids, same order.
+            $rowIdx = array_keys(array_filter($p->statements, static fn (string $s): bool => str_contains($s, 'AS c_persona')));
+            $this->assertCount(1, $rowIdx);
+            $rowSql = $p->statements[$rowIdx[0]];
+            $this->assertTrue($p->timed[$rowIdx[0]], 'row query runs under the statement timeout');
+            $this->assertStringNotContainsString('GROUP BY', $rowSql);
+            $ids = array_map(static fn (array $row): int => $row['MundaneId'], $r['Rows']);
+            $sortedIds = $ids;
+            sort($sortedIds);
+            preg_match('/WHERE m\.mundane_id IN \(([\d,]+)\) ORDER BY CONCAT\(m\.persona\), m\.mundane_id$/', $rowSql, $m);
+            $listed = array_map('intval', explode(',', $m[1] ?? ''));
+            sort($listed);
+            $this->assertSame($sortedIds, $listed);
+        }
         $this->assertSame(PopulationExplorer::STATEMENT_TIMEOUT_S, 10);
+    }
+
+    public function testNoMatchesRunsNoColumnQuery(): void
+    {
+        $p = $this->probe();
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('total_signins', 'lt', 0)), ['persona', 'knighthoods']));
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame([], $r['Rows']);
+        $this->assertSame(0, $r['Total']);
+        $this->assertFalse($r['Truncated']);
+        $this->assertSame([], array_filter($p->statements, static fn (string $s): bool => str_contains($s, 'AS c_persona')));
     }
 
     public function testRowsAreInPersonaOrderLikeTheTable(): void
@@ -1043,13 +1074,13 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertArrayNotHasKey('Total', $r);
     }
 
-    public function testDbFailureOnCountAndScopeTotalIsAnError(): void
+    public function testDbFailureOnIdQueryAndScopeTotalIsAnError(): void
     {
         for ($i = 0; $i < 3; $i++) {
             $this->player('pe-cf-' . $i);
         }
         $p = $this->probe();
-        $p->failPattern = '/COUNT\(\*\) AS n FROM \w+ m WHERE \(.*\) AND \(/s';
+        $p->failPattern = '/COUNT\(\*\) OVER \(\) AS matches/';
         $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 2]));
         $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
         $this->assertArrayNotHasKey('Rows', $r);
