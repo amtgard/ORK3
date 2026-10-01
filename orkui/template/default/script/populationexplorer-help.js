@@ -185,8 +185,9 @@
         buildReference();
         isOpen = true;
         var root = document.documentElement;
-        // A classic scrollbar takes space: keep its gutter while locked so nothing shifts.
-        root.classList.toggle('pe-help-lock-gutter', window.innerWidth - root.clientWidth > 0);
+        // A classic scrollbar takes space: pad its width back while locked so nothing shifts.
+        var gutter = Math.max(0, window.innerWidth - root.clientWidth);
+        root.style.setProperty('--pe-help-gutter', gutter + 'px');
         overlay.hidden = false;
         root.classList.add('pe-help-lock'); // <html> only: the one page scroller
         setBackgroundInert(true);
@@ -202,7 +203,8 @@
         overlay.classList.remove('is-open');
         overlay.hidden = true;
         setBackgroundInert(false); // before focusing the opener, which is in the background
-        document.documentElement.classList.remove('pe-help-lock', 'pe-help-lock-gutter');
+        document.documentElement.classList.remove('pe-help-lock');
+        document.documentElement.style.removeProperty('--pe-help-gutter');
         opener.setAttribute('aria-expanded', 'false');
         opener.focus();
     }

@@ -708,6 +708,8 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-col-check input { width: 20px; height: 20px; }
     .pe-columns { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
     .pe-card-toggle { min-height: 44px; }
+    /* Wrap the folded summary rather than cut off "changed since last run". */
+    .pe-card-summary { white-space: normal; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; }
     .pe-root [data-tip]:hover::after,
     .pe-root .pe-rule-op[data-tip]:focus-within::after { max-width: min(240px, 70vw); }
 }
@@ -760,6 +762,10 @@ html[data-theme="dark"] .pe-root .pe-input {
     border-color: var(--ork-input-border);
     color       : #e2e8f0;
 }
+/* Browser-default #757575 is 2.2:1 on the input bg; --ork-text-muted (#a0aec0) is 4.57:1 on #374151. */
+html[data-theme="dark"] .pe-root .pe-input::placeholder,
+html[data-theme="dark"] .pe-root input.flatpickr-input::placeholder,
+html[data-theme="dark"] .pe-chips input.pe-chip-input::placeholder { color: var(--ork-text-muted, #a0aec0); opacity: 1; }
 html[data-theme="dark"] .pe-root .pe-input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.25); }
 html[data-theme="dark"] .pe-btn-add { color: #a5b4fc; border-color: #4a5568; }
 html[data-theme="dark"] .pe-btn-add:hover:not(.is-disabled) { border-color: #818cf8; background: rgba(99,102,241,0.15); }
@@ -815,10 +821,14 @@ html[data-theme="dark"] .pe-fp .flatpickr-day.selected { background: #4f46e5; bo
    rely on .pe-root or .rp-root (only --ork-* and the --pe-* tokens
    declared on .pe-help-overlay above).
    ===================================================== */
-html.pe-help-lock { overflow: hidden; } /* <html> only: it is the one page scroller */
-/* Set only when the page had a classic (space-taking) scrollbar: keep its gutter so the
-   page behind does not shift sideways when the lock removes the scrollbar. */
-html.pe-help-lock.pe-help-lock-gutter { scrollbar-gutter: stable; }
+/* <html> only: it is the one page scroller. --pe-help-gutter is the width of a classic
+   (space-taking) scrollbar, measured by the script; padding it back keeps the page behind
+   from shifting sideways. Padding rather than scrollbar-gutter, so the viewport stays full
+   width and the fixed backdrop dims all of it (a stable gutter is left undimmed). */
+html.pe-help-lock { overflow: hidden; padding-right: var(--pe-help-gutter, 0px); }
+/* The fixed top nav spans the viewport: a transparent border (its background still paints
+   under it) keeps its items where they were. */
+html.pe-help-lock #newmenu { border-right: var(--pe-help-gutter, 0px) solid transparent; }
 
 .pe-help-overlay {
     position       : fixed;
