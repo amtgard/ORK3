@@ -1312,9 +1312,6 @@ class Controller_Reports extends Controller
         if ($st === ServiceErrorIds::SecureTokenFailure) {
             return [401, 'Your session has expired. Log in and run the report again.'];
         }
-        if ($st === ServiceErrorIds::NoAuthorization) {
-            return [403, 'You do not have access to this scope.'];
-        }
         if (!empty($r['TimedOut'])) {
             return [503, PopulationExplorer::TIMEOUT_MESSAGE];
         }

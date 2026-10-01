@@ -97,7 +97,9 @@ final class PopulationExplorerControllerTest extends TestCase
     public function testExportFailureCodes(): void
     {
         $this->assertSame(401, $this->call('_pe_export_failure', ['Status' => BadToken()])[0]);
-        $this->assertSame(403, $this->call('_pe_export_failure', ['Status' => NoAuthorization()])[0]);
+        // Run / BuildExport never return NoAuthorization (AuthorizeScope only answers
+        // InvalidParameter, BadToken or ProcessingError), so it is just an unknown failure.
+        $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => NoAuthorization()])[0]);
         $bad = $this->call('_pe_export_failure', ['Status' => InvalidParameter('Value must be a number'), 'RulePath' => [0]]);
         $this->assertSame(400, $bad[0]);
         $this->assertStringContainsString('Value must be a number', $bad[1]);
