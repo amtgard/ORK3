@@ -1425,6 +1425,102 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertTrue($this->lockFree($this->admin['mundane_id']), 'after a timeout');
     }
 
+    // ---------------------------------------------------------------- one consistent snapshot
+
+    public function testIdsColumnsAndCountsReadOneSnapshotOnOneConnection(): void
+    {
+        $a = $this->player('pe-snap-a');
+        $b = $this->player('pe-snap-b');
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?', ['Snapshot Alpha', $a['mundane_id']]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?', ['Snapshot Beta', $b['mundane_id']]);
+        $plain = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'home_park']));
+        $this->assertSame(0, $plain['Status']['Status']);
+
+        // Between the id statement and the columns statement, another connection
+        // renames one listed player and moves the other out of the park, and commits.
+        $other = $this->fixture->pdo();
+        $outsidePark = (int) $other->query('SELECT park_id FROM ' . DB_PREFIX . 'park WHERE park_id <> ' . $this->parkId . ' AND kingdom_id = ' . $this->kid . ' LIMIT 1')->fetchColumn();
+        $this->assertGreaterThan(0, $outsidePark);
+        $changed = false;
+        $writable = null;
+        $p = $this->probe();
+        $p->afterStatement = function (string $sql, PopulationExplorerProbe $probe) use ($other, $a, $b, $outsidePark, &$changed, &$writable): void {
+            if ($changed || !str_contains($sql, 'COUNT(*) OVER () AS matches')) {
+                return;
+            }
+            $changed = true;
+            $other->prepare('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?')->execute(['Renamed Meanwhile', $a['mundane_id']]);
+            $other->prepare('UPDATE ' . DB_PREFIX . 'mundane SET park_id = ? WHERE mundane_id = ?')->execute([$outsidePark, $b['mundane_id']]);
+            $writable = $probe->canWrite();
+        };
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'home_park']));
+        $this->assertTrue($changed);
+        $this->assertSame(0, $r['Status']['Status']);
+
+        // Same answer as before the change: rows, column values, Total and ScopeTotal.
+        foreach (['Rows', 'Total', 'ScopeTotal', 'Truncated', 'Columns'] as $k) {
+            $this->assertSame($plain[$k], $r[$k], $k . ' comes from the snapshot');
+        }
+        $this->assertFalse($writable, 'the run reads in a READ ONLY transaction');
+        $this->assertSame(1, count(array_unique($p->connections)), 'every statement ran on one connection');
+        $this->assertFalse($GLOBALS['DB']->InTrans(), 'the snapshot is closed after the run');
+
+        // The next run sees the committed changes.
+        $after = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona']));
+        $personas = array_column($after['Rows'], 'persona');
+        $this->assertContains('Renamed Meanwhile', $personas);
+        $this->assertNotContains('Snapshot Beta', $personas);
+        $this->assertSame($plain['Total'] - 1, $after['Total']);
+    }
+
+    public function testTheSnapshotIsClosedAfterAFailureATimeoutAndARefusal(): void
+    {
+        $p = $this->probe();
+        $p->failPattern = '/AS c_persona/';
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertFalse($GLOBALS['DB']->InTrans(), 'after a DB failure');
+
+        $p = $this->probe();
+        $p->timeout = 0.000001;
+        $r = $p->Run($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('total_signins', 'gt', 1))));
+        $this->assertTrue($r['TimedOut'] ?? false, 'max_statement_time still applies inside the snapshot');
+        $this->assertFalse($GLOBALS['DB']->InTrans(), 'after a timeout');
+
+        $name = $this->lockName($this->admin['mundane_id']);
+        $other = $this->fixture->pdo();
+        $this->assertSame(1, (int) $other->query("SELECT GET_LOCK('$name', 0)")->fetchColumn());
+        try {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertTrue($r['Busy'] ?? false);
+            $this->assertSame(['Status', 'Busy'], array_keys($r), 'a refusal carries no results of any kind');
+            $this->assertFalse($GLOBALS['DB']->InTrans(), 'a refusal never opens one');
+            $this->assertSame(0, (int) $other->query("SELECT IS_FREE_LOCK('$name')")->fetchColumn(), 'the other run keeps its lock');
+        } finally {
+            $other->query("SELECT RELEASE_LOCK('$name')")->fetchColumn();
+        }
+    }
+
+    public function testARunInsideAnOpenTransactionLeavesItOpen(): void
+    {
+        $db = $GLOBALS['DB'];
+        $this->assertTrue($db->BeginTrans());
+        try {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertSame(0, $r['Status']['Status']);
+            $this->assertTrue($db->InTrans(), 'the snapshot never commits a caller\'s transaction');
+            $this->assertFalse($db->BeginReadSnapshot());
+        } finally {
+            $db->RollbackTrans();
+        }
+        $this->assertFalse($db->InTrans());
+        $this->assertTrue($db->BeginReadSnapshot());
+        $this->assertTrue($db->InTrans());
+        $this->assertTrue($db->EndReadSnapshot());
+        $this->assertFalse($db->InTrans());
+        $this->assertTrue($db->EndReadSnapshot(), 'ending with nothing open is a no-op');
+    }
+
     public function testClassesPlayedInLastNMonths(): void
     {
         $classId = (int) $this->fixture->pdo()->query('SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id LIMIT 1')->fetchColumn();

@@ -23,6 +23,12 @@ final class PopulationExplorerProbe extends PopulationExplorer
     /** Kingdom-only ladder ids (kingdomaward ids) to use instead of the real list. */
     public ?array $kingdomLadderIds = null;
 
+    /** @var list<int> parallel to $statements: CONNECTION_ID() each statement ran on */
+    public array $connections = [];
+
+    /** Called as fn(string $sql, self $probe) after each statement has run. */
+    public ?Closure $afterStatement = null;
+
     protected function _select(string $sql, bool $timed = false)
     {
         if ($this->failPattern !== null && preg_match($this->failPattern, $sql)) {
@@ -30,8 +36,29 @@ final class PopulationExplorerProbe extends PopulationExplorer
         }
         $this->statements[] = $sql;
         $this->timed[] = $timed;
+        $this->connections[] = $this->connectionId();
 
-        return parent::_select($sql, $timed);
+        try {
+            return parent::_select($sql, $timed);
+        } finally {
+            if ($this->afterStatement !== null) {
+                ($this->afterStatement)($sql, $this);
+            }
+        }
+    }
+
+    /** CONNECTION_ID() of the connection the queries run on (not recorded as a statement). */
+    public function connectionId(): int
+    {
+        $r = parent::_select('SELECT CONNECTION_ID() AS c');
+
+        return $r->next() ? (int) $r->c : 0;
+    }
+
+    /** Whether a write on the queries' own connection succeeds right now. */
+    public function canWrite(): bool
+    {
+        return (bool) @$this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . 'mundane SET persona = persona WHERE mundane_id = 0');
     }
 
     protected function _kingdomOnlyLadderIds(): array

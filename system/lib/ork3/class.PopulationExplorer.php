@@ -1497,6 +1497,37 @@ class PopulationExplorer extends Ork3
         }
     }
 
+    /**
+     * Opens the read-only snapshot on the YapoMysql connection that _select() uses.
+     * Fails open: when it cannot be started (a transaction already open on this
+     * connection, or a DB error) the statements run as before, each on its own.
+     */
+    private function _beginReadSnapshot(): bool
+    {
+        if (!method_exists($this->db, 'BeginReadSnapshot')) {
+            return false;
+        }
+        try {
+            // @: PDO runs in ERRMODE_WARNING; a warning would corrupt a JSON or xlsx response.
+            return (bool)@$this->db->BeginReadSnapshot();
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run snapshot failure', $e->getMessage());
+            return false;
+        }
+    }
+
+    private function _endReadSnapshot(bool $started): void
+    {
+        if (!$started) {
+            return;
+        }
+        try {
+            @$this->db->EndReadSnapshot();
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run snapshot end failure', $e->getMessage()); // closed with the connection anyway
+        }
+    }
+
     /** Run() after the scope check, under the run lock. */
     private function _runAuthorized(array $request, float $started, string $scopeType, int $scopeId, string $token): array
     {
@@ -1571,6 +1602,11 @@ class PopulationExplorer extends Ork3
         $rows = [];
         $total = 0;
         $scopeTotal = 0;
+        // All three statements read one read-only consistent snapshot on this
+        // connection, so the listed rows, their column values, Total and ScopeTotal
+        // describe the same moment (no player deleted, moved or renamed between the
+        // ids and the columns). Each statement keeps its own max_statement_time.
+        $snapshot = $this->_beginReadSnapshot();
         try {
             $ids = [];
             $r = $this->_select($idSql, true);
@@ -1607,6 +1643,8 @@ class PopulationExplorer extends Ork3
                 return ['Status' => ProcessingError(self::TIMEOUT_MESSAGE), 'TimedOut' => true];
             }
             return ['Status' => ProcessingError('The query could not be completed. Try narrowing the filter or scope.')];
+        } finally {
+            $this->_endReadSnapshot($snapshot);
         }
 
         $columns = [];
