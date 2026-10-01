@@ -85,7 +85,6 @@ final class PopulationExplorerTest extends TestCase
             'operand wrong for type'   => [['c' => 'last_signin', 'o' => 'in', 'v' => [1]], 'operand'],
             'bad date format'          => [['c' => 'last_signin', 'o' => 'gte', 'v' => '01/02/2025'], 'date'],
             'impossible date'          => [['c' => 'last_signin', 'o' => 'gte', 'v' => '2025-02-30'], 'date'],
-            'between wrong order'      => [['c' => 'last_signin', 'o' => 'between', 'v' => ['2025-05-01', '2025-01-01']], 'between'],
             'between not pair'         => [['c' => 'total_signins', 'o' => 'between', 'v' => [1]], 'between'],
             'non-numeric number'       => [['c' => 'total_signins', 'o' => 'gt', 'v' => 'abc'], 'number'],
             'empty IN list'            => [['c' => 'home_park', 'o' => 'in', 'v' => []], 'empty'],
@@ -263,7 +262,7 @@ final class PopulationExplorerTest extends TestCase
             }
         }
         sort($nullable);
-        $this->assertSame(['dues_through', 'last_class', 'last_signin', 'last_signin_park', 'player_since'], $nullable);
+        $this->assertSame(['dues_through', 'last_class', 'last_signin', 'last_signin_days_ago', 'last_signin_park', 'player_since'], $nullable);
     }
 
     public function testLesserPeerageLabelNamesItsThreeOrders(): void
@@ -419,6 +418,9 @@ final class PopulationExplorerTest extends TestCase
         foreach ($crit as $id => $def) {
             $hasNeg = array_intersect($neg, $def['operands']) !== [];
             $setStyle = $def['type'] === 'peerage_set' || in_array($id, ['has_award', 'classes_last_n_months'], true);
+            if ($id === 'last_signin_days_ago') {
+                continue; // its "not matched" note applies to every operand: see testLastSigninDaysAgoDefinition
+            }
             if ($hasNeg && ($def['nullable'] || $setStyle)) {
                 $this->assertNotSame('', (string) ($def['neg_note'] ?? ''), "$id needs a negated-operand note");
             } else {
@@ -598,7 +600,6 @@ final class PopulationExplorerTest extends TestCase
             'text'                => ['lt', 'abc', '0 or more'],
             'empty'               => ['eq', '', '0 or more'],
             'array for scalar'    => ['eq', [3], '0 or more'],
-            'between descending'  => ['between', [5, 2], 'ascending'],
             'between negative'    => ['between', [-1, 3], '0 or more'],
             'between single'      => ['between', [3], 'two values'],
         ];
@@ -663,5 +664,143 @@ final class PopulationExplorerTest extends TestCase
         $d = PopulationExplorer::DecodeLink($q, ['ladders' => []] + $this->known);
         $this->assertFalse($d['ok']);
         $this->assertStringContainsString(PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE, (string) $d['error']);
+    }
+    // ------------------------------------------------------------ between in either order (spec §3.4)
+
+    /** @return array<string, array{0:string, 1:array, 2:array, 3:string}> */
+    public static function reversedBetweens(): array
+    {
+        return [
+            'date'        => ['last_signin', ['2025-05-01', '2025-01-01'], ['2025-01-01', '2025-05-01'], "BETWEEN '2025-01-01' AND '2025-05-01'"],
+            'number'      => ['total_signins', ['20', 3], [3, 20], 'BETWEEN 3 AND 20'],
+            'ladder rank' => ['ladder_a21', [5, '2'], [2, 5], 'BETWEEN 2 AND 5'],
+            'days ago'    => ['last_signin_days_ago', [200, 180], [180, 200], 'BETWEEN 180 AND 200'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('reversedBetweens')]
+    public function testReversedBetweenIsSwappedToAscending(string $c, array $in, array $sorted, string $sqlNeedle): void
+    {
+        $known = $this->withLadders(true);
+        $n = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf($c, 'between', $in)]], $known);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame($sorted, $n['tree']['children'][0]['v']);
+        $sql = $this->pe->CompileTree($n['tree'], ['ladders' => $this->ladders()]);
+        $this->assertStringContainsString($sqlNeedle, $sql);
+
+        // Equal values stay valid; an ascending pair is unchanged.
+        foreach ([[$sorted[0], $sorted[0]], $sorted] as $pair) {
+            $m = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf($c, 'between', $pair)]], $known);
+            $this->assertTrue($m['ok'], $m['error'] ?? '');
+            $this->assertSame($pair, $m['tree']['children'][0]['v']);
+        }
+    }
+
+    public function testReversedBetweenStillValidatesEachValue(): void
+    {
+        $bad = [
+            ['last_signin', ['2025-05-01', '2025-02-30'], 'date'],
+            ['total_signins', [9, 'x'], 'number'],
+            ['ladder_a21', [5, -1], '0 or more'],
+            ['last_signin', ['2025-05-01'], 'two values'],
+            ['total_signins', [9, 3, 1], 'two values'],
+        ];
+        foreach ($bad as [$c, $v, $needle]) {
+            $r = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf($c, 'between', $v)]], $this->withLadders());
+            $this->assertFalse($r['ok'], $c . ' ' . json_encode($v));
+            $this->assertStringContainsStringIgnoringCase($needle, $r['error']);
+            $this->assertSame([0], $r['path']);
+        }
+    }
+
+    public function testShareLinkWithReversedBetweenDecodesAscending(): void
+    {
+        $tree = ['op' => 'AND', 'children' => [
+            $this->leaf('player_since', 'between', ['2020-12-31', '2001-01-01']),
+            $this->leaf('award_count', 'between', [10, 1]),
+        ]];
+        $d = PopulationExplorer::DecodeLink(PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona']]), $this->known);
+        $this->assertTrue($d['ok'], (string) $d['error']);
+        $this->assertSame(['2001-01-01', '2020-12-31'], $d['state']['tree']['children'][0]['v']);
+        $this->assertSame([1, 10], $d['state']['tree']['children'][1]['v']);
+    }
+
+    // ------------------------------------------------------------ last sign-in date / days ago (spec §3.4, §4)
+
+    public function testLastSigninCriterionIsLabelledAsADateAndTheColumnIsUnchanged(): void
+    {
+        $reg = $this->pe->Registry();
+        $this->assertSame('Last sign-in date', $reg['criteria']['last_signin']['label']);
+        $this->assertSame('date', $reg['criteria']['last_signin']['type']);
+        $this->assertSame('Last sign-in', $reg['columns']['last_signin']['label']);
+    }
+
+    public function testLastSigninDaysAgoDefinition(): void
+    {
+        $crit = $this->pe->Registry()['criteria'];
+        $ids = array_keys($crit);
+        $this->assertSame('last_signin_days_ago', $ids[array_search('last_signin', $ids, true) + 1], 'right after Last sign-in date');
+        $def = $crit['last_signin_days_ago'];
+        $this->assertSame('Last sign-in days ago', $def['label']);
+        $this->assertSame('Activity', $def['group']);
+        $this->assertSame('number', $def['type']);
+        $this->assertSame(['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'], $def['operands']);
+        $this->assertFalse($def['param']);
+        $this->assertSame(0, $def['min']);
+        $this->assertSame(PopulationExplorer::MAX_DAYS_AGO, $def['max']);
+        $this->assertSame(36500, PopulationExplorer::MAX_DAYS_AGO);
+        $this->assertTrue($def['nullable'], 'never signed in = NULL');
+        // The note is on every operand (not only the negated ones): no operand matches a player who never signed in.
+        $this->assertSame('Players who have never signed in are not matched. Use Total sign-ins = 0 to find them.', $def['note']);
+        $this->assertArrayNotHasKey('neg_note', $def, 'the note already says it; a neg_note would repeat it on ≠');
+        $this->assertArrayHasKey('last_signin_days_ago', $this->pe->PublicCriteria($this->known));
+    }
+
+    /** @return array<string, array{0:string, 1:mixed}> */
+    public static function badDaysAgo(): array
+    {
+        return [
+            'negative'        => ['gte', -1],
+            'negative string' => ['eq', '-3'],
+            'decimal'         => ['gt', '2.5'],
+            'text'            => ['lt', 'abc'],
+            'empty'           => ['eq', ''],
+            'too large'       => ['gt', 36501],
+            'huge string'     => ['gt', '9999999999'],
+            'array for scalar' => ['eq', [3]],
+            'between too big' => ['between', [36501, 5]],
+            'between negative' => ['between', [10, -1]],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badDaysAgo')]
+    public function testLastSigninDaysAgoRejectsValuesOutsideZeroTo36500($o, $v): void
+    {
+        $r = $this->norm(['op' => 'AND', 'children' => [$this->leaf('last_signin_days_ago', $o, $v)]]);
+        $this->assertFalse($r['ok']);
+        $this->assertSame('Value must be a whole number from 0 to 36500', $r['error']);
+        $this->assertSame([0], $r['path']);
+    }
+
+    public function testLastSigninDaysAgoAcceptsTheEnds(): void
+    {
+        foreach ([['eq', '0', 0], ['lte', 36500, 36500], ['between', ['36500', 0], [0, 36500]]] as [$o, $v, $want]) {
+            $r = $this->norm(['op' => 'AND', 'children' => [$this->leaf('last_signin_days_ago', $o, $v)]]);
+            $this->assertTrue($r['ok'], $r['error'] ?? '');
+            $this->assertSame($want, $r['tree']['children'][0]['v']);
+        }
+    }
+
+    public function testLastSigninDaysAgoIsDatediffOverTheLastSigninExpression(): void
+    {
+        $last = $this->pe->ColumnSelectSql('last_signin', []);
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('last_signin_days_ago', 'gt', 180)]]);
+        $this->assertSame('((DATEDIFF(CURDATE(), ' . $last . ') > 180))', $s);
+        // The same expression the Last sign-in date criterion compiles.
+        $d = $this->sql(['op' => 'AND', 'children' => [$this->leaf('last_signin', 'lt', '2025-01-01')]]);
+        $this->assertSame('((' . $last . " < '2025-01-01'))", $d);
+        foreach (['ne' => '<> 5', 'lte' => '<= 5', 'eq' => '= 5'] as $o => $tail) {
+            $this->assertStringEndsWith($tail . '))', $this->sql(['op' => 'AND', 'children' => [$this->leaf('last_signin_days_ago', $o, 5)]]));
+        }
     }
 }

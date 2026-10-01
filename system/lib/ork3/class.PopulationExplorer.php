@@ -41,6 +41,10 @@ class PopulationExplorer extends Ork3
     public const WALKER_AWARD_ID = 31;
     private const LADDER_ID_RE = '/^ladder_([ak])([1-9]\d{0,9})$/D';
 
+    /** Last sign-in days ago (spec §3.4): whole days, 0 to MAX_DAYS_AGO (100 years). */
+    public const MAX_DAYS_AGO = 36500;
+    public const DAYS_AGO_NOTE = 'Players who have never signed in are not matched. Use Total sign-ins = 0 to find them.';
+
     public function __construct()
     {
         parent::__construct();
@@ -107,7 +111,16 @@ class PopulationExplorer extends Ork3
     private function _staticCriteriaDefs(): array
     {
         return [
-            'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date', ['nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
+            'last_signin'           => $this->_crit('Last sign-in date', 'Activity', 'date', ['nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
+            // DATEDIFF over the same expression (owner decision 2026-10-01): never signed
+            // in is NULL, which no operand matches, so the note is shown on every operand
+            // rather than as a neg_note on the negated ones only.
+            'last_signin_days_ago'  => $this->_crit('Last sign-in days ago', 'Activity', 'number', [
+                'min'      => 0,
+                'max'      => self::MAX_DAYS_AGO,
+                'nullable' => true,
+                'note'     => self::DAYS_AGO_NOTE,
+            ]),
             'player_since'          => $this->_crit('Player since', 'Activity', 'date', [
                 'nullable' => true,
                 'neg_note' => 'Players with no sign-in dated 1988 or later are not matched.',
@@ -327,9 +340,13 @@ class PopulationExplorer extends Ork3
             case 'number':
                 if (isset($def['min'])) {
                     $min = (int)$def['min'];
-                    return $this->_normScalar($v, $o, 'number', 'Value must be a whole number, ' . $min . ' or more', function ($x) use ($min) {
+                    $max = isset($def['max']) ? (int)$def['max'] : null;
+                    $msg = $max === null
+                        ? 'Value must be a whole number, ' . $min . ' or more'
+                        : 'Value must be a whole number from ' . $min . ' to ' . $max;
+                    return $this->_normScalar($v, $o, 'number', $msg, function ($x) use ($min, $max) {
                         $n = $this->_int($x, true);
-                        return $n !== null && $n >= $min ? $n : null;
+                        return $n !== null && $n >= $min && ($max === null || $n <= $max) ? $n : null;
                     });
                 }
                 return $this->_normScalar($v, $o, 'number', 'Value must be a number', function ($x) {
@@ -363,10 +380,9 @@ class PopulationExplorer extends Ork3
             if ($a === null || $b === null) {
                 return ['error' => $msg];
             }
-            if ($a > $b) {
-                return ['error' => 'Between range must be in ascending order'];
-            }
-            return ['v' => [$a, $b]];
+            // Either order is accepted (spec §3.4): the pair is sorted ascending, so
+            // Run, share links and export all see [lo, hi]. ISO dates sort as strings.
+            return ['v' => $a > $b ? [$b, $a] : [$a, $b]];
         }
         $a = is_array($v) ? null : $check($v);
         if ($a === null) {
@@ -587,6 +603,16 @@ class PopulationExplorer extends Ork3
         return $this->_attSub('MAX(a.date)');
     }
 
+    /**
+     * Whole days since the last sign-in, over _lastSigninExpr() itself so the two
+     * criteria cannot drift (no date floor, as there is none on the last sign-in).
+     * Never signed in: MAX() is NULL, so this is NULL and no comparison matches.
+     */
+    private function _lastSigninDaysAgoExpr(): string
+    {
+        return 'DATEDIFF(CURDATE(), ' . $this->_lastSigninExpr() . ')';
+    }
+
     /** Earliest sign-in date that counts (Player::get_earliest_attendance_date's floor). */
     public const FIRST_SIGNIN_FLOOR = '1988-01-01';
     /** Award dates before this are unknown ('0000-00-00' or typo years). */
@@ -753,6 +779,8 @@ class PopulationExplorer extends Ork3
             switch ($id) {
                 case 'last_signin':
                     return $this->_cmp($this->_lastSigninExpr(), 'date', $o, $v);
+                case 'last_signin_days_ago':
+                    return $this->_cmp($this->_lastSigninDaysAgoExpr(), 'number', $o, $v);
                 case 'player_since':
                     return $this->_cmp($this->_playerSinceExpr(), 'date', $o, $v);
                 case 'signins_last_n_months':

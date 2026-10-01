@@ -232,6 +232,7 @@ final class PopulationExplorerLadderTest extends TestCase
         $this->assertSame($this->sorted([$r3, $r2, $r4, $s0, $n0]), $this->matchAmong($this->tree($this->leaf($c, 'ne', 5)), $mine), 'ne includes rank 0');
         $this->assertSame($this->sorted([$r2, $s0, $n0]), $this->matchAmong($this->tree($this->leaf($c, 'lt', 3)), $mine), 'lt includes rank 0');
         $this->assertSame($this->sorted([$r3, $r2, $r4]), $this->matchAmong($this->tree($this->leaf($c, 'between', [2, 4])), $mine));
+        $this->assertSame($this->sorted([$r3, $r2, $r4]), $this->matchAmong($this->tree($this->leaf($c, 'between', [4, 2])), $mine), 'reversed pair is the same range');
         $this->assertSame($this->sorted([$r5, $r3, $r2, $r4]), $this->matchAmong($this->tree($this->leaf($c, 'gte', 1)), $mine));
         $this->assertSame([$r5], $this->matchAmong($this->tree($this->leaf($c, 'gt', 4)), $mine));
         $this->assertSame($this->sorted([$r2, $s0, $n0]), $this->matchAmong($this->tree($this->leaf($c, 'lte', 2)), $mine));

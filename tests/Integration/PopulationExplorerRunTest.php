@@ -1434,4 +1434,87 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame([$a['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'lte', '2020-06-15')), $mine));
         $this->assertSame([$b['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'between', ['2023-01-01', '2023-06-15'])), $mine));
     }
+    /** The database's CURDATE() (not PHP's clock: the two may sit in different time zones). */
+    private function dbToday(): string
+    {
+        return (string) $this->fixture->pdo()->query('SELECT CURDATE()')->fetchColumn();
+    }
+
+    private function daysBefore(string $today, int $n): string
+    {
+        return (new DateTimeImmutable($today))->modify('-' . $n . ' days')->format('Y-m-d');
+    }
+
+    public function testLastSigninDaysAgoCountsWholeDaysAndNeverMatchesNeverSignedIn(): void
+    {
+        $today = $this->dbToday();
+        $d180 = $this->player('pe-da-180');
+        $d181 = $this->player('pe-da-181');
+        $d0 = $this->player('pe-da-0');
+        $never = $this->player('pe-da-never');
+        // An older sign-in too: days ago reads the LAST sign-in, not any sign-in.
+        $this->fixture->insertAttendance($d180['mundane_id'], $this->parkId, $this->kid, $this->daysBefore($today, 400));
+        $this->fixture->insertAttendance($d180['mundane_id'], $this->parkId, $this->kid, $this->daysBefore($today, 180));
+        $this->fixture->insertAttendance($d181['mundane_id'], $this->parkId, $this->kid, $this->daysBefore($today, 181));
+        $this->fixture->insertAttendance($d0['mundane_id'], $this->parkId, $this->kid, $today);
+        [$a, $b, $z, $n] = [$d180['mundane_id'], $d181['mundane_id'], $d0['mundane_id'], $never['mundane_id']];
+        $mine = [$a, $b, $z, $n];
+        $c = 'last_signin_days_ago';
+        $m = fn (string $o, $v): array => $this->matchAmong($this->tree($this->leaf($c, $o, $v)), $mine);
+
+        $this->assertSame($this->sorted([$a, $b]), $m('gte', 180), '180 days ago is >= 180');
+        $this->assertSame($this->sorted([$a, $b]), $m('between', [180, 200]));
+        $this->assertSame($this->sorted([$a, $b]), $m('between', [200, 180]), 'reversed pair is the same range');
+        $this->assertSame([$b], $m('gt', 180), '180 days ago is not > 180');
+        $this->assertSame([$a], $m('eq', 180));
+        $this->assertSame([$z], $m('eq', 0), 'signed in today = 0');
+        $this->assertSame([$z], $m('lt', 100));
+        // Never signed in: NULL, so no operator matches, including the negated and wide ones.
+        $this->assertSame($this->sorted([$a, $b]), $m('gt', 0));
+        $this->assertSame($this->sorted([$a, $b, $z]), $m('ne', 5));
+        $this->assertSame($this->sorted([$a, $b, $z]), $m('between', [0, PopulationExplorer::MAX_DAYS_AGO]));
+        $this->assertSame($this->sorted([$a, $b, $z]), $m('lte', PopulationExplorer::MAX_DAYS_AGO));
+        // ... and Total sign-ins = 0 is how to find them.
+        $this->assertSame([$n], $this->matchAmong($this->tree($this->leaf('total_signins', 'eq', 0)), $mine));
+    }
+
+    public function testLastSigninDaysAgoMatchesTheEquivalentLastSigninDateFilter(): void
+    {
+        $today = $this->dbToday();
+        foreach ([179, 180, 181, 900] as $n) {
+            $p = $this->player('pe-da-eq-' . $n);
+            $this->fixture->insertAttendance($p['mundane_id'], $this->parkId, $this->kid, $this->daysBefore($today, $n));
+        }
+        $this->player('pe-da-eq-never');
+        foreach ([['Park', $this->parkId], ['Kingdom', $this->kid]] as [$type, $id]) {
+            $days = $this->exec($this->req($this->admin['token'], $type, $id, $this->tree($this->leaf('last_signin_days_ago', 'gt', 180))));
+            $date = $this->exec($this->req($this->admin['token'], $type, $id, $this->tree($this->leaf('last_signin', 'lt', $this->daysBefore($today, 180)))));
+            $this->assertSame(0, $days['Status']['Status'], json_encode($days['Status']));
+            $this->assertSame(0, $date['Status']['Status']);
+            $this->assertFalse($days['Truncated'], 'compare whole sets');
+            $this->assertGreaterThanOrEqual(2, count($days['Rows']), $type);
+            $this->assertSame($this->ids($date), $this->ids($days), $type);
+        }
+    }
+
+    public function testReversedBetweenRunsTheSameRangeForDatesAndNumbers(): void
+    {
+        $a = $this->player('pe-rb-a');
+        $b = $this->player('pe-rb-b');
+        $c = $this->player('pe-rb-c');
+        $this->fixture->insertAttendance($a['mundane_id'], $this->parkId, $this->kid, '2024-02-01');
+        $this->fixture->insertAttendance($b['mundane_id'], $this->parkId, $this->kid, '2024-08-01');
+        $this->fixture->insertAttendance($b['mundane_id'], $this->parkId, $this->kid, '2024-08-02');
+        $this->fixture->insertAttendance($b['mundane_id'], $this->parkId, $this->kid, '2024-08-03');
+        $this->fixture->insertAttendance($c['mundane_id'], $this->parkId, $this->kid, '2025-02-01');
+        $mine = [$a['mundane_id'], $b['mundane_id'], $c['mundane_id']];
+
+        foreach ([
+            [['2024-12-31', '2024-01-01'], ['2024-01-01', '2024-12-31'], 'last_signin', $this->sorted([$a['mundane_id'], $b['mundane_id']])],
+            [[3, 2], [2, 3], 'total_signins', [$b['mundane_id']]],
+        ] as [$reversed, $ascending, $crit, $want]) {
+            $this->assertSame($want, $this->matchAmong($this->tree($this->leaf($crit, 'between', $ascending)), $mine), $crit);
+            $this->assertSame($want, $this->matchAmong($this->tree($this->leaf($crit, 'between', $reversed)), $mine), $crit . ' reversed');
+        }
+    }
 }
