@@ -18,6 +18,11 @@ class PopulationExplorer extends Ork3
     public const MAX_ROWS = 5000;
     public const MAX_LINK_BYTES = 8192;
     public const MAX_MONTHS = 60;
+    /** MariaDB max_statement_time (seconds) for the row and COUNT queries. */
+    public const STATEMENT_TIMEOUT_S = 10;
+    /** RuntimeException code _select() uses for a statement killed by the timeout. */
+    public const TIMEOUT_CODE = 1969;
+    public const TIMEOUT_MESSAGE = 'This query took too long — narrow your filter.';
 
     public const OPS_CMP = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'];
     public const OPS_SET = ['is', 'is_not', 'in', 'not_in'];
@@ -360,20 +365,26 @@ class PopulationExplorer extends Ork3
      * Throws RuntimeException when the database cannot be read: an empty set
      * would make every class/award rule fail validation with a misleading
      * "unknown id" message, so a DB failure must surface as a DB failure.
+     * (The class and award tables are never legitimately empty.)
      */
     public function LoadKnown(): array
     {
         $known = ['class' => [], 'award' => [], 'peerage' => []];
-        $r = $this->db->query('SELECT class_id FROM ' . DB_PREFIX . 'class');
-        if ($r === false || $r === null) {
-            throw new RuntimeException('Could not read class list');
+        try {
+            $r = $this->_select('SELECT class_id FROM ' . $this->_t('class'));
+        } catch (RuntimeException $e) {
+            throw new RuntimeException('Could not read class list: ' . $e->getMessage(), 0, $e);
         }
         while ($r->next()) {
             $known['class'][] = (int)$r->class_id;
         }
-        $r = $this->db->query('SELECT award_id, peerage FROM ' . DB_PREFIX . 'award');
-        if ($r === false || $r === null) {
-            throw new RuntimeException('Could not read award list');
+        if (count($known['class']) === 0) {
+            throw new RuntimeException('Could not read class list');
+        }
+        try {
+            $r = $this->_select('SELECT award_id, peerage FROM ' . $this->_t('award'));
+        } catch (RuntimeException $e) {
+            throw new RuntimeException('Could not read award list: ' . $e->getMessage(), 0, $e);
         }
         while ($r->next()) {
             $id = (int)$r->award_id;
@@ -383,7 +394,45 @@ class PopulationExplorer extends Ork3
                 $known['peerage'][$pe][] = $id;
             }
         }
+        if (count($known['award']) === 0) {
+            throw new RuntimeException('Could not read award list');
+        }
         return $known;
+    }
+
+    /**
+     * Run a read-only statement and fail loudly. YapoDb::Query() always returns a
+     * YapoResultSet (PDO runs in ERRMODE_WARNING), so a failed statement is only
+     * visible in the result's __ERROR SQLSTATE; anything but 00000 throws.
+     * $timed wraps the statement in MariaDB's per-statement timeout; a kill by
+     * that timeout (error 1969) throws with code TIMEOUT_CODE.
+     *
+     * @return YapoResultSet
+     */
+    protected function _select(string $sql, bool $timed = false)
+    {
+        if ($timed) {
+            $sql = 'SET STATEMENT max_statement_time=' . rtrim(rtrim(sprintf('%.6F', $this->_statementTimeout()), '0'), '.') . ' FOR ' . $sql;
+        }
+        // @: the failure is read from __ERROR below and logged; a PHP warning
+        // printed into a JSON or xlsx response would only corrupt it.
+        $r = @$this->db->query($sql);
+        $err = is_object($r) && isset($r->__ERROR[0]) ? $r->__ERROR[0] : null;
+        $state = $err !== null ? (string)($err[1] ?? '') : 'no result';
+        if (!is_object($r) || ($state !== '00000' && $state !== '')) {
+            $driverCode = (int)($err[2][1] ?? 0);
+            throw new RuntimeException(
+                'query failed [' . $state . '/' . $driverCode . ']: ' . (string)($err[2][2] ?? ''),
+                $driverCode === self::TIMEOUT_CODE ? self::TIMEOUT_CODE : 0
+            );
+        }
+        return $r;
+    }
+
+    /** Seconds; overridable as a test seam. */
+    protected function _statementTimeout(): float
+    {
+        return (float)self::STATEMENT_TIMEOUT_S;
     }
 
     // ---------------------------------------------------------------- SQL compilation
@@ -451,9 +500,31 @@ class PopulationExplorer extends Ork3
         return $this->_attSub('MAX(a.date)');
     }
 
+    /** Player since = first sign-in, or ork_mundane.player_since_override where that column exists. */
     private function _playerSinceExpr(): string
     {
-        return 'COALESCE(m.player_since_override, ' . $this->_attSub('MIN(a.date)') . ')';
+        $first = $this->_attSub('MIN(a.date)');
+        return $this->_hasPlayerSinceOverride() ? 'COALESCE(m.player_since_override, ' . $first . ')' : $first;
+    }
+
+    private static ?bool $playerSinceOverride = null;
+
+    /**
+     * player_since_override is added by a migration that is not on master, so the
+     * column may be absent; referencing it then fails every query that selects or
+     * filters on Player since. Checked once per process; a failed check is not cached.
+     */
+    protected function _hasPlayerSinceOverride(): bool
+    {
+        if (self::$playerSinceOverride === null) {
+            try {
+                $r = $this->_select('SHOW COLUMNS FROM ' . $this->_t('mundane') . " LIKE 'player_since_override'");
+                self::$playerSinceOverride = (bool)$r->next();
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
+        return self::$playerSinceOverride;
     }
 
     private function _signinsInMonthsExpr(int $n): string
@@ -835,12 +906,14 @@ class PopulationExplorer extends Ork3
             return ['Status' => InvalidParameter($e->getMessage())];
         }
 
+        // No outer GROUP BY: k and p join on primary keys and every criterion and
+        // column is a scalar subquery or EXISTS, so rows cannot multiply.
         $where = 'WHERE (' . $scopeSql . ') AND (' . $treeSql . ')';
         $sql = 'SELECT ' . implode(', ', $selects)
             . ' FROM ' . $this->_t('mundane') . ' m'
             . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = m.kingdom_id'
             . ' LEFT JOIN ' . $this->_t('park') . ' p ON p.park_id = m.park_id '
-            . $where . ' GROUP BY m.mundane_id ORDER BY m.persona, m.mundane_id LIMIT ' . (int)$cap;
+            . $where . ' ORDER BY m.persona, m.mundane_id LIMIT ' . (int)$cap;
         $countSql = 'SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m ' . $where;
         logtrace('PopulationExplorer::Run', [$sql, $countSql]);
 
@@ -848,10 +921,7 @@ class PopulationExplorer extends Ork3
         $total = 0;
         $scopeTotal = 0;
         try {
-            $r = $this->db->query($sql);
-            if ($r === false || $r === null) {
-                throw new RuntimeException('query failed');
-            }
+            $r = $this->_select($sql, true);
             while ($r->next()) {
                 $row = ['MundaneId' => (int)$r->mundane_id];
                 foreach ($colIds as $id) {
@@ -860,20 +930,26 @@ class PopulationExplorer extends Ork3
                 }
                 $rows[] = $row;
             }
-            $c = $this->db->query($countSql);
-            if ($c === false || $c === null || !$c->next()) {
-                throw new RuntimeException('count failed');
+            if (count($rows) < $cap) {
+                $total = count($rows); // under the cap: the rows are the whole answer
+            } else {
+                $c = $this->_select($countSql, true);
+                if (!$c->next()) {
+                    throw new RuntimeException('count returned no row');
+                }
+                $total = (int)$c->n;
             }
-            $total = (int)$c->n;
             // Everyone in the authorized scope, ignoring the tree (for "% of scope").
-            $this->db->Clear();
-            $sc = $this->db->query('SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m WHERE (' . $scopeSql . ')');
-            if ($sc === false || $sc === null || !$sc->next()) {
-                throw new RuntimeException('scope count failed');
+            $sc = $this->_select('SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m WHERE (' . $scopeSql . ')', true);
+            if (!$sc->next()) {
+                throw new RuntimeException('scope count returned no row');
             }
             $scopeTotal = (int)$sc->n;
         } catch (Throwable $e) {
             logtrace('PopulationExplorer::Run failure', $e->getMessage());
+            if ($e->getCode() === self::TIMEOUT_CODE) {
+                return ['Status' => ProcessingError(self::TIMEOUT_MESSAGE), 'TimedOut' => true];
+            }
             return ['Status' => ProcessingError('The query could not be completed. Try narrowing the filter or scope.')];
         }
 
@@ -1031,6 +1107,7 @@ class PopulationExplorer extends Ork3
     /**
      * Registry safe to send to the browser: no closures / SQL, plus the option
      * lists the rule editor needs, limited to the viewer's chosen scope.
+     * Throws RuntimeException when an option list cannot be read.
      */
     public function PublicRegistry(string $scopeType, int $scopeId): array
     {
@@ -1046,8 +1123,8 @@ class PopulationExplorer extends Ork3
         }
 
         $options = ['class' => [], 'award' => [], 'order' => [], 'park' => [], 'kingdom' => []];
-        $r = $this->db->query('SELECT class_id, name FROM ' . $this->_t('class') . ' ORDER BY name');
-        while ($r && $r->next()) {
+        $r = $this->_select('SELECT class_id, name FROM ' . $this->_t('class') . ' ORDER BY name');
+        while ($r->next()) {
             $options['class'][] = [(int)$r->class_id, (string)$r->name];
         }
 
@@ -1055,8 +1132,8 @@ class PopulationExplorer extends Ork3
         foreach ($orderPeerage as $pe) {
             $options['order'][$pe] = [];
         }
-        $r = $this->db->query('SELECT award_id, name, peerage FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name');
-        while ($r && $r->next()) {
+        $r = $this->_select('SELECT award_id, name, peerage FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name');
+        while ($r->next()) {
             $pe = (string)$r->peerage;
             $options['award'][] = [(int)$r->award_id, (string)$r->name, $pe];
             if (isset($options['order'][$pe])) {
@@ -1066,9 +1143,9 @@ class PopulationExplorer extends Ork3
 
         if ($scopeType === 'Park') {
             $pid = (int)$scopeId;
-            $r = $this->db->query('SELECT p.park_id, p.name AS park_name, k.kingdom_id, k.name AS kingdom_name FROM ' . $this->_t('park') . ' p'
+            $r = $this->_select('SELECT p.park_id, p.name AS park_name, k.kingdom_id, k.name AS kingdom_name FROM ' . $this->_t('park') . ' p'
                 . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = p.kingdom_id WHERE p.park_id = ' . $pid);
-            while ($r && $r->next()) {
+            while ($r->next()) {
                 $options['park'][] = [(int)$r->park_id, (string)$r->park_name];
                 if ((int)$r->kingdom_id > 0) {
                     $options['kingdom'][] = [(int)$r->kingdom_id, (string)$r->kingdom_name];
@@ -1078,12 +1155,12 @@ class PopulationExplorer extends Ork3
             $ids = $this->_scopeKingdomIds((int)$scopeId);
             if (count($ids) > 0) {
                 $in = implode(',', $ids);
-                $r = $this->db->query('SELECT kingdom_id, name FROM ' . $this->_t('kingdom') . " WHERE kingdom_id IN ($in) ORDER BY name");
-                while ($r && $r->next()) {
+                $r = $this->_select('SELECT kingdom_id, name FROM ' . $this->_t('kingdom') . " WHERE kingdom_id IN ($in) ORDER BY name");
+                while ($r->next()) {
                     $options['kingdom'][] = [(int)$r->kingdom_id, (string)$r->name];
                 }
-                $r = $this->db->query('SELECT park_id, name FROM ' . $this->_t('park') . " WHERE kingdom_id IN ($in) AND active = 'Active' ORDER BY name");
-                while ($r && $r->next()) {
+                $r = $this->_select('SELECT park_id, name FROM ' . $this->_t('park') . " WHERE kingdom_id IN ($in) AND active = 'Active' ORDER BY name");
+                while ($r->next()) {
                     $options['park'][] = [(int)$r->park_id, (string)$r->name];
                 }
             }

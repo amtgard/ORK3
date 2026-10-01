@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Support/PopulationExplorerProbe.php';
+
 /**
  * Population Explorer: scoped execution, authorization, parity against the
  * existing reports (GetPlayerRoster, PlayerAwards = knights/masters list).
@@ -745,5 +747,135 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertArrayNotHasKey('ScopeTotal', $r);
         $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, ['op' => 'AND', 'children' => [['c' => 'nope', 'o' => 'is', 'v' => 1]]]));
         $this->assertArrayNotHasKey('ScopeTotal', $r);
+    }
+
+    private function probe(): PopulationExplorerProbe
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        return new PopulationExplorerProbe();
+    }
+
+    /** @return list<string> statements that are the tree-filtered COUNT (not the scope total) */
+    private function filteredCounts(PopulationExplorerProbe $p): array
+    {
+        return array_values(array_filter($p->statements, static fn (string $s): bool => (bool) preg_match('/COUNT\(\*\) AS n FROM \w+ m WHERE \(.*\) AND \(/s', $s)));
+    }
+
+    public function testQueryShapeTimeoutNoGroupByAndCountOnlyWhenCapped(): void
+    {
+        for ($i = 0; $i < 4; $i++) {
+            $this->player('pe-shape-' . $i);
+        }
+        $p = $this->probe();
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'last_signin']));
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertFalse($r['Truncated']);
+        $this->assertSame(count($r['Rows']), $r['Total']);
+        $this->assertSame([], $this->filteredCounts($p), 'no COUNT when the rows are under the cap');
+        $rowIdx = array_keys(array_filter($p->statements, static fn (string $s): bool => str_contains($s, 'AS c_persona')));
+        $this->assertCount(1, $rowIdx);
+        $rowSql = $p->statements[$rowIdx[0]];
+        $this->assertTrue($p->timed[$rowIdx[0]], 'row query runs under the statement timeout');
+        $this->assertStringNotContainsString('GROUP BY', $rowSql);
+        $this->assertStringContainsString('ORDER BY m.persona, m.mundane_id', $rowSql);
+
+        $p = $this->probe();
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 3]));
+        $this->assertTrue($r['Truncated']);
+        $this->assertCount(3, $r['Rows']);
+        $this->assertCount(1, $this->filteredCounts($p), 'COUNT runs when the cap is hit');
+        $countIdx = array_search($this->filteredCounts($p)[0], $p->statements, true);
+        $this->assertTrue($p->timed[$countIdx], 'COUNT runs under the statement timeout');
+        $this->assertSame(PopulationExplorer::STATEMENT_TIMEOUT_S, 10);
+    }
+
+    public function testEveryColumnYieldsOneRowPerPlayer(): void
+    {
+        $pl = $this->player('pe-dup');
+        foreach (['2025-01-01', '2025-02-01', '2025-03-01'] as $d) {
+            $this->fixture->insertAttendance($pl['mundane_id'], $this->parkId, $this->kid, $d);
+        }
+        $this->fixture->insertDues($pl['mundane_id'], $this->parkId, $this->kid);
+        $this->fixture->insertDues($pl['mundane_id'], $this->parkId, $this->kid, date('Y-m-d', strtotime('+2 years')));
+        [$kaId, $awardId] = $this->peerageAward('Knight');
+        $this->fixture->insertLadderAward($pl['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $this->fixture->insertLadderAward($pl['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+
+        $cols = array_keys($this->pe->PublicRegistry('Park', $this->parkId)['columns']);
+        $this->assertCount(19, $cols);
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], $cols));
+        $this->assertSame(0, $r['Status']['Status']);
+        $ids = array_map(static fn (array $x): int => $x['MundaneId'], $r['Rows']);
+        $this->assertSame(count($ids), count(array_unique($ids)), 'MundaneIds are unique');
+        $this->assertSame(1, count(array_keys($ids, $pl['mundane_id'], true)));
+    }
+
+    public function testDbFailureOnRowQueryIsAnErrorNotAnEmptyTable(): void
+    {
+        $p = $this->probe();
+        $p->failPattern = '/AS c_persona/';
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Rows', $r);
+        $this->assertArrayNotHasKey('Total', $r);
+    }
+
+    public function testDbFailureOnCountAndScopeTotalIsAnError(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->player('pe-cf-' . $i);
+        }
+        $p = $this->probe();
+        $p->failPattern = '/COUNT\(\*\) AS n FROM \w+ m WHERE \(.*\) AND \(/s';
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 2]));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Rows', $r);
+
+        $p = $this->probe();
+        $p->failPattern = '/^SELECT COUNT\(\*\) AS n FROM \w+ m WHERE \([^)]*\)$/';
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('ScopeTotal', $r);
+    }
+
+    public function testDbFailureLoadingKnownIdsIsNotAValidationError(): void
+    {
+        $p = $this->probe();
+        $p->failPattern = '/FROM ' . DB_PREFIX . 'class\b/';
+        try {
+            $p->LoadKnown();
+            $this->fail('LoadKnown must throw when the class list cannot be read');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('class', $e->getMessage());
+        }
+
+        $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('last_class', 'in', [1]))));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('RulePath', $r);
+
+        $p = $this->probe();
+        $p->failPattern = '/FROM ' . DB_PREFIX . 'award\b/';
+        $this->expectException(RuntimeException::class);
+        $p->LoadKnown();
+    }
+
+    public function testDbFailureInRegistryOptionsThrows(): void
+    {
+        $p = $this->probe();
+        $p->failPattern = '/FROM ' . DB_PREFIX . 'park\b/';
+        $this->expectException(RuntimeException::class);
+        $p->PublicRegistry('Kingdom', $this->kid);
+    }
+
+    public function testStatementTimeoutIsReportedAsTooSlow(): void
+    {
+        $p = $this->probe();
+        $p->timeout = 0.000001;
+        $r = $p->Run($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('signins_last_n_months', 'gte', 0, 60)), ['persona', 'last_signin', 'award_count']));
+        $this->assertSame(ServiceErrorIds::ProcessingError, $r['Status']['Status']);
+        $this->assertTrue($r['TimedOut'] ?? false);
+        $this->assertStringContainsString('took too long', (string) $r['Status']['Detail']);
+        $this->assertArrayNotHasKey('Rows', $r);
     }
 }
