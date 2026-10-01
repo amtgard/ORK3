@@ -16,6 +16,8 @@ class Controller_Reports extends Controller
             'suspended',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
+            // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
+            'population_explorer_export',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -1182,9 +1184,56 @@ class Controller_Reports extends Controller
             'columns'    => $r['Columns'] ?? [],
             'rows'       => $rows,
             'total'      => (int)($r['Total'] ?? 0),
+            'scope_total' => (int)($r['ScopeTotal'] ?? 0),
             'truncated'  => !empty($r['Truncated']),
             'elapsed_ms' => (int)($r['ElapsedMs'] ?? 0),
         ]);
+        exit;
+    }
+
+    public function population_explorer_export()
+    {
+        $fail = function (int $code, string $msg) {
+            http_response_code($code);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $msg;
+            exit;
+        };
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            $fail(401, 'Not logged in. Log in and run the report again.');
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            header('Allow: POST');
+            $fail(405, 'POST required.');
+        }
+        $body = json_decode(is_string($_POST['payload'] ?? null) ? $_POST['payload'] : '', true);
+        if (!is_array($body)) {
+            $fail(400, 'Invalid export request.');
+        }
+        $r = $this->Reports->population_export([
+            'Token'     => (string)$this->session->token,
+            'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
+            'ScopeId'   => (int)($body['ScopeId'] ?? 0),
+            'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
+            'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+        ]);
+        $st = (int)($r['Status']['Status'] ?? 1);
+        if ($st !== 0 || empty($r['Path']) || !is_file($r['Path'])) {
+            if ($st === 2) {
+                $fail(401, 'Your session has expired. Log in and run the report again.');
+            }
+            if ($st === 5) {
+                $fail(403, 'You do not have access to this scope.');
+            }
+            $fail($st === 4 ? 400 : 500, 'The export could not be created. Check the filter and try again.');
+        }
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '', (string)($r['Filename'] ?? 'population-explorer.xlsx'));
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Content-Length: ' . filesize($r['Path']));
+        header('Cache-Control: private, no-store');
+        readfile($r['Path']);
+        @unlink($r['Path']);
         exit;
     }
 

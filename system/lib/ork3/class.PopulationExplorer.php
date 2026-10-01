@@ -8,6 +8,8 @@
  * CompileTree() / ColumnSelectSql() turn a canonical tree into a SQL boolean
  * over alias `m` (ork_mundane). Only ints and validated dates ever reach SQL.
  */
+require_once __DIR__ . '/../vendor/SimpleXlsx.php';
+
 class PopulationExplorer extends Ork3
 {
     public const MAX_DEPTH = 6;
@@ -824,6 +826,7 @@ class PopulationExplorer extends Ork3
 
         $rows = [];
         $total = 0;
+        $scopeTotal = 0;
         try {
             $r = $this->db->query($sql);
             if ($r === false || $r === null) {
@@ -842,6 +845,13 @@ class PopulationExplorer extends Ork3
                 throw new RuntimeException('count failed');
             }
             $total = (int)$c->n;
+            // Everyone in the authorized scope, ignoring the tree (for "% of scope").
+            $this->db->Clear();
+            $sc = $this->db->query('SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m WHERE (' . $scopeSql . ')');
+            if ($sc === false || $sc === null || !$sc->next()) {
+                throw new RuntimeException('scope count failed');
+            }
+            $scopeTotal = (int)$sc->n;
         } catch (Throwable $e) {
             logtrace('PopulationExplorer::Run failure', $e->getMessage());
             return ['Status' => ProcessingError('The query could not be completed. Try narrowing the filter or scope.')];
@@ -856,9 +866,76 @@ class PopulationExplorer extends Ork3
             'Columns'   => $columns,
             'Rows'      => $rows,
             'Total'     => $total,
+            'ScopeTotal' => $scopeTotal,
             'Truncated' => $total > $cap,
             'ElapsedMs' => (int)round((microtime(true) - $started) * 1000),
         ];
+    }
+
+    /**
+     * Build an .xlsx of a Run() result. Reuses Run (auth, validation, 5,000-row cap).
+     * Cells are written as inline strings / numbers by SimpleXlsx, so text beginning
+     * with = + - @ is never evaluated as a formula. Dates are ISO text; flags Yes/No.
+     *
+     * @return array ['Status'=>..., 'Path'=>temp file, 'Filename'=>string] or ['Status'=>error]
+     */
+    public function BuildExport(array $request): array
+    {
+        $r = $this->Run($request);
+        if (($r['Status']['Status'] ?? 1) != 0) {
+            $out = ['Status' => $r['Status']];
+            if (isset($r['RulePath'])) {
+                $out['RulePath'] = $r['RulePath'];
+            }
+            return $out;
+        }
+
+        $header = [];
+        $widths = [];
+        foreach ($r['Columns'] as $col) {
+            $header[] = ['v' => (string)$col['label'], 's' => SimpleXlsx::S_HEADER];
+            $widths[] = $col['type'] === 'text' ? 26 : ($col['type'] === 'date' ? 14 : 16);
+        }
+        $rows = [$header];
+        foreach ($r['Rows'] as $row) {
+            $line = [];
+            foreach ($r['Columns'] as $col) {
+                $v = $row[$col['id']] ?? null;
+                if ($v === null || $v === '') {
+                    $line[] = '';
+                } elseif ($col['type'] === 'number') {
+                    $line[] = (int)$v;
+                } elseif ($col['type'] === 'bool') {
+                    $line[] = ((int)$v) === 1 ? 'Yes' : 'No';
+                } elseif ($col['type'] === 'date') {
+                    $d = (string)$v;
+                    $line[] = ['v' => (preg_match('/^\d{4}-\d{2}-\d{2}/', $d) ? substr($d, 0, 10) : $d), 't' => 's'];
+                } else {
+                    $line[] = ['v' => stripslashes((string)$v), 't' => 's'];
+                }
+            }
+            $rows[] = $line;
+        }
+        if (!empty($r['Truncated'])) {
+            $rows[] = [];
+            $cap = count($r['Rows']);
+            $rows[] = [['v' => 'Showing first ' . number_format($cap) . ' of ' . number_format((int)$r['Total']) . ' matches', 's' => SimpleXlsx::S_LABEL]];
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'population-explorer-');
+        if ($path === false) {
+            return ['Status' => ProcessingError('The export file could not be created.')];
+        }
+        try {
+            $x = new SimpleXlsx();
+            $x->addSheet('Population Explorer', $rows, ['colWidths' => $widths, 'freezeRow' => 1]);
+            $x->writeToFile($path);
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::BuildExport failure', $e->getMessage());
+            @unlink($path);
+            return ['Status' => ProcessingError('The export file could not be created.')];
+        }
+        return ['Status' => Success(), 'Path' => $path, 'Filename' => 'population-explorer-' . date('Y-m-d') . '.xlsx'];
     }
 
     /** Normalise a raw DB cell by column type: numbers/bools to ints, NULL stays null. */

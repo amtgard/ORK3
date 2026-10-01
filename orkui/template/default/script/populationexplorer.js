@@ -179,8 +179,6 @@
     var errorRuleId = null;
     var errorText = '';
     var lastRun = null;          // {tree, columns} of the last successful run
-    var scopeTotal = null;       // players in scope (for "% of scope")
-    var scopeTotalPending = null;
     var fpInstances = [];
     var dt = null;
     var running = false;
@@ -714,17 +712,6 @@
         return { ScopeType: PE.scope.type, ScopeId: PE.scope.id, Tree: state.tree, Columns: state.columns };
     }
 
-    function fetchScopeTotal() {
-        if (scopeTotal !== null) { return Promise.resolve(scopeTotal); }
-        if (!scopeTotalPending) {
-            scopeTotalPending = postJson(requestFor({ tree: { op: 'AND', children: [] }, columns: [] })).then(function (j) {
-                if (j && j.status === 0) { scopeTotal = parseInt(j.total, 10) || 0; }
-                scopeTotalPending = null;
-                return scopeTotal;
-            }, function () { scopeTotalPending = null; return null; });
-        }
-        return scopeTotalPending;
-    }
 
     function setRunning(on) {
         running = on;
@@ -753,14 +740,13 @@
             $('pe-table-area').hidden = true;
             showMsg('info', '<i class="fas fa-spinner fa-spin"></i> <span>Running the query…</span>');
         }
-        var totalP = fetchScopeTotal();
         postJson(requestFor(state)).then(function (j) {
             setRunning(false);
             if (!j || j.status !== 0) { return handleError(j || {}); }
             lastRun = state;
             setExportEnabled(true);
             showResults(j);
-            totalP.then(function () { updatePct(j.total); });
+            updatePct(j.total, parseInt(j.scope_total, 10) || 0);
         }, function () {
             setRunning(false);
             handleError({ status: -1, error: 'Could not reach the server. Check your connection and try again.' });
@@ -792,9 +778,9 @@
         if (!dt) { $('pe-results-idle').hidden = false; }
     }
 
-    function updatePct(total) {
+    function updatePct(total, scopeTotal) {
         var pct = $('pe-stat-pct');
-        if (scopeTotal && scopeTotal > 0) {
+        if (scopeTotal > 0) {
             var p = (total / scopeTotal) * 100;
             pct.textContent = (p > 0 && p < 0.1 ? '<0.1' : (p >= 10 ? Math.round(p) : p.toFixed(1))) + '%';
         } else {

@@ -537,4 +537,127 @@ final class PopulationExplorerRunTest extends TestCase
             $this->assertLessThanOrEqual(count($inPark), $r['Total'], "tree $n");
         }
     }
+
+    /** @return array<string,string> zip entry name => contents (reads STORE or DEFLATE entries via ZipArchive) */
+    private function readXlsx(string $path): array
+    {
+        if (!extension_loaded('zip')) {
+            $this->markTestSkipped('ext-zip not available to read the workbook.');
+        }
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path) === true, 'workbook opens as a zip');
+        $out = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $out[(string) $zip->getNameIndex($i)] = (string) $zip->getFromIndex($i);
+        }
+        $zip->close();
+
+        return $out;
+    }
+
+    public function testExportBuildsReadableXlsxWithHeaderAndRows(): void
+    {
+        $p = $this->player('pe-xl');
+        $r = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'dues_paid', 'award_count', 'last_signin']));
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertMatchesRegularExpression('/^population-explorer-\d{4}-\d{2}-\d{2}\.xlsx$/', $r['Filename']);
+        $this->assertFileExists($r['Path']);
+        try {
+            $parts = $this->readXlsx($r['Path']);
+            $sheet = $parts['xl/worksheets/sheet1.xml'] ?? '';
+            $this->assertStringContainsString('Population Explorer', $parts['xl/workbook.xml']);
+            foreach (['Persona', 'Dues paid', 'Award count', 'Last sign-in'] as $label) {
+                $this->assertStringContainsString('>' . $label . '<', $sheet);
+            }
+            $this->assertStringContainsString('state="frozen"', $sheet);
+            $this->assertStringContainsString('Pe-xl', $sheet, 'known persona present');
+            $this->assertStringNotContainsString('Showing first', $sheet);
+            // flags are Yes/No text, not 0/1
+            $this->assertMatchesRegularExpression('/>(Yes|No)</', $sheet);
+        } finally {
+            @unlink($r['Path']);
+        }
+        $this->assertGreaterThan(0, $p['mundane_id']);
+    }
+
+    public function testExportTruncatedAddsNoteRow(): void
+    {
+        for ($i = 0; $i < 4; $i++) {
+            $this->player('pe-xt-' . $i);
+        }
+        $total = (int) $this->fixture->pdo()->query(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+        )->fetchColumn();
+        $r = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 3]));
+        $this->assertSame(0, $r['Status']['Status']);
+        try {
+            $sheet = $this->readXlsx($r['Path'])['xl/worksheets/sheet1.xml'];
+            $this->assertStringContainsString('Showing first 3 of ' . $total . ' matches', $sheet);
+            // header + 3 data rows + spacer + note row
+            $this->assertSame(6, substr_count($sheet, '<row '));
+        } finally {
+            @unlink($r['Path']);
+        }
+    }
+
+    public function testExportRequiresAuth(): void
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+        $before = glob(sys_get_temp_dir() . '/population-explorer-*') ?: [];
+        $r = $this->pe->BuildExport($this->req('not-a-real-token', 'Park', $this->parkId));
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Path', $r);
+        $this->assertSame(count($before), count(glob(sys_get_temp_dir() . '/population-explorer-*') ?: []));
+
+        $r = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, ['op' => 'AND', 'children' => [['c' => 'nope', 'o' => 'is', 'v' => 1]]]));
+        $this->assertNotSame(0, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Path', $r);
+    }
+
+    public function testExportFormulaLikePersonaIsLiteralText(): void
+    {
+        $p = $this->player('pe-fx');
+        $formula = '=HYPERLINK("http://x","y")';
+        $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'mundane SET persona = ? WHERE mundane_id = ?')
+            ->execute([$formula, $p['mundane_id']]);
+        $r = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(0, $r['Status']['Status']);
+        try {
+            $sheet = $this->readXlsx($r['Path'])['xl/worksheets/sheet1.xml'];
+            $this->assertStringContainsString('=HYPERLINK(&quot;http://x&quot;,&quot;y&quot;)</t>', $sheet);
+            // stored as an inline string cell, never as a formula element
+            $this->assertStringNotContainsString('<f>', $sheet);
+            $this->assertStringContainsString('t="inlineStr"', $sheet);
+        } finally {
+            @unlink($r['Path']);
+        }
+    }
+
+    public function testScopeTotalIgnoresTreeAndIsAbsentOnError(): void
+    {
+        $this->player('pe-st');
+        $expected = (int) $this->fixture->pdo()->query(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+        )->fetchColumn();
+
+        $none = $this->tree($this->leaf('total_signins', 'gt', 999999));
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $none));
+        $this->assertSame(0, $r['Total']);
+        $this->assertSame($expected, $r['ScopeTotal']);
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame($expected, $r['ScopeTotal']);
+        $this->assertSame($r['Total'], $r['ScopeTotal']);
+
+        $kExpected = (int) $this->fixture->pdo()->query(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE kingdom_id = ' . $this->kid
+        )->fetchColumn();
+        $r = $this->exec($this->req($this->admin['token'], 'Kingdom', $this->kid, $none));
+        $this->assertGreaterThanOrEqual($kExpected, $r['ScopeTotal']);
+
+        $r = $this->exec($this->req('bad', 'Park', $this->parkId));
+        $this->assertArrayNotHasKey('ScopeTotal', $r);
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, ['op' => 'AND', 'children' => [['c' => 'nope', 'o' => 'is', 'v' => 1]]]));
+        $this->assertArrayNotHasKey('ScopeTotal', $r);
+    }
 }

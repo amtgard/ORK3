@@ -30,6 +30,11 @@ class Model_Reports extends Model
         return $this->PopulationExplorer->Run($request);
     }
 
+    public function population_export(array $request): array
+    {
+        return $this->PopulationExplorer->BuildExport($request);
+    }
+
     /** Decode and re-validate a share-link payload (see PopulationExplorer::DecodeLink). */
     public function population_decode_link(string $q): array
     {
