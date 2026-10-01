@@ -23,8 +23,14 @@ class PopulationExplorer extends Ork3
     /** RuntimeException code _select() uses for a statement killed by the timeout. */
     public const TIMEOUT_CODE = 1969;
     public const TIMEOUT_MESSAGE = 'This query took too long — narrow your filter.';
-    /** Named-lock prefix (+ mundane_id): one Run at a time per player, server-wide. */
+    /**
+     * Named-lock prefix: one Run at a time per player. Named locks are server-wide,
+     * so the name also carries the database (see RunLockName): staging and
+     * production on one server never block each other.
+     */
     public const RUN_LOCK_PREFIX = 'pe:';
+    /** MariaDB's limit on a user-level lock name. */
+    public const LOCK_NAME_MAX = 64;
     public const BUSY_MESSAGE = 'Another Population Explorer run of yours is still in progress — please wait for it to finish.';
 
     public const OPS_CMP = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'];
@@ -1439,7 +1445,7 @@ class PopulationExplorer extends Ork3
     }
 
     /**
-     * GET_LOCK(RUN_LOCK_PREFIX + the player's mundane_id, no wait) on this request's
+     * GET_LOCK(RunLockName(database, the player's mundane_id), no wait) on this request's
      * connection; MariaDB also drops it if the connection ends. Returns the lock
      * name, null when another connection holds it, or '' when no lock could be
      * taken (a DB error): the run then goes ahead unguarded, since the lock only
@@ -1452,7 +1458,7 @@ class PopulationExplorer extends Ork3
             if ($mid <= 0) {
                 return '';
             }
-            $name = self::RUN_LOCK_PREFIX . $mid;
+            $name = self::RunLockName(DB_DATABASE, $mid);
             $r = $this->_select("SELECT GET_LOCK('" . $name . "', 0) AS got");
             $got = $r->next() ? $r->got : null;
             if ($got === null) {
@@ -1463,6 +1469,20 @@ class PopulationExplorer extends Ork3
             logtrace('PopulationExplorer::Run lock failure', $e->getMessage());
             return '';
         }
+    }
+
+    /**
+     * "pe:<database>:<mundane_id>". A database name that is not plain [A-Za-z0-9_$],
+     * or that would push the name past LOCK_NAME_MAX, is replaced by its SHA-1, so
+     * the result is always a safe SQL string literal of at most 64 characters.
+     */
+    public static function RunLockName(string $database, int $mundaneId): string
+    {
+        $name = self::RUN_LOCK_PREFIX . $database . ':' . $mundaneId;
+        if (!preg_match('/^[A-Za-z0-9_$]+$/', $database) || strlen($name) > self::LOCK_NAME_MAX) {
+            $name = self::RUN_LOCK_PREFIX . sha1($database) . ':' . $mundaneId; // 3 + 40 + 1 + at most 20
+        }
+        return $name;
     }
 
     private function _releaseRunLock(string $name): void

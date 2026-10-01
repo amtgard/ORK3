@@ -1343,14 +1343,42 @@ final class PopulationExplorerRunTest extends TestCase
 
     // ---------------------------------------------------------------- one run at a time per player
 
+    /** The run lock name, built on the fixture's own connection from the database it is using. */
+    private function lockName(int $mundaneId): string
+    {
+        return (string) $this->fixture->pdo()->query("SELECT CONCAT('pe:', DATABASE(), ':', " . $mundaneId . ')')->fetchColumn();
+    }
+
     private function lockFree(int $mundaneId): bool
     {
-        return (int) $this->fixture->pdo()->query("SELECT IS_FREE_LOCK('" . PopulationExplorer::RUN_LOCK_PREFIX . $mundaneId . "')")->fetchColumn() === 1;
+        return (int) $this->fixture->pdo()->query("SELECT IS_FREE_LOCK('" . $this->lockName($mundaneId) . "')")->fetchColumn() === 1;
+    }
+
+    public function testTheLockNameCarriesTheDatabaseSoServersCanHostSeveral(): void
+    {
+        $mid = $this->admin['mundane_id'];
+        $this->assertSame($this->lockName($mid), PopulationExplorer::RunLockName(DB_DATABASE, $mid));
+        $this->assertStringContainsString(':' . DB_DATABASE . ':', PopulationExplorer::RunLockName(DB_DATABASE, $mid));
+
+        // The old server-wide name (another database's run, in effect) no longer blocks this one.
+        $other = $this->fixture->pdo();
+        $old = PopulationExplorer::RUN_LOCK_PREFIX . $mid;
+        $sameIdOtherDb = PopulationExplorer::RunLockName(DB_DATABASE . '_staging', $mid);
+        $this->assertSame(1, (int) $other->query("SELECT GET_LOCK('$old', 0)")->fetchColumn());
+        $this->assertSame(1, (int) $other->query("SELECT GET_LOCK('$sameIdOtherDb', 0)")->fetchColumn());
+        try {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertSame(0, $r['Status']['Status']);
+            $this->assertArrayNotHasKey('Busy', $r);
+        } finally {
+            $other->query("SELECT RELEASE_LOCK('$old')")->fetchColumn();
+            $other->query("SELECT RELEASE_LOCK('$sameIdOtherDb')")->fetchColumn();
+        }
     }
 
     public function testASecondRunWhileOneIsInProgressIsRefusedNotQueued(): void
     {
-        $name = PopulationExplorer::RUN_LOCK_PREFIX . $this->admin['mundane_id'];
+        $name = $this->lockName($this->admin['mundane_id']);
         $other = $this->fixture->pdo(); // another connection: the run in progress
         $this->assertSame(1, (int) $other->query("SELECT GET_LOCK('$name', 0)")->fetchColumn());
         try {

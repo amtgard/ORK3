@@ -999,4 +999,22 @@ final class PopulationExplorerTest extends TestCase
         $this->assertStringStartsWith('((m.active = 1) OR (m.park_id IN (9)) OR ', $s);
         $this->assertStringContainsString('((m.waivered = 1) AND (', $s, 'inside a group too');
     }
+
+    public function testRunLockNameIsPerDatabaseAndAlwaysASafeLiteralWithinSixtyFourChars(): void
+    {
+        $this->assertSame('pe:ork:42', PopulationExplorer::RunLockName('ork', 42));
+        $this->assertSame('pe:ork_test:42', PopulationExplorer::RunLockName('ork_test', 42));
+        $this->assertNotSame(PopulationExplorer::RunLockName('ork', 42), PopulationExplorer::RunLockName('ork_staging', 42));
+
+        // Too long, or characters that would need quoting: hashed, still per database.
+        $long = str_repeat('d', 64);
+        foreach ([$long, "o'rk", 'ork-db', 'ork db', ''] as $db) {
+            $name = PopulationExplorer::RunLockName($db, 4294967295);
+            $this->assertSame('pe:' . sha1($db) . ':4294967295', $name, $db);
+            $this->assertLessThanOrEqual(PopulationExplorer::LOCK_NAME_MAX, strlen($name));
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9_$:]+$/', $name);
+        }
+        $this->assertNotSame(PopulationExplorer::RunLockName($long, 1), PopulationExplorer::RunLockName($long . 'x', 1));
+        $this->assertLessThanOrEqual(64, strlen(PopulationExplorer::RunLockName(str_repeat('d', 50), PHP_INT_MAX)));
+    }
 }
