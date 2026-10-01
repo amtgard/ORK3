@@ -147,8 +147,11 @@ exactly those ids, joined to `ork_kingdom k` / `ork_park p`. With:
   reported to the user as "query took too long — narrow your filter"
 - the three statements read one snapshot: `START TRANSACTION WITH CONSISTENT
   SNAPSHOT, READ ONLY` (REPEATABLE READ) on the same connection, committed in a
-  `finally`, so the listed rows, their columns, Total and the scope count describe
-  the same moment; if a transaction is already open the run reads without it
+  `finally`. The InnoDB tables (players, attendance, awards) therefore describe the
+  same moment for the listed rows, their columns, Total and the scope count. The
+  MyISAM reference tables (`ork_kingdom`, `ork_park`, `ork_dues`, `ork_kingdomaward`,
+  `ork_award`, `ork_class`) are not transactional and are read as of each statement.
+  If a transaction is already open, the run reads without a snapshot.
 - one run at a time per player: `GET_LOCK('pe:<database>:<mundane_id>', 0)` around
   the run (export included; the database is in the name because named locks are
   server-wide); a second request while one is going is refused at once with
