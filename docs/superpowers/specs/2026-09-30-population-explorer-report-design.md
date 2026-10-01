@@ -250,8 +250,8 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
 ## 8. Rollout
 
 - No migration. No new tables.
-- Add the report link to the Kingdom and Park reports tabs; add a What's New
-  entry per the release-notes convention.
+- Add the report link to the Kingdom and Park reports tabs. No What's New entry and
+  no version bump: it ships under 3.5.5 Hydra (owner decision, 2026-10-01).
 - Verify every claim above (including "no migration") against the branch before
   declaring done.
 
