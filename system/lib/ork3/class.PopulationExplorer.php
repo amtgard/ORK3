@@ -1044,7 +1044,9 @@ class PopulationExplorer extends Ork3
      *   park's kingdom), else ork_award.name;
      * - `ladder_k<kingdomaward_id>`: the kingdom-only ladders of every kingdom in
      *   scope (the stats kingdoms, or the park's kingdom), labelled with ka.name; a
-     *   name two in-scope kingdoms share gets the kingdom's abbreviation appended.
+     *   name another ladder in scope also uses (kingdom-only or global) gets the
+     *   kingdom's abbreviation appended, and the id as well when that is still not
+     *   unique, so every label in the picker is distinct.
      * Throws RuntimeException when the database cannot be read.
      *
      * @return array<string, array{label:string, kind:string, id:int}>
@@ -1095,8 +1097,27 @@ class PopulationExplorer extends Ork3
                 $key = strtolower($name);
                 $seen[$key] = ($seen[$key] ?? 0) + 1;
             }
+            $globalLabels = [];
+            foreach ($out as $def) {
+                $globalLabels[strtolower($def['label'])] = true;
+            }
+            $labels = [];
             foreach ($local as $kaId => [$name, $kingdom]) {
-                $label = $seen[strtolower($name)] > 1 && $kingdom !== '' ? $name . ' (' . $kingdom . ')' : $name;
+                $key = strtolower($name);
+                $clash = $seen[$key] > 1 || isset($globalLabels[$key]);
+                $labels[$kaId] = $clash && $kingdom !== '' ? $name . ' (' . $kingdom . ')' : $name;
+            }
+            // A suffix that is still not unique (two same-named ladders of one kingdom,
+            // or a kingdom without an abbreviation) also gets the id.
+            $count = [];
+            foreach (array_merge(array_keys($globalLabels), array_map('strtolower', $labels)) as $l) {
+                $count[$l] = ($count[$l] ?? 0) + 1;
+            }
+            foreach ($local as $kaId => [$name, $kingdom]) {
+                $label = $labels[$kaId];
+                if ($count[strtolower($label)] > 1) {
+                    $label = $name . ' (' . ($kingdom !== '' ? $kingdom . ' ' : '') . '#' . $kaId . ')';
+                }
                 $out['ladder_k' . $kaId] = ['label' => $label, 'kind' => 'kingdomaward', 'id' => $kaId];
             }
         }

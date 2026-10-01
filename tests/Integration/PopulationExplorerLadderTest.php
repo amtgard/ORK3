@@ -318,6 +318,38 @@ final class PopulationExplorerLadderTest extends TestCase
         }
     }
 
+    /**
+     * M8: every picker label is unique. A kingdom-only ladder named like a global
+     * ladder's label gets the kingdom suffix (the global keeps its name), and two
+     * same-named kingdom-only ladders of the same kingdom also get their id.
+     */
+    public function testKingdomOnlyLadderLabelsAreUniqueAgainstEveryLabel(): void
+    {
+        $probe = new PopulationExplorerProbe();
+        $probe->kingdomLadderIds = [];
+        $roseLabel = $probe->LoadLadders('Park', $this->parkId)['ladder_a' . self::ROSE]['label'];
+
+        $clash = $this->fixture->insertKingdomOnlyAward($this->kid, 'clash');
+        $this->fixture->renameKingdomAward($clash, $roseLabel);
+        $s1 = $this->fixture->insertKingdomOnlyAward($this->kid, 'Order of the Same');
+        // The unique key is (kingdom_id, award_id, name), so a same-named twin in the same
+        // kingdom needs another award_id (Custom Award, as on real kingdom-only ladders).
+        $s2 = $this->fixture->insertKingdomAward($this->kid, 94, 'T10RPT Order of the Same');
+        $probe->kingdomLadderIds = [$clash, $s1, $s2];
+        $abbr = (string) $this->fixture->pdo()->query('SELECT abbreviation FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $this->kid)->fetchColumn();
+        $this->assertNotSame('', $abbr);
+
+        foreach ([['Park', $this->parkId], ['Kingdom', $this->kid]] as [$type, $id]) {
+            $l = $probe->LoadLadders($type, $id);
+            $this->assertSame($roseLabel, $l['ladder_a' . self::ROSE]['label'], "$type: the global ladder keeps its name");
+            $this->assertSame($roseLabel . ' (' . $abbr . ')', $l['ladder_k' . $clash]['label'], $type);
+            $this->assertSame('T10RPT Order of the Same (' . $abbr . ' #' . $s1 . ')', $l['ladder_k' . $s1]['label'], $type);
+            $this->assertSame('T10RPT Order of the Same (' . $abbr . ' #' . $s2 . ')', $l['ladder_k' . $s2]['label'], $type);
+            $labels = array_map(static fn (array $d): string => strtolower($d['label']), $l);
+            $this->assertSame(count($labels), count(array_unique($labels)), "$type: labels are unique");
+        }
+    }
+
     public function testLadderRulesThroughShareLinkAndExport(): void
     {
         $ka = $this->kaFor(self::ROSE);
