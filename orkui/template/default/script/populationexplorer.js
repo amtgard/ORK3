@@ -1,6 +1,6 @@
 /* Population Explorer — filter builder, columns, run, share link, export.
  * Reads only window.PE (set by Reports_populationexplorer.tpl):
- *   { registry:{criteria, columns, options}, scope:{type,id,name}, initial, urls:{run, export, share, player} }
+ *   { registry:{criteria, columns, options, officer}, scope:{type,id,name}, initial, urls:{run, export, share, player} }
  * Vanilla JS. Never inject server/user text with innerHTML unless it went through esc().
  */
 (function () {
@@ -548,9 +548,12 @@
     }
 
     function numberInput(r, idx) {
+        var def = CRIT[r.c] || {};
         var inp = el('input', 'pe-input pe-num-input');
         inp.type = 'number';
         inp.step = '1';
+        // Registry floor (ladder ranks are 0 or more); the server enforces it too.
+        if (typeof def.min === 'number') { inp.min = String(def.min); }
         inp.inputMode = 'numeric';
         inp.value = readSlot(r, idx);
         inp.placeholder = idx === 1 ? 'to' : (idx === 0 ? 'from' : 'Number');
@@ -755,6 +758,9 @@
                     var t = String(vals[i] == null ? '' : vals[i]).trim();
                     if (t === '') { return def.type === 'date' ? (between ? 'Choose both dates' : 'Choose a date') : (between ? 'Enter both numbers' : 'Enter a number'); }
                     if (!re.test(t)) { return def.type === 'date' ? 'Value must be a valid date' : 'Value must be a whole number'; }
+                    if (def.type === 'number' && typeof def.min === 'number' && +t < def.min) {
+                        return 'Value must be a whole number, ' + def.min + ' or more';
+                    }
                 }
                 if (between) {
                     var a = def.type === 'date' ? String(vals[0]) : +vals[0];

@@ -23,7 +23,13 @@ $pe_officer    = !empty($pe_registry['officer']);
 $pe_scope_link = $pe_scope_type ? UIR . ($pe_is_park ? 'Park' : 'Kingdom') . '/profile/' . $pe_scope_id : '';
 $pe_scope_icon = $pe_is_park ? 'fa-tree' : 'fa-chess-rook';
 
-// Option names come straight from the DB; strip magic-quotes-era escapes for display.
+// Option names (and ladder criterion labels) come straight from the DB; strip
+// magic-quotes-era escapes for display.
+foreach ((array)($pe_registry['criteria'] ?? []) as $_id => $_def) {
+	if (is_array($_def) && isset($_def['label']) && is_string($_def['label'])) {
+		$pe_registry['criteria'][$_id]['label'] = stripslashes($_def['label']);
+	}
+}
 if (isset($pe_registry['options']) && is_array($pe_registry['options'])) {
 	foreach (['class', 'award', 'park', 'kingdom'] as $_k) {
 		foreach ((array)($pe_registry['options'][$_k] ?? []) as $_i => $_o) {
