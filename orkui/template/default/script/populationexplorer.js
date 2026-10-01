@@ -25,6 +25,8 @@
         has_any: 'has any of', has_all: 'has all of', has_none: 'has none of'
     };
     var DEFAULT_OP = { date: 'gte', number: 'gte', enum_set: 'in', bool: 'is', peerage_set: 'has_any' };
+    // The help guide (populationexplorer-help.js) shows operators with the builder's own symbols.
+    PE.opLabel = OP_LABEL;
 
     /* ── helpers ─────────────────────────────────────────── */
     function esc(s) {

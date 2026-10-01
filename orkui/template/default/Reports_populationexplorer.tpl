@@ -75,6 +75,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 		<div class="rp-header-actions">
 			<button type="button" class="rp-btn-ghost" id="pe-copy-link" data-tip="Copy a link that reopens this exact filter and column set"><i class="fas fa-link"></i> Copy link</button>
 			<button type="button" class="rp-btn-ghost" id="pe-export" aria-disabled="true" data-tip="Run the report first, then export the results to Excel"><i class="fas fa-file-excel"></i> Export</button>
+			<button type="button" class="rp-btn-ghost" id="pe-help-open" aria-haspopup="dialog" aria-controls="pe-help" aria-expanded="false"><i class="fas fa-circle-question" aria-hidden="true"></i> Help</button>
 		</div>
 <?php endif; ?>
 	</div>
@@ -189,6 +190,251 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 	<!-- Persistent live region: run results and errors are announced here. -->
 	<div class="pe-sr-only" id="pe-live" role="status" aria-live="polite" aria-atomic="true"></div>
 
+<?php
+	/* ── Help guide (dialog) ──────────────────────────────────
+	   Static prose; the Criteria reference (#pe-help-ref) is built by
+	   script/populationexplorer-help.js from PE.registry. Every claim here is
+	   backed by class.PopulationExplorer.php / populationexplorer.js; keep the
+	   two in step when either changes. */
+	$pe_h = function ($s) {
+		return htmlspecialchars((string)$s, ENT_QUOTES);
+	};
+	// A read-only rule in the builder's look. $val: text, or a list of chips.
+	$pe_rule = function ($crit, $op, $val) use ($pe_h) {
+		$v = is_array($val)
+			? implode(' ', array_map(function ($c) use ($pe_h) { return '<span class="pe-help-chip">' . $pe_h($c) . '</span>'; }, $val))
+			: '<span class="pe-help-rule-val">' . $pe_h($val) . '</span>';
+		return '<span class="pe-help-rule"><span class="pe-help-rule-crit">' . $pe_h($crit) . '</span>'
+			. '<span class="pe-help-rule-op">' . $pe_h($op) . '</span>' . $v . '</span>';
+	};
+	$pe_join = function ($op) {
+		return '<span class="pe-connector-label pe-connector-' . ($op === 'OR' ? 'or' : 'and') . '">' . ($op === 'OR' ? 'OR' : 'AND') . '</span>';
+	};
+	$pe_word = $pe_is_park ? 'park' : 'kingdom';
+?>
+	<div class="pe-help-overlay" id="pe-help" hidden>
+		<div class="pe-help-box" role="dialog" aria-modal="true" aria-labelledby="pe-help-title">
+			<div class="pe-help-header">
+				<h2 class="pe-help-title" id="pe-help-title" tabindex="-1"><i class="fas fa-circle-question" aria-hidden="true"></i> Population Explorer guide</h2>
+				<button type="button" class="pe-help-close" id="pe-help-close" aria-label="Close guide"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+			</div>
+			<div class="pe-help-body" id="pe-help-body">
+
+				<nav class="pe-help-toc" aria-label="Guide contents">
+					<ol>
+						<li><a href="#pe-help-what">What this report does</a></li>
+						<li><a href="#pe-help-start">Quick start</a></li>
+						<li><a href="#pe-help-rules">Rules</a></li>
+						<li><a href="#pe-help-groups">Groups: AND and OR</a></li>
+						<li><a href="#pe-help-not">&ldquo;Not&rdquo; rules and missing values</a></li>
+						<li><a href="#pe-help-ref">Criteria reference</a></li>
+						<li><a href="#pe-help-results">Columns and results</a></li>
+						<li><a href="#pe-help-export">Export</a></li>
+						<li><a href="#pe-help-share">Share links</a></li>
+						<li><a href="#pe-help-officer">Officer-only filters</a></li>
+						<li><a href="#pe-help-trouble">Troubleshooting</a></li>
+					</ol>
+				</nav>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-what">
+					<h3 class="pe-help-h" id="pe-help-what" tabindex="-1">What this report does</h3>
+					<p>Population Explorer lists the players of one kingdom or park who match the rules you set, with the columns you choose. Anyone who is logged in can use it for any kingdom or park. You are looking at <strong><?=$pe_h($pe_scope_name)?></strong>.</p>
+					<ul>
+<?php if ($pe_is_park) : ?>
+						<li><strong>Who is included:</strong> every player whose home park is this park, active or not.</li>
+<?php else : ?>
+						<li><strong>Who is included:</strong> every player whose home kingdom is this kingdom, active or not. If the kingdom counts its principalities in its statistics, their players are included too.</li>
+<?php endif; ?>
+						<li><strong>What you can filter on:</strong> sign-ins, home and last sign-in location, dues, waivers, active status, awards and peerages, ladder award ranks, and reeve and corpora qualifications.</li>
+						<li><strong>What it shows:</strong> personas only. There are no real names or email addresses, on screen or in the export.</li>
+					</ul>
+					<p>Inactive players count unless you leave them out with <?=$pe_rule('Active', 'is', 'Yes')?>.</p>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-start">
+					<h3 class="pe-help-h" id="pe-help-start" tabindex="-1">Quick start</h3>
+					<ol class="pe-help-steps">
+						<li><strong>Add a rule.</strong> In Filters, press <span class="pe-help-btn"><i class="fas fa-plus" aria-hidden="true"></i> Rule</span>, then choose a criterion, an operator and a value. Add as many rules as you need.</li>
+						<li><strong>Pick columns.</strong> Tick the columns you want in Columns. Persona is always included.</li>
+						<li><strong>Run.</strong> Press <strong>Run</strong>, or Ctrl+Enter (&#8984;+Enter on a Mac) while you are in a rule. The matching players appear under Results.</li>
+					</ol>
+					<p>With no rules at all, Run lists everyone in this <?=$pe_word?>.</p>
+					<p>After a successful run, the Filters and Columns cards fold up so the results move up the page. Click a card&rsquo;s title to open it again. While a card is folded, its title shows a short summary, such as &ldquo;3 rules (AND)&rdquo;.</p>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-rules">
+					<h3 class="pe-help-h" id="pe-help-rules" tabindex="-1">Rules</h3>
+					<p>Each rule reads <strong>Criteria</strong> | <strong>Operator</strong> | <strong>Value</strong>, for example <?=$pe_rule('Last sign-in date', '≥', 'Jan 1, 2025')?>. Changing the criterion resets the operator and the value. Some criteria carry a note, for example about players with no value; hover over the operator or tab to it to read it.</p>
+					<dl class="pe-help-dl">
+						<dt>Dates</dt>
+						<dd>Pick a day from the calendar. Dates show as &ldquo;Jan 1, 2025&rdquo;.</dd>
+						<dt>Numbers</dt>
+						<dd>Whole numbers. Some criteria have limits; ladder ranks, for example, are 0 or more.</dd>
+						<dt>Between</dt>
+						<dd>Two boxes, and both ends count: between 3 and 5 includes 3 and 5. You can fill them in either order. When you leave the pair, or press Run or Copy link, they are put smallest &rarr; largest.</dd>
+						<dt>Pick-lists</dt>
+						<dd>Classes, parks, kingdoms, awards and orders. Type to search, then pick; each choice becomes a chip. <em>is</em> and <em>is not</em> take one choice; <em>is any of</em> and <em>is none of</em> take several. Remove a chip with its &times; or with Backspace.</dd>
+						<dt>Yes / No</dt>
+						<dd>A two-button switch.</dd>
+						<dt>Peerages</dt>
+						<dd><em>has any of</em>, <em>has all of</em> or <em>has none of</em> the orders you pick, or <em>holds any</em> Yes / No for &ldquo;holds at least one at all&rdquo;.</dd>
+						<dt>&ldquo;Last N months&rdquo;</dt>
+						<dd>Sign-ins in last N months and Classes played in last N months have their own <strong>N</strong> box: 1 to 60 months, starting at 6.</dd>
+					</dl>
+					<p><strong>Last sign-in date or days ago?</strong> &ldquo;Last sign-in days ago&rdquo; counts whole days since the player&rsquo;s last sign-in, so it makes a rolling window you never have to update: <?=$pe_rule('Last sign-in days ago', '>', '180')?> finds players not seen for more than 180 days, and <?=$pe_rule('Last sign-in days ago', '≤', '30')?> finds players seen in the last 30. Players who have never signed in are not matched by any days-ago rule; use <?=$pe_rule('Total sign-ins', '=', '0')?> to find them.</p>
+					<p><strong>Errors.</strong> If a rule is unfinished or not valid, Run stops. The rule is outlined in red with the reason under it, such as &ldquo;Choose at least one&rdquo;, and Results says &ldquo;Fix the highlighted rule&rdquo;. Editing the rule clears the error.</p>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-groups">
+					<h3 class="pe-help-h" id="pe-help-groups" tabindex="-1">Groups: AND and OR</h3>
+					<p>Every rule sits in a group, and the group&rsquo;s switch decides how its rules combine:</p>
+					<ul>
+						<li><?=$pe_join('AND')?> A player must match <strong>every</strong> rule. Each rule you add narrows the list.</li>
+						<li><?=$pe_join('OR')?> A player must match <strong>at least one</strong> rule. Each rule you add widens the list.</li>
+					</ul>
+					<p>Click AND or OR at the top of a group to switch it; the label between the rules follows. <span class="pe-help-btn"><i class="fas fa-layer-group" aria-hidden="true"></i> Group</span> adds a group inside the current one, with one rule and the opposite switch, so you can mix &ldquo;all of&rdquo; and &ldquo;any of&rdquo;. Groups nest up to three levels deep, counting the outer one. Empty groups are ignored when the report runs.</p>
+					<h4 class="pe-help-h4">Worked example</h4>
+					<p>Knights who have signed in since the start of 2025 and have paid dues, and who either come often or did not last play Druid:</p>
+					<div class="pe-help-tree" aria-hidden="true">
+						<div class="pe-help-group">
+							<?=$pe_rule('Last sign-in date', '≥', 'Jan 1, 2025')?>
+							<?=$pe_join('AND')?>
+							<?=$pe_rule('Knighthood', 'has any of', ['Knight of the Flame', 'Knight of the Sword', 'Knight of the Crown'])?>
+							<?=$pe_join('AND')?>
+							<?=$pe_rule('Dues paid', 'is', 'Yes')?>
+							<?=$pe_join('AND')?>
+							<div class="pe-help-group pe-help-group-or">
+								<?=$pe_rule('Sign-ins in last N months (N = 6)', '>', '5')?>
+								<?=$pe_join('OR')?>
+								<?=$pe_rule('Last class played', 'is not', 'Druid')?>
+							</div>
+						</div>
+					</div>
+					<ol class="pe-help-steps">
+						<li>Leave the outer group on <strong>AND</strong>.</li>
+						<li>Press <strong>+ Rule</strong> and set <?=$pe_rule('Last sign-in date', '≥', 'Jan 1, 2025')?>.</li>
+						<li>Press <strong>+ Rule</strong> and set <?=$pe_rule('Knighthood', 'has any of', ['Knight of the Flame', 'Knight of the Sword', 'Knight of the Crown'])?>.</li>
+						<li>Press <strong>+ Rule</strong> and set <?=$pe_rule('Dues paid', 'is', 'Yes')?>.</li>
+						<li>Press <strong>+ Group</strong>. The new group starts on <strong>OR</strong> with one rule: make it <?=$pe_rule('Sign-ins in last N months', '>', '5')?> with <strong>N</strong> = 6.</li>
+						<li>Inside that group, press <strong>+ Rule</strong> and set <?=$pe_rule('Last class played', 'is not', 'Druid')?>.</li>
+						<li>Press <strong>Run</strong>.</li>
+					</ol>
+					<p>It reads: signed in on or after Jan 1, 2025 <strong>and</strong> holds the Flame, Sword or Crown <strong>and</strong> has paid dues <strong>and</strong> (more than 5 sign-ins in the last 6 months <strong>or</strong> last played a class other than Druid). A player with no recorded class does not pass the Druid rule (see the next section), so they need the sign-ins rule instead.</p>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-not">
+					<h3 class="pe-help-h" id="pe-help-not" tabindex="-1">&ldquo;Not&rdquo; rules and missing values</h3>
+					<p>Some fields can be empty for a player. A rule on an empty field never matches that player, and that includes &ldquo;not&rdquo; rules (<em>&ne;</em>, <em>is not</em>, <em>is none of</em>). For example, <?=$pe_rule('Last class played', 'is not', 'Druid')?> skips players who have no sign-in with a class. The fields that can be empty:</p>
+					<ul>
+						<li><strong>Last sign-in date</strong> and <strong>Last sign-in days ago</strong>: empty for players who have never signed in.</li>
+						<li><strong>Player since</strong>: empty for players with no sign-in dated 1988 or later.</li>
+						<li><strong>Last class played</strong>: empty for players with no sign-in that recorded a class.</li>
+						<li><strong>Last sign-in park</strong>: empty for players who have never signed in, or whose last sign-in was at an event with no park.</li>
+						<li><strong>Dues paid through</strong>: empty for players with no dues paid to this <?=$pe_word?>.</li>
+					</ul>
+					<p>These &ldquo;not&rdquo; rules work the other way and <strong>do</strong> include players who have nothing:</p>
+					<ul>
+						<li><strong>Classes played in last N months</strong> with <em>is not</em> or <em>is none of</em> means &ldquo;did not play these classes in that time&rdquo;, so it also matches players with no sign-ins in that time.</li>
+						<li><strong>Has award</strong>, <strong>Knighthood</strong>, <strong>Masterhood</strong>, <strong>Paragon</strong> and <strong>Squire / Page / Man-At-Arms held</strong> with <em>is not</em>, <em>is none of</em> or <em>has none of</em> also match players who hold none at all.</li>
+						<li><strong>Ladder award ranks</strong> count &ldquo;no award in this ladder&rdquo; as rank 0, so <em>&ne;</em>, <em>&lt;</em> and <em>&le;</em> include those players.</li>
+					</ul>
+					<p>Counts (Total sign-ins, Sign-ins in last N months, Award count) are 0 for a player with none, so they are never empty.</p>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-ref">
+					<h3 class="pe-help-h" id="pe-help-ref" tabindex="-1">Criteria reference</h3>
+					<p>Every criterion you can use on this <?=$pe_word?>, with its operators. The list is built from the same source as the rule picker, so the two always agree.</p>
+					<div class="pe-help-ref" id="pe-help-ref-list"></div>
+					<h4 class="pe-help-h4">Definitions</h4>
+					<dl class="pe-help-dl">
+						<dt>Player since</dt>
+						<dd>The date of the player&rsquo;s first sign-in on or after Jan 1, 1988, as on the player profile. Earlier dates (such as 0000-00-00) are data-entry errors and are ignored.</dd>
+						<dt>Dues paid and Dues paid through</dt>
+						<dd>Worked out the same way as the Dues report, from dues paid to this <?=$pe_word?> that have not been revoked. Dues paid is Yes when those dues run through today or later, or are lifetime dues. Dues paid through is the latest such date; lifetime dues show as &ldquo;Lifetime&rdquo;.</dd>
+						<dt>Last class played</dt>
+						<dd>The class on the player&rsquo;s most recent sign-in that recorded a class.</dd>
+						<dt>Last sign-in park</dt>
+						<dd>The park of the player&rsquo;s most recent sign-in (the last one entered, if there were several that day). A sign-in at an event with no park counts as no park.</dd>
+						<dt>Held awards and peerages</dt>
+						<dd>Revoked and stripped awards don&rsquo;t count. A knighthood&rsquo;s order is the award itself: Knight of the Flame, of the Sword, of the Crown, and so on.</dd>
+						<dt>Squire / Page / Man-At-Arms held</dt>
+						<dd>Exactly those three. Lords-Page and Apprentice are not included.</dd>
+						<dt>Any award received date</dt>
+						<dd>Award dates before 1980 (such as 0000-00-00) count as unknown and are ignored.</dd>
+						<dt>Ladder award ranks</dt>
+						<dd>One criterion per ladder award: the standard ladders, under this kingdom&rsquo;s own names where it renames them, plus the kingdom&rsquo;s own ladder awards. A player&rsquo;s rank is the highest rank recorded or the number of those awards they hold, whichever is larger, and 0 if they hold none.</dd>
+						<dt>Reeve qualified and Corpora qualified</dt>
+						<dd>The same rule as the Reeve Qualified and Corpora Qualified reports: the qualification is recorded and its expiry date has not passed.</dd>
+					</dl>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-results">
+					<h3 class="pe-help-h" id="pe-help-results" tabindex="-1">Columns and results</h3>
+					<ul>
+						<li><strong>Columns:</strong> tick the ones to show. They appear in the order of the checkboxes. Persona is always included and links to the player&rsquo;s profile. Reset goes back to the defaults: Persona, Home park, Last sign-in date and Dues paid.</li>
+						<li><strong>The table:</strong> click a heading to sort. &ldquo;Search results&rdquo; filters the rows already loaded. Show 25 rows per page, or more up to All, or Print the table.</li>
+						<li><strong>Stats:</strong> <em>Results</em> is the number of matching players. <em>Of <?=$pe_word?> players</em> is that number as a share of everyone in this <?=$pe_word?>. <em>Run time</em> is how long the run took.</li>
+						<li><strong>5,000-row limit:</strong> the table holds at most 5,000 players. When more match, a banner says &ldquo;Showing 5,000 of N&rdquo; and Results shows the full count. Narrow the filter to see everyone.</li>
+						<li><strong>&ldquo;Filters changed since last run&rdquo;:</strong> appears beside Run when your rules or columns differ from the last run, so you know the table is out of date. A folded Filters card says &ldquo;changed since last run&rdquo; in its title.</li>
+						<li><strong>After an error:</strong> if a run fails, the stats show &ldquo;&mdash;&rdquo; and the previous table stays, dimmed, under &ldquo;The table below is from your last successful run.&rdquo;</li>
+					</ul>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-export">
+					<h3 class="pe-help-h" id="pe-help-export" tabindex="-1">Export</h3>
+					<ul>
+						<li>Export downloads an Excel file (.xlsx) of your <strong>last run</strong>. It works once a run has succeeded. The rules and columns of that run are run again when you click, so the data is current; changes you have made since are not included until you Run again.</li>
+						<li>Dates are written as text, YYYY-MM-DD. Yes / No fields say &ldquo;Yes&rdquo; or &ldquo;No&rdquo;. Lifetime dues say &ldquo;Lifetime&rdquo;.</li>
+						<li>The same 5,000-row limit applies. When it is reached, a note at the bottom says &ldquo;Showing first 5,000 of N matches&rdquo;.</li>
+					</ul>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-share">
+					<h3 class="pe-help-h" id="pe-help-share" tabindex="-1">Share links</h3>
+					<ul>
+						<li><strong>Copy link</strong> copies a link holding your rules, your columns and this <?=$pe_word?>. It never holds the results. The link is also put in your address bar.</li>
+						<li>Whoever opens it must be logged in. The report runs straight away, with current data and that person&rsquo;s own access.</li>
+						<li>Finish or remove any unfinished rule first; Copy link highlights it.</li>
+						<li>A very large filter is too long for a link; remove a few rules and try again.</li>
+						<li>If a link holds a rule that is not valid here, such as another kingdom&rsquo;s ladder, the page opens with a warning and an empty builder.</li>
+						<li>The officer-only rules (Suspended, Banned) are refused the same way for anyone who is not an officer of that kingdom or park.</li>
+					</ul>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-officer">
+					<h3 class="pe-help-h" id="pe-help-officer" tabindex="-1">Officer-only filters</h3>
+					<p>The <strong>Suspended</strong> and <strong>Banned</strong> filters are offered only to people with officer authority over the kingdom or park being viewed: for a kingdom, its kingdom officers (for a principality, its parent kingdom&rsquo;s officers too); for a park, its park officers and its kingdom&rsquo;s officers; and ORK administrators. Everyone else does not see them in the rule picker, and a link or export that uses them is refused.</p>
+<?php if ($pe_officer) : ?>
+					<p>You have officer access here, so you will find them in the Status group.</p>
+<?php else : ?>
+					<p>They are not in your rule picker here.</p>
+<?php endif; ?>
+				</section>
+
+				<section class="pe-help-section" aria-labelledby="pe-help-trouble">
+					<h3 class="pe-help-h" id="pe-help-trouble" tabindex="-1">Troubleshooting</h3>
+					<dl class="pe-help-dl">
+						<dt>&ldquo;This query took too long — narrow your filter.&rdquo;</dt>
+						<dd>A run may take up to 10 seconds. Add a rule that cuts the list down early, such as a recent Last sign-in date, or run it for a park instead of the whole kingdom.</dd>
+						<dt>&ldquo;Fix the highlighted rule&rdquo;</dt>
+						<dd>The rule outlined in red says what is wrong under it. If the Filters card was folded, it opens and scrolls to that rule.</dd>
+						<dt>A yellow banner ending &ldquo;The builder has been reset.&rdquo;</dt>
+						<dd>The link you opened held a rule that is not valid here (see Share links). Build the filter again.</dd>
+						<dt>&ldquo;Your session has ended.&rdquo;</dt>
+						<dd>Log in again with the link in the message, then press Run.</dd>
+						<dt>&ldquo;Could not reach the server.&rdquo;</dt>
+						<dd>Check your connection and try again.</dd>
+						<dt>Too many rules or choices</dt>
+						<dd>A filter can hold up to 40 rules, and a pick-list up to 100 choices.</dd>
+						<dt>No players match</dt>
+						<dd>Loosen a rule, or switch a group to OR.</dd>
+					</dl>
+				</section>
+
+			</div>
+		</div>
+	</div>
+
 <?php endif; ?>
 </div><!-- /rp-root -->
 
@@ -215,4 +461,5 @@ window.PE = <?=json_encode([
 ], $pe_json_flags)?>;
 </script>
 <script src="<?=HTTP_TEMPLATE?>default/script/populationexplorer.js?v=<?=filemtime(__DIR__ . '/script/populationexplorer.js')?>"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/populationexplorer-help.js?v=<?=filemtime(__DIR__ . '/script/populationexplorer-help.js')?>"></script>
 <?php endif; ?>
