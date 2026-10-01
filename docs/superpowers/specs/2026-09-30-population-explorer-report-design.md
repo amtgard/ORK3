@@ -145,10 +145,19 @@ exactly those ids, joined to `ork_kingdom k` / `ork_park p`. With:
 - every statement of a run (the ids, the columns, and the scope count) runs under
   its own MariaDB statement timeout (10 s each, so up to three per run); a timeout is
   reported to the user as "query took too long — narrow your filter"
-- one run at a time per player: `GET_LOCK('pe:<mundane_id>', 0)` around the run
-  (export included); a second request while one is going is refused at once with
+- the three statements read one snapshot: `START TRANSACTION WITH CONSISTENT
+  SNAPSHOT, READ ONLY` (REPEATABLE READ) on the same connection, committed in a
+  `finally`, so the listed rows, their columns, Total and the scope count describe
+  the same moment; if a transaction is already open the run reads without it
+- one run at a time per player: `GET_LOCK('pe:<database>:<mundane_id>', 0)` around
+  the run (export included; the database is in the name because named locks are
+  server-wide); a second request while one is going is refused at once with
   "Another Population Explorer run of yours is still in progress — please wait for
-  it to finish." (JSON `busy: true`, export HTTP 429)
+  it to finish." (JSON `busy: true`, export HTTP 429 with `Retry-After: 5`). The two
+  endpoints release the PHP session (`session_write_close()`) as soon as they have
+  read the token, so a long run does not hold up that browser's other pages, and a
+  second run from another tab, browser or device is refused by this lock rather
+  than queued behind the session lock
 - result cap **5,000 rows**; the response carries `truncated: true` and the true
   total (every match of the same predicate) so the UI can say "showing 5,000 of N"
 
