@@ -1189,13 +1189,14 @@ class Controller_Reports extends Controller
             echo json_encode(['status' => $pre[1], 'error' => $pre[2]]);
             exit;
         }
+        $token = $this->_pe_release_session();
         $body = json_decode((string)file_get_contents('php://input'), true);
         if (!is_array($body)) {
             echo json_encode(['status' => 1, 'error' => 'Invalid request body']);
             exit;
         }
         $r = $this->Reports->population_run([
-            'Token'     => (string)$this->session->token,
+            'Token'     => $token,
             'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
@@ -1219,9 +1220,12 @@ class Controller_Reports extends Controller
 
     public function population_explorer_export()
     {
-        $fail = function (int $code, string $msg) {
+        $fail = function (int $code, string $msg, array $headers = []) {
             http_response_code($code);
             header('Content-Type: text/plain; charset=utf-8');
+            foreach ($headers as $h => $v) {
+                header($h . ': ' . $v);
+            }
             echo $msg;
             exit;
         };
@@ -1232,12 +1236,13 @@ class Controller_Reports extends Controller
             }
             $fail($pre[0], $pre[0] === 401 ? 'Not logged in. Log in and run the report again.' : $pre[2]);
         }
+        $token = $this->_pe_release_session();
         $body = json_decode(is_string($_POST['payload'] ?? null) ? $_POST['payload'] : '', true);
         if (!is_array($body)) {
             $fail(400, 'Invalid export request.');
         }
         $r = $this->Reports->population_export([
-            'Token'     => (string)$this->session->token,
+            'Token'     => $token,
             'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
@@ -1253,8 +1258,8 @@ class Controller_Reports extends Controller
             });
         }
         if ((int)($r['Status']['Status'] ?? 1) !== 0 || $path === '' || !is_file($path)) {
-            [$code, $msg] = $this->_pe_export_failure($r);
-            $fail($code, $msg);
+            $failure = $this->_pe_export_failure($r);
+            $fail($failure[0], $failure[1], $failure[2] ?? []);
         }
         $name = preg_replace('/[^A-Za-z0-9._-]/', '', (string)($r['Filename'] ?? 'population-explorer.xlsx'));
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1284,6 +1289,24 @@ class Controller_Reports extends Controller
             return [403, 1, 'Cross-site request refused.'];
         }
         return null;
+    }
+
+    /**
+     * Read what the Population Explorer endpoints need from the PHP session, then
+     * release its lock. A run can take up to ~30 s; while the session is open, every
+     * other page in that browser waits on the session file. Neither endpoint writes
+     * session values after this point. (IsAuthorized still caches the player id in
+     * $_SESSION for the rest of this request; that cache is rebuilt on every request,
+     * so not saving it changes nothing.) A second run from the same browser then
+     * reaches the per-player run lock and is refused at once as "busy".
+     */
+    private function _pe_release_session(): string
+    {
+        $token = (string)$this->session->token;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        return $token;
     }
 
     /**
@@ -1330,7 +1353,13 @@ class Controller_Reports extends Controller
         return $out;
     }
 
-    /** @return array{0:int,1:string} HTTP code and plain-text message for a failed export */
+    /** Seconds a refused (busy) export asks the client to wait before retrying. */
+    private const PE_BUSY_RETRY_AFTER = 5;
+
+    /**
+     * @return array{0:int,1:string,2?:array<string,string>} HTTP code, plain-text
+     *         message and any extra response headers for a failed export
+     */
     private function _pe_export_failure(array $r): array
     {
         $st = (int)($r['Status']['Status'] ?? 1);
@@ -1342,7 +1371,7 @@ class Controller_Reports extends Controller
             return [503, PopulationExplorer::TIMEOUT_MESSAGE];
         }
         if (!empty($r['Busy'])) {
-            return [429, PopulationExplorer::BUSY_MESSAGE];
+            return [429, PopulationExplorer::BUSY_MESSAGE, ['Retry-After' => (string)self::PE_BUSY_RETRY_AFTER]];
         }
         if ($st === ServiceErrorIds::InvalidParameter) {
             return [400, 'The export could not be created: ' . ($detail !== '' ? $detail : 'check the filter and try again.')];

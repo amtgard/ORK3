@@ -428,7 +428,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 						<dt>&ldquo;This query took too long — narrow your filter.&rdquo;</dt>
 						<dd>Very broad filters on large kingdoms can take a while. A run has up to three database steps, and any single step that runs past 10 seconds is stopped and the run ends with this message, so in the worst case it can take about 30 seconds to appear. Add a rule that cuts the list down early, such as a recent Last sign-in date, or run it for a park instead of the whole kingdom.</dd>
 						<dt>&ldquo;Another Population Explorer run of yours is still in progress&rdquo;</dt>
-						<dd>You can run one report at a time. A run you started in another tab, or before reloading this page, is still working; it stops on its own within the time limit above. Wait for it, then press Run (or Export) again.</dd>
+						<dd>You can run one report at a time. Another run of yours is still working: in another tab, browser or device signed in as you, or one started before this page was reloaded. It stops on its own within the time limit above. Wait for it, then press Run (or Export) again.</dd>
 						<dt>&ldquo;Fix the highlighted rule&rdquo;</dt>
 						<dd>The rule outlined in red says what is wrong under it. If the Filters card was folded, it opens and scrolls to that rule.</dd>
 						<dt>A yellow banner ending &ldquo;The builder has been reset.&rdquo;</dt>

@@ -43,7 +43,7 @@ final class PopulationExplorerControllerTest extends TestCase
 
     public function testHelpersAreNotRoutable(): void
     {
-        foreach (['_pe_preflight', '_pe_same_origin', '_pe_json_error', '_pe_export_failure'] as $m) {
+        foreach (['_pe_preflight', '_pe_same_origin', '_pe_json_error', '_pe_export_failure', '_pe_release_session'] as $m) {
             $this->assertTrue((new ReflectionMethod(Controller_Reports::class, $m))->isPrivate(), $m);
         }
     }
@@ -109,9 +109,38 @@ final class PopulationExplorerControllerTest extends TestCase
         $this->assertSame(400, $bad[0]);
         $this->assertStringContainsString('Value must be a number', $bad[1]);
         $this->assertSame([503, PopulationExplorer::TIMEOUT_MESSAGE], $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true]));
-        $this->assertSame([429, PopulationExplorer::BUSY_MESSAGE], $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::BUSY_MESSAGE), 'Busy' => true]));
+        $this->assertSame(
+            [429, PopulationExplorer::BUSY_MESSAGE, ['Retry-After' => '5']],
+            $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::BUSY_MESSAGE), 'Busy' => true]),
+            'a refused export says when to try again'
+        );
+        foreach ([['Status' => BadToken()], ['Status' => ProcessingError('x')], ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true]] as $r) {
+            $this->assertArrayNotHasKey(2, $this->call('_pe_export_failure', $r), 'only the busy refusal carries Retry-After');
+        }
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => ProcessingError('x')])[0]);
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => Success()])[0], 'success without a file is a failure');
+    }
+
+    public function testTheEndpointsReleaseTheSessionOnceTheTokenIsRead(): void
+    {
+        // Without an active session (CLI) it only reads the token.
+        $this->assertSame(PHP_SESSION_NONE, session_status());
+        $this->assertSame('tok', $this->call('_pe_release_session'));
+
+        // Both actions read the token through it before any long work, and never
+        // touch the session after it.
+        $src = (string) file_get_contents(DIR_UI . 'controller/controller.Reports.php');
+        foreach (['population_explorer_json', 'population_explorer_export'] as $action) {
+            $this->assertMatchesRegularExpression('/function ' . $action . '\(\)\s*\{(.*?)\n    \}/s', $src);
+            preg_match('/function ' . $action . '\(\)\s*\{(.*?)\n    \}/s', $src, $m);
+            $body = $m[1];
+            $release = strpos($body, '$this->_pe_release_session()');
+            $this->assertNotFalse($release, $action . ' releases the session');
+            $rest = substr($body, $release);
+            $this->assertStringNotContainsString('$this->session', $rest, $action . ' reads no session value after releasing it');
+            $this->assertStringNotContainsString('$_SESSION', $rest, $action . ' writes no session value after releasing it');
+            $this->assertLessThan(strpos($body, '$this->Reports->population_'), $release, $action . ' releases before the run');
+        }
     }
 
     /** Run the page action with a stubbed model; returns the template data. */
