@@ -285,6 +285,7 @@
     function render() {
         closeAllChipLists();
         destroyPickers();
+        betweenPairs = {};
         var host = $('pe-builder');
         host.textContent = '';
         host.appendChild(renderGroup(root, 1));
@@ -478,21 +479,22 @@
     }
 
     function renderValue(cell, r, def) {
+        var pair = r.o === 'between' ? betweenPair(r, cell) : null;
         switch (def.type) {
             case 'date':
-                if (r.o === 'between') {
-                    cell.appendChild(dateInput(r, 0));
+                if (pair) {
+                    cell.appendChild(dateInput(r, 0, pair));
                     cell.appendChild(el('span', 'pe-and', 'and'));
-                    cell.appendChild(dateInput(r, 1));
+                    cell.appendChild(dateInput(r, 1, pair));
                 } else {
                     cell.appendChild(dateInput(r, null));
                 }
                 break;
             case 'number':
-                if (r.o === 'between') {
-                    cell.appendChild(numberInput(r, 0));
+                if (pair) {
+                    cell.appendChild(numberInput(r, 0, pair));
                     cell.appendChild(el('span', 'pe-and', 'and'));
-                    cell.appendChild(numberInput(r, 1));
+                    cell.appendChild(numberInput(r, 1, pair));
                 } else {
                     cell.appendChild(numberInput(r, null));
                 }
@@ -514,7 +516,63 @@
         if (idx === null) { r.v = val; } else { if (!Array.isArray(r.v)) { r.v = ['', '']; } r.v[idx] = val; }
     }
 
-    function dateInput(r, idx) {
+    /* ── between: either order (spec §3.4) ───────────────── */
+    // The server sorts a between pair ascending; the builder does the same on commit
+    // (focus leaving the pair, a date picker closing, or Run / Copy link) so the
+    // screen matches what runs. Never per keystroke, and never while focus is still
+    // inside the pair: tabbing from "from" to "to" must not swap under the user.
+    var betweenPairs = {};       // rule id -> {r, cell, fps:[], nums:[]}; rebuilt on render
+    function betweenPair(r, cell) {
+        var pair = { r: r, cell: cell, fps: [], nums: [] };
+        betweenPairs[r.id] = pair;
+        return pair;
+    }
+    // Swap r.v when both ends are filled, valid and lo > hi. Returns true if swapped.
+    function orderBetween(r) {
+        var def = CRIT[r.c];
+        if (!def || r.o !== 'between' || !Array.isArray(r.v) || (def.type !== 'date' && def.type !== 'number')) { return false; }
+        var a = String(r.v[0] == null ? '' : r.v[0]).trim();
+        var b = String(r.v[1] == null ? '' : r.v[1]).trim();
+        var re = def.type === 'date' ? ISO_DATE : INT;
+        if (!re.test(a) || !re.test(b)) { return false; }
+        var lo = def.type === 'date' ? a : +a;
+        var hi = def.type === 'date' ? b : +b;
+        if (!(lo > hi)) { return false; }
+        r.v = [b, a];
+        return true;
+    }
+    // Put the rule's (swapped) values back into its inputs; Flatpickr pickers via setDate.
+    function reflectPair(pair) {
+        if (!pair) { return; }
+        [0, 1].forEach(function (i) {
+            var v = pair.r.v[i];
+            if (pair.fps[i]) { pair.fps[i].setDate(v, false); }
+            if (pair.nums[i]) { pair.nums[i].value = v; }
+        });
+    }
+    function commitBetween(r, quiet) {
+        if (!orderBetween(r)) { return false; }
+        reflectPair(betweenPairs[r.id]);
+        clearErrorFor(r);
+        scheduleDirtyCheck();
+        if (!quiet) { announce('Swapped to smallest to largest.'); toast('Swapped to smallest → largest.'); }
+        return true;
+    }
+    // After focus settles: commit unless it is still on one of this pair's inputs.
+    function commitBetweenLater(r, cell) {
+        setTimeout(function () {
+            var a = document.activeElement;
+            if (a && a !== document.body && cell.contains(a)) { return; }
+            commitBetween(r, false);
+        }, 0);
+    }
+    // Every between rule in the tree, before Run / Copy link.
+    function orderAllBetweens(node) {
+        if (node.kind === 'rule') { commitBetween(node, true); return; }
+        node.children.forEach(orderAllBetweens);
+    }
+
+    function dateInput(r, idx, pair) {
         var wrap = el('span', 'pe-date');
         var inp = el('input', 'pe-input pe-date-input');
         inp.type = 'text';
@@ -522,6 +580,13 @@
         inp.placeholder = idx === 1 ? 'End date' : (idx === 0 ? 'Start date' : 'Choose a date');
         inp.setAttribute('aria-label', idx === 1 ? 'End date' : (idx === 0 ? 'Start date' : 'Date'));
         wrap.appendChild(inp);
+        // A date typed into an open picker and committed by clicking elsewhere is set by
+        // Flatpickr without onChange (its outside-click path), so read the picker's own
+        // ISO value back on close / blur; otherwise the rule would keep the old value.
+        function syncSlot() {
+            var v = String(inp.value || '').trim();
+            if (v !== String(readSlot(r, idx))) { writeSlot(r, idx, v); clearErrorFor(r); scheduleDirtyCheck(); }
+        }
         if (typeof window.flatpickr === 'function') {
             // Defer until the input is in the document so altInput copies the classes cleanly.
             setTimeout(function () {
@@ -535,30 +600,52 @@
                     onReady: function (_d, _s, inst) {
                         inst.calendarContainer.classList.add('pe-fp');
                         if (inst.altInput) { inst.altInput.setAttribute('aria-label', inp.getAttribute('aria-label')); }
+                        // Flatpickr parses a typed date in its own handlers, which run first;
+                        // then sync, and (between) commit the pair once focus has left it.
+                        if (inst.altInput) {
+                            inst.altInput.addEventListener('blur', function () {
+                                syncSlot();
+                                if (pair) { commitBetweenLater(r, pair.cell); }
+                            });
+                        }
                     },
-                    onChange: function (_d, str) { writeSlot(r, idx, str); clearErrorFor(r); }
+                    onChange: function (_d, str) { writeSlot(r, idx, str); clearErrorFor(r); },
+                    onClose: function () {
+                        syncSlot();
+                        if (pair) { commitBetweenLater(r, pair.cell); }
+                    }
                 });
                 fpInstances.push(fp);
+                if (pair) { pair.fps[idx] = fp; }
             }, 0);
         } else {
             inp.placeholder = 'YYYY-MM-DD';
             inp.addEventListener('input', function () { writeSlot(r, idx, inp.value.trim()); clearErrorFor(r); });
+            if (pair) {
+                pair.nums[idx] = inp; // plain text input: reflected like a number input
+                inp.addEventListener('blur', function () { commitBetweenLater(r, pair.cell); });
+            }
         }
         return wrap;
     }
 
-    function numberInput(r, idx) {
+    function numberInput(r, idx, pair) {
         var def = CRIT[r.c] || {};
         var inp = el('input', 'pe-input pe-num-input');
         inp.type = 'number';
         inp.step = '1';
         // Registry floor (ladder ranks are 0 or more); the server enforces it too.
         if (typeof def.min === 'number') { inp.min = String(def.min); }
+        if (typeof def.max === 'number') { inp.max = String(def.max); }
         inp.inputMode = 'numeric';
         inp.value = readSlot(r, idx);
         inp.placeholder = idx === 1 ? 'to' : (idx === 0 ? 'from' : 'Number');
         inp.setAttribute('aria-label', idx === 1 ? 'Upper value' : (idx === 0 ? 'Lower value' : 'Value'));
         inp.addEventListener('input', function () { writeSlot(r, idx, inp.value); clearErrorFor(r); });
+        if (pair) {
+            pair.nums[idx] = inp;
+            inp.addEventListener('blur', function () { commitBetweenLater(r, pair.cell); });
+        }
         return inp;
     }
 
@@ -758,15 +845,14 @@
                     var t = String(vals[i] == null ? '' : vals[i]).trim();
                     if (t === '') { return def.type === 'date' ? (between ? 'Choose both dates' : 'Choose a date') : (between ? 'Enter both numbers' : 'Enter a number'); }
                     if (!re.test(t)) { return def.type === 'date' ? 'Value must be a valid date' : 'Value must be a whole number'; }
+                    if (def.type === 'number' && typeof def.max === 'number' && typeof def.min === 'number' && (+t < def.min || +t > def.max)) {
+                        return 'Value must be a whole number from ' + def.min + ' to ' + def.max;
+                    }
                     if (def.type === 'number' && typeof def.min === 'number' && +t < def.min) {
                         return 'Value must be a whole number, ' + def.min + ' or more';
                     }
                 }
-                if (between) {
-                    var a = def.type === 'date' ? String(vals[0]) : +vals[0];
-                    var b = def.type === 'date' ? String(vals[1]) : +vals[1];
-                    if (a > b) { return 'Between range must be in ascending order'; }
-                }
+                // A reversed between pair is not an error: it is swapped (orderBetween).
                 return null;
             case 'enum_set':
                 return Array.isArray(v) && v.length ? null : 'Choose at least one';
@@ -925,6 +1011,7 @@
     function run(origin) {
         origin = origin && origin.nodeType === 1 ? origin : null;
         if (running) { return; }
+        orderAllBetweens(root);
         var bad = firstIncomplete(root);
         if (bad) { markStale(); markRuleError(bad.node, bad.msg); return; }
         var state = currentState();
@@ -1126,6 +1213,7 @@
     }
     function onCopyLink() {
         // Never encode unfinished rules: the recipient's page would reject the whole link.
+        orderAllBetweens(root);
         var bad = firstIncomplete(root);
         if (bad) {
             markRuleError(bad.node, bad.msg);
