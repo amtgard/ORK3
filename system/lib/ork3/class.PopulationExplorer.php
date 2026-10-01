@@ -27,6 +27,7 @@ class PopulationExplorer extends Ork3
     public const OPS_PEER = ['has_any', 'has_all', 'has_none', 'is'];
     public const OPS_BOOL = ['is'];
     public const SQL_CMP = ['eq' => '=', 'ne' => '<>', 'gt' => '>', 'gte' => '>=', 'lt' => '<', 'lte' => '<='];
+    private const NOTE_NONE_HELD = 'Players who hold none at all also match.';
 
     public function __construct()
     {
@@ -61,7 +62,9 @@ class PopulationExplorer extends Ork3
             'operands' => $this->_opsFor($type),
             'param'    => false,
             // nullable: the value can be missing (never signed in, no dues). Negated
-            // operands then do not match those players (spec §3.2); the UI says so.
+            // operands then do not match those players (spec §3.2). Every criterion
+            // whose negated operands treat "no value" specially carries a neg_note
+            // (shown by the UI on those operands) saying exactly what happens.
             'nullable' => false,
             'sql'      => null,
         ], $extra);
@@ -80,29 +83,37 @@ class PopulationExplorer extends Ork3
     private function _criteriaDefs(): array
     {
         return [
-            'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date', ['nullable' => true]),
-            'player_since'          => $this->_crit('Player since', 'Activity', 'date', ['nullable' => true]),
+            'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date', ['nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
+            'player_since'          => $this->_crit('Player since', 'Activity', 'date', [
+                'nullable' => true,
+                'neg_note' => 'Players with no sign-in dated 1988 or later are not matched.',
+                'note'     => 'First sign-in dated 1988 or later, as on the player profile. Earlier dates (such as 0000-00-00) are data-entry errors and are ignored.',
+            ]),
             'signins_last_n_months' => $this->_crit('Sign-ins in last N months', 'Activity', 'number', ['param' => true]),
             'total_signins'         => $this->_crit('Total sign-ins', 'Activity', 'number'),
-            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['set' => 'class', 'nullable' => true]),
-            'classes_last_n_months' => $this->_crit('Classes played in last N months', 'Activity', 'enum_set', ['set' => 'class', 'param' => true]),
+            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['set' => 'class', 'nullable' => true, 'neg_note' => 'Players with no sign-in that recorded a class are not matched.']),
+            // Negated: "did not play these classes in the window", so no sign-ins at all also matches (spec §3.4).
+            'classes_last_n_months' => $this->_crit('Classes played in last N months', 'Activity', 'enum_set', ['set' => 'class', 'param' => true, 'neg_note' => 'Players with no sign-ins in the last N months also match (they did not play these classes).']),
             'home_kingdom'          => $this->_crit('Home kingdom', 'Location', 'enum_set', ['set' => 'kingdom']),
             'home_park'             => $this->_crit('Home park', 'Location', 'enum_set', ['set' => 'park']),
-            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park', 'nullable' => true]),
+            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park', 'nullable' => true, 'neg_note' => 'Players with no last sign-in park are not matched: they never signed in, or last signed in at an event with no park.']),
             'dues_paid'             => $this->_crit('Dues paid', 'Status', 'bool', ['note' => 'Same as the Dues report: dues paid to this scope that run through today or later, or lifetime dues.']),
-            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
+            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'neg_note' => 'Players with no dues paid to this scope are not matched.', 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
             'suspended'             => $this->_crit('Suspended', 'Status', 'bool'),
             'banned'                => $this->_crit('Banned', 'Status', 'bool'),
-            'knighthood'            => $this->_crit('Knighthood', 'Peerage', 'peerage_set', ['peerage' => ['Knight']]),
-            'masterhood'            => $this->_crit('Masterhood', 'Peerage', 'peerage_set', ['peerage' => ['Master']]),
-            'paragon'               => $this->_crit('Paragon', 'Peerage', 'peerage_set', ['peerage' => ['Paragon']]),
+            'knighthood'            => $this->_crit('Knighthood', 'Peerage', 'peerage_set', ['peerage' => ['Knight'], 'neg_note' => self::NOTE_NONE_HELD]),
+            'masterhood'            => $this->_crit('Masterhood', 'Peerage', 'peerage_set', ['peerage' => ['Master'], 'neg_note' => self::NOTE_NONE_HELD]),
+            'paragon'               => $this->_crit('Paragon', 'Peerage', 'peerage_set', ['peerage' => ['Paragon'], 'neg_note' => self::NOTE_NONE_HELD]),
             // Exactly these three (spec §4): Lords-Page and Apprentice are not included, hence the explicit label.
-            'lesser_peerage'        => $this->_crit('Squire / Page / Man-At-Arms held', 'Peerage', 'peerage_set', ['peerage' => ['Squire', 'Page', 'Man-At-Arms']]),
-            'has_award'             => $this->_crit('Has award', 'Awards', 'enum_set', ['set' => 'award']),
+            'lesser_peerage'        => $this->_crit('Squire / Page / Man-At-Arms held', 'Peerage', 'peerage_set', ['peerage' => ['Squire', 'Page', 'Man-At-Arms'], 'neg_note' => self::NOTE_NONE_HELD]),
+            'has_award'             => $this->_crit('Has award', 'Awards', 'enum_set', ['set' => 'award', 'neg_note' => 'Players with no awards at all also match.']),
             'award_count'           => $this->_crit('Award count', 'Awards', 'number'),
-            'award_date_any'        => $this->_crit('Any award received date', 'Awards', 'date', ['operands' => ['gt', 'gte', 'lt', 'lte', 'between']]),
+            'award_date_any'        => $this->_crit('Any award received date', 'Awards', 'date', [
+                'operands' => ['gt', 'gte', 'lt', 'lte', 'between'],
+                'note'     => 'Awards with an unknown date (before 1980, such as 0000-00-00) are ignored.',
+            ]),
             'reeve_qualified'       => $this->_crit('Reeve qualified', 'Qualifications', 'bool'),
             'corpora_qualified'     => $this->_crit('Corpora qualified', 'Qualifications', 'bool'),
         ];
@@ -402,7 +413,7 @@ class PopulationExplorer extends Ork3
     protected function _select(string $sql, bool $timed = false)
     {
         if ($timed) {
-            $sql = 'SET STATEMENT max_statement_time=' . rtrim(rtrim(sprintf('%.6F', $this->_statementTimeout()), '0'), '.') . ' FOR ' . $sql;
+            $sql = $this->_timeoutClause() . $sql;
         }
         // @: the failure is read from __ERROR below and logged; a PHP warning
         // printed into a JSON or xlsx response would only corrupt it.
@@ -423,6 +434,21 @@ class PopulationExplorer extends Ork3
     protected function _statementTimeout(): float
     {
         return (float)self::STATEMENT_TIMEOUT_S;
+    }
+
+    /**
+     * "SET STATEMENT max_statement_time=N FOR ". A seam value that is not a positive
+     * finite number falls back to STATEMENT_TIMEOUT_S: MariaDB reads 0 or less as
+     * "no limit", and NAN / INF would not be SQL at all.
+     */
+    protected function _timeoutClause(): string
+    {
+        $t = $this->_statementTimeout();
+        if (!is_finite($t) || $t <= 0) {
+            $t = (float)self::STATEMENT_TIMEOUT_S;
+        }
+        $n = rtrim(rtrim(sprintf('%.6F', max($t, 0.000001)), '0'), '.');
+        return 'SET STATEMENT max_statement_time=' . $n . ' FOR ';
     }
 
     // ---------------------------------------------------------------- SQL compilation
@@ -490,31 +516,18 @@ class PopulationExplorer extends Ork3
         return $this->_attSub('MAX(a.date)');
     }
 
-    /** Player since = first sign-in, or ork_mundane.player_since_override where that column exists. */
-    private function _playerSinceExpr(): string
-    {
-        $first = $this->_attSub('MIN(a.date)');
-        return $this->_hasPlayerSinceOverride() ? 'COALESCE(m.player_since_override, ' . $first . ')' : $first;
-    }
-
-    private static ?bool $playerSinceOverride = null;
+    /** Earliest sign-in date that counts (Player::get_earliest_attendance_date's floor). */
+    public const FIRST_SIGNIN_FLOOR = '1988-01-01';
+    /** Award dates before this are unknown ('0000-00-00' or typo years). */
+    public const AWARD_DATE_FLOOR = '1980-01-01';
 
     /**
-     * player_since_override is added by a migration that is not on master, so the
-     * column may be absent; referencing it then fails every query that selects or
-     * filters on Player since. Checked once per process; a failed check is not cached.
+     * Player since = first sign-in dated FIRST_SIGNIN_FLOOR or later, as on the
+     * player profile; earlier rows are '0000-00-00' or typo dates (spec §3.4).
      */
-    protected function _hasPlayerSinceOverride(): bool
+    private function _playerSinceExpr(): string
     {
-        if (self::$playerSinceOverride === null) {
-            try {
-                $r = $this->_select('SHOW COLUMNS FROM ' . $this->_t('mundane') . " LIKE 'player_since_override'");
-                self::$playerSinceOverride = (bool)$r->next();
-            } catch (Throwable $e) {
-                return false;
-            }
-        }
-        return self::$playerSinceOverride;
+        return $this->_attSub('MIN(a.date)', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'");
     }
 
     private function _signinsInMonthsExpr(int $n): string
@@ -532,9 +545,14 @@ class PopulationExplorer extends Ork3
         return $this->_attSub('a.class_id', 'a.class_id > 0', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
     }
 
+    /**
+     * Park of the most recent sign-in (same-day ties: highest attendance_id). An
+     * event sign-in with no park (park_id 0) is NULL, so the column is blank and
+     * negated park filters do not match it (spec §3.4).
+     */
     private function _lastSigninParkExpr(): string
     {
-        return $this->_attSub('a.park_id', '', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
+        return $this->_attSub('NULLIF(a.park_id, 0)', '', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
     }
 
     /** Lifetime dues sort and compare as this date; the column shows LIFETIME_LABEL. */
@@ -680,7 +698,7 @@ class PopulationExplorer extends Ork3
                 case 'award_count':
                     return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')', 'number', $o, $v);
                 case 'award_date_any':
-                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $this->_cmp('w.date', 'date', $o, $v), false) . ')';
+                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom("AND w.date >= '" . self::AWARD_DATE_FLOOR . "' AND " . $this->_cmp('w.date', 'date', $o, $v), false) . ')';
                 case 'reeve_qualified':
                 case 'corpora_qualified':
                     $e = $this->_qualifiedExpr($id === 'reeve_qualified' ? 'reeve' : 'corpora');
@@ -816,15 +834,23 @@ class PopulationExplorer extends Ork3
     }
 
     /**
-     * @return array [mundane scope clause over m, dues scope clause over d]. The dues
+     * @return array|null [mundane scope clause over m, dues scope clause over d], or
+     * null when a park's kingdom cannot be resolved (the caller must refuse, never
+     * run unscoped). The player clause matches Report::GetPlayerRoster: a park scope
+     * is the park's players whose home kingdom is the park's kingdom. The dues
      * clause matches Report::GetDuesPaidList's Type filter (d.park_id / d.kingdom_id),
-     * widened to the stats kingdoms for a Kingdom scope.
+     * widened to the stats kingdoms for a Kingdom scope. Throws on a DB failure.
      */
-    private function _scopeClauses(string $scopeType, int $scopeId): array
+    private function _scopeClauses(string $scopeType, int $scopeId): ?array
     {
         $scopeId = (int)$scopeId;
         if ($scopeType === 'Park') {
-            return ['m.park_id = ' . $scopeId, 'd.park_id = ' . $scopeId];
+            $r = $this->_select('SELECT kingdom_id FROM ' . $this->_t('park') . ' WHERE park_id = ' . $scopeId);
+            $parkKingdom = $r->next() ? (int)$r->kingdom_id : 0;
+            if ($parkKingdom <= 0) {
+                return null;
+            }
+            return ['m.park_id = ' . $scopeId . ' AND m.kingdom_id = ' . $parkKingdom, 'd.park_id = ' . $scopeId];
         }
         $ids = $this->_scopeKingdomIds($scopeId);
         if (count($ids) === 0) {
@@ -882,7 +908,16 @@ class PopulationExplorer extends Ork3
             $cap = $reqCap;
         }
 
-        list($scopeSql, $duesScope) = $this->_scopeClauses($scopeType, $scopeId);
+        try {
+            $clauses = $this->_scopeClauses($scopeType, $scopeId);
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run scope failure', $e->getMessage());
+            return ['Status' => ProcessingError('The query could not be completed. Try narrowing the filter or scope.')];
+        }
+        if ($clauses === null) {
+            return ['Status' => InvalidParameter('That park could not be found in a kingdom, so it cannot be reported on.')];
+        }
+        list($scopeSql, $duesScope) = $clauses;
         $ctx = ['duesScope' => $duesScope];
         try {
             $treeSql = $this->CompileTree($norm['tree'], $ctx);

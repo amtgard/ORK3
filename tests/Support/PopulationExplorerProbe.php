@@ -15,9 +15,6 @@ final class PopulationExplorerProbe extends PopulationExplorer
     /** @var list<bool> parallel to $statements: run under the statement timeout */
     public array $timed = [];
 
-    /** null = real schema check; true/false forces Player since's override column on/off */
-    public ?bool $override = null;
-
     /** Regex; matching statements are rewritten to read a table that does not exist. */
     public ?string $failPattern = null;
 
@@ -34,13 +31,13 @@ final class PopulationExplorerProbe extends PopulationExplorer
         return parent::_select($sql, $timed);
     }
 
-    protected function _hasPlayerSinceOverride(): bool
-    {
-        return $this->override ?? parent::_hasPlayerSinceOverride();
-    }
-
     protected function _statementTimeout(): float
     {
         return $this->timeout ?? parent::_statementTimeout();
+    }
+
+    public function timeoutClause(): string
+    {
+        return $this->_timeoutClause();
     }
 }

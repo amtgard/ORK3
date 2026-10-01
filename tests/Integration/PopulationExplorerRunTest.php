@@ -115,7 +115,7 @@ final class PopulationExplorerRunTest extends TestCase
         $this->player('pe-a');
         $this->player('pe-b');
         $expected = (int) $this->fixture->pdo()->query(
-            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
         )->fetchColumn();
 
         $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
@@ -549,7 +549,7 @@ final class PopulationExplorerRunTest extends TestCase
             $this->player('pe-cap-' . $i);
         }
         $expected = (int) $this->fixture->pdo()->query(
-            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
         )->fetchColumn();
         $this->assertGreaterThan(3, $expected);
 
@@ -674,7 +674,7 @@ final class PopulationExplorerRunTest extends TestCase
             $this->player('pe-xt-' . $i);
         }
         $total = (int) $this->fixture->pdo()->query(
-            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
         )->fetchColumn();
         $r = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona'], ['RowCap' => 3]));
         $this->assertSame(0, $r['Status']['Status']);
@@ -725,7 +725,7 @@ final class PopulationExplorerRunTest extends TestCase
     {
         $this->player('pe-st');
         $expected = (int) $this->fixture->pdo()->query(
-            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
         )->fetchColumn();
 
         $none = $this->tree($this->leaf('total_signins', 'gt', 999999));
@@ -1029,7 +1029,7 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame($this->fixture->parkName($this->parkId), $col[$home['mundane_id']]);
     }
 
-    public function testPlayerSinceIsFirstSignInOrOverride(): void
+    public function testPlayerSinceIsFirstSignIn(): void
     {
         $early = $this->player('pe-since-early');
         $late = $this->player('pe-since-late');
@@ -1044,19 +1044,160 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame('2019-03-01', $col[$early['mundane_id']]);
         $this->assertSame('2021-05-05', $col[$late['mundane_id']]);
         $this->assertSame([$early['mundane_id']], $this->matchAmong($this->tree($this->leaf('player_since', 'lt', '2020-01-01')), $mine));
+        // No override column: the spec defines Player since as the first sign-in only.
+        $this->assertStringNotContainsString('player_since_override', $this->pe->ColumnSelectSql('player_since', []));
+    }
 
-        // The override column only exists where its (unmerged) migration ran.
-        $hasColumn = (bool) $this->fixture->pdo()->query('SHOW COLUMNS FROM ' . DB_PREFIX . "mundane LIKE 'player_since_override'")->fetch();
-        $probe = new PopulationExplorerProbe();
-        $probe->override = true;
-        $this->assertStringContainsString('COALESCE(m.player_since_override, ', $probe->ColumnSelectSql('player_since', []));
-        $probe->override = false;
-        $this->assertStringNotContainsString('player_since_override', $probe->ColumnSelectSql('player_since', []));
-        if (!$hasColumn) {
-            return; // ork_test follows master's schema: first sign-in only (asserted above)
+    /** Store a date the app's strict sql_mode would reject (legacy '0000-00-00' / typo rows exist in production). */
+    private function forceAttendanceDate(int $attendanceId, string $date): void
+    {
+        $this->sql("SET STATEMENT sql_mode='' FOR UPDATE " . DB_PREFIX . 'attendance SET date = ? WHERE attendance_id = ?', [$date, $attendanceId]);
+    }
+
+    public function testPlayerSinceIgnoresZeroAndPre1988Dates(): void
+    {
+        $zero = $this->player('pe-since-zero');
+        $pre = $this->player('pe-since-pre88');
+        $only = $this->player('pe-since-onlyzero');
+        $this->forceAttendanceDate($this->fixture->insertAttendance($zero['mundane_id'], $this->parkId, $this->kid, '2001-01-01'), '0000-00-00');
+        $this->fixture->insertAttendance($zero['mundane_id'], $this->parkId, $this->kid, '2010-05-05');
+        $this->fixture->insertAttendance($pre['mundane_id'], $this->parkId, $this->kid, '1985-03-03');
+        $this->fixture->insertAttendance($pre['mundane_id'], $this->parkId, $this->kid, '1994-04-04');
+        $this->forceAttendanceDate($this->fixture->insertAttendance($only['mundane_id'], $this->parkId, $this->kid, '2001-01-01'), '0000-00-00');
+        $mine = [$zero['mundane_id'], $pre['mundane_id'], $only['mundane_id']];
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'player_since', 'total_signins']));
+        $this->assertSame(0, $r['Status']['Status']);
+        $col = array_column($r['Rows'], 'player_since', 'MundaneId');
+        $this->assertSame('2010-05-05', $col[$zero['mundane_id']], '0000-00-00 is ignored');
+        $this->assertSame('1994-04-04', $col[$pre['mundane_id']], 'pre-1988 dates are ignored, as on the player profile');
+        $this->assertNull($col[$only['mundane_id']], 'no valid sign-in: no Player since');
+        $this->assertSame(1, array_column($r['Rows'], 'total_signins', 'MundaneId')[$only['mundane_id']], 'sign-in counts are unchanged');
+
+        $this->assertSame([], $this->matchAmong($this->tree($this->leaf('player_since', 'lt', '1990-01-01')), $mine));
+        $this->assertSame([], $this->matchAmong($this->tree($this->leaf('player_since', 'lte', '1987-12-31')), $mine));
+        $this->assertSame([$pre['mundane_id']], $this->matchAmong($this->tree($this->leaf('player_since', 'between', ['1994-01-01', '1994-12-31'])), $mine));
+        // nullable: a player with no valid first sign-in never matches a negated comparison
+        $this->assertSame($this->sorted([$zero['mundane_id'], $pre['mundane_id']]), $this->matchAmong($this->tree($this->leaf('player_since', 'ne', '2000-01-01')), $mine));
+        // The export writes what Run returns.
+        $x = $this->pe->BuildExport($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('player_since', 'eq', '2010-05-05')), ['persona', 'player_since']));
+        $this->assertSame(0, $x['Status']['Status']);
+        $sheet = $this->readXlsx($x['Path'])['xl/worksheets/sheet1.xml'] ?? '';
+        @unlink($x['Path']);
+        $this->assertStringContainsString('2010-05-05', $sheet);
+        $this->assertStringNotContainsString('0000-00-00', $sheet);
+    }
+
+    public function testLastSigninParkEventSignInWithNoParkIsNoPark(): void
+    {
+        $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
+        if ($p2 <= 0) {
+            $this->markTestSkipped('Needs a second park in the kingdom.');
         }
-        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET player_since_override = ? WHERE mundane_id = ?', ['2015-02-02', $late['mundane_id']]);
-        $this->assertSame($this->sorted($mine), $this->matchAmong($this->tree($this->leaf('player_since', 'lt', '2020-01-01')), $mine));
+        $event = $this->player('pe-lsp-event');
+        $tie = $this->player('pe-lsp-eventtie');
+        $park = $this->player('pe-lsp-park');
+        // latest sign-in is an event sign-in with no park (park_id 0)
+        $this->fixture->insertAttendance($event['mundane_id'], $p2, $this->kid, '2024-01-01');
+        $this->fixture->insertAttendance($event['mundane_id'], 0, $this->kid, '2024-06-01');
+        // same day: the park-0 row was entered last, so it wins the tie
+        $this->fixture->insertAttendance($tie['mundane_id'], $p2, $this->kid, '2024-07-07');
+        $this->fixture->insertAttendance($tie['mundane_id'], 0, $this->kid, '2024-07-07');
+        $this->fixture->insertAttendance($park['mundane_id'], $p2, $this->kid, '2024-06-01');
+        $mine = [$event['mundane_id'], $tie['mundane_id'], $park['mundane_id']];
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'last_signin_park']));
+        $col = array_column($r['Rows'], 'last_signin_park', 'MundaneId');
+        $this->assertNull($col[$event['mundane_id']]);
+        $this->assertNull($col[$tie['mundane_id']]);
+        $this->assertSame($this->fixture->parkName($p2), $col[$park['mundane_id']]);
+
+        // No park = NULL: negated operands do not match it (spec §3.2 / §3.4), positive ones neither.
+        $this->assertSame([], $this->matchAmong($this->tree($this->leaf('last_signin_park', 'not_in', [$p2])), $mine));
+        $this->assertSame([$park['mundane_id']], $this->matchAmong($this->tree($this->leaf('last_signin_park', 'not_in', [$this->parkId])), $mine));
+        $this->assertSame([$park['mundane_id']], $this->matchAmong($this->tree($this->leaf('last_signin_park', 'is_not', $this->parkId)), $mine));
+        $this->assertSame([$park['mundane_id']], $this->matchAmong($this->tree($this->leaf('last_signin_park', 'in', [$p2, $this->parkId])), $mine));
+    }
+
+    public function testAwardDateAnyIgnoresUnknownDates(): void
+    {
+        [$kaId, $awardId] = $this->peerageAward('Knight');
+        $zero = $this->player('pe-ad-zero');
+        $typo = $this->player('pe-ad-typo');
+        $early = $this->player('pe-ad-1985');
+        $zw = $this->fixture->insertLadderAward($zero['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $tw = $this->fixture->insertLadderAward($typo['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $ew = $this->fixture->insertLadderAward($early['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $this->sql("SET STATEMENT sql_mode='' FOR UPDATE " . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['0000-00-00', $zw]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['0201-01-28', $tw]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['1985-01-01', $ew]);
+        $mine = [$zero['mundane_id'], $typo['mundane_id'], $early['mundane_id']];
+
+        $this->assertSame([$early['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'lt', '2000-01-01')), $mine));
+        $this->assertSame([$early['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'between', ['0001-01-01', '1999-12-31'])), $mine));
+        // the award itself still counts
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'award_count']));
+        $this->assertSame(1, array_column($r['Rows'], 'award_count', 'MundaneId')[$zero['mundane_id']]);
+    }
+
+    /** Players whose park is the scope park but whose home kingdom is another kingdom. */
+    private function otherKingdomId(): int
+    {
+        $st = $this->fixture->pdo()->prepare('SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id <> ? ORDER BY kingdom_id LIMIT 1');
+        $st->execute([$this->kid]);
+        $k = (int) $st->fetchColumn();
+        if ($k <= 0) {
+            $this->markTestSkipped('Needs a second kingdom.');
+        }
+
+        return $k;
+    }
+
+    public function testParkScopeIsPinnedToTheParksKingdom(): void
+    {
+        $home = $this->player('pe-pk-home');
+        $stray = $this->player('pe-pk-stray');
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET kingdom_id = ? WHERE mundane_id = ?', [$this->otherKingdomId(), $stray['mundane_id']]);
+        $expected = (int) $this->fixture->pdo()->query(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId . ' AND kingdom_id = ' . $this->kid
+        )->fetchColumn();
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId));
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertContains($home['mundane_id'], $this->ids($r));
+        $this->assertNotContains($stray['mundane_id'], $this->ids($r), 'a player of another kingdom is outside the park scope');
+        $this->assertSame($expected, $r['Total']);
+        $this->assertSame($expected, $r['ScopeTotal'], 'ScopeTotal uses the same scope clause');
+        $orTree = ['op' => 'OR', 'children' => [$this->leaf('active', 'is', 'yes'), $this->leaf('active', 'is', 'no')]];
+        $this->assertNotContains($stray['mundane_id'], $this->ids($this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $orTree))));
+
+        // Same population as GetPlayerRoster's park scope.
+        $roster = array_map(static fn (array $x): int => (int) $x['MundaneId'], $this->roster('Park', $this->parkId, [], $this->admin['token']));
+        $this->assertSame($this->sorted(array_values(array_unique($roster))), $this->ids($r));
+    }
+
+    public function testParkScopeFailsClosedWhenTheParkHasNoKingdom(): void
+    {
+        $missing = (int) $this->fixture->pdo()->query('SELECT COALESCE(MAX(park_id), 0) + 1000 FROM ' . DB_PREFIX . 'park')->fetchColumn();
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $missing));
+        $this->assertNotSame(0, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Rows', $r);
+        $this->assertArrayNotHasKey('ScopeTotal', $r);
+    }
+
+    public function testNonPositiveOrNonFiniteStatementTimeoutKeepsTheDefault(): void
+    {
+        foreach ([0.0, -5.0, NAN, INF] as $t) {
+            $p = $this->probe();
+            $p->timeout = $t;
+            // 0 / negative would mean "no limit" to MariaDB, NAN / INF are not SQL at all
+            $this->assertSame('SET STATEMENT max_statement_time=' . PopulationExplorer::STATEMENT_TIMEOUT_S . ' FOR ', $p->timeoutClause(), "timeout $t");
+            $r = $p->Run($this->req($this->admin['token'], 'Park', $this->parkId));
+            $this->assertSame(0, $r['Status']['Status'], "timeout $t: " . json_encode($r['Status']));
+        }
+        $p = $this->probe();
+        $p->timeout = 2.5;
+        $this->assertSame('SET STATEMENT max_statement_time=2.5 FOR ', $p->timeoutClause());
     }
 
     public function testReeveAndCorporaQualifiedParity(): void

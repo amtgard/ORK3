@@ -371,4 +371,70 @@ final class PopulationExplorerTest extends TestCase
         $this->assertNotContains('drop table', $d['state']['columns']);
         $this->assertContains('home_park', $d['state']['columns']);
     }
+
+    private function compileLeaf(string $c, string $o, $v, ?int $p = null): string
+    {
+        $n = $this->norm(['op' => 'AND', 'children' => [$this->leaf($c, $o, $v, $p)]]);
+        $this->assertTrue($n['ok'], (string) ($n['error'] ?? ''));
+
+        return $this->pe->CompileTree($n['tree'], ['duesScope' => '1=1']);
+    }
+
+    public function testPlayerSinceFloorsAt1988AndHasNoOverride(): void
+    {
+        $col = $this->pe->ColumnSelectSql('player_since', []);
+        $this->assertStringContainsString("a.date >= '1988-01-01'", $col);
+        $this->assertStringNotContainsString('player_since_override', $col);
+        $crit = $this->compileLeaf('player_since', 'lt', '2000-01-01');
+        $this->assertStringContainsString("a.date >= '1988-01-01'", $crit);
+        $this->assertStringNotContainsString('player_since_override', $crit);
+        $this->assertFalse(method_exists(PopulationExplorer::class, '_hasPlayerSinceOverride'), 'no schema probe');
+    }
+
+    public function testLastSigninParkTreatsParkZeroAsNoParkWithIdTieBreak(): void
+    {
+        foreach ([$this->compileLeaf('last_signin_park', 'not_in', [5]), $this->pe->ColumnSelectSql('last_signin_park', [])] as $sql) {
+            $this->assertStringContainsString('NULLIF(a.park_id, 0)', $sql);
+            $this->assertStringContainsString('ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1', $sql);
+        }
+    }
+
+    public function testAwardDateAnyIgnoresAwardsDatedBefore1980(): void
+    {
+        foreach (['lt', 'gte'] as $o) {
+            $this->assertStringContainsString("w.date >= '1980-01-01'", $this->compileLeaf('award_date_any', $o, '2000-01-01'));
+        }
+    }
+
+    /**
+     * Every criterion that offers a negated operand says what happens to players
+     * with no value: nullable ones are not matched, set-style ones are. The note
+     * travels in the registry so the UI never guesses.
+     */
+    public function testNegatedOperandNotesAreSpecificAndAccurate(): void
+    {
+        $neg = ['ne', 'is_not', 'not_in', 'has_none'];
+        $crit = $this->pe->Registry()['criteria'];
+        foreach ($crit as $id => $def) {
+            $hasNeg = array_intersect($neg, $def['operands']) !== [];
+            $setStyle = $def['type'] === 'peerage_set' || in_array($id, ['has_award', 'classes_last_n_months'], true);
+            if ($hasNeg && ($def['nullable'] || $setStyle)) {
+                $this->assertNotSame('', (string) ($def['neg_note'] ?? ''), "$id needs a negated-operand note");
+            } else {
+                $this->assertArrayNotHasKey('neg_note', $def, "$id: a count or plain field has no missing value");
+            }
+        }
+        $this->assertStringContainsString('no sign-ins in the last N months', $crit['classes_last_n_months']['neg_note']);
+        $this->assertStringContainsString('also match', $crit['classes_last_n_months']['neg_note']);
+        $this->assertStringContainsString('event', $crit['last_signin_park']['neg_note']);
+        $this->assertStringContainsString('not matched', $crit['last_signin_park']['neg_note']);
+        foreach (['knighthood', 'masterhood', 'paragon', 'lesser_peerage', 'has_award'] as $id) {
+            $this->assertStringContainsString('also match', $crit[$id]['neg_note'], $id);
+        }
+        foreach (['last_signin', 'player_since', 'last_class', 'dues_through'] as $id) {
+            $this->assertStringContainsString('not matched', $crit[$id]['neg_note'], $id);
+        }
+        $this->assertStringContainsString('1988', $crit['player_since']['note']);
+        $this->assertStringContainsString('1980', $crit['award_date_any']['note']);
+    }
 }
