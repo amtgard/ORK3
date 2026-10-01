@@ -144,7 +144,7 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     transition   : background 0.15s;
 }
 .pe-btn-run:hover { background: var(--pe-accent-hover); }
-.pe-btn-run:disabled { opacity: 0.75; cursor: progress; }
+.pe-btn-run[aria-disabled="true"] { opacity: 0.75; cursor: progress; }
 .pe-btn-run:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; }
 
 .pe-btn-link {
@@ -500,6 +500,18 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     border-radius: 0;
 }
 #pe-results-card.is-loading .pe-table-area { opacity: 0.5; pointer-events: none; transition: opacity 0.15s; }
+/* A failed run leaves the last successful run's table dimmed under a note. */
+.pe-root .pe-table-area.is-stale { opacity: 0.5; }
+.pe-stale-note {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    margin     : 0 0 8px;
+    font-size  : 12px;
+    font-weight: 600;
+    color      : var(--rp-text-muted);
+}
+.pe-stale-note[hidden] { display: none; }
 .pe-root .pe-results-empty { padding: 28px 12px; }
 .pe-dt-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 4px; }
 .pe-dt-top .dataTables_filter { margin-left: auto; }

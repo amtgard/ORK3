@@ -154,6 +154,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 			<div class="rp-filter-card-header"><i class="fas fa-list"></i> Results</div>
 			<div class="rp-filter-card-body pe-results-body">
 				<div id="pe-results-msg"></div>
+				<p class="pe-stale-note" id="pe-stale" hidden><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> The table below is from your last successful run.</p>
 				<div class="rp-table-area pe-table-area" id="pe-table-area" hidden></div>
 				<div class="rp-empty-state pe-results-empty" id="pe-results-idle">
 					<i class="fas fa-users-viewfinder"></i>

@@ -853,10 +853,13 @@
     }
 
 
+    // Not btn.disabled: disabling the focused button drops focus to <body>. run()
+    // ignores clicks while `running`; aria-disabled tells assistive tech.
     function setRunning(on) {
         running = on;
         var btn = $('pe-run');
-        btn.disabled = on;
+        btn.setAttribute('aria-disabled', on ? 'true' : 'false');
+        btn.setAttribute('aria-busy', on ? 'true' : 'false');
         btn.classList.toggle('is-loading', on);
         btn.querySelector('i').className = on ? 'fas fa-spinner fa-spin' : 'fas fa-play';
         btn.querySelector('span').textContent = on ? 'Running…' : 'Run';
@@ -869,12 +872,40 @@
         m.innerHTML = html ? '<div class="pe-banner pe-banner-' + kind + '" role="' + (kind === 'error' ? 'alert' : 'status') + '">' + html + '</div>' : '';
     }
 
+    // Re-render the builder and put focus back on the same control (Ctrl+Enter from a rule).
+    function renderKeepingFocus() {
+        var a = document.activeElement;
+        var host = a && a.closest ? a.closest('[data-node]') : null;
+        var id = host ? host.getAttribute('data-node') : null;
+        var idx = host ? Array.prototype.indexOf.call(host.querySelectorAll('select, input, button'), a) : -1;
+        render();
+        if (id === null || idx < 0) { return; }
+        var n = document.querySelector('[data-node="' + id + '"]');
+        var f = n ? n.querySelectorAll('select, input, button')[idx] : null;
+        if (f) { f.focus(); }
+    }
+
+    // A failed run (incomplete rule, server error, network) must not leave the last
+    // run's numbers looking like this run's: the stats reset to "—" and a table from
+    // the last successful run stays visible but dimmed and labelled as such.
+    // Returns true when such a table is on screen.
+    function markStale() {
+        ['pe-stat-results', 'pe-stat-pct', 'pe-stat-time'].forEach(function (id) { $(id).textContent = '—'; });
+        var area = $('pe-table-area');
+        var hasTable = !!(area && !area.hidden && area.firstChild);
+        if (area) { area.classList.toggle('is-stale', hasTable); }
+        $('pe-stale').hidden = !hasTable;
+        if (!hasTable) { resetIdle(); $('pe-results-idle').hidden = false; }
+        return hasTable;
+    }
+    var STALE_SAY = ' The table below is from your last successful run.';
+
     function run() {
         if (running) { return; }
         var bad = firstIncomplete(root);
-        if (bad) { markRuleError(bad.node, bad.msg); if (!dt) { resetIdle(); $('pe-results-idle').hidden = false; } return; }
+        if (bad) { markStale(); markRuleError(bad.node, bad.msg); return; }
         var state = currentState();
-        if (errorRuleId) { clearError(); render(); } // re-render only to drop a stale rule error
+        if (errorRuleId) { clearError(); renderKeepingFocus(); } // re-render only to drop a stale rule error
         setRunning(true);
         showMsg('', '');
         resetIdle();
@@ -902,6 +933,7 @@
         var msg = j.error ? String(j.error) : 'The report could not be run.';
         // The endpoint joins a generic status sentence and the detail as "Generic.: Detail"; keep the detail.
         msg = msg.replace(/^[^:]*\.:\s+/, '');
+        var stale = markStale();
         if (/not logged in/i.test(msg)) {
             showMsg('error', loginPromptHtml());
             announce('Your session has ended. Log in again and re-run.');
@@ -911,13 +943,11 @@
             var node = findPath(root, j.rule_path);
             if (node) {
                 markRuleError(node, msg);
-                if (!dt) { $('pe-results-idle').hidden = false; }
                 return;
             }
         }
         showMsg('error', '<i class="fas fa-circle-exclamation"></i> <span>' + esc(msg) + '</span>');
-        announce(msg);
-        if (!dt) { $('pe-results-idle').hidden = false; }
+        announce(msg + (stale ? STALE_SAY : ''));
     }
 
     function updatePct(total, scopeTotal) {
@@ -968,6 +998,8 @@
         if (dt) { try { dt.destroy(); } catch (e) { /* ignore */ } dt = null; }
         var area = $('pe-table-area');
         area.textContent = '';
+        area.classList.remove('is-stale');
+        $('pe-stale').hidden = true;
         if (!rows.length) {
             area.hidden = true;
             var idle = $('pe-results-idle');
