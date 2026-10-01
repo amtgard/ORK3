@@ -79,7 +79,7 @@ Validation (reject with a message naming the offending rule; build no SQL):
 
 - criterion id exists in the registry; operand allowed for that criterion
 - value matches the type: ISO `YYYY-MM-DD` regex, `(int)` casts, `between`
-  needs two ordered values, ids checked against known parks / kingdoms /
+  needs two values (sorted ascending if reversed, see §3.4), ids checked against known parks / kingdoms /
   classes / peerage orders, bool enum
 - tree depth ≤ 6, total leaves ≤ 40, `IN`-list size ≤ 100
 - columns exist in the column registry; Persona is always included
