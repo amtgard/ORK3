@@ -30,6 +30,8 @@ class PopulationExplorer extends Ork3
     public const OPS_BOOL = ['is'];
     public const SQL_CMP = ['eq' => '=', 'ne' => '<>', 'gt' => '>', 'gte' => '>=', 'lt' => '<', 'lte' => '<='];
     private const NOTE_NONE_HELD = 'Players who hold none at all also match.';
+    /** Rule rejection for a restricted criterion (suspended, banned) sent by a non-officer of the scope. */
+    public const RESTRICTED_MESSAGE = 'This filter requires officer access for this kingdom or park.';
 
     public function __construct()
     {
@@ -103,8 +105,10 @@ class PopulationExplorer extends Ork3
             'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'neg_note' => 'Players with no dues paid to this scope are not matched.', 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
-            'suspended'             => $this->_crit('Suspended', 'Status', 'bool'),
-            'banned'                => $this->_crit('Banned', 'Status', 'bool'),
+            // restricted: officers of the scope only (spec §3.3). Hidden from everyone
+            // else by PublicCriteria and rejected for them by NormalizeTree.
+            'suspended'             => $this->_crit('Suspended', 'Status', 'bool', ['restricted' => true]),
+            'banned'                => $this->_crit('Banned', 'Status', 'bool', ['restricted' => true]),
             'knighthood'            => $this->_crit('Knighthood', 'Peerage', 'peerage_set', ['peerage' => ['Knight'], 'neg_note' => self::NOTE_NONE_HELD]),
             'masterhood'            => $this->_crit('Masterhood', 'Peerage', 'peerage_set', ['peerage' => ['Master'], 'neg_note' => self::NOTE_NONE_HELD]),
             'paragon'               => $this->_crit('Paragon', 'Peerage', 'peerage_set', ['peerage' => ['Paragon'], 'neg_note' => self::NOTE_NONE_HELD]),
@@ -153,6 +157,10 @@ class PopulationExplorer extends Ork3
 
     /**
      * Validate and canonicalise a filter tree.
+     *
+     * $known carries the viewer context too: $known['officer'] must be exactly true
+     * for restricted criteria (suspended, banned) to be accepted. Anything else,
+     * including a missing key, is a non-officer: the check fails closed.
      *
      * @return array ['ok'=>true,'tree'=>array] or ['ok'=>false,'error'=>string,'path'=>int[]]
      */
@@ -219,6 +227,9 @@ class PopulationExplorer extends Ork3
             return $this->_err('Unknown criterion', $path);
         }
         $def = $registry[$c];
+        if (!empty($def['restricted']) && ($known['officer'] ?? false) !== true) {
+            return $this->_err(self::RESTRICTED_MESSAGE, $path);
+        }
         $o = $leaf['o'] ?? null;
         if (!is_string($o) || !in_array($o, $def['operands'], true)) {
             return $this->_err('Invalid operand for ' . $def['label'], $path);
@@ -791,10 +802,13 @@ class PopulationExplorer extends Ork3
     // ---------------------------------------------------------------- scope, authorization, execution
 
     /**
-     * Same gate as Report::_authorizeKingdomParkReportScope (private there, so
-     * mirrored here): global admin, or kingdom EDIT, or park CREATE.
+     * Access gate (spec §3.3): any valid session may explore any existing kingdom or
+     * park. Officer authority is not needed here; it only unlocks the restricted
+     * criteria (see IsScopeOfficer).
      *
-     * @return array|null null when allowed, else an error Status array
+     * @return array|null null when allowed; InvalidParameter for a bad scope type, a
+     * missing id or a kingdom / park that does not exist; BadToken for a missing,
+     * invalid or expired token; ProcessingError when the scope cannot be read.
      */
     public function AuthorizeScope(string $token, string $scopeType, int $scopeId): ?array
     {
@@ -804,23 +818,72 @@ class PopulationExplorer extends Ork3
         if (!valid_id($scopeId)) {
             return InvalidParameter('Scope id is required.');
         }
-        $actorId = Ork3::$Lib->authorization->IsAuthorized($token);
-        if (!valid_id($actorId)) {
+        if (!valid_id(Ork3::$Lib->authorization->IsAuthorized($token))) {
             return BadToken();
         }
-        $auth = Ork3::$Lib->authorization;
-        if ($auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)
-            || $auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return null;
+        try {
+            $exists = $this->_scopeExists($scopeType, $scopeId);
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::AuthorizeScope failure', $e->getMessage());
+            return ProcessingError('The kingdom or park could not be read. Please try again.');
         }
-        if ($scopeType === 'Park') {
-            if ($auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
-                return null;
+        if (!$exists) {
+            return InvalidParameter($scopeType === 'Park' ? 'That park could not be found.' : 'That kingdom could not be found.');
+        }
+        return null;
+    }
+
+    /** Throws on a DB failure. */
+    private function _scopeExists(string $scopeType, int $scopeId): bool
+    {
+        $sql = $scopeType === 'Park'
+            ? 'SELECT park_id FROM ' . $this->_t('park') . ' WHERE park_id = ' . (int)$scopeId
+            : 'SELECT kingdom_id FROM ' . $this->_t('kingdom') . ' WHERE kingdom_id = ' . (int)$scopeId;
+        return $this->_select($sql)->next();
+    }
+
+    /**
+     * Officer authority over the scope, which unlocks the restricted criteria. The
+     * rule is Report::_authorizeKingdomParkReportScope's (private there, so mirrored
+     * here; keep the two in step): global admin, kingdom AUTH_EDIT for that kingdom
+     * (principalities resolve through HasAuthority's parent walk), or park
+     * AUTH_CREATE for that park (a kingdom officer reaches its parks the same way).
+     * Fails closed: a bad token, a bad scope or any error is "not an officer".
+     */
+    public function IsScopeOfficer(string $token, string $scopeType, int $scopeId): bool
+    {
+        if (($scopeType !== 'Kingdom' && $scopeType !== 'Park') || !valid_id($scopeId)) {
+            return false;
+        }
+        try {
+            $auth = Ork3::$Lib->authorization;
+            $actorId = $auth->IsAuthorized($token);
+            if (!valid_id($actorId)) {
+                return false;
             }
-        } elseif ($auth->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT)) {
-            return null;
+            if ($auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)
+                || $auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                return true;
+            }
+            if ($scopeType === 'Park') {
+                return (bool)$auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE);
+            }
+            return (bool)$auth->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::IsScopeOfficer failure', $e->getMessage());
+            return false;
         }
-        return NoAuthorization();
+    }
+
+    /**
+     * Class / award / peerage ids plus the viewer context for this scope
+     * ($known['officer']). Throws RuntimeException when the database cannot be read.
+     */
+    public function LoadKnownForScope(string $token, string $scopeType, int $scopeId): array
+    {
+        $known = $this->LoadKnown();
+        $known['officer'] = $this->IsScopeOfficer($token, $scopeType, $scopeId);
+        return $known;
     }
 
     /** @return int[] kingdom ids covered by a Kingdom scope (stats kingdoms, ints only) */
@@ -889,7 +952,7 @@ class PopulationExplorer extends Ork3
         }
 
         try {
-            $known = $this->LoadKnown();
+            $known = $this->LoadKnownForScope($token, $scopeType, $scopeId);
         } catch (Throwable $e) {
             logtrace('PopulationExplorer::Run known-ids failure', $e->getMessage());
             return ['Status' => ProcessingError('Could not load the report options. Please try again.')];
@@ -1093,7 +1156,8 @@ class PopulationExplorer extends Ork3
     /**
      * Decode and re-validate a share-link payload. Never trusts the link: size
      * capped before decoding, tree re-run through NormalizeTree, columns
-     * filtered to known column ids.
+     * filtered to known column ids. Pass LoadKnownForScope() for the viewer's
+     * scope; with no $known the viewer is treated as a non-officer.
      *
      * @return array ['ok'=>bool,'state'=>?array{tree:array,columns:string[]},'error'=>?string]
      */
@@ -1137,17 +1201,33 @@ class PopulationExplorer extends Ork3
     }
 
     /**
-     * Registry safe to send to the browser: no closures / SQL, plus the option
-     * lists the rule editor needs, limited to the viewer's chosen scope.
-     * Throws RuntimeException when an option list cannot be read.
+     * Criteria safe to send to the browser for this viewer context: no SQL, and no
+     * restricted criteria unless $known['officer'] is exactly true.
      */
-    public function PublicRegistry(string $scopeType, int $scopeId): array
+    public function PublicCriteria(array $known): array
     {
+        $officer = ($known['officer'] ?? false) === true;
         $criteria = [];
         foreach ($this->_criteriaDefs() as $id => $def) {
+            if (!empty($def['restricted']) && !$officer) {
+                continue;
+            }
             unset($def['sql']);
             $criteria[$id] = $def;
         }
+        return $criteria;
+    }
+
+    /**
+     * Registry safe to send to the browser: no closures / SQL, plus the option
+     * lists the rule editor needs, limited to the viewer's chosen scope.
+     * $isOfficer (IsScopeOfficer) decides whether restricted criteria are offered;
+     * `officer` echoes it so the page can say why they are missing.
+     * Throws RuntimeException when an option list cannot be read.
+     */
+    public function PublicRegistry(string $scopeType, int $scopeId, bool $isOfficer = false): array
+    {
+        $criteria = $this->PublicCriteria(['officer' => $isOfficer]);
         $columns = [];
         foreach ($this->_columnDefs() as $id => $def) {
             $columns[$id] = $def;
@@ -1200,6 +1280,6 @@ class PopulationExplorer extends Ork3
             }
         }
 
-        return ['criteria' => $criteria, 'columns' => $columns, 'options' => $options];
+        return ['criteria' => $criteria, 'columns' => $columns, 'options' => $options, 'officer' => $isOfficer];
     }
 }

@@ -138,7 +138,8 @@ final class PopulationExplorerTest extends TestCase
 
     private function sql(array $tree, array $ctx = ['duesScope' => 'd.kingdom_id = 1']): string
     {
-        $n = $this->norm($tree);
+        // Compilation tests are not about access: normalize as an officer of the scope.
+        $n = $this->pe->NormalizeTree($tree, ['officer' => true] + $this->known);
         $this->assertTrue($n['ok'], $n['error'] ?? '');
         return $this->pe->CompileTree($n['tree'], $ctx);
     }
@@ -436,5 +437,86 @@ final class PopulationExplorerTest extends TestCase
         }
         $this->assertStringContainsString('1988', $crit['player_since']['note']);
         $this->assertStringContainsString('1980', $crit['award_date_any']['note']);
+    }
+
+    // ------------------------------------------------------------ restricted criteria (spec §3.3)
+
+    /** @return array{0:array,1:array} [non-officer known, officer known] */
+    private function viewers(): array
+    {
+        return [['officer' => false] + $this->known, ['officer' => true] + $this->known];
+    }
+
+    public function testSuspendedAndBannedAreTheOnlyRestrictedCriteria(): void
+    {
+        $restricted = [];
+        foreach ($this->pe->Registry()['criteria'] as $id => $def) {
+            if (!empty($def['restricted'])) {
+                $restricted[] = $id;
+            }
+        }
+        sort($restricted);
+        $this->assertSame(['banned', 'suspended'], $restricted);
+        $this->assertTrue($this->pe->Registry()['criteria']['suspended']['restricted']);
+    }
+
+    public function testRestrictedCriteriaAreRejectedForNonOfficersWithRulePath(): void
+    {
+        [$plain, $officer] = $this->viewers();
+        foreach (['suspended', 'banned'] as $c) {
+            $tree = ['op' => 'AND', 'children' => [
+                $this->leaf('active', 'is', 'yes'),
+                ['op' => 'OR', 'children' => [$this->leaf($c, 'is', 'yes')]],
+            ]];
+            $r = $this->pe->NormalizeTree($tree, $plain);
+            $this->assertFalse($r['ok'], $c);
+            $this->assertSame(PopulationExplorer::RESTRICTED_MESSAGE, $r['error']);
+            $this->assertSame('This filter requires officer access for this kingdom or park.', $r['error']);
+            $this->assertSame([1, 0], $r['path']);
+
+            $ok = $this->pe->NormalizeTree($tree, $officer);
+            $this->assertTrue($ok['ok'], $c . ': ' . ($ok['error'] ?? ''));
+            $this->assertSame(1, $ok['tree']['children'][1]['children'][0]['v']);
+        }
+    }
+
+    public function testRestrictedCriteriaFailClosedWhenOfficerStatusIsUnknown(): void
+    {
+        $tree = ['op' => 'AND', 'children' => [$this->leaf('suspended', 'is', 'no')]];
+        foreach ([$this->known, ['officer' => 1] + $this->known, ['officer' => 'yes'] + $this->known, ['officer' => null] + $this->known] as $i => $known) {
+            $r = $this->pe->NormalizeTree($tree, $known);
+            $this->assertFalse($r['ok'], "case $i");
+            $this->assertSame(PopulationExplorer::RESTRICTED_MESSAGE, $r['error']);
+        }
+        // An unrestricted criterion is unaffected.
+        $this->assertTrue($this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf('active', 'is', 'no')]], $this->known)['ok']);
+    }
+
+    public function testRestrictedCriteriaInShareLinksAreRejectedForNonOfficers(): void
+    {
+        [$plain, $officer] = $this->viewers();
+        $q = PopulationExplorer::EncodeLink(['tree' => ['op' => 'AND', 'children' => [$this->leaf('banned', 'is', 'yes')]], 'columns' => ['persona']]);
+        $d = PopulationExplorer::DecodeLink($q, $plain);
+        $this->assertFalse($d['ok']);
+        $this->assertStringContainsString(PopulationExplorer::RESTRICTED_MESSAGE, (string) $d['error']);
+        $this->assertTrue(PopulationExplorer::DecodeLink($q, $officer)['ok']);
+    }
+
+    public function testPublicCriteriaHideRestrictedFromNonOfficers(): void
+    {
+        [$plain, $officer] = $this->viewers();
+        $hidden = $this->pe->PublicCriteria($plain);
+        $this->assertArrayNotHasKey('suspended', $hidden);
+        $this->assertArrayNotHasKey('banned', $hidden);
+        $this->assertArrayHasKey('active', $hidden);
+        $this->assertArrayNotHasKey('suspended', $this->pe->PublicCriteria($this->known), 'fail closed');
+
+        $shown = $this->pe->PublicCriteria($officer);
+        $this->assertArrayHasKey('suspended', $shown);
+        $this->assertArrayHasKey('banned', $shown);
+        foreach ($shown as $id => $def) {
+            $this->assertArrayNotHasKey('sql', $def, $id);
+        }
+        $this->assertSame(array_keys($this->pe->Registry()['criteria']), array_keys($shown));
     }
 }

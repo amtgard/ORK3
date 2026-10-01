@@ -124,9 +124,9 @@ final class PopulationExplorerControllerTest extends TestCase
                 return ['criteria' => ['active' => []], 'columns' => [], 'options' => []];
             }
 
-            public function population_decode_link(string $q): array
+            public function population_decode_link(string $q, string $token, string $type, int $id): array
             {
-                return PopulationExplorer::DecodeLink($q, ['class' => [], 'award' => [], 'peerage' => []]);
+                return PopulationExplorer::DecodeLink($q, ['class' => [], 'award' => [], 'peerage' => [], 'officer' => false]);
             }
         };
         $this->ctl->population_explorer();

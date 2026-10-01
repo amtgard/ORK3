@@ -418,7 +418,75 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertNotContains($plain['mundane_id'], $this->ids($r));
     }
 
-    public function testParkOfficerCannotReadOtherPark(): void
+    /** A tree whose only rule is a restricted criterion, nested so the rule path is [1, 0]. */
+    private function restrictedTree(string $c = 'suspended'): array
+    {
+        return ['op' => 'AND', 'children' => [
+            $this->leaf('active', 'is', 'yes'),
+            ['op' => 'OR', 'children' => [$this->leaf($c, 'is', 'no')]],
+        ]];
+    }
+
+    private function assertRestrictedRejected(array $r, string $why): void
+    {
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']['Status'], $why . ': ' . json_encode($r['Status']));
+        $this->assertSame(PopulationExplorer::RESTRICTED_MESSAGE, $r['Status']['Detail'], $why);
+        $this->assertSame([1, 0], $r['RulePath'] ?? null, $why);
+        $this->assertArrayNotHasKey('Rows', $r, $why);
+    }
+
+    private function assertRestrictedAllowed(array $r, string $why): void
+    {
+        $this->assertSame(0, $r['Status']['Status'], $why . ': ' . json_encode($r['Status']));
+        $this->assertArrayHasKey('Rows', $r, $why);
+    }
+
+    public function testPlainPlayerMayRunAnyKingdomOrParkWithoutRestrictedCriteria(): void
+    {
+        $plain = $this->player('pe-plain-viewer');
+        $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
+        $other = $this->otherKingdomId();
+        $otherPark = $this->fixture->parkIdInKingdom($other);
+        $scopes = [['Park', $this->parkId], ['Kingdom', $this->kid], ['Kingdom', $other]];
+        if ($p2 > 0) {
+            $scopes[] = ['Park', $p2];
+        }
+        if ($otherPark > 0) {
+            $scopes[] = ['Park', $otherPark];
+        }
+        foreach ($scopes as [$type, $id]) {
+            $r = $this->exec($this->req($plain['token'], $type, $id));
+            $this->assertSame(0, $r['Status']['Status'], "$type $id: " . json_encode($r['Status']));
+            $this->assertSame($r['ScopeTotal'], $r['Total'], "$type $id");
+            foreach (['suspended', 'banned'] as $c) {
+                $this->assertRestrictedRejected($this->exec($this->req($plain['token'], $type, $id, $this->restrictedTree($c))), "$c in $type $id");
+            }
+        }
+        $this->assertFalse($this->pe->IsScopeOfficer($plain['token'], 'Kingdom', $this->kid));
+        $this->assertFalse($this->pe->IsScopeOfficer($plain['token'], 'Park', $this->parkId));
+    }
+
+    public function testNonExistentScopeIsInvalidNotForbidden(): void
+    {
+        $plain = $this->player('pe-plain-missing');
+        $missingKingdom = (int) $this->fixture->pdo()->query('SELECT COALESCE(MAX(kingdom_id), 0) + 1000 FROM ' . DB_PREFIX . 'kingdom')->fetchColumn();
+        $missingPark = (int) $this->fixture->pdo()->query('SELECT COALESCE(MAX(park_id), 0) + 1000 FROM ' . DB_PREFIX . 'park')->fetchColumn();
+        foreach ([['Kingdom', $missingKingdom], ['Park', $missingPark], ['Kingdom', 0], ['Park', -3]] as [$type, $id]) {
+            $denied = $this->pe->AuthorizeScope($plain['token'], $type, $id);
+            $this->assertNotNull($denied, "$type $id");
+            $this->assertSame(ServiceErrorIds::InvalidParameter, $denied['Status'], "$type $id");
+            $r = $this->exec($this->req($plain['token'], $type, $id));
+            $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']['Status'], "$type $id");
+            $this->assertArrayNotHasKey('Rows', $r);
+        }
+        $this->assertNull($this->pe->AuthorizeScope($plain['token'], 'Kingdom', $this->kid));
+        $this->assertNull($this->pe->AuthorizeScope($plain['token'], 'Park', $this->parkId));
+        // A bad token is reported as such before the scope is looked at.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $this->pe->AuthorizeScope('nope', 'Kingdom', $missingKingdom)['Status']);
+    }
+
+    public function testParkOfficerIsAnOfficerOnlyForTheirOwnPark(): void
     {
         $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
         if ($p2 <= 0) {
@@ -429,20 +497,23 @@ final class PopulationExplorerRunTest extends TestCase
         // satisfy the kingdom lookup in HasAuthority and prove nothing here.
         $this->fixture->insertScopedAuth($officer['mundane_id'], $this->parkId, 0, AUTH_CREATE);
 
-        $own = $this->exec($this->req($officer['token'], 'Park', $this->parkId));
-        $this->assertSame(0, $own['Status']['Status']);
-        $this->assertNotEmpty($own['Rows']);
+        $own = $this->exec($this->req($officer['token'], 'Park', $this->parkId, $this->restrictedTree()));
+        $this->assertRestrictedAllowed($own, 'own park');
+        $this->assertTrue($this->pe->IsScopeOfficer($officer['token'], 'Park', $this->parkId));
 
+        // Another park and the kingdom: may run, but not with restricted criteria.
         $other = $this->exec($this->req($officer['token'], 'Park', $p2));
-        $this->assertSame(ServiceErrorIds::NoAuthorization, $other['Status']['Status']);
-        $this->assertArrayNotHasKey('Rows', $other);
+        $this->assertSame(0, $other['Status']['Status']);
+        $this->assertRestrictedRejected($this->exec($this->req($officer['token'], 'Park', $p2, $this->restrictedTree('banned'))), 'other park');
+        $this->assertFalse($this->pe->IsScopeOfficer($officer['token'], 'Park', $p2));
 
         $kingdom = $this->exec($this->req($officer['token'], 'Kingdom', $this->kid));
-        $this->assertSame(ServiceErrorIds::NoAuthorization, $kingdom['Status']['Status']);
-        $this->assertArrayNotHasKey('Rows', $kingdom);
+        $this->assertSame(0, $kingdom['Status']['Status']);
+        $this->assertRestrictedRejected($this->exec($this->req($officer['token'], 'Kingdom', $this->kid, $this->restrictedTree())), 'kingdom');
+        $this->assertFalse($this->pe->IsScopeOfficer($officer['token'], 'Kingdom', $this->kid));
     }
 
-    public function testKingdomOfficerScopedToKingdom(): void
+    public function testKingdomOfficerIsAnOfficerForTheKingdomAndItsParks(): void
     {
         $officer = $this->player('pe-kd-officer');
         $this->fixture->insertScopedAuth($officer['mundane_id'], 0, $this->kid, AUTH_CREATE);
@@ -454,15 +525,16 @@ final class PopulationExplorerRunTest extends TestCase
             'SELECT COUNT(*) FROM ' . DB_PREFIX . "mundane WHERE kingdom_id IN ($kidList)"
         )->fetchColumn();
         $this->assertSame($expected, $own['Total']);
+        $this->assertRestrictedAllowed($this->exec($this->req($officer['token'], 'Kingdom', $this->kid, $this->restrictedTree())), 'own kingdom');
+        $this->assertRestrictedAllowed($this->exec($this->req($officer['token'], 'Park', $this->parkId, $this->restrictedTree('banned'))), 'park in own kingdom');
+        $this->assertTrue($this->pe->IsScopeOfficer($officer['token'], 'Park', $this->parkId));
 
-        // a park inside the kingdom is allowed through kingdom EDIT? (Park needs park CREATE) -> denied, matches Report gate
         $otherKingdom = (int) $this->fixture->pdo()->query(
             'SELECT kingdom_id FROM ' . DB_PREFIX . "kingdom WHERE kingdom_id <> {$this->kid} AND parent_kingdom_id <> {$this->kid} AND active = 'Active' LIMIT 1"
         )->fetchColumn();
         $this->assertGreaterThan(0, $otherKingdom);
-        $denied = $this->exec($this->req($officer['token'], 'Kingdom', $otherKingdom));
-        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']['Status']);
-        $this->assertArrayNotHasKey('Rows', $denied);
+        $this->assertSame(0, $this->exec($this->req($officer['token'], 'Kingdom', $otherKingdom))['Status']['Status']);
+        $this->assertRestrictedRejected($this->exec($this->req($officer['token'], 'Kingdom', $otherKingdom, $this->restrictedTree())), 'other kingdom');
 
         // every returned row belongs to the kingdom's stats ids
         $in = array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($this->kid));
@@ -471,6 +543,73 @@ final class PopulationExplorerRunTest extends TestCase
             'SELECT COUNT(*) FROM ' . DB_PREFIX . "mundane WHERE mundane_id IN ($idList) AND kingdom_id NOT IN (" . implode(',', $in) . ')'
         )->fetchColumn();
         $this->assertSame(0, $bad);
+    }
+
+    public function testAdminMayUseRestrictedCriteriaEverywhere(): void
+    {
+        $other = $this->otherKingdomId();
+        foreach ([['Park', $this->parkId], ['Kingdom', $this->kid], ['Kingdom', $other]] as [$type, $id]) {
+            foreach (['suspended', 'banned'] as $c) {
+                $this->assertRestrictedAllowed($this->exec($this->req($this->admin['token'], $type, $id, $this->restrictedTree($c))), "$c in $type $id");
+            }
+            $this->assertTrue($this->pe->IsScopeOfficer($this->admin['token'], $type, $id));
+        }
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertFalse($this->pe->IsScopeOfficer('not-a-token', 'Kingdom', $this->kid), 'a bad token is never an officer');
+    }
+
+    public function testRestrictedCriteriaRejectedInExportAndShareLinkForNonOfficers(): void
+    {
+        $plain = $this->player('pe-plain-export');
+        $before = glob(sys_get_temp_dir() . '/population-explorer-*') ?: [];
+        $x = $this->pe->BuildExport($this->req($plain['token'], 'Park', $this->parkId, $this->restrictedTree('banned')));
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $x['Status']['Status']);
+        $this->assertSame(PopulationExplorer::RESTRICTED_MESSAGE, $x['Status']['Detail']);
+        $this->assertSame([1, 0], $x['RulePath']);
+        $this->assertArrayNotHasKey('Path', $x);
+        $this->assertSame(count($before), count(glob(sys_get_temp_dir() . '/population-explorer-*') ?: []));
+
+        // Without restricted criteria a non-officer can export.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ok = $this->pe->BuildExport($this->req($plain['token'], 'Park', $this->parkId));
+        $this->assertSame(0, $ok['Status']['Status']);
+        @unlink($ok['Path']);
+
+        $model = new Model_Reports();
+        $q = PopulationExplorer::EncodeLink(['tree' => $this->restrictedTree(), 'columns' => ['persona']]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $d = $model->population_decode_link($q, $plain['token'], 'Park', $this->parkId);
+        $this->assertFalse($d['ok']);
+        $this->assertStringContainsString(PopulationExplorer::RESTRICTED_MESSAGE, (string) $d['error']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertTrue($model->population_decode_link($q, $this->admin['token'], 'Park', $this->parkId)['ok']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertFalse($model->population_decode_link($q, '', 'Park', $this->parkId)['ok'], 'no session: fail closed');
+    }
+
+    public function testPublicRegistryHidesRestrictedCriteriaFromNonOfficers(): void
+    {
+        $plain = $this->pe->PublicRegistry('Park', $this->parkId, false);
+        $this->assertArrayNotHasKey('suspended', $plain['criteria']);
+        $this->assertArrayNotHasKey('banned', $plain['criteria']);
+        $this->assertFalse($plain['officer']);
+        $this->assertArrayNotHasKey('suspended', $this->pe->PublicRegistry('Park', $this->parkId)['criteria'], 'defaults to non-officer');
+
+        $officer = $this->pe->PublicRegistry('Park', $this->parkId, true);
+        $this->assertTrue($officer['criteria']['suspended']['restricted']);
+        $this->assertArrayHasKey('banned', $officer['criteria']);
+        $this->assertTrue($officer['officer']);
+
+        $model = new Model_Reports();
+        $viewer = $this->player('pe-plain-registry');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $reg = $model->population_registry($viewer['token'], 'Kingdom', $this->kid);
+        $this->assertArrayNotHasKey('suspended', $reg['criteria']);
+        $this->assertFalse($reg['officer']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $reg = $model->population_registry($this->admin['token'], 'Kingdom', $this->kid);
+        $this->assertArrayHasKey('suspended', $reg['criteria']);
+        $this->assertTrue($reg['officer']);
     }
 
     public function testGlobalAdminMayChooseAnyKingdom(): void

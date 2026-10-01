@@ -2,7 +2,7 @@
 /* ── Population Explorer ─────────────────────────────────────
    Controller: Controller_Reports::population_explorer
    Data: pe_scope_type, pe_scope_id, pe_scope_name, pe_registry,
-         pe_initial, pe_link_error, pe_link_param, pe_no_scope, pe_forbidden, pe_load_error
+         pe_initial, pe_link_error, pe_link_param, pe_no_scope, pe_bad_scope, pe_load_error
    The builder itself lives in script/populationexplorer.js and
    reads only window.PE. */
 $pe_scope_type = $pe_scope_type ?? null;
@@ -12,12 +12,14 @@ $pe_registry   = is_array($pe_registry ?? null) ? $pe_registry : [];
 $pe_initial    = $pe_initial ?? null;
 $pe_link_error = $pe_link_error ?? null;
 $pe_no_scope   = !empty($pe_no_scope);
-$pe_forbidden  = !empty($pe_forbidden);
+$pe_bad_scope  = !empty($pe_bad_scope);
 $pe_load_error = !empty($pe_load_error);
 $pe_link_param = (string)($pe_link_param ?? 'pe');
-$pe_ready      = !$pe_no_scope && !$pe_forbidden && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
+$pe_ready      = !$pe_no_scope && !$pe_bad_scope && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
 
 $pe_is_park    = ($pe_scope_type === 'Park');
+// Officers of the scope also get the restricted Suspended / Banned filters (PublicRegistry).
+$pe_officer    = !empty($pe_registry['officer']);
 $pe_scope_link = $pe_scope_type ? UIR . ($pe_is_park ? 'Park' : 'Kingdom') . '/profile/' . $pe_scope_id : '';
 $pe_scope_icon = $pe_is_park ? 'fa-tree' : 'fa-chess-rook';
 
@@ -74,14 +76,14 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 	<!-- ── Context strip ──────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Build a filter from rules joined by AND / OR, choose the columns you want, then Run. Groups nest, so you can mix &ldquo;all of&rdquo; and &ldquo;any of&rdquo;. Results are limited to players in this <?=$pe_is_park ? 'park' : 'kingdom'?> and capped at 5,000 rows; Copy link shares the exact query.</span>
+		<span>Build a filter from rules joined by AND / OR, choose the columns you want, then Run. Groups nest, so you can mix &ldquo;all of&rdquo; and &ldquo;any of&rdquo;. Results are limited to players in this <?=$pe_is_park ? 'park' : 'kingdom'?> and capped at 5,000 rows; Copy link shares the exact query.<?php if ($pe_ready && !$pe_officer) : ?> The Suspended and Banned filters are only offered to officers of this <?=$pe_is_park ? 'park' : 'kingdom'?>.<?php endif; ?></span>
 	</div>
 
-<?php if ($pe_forbidden) : ?>
+<?php if ($pe_bad_scope) : ?>
 	<div class="rp-empty-state pe-empty-page">
-		<i class="fas fa-lock"></i>
-		<h3 class="pe-empty-title">You don&rsquo;t have access to this <?=$pe_is_park ? 'park' : 'kingdom'?></h3>
-		<p>Population Explorer is available to officers of the <?=$pe_is_park ? 'park' : 'kingdom'?> being explored. Open it from your own kingdom or park&rsquo;s Reports tab.</p>
+		<i class="fas fa-circle-question"></i>
+		<h3 class="pe-empty-title">That <?=$pe_is_park ? 'park' : 'kingdom'?> could not be found</h3>
+		<p>Open Population Explorer from a kingdom or park&rsquo;s Reports tab to choose who to explore.</p>
 	</div>
 <?php elseif ($pe_load_error) : ?>
 	<div class="rp-empty-state pe-empty-page" role="alert">

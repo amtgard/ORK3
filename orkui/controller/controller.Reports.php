@@ -1109,7 +1109,7 @@ class Controller_Reports extends Controller
         $this->data['pe_link_error'] = null;
         $this->data['pe_link_param'] = PopulationExplorer::LINK_PARAM;
         $this->data['pe_no_scope'] = true;
-        $this->data['pe_forbidden'] = false;
+        $this->data['pe_bad_scope'] = false;
         $this->data['pe_load_error'] = false;
 
         if ($type === null) {
@@ -1119,9 +1119,20 @@ class Controller_Reports extends Controller
         $this->data['menu']['reports']['url'] = UIR . ($type === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $id . '&tab=reports';
 
         // Authorize BEFORE building the registry: PublicRegistry does not check access.
+        // Any logged-in viewer may explore any existing kingdom or park.
         $token = isset($this->session->token) ? (string)$this->session->token : '';
-        if ($this->Reports->population_authorize($token, $type, $id) !== null) {
-            $this->data['pe_forbidden'] = true;
+        $denied = $this->Reports->population_authorize($token, $type, $id);
+        if ($denied !== null) {
+            $status = (int)($denied['Status'] ?? 0);
+            if ($status === ServiceErrorIds::SecureTokenFailure) {
+                header('Location: ' . UIR . 'Login'); // expired session, same as logged out
+                exit;
+            }
+            if ($status === ServiceErrorIds::ProcessingError) {
+                $this->data['pe_load_error'] = true;
+                return;
+            }
+            $this->data['pe_bad_scope'] = true; // no such kingdom or park
             return;
         }
 
@@ -1135,7 +1146,7 @@ class Controller_Reports extends Controller
 
         $link = $this->request->{PopulationExplorer::LINK_PARAM} ?? null;
         if (is_string($link) && $link !== '') {
-            $d = $this->Reports->population_decode_link($link);
+            $d = $this->Reports->population_decode_link($link, $token, $type, $id);
             if ($d['ok']) {
                 $this->data['pe_initial'] = $d['state'];
             } else {

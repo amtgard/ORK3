@@ -72,9 +72,10 @@ final class PopulationExplorerModelTest extends TestCase
     public function testPopulationDecodeLinkAndNormalize(): void
     {
         $q = PopulationExplorer::EncodeLink(['tree' => ['op' => 'AND', 'children' => []], 'columns' => ['persona']]);
-        $d = $this->model->population_decode_link($q);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $d = $this->model->population_decode_link($q, $this->admin['token'], 'Park', $this->parkId);
         $this->assertTrue($d['ok']);
-        $this->assertFalse($this->model->population_decode_link('!!')['ok']);
+        $this->assertFalse($this->model->population_decode_link('!!', $this->admin['token'], 'Park', $this->parkId)['ok']);
     }
 
     public function testRegistryDbFailureReturnsEmptyNotAPartialRegistry(): void
