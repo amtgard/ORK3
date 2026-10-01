@@ -133,6 +133,14 @@ One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
 Semantics fixed here:
 
 - **Last Class** = class on the player's most recent sign-in that has a class.
+- **Last sign-in days ago** = `DATEDIFF(CURDATE(), last sign-in date)`, using the
+  same last-sign-in expression as "Last sign-in date". Players who have never signed in
+  are **not matched** by any operator (owner decision 2026-10-01). Use Total sign-ins = 0
+  to find them.
+- **BETWEEN takes its two values in either order.** For every date and number
+  criterion, the server sorts the pair ascending instead of rejecting it, and the
+  builder swaps the two inputs on blur so the screen matches what runs. Both ends are
+  inclusive.
 - **Player Since** = the player's first sign-in date on or after `1988-01-01`, the same
   floor `Player::get_earliest_attendance_date` uses for the profile (earlier rows are
   `0000-00-00` or typo dates). `player_since_override` is not used: that column is not
@@ -176,7 +184,7 @@ Semantics fixed here:
 
 | Group | Criteria | Operands |
 |---|---|---|
-| Activity | Last Sign-In Date; Sign-ins in last N months (N per row); Total sign-ins; Player Since (first sign-in) | `=  ≠  >  ≥  <  ≤  between` |
+| Activity | Last sign-in date; Last sign-in days ago (whole days); Sign-ins in last N months (N per row); Total sign-ins; Player Since (first sign-in) | `=  ≠  >  ≥  <  ≤  between` |
 | Activity | Last Class; Classes played in last N months | `IS  IS NOT  IN  NOT IN` |
 | Location | Home Kingdom; Home Park; Last Sign-in Park | `IS  IS NOT  IN  NOT IN` |
 | Status | Dues Paid; Waivered; Active; Suspended; Banned | `IS Yes / No` |
@@ -184,7 +192,7 @@ Semantics fixed here:
 | Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held (exactly those three; Lords-Page and Apprentice are not included) | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
 | Awards | Has award X; award count; awarded after / before date | has / has not; number operands; date operands `>  ≥  <  ≤  between` (no `=`/`≠`) |
 | Qualifications | Reeve qualified; Corpora qualified | `IS Yes / No` |
-| Ladder Award Ranks | One criterion per ranked ladder: the 15 global ladders the Ladder Award Grid uses (`ork_award.is_ladder = 1`, excluding Walker in the Middle, id 31), labelled with the kingdom's own name where it renames one, **plus** every kingdom-only ladder (`ork_kingdomaward.award_id = 0 AND is_ladder = 1`) of the kingdoms in scope | `=  ≠  >  ≥  <  ≤  between` (integer) |
+| Ladder Award Ranks | One criterion per ranked ladder: the 15 global ladders the Ladder Award Grid uses (`ork_award.is_ladder = 1`, excluding Walker in the Middle, id 31), labelled with the kingdom's own name where it renames one, **plus** every kingdom-only ladder of the kingdoms in scope. A kingdom-only ladder is a kingdom award in master's existing list, `Award::pseudoLadderKingdomAwardIds()`; it may sit on a generic award such as Custom Award, id 94. `ork_kingdomaward.is_ladder` is not on master, so swap to that column when the award-management branch merges. | `=  ≠  >  ≥  <  ≤  between` (integer) |
 
 **Ladder rank semantics:**
 - A player's rank in a ladder is `GREATEST(MAX(rank), COUNT(*))` over that player's
