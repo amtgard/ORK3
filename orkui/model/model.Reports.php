@@ -15,14 +15,20 @@ class Model_Reports extends Model
         return $this->PopulationExplorer->AuthorizeScope($token, $scopeType, $scopeId);
     }
 
-    /** Registry + option lists for a scope. Callers MUST population_authorize() first. */
+    /** Registry + option lists for a scope ([] when denied or the DB could not be read). */
     public function population_registry(string $token, string $scopeType, int $scopeId): array
     {
         $denied = $this->population_authorize($token, $scopeType, $scopeId);
         if ($denied !== null) {
             return [];
         }
-        return $this->PopulationExplorer->PublicRegistry($scopeType, $scopeId);
+        try {
+            return $this->PopulationExplorer->PublicRegistry($scopeType, $scopeId);
+        } catch (Throwable $e) {
+            // A DB failure must not render a builder with empty pickers; the page shows an error.
+            logtrace('Model_Reports::population_registry failure', $e->getMessage());
+            return [];
+        }
     }
 
     public function population_run(array $request): array

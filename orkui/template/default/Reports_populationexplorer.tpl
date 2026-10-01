@@ -2,7 +2,7 @@
 /* ── Population Explorer ─────────────────────────────────────
    Controller: Controller_Reports::population_explorer
    Data: pe_scope_type, pe_scope_id, pe_scope_name, pe_registry,
-         pe_initial, pe_link_error, pe_no_scope, pe_forbidden
+         pe_initial, pe_link_error, pe_no_scope, pe_forbidden, pe_load_error
    The builder itself lives in script/populationexplorer.js and
    reads only window.PE. */
 $pe_scope_type = $pe_scope_type ?? null;
@@ -13,7 +13,8 @@ $pe_initial    = $pe_initial ?? null;
 $pe_link_error = $pe_link_error ?? null;
 $pe_no_scope   = !empty($pe_no_scope);
 $pe_forbidden  = !empty($pe_forbidden);
-$pe_ready      = !$pe_no_scope && !$pe_forbidden && $pe_scope_type !== null && !empty($pe_registry);
+$pe_load_error = !empty($pe_load_error);
+$pe_ready      = !$pe_no_scope && !$pe_forbidden && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
 
 $pe_is_park    = ($pe_scope_type === 'Park');
 $pe_scope_link = $pe_scope_type ? UIR . ($pe_is_park ? 'Park' : 'Kingdom') . '/profile/' . $pe_scope_id : '';
@@ -80,6 +81,12 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 		<i class="fas fa-lock"></i>
 		<h3 class="pe-empty-title">You don&rsquo;t have access to this <?=$pe_is_park ? 'park' : 'kingdom'?></h3>
 		<p>Population Explorer is available to officers of the <?=$pe_is_park ? 'park' : 'kingdom'?> being explored. Open it from your own kingdom or park&rsquo;s Reports tab.</p>
+	</div>
+<?php elseif ($pe_load_error) : ?>
+	<div class="rp-empty-state pe-empty-page" role="alert">
+		<i class="fas fa-circle-exclamation"></i>
+		<h3 class="pe-empty-title">The report options could not be loaded</h3>
+		<p>Something went wrong reading the class, award and park lists. Reload the page to try again.</p>
 	</div>
 <?php elseif (!$pe_ready) : ?>
 	<div class="rp-empty-state pe-empty-page">

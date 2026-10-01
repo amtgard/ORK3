@@ -4,76 +4,105 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+require_once DIR_UI . 'controller/controller.Reports.php';
+
 /**
- * Model_Reports must route Population Explorer calls to the domain class.
+ * Controller_Reports Population Explorer wire contract: the JSON shape, the
+ * not-logged-in / expired-session guard, export HTTP codes and the same-origin
+ * check. The actions themselves end in exit(), so the decisions they make are
+ * private helpers exercised here directly (constructor skipped: it needs a full
+ * request context).
  */
 final class PopulationExplorerControllerTest extends TestCase
 {
-    private ReportsFixture $fixture;
+    private Controller_Reports $ctl;
 
-    private Model_Reports $model;
-
-    private int $parkId;
-
-    /** @var array{mundane_id:int,park_id:int,kingdom_id:int,token:string} */
-    private array $admin;
+    private array $serverBackup;
 
     protected function setUp(): void
     {
-        if (!ork3_test_db_available()) {
-            $this->markTestSkipped('Test database is not available.');
-        }
-
-        $this->fixture = ReportsFixture::create();
-        $this->model = new Model_Reports();
-        $kid = $this->fixture->firstKingdomId();
-        $this->parkId = $this->fixture->parkIdInKingdom($kid);
-        $this->admin = $this->fixture->createPlayer($this->parkId, 'pe-ctl-admin');
-        $this->fixture->insertGlobalAdmin($this->admin['mundane_id']);
+        $this->serverBackup = $_SERVER;
+        $this->ctl = (new ReflectionClass(Controller_Reports::class))->newInstanceWithoutConstructor();
+        $this->ctl->session = (object) ['user_id' => 1, 'token' => 'tok'];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['HTTP_HOST'] = 'ork.example:8080';
+        unset($_SERVER['HTTP_ORIGIN'], $_SERVER['HTTP_SEC_FETCH_SITE']);
     }
 
     protected function tearDown(): void
     {
-        if (isset($this->fixture)) {
-            $this->fixture->cleanup();
+        $_SERVER = $this->serverBackup;
+    }
+
+    private function call(string $method, ...$args)
+    {
+        $m = new ReflectionMethod(Controller_Reports::class, $method);
+
+        return $m->invoke($this->ctl, ...$args);
+    }
+
+    public function testHelpersAreNotRoutable(): void
+    {
+        foreach (['_pe_preflight', '_pe_same_origin', '_pe_json_error', '_pe_export_failure'] as $m) {
+            $this->assertTrue((new ReflectionMethod(Controller_Reports::class, $m))->isPrivate(), $m);
         }
     }
 
-    public function testPopulationRunDelegatesToDomain(): void
+    public function testPreflightRequiresLoginAndPost(): void
     {
-        unset($_SESSION['is_authorized_mundane_id']);
-        $r = $this->model->population_run([
-            'Token' => $this->admin['token'],
-            'ScopeType' => 'Park',
-            'ScopeId' => $this->parkId,
-            'Tree' => ['op' => 'AND', 'children' => []],
-            'Columns' => ['persona'],
-        ]);
-        $this->assertSame(0, $r['Status']['Status']);
-        $this->assertNotEmpty($r['Rows']);
-        $this->assertSame('persona', $r['Columns'][0]['id']);
+        $this->assertNull($this->call('_pe_preflight'));
+
+        $this->ctl->session = (object) [];
+        $this->assertSame([401, 5, 'Not logged in'], $this->call('_pe_preflight'));
+
+        $this->ctl->session = (object) ['user_id' => 1, 'token' => 'tok'];
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $this->assertSame(405, $this->call('_pe_preflight')[0]);
     }
 
-    public function testPopulationAuthorizeAndRegistry(): void
+    public function testSameOriginCheck(): void
     {
-        unset($_SESSION['is_authorized_mundane_id']);
-        $this->assertNull($this->model->population_authorize($this->admin['token'], 'Park', $this->parkId));
-        $denied = $this->model->population_authorize('not-a-token', 'Park', $this->parkId);
-        $this->assertNotNull($denied);
-        $this->assertNotSame(0, $denied['Status']);
+        // Absent headers are allowed (older browsers, curl).
+        $this->assertTrue($this->call('_pe_same_origin', $_SERVER));
+        $this->assertTrue($this->call('_pe_same_origin', ['HTTP_HOST' => 'ork.example:8080', 'HTTP_ORIGIN' => 'http://ork.example:8080']));
+        $this->assertTrue($this->call('_pe_same_origin', ['HTTP_HOST' => 'ORK.example', 'HTTP_ORIGIN' => 'https://ork.example', 'HTTP_SEC_FETCH_SITE' => 'same-origin']));
+        $this->assertFalse($this->call('_pe_same_origin', ['HTTP_HOST' => 'ork.example:8080', 'HTTP_ORIGIN' => 'http://evil.example']));
+        $this->assertFalse($this->call('_pe_same_origin', ['HTTP_HOST' => 'ork.example:8080', 'HTTP_ORIGIN' => 'http://ork.example:9999']));
+        $this->assertFalse($this->call('_pe_same_origin', ['HTTP_HOST' => 'ork.example', 'HTTP_ORIGIN' => 'null']));
+        $this->assertFalse($this->call('_pe_same_origin', ['HTTP_HOST' => 'ork.example', 'HTTP_SEC_FETCH_SITE' => 'cross-site']));
 
-        $reg = $this->model->population_registry($this->admin['token'], 'Park', $this->parkId);
-        $this->assertArrayHasKey('criteria', $reg);
-        $this->assertArrayHasKey('options', $reg);
-        unset($_SESSION['is_authorized_mundane_id']);
-        $this->assertSame([], $this->model->population_registry('not-a-token', 'Park', $this->parkId));
+        $_SERVER['HTTP_ORIGIN'] = 'http://evil.example';
+        $this->assertSame([403, 1, 'Cross-site request refused.'], $this->call('_pe_preflight'));
     }
 
-    public function testPopulationDecodeLinkAndNormalize(): void
+    public function testJsonErrorShape(): void
     {
-        $q = PopulationExplorer::EncodeLink(['tree' => ['op' => 'AND', 'children' => []], 'columns' => ['persona']]);
-        $d = $this->model->population_decode_link($q);
-        $this->assertTrue($d['ok']);
-        $this->assertFalse($this->model->population_decode_link('!!')['ok']);
+        // Expired / replaced session (status 2) gets the login prompt contract.
+        $this->assertSame(['status' => 5, 'error' => 'Not logged in'], $this->call('_pe_json_error', ['Status' => BadToken()]));
+
+        // Detail alone, no "You have set a parameter incorrectly.:" prefix; rule path kept.
+        $this->assertSame(
+            ['status' => 4, 'error' => 'Value must be a number', 'rule_path' => [1, 0]],
+            $this->call('_pe_json_error', ['Status' => InvalidParameter('Value must be a number'), 'RulePath' => [1, 0]])
+        );
+        // No detail: the generic sentence.
+        $this->assertSame(['status' => 5, 'error' => ServiceErrorMessages::NoAuthorization], $this->call('_pe_json_error', ['Status' => NoAuthorization()]));
+        // Timeout is flagged.
+        $this->assertSame(
+            ['status' => 3, 'error' => PopulationExplorer::TIMEOUT_MESSAGE, 'timeout' => true],
+            $this->call('_pe_json_error', ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true])
+        );
+    }
+
+    public function testExportFailureCodes(): void
+    {
+        $this->assertSame(401, $this->call('_pe_export_failure', ['Status' => BadToken()])[0]);
+        $this->assertSame(403, $this->call('_pe_export_failure', ['Status' => NoAuthorization()])[0]);
+        $bad = $this->call('_pe_export_failure', ['Status' => InvalidParameter('Value must be a number'), 'RulePath' => [0]]);
+        $this->assertSame(400, $bad[0]);
+        $this->assertStringContainsString('Value must be a number', $bad[1]);
+        $this->assertSame([503, PopulationExplorer::TIMEOUT_MESSAGE], $this->call('_pe_export_failure', ['Status' => ProcessingError(PopulationExplorer::TIMEOUT_MESSAGE), 'TimedOut' => true]));
+        $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => ProcessingError('x')])[0]);
+        $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => Success()])[0], 'success without a file is a failure');
     }
 }
