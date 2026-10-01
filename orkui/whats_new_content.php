@@ -8,17 +8,20 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-08-22');
+    define('WHATS_NEW_VERSION', '2026-09-30');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.5 Hydra');
+    define('ORK_VERSION', '3.5.6 Hydra');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.6 Hydra', 'date' => '2026-09-30', 'items' => [
+        ['icon' => 'fas fa-users-viewfinder', 'title' => 'Population Explorer', 'body' => 'Officers can now build their own player lists. Combine conditions such as attendance, dues, waivers, awards and last sign-in with AND, OR and NOT, choose the columns you want, then export to a spreadsheet or share a link to the exact report. Find it in the Reports tab of your kingdom or park.'],
+    ]],
     ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
         ['icon' => 'fas fa-laptop', 'title' => 'Stay Signed In on Three Devices', 'body' => 'Signing in on your phone no longer signs you out on your laptop. The ORK now keeps up to three devices signed in at once, so you can check the calendar on your phone at the park, take attendance on a tablet, and still have your reeve reports open on a desktop at home — no more getting bounced back to the login page every time you switch.'],
