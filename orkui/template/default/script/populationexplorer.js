@@ -18,8 +18,6 @@
     var DEFAULT_MONTHS = 6;
     var MAX_MONTHS = 60;
     var NEGATED = { ne: 1, is_not: 1, not_in: 1, has_none: 1 };
-    var TIP_NULL = 'Players with no value for this field are not matched.';
-    var TIP_NONE = 'Players with none at all are matched too.';
 
     var OP_LABEL = {
         eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', between: 'between',
@@ -436,7 +434,15 @@
         osel.addEventListener('change', function () { setOperand(r, osel.value); clearErrorFor(r); render(); focusNode(r.id, '.pe-op-select'); });
         opCell.appendChild(osel);
         var tip = operandTip(def, r.o);
-        if (tip) { opCell.setAttribute('data-tip', tip); }
+        if (tip) {
+            // Visual tip on hover / keyboard focus (:focus-within); the same text is
+            // the select's description for screen readers.
+            opCell.setAttribute('data-tip', tip);
+            var note = el('span', 'pe-sr-only', tip);
+            note.id = 'pe-opnote-' + r.id;
+            opCell.appendChild(note);
+            osel.setAttribute('aria-describedby', note.id);
+        }
         row.appendChild(opCell);
 
         // Value
@@ -461,14 +467,12 @@
         return row;
     }
 
-    // Spec §3.2: negated operands never match a missing value; set-style criteria
-    // ("has none of") do match players who have none. Plus the criterion's own note.
+    // Negated operands: the registry's neg_note says what happens to players with no
+    // value (spec §3.2: nullable fields do not match; set-style criteria such as
+    // "has none of" or "classes in the last N months" do). Plus the criterion's own note.
     function operandTip(def, o) {
         var parts = [];
-        if (NEGATED[o]) {
-            if (def.nullable) { parts.push(TIP_NULL); }
-            else if (def.type === 'peerage_set' || def.set === 'award' || (def.type === 'enum_set' && def.param)) { parts.push(TIP_NONE); }
-        }
+        if (NEGATED[o] && def.neg_note) { parts.push(def.neg_note); }
         if (def.note) { parts.push(def.note); }
         return parts.join(' ');
     }
