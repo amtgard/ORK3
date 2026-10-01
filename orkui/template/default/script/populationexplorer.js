@@ -886,7 +886,8 @@
             deferRender: true,
             autoWidth: false,
             dom: '<"pe-dt-top"lBf>rt<"pe-dt-bottom"ip>',
-            buttons: [{ extend: 'print', text: '<i class="fas fa-print"></i> Print', className: 'pe-dt-btn', title: 'Population Explorer — ' + (PE.scope.name || '') }],
+            // Buttons print writes the title into the print window's <title>/<h1> unescaped.
+            buttons: [{ extend: 'print', text: '<i class="fas fa-print"></i> Print', className: 'pe-dt-btn', title: 'Population Explorer — ' + esc(PE.scope.name || '') }],
             language: { search: 'Search results:', emptyTable: 'No players match these filters.' }
         });
     }
