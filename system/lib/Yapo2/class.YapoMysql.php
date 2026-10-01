@@ -250,6 +250,37 @@ class YapoMysql extends YapoDb
         return $this->DBH->inTransaction();
     }
 
+    // Read-only consistent snapshot (InnoDB): every SELECT on this connection until
+    // EndReadSnapshot() reads the database as it was at this call, so several
+    // statements that make up one answer agree with each other. Writes are refused
+    // (error 1792) until it ends. Per-statement limits such as
+    // SET STATEMENT max_statement_time still apply inside it.
+    // Returns false and starts nothing when a transaction is already open here:
+    // START TRANSACTION would silently commit it. The caller then simply reads
+    // without the snapshot.
+    public function BeginReadSnapshot()
+    {
+        if ($this->__trans_depth > 0 || $this->DBH->inTransaction()) {
+            return false;
+        }
+        // The snapshot only holds across statements under REPEATABLE READ; this
+        // SET applies to the next transaction only, so the session default is kept.
+        if ($this->DBH->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ') === false) {
+            return false;
+        }
+        return $this->DBH->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY') !== false;
+    }
+
+    // Ends a snapshot from BeginReadSnapshot(). Nothing was written, so COMMIT and
+    // ROLLBACK are equivalent; a no-op when no transaction is open.
+    public function EndReadSnapshot()
+    {
+        if (!$this->DBH->inTransaction()) {
+            return true;
+        }
+        return $this->DBH->exec('COMMIT') !== false;
+    }
+
     public function Clear()
     {
         $this->Data = array();

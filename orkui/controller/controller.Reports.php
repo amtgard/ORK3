@@ -14,6 +14,10 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
+            // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
+            'population_explorer_json',
+            // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
+            'population_explorer_export',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -1075,6 +1079,305 @@ class Controller_Reports extends Controller
         $this->data['KnightTypes']  = $result['KnightTypes']  ?? array();
     }
 
+
+    public function population_explorer($params = null)
+    {
+        $this->template = 'Reports_populationexplorer.tpl';
+        $this->data['page_title'] = 'Population Explorer';
+
+        $type = null;
+        $id = 0;
+        if (isset($this->request->ParkId) && valid_id($this->request->ParkId)) {
+            $type = 'Park';
+            $id = (int)$this->request->ParkId;
+        } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+            $type = 'Kingdom';
+            $id = (int)$this->request->KingdomId;
+        } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+            $type = 'Park';
+            $id = (int)$this->session->park_id;
+        } elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+            $type = 'Kingdom';
+            $id = (int)$this->session->kingdom_id;
+        }
+
+        $this->data['pe_scope_type'] = $type;
+        $this->data['pe_scope_id'] = $id;
+        $this->data['pe_scope_name'] = '';
+        $this->data['pe_registry'] = [];
+        $this->data['pe_initial'] = null;
+        $this->data['pe_link_error'] = null;
+        $this->data['pe_link_param'] = PopulationExplorer::LINK_PARAM;
+        $this->data['pe_no_scope'] = true;
+        $this->data['pe_bad_scope'] = false;
+        $this->data['pe_load_error'] = false;
+
+        if ($type === null) {
+            return;
+        }
+
+        $this->data['menu']['reports']['url'] = UIR . ($type === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $id . '&tab=reports';
+
+        // Authorize BEFORE building the registry: PublicRegistry does not check access.
+        // Any logged-in viewer may explore any existing kingdom or park.
+        $token = isset($this->session->token) ? (string)$this->session->token : '';
+        $denied = $this->Reports->population_authorize($token, $type, $id);
+        if ($denied !== null) {
+            $status = (int)($denied['Status'] ?? 0);
+            if ($status === ServiceErrorIds::SecureTokenFailure) {
+                header('Location: ' . UIR . 'Login'); // expired session, same as logged out
+                exit;
+            }
+            if ($status === ServiceErrorIds::ProcessingError) {
+                $this->data['pe_load_error'] = true;
+                return;
+            }
+            $this->data['pe_bad_scope'] = true; // no such kingdom or park
+            return;
+        }
+
+        $this->data['pe_no_scope'] = false;
+        $this->data['pe_scope_name'] = $this->_resolve_scope_name($type, $id);
+        $this->_pe_scope_breadcrumb($type, $id, $this->data['pe_scope_name']);
+        $this->data['pe_registry'] = $this->Reports->population_registry($token, $type, $id);
+        if (empty($this->data['pe_registry']['criteria'])) {
+            $this->data['pe_load_error'] = true; // authorized, but the options could not be read
+            return;
+        }
+
+        $link = $this->request->{PopulationExplorer::LINK_PARAM} ?? null;
+        if (is_string($link) && $link !== '') {
+            $d = $this->Reports->population_decode_link($link, $token, $type, $id);
+            if ($d['ok']) {
+                $this->data['pe_initial'] = $d['state'];
+            } else {
+                $this->data['pe_link_error'] = $d['error'];
+            }
+        }
+    }
+
+    /**
+     * Breadcrumb follows the report's scope, not the session's kingdom/park (the base
+     * Controller seeds those from the session). Same approach as event_attendance.
+     */
+    private function _pe_scope_breadcrumb($type, $id, $scopeName)
+    {
+        $reportsUrl = $this->data['menu']['reports']['url'];
+        unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['reports']);
+        if ($type === 'Park') {
+            $info = $this->Park->get_park_info($id); // Park model is loaded by _resolve_scope_name
+            $kid = (int)($info['ParkInfo']['KingdomId'] ?? 0);
+            $kname = (string)($info['KingdomInfo']['KingdomName'] ?? '');
+            if (valid_id($kid) && $kname !== '') {
+                $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $kid, 'display' => $kname];
+            }
+            $this->data['menu']['park'] = ['url' => UIR . 'Park/profile/' . (int)$id, 'display' => $scopeName !== '' ? $scopeName : 'Park'];
+        } else {
+            $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . (int)$id, 'display' => $scopeName !== '' ? $scopeName : 'Kingdom'];
+        }
+        $this->data['menu']['reports'] = ['url' => $reportsUrl, 'display' => 'Reports'];
+    }
+
+    public function population_explorer_json()
+    {
+        header('Content-Type: application/json');
+        $pre = $this->_pe_preflight();
+        if ($pre !== null) {
+            if ($pre[0] !== 401) {
+                http_response_code($pre[0]); // 401 stays 200 + status 5: the JS reads the body
+            }
+            echo json_encode(['status' => $pre[1], 'error' => $pre[2]]);
+            exit;
+        }
+        $token = $this->_pe_release_session();
+        $body = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($body)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid request body']);
+            exit;
+        }
+        $r = $this->Reports->population_run([
+            'Token'     => $token,
+            'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
+            'ScopeId'   => (int)($body['ScopeId'] ?? 0),
+            'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
+            'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+        ]);
+        if ((int)($r['Status']['Status'] ?? 1) !== 0) {
+            echo json_encode($this->_pe_json_error($r));
+            exit;
+        }
+        echo json_encode([
+            'status'     => 0,
+            'columns'    => $r['Columns'] ?? [],
+            'rows'       => $r['Rows'] ?? [], // persona is already unslashed by the domain
+            'total'      => (int)($r['Total'] ?? 0),
+            'scope_total' => (int)($r['ScopeTotal'] ?? 0),
+            'truncated'  => !empty($r['Truncated']),
+            'elapsed_ms' => (int)($r['ElapsedMs'] ?? 0),
+        ]);
+        exit;
+    }
+
+    public function population_explorer_export()
+    {
+        $fail = function (int $code, string $msg, array $headers = []) {
+            http_response_code($code);
+            header('Content-Type: text/plain; charset=utf-8');
+            foreach ($headers as $h => $v) {
+                header($h . ': ' . $v);
+            }
+            echo $msg;
+            exit;
+        };
+        $pre = $this->_pe_preflight();
+        if ($pre !== null) {
+            if ($pre[0] === 405) {
+                header('Allow: POST');
+            }
+            $fail($pre[0], $pre[0] === 401 ? 'Not logged in. Log in and run the report again.' : $pre[2]);
+        }
+        $token = $this->_pe_release_session();
+        $body = json_decode(is_string($_POST['payload'] ?? null) ? $_POST['payload'] : '', true);
+        if (!is_array($body)) {
+            $fail(400, 'Invalid export request.');
+        }
+        $r = $this->Reports->population_export([
+            'Token'     => $token,
+            'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
+            'ScopeId'   => (int)($body['ScopeId'] ?? 0),
+            'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
+            'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+        ]);
+        $path = is_string($r['Path'] ?? null) ? $r['Path'] : '';
+        if ($path !== '') {
+            // Delete the temp file however this request ends (client abort, fatal, exit).
+            register_shutdown_function(static function () use ($path) {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            });
+        }
+        if ((int)($r['Status']['Status'] ?? 1) !== 0 || $path === '' || !is_file($path)) {
+            $failure = $this->_pe_export_failure($r);
+            $fail($failure[0], $failure[1], $failure[2] ?? []);
+        }
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '', (string)($r['Filename'] ?? 'population-explorer.xlsx'));
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Content-Length: ' . filesize($path));
+        header('Cache-Control: private, no-store');
+        ignore_user_abort(true); // a client abort must not stop the script before the unlink
+        readfile($path);
+        @unlink($path);
+        exit;
+    }
+
+    /**
+     * Shared guard for the Population Explorer POST endpoints.
+     *
+     * @return array{0:int,1:int,2:string}|null [HTTP code, JSON status, message], or null to proceed
+     */
+    private function _pe_preflight(): ?array
+    {
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            return [401, 5, 'Not logged in'];
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            return [405, 1, 'POST required'];
+        }
+        if (!$this->_pe_same_origin($_SERVER)) {
+            return [403, 1, 'Cross-site request refused.'];
+        }
+        return null;
+    }
+
+    /**
+     * Read what the Population Explorer endpoints need from the PHP session, then
+     * release its lock. A run can take up to ~30 s; while the session is open, every
+     * other page in that browser waits on the session file. Neither endpoint writes
+     * session values after this point. (IsAuthorized still caches the player id in
+     * $_SESSION for the rest of this request; that cache is rebuilt on every request,
+     * so not saving it changes nothing.) A second run from the same browser then
+     * reaches the per-player run lock and is refused at once as "busy".
+     */
+    private function _pe_release_session(): string
+    {
+        $token = (string)$this->session->token;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        return $token;
+    }
+
+    /**
+     * Same-origin check: refuse a browser request that says it is cross-site
+     * (Sec-Fetch-Site) or whose Origin host differs from Host. Requests that send
+     * neither header (older browsers, curl) are allowed.
+     */
+    private function _pe_same_origin(array $server): bool
+    {
+        if (strtolower(trim((string)($server['HTTP_SEC_FETCH_SITE'] ?? ''))) === 'cross-site') {
+            return false;
+        }
+        $origin = trim((string)($server['HTTP_ORIGIN'] ?? ''));
+        if ($origin === '') {
+            return true;
+        }
+        $host = parse_url($origin, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false; // "null" (sandboxed / file://) or garbage
+        }
+        $port = parse_url($origin, PHP_URL_PORT);
+        $originHost = strtolower($host . ($port ? ':' . $port : ''));
+        return $originHost === strtolower(trim((string)($server['HTTP_HOST'] ?? '')));
+    }
+
+    /** JSON error payload for a failed Run: Detail alone when set; expired session = status 5. */
+    private function _pe_json_error(array $r): array
+    {
+        $st = (int)($r['Status']['Status'] ?? 1);
+        if ($st === ServiceErrorIds::SecureTokenFailure) {
+            return ['status' => 5, 'error' => 'Not logged in'];
+        }
+        $detail = trim((string)($r['Status']['Detail'] ?? ''));
+        $out = ['status' => $st === 0 ? 1 : $st, 'error' => $detail !== '' ? $detail : (string)($r['Status']['Error'] ?? 'Error')];
+        if (isset($r['RulePath'])) {
+            $out['rule_path'] = $r['RulePath'];
+        }
+        if (!empty($r['TimedOut'])) {
+            $out['timeout'] = true;
+        }
+        if (!empty($r['Busy'])) {
+            $out['busy'] = true;
+        }
+        return $out;
+    }
+
+    /** Seconds a refused (busy) export asks the client to wait before retrying. */
+    private const PE_BUSY_RETRY_AFTER = 5;
+
+    /**
+     * @return array{0:int,1:string,2?:array<string,string>} HTTP code, plain-text
+     *         message and any extra response headers for a failed export
+     */
+    private function _pe_export_failure(array $r): array
+    {
+        $st = (int)($r['Status']['Status'] ?? 1);
+        $detail = trim((string)($r['Status']['Detail'] ?? ''));
+        if ($st === ServiceErrorIds::SecureTokenFailure) {
+            return [401, 'Your session has expired. Log in and run the report again.'];
+        }
+        if (!empty($r['TimedOut'])) {
+            return [503, PopulationExplorer::TIMEOUT_MESSAGE];
+        }
+        if (!empty($r['Busy'])) {
+            return [429, PopulationExplorer::BUSY_MESSAGE, ['Retry-After' => (string)self::PE_BUSY_RETRY_AFTER]];
+        }
+        if ($st === ServiceErrorIds::InvalidParameter) {
+            return [400, 'The export could not be created: ' . ($detail !== '' ? $detail : 'check the filter and try again.')];
+        }
+        return [500, 'The export could not be created. Please try again.'];
+    }
 
     public function ladder_grid($params = null)
     {
