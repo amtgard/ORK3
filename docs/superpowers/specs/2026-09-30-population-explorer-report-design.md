@@ -118,22 +118,39 @@ user tree, so no tree can widen it:
 
 ### 3.4 Execution
 
-One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
+Two queries on `ork_mundane m` (performance pass, 2026-10-01; results unchanged):
+first the matching ids in report order, capped, with `COUNT(*) OVER ()` as the true
+Total from the same single evaluation of the filter; then the selected columns for
+exactly those ids, joined to `ork_kingdom k` / `ork_park p`. With:
 
-- criteria fragments as correlated subqueries / `EXISTS` (e.g. last sign-in is
-  `(select max(a.date) from ork_attendance a where a.mundane_id = m.mundane_id)`,
-  the existing `idx_sor_mundane_date` pattern)
-- output columns as scalar subqueries, **lazy** (only selected columns cost anything)
+- criteria fragments as correlated subqueries, written as per-player index probes
+  (e.g. last sign-in is `(select a.date from ork_attendance a where a.mundane_id =
+  m.mundane_id order by a.date desc limit 1)`, the newest `idx_sor_mundane_date`
+  entry; "holds an award" is `(select 1 ... limit 1) is not null` with
+  `w.award_id in (0, ids)` checked on `idx_awards_mundane_award_rank_date`, because
+  MariaDB turns a correlated `EXISTS` into a full scan of `ork_awards`; aliased rows
+  come from one uncorrelated lookup on `idx_alias_award_id`)
+- output columns as scalar subqueries, **lazy** (only selected columns cost anything,
+  and only for the listed rows)
 - no outer `GROUP BY` (every join is 1:1 on a primary key and every fragment is a
-  scalar subquery or `EXISTS`, so rows cannot multiply); `m.mundane_id` is the final
-  ORDER BY tiebreaker
-- the `count(*)` query runs only when the row query hits the cap; otherwise
-  Total = number of rows returned
-- every statement of a run (the rows, the count when capped, and the scope count)
-  runs under its own MariaDB statement timeout (10 s each, so up to three per run);
-  a timeout is reported to the user as "query took too long — narrow your filter"
+  scalar subquery or a probe, so rows cannot multiply); `m.mundane_id` is the final
+  ORDER BY tiebreaker; the order key is `CONCAT(m.persona)` (the same value and
+  collation as `persona`), so MariaDB sorts the scope instead of walking the whole
+  persona index
+- SQL emission only (the validated tree and every rule path stay as the user built
+  them): identical sibling rules compile once; under OR the "holds one of these
+  awards" rules (has award, peerage has any / yes) merge into one probe over the
+  union of ids, under AND their "holds none" forms do; each group's parts are
+  emitted cheapest first (columns of `m`, then single probes, then aggregates)
+- every statement of a run (the ids, the columns, and the scope count) runs under
+  its own MariaDB statement timeout (10 s each, so up to three per run); a timeout is
+  reported to the user as "query took too long — narrow your filter"
+- one run at a time per player: `GET_LOCK('pe:<mundane_id>', 0)` around the run
+  (export included); a second request while one is going is refused at once with
+  "Another Population Explorer run of yours is still in progress — please wait for
+  it to finish." (JSON `busy: true`, export HTTP 429)
 - result cap **5,000 rows**; the response carries `truncated: true` and the true
-  total (`count(*)` of the same predicate) so the UI can say "showing 5,000 of N"
+  total (every match of the same predicate) so the UI can say "showing 5,000 of N"
 
 Semantics fixed here:
 
