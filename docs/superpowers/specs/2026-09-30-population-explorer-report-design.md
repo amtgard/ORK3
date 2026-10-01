@@ -27,7 +27,7 @@ runs it, views the table, exports it, and can share the exact query as a link.
 
 | Topic | Decision |
 |---|---|
-| Who / scope | **Any logged-in user** may run it for **any kingdom or park** (owner decision 2026-10-01). Anonymous users are sent to Login. The **Suspended** and **Banned** criteria are *restricted*: they need officer authority over the scope being viewed (global admin, kingdom `AUTH_EDIT` for that kingdom, or park `AUTH_CREATE` for that park). |
+| Who / scope | **Any logged-in user** may run it for **any kingdom or park** (owner decision 2026-10-01). Anonymous users are sent to Login. The **Suspended** and **Banned** criteria are *restricted*: they need officer authority over the scope being viewed (global admin, kingdom `AUTH_EDIT` for that kingdom, or for a park either park `AUTH_CREATE` for that park or kingdom `AUTH_EDIT` for the park's kingdom; see §3.3). |
 | Personal data | **No real-name or email columns in v1.** `restricted` players show persona only. |
 | v1 extras | **Excel (.xlsx) export** and **shareable URL** (query encoded in the link). No saved queries, no new tables, no migration. |
 | Criteria / columns | The catalog in section 4. |
@@ -129,8 +129,9 @@ One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
   ORDER BY tiebreaker
 - the `count(*)` query runs only when the row query hits the cap; otherwise
   Total = number of rows returned
-- both statements run under a MariaDB statement timeout (10 s); a timeout is
-  reported to the officer as "query took too long — narrow your filter"
+- every statement of a run (the rows, the count when capped, and the scope count)
+  runs under its own MariaDB statement timeout (10 s each, so up to three per run);
+  a timeout is reported to the user as "query took too long — narrow your filter"
 - result cap **5,000 rows**; the response carries `truncated: true` and the true
   total (`count(*)` of the same predicate) so the UI can say "showing 5,000 of N"
 
@@ -237,8 +238,14 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
 - Columns card: grouped checkboxes, Persona locked, sensible defaults, Reset.
   Order follows the checkbox order.
 - Run is explicit (button), not on keystroke. Run, Copy link and Export sit in one action bar OUTSIDE the collapsible Filters and Columns cards (always visible, between the cards and Results). A successful Run collapses both cards unless the builder was edited while that run was in flight; in that case the cards stay open, the results are marked "Filters changed since last run", and focus is not moved. Results: DataTables table,
-  **Export** and **Copy link** buttons, `.rp-empty-state`, a loading state, and
-  per-rule inline validation errors.
+  `.rp-empty-state`, a loading state, and per-rule inline validation errors.
+- Filters and Columns are collapsible cards: the header toggle (`aria-expanded`) shows a
+  one-line summary while folded ("3 rules (AND)", "4 selected", "changed since last run").
+  A rule error re-opens Filters.
+- A **Help** button in the page header opens the guide: a modal dialog (focus trapped,
+  page behind inert, Esc / close button / backdrop close it, focus returns to Help) with
+  static prose plus a criteria reference generated from the same registry as the picker,
+  so restricted criteria appear only for officers.
 - Tooltips use `data-tip`, never `title`. No native `alert/confirm/prompt`.
 - Dark mode via `html[data-theme="dark"]` for the builder's own pieces (groups,
   segmented toggles, chips), verified on computed styles in both themes
