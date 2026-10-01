@@ -545,6 +545,72 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertSame(0, $bad);
     }
 
+    private function isOfficer(string $token, string $type, int $id): bool
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        return $this->pe->IsScopeOfficer($token, $type, $id);
+    }
+
+    /** @return array{criteria: array, officer: bool} the registry the page would ship to this viewer */
+    private function viewerRegistry(string $token, string $type, int $id): array
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        return (new Model_Reports())->population_registry($token, $type, $id);
+    }
+
+    /**
+     * Ruling A1 (spec §3.3): kingdom AUTH_EDIT alone (no AUTH_CREATE anywhere) makes an
+     * officer for the kingdom's own parks and, through HasAuthority's parent walk, for
+     * its principalities' parks, but never for another kingdom's parks.
+     */
+    public function testKingdomEditOnlyOfficerIsAnOfficerForTheKingdomsParks(): void
+    {
+        $officer = $this->player('pe-kd-edit-officer');
+        // A real kingdom grant: park_id = 0, role edit only.
+        $this->fixture->insertScopedAuth($officer['mundane_id'], 0, $this->kid, AUTH_EDIT);
+
+        $this->assertTrue($this->isOfficer($officer['token'], 'Kingdom', $this->kid), 'own kingdom');
+        $this->assertTrue($this->isOfficer($officer['token'], 'Park', $this->parkId), 'park in own kingdom');
+        foreach (['suspended', 'banned'] as $c) {
+            $this->assertRestrictedAllowed($this->exec($this->req($officer['token'], 'Park', $this->parkId, $this->restrictedTree($c))), "$c at a park in own kingdom");
+        }
+        $reg = $this->viewerRegistry($officer['token'], 'Park', $this->parkId);
+        $this->assertTrue($reg['officer']);
+        $this->assertArrayHasKey('suspended', $reg['criteria']);
+        $this->assertArrayHasKey('banned', $reg['criteria']);
+
+        $child = (int) $this->fixture->pdo()->query(
+            'SELECT k.kingdom_id FROM ' . DB_PREFIX . 'kingdom k WHERE k.parent_kingdom_id = ' . $this->kid
+            . " AND k.active = 'Active' AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "park p WHERE p.kingdom_id = k.kingdom_id AND p.active = 'Active')"
+            . ' ORDER BY k.kingdom_id LIMIT 1'
+        )->fetchColumn();
+        if ($child > 0) {
+            $childPark = $this->fixture->parkIdInKingdom($child);
+            $this->assertTrue($this->isOfficer($officer['token'], 'Park', $childPark), 'park of a principality of own kingdom');
+            $this->assertRestrictedAllowed($this->exec($this->req($officer['token'], 'Park', $childPark, $this->restrictedTree())), 'principality park');
+        }
+
+        $otherKingdom = (int) $this->fixture->pdo()->query(
+            'SELECT k.kingdom_id FROM ' . DB_PREFIX . 'kingdom k WHERE k.kingdom_id <> ' . $this->kid . ' AND k.parent_kingdom_id <> ' . $this->kid
+            . " AND k.active = 'Active' AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "park p WHERE p.kingdom_id = k.kingdom_id AND p.active = 'Active')"
+            . ' ORDER BY k.kingdom_id LIMIT 1'
+        )->fetchColumn();
+        if ($otherKingdom <= 0) {
+            $this->markTestSkipped('Needs a park in another kingdom.');
+        }
+        $otherPark = $this->fixture->parkIdInKingdom($otherKingdom);
+        $this->assertFalse($this->isOfficer($officer['token'], 'Park', $otherPark), 'park in another kingdom');
+        $this->assertFalse($this->isOfficer($officer['token'], 'Kingdom', $otherKingdom), 'another kingdom');
+        $this->assertSame(0, $this->exec($this->req($officer['token'], 'Park', $otherPark))['Status']['Status']);
+        $this->assertRestrictedRejected($this->exec($this->req($officer['token'], 'Park', $otherPark, $this->restrictedTree('banned'))), 'park in another kingdom');
+        $reg = $this->viewerRegistry($officer['token'], 'Park', $otherPark);
+        $this->assertFalse($reg['officer']);
+        $this->assertArrayNotHasKey('suspended', $reg['criteria']);
+        $this->assertArrayNotHasKey('banned', $reg['criteria']);
+    }
+
     public function testAdminMayUseRestrictedCriteriaEverywhere(): void
     {
         $other = $this->otherKingdomId();

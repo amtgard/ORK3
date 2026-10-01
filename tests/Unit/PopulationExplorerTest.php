@@ -482,6 +482,35 @@ final class PopulationExplorerTest extends TestCase
         }
     }
 
+    /**
+     * Ordering guard: the officer check runs before operand and value validation, so a
+     * non-officer gets the same message for any operand or value, and nothing echoes the
+     * restricted criterion's label, operand or value.
+     */
+    public function testRestrictedCheckRunsBeforeOperandAndValueValidation(): void
+    {
+        [$plain, $officer] = $this->viewers();
+        $bad = [
+            ['suspended', 'gte', 'yes'],
+            ['banned', 'between', ['x', 'y']],
+            ['suspended', 'is', 'maybe'],
+            ['banned', 'is', null],
+            ['suspended', 42, []],
+        ];
+        foreach ($bad as $i => [$c, $o, $v]) {
+            $tree = ['op' => 'OR', 'children' => [$this->leaf('active', 'is', 'yes'), ['c' => $c, 'o' => $o, 'v' => $v]]];
+            $r = $this->pe->NormalizeTree($tree, $plain);
+            $this->assertFalse($r['ok'], "case $i");
+            $this->assertSame(PopulationExplorer::RESTRICTED_MESSAGE, $r['error'], "case $i");
+            $this->assertSame([1], $r['path'], "case $i");
+
+            // An officer reaches the ordinary validation, which may name the criterion.
+            $o2 = $this->pe->NormalizeTree($tree, $officer);
+            $this->assertFalse($o2['ok'], "officer case $i");
+            $this->assertNotSame(PopulationExplorer::RESTRICTED_MESSAGE, $o2['error'], "officer case $i");
+        }
+    }
+
     public function testRestrictedCriteriaFailClosedWhenOfficerStatusIsUnknown(): void
     {
         $tree = ['op' => 'AND', 'children' => [$this->leaf('suspended', 'is', 'no')]];

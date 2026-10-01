@@ -964,11 +964,18 @@ class PopulationExplorer extends Ork3
     }
 
     /**
-     * Officer authority over the scope, which unlocks the restricted criteria. The
-     * rule is Report::_authorizeKingdomParkReportScope's (private there, so mirrored
-     * here; keep the two in step): global admin, kingdom AUTH_EDIT for that kingdom
-     * (principalities resolve through HasAuthority's parent walk), or park
-     * AUTH_CREATE for that park (a kingdom officer reaches its parks the same way).
+     * Officer authority over the scope, which unlocks the restricted criteria (spec
+     * §3.3, ruling A1):
+     * - global admin;
+     * - Kingdom scope: kingdom AUTH_EDIT for that kingdom (a principality resolves to
+     *   its parent kingdom's officers through HasAuthority's parent walk);
+     * - Park scope: park AUTH_CREATE for that park, or kingdom AUTH_EDIT for the park's
+     *   kingdom (again with the parent walk, so a principality's parks count for the
+     *   parent kingdom's officers).
+     * This deliberately differs from Report::_authorizeKingdomParkReportScope, which
+     * asks only park AUTH_CREATE for a park (so an edit-only kingdom officer fails
+     * there). Do not "re-sync" the two: a kingdom officer may already filter the whole
+     * kingdom, which contains every player of the park.
      * Fails closed: a bad token, a bad scope or any error is "not an officer".
      */
     public function IsScopeOfficer(string $token, string $scopeType, int $scopeId): bool
@@ -987,7 +994,13 @@ class PopulationExplorer extends Ork3
                 return true;
             }
             if ($scopeType === 'Park') {
-                return (bool)$auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE);
+                if ($auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
+                    return true;
+                }
+                $r = $this->_select('SELECT kingdom_id FROM ' . $this->_t('park') . ' WHERE park_id = ' . (int)$scopeId);
+                $parkKingdom = $r->next() ? (int)$r->kingdom_id : 0;
+                return valid_id($parkKingdom)
+                    && (bool)$auth->HasAuthority($actorId, AUTH_KINGDOM, $parkKingdom, AUTH_EDIT);
             }
             return (bool)$auth->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
         } catch (Throwable $e) {
