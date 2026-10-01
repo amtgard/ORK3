@@ -352,21 +352,33 @@ class PopulationExplorer extends Ork3
         return ['v' => $out];
     }
 
-    /** Known class / award / peerage ids, read-only. */
+    /**
+     * Known class / award / peerage ids, read-only.
+     *
+     * Throws RuntimeException when the database cannot be read: an empty set
+     * would make every class/award rule fail validation with a misleading
+     * "unknown id" message, so a DB failure must surface as a DB failure.
+     */
     public function LoadKnown(): array
     {
         $known = ['class' => [], 'award' => [], 'peerage' => []];
         $r = $this->db->query('SELECT class_id FROM ' . DB_PREFIX . 'class');
-        if ($r !== false) {
-            while ($r->next()) {
-                $known['class'][] = (int)$r->class_id;
-            }
+        if ($r === false || $r === null) {
+            throw new RuntimeException('Could not read class list');
+        }
+        while ($r->next()) {
+            $known['class'][] = (int)$r->class_id;
         }
         $r = $this->db->query('SELECT award_id, peerage FROM ' . DB_PREFIX . 'award');
-        if ($r !== false) {
-            while ($r->next()) {
-                $known['award'][] = (int)$r->award_id;
-                $known['peerage'][$r->peerage][] = (int)$r->award_id;
+        if ($r === false || $r === null) {
+            throw new RuntimeException('Could not read award list');
+        }
+        while ($r->next()) {
+            $id = (int)$r->award_id;
+            $known['award'][] = $id;
+            $pe = trim((string)$r->peerage);
+            if ($pe !== '') {
+                $known['peerage'][$pe][] = $id;
             }
         }
         return $known;
@@ -675,5 +687,253 @@ class PopulationExplorer extends Ork3
         }
         $fn = $registry[$node['c']]['sql'];
         return '(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')';
+    }
+
+    // ---------------------------------------------------------------- scope, authorization, execution
+
+    /**
+     * Same gate as Report::_authorizeKingdomParkReportScope (private there, so
+     * mirrored here): global admin, or kingdom EDIT, or park CREATE.
+     *
+     * @return array|null null when allowed, else an error Status array
+     */
+    public function AuthorizeScope(string $token, string $scopeType, int $scopeId): ?array
+    {
+        if ($scopeType !== 'Kingdom' && $scopeType !== 'Park') {
+            return InvalidParameter('Scope type must be Kingdom or Park.');
+        }
+        if (!valid_id($scopeId)) {
+            return InvalidParameter('Scope id is required.');
+        }
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($token);
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        $auth = Ork3::$Lib->authorization;
+        if ($auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)
+            || $auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return null;
+        }
+        if ($scopeType === 'Park') {
+            if ($auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
+                return null;
+            }
+        } elseif ($auth->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT)) {
+            return null;
+        }
+        return NoAuthorization();
+    }
+
+    /** @return int[] kingdom ids covered by a Kingdom scope (stats kingdoms, ints only) */
+    private function _scopeKingdomIds(int $kingdomId): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', (array)Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdomId)),
+            function ($i) {
+                return $i > 0;
+            }
+        )));
+        return $ids;
+    }
+
+    /** @return array [mundane scope clause over m, account scope clause over ac] */
+    private function _scopeClauses(string $scopeType, int $scopeId): array
+    {
+        if ($scopeType === 'Park') {
+            return ['m.park_id = ' . $scopeId, '(ac.park_id = ' . $scopeId . ')'];
+        }
+        $ids = $this->_scopeKingdomIds($scopeId);
+        if (count($ids) === 0) {
+            return ['1=0', '(1=0)'];
+        }
+        $in = implode(',', $ids);
+        return [
+            "m.kingdom_id IN ($in)",
+            "(ac.kingdom_id IN ($in) OR ac.park_id IN (SELECT park_id FROM " . $this->_t('park') . " WHERE kingdom_id IN ($in)))",
+        ];
+    }
+
+    /**
+     * Run a Population Explorer query. See the plan's interface contract.
+     * The scope clause is built here from the authorized scope and AND-ed
+     * OUTSIDE the user's filter tree, so no tree can widen it.
+     */
+    public function Run(array $request): array
+    {
+        $started = microtime(true);
+        $scopeType = is_string($request['ScopeType'] ?? null) ? $request['ScopeType'] : '';
+        $scopeId = $this->_int($request['ScopeId'] ?? null) ?? 0;
+        $token = is_string($request['Token'] ?? null) ? $request['Token'] : '';
+
+        $denied = $this->AuthorizeScope($token, $scopeType, $scopeId);
+        if ($denied !== null) {
+            return ['Status' => $denied];
+        }
+
+        // Columns: whitelist, persona always first, request order, no duplicates.
+        $registryCols = $this->_columns();
+        $colIds = ['persona'];
+        foreach ((array)($request['Columns'] ?? []) as $c) {
+            if (is_string($c) && isset($registryCols[$c]) && !in_array($c, $colIds, true)) {
+                $colIds[] = $c;
+            }
+        }
+
+        try {
+            $known = $this->LoadKnown();
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run known-ids failure', $e->getMessage());
+            return ['Status' => ProcessingError('Could not load the report options. Please try again.')];
+        }
+
+        $tree = $request['Tree'] ?? [];
+        if (!is_array($tree) || count($tree) === 0) {
+            $tree = ['op' => 'AND', 'children' => []]; // no filter: everyone in scope
+        }
+        $norm = $this->NormalizeTree($tree, $known);
+        if (!$norm['ok']) {
+            return ['Status' => InvalidParameter($norm['error']), 'RulePath' => $norm['path']];
+        }
+
+        $cap = self::MAX_ROWS;
+        $reqCap = $this->_int($request['RowCap'] ?? null);
+        if ($reqCap !== null && $reqCap >= 1 && $reqCap < self::MAX_ROWS) {
+            $cap = $reqCap;
+        }
+
+        list($scopeSql, $accountScope) = $this->_scopeClauses($scopeType, $scopeId);
+        $ctx = ['accountScope' => $accountScope];
+        try {
+            $treeSql = $this->CompileTree($norm['tree'], $ctx);
+            $selects = ['m.mundane_id AS mundane_id'];
+            foreach ($colIds as $id) {
+                $selects[] = '(' . $this->ColumnSelectSql($id, $ctx) . ') AS c_' . $id;
+            }
+        } catch (InvalidArgumentException $e) {
+            return ['Status' => InvalidParameter($e->getMessage())];
+        }
+
+        $where = 'WHERE (' . $scopeSql . ') AND (' . $treeSql . ')';
+        $sql = 'SELECT ' . implode(', ', $selects)
+            . ' FROM ' . $this->_t('mundane') . ' m'
+            . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = m.kingdom_id'
+            . ' LEFT JOIN ' . $this->_t('park') . ' p ON p.park_id = m.park_id '
+            . $where . ' GROUP BY m.mundane_id ORDER BY m.persona, m.mundane_id LIMIT ' . (int)$cap;
+        $countSql = 'SELECT COUNT(*) AS n FROM ' . $this->_t('mundane') . ' m ' . $where;
+        logtrace('PopulationExplorer::Run', [$sql, $countSql]);
+
+        $rows = [];
+        $total = 0;
+        try {
+            $r = $this->db->query($sql);
+            if ($r === false || $r === null) {
+                throw new RuntimeException('query failed');
+            }
+            while ($r->next()) {
+                $row = ['MundaneId' => (int)$r->mundane_id];
+                foreach ($colIds as $id) {
+                    $field = 'c_' . $id;
+                    $row[$id] = $this->_cell($registryCols[$id]['type'], $r->$field);
+                }
+                $rows[] = $row;
+            }
+            $c = $this->db->query($countSql);
+            if ($c === false || $c === null || !$c->next()) {
+                throw new RuntimeException('count failed');
+            }
+            $total = (int)$c->n;
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::Run failure', $e->getMessage());
+            return ['Status' => ProcessingError('The query could not be completed. Try narrowing the filter or scope.')];
+        }
+
+        $columns = [];
+        foreach ($colIds as $id) {
+            $columns[] = ['id' => $id, 'label' => $registryCols[$id]['label'], 'type' => $registryCols[$id]['type']];
+        }
+        return [
+            'Status'    => Success(),
+            'Columns'   => $columns,
+            'Rows'      => $rows,
+            'Total'     => $total,
+            'Truncated' => $total > $cap,
+            'ElapsedMs' => (int)round((microtime(true) - $started) * 1000),
+        ];
+    }
+
+    /** Normalise a raw DB cell by column type: numbers/bools to ints, NULL stays null. */
+    private function _cell(string $type, $v)
+    {
+        if ($v === null) {
+            return null;
+        }
+        if ($type === 'number' || $type === 'bool') {
+            return (int)$v;
+        }
+        return (string)$v;
+    }
+
+    /**
+     * Registry safe to send to the browser: no closures / SQL, plus the option
+     * lists the rule editor needs, limited to the viewer's chosen scope.
+     */
+    public function PublicRegistry(string $scopeType, int $scopeId): array
+    {
+        $criteria = [];
+        foreach ($this->_criteriaDefs() as $id => $def) {
+            unset($def['sql']);
+            $criteria[$id] = $def;
+        }
+        $columns = [];
+        foreach ($this->_columnDefs() as $id => $def) {
+            unset($def['sql']);
+            $columns[$id] = $def;
+        }
+
+        $options = ['class' => [], 'award' => [], 'order' => [], 'park' => [], 'kingdom' => []];
+        $r = $this->db->query('SELECT class_id, name FROM ' . $this->_t('class') . ' ORDER BY name');
+        while ($r && $r->next()) {
+            $options['class'][] = [(int)$r->class_id, (string)$r->name];
+        }
+
+        $orderPeerage = ['Knight', 'Master', 'Paragon', 'Squire', 'Page', 'Man-At-Arms'];
+        foreach ($orderPeerage as $pe) {
+            $options['order'][$pe] = [];
+        }
+        $r = $this->db->query('SELECT award_id, name, peerage FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name');
+        while ($r && $r->next()) {
+            $pe = (string)$r->peerage;
+            $options['award'][] = [(int)$r->award_id, (string)$r->name, $pe];
+            if (isset($options['order'][$pe])) {
+                $options['order'][$pe][] = [(int)$r->award_id, (string)$r->name];
+            }
+        }
+
+        if ($scopeType === 'Park') {
+            $pid = (int)$scopeId;
+            $r = $this->db->query('SELECT p.park_id, p.name AS park_name, k.kingdom_id, k.name AS kingdom_name FROM ' . $this->_t('park') . ' p'
+                . ' LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = p.kingdom_id WHERE p.park_id = ' . $pid);
+            while ($r && $r->next()) {
+                $options['park'][] = [(int)$r->park_id, (string)$r->park_name];
+                if ((int)$r->kingdom_id > 0) {
+                    $options['kingdom'][] = [(int)$r->kingdom_id, (string)$r->kingdom_name];
+                }
+            }
+        } else {
+            $ids = $this->_scopeKingdomIds((int)$scopeId);
+            if (count($ids) > 0) {
+                $in = implode(',', $ids);
+                $r = $this->db->query('SELECT kingdom_id, name FROM ' . $this->_t('kingdom') . " WHERE kingdom_id IN ($in) ORDER BY name");
+                while ($r && $r->next()) {
+                    $options['kingdom'][] = [(int)$r->kingdom_id, (string)$r->name];
+                }
+                $r = $this->db->query('SELECT park_id, name FROM ' . $this->_t('park') . " WHERE kingdom_id IN ($in) AND active = 'Active' ORDER BY name");
+                while ($r && $r->next()) {
+                    $options['park'][] = [(int)$r->park_id, (string)$r->name];
+                }
+            }
+        }
+
+        return ['criteria' => $criteria, 'columns' => $columns, 'options' => $options];
     }
 }
