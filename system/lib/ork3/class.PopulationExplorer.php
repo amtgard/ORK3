@@ -1024,7 +1024,44 @@ class PopulationExplorer extends Ork3
         if (empty($normalizedTree['children'])) {
             return '1=1';
         }
-        return $this->_compileNode($normalizedTree, $registry, $ctx);
+        return $this->_compileNode($normalizedTree, $registry, $ctx)[0];
+    }
+
+    /** Rough evaluation cost per player, for emission order only. */
+    private const COST_COLUMN = 0;    // a column of m
+    private const COST_PROBE = 1;     // one index probe / one index entry
+    private const COST_AGGREGATE = 2; // reads all of the player's rows in an index, or several probes
+
+    private function _leafCost(array $leaf, array $registry): int
+    {
+        $c = $leaf['c'] ?? '';
+        $def = $registry[$c] ?? [];
+        if (isset($def['ladder'])) {
+            return ($def['ladder']['kind'] ?? '') === 'kingdomaward' ? self::COST_PROBE : self::COST_AGGREGATE;
+        }
+        switch ($c) {
+            case 'home_kingdom':
+            case 'home_park':
+            case 'waivered':
+            case 'active':
+            case 'suspended':
+            case 'banned':
+            case 'reeve_qualified':
+            case 'corpora_qualified':
+                return self::COST_COLUMN;
+            case 'last_signin':
+            case 'last_signin_days_ago':
+            case 'player_since':
+            case 'classes_last_n_months':
+            case 'dues_paid':
+            case 'has_award':
+            case 'award_date_any':
+                return self::COST_PROBE;
+        }
+        if (isset($def['peerage'])) {
+            return ($leaf['o'] ?? '') === 'has_all' ? self::COST_AGGREGATE : self::COST_PROBE;
+        }
+        return self::COST_AGGREGATE;
     }
 
     /**
@@ -1034,9 +1071,16 @@ class PopulationExplorer extends Ork3
      * - under OR, the "holds one of these awards" rules become one probe over the
      *   union of their ids (holds any of A, or any of B = holds any of A u B); under
      *   AND, the "holds none of these" rules do (De Morgan). None of these is ever
-     *   NULL, so three-valued logic does not change the result.
+     *   NULL, so three-valued logic does not change the result;
+     * - the parts are emitted cheapest first (a column of m, then single index
+     *   probes, then aggregates; a group costs as much as its dearest part; equal
+     *   costs keep the user's order). AND and OR are commutative in SQL's
+     *   three-valued logic, so only the work changes: MariaDB stops at the first
+     *   true OR part / false AND part.
+     *
+     * @return array{0:string, 1:int} SQL and its cost class
      */
-    private function _compileNode(array $node, array $registry, array $ctx): string
+    private function _compileNode(array $node, array $registry, array $ctx): array
     {
         if (isset($node['children'])) {
             // NormalizeTree drops empty groups and CompileTree handles an empty root.
@@ -1055,22 +1099,32 @@ class PopulationExplorer extends Ork3
                     $held = array_merge($held ?? [], $h['ids']);
                     continue;
                 }
-                $sql = $this->_compileNode($child, $registry, $ctx);
+                [$sql, $cost] = $this->_compileNode($child, $registry, $ctx);
                 if (!isset($seen[$sql])) {
                     $seen[$sql] = true;
-                    $parts[] = $sql;
+                    $parts[] = [$sql, $cost];
                 }
             }
             if ($heldAt !== null) {
-                $parts[$heldAt] = '(' . ($or ? '' : 'NOT ') . $this->_holdsAny(array_values(array_unique($held))) . ')';
+                $parts[$heldAt] = ['(' . ($or ? '' : 'NOT ') . $this->_holdsAny(array_values(array_unique($held))) . ')', self::COST_PROBE];
             }
-            return '(' . implode($or ? ' OR ' : ' AND ', $parts) . ')';
+            $order = array_keys($parts);
+            usort($order, function (int $a, int $b) use ($parts): int {
+                return ($parts[$a][1] <=> $parts[$b][1]) ?: ($a <=> $b);
+            });
+            $sqls = [];
+            $max = self::COST_COLUMN;
+            foreach ($order as $i) {
+                $sqls[] = $parts[$i][0];
+                $max = max($max, $parts[$i][1]);
+            }
+            return ['(' . implode($or ? ' OR ' : ' AND ', $sqls) . ')', $max];
         }
         if (!isset($registry[$node['c']])) {
             throw new InvalidArgumentException('unknown criterion');
         }
         $fn = $registry[$node['c']]['sql'];
-        return '(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')';
+        return ['(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')', $this->_leafCost($node, $registry)];
     }
 
     /**

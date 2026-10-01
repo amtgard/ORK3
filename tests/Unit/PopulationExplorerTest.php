@@ -975,4 +975,28 @@ final class PopulationExplorerTest extends TestCase
         $all = $this->sql(['op' => 'OR', 'children' => [$this->leaf('knighthood', 'has_all', [17, 20]), $this->leaf('has_award', 'in', [18])]]);
         $this->assertSame(3, substr_count($all, 'LIMIT 1) IS NOT NULL'), 'has all is never merged');
     }
+
+    public function testCheapRulesAreEmittedFirstAndTheTreeIsUntouched(): void
+    {
+        $tree = ['op' => 'OR', 'children' => [
+            $this->leaf('last_signin_park', 'in', [5]),          // aggregate
+            ['op' => 'AND', 'children' => [$this->leaf('total_signins', 'gt', 3), $this->leaf('waivered', 'is', 'yes')]],
+            $this->leaf('last_signin', 'gte', '2025-01-01'),     // one index entry
+            $this->leaf('active', 'is', 'yes'),                  // a column of m
+            $this->leaf('has_award', 'in', [17]),                // award probe
+            $this->leaf('home_park', 'in', [9]),                 // a column of m
+        ]];
+        $n = $this->norm($tree);
+        $this->assertTrue($n['ok']);
+        $this->assertSame('last_signin_park', $n['tree']['children'][0]['c'], 'the normalized tree keeps the user order (RulePath)');
+        $s = $this->pe->CompileTree($n['tree'], ['duesScope' => '1=1']);
+        $at = static fn (string $needle): int => (int) strpos($s, $needle);
+        $this->assertLessThan($at('m.park_id IN (9)'), $at('m.active = 1'), 'columns of m keep their relative order');
+        $this->assertLessThan($at('ORDER BY a.date DESC LIMIT 1'), $at('m.park_id IN (9)'));
+        $this->assertLessThan($at('ka.award_id) IN (17)'), $at('ORDER BY a.date DESC LIMIT 1'), 'equal cost: user order');
+        $this->assertLessThan($at('NULLIF(a.park_id, 0)'), $at('ka.award_id) IN (17)'));
+        $this->assertLessThan($at('m.waivered = 1'), $at('NULLIF(a.park_id, 0)'), 'a group costs as much as its dearest rule; equal cost keeps user order');
+        $this->assertStringStartsWith('((m.active = 1) OR (m.park_id IN (9)) OR ', $s);
+        $this->assertStringContainsString('((m.waivered = 1) AND (', $s, 'inside a group too');
+    }
 }
