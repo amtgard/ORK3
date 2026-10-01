@@ -5,7 +5,7 @@ Status: Draft for review
 
 ## 1. Goal
 
-A report, **Population Explorer**, that lets officers pull a list of players and
+A report, **Population Explorer**, that lets any logged-in user (officers included) pull a list of players and
 details using an AND/OR filter builder.
 
 A filter row is `Criteria | Operand | Value`. Rows are grouped with AND/OR, and
@@ -27,15 +27,15 @@ runs it, views the table, exports it, and can share the exact query as a link.
 
 | Topic | Decision |
 |---|---|
-| Who / scope | Officers see players in **their own kingdom or park**. Only global admins may choose another kingdom. Same gate pattern as the other scoped `Reports/*` pages. |
+| Who / scope | **Any logged-in user** may run it for **any kingdom or park** (owner decision 2026-10-01). Anonymous users are sent to Login. The **Suspended** and **Banned** criteria are *restricted*: they need officer authority over the scope being viewed (global admin, kingdom `AUTH_EDIT` for that kingdom, or park `AUTH_CREATE` for that park). |
 | Personal data | **No real-name or email columns in v1.** `restricted` players show persona only. |
 | v1 extras | **Excel (.xlsx) export** and **shareable URL** (query encoded in the link). No saved queries, no new tables, no migration. |
 | Criteria / columns | The catalog in section 4. |
 | Approach | **A:** compile the validated tree to one SQL query from a registry of whitelisted fragments. |
 
 Non-goals: saved queries, drag-reordering columns, event-attendance and
-officer-role criteria, real-name/email columns, anything cross-kingdom for
-non-admins.
+officer-role criteria, real-name/email columns, ladder ranks as display columns,
+anonymous (logged-out) access.
 
 ## 3. Architecture
 
@@ -100,10 +100,17 @@ user tree, so no tree can widen it:
   `Ork3::$Lib->kingdom->GetStatsKingdomIds()` helper `GetPlayerRoster` uses
   (includes principalities per the statistics setting).
 - Park: `m.park_id = P AND m.kingdom_id = <P's kingdom>` (same as `GetPlayerRoster`'s park scope).
-- Global admin may supply a `kingdom_id`; for anyone else a supplied id is
-  checked with the same authority helpers the other report scopes use and
-  otherwise rejected with a `status: 5`-style authorization error (never silently
-  widened or narrowed).
+- **Access:** any valid session token may use any existing kingdom or park as its
+  scope. A missing or non-existent scope id is rejected. The scope comes from the
+  request (`KingdomId`/`ParkId`) or, failing that, from the session's park/kingdom.
+- **Officer authority** over the scope is global admin, kingdom `AUTH_EDIT` for that
+  kingdom (principalities resolve through `HasAuthority`'s parent walk), or park
+  `AUTH_CREATE` for that park, which is the old `Report::_authorizeKingdomParkReportScope`
+  rule. It only unlocks **restricted criteria** (`suspended`, `banned`):
+  - for non-officers they are left out of `PublicRegistry` (not in the picker);
+  - `NormalizeTree` rejects them on that rule with "This filter requires officer
+    access for this kingdom or park.", whether they arrive in the JSON body, a
+    share link or an export.
 
 ### 3.4 Execution
 
@@ -177,6 +184,20 @@ Semantics fixed here:
 | Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held (exactly those three; Lords-Page and Apprentice are not included) | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
 | Awards | Has award X; award count; awarded after / before date | has / has not; number operands; date operands `>  ≥  <  ≤  between` (no `=`/`≠`) |
 | Qualifications | Reeve qualified; Corpora qualified | `IS Yes / No` |
+| Ladder Award Ranks | One criterion per ranked ladder: the 15 global ladders the Ladder Award Grid uses (`ork_award.is_ladder = 1`, excluding Walker in the Middle, id 31), labelled with the kingdom's own name where it renames one, **plus** every kingdom-only ladder (`ork_kingdomaward.award_id = 0 AND is_ladder = 1`) of the kingdoms in scope | `=  ≠  >  ≥  <  ≤  between` (integer) |
+
+**Ladder rank semantics:**
+- A player's rank in a ladder is `GREATEST(MAX(rank), COUNT(*))` over that player's
+  *held* awards in that ladder (the Ladder Award Grid's rule; many rows have no rank).
+  "Held" is the report's usual rule: `revoked = 0`, not stripped, alias resolved.
+- A player with no award in the ladder has rank **0**, never NULL, so `≠` and `<`
+  include them. The operand note says this.
+- Global ladders match on the resolved award id. Kingdom-only ladders match on
+  `w.kingdomaward_id`.
+- Criterion ids are generated per ladder: `ladder_a<award_id>` for global ladders and
+  `ladder_k<kingdomaward_id>` for kingdom-only ones. They are added to the registry at
+  run time for the current scope. A kingdom-only ladder outside the scope is rejected
+  on that rule.
 
 **Output columns:** Persona (always), Home Park, Home Kingdom, Last Sign-In Date,
 Last Sign-In Park, Last Class, Sign-ins (last 6 months), Total Sign-ins, Player
@@ -236,8 +257,10 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
    empty IN, oversized link).
 3. **Injection tests**: hostile strings in every value slot produce a rejection
    or a harmless literal — never changed SQL.
-4. **Authorization**: a park officer cannot read another park/kingdom by
-   altering the request or the share link; admin can.
+4. **Authorization**: any logged-in user can run any scope; anonymous cannot;
+   restricted criteria (suspended, banned) are hidden from and rejected for
+   non-officers of the scope, including an officer of a *different* park/kingdom,
+   via JSON body, share link and export; officers of the scope and admins can use them.
 5. **Performance**: run the slowest criteria (sign-ins in last N months, Last
    Class, award count) on the largest kingdom (~15.8k players); record timings
    in the PR. Target: each single criterion and the example query in
