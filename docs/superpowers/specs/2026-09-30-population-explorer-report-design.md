@@ -152,7 +152,8 @@ Semantics fixed here:
 ### 3.5 Share link and export
 
 - **Share link:** the validated `{tree, columns}` JSON, base64url-encoded into
-  `&q=` on the report URL. On load the server decodes and **re-validates** it
+  `&pe=` on the report URL (not `q`, which Google Analytics logs as a site
+  search). On load the server decodes and **re-validates** it
   like any other request; a hand-edited link is no riskier than typing the same
   thing into the form. Oversized payloads (> 8 KB) are rejected with a message
   rather than truncated. Scope is never taken from the link beyond what the

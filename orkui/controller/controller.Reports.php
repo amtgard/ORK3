@@ -1107,6 +1107,7 @@ class Controller_Reports extends Controller
         $this->data['pe_registry'] = [];
         $this->data['pe_initial'] = null;
         $this->data['pe_link_error'] = null;
+        $this->data['pe_link_param'] = PopulationExplorer::LINK_PARAM;
         $this->data['pe_no_scope'] = true;
         $this->data['pe_forbidden'] = false;
         $this->data['pe_load_error'] = false;
@@ -1132,8 +1133,9 @@ class Controller_Reports extends Controller
             return;
         }
 
-        if (isset($this->request->q) && is_string($this->request->q) && $this->request->q !== '') {
-            $d = $this->Reports->population_decode_link($this->request->q);
+        $link = $this->request->{PopulationExplorer::LINK_PARAM} ?? null;
+        if (is_string($link) && $link !== '') {
+            $d = $this->Reports->population_decode_link($link);
             if ($d['ok']) {
                 $this->data['pe_initial'] = $d['state'];
             } else {

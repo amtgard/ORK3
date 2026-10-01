@@ -105,4 +105,52 @@ final class PopulationExplorerControllerTest extends TestCase
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => ProcessingError('x')])[0]);
         $this->assertSame(500, $this->call('_pe_export_failure', ['Status' => Success()])[0], 'success without a file is a failure');
     }
+
+    /** Run the page action with a stubbed model; returns the template data. */
+    private function page(array $query): array
+    {
+        $req = new Request('test');
+        $req->Request = $query;
+        $this->ctl->request = $req;
+        $this->ctl->data = [];
+        $this->ctl->Reports = new class () {
+            public function population_authorize(string $token, string $type, int $id): ?array
+            {
+                return null;
+            }
+
+            public function population_registry(string $token, string $type, int $id): array
+            {
+                return ['criteria' => ['active' => []], 'columns' => [], 'options' => []];
+            }
+
+            public function population_decode_link(string $q): array
+            {
+                return PopulationExplorer::DecodeLink($q, ['class' => [], 'award' => [], 'peerage' => []]);
+            }
+        };
+        $this->ctl->population_explorer();
+
+        return $this->ctl->data;
+    }
+
+    public function testShareLinkIsReadFromPeNotQ(): void
+    {
+        // Analytics records any `q` URL parameter as a site search, so the filter travels in `pe`.
+        $this->assertSame('pe', PopulationExplorer::LINK_PARAM);
+        $link = PopulationExplorer::EncodeLink(['tree' => ['op' => 'AND', 'children' => [['c' => 'active', 'o' => 'is', 'v' => 'yes']]], 'columns' => ['persona']]);
+
+        $d = $this->page(['KingdomId' => 1, 'pe' => $link]);
+        $this->assertSame('pe', $d['pe_link_param']);
+        $this->assertNull($d['pe_link_error']);
+        $this->assertSame('active', $d['pe_initial']['tree']['children'][0]['c'] ?? null);
+
+        $d = $this->page(['KingdomId' => 1, 'q' => $link]);
+        $this->assertNull($d['pe_initial'], 'the old q parameter is not read');
+        $this->assertNull($d['pe_link_error']);
+
+        $d = $this->page(['KingdomId' => 1, 'pe' => 'not a link!']);
+        $this->assertNull($d['pe_initial']);
+        $this->assertNotEmpty($d['pe_link_error']);
+    }
 }

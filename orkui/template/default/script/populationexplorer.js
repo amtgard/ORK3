@@ -1,6 +1,6 @@
 /* Population Explorer — filter builder, columns, run, share link, export.
  * Reads only window.PE (set by Reports_populationexplorer.tpl):
- *   { registry:{criteria, columns, options}, scope:{type,id,name}, initial, urls:{run, export, page, player} }
+ *   { registry:{criteria, columns, options}, scope:{type,id,name}, initial, urls:{run, export, page, share, player} }
  * Vanilla JS. Never inject server/user text with innerHTML unless it went through esc().
  */
 (function () {
@@ -1022,7 +1022,8 @@
         return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
     function shareUrl() {
-        var url = PE.urls.page + '&q=' + b64url(JSON.stringify(currentState()));
+        // `pe`, not `q`: analytics records any `q` parameter as a site search.
+        var url = PE.urls.share + b64url(JSON.stringify(currentState()));
         var full = url;
         try { full = new URL(url, window.location.href).href; } catch (e) { /* relative URL: measure as is */ }
         return full.length > MAX_SHARE_URL ? null : url;

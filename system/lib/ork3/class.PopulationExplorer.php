@@ -15,6 +15,8 @@ class PopulationExplorer extends Ork3
     public const MAX_LIST = 100;
     public const MAX_ROWS = 5000;
     public const MAX_LINK_BYTES = 8192;
+    /** Share-link URL parameter. Not `q`: Google Analytics logs any `q` as a site search. */
+    public const LINK_PARAM = 'pe';
     public const MAX_MONTHS = 60;
     /** MariaDB max_statement_time (seconds) for the row and COUNT queries. */
     public const STATEMENT_TIMEOUT_S = 10;

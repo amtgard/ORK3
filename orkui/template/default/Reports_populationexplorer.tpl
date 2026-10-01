@@ -2,7 +2,7 @@
 /* ── Population Explorer ─────────────────────────────────────
    Controller: Controller_Reports::population_explorer
    Data: pe_scope_type, pe_scope_id, pe_scope_name, pe_registry,
-         pe_initial, pe_link_error, pe_no_scope, pe_forbidden, pe_load_error
+         pe_initial, pe_link_error, pe_link_param, pe_no_scope, pe_forbidden, pe_load_error
    The builder itself lives in script/populationexplorer.js and
    reads only window.PE. */
 $pe_scope_type = $pe_scope_type ?? null;
@@ -14,6 +14,7 @@ $pe_link_error = $pe_link_error ?? null;
 $pe_no_scope   = !empty($pe_no_scope);
 $pe_forbidden  = !empty($pe_forbidden);
 $pe_load_error = !empty($pe_load_error);
+$pe_link_param = (string)($pe_link_param ?? 'pe');
 $pe_ready      = !$pe_no_scope && !$pe_forbidden && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
 
 $pe_is_park    = ($pe_scope_type === 'Park');
@@ -187,6 +188,8 @@ window.PE = <?=json_encode([
 		'run'    => UIR . 'Reports/population_explorer_json',
 		'export' => UIR . 'Reports/population_explorer_export',
 		'page'   => $pe_page_url,
+		// Share links carry the filter in `pe`, never `q` (analytics logs `q` as a site search).
+		'share'  => $pe_page_url . '&' . $pe_link_param . '=',
 		'player' => UIR . 'Player/profile/',
 	],
 ], $pe_json_flags)?>;

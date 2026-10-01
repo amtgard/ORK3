@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A scoped officer report, "Population Explorer", with an AND/OR nested filter builder (`Criteria | Operand | Value`), selectable output columns, DataTables results, `.xlsx` export and a shareable `&q=` link.
+**Goal:** A scoped officer report, "Population Explorer", with an AND/OR nested filter builder (`Criteria | Operand | Value`), selectable output columns, DataTables results, `.xlsx` export and a shareable `&pe=` link.
 
 **Architecture:** A new domain class `PopulationExplorer` (`system/lib/ork3/`) owns a registry of whitelisted criteria/columns, validates and normalizes a filter tree, compiles it to one SQL query (correlated subqueries / `EXISTS`), enforces scope server-side, and runs/exports it. `Model_Reports` is the thin membrane; `Controller_Reports` serves the page, a JSON run endpoint and an export download; a `.rp-*` template plus `populationexplorer.js` render the inline builder.
 
@@ -594,7 +594,7 @@ Requirements (from spec §5; read it before building):
 - Builder (vanilla JS, no jQuery UI): state `{op, children}`; recursive render; groups have an AND/OR segmented toggle, **+ Add rule**, **+ Add group** (disabled with `data-tip` at UI depth 3); rules are `[Criteria select grouped by group][Operand select][Value control][remove]`; changing criterion resets operand/value; the `N` months input shows for `param` criteria; connector label shows the group's AND/OR between rows. Value controls: Flatpickr `altInput` dates (two for `between`), number inputs (two for `between`), chip multi-select (custom `.pe-chip-*` dropdown, not jQuery UI; reposition with `tnPositionAcFixed()` pattern if inside a modal—not applicable here but keep the list scrollable) for class/award/order/park/kingdom from `registry.options`, Yes/No toggle, peerage criteria show chips of the order awards with `is` offering Yes/No.
 - Columns card: grouped checkboxes from `registry.columns`, Persona locked on, defaults from `default`, Reset link.
 - Run: button posts `{ScopeType, ScopeId, Tree, Columns}`; on success fill stats row and a DataTables table (Persona links to `<?=UIR?>Player/profile/<id>`); inline per-rule error using `rule_path`; truncated banner "Showing 5,000 of N — narrow your filter"; loading state; `.rp-empty-state` for zero rows.
-- Copy link: `EncodeLink`-compatible base64url of `{tree, columns}` into `&q=` on the page URL (`navigator.clipboard` with a textarea fallback; confirm via an inline toast, no native dialogs). On load, if `PE.initial` exists, populate the builder and auto-run.
+- Copy link: `EncodeLink`-compatible base64url of `{tree, columns}` into `&pe=` on the page URL (`navigator.clipboard` with a textarea fallback; confirm via an inline toast, no native dialogs). On load, if `PE.initial` exists, populate the builder and auto-run.
 - Export: submits a hidden form POST to `PE.urls.export` with the JSON state.
 - CSS: `.pe-*` only builder pieces (group block with left accent bar/indent, segmented toggle, rule row grid, chips, toast); dark mode for each via `html[data-theme="dark"] .pe-…`; ≤ 600px: rule rows stack (criteria on top, operand + value below), no horizontal scroll, ≥44px tap targets; use existing CSS variables (`--ork-card-bg`, `--ork-border`, `--ork-input-bg`, `--ork-input-border`) before hardcoding colors. Tooltips via `data-tip` only.
 
