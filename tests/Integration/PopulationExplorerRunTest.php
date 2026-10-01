@@ -505,4 +505,36 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertArrayHasKey('Knight', $kreg['options']['order']);
         $this->assertNotFalse(json_encode($kreg));
     }
+
+    public function testOrTreesCannotEscapeParkScope(): void
+    {
+        $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
+        $inside = $this->player('pe-or-in');
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ?', [$inside['mundane_id']]);
+        if ($p2 > 0) {
+            $outside = $this->player('pe-or-out', $p2);
+            $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET active = 0 WHERE mundane_id = ?', [$outside['mundane_id']]);
+        }
+        $inPark = array_map('intval', $this->fixture->pdo()->query(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE park_id = ' . $this->parkId
+        )->fetchAll(PDO::FETCH_COLUMN));
+
+        $trees = [
+            ['op' => 'OR', 'children' => [$this->leaf('active', 'is', 'yes'), $this->leaf('active', 'is', 'no')]],
+            ['op' => 'OR', 'children' => [$this->leaf('last_signin', 'lte', '1900-01-01'), $this->leaf('suspended', 'is', 'no')]],
+            ['op' => 'OR', 'children' => [
+                ['op' => 'OR', 'children' => [$this->leaf('active', 'is', 'yes')]],
+                $this->leaf('suspended', 'is', 'no'),
+            ]],
+        ];
+        foreach ($trees as $n => $tree) {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $tree));
+            $this->assertSame(0, $r['Status']['Status'], "tree $n");
+            $this->assertNotEmpty($r['Rows'], "tree $n");
+            foreach ($this->ids($r) as $id) {
+                $this->assertContains($id, $inPark, "tree $n returned a player outside the scope park");
+            }
+            $this->assertLessThanOrEqual(count($inPark), $r['Total'], "tree $n");
+        }
+    }
 }

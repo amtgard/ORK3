@@ -6,6 +6,34 @@ class Model_Reports extends Model
     {
         parent::__construct();
         $this->Report = new APIModel('Report');
+        $this->PopulationExplorer = new APIModel('PopulationExplorer');
+    }
+
+    /** Authorization gate for a Population Explorer scope: null = allowed, else an error Status array. */
+    public function population_authorize(string $token, string $scopeType, int $scopeId): ?array
+    {
+        return $this->PopulationExplorer->AuthorizeScope($token, $scopeType, $scopeId);
+    }
+
+    /** Registry + option lists for a scope. Callers MUST population_authorize() first. */
+    public function population_registry(string $token, string $scopeType, int $scopeId): array
+    {
+        $denied = $this->population_authorize($token, $scopeType, $scopeId);
+        if ($denied !== null) {
+            return [];
+        }
+        return $this->PopulationExplorer->PublicRegistry($scopeType, $scopeId);
+    }
+
+    public function population_run(array $request): array
+    {
+        return $this->PopulationExplorer->Run($request);
+    }
+
+    /** Decode and re-validate a share-link payload (see PopulationExplorer::DecodeLink). */
+    public function population_decode_link(string $q): array
+    {
+        return PopulationExplorer::DecodeLink($q);
     }
 
     public function ReleaseFeatureUtilization()

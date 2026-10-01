@@ -268,4 +268,59 @@ final class PopulationExplorerTest extends TestCase
         $this->assertStringContainsString("aw.peerage IN ('Knight')", $no);
         $this->assertStringContainsString('NOT EXISTS', $no);
     }
+
+    public function testDecodeLinkRoundTrip(): void
+    {
+        $tree = ['op' => 'AND', 'children' => [$this->leaf('last_signin', 'gte', '2025-01-01')]];
+        $q = PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona', 'home_park']]);
+        $this->assertDoesNotMatchRegularExpression('/[+\/=]/', $q);
+        $d = $this->pe->DecodeLink($q, $this->known);
+        $this->assertTrue($d['ok'], (string) $d['error']);
+        $this->assertNull($d['error']);
+        $this->assertSame('AND', $d['state']['tree']['op']);
+        $this->assertSame('last_signin', $d['state']['tree']['children'][0]['c']);
+        $this->assertContains('persona', $d['state']['columns']);
+    }
+
+    public function testDecodeLinkRejectsOversize(): void
+    {
+        $q = str_repeat('A', 8193);
+        $d = PopulationExplorer::DecodeLink($q);
+        $this->assertFalse($d['ok']);
+        $this->assertNull($d['state']);
+        $this->assertNotEmpty($d['error']);
+    }
+
+    public function testDecodeLinkRejectsGarbage(): void
+    {
+        foreach (['', '!!!not base64!!!', PopulationExplorer::EncodeLink(['x' => 1]) . '*'] as $q) {
+            $d = PopulationExplorer::DecodeLink($q, $this->known);
+            $this->assertFalse($d['ok'], $q);
+            $this->assertNull($d['state']);
+        }
+        // valid base64 but not JSON
+        $d = PopulationExplorer::DecodeLink(rtrim(strtr(base64_encode('not json {'), '+/', '-_'), '='), $this->known);
+        $this->assertFalse($d['ok']);
+        // valid JSON but not an object with a tree
+        $d = PopulationExplorer::DecodeLink(rtrim(strtr(base64_encode('"str"'), '+/', '-_'), '='), $this->known);
+        $this->assertFalse($d['ok']);
+    }
+
+    public function testDecodeLinkRevalidatesTree(): void
+    {
+        $bad = ['op' => 'AND', 'children' => [$this->leaf('no_such_criterion', 'is', 'yes')]];
+        $d = PopulationExplorer::DecodeLink(PopulationExplorer::EncodeLink(['tree' => $bad, 'columns' => ['persona']]), $this->known);
+        $this->assertFalse($d['ok']);
+        $this->assertNull($d['state']);
+        $this->assertNotEmpty($d['error']);
+    }
+
+    public function testDecodeLinkFiltersUnknownColumns(): void
+    {
+        $tree = ['op' => 'AND', 'children' => []];
+        $d = PopulationExplorer::DecodeLink(PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona', 'drop table', 5, 'home_park']]), $this->known);
+        $this->assertTrue($d['ok'], (string) $d['error']);
+        $this->assertNotContains('drop table', $d['state']['columns']);
+        $this->assertContains('home_park', $d['state']['columns']);
+    }
 }

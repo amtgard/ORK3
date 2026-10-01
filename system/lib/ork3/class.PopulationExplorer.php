@@ -873,6 +873,58 @@ class PopulationExplorer extends Ork3
         return (string)$v;
     }
 
+    /** Encode {tree, columns} as a base64url JSON share-link payload. */
+    public static function EncodeLink(array $state): string
+    {
+        return rtrim(strtr(base64_encode((string)json_encode($state)), '+/', '-_'), '=');
+    }
+
+    /**
+     * Decode and re-validate a share-link payload. Never trusts the link: size
+     * capped before decoding, tree re-run through NormalizeTree, columns
+     * filtered to known column ids.
+     *
+     * @return array ['ok'=>bool,'state'=>?array{tree:array,columns:string[]},'error'=>?string]
+     */
+    public static function DecodeLink(string $q, ?array $known = null): array
+    {
+        $fail = function (string $msg): array {
+            return ['ok' => false, 'state' => null, 'error' => $msg];
+        };
+        if ($q === '' || strlen($q) > self::MAX_LINK_BYTES) {
+            return $fail('That link is empty or too large to open.');
+        }
+        if (!preg_match('/^[A-Za-z0-9_-]+$/', $q)) {
+            return $fail('That link is not valid.');
+        }
+        $raw = base64_decode(strtr($q, '-_', '+/'), true);
+        if ($raw === false) {
+            return $fail('That link is not valid.');
+        }
+        $data = json_decode($raw, true);
+        if (!is_array($data) || !isset($data['tree']) || !is_array($data['tree'])) {
+            return $fail('That link is not valid.');
+        }
+        $pe = new self();
+        try {
+            $norm = $pe->NormalizeTree($data['tree'], $known);
+        } catch (Throwable $e) {
+            logtrace('PopulationExplorer::DecodeLink failure', $e->getMessage());
+            return $fail('That link could not be opened.');
+        }
+        if (!$norm['ok']) {
+            return $fail('That link has an invalid filter: ' . $norm['error']);
+        }
+        $cols = [];
+        $defs = $pe->_columnDefs();
+        foreach ((array)($data['columns'] ?? []) as $c) {
+            if (is_string($c) && isset($defs[$c]) && !in_array($c, $cols, true)) {
+                $cols[] = $c;
+            }
+        }
+        return ['ok' => true, 'state' => ['tree' => $norm['tree'], 'columns' => $cols], 'error' => null];
+    }
+
     /**
      * Registry safe to send to the browser: no closures / SQL, plus the option
      * lists the rule editor needs, limited to the viewer's chosen scope.

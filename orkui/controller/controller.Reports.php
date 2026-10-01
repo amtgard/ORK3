@@ -14,6 +14,8 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
+            // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
+            'population_explorer_json',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -1075,6 +1077,116 @@ class Controller_Reports extends Controller
         $this->data['KnightTypes']  = $result['KnightTypes']  ?? array();
     }
 
+
+    public function population_explorer($params = null)
+    {
+        $this->template = 'Reports_populationexplorer.tpl';
+        $this->data['page_title'] = 'Population Explorer';
+
+        $type = null;
+        $id = 0;
+        if (isset($this->request->ParkId) && valid_id($this->request->ParkId)) {
+            $type = 'Park';
+            $id = (int)$this->request->ParkId;
+        } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+            $type = 'Kingdom';
+            $id = (int)$this->request->KingdomId;
+        } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+            $type = 'Park';
+            $id = (int)$this->session->park_id;
+        } elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+            $type = 'Kingdom';
+            $id = (int)$this->session->kingdom_id;
+        }
+
+        $this->data['pe_scope_type'] = $type;
+        $this->data['pe_scope_id'] = $id;
+        $this->data['pe_scope_name'] = '';
+        $this->data['pe_registry'] = [];
+        $this->data['pe_initial'] = null;
+        $this->data['pe_link_error'] = null;
+        $this->data['pe_no_scope'] = true;
+        $this->data['pe_forbidden'] = false;
+
+        if ($type === null) {
+            return;
+        }
+
+        $this->data['menu']['reports']['url'] = UIR . ($type === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $id . '&tab=reports';
+
+        // Authorize BEFORE building the registry: PublicRegistry does not check access.
+        $token = isset($this->session->token) ? (string)$this->session->token : '';
+        if ($this->Reports->population_authorize($token, $type, $id) !== null) {
+            $this->data['pe_forbidden'] = true;
+            return;
+        }
+
+        $this->data['pe_no_scope'] = false;
+        $this->data['pe_scope_name'] = $this->_resolve_scope_name($type, $id);
+        $this->data['pe_registry'] = $this->Reports->population_registry($token, $type, $id);
+
+        if (isset($this->request->q) && is_string($this->request->q) && $this->request->q !== '') {
+            $d = $this->Reports->population_decode_link($this->request->q);
+            if ($d['ok']) {
+                $this->data['pe_initial'] = $d['state'];
+            } else {
+                $this->data['pe_link_error'] = $d['error'];
+            }
+        }
+    }
+
+    public function population_explorer_json()
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['status' => 1, 'error' => 'POST required']);
+            exit;
+        }
+        $body = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($body)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid request body']);
+            exit;
+        }
+        $r = $this->Reports->population_run([
+            'Token'     => (string)$this->session->token,
+            'ScopeType' => is_string($body['ScopeType'] ?? null) ? $body['ScopeType'] : '',
+            'ScopeId'   => (int)($body['ScopeId'] ?? 0),
+            'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
+            'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+        ]);
+        $st = $r['Status']['Status'] ?? 1;
+        if ($st != 0) {
+            $out = ['status' => (int)$st, 'error' => rtrim(($r['Status']['Error'] ?? 'Error') . ': ' . ($r['Status']['Detail'] ?? ''), ': ')];
+            if (isset($r['RulePath'])) {
+                $out['rule_path'] = $r['RulePath'];
+            }
+            echo json_encode($out);
+            exit;
+        }
+        $rows = $r['Rows'] ?? [];
+        foreach ($rows as &$row) {
+            if (isset($row['persona']) && is_string($row['persona'])) {
+                $row['persona'] = stripslashes($row['persona']);
+            }
+            if (isset($row['Persona']) && is_string($row['Persona'])) {
+                $row['Persona'] = stripslashes($row['Persona']);
+            }
+        }
+        unset($row);
+        echo json_encode([
+            'status'     => 0,
+            'columns'    => $r['Columns'] ?? [],
+            'rows'       => $rows,
+            'total'      => (int)($r['Total'] ?? 0),
+            'truncated'  => !empty($r['Truncated']),
+            'elapsed_ms' => (int)($r['ElapsedMs'] ?? 0),
+        ]);
+        exit;
+    }
 
     public function ladder_grid($params = null)
     {
