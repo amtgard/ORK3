@@ -5,7 +5,8 @@
  *
  * The filter tree is untrusted client input. NormalizeTree() either returns a
  * canonical tree whose values are all ints / validated dates, or an error.
- * SQL compilation (the registry `sql` closures) is added separately.
+ * CompileTree() / ColumnSelectSql() turn a canonical tree into a SQL boolean
+ * over alias `m` (ork_mundane). Only ints and validated dates ever reach SQL.
  */
 class PopulationExplorer extends Ork3
 {
@@ -60,6 +61,16 @@ class PopulationExplorer extends Ork3
 
     private function _criteria(): array
     {
+        $list = $this->_criteriaDefs();
+        foreach ($list as $id => &$def) {
+            $def['sql'] = $this->_criterionSql($id, $def);
+        }
+        unset($def);
+        return $list;
+    }
+
+    private function _criteriaDefs(): array
+    {
         return [
             'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date'),
             'player_since'          => $this->_crit('Player since', 'Activity', 'date'),
@@ -94,6 +105,18 @@ class PopulationExplorer extends Ork3
     }
 
     private function _columns(): array
+    {
+        $list = $this->_columnDefs();
+        foreach ($list as $id => &$def) {
+            $def['sql'] = function (array $ctx) use ($id): string {
+                return $this->_columnSql($id, $ctx);
+            };
+        }
+        unset($def);
+        return $list;
+    }
+
+    private function _columnDefs(): array
     {
         return [
             'persona'           => $this->_col('Persona', 'Player', 'text', true),
@@ -347,5 +370,309 @@ class PopulationExplorer extends Ork3
             }
         }
         return $known;
+    }
+
+    // ---------------------------------------------------------------- SQL compilation
+
+    private function _t(string $name): string
+    {
+        return DB_PREFIX . $name;
+    }
+
+    /** Compare an SQL expression with a normalized scalar / [lo, hi] value. */
+    private function _cmp(string $expr, string $type, string $op, $v): string
+    {
+        $q = function ($x) use ($type): string {
+            if ($type === 'date') {
+                if (!is_string($x) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $x)) {
+                    throw new InvalidArgumentException('bad date');
+                }
+                return "'" . $x . "'";
+            }
+            return (string)(int)$x;
+        };
+        if ($op === 'between') {
+            return "$expr BETWEEN " . $q($v[0]) . ' AND ' . $q($v[1]);
+        }
+        if (!isset(self::SQL_CMP[$op])) {
+            throw new InvalidArgumentException('bad operand');
+        }
+        return "$expr " . self::SQL_CMP[$op] . ' ' . $q($v);
+    }
+
+    /** Compare an SQL expression with a normalized id / id list. */
+    private function _set(string $expr, string $op, $v): string
+    {
+        $ids = implode(',', array_map('intval', (array)$v));
+        switch ($op) {
+            case 'is':
+                return "$expr = " . (int)$v;
+            case 'is_not':
+                return "$expr <> " . (int)$v;
+            case 'in':
+                return "$expr IN ($ids)";
+            case 'not_in':
+                return "$expr NOT IN ($ids)";
+        }
+        throw new InvalidArgumentException('bad operand');
+    }
+
+    private function _months(?int $p): int
+    {
+        $n = (int)$p;
+        if ($n < 1 || $n > self::MAX_MONTHS) {
+            throw new InvalidArgumentException('bad months');
+        }
+        return $n;
+    }
+
+    private function _attSub(string $select, string $extraWhere = '', string $tail = ''): string
+    {
+        return '(SELECT ' . $select . ' FROM ' . $this->_t('attendance') . ' a WHERE a.mundane_id = m.mundane_id'
+            . ($extraWhere !== '' ? ' AND ' . $extraWhere : '') . ($tail !== '' ? ' ' . $tail : '') . ')';
+    }
+
+    private function _lastSigninExpr(): string
+    {
+        return $this->_attSub('MAX(a.date)');
+    }
+
+    private function _playerSinceExpr(): string
+    {
+        return 'COALESCE(m.player_since_override, ' . $this->_attSub('MIN(a.date)') . ')';
+    }
+
+    private function _signinsInMonthsExpr(int $n): string
+    {
+        return $this->_attSub('COUNT(*)', "a.date >= DATE_SUB(CURDATE(), INTERVAL $n MONTH)");
+    }
+
+    private function _totalSigninsExpr(): string
+    {
+        return $this->_attSub('COUNT(*)');
+    }
+
+    private function _lastClassExpr(): string
+    {
+        return $this->_attSub('a.class_id', 'a.class_id > 0', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
+    }
+
+    private function _lastSigninParkExpr(): string
+    {
+        return $this->_attSub('a.park_id', '', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
+    }
+
+    private function _duesFrom(array $ctx): string
+    {
+        $scope = isset($ctx['accountScope']) && $ctx['accountScope'] !== '' ? $ctx['accountScope'] : '1=0';
+        return 'FROM ' . $this->_t('split') . ' s JOIN ' . $this->_t('account') . ' ac ON ac.account_id = s.account_id'
+            . ' WHERE s.src_mundane_id = m.mundane_id AND s.is_dues = 1 AND (' . $scope . ')';
+    }
+
+    private function _duesThroughExpr(array $ctx): string
+    {
+        return '(SELECT MAX(s.dues_through) ' . $this->_duesFrom($ctx) . ')';
+    }
+
+    private function _duesPaidExists(array $ctx): string
+    {
+        return 'EXISTS (SELECT 1 ' . $this->_duesFrom($ctx) . ' AND s.dues_through >= CURDATE())';
+    }
+
+    /**
+     * Held awards for the player in alias `m`. `aw` is the EFFECTIVE award: a
+     * Custom Title aliased to a peerage award (awards.alias_award_id) counts as
+     * its alias target, matching Report::PlayerAwards / BeltlineData
+     * (COALESCE(alias.peerage, a.peerage)). Revoked and stripped awards never count.
+     */
+    private function _heldAwardsFrom(string $extraWhere = ''): string
+    {
+        return 'FROM ' . $this->_t('awards') . ' w'
+            . ' LEFT JOIN ' . $this->_t('kingdomaward') . ' ka ON ka.kingdomaward_id = w.kingdomaward_id'
+            . ' JOIN ' . $this->_t('award') . ' aw ON aw.award_id = COALESCE(NULLIF(w.alias_award_id, 0), NULLIF(w.award_id, 0), ka.award_id)'
+            . ' WHERE w.mundane_id = m.mundane_id AND w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'
+            . ($extraWhere !== '' ? ' ' . $extraWhere : '');
+    }
+
+    private function _peerageIn(array $peerage): string
+    {
+        $lits = [];
+        foreach ($peerage as $pe) {
+            if (!is_string($pe) || !preg_match('/^[A-Za-z-]+$/D', $pe)) {
+                throw new InvalidArgumentException('bad peerage');
+            }
+            $lits[] = "'" . $pe . "'";
+        }
+        return 'aw.peerage IN (' . implode(',', $lits) . ')';
+    }
+
+    /** Reeve / Corpora qualified: mirrors Report::GetReeveQualified / GetCorporaQualified. */
+    private function _qualifiedExpr(string $kind): string
+    {
+        return "(m.suspended = 0 AND m.{$kind}_qualified = 1 AND COALESCE(m.{$kind}_qualified_until >= CURDATE(), 0))";
+    }
+
+    private function _awardSetSql(string $o, $v, string $peerageFilter): string
+    {
+        if ($o === 'is') {
+            return ($v ? 'EXISTS' : 'NOT EXISTS') . ' (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $peerageFilter) . ')';
+        }
+        // has_award is an enum_set criterion, so also accept the set operands.
+        $map = ['in' => 'has_any', 'is' => 'has_any', 'not_in' => 'has_none', 'is_not' => 'has_none'];
+        $o = $map[$o] ?? $o;
+        $ids = array_values(array_unique(array_map('intval', (array)$v)));
+        $in = 'aw.award_id IN (' . implode(',', $ids) . ')';
+        switch ($o) {
+            case 'has_any':
+                return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $in) . ')';
+            case 'has_none':
+                return 'NOT EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $in) . ')';
+            case 'has_all':
+                return '(SELECT COUNT(DISTINCT aw.award_id) ' . $this->_heldAwardsFrom('AND ' . $in) . ') = ' . count($ids);
+        }
+        throw new InvalidArgumentException('bad operand');
+    }
+
+    /** @return callable function(string $o, $v, ?int $p, array $ctx): string */
+    private function _criterionSql(string $id, array $def): callable
+    {
+        return function (string $o, $v, ?int $p, array $ctx) use ($id, $def): string {
+            switch ($id) {
+                case 'last_signin':
+                    return $this->_cmp($this->_lastSigninExpr(), 'date', $o, $v);
+                case 'player_since':
+                    return $this->_cmp($this->_playerSinceExpr(), 'date', $o, $v);
+                case 'signins_last_n_months':
+                    return $this->_cmp($this->_signinsInMonthsExpr($this->_months($p)), 'number', $o, $v);
+                case 'total_signins':
+                    return $this->_cmp($this->_totalSigninsExpr(), 'number', $o, $v);
+                case 'last_class':
+                    return $this->_set($this->_lastClassExpr(), $o, $v);
+                case 'classes_last_n_months':
+                    $ids = implode(',', array_map('intval', (array)$v));
+                    $ex = 'EXISTS ' . $this->_attSub('1', "a.class_id IN ($ids) AND a.date >= DATE_SUB(CURDATE(), INTERVAL " . $this->_months($p) . ' MONTH)');
+                    if ($o === 'is' || $o === 'in') {
+                        return $ex;
+                    }
+                    if ($o === 'is_not' || $o === 'not_in') {
+                        return 'NOT ' . $ex;
+                    }
+                    throw new InvalidArgumentException('bad operand');
+                case 'home_kingdom':
+                    return $this->_set('m.kingdom_id', $o, $v);
+                case 'home_park':
+                    return $this->_set('m.park_id', $o, $v);
+                case 'last_signin_park':
+                    return $this->_set($this->_lastSigninParkExpr(), $o, $v);
+                case 'dues_paid':
+                    return ((int)$v === 1 ? '' : 'NOT ') . $this->_duesPaidExists($ctx);
+                case 'dues_through':
+                    return $this->_cmp($this->_duesThroughExpr($ctx), 'date', $o, $v);
+                case 'waivered':
+                    return 'm.waivered = ' . ((int)$v === 1 ? 1 : 0);
+                case 'active':
+                    return 'm.active = ' . ((int)$v === 1 ? 1 : 0);
+                case 'suspended':
+                    return 'm.suspended = ' . ((int)$v === 1 ? 1 : 0);
+                case 'banned':
+                    return 'm.penalty_box = ' . ((int)$v === 1 ? 1 : 0);
+                case 'knighthood':
+                case 'masterhood':
+                case 'paragon':
+                case 'lesser_peerage':
+                    return $this->_awardSetSql($o, $v, $this->_peerageIn($def['peerage']));
+                case 'has_award':
+                    return $this->_awardSetSql($o, $v, '1=1');
+                case 'award_count':
+                    return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom() . ')', 'number', $o, $v);
+                case 'award_date_any':
+                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $this->_cmp('w.date', 'date', $o, $v)) . ')';
+                case 'reeve_qualified':
+                case 'corpora_qualified':
+                    $e = $this->_qualifiedExpr($id === 'reeve_qualified' ? 'reeve' : 'corpora');
+                    return (int)$v === 1 ? $e : 'NOT ' . $e;
+            }
+            throw new InvalidArgumentException('unknown criterion');
+        };
+    }
+
+    /** SQL expression (no alias) for a result column; `m`, `k`, `p` are joined by the caller. */
+    public function ColumnSelectSql(string $colId, array $ctx): string
+    {
+        return $this->_columnSql($colId, $ctx);
+    }
+
+    private function _columnSql(string $id, array $ctx): string
+    {
+        switch ($id) {
+            case 'persona':
+                return 'm.persona';
+            case 'home_park':
+                return 'p.name';
+            case 'home_kingdom':
+                return 'k.name';
+            case 'last_signin':
+                return $this->_lastSigninExpr();
+            case 'player_since':
+                return $this->_playerSinceExpr();
+            case 'signins_6m':
+                return $this->_signinsInMonthsExpr(6);
+            case 'total_signins':
+                return $this->_totalSigninsExpr();
+            case 'dues_through':
+                return $this->_duesThroughExpr($ctx);
+            case 'last_signin_park':
+                return '(SELECT p2.name FROM ' . $this->_t('park') . ' p2 WHERE p2.park_id = (' . $this->_lastSigninParkExpr() . '))';
+            case 'last_class':
+                return '(SELECT c.name FROM ' . $this->_t('class') . ' c WHERE c.class_id = (' . $this->_lastClassExpr() . '))';
+            case 'dues_paid':
+                return 'CASE WHEN ' . $this->_duesPaidExists($ctx) . ' THEN 1 ELSE 0 END';
+            case 'waivered':
+                return 'm.waivered';
+            case 'active':
+                return 'm.active';
+            case 'knighthoods':
+            case 'masterhoods':
+            case 'paragons':
+                $pe = ['knighthoods' => 'Knight', 'masterhoods' => 'Master', 'paragons' => 'Paragon'][$id];
+                return "(SELECT GROUP_CONCAT(DISTINCT aw.name ORDER BY aw.name SEPARATOR ', ') "
+                    . $this->_heldAwardsFrom("AND aw.peerage = '$pe'") . ')';
+            case 'award_count':
+                return '(SELECT COUNT(*) ' . $this->_heldAwardsFrom() . ')';
+            case 'reeve_qualified':
+                return 'CASE WHEN ' . $this->_qualifiedExpr('reeve') . ' THEN 1 ELSE 0 END';
+            case 'corpora_qualified':
+                return 'CASE WHEN ' . $this->_qualifiedExpr('corpora') . ' THEN 1 ELSE 0 END';
+        }
+        throw new InvalidArgumentException('unknown column');
+    }
+
+    /**
+     * Compile a normalized tree (from NormalizeTree) into a SQL boolean over alias `m`.
+     * ctx['accountScope'] is a SQL boolean over alias `ac` (ork_account) for dues rules.
+     */
+    public function CompileTree(array $normalizedTree, array $ctx = []): string
+    {
+        $registry = $this->_criteria();
+        if (empty($normalizedTree['children'])) {
+            return '1=1';
+        }
+        return $this->_compileNode($normalizedTree, $registry, $ctx);
+    }
+
+    private function _compileNode(array $node, array $registry, array $ctx): string
+    {
+        if (isset($node['children'])) {
+            $parts = [];
+            foreach ($node['children'] as $child) {
+                $parts[] = $this->_compileNode($child, $registry, $ctx);
+            }
+            if (count($parts) === 0) {
+                return '1=1';
+            }
+            return '(' . implode($node['op'] === 'OR' ? ' OR ' : ' AND ', $parts) . ')';
+        }
+        $fn = $registry[$node['c']]['sql'];
+        return '(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')';
     }
 }

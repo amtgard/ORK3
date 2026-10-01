@@ -135,4 +135,109 @@ final class PopulationExplorerTest extends TestCase
         $this->assertFalse($this->norm(['op' => 'XOR', 'children' => []])['ok']);
         $this->assertFalse($this->norm(['children' => 'x'])['ok']);
     }
+
+    private function sql(array $tree, array $ctx = ['accountScope' => 'ac.kingdom_id = 1']): string
+    {
+        $n = $this->norm($tree);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        return $this->pe->CompileTree($n['tree'], $ctx);
+    }
+
+    public function testEmptyTreeCompilesToTautology(): void
+    {
+        $this->assertSame('1=1', $this->sql(['op' => 'AND', 'children' => []]));
+    }
+
+    public function testPrecedenceIsExplicit(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [
+            $this->leaf('active', 'is', 'yes'),
+            ['op' => 'OR', 'children' => [
+                $this->leaf('waivered', 'is', 'yes'),
+                $this->leaf('suspended', 'is', 'no'),
+            ]],
+        ]]);
+        $this->assertSame('((m.active = 1) AND ((m.waivered = 1) OR (m.suspended = 0)))', $s);
+    }
+
+    public function testEmptyChildGroupIsDroppedFromOrCompiled(): void
+    {
+        $s = $this->sql(['op' => 'OR', 'children' => [
+            $this->leaf('active', 'is', 'yes'),
+            ['op' => 'AND', 'children' => []],
+        ]]);
+        $this->assertSame('((m.active = 1))', $s);
+    }
+
+    public function testNullSemanticsForNegatedComparisons(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('last_class', 'is_not', 7)]]);
+        $this->assertStringContainsString('<> 7', $s);
+        $this->assertStringNotContainsString('COALESCE((SELECT a.class_id', $s); // no NULL-coalescing: NULL = no match
+    }
+
+    public function testBetweenAndInRender(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [
+            $this->leaf('last_signin', 'between', ['2025-01-01', '2025-06-30']),
+            $this->leaf('home_park', 'in', [3, 4, 5]),
+        ]]);
+        $this->assertStringContainsString("BETWEEN '2025-01-01' AND '2025-06-30'", $s);
+        $this->assertStringContainsString('m.park_id IN (3,4,5)', $s);
+    }
+
+    public function testNMonthsParamAndNotExists(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [
+            $this->leaf('signins_last_n_months', 'gt', 5, 6),
+            $this->leaf('classes_last_n_months', 'not_in', [7], 3),
+        ]]);
+        $this->assertStringContainsString('INTERVAL 6 MONTH', $s);
+        $this->assertStringContainsString('> 5', $s);
+        $this->assertStringContainsString('NOT EXISTS', $s);
+        $this->assertStringContainsString('INTERVAL 3 MONTH', $s);
+    }
+
+    public function testPeerageOperands(): void
+    {
+        $any  = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_any', [17, 20])]]);
+        $all  = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_all', [17, 20])]]);
+        $none = $this->sql(['op' => 'AND', 'children' => [$this->leaf('knighthood', 'has_none', [17])]]);
+        $this->assertStringContainsString('aw.award_id IN (17,20)', $any);
+        $this->assertStringContainsString('COUNT(DISTINCT aw.award_id)', $all);
+        $this->assertStringContainsString(') = 2', $all);
+        $this->assertStringContainsString('NOT EXISTS', $none);
+        $this->assertStringContainsString('w.revoked = 0', $any);
+        $this->assertStringContainsString('stripped_from', $any);
+    }
+
+    public function testDuesUsesAccountScope(): void
+    {
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('dues_paid', 'is', 'yes')]], ['accountScope' => 'ac.park_id = 42']);
+        $this->assertStringContainsString('ac.park_id = 42', $s);
+        $this->assertStringContainsString('s.is_dues = 1', $s);
+    }
+
+    public function testCompiledSqlNeverContainsUserText(): void
+    {
+        $n = $this->norm(['op' => 'AND', 'children' => [$this->leaf('last_signin', 'gte', '2025-01-01')]]);
+        $s = $this->pe->CompileTree($n['tree'], ['accountScope' => '1=1']);
+        $this->assertDoesNotMatchRegularExpression('/DROP|--|;/', $s);
+    }
+
+    public function testEveryColumnCompiles(): void
+    {
+        $cols = array_keys($this->pe->Registry()['columns']);
+        foreach ($cols as $c) {
+            $expr = $this->pe->ColumnSelectSql($c, ['accountScope' => 'ac.kingdom_id = 1']);
+            $this->assertNotSame('', $expr, $c);
+        }
+    }
+
+    public function testEveryCriterionHasASqlBuilder(): void
+    {
+        foreach ($this->pe->Registry()['criteria'] as $id => $def) {
+            $this->assertIsCallable($def['sql'], $id);
+        }
+    }
 }
