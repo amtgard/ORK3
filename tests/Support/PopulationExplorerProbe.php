@@ -20,6 +20,9 @@ final class PopulationExplorerProbe extends PopulationExplorer
 
     public ?float $timeout = null;
 
+    /** Kingdom-only ladder ids (kingdomaward ids) to use instead of the real list. */
+    public ?array $kingdomLadderIds = null;
+
     protected function _select(string $sql, bool $timed = false)
     {
         if ($this->failPattern !== null && preg_match($this->failPattern, $sql)) {
@@ -29,6 +32,11 @@ final class PopulationExplorerProbe extends PopulationExplorer
         $this->timed[] = $timed;
 
         return parent::_select($sql, $timed);
+    }
+
+    protected function _kingdomOnlyLadderIds(): array
+    {
+        return $this->kingdomLadderIds ?? parent::_kingdomOnlyLadderIds();
     }
 
     protected function _statementTimeout(): float

@@ -303,6 +303,22 @@ final class ReportsFixture
         return $id;
     }
 
+    /**
+     * A kingdom's own row for a global award (ork_kingdomaward.award_id = $awardId),
+     * e.g. a kingdom renaming a ladder. Returns the kingdomaward id; cleaned up.
+     */
+    public function insertKingdomAward(int $kingdomId, int $awardId, string $name): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (is_title, title_class, kingdom_id, award_id, name, reign_limit, month_limit)
+             VALUES (0, 0, ?, ?, ?, 0, 0)'
+        )->execute([$kingdomId, $awardId, $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
     public function insertParkOfficer(int $kingdomId, int $parkId, int $mundaneId, string $role): int
     {
         $stmt = $this->pdo->prepare(

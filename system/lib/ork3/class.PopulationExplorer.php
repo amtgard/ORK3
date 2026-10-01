@@ -33,6 +33,14 @@ class PopulationExplorer extends Ork3
     /** Rule rejection for a restricted criterion (suspended, banned) sent by a non-officer of the scope. */
     public const RESTRICTED_MESSAGE = 'This filter requires officer access for this kingdom or park.';
 
+    /** Ladder Award Ranks (spec §4): one number criterion per ladder in the scope. */
+    public const LADDER_GROUP = 'Ladder Award Ranks';
+    public const LADDER_NOTE = 'Players with no award in this ladder count as rank 0.';
+    public const LADDER_UNAVAILABLE_MESSAGE = "This ladder isn't available for this kingdom or park.";
+    /** Order of the Walker in the Middle: is_ladder = 1 but not a ranked ladder (as in Report::GetLadderAwardGrid). */
+    public const WALKER_AWARD_ID = 31;
+    private const LADDER_ID_RE = '/^ladder_([ak])([1-9]\d{0,9})$/D';
+
     public function __construct()
     {
         parent::__construct();
@@ -74,9 +82,10 @@ class PopulationExplorer extends Ork3
         ], $extra);
     }
 
-    private function _criteria(): array
+    /** Criteria with SQL builders. $known['ladders'] (LoadLadders) adds the scope's ladder criteria. */
+    private function _criteria(array $known = []): array
     {
-        $list = $this->_criteriaDefs();
+        $list = $this->_criteriaDefs($known);
         foreach ($list as $id => &$def) {
             $def['sql'] = $this->_criterionSql($id, $def);
         }
@@ -84,7 +93,18 @@ class PopulationExplorer extends Ork3
         return $list;
     }
 
-    private function _criteriaDefs(): array
+    /**
+     * Criteria definitions. The static list is scope-free; the Ladder Award Ranks
+     * criteria are generated from $known['ladders'] (see LoadLadders), so every
+     * caller that validates, compiles or publishes the registry for a scope passes
+     * the same ladder set.
+     */
+    private function _criteriaDefs(array $known = []): array
+    {
+        return $this->_staticCriteriaDefs() + $this->_ladderDefs($known['ladders'] ?? []);
+    }
+
+    private function _staticCriteriaDefs(): array
     {
         return [
             'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date', ['nullable' => true, 'neg_note' => 'Players who have never signed in are not matched.']),
@@ -123,6 +143,34 @@ class PopulationExplorer extends Ork3
             'reeve_qualified'       => $this->_crit('Reeve qualified', 'Qualifications', 'bool'),
             'corpora_qualified'     => $this->_crit('Corpora qualified', 'Qualifications', 'bool'),
         ];
+    }
+
+    /**
+     * One number criterion per scope ladder, in the order given (LoadLadders sorts by
+     * label). An entry whose id, kind and int id do not agree is dropped, so only
+     * well-formed ints can ever reach the rank SQL.
+     *
+     * @param array<string, array{label:string, kind:string, id:int}> $ladders
+     */
+    private function _ladderDefs(array $ladders): array
+    {
+        $out = [];
+        foreach ($ladders as $cid => $l) {
+            if (!is_string($cid) || !preg_match(self::LADDER_ID_RE, $cid, $m) || !is_array($l)
+                || !is_int($l['id'] ?? null) || (string)$l['id'] !== $m[2]
+                || ($l['kind'] ?? null) !== ($m[1] === 'a' ? 'award' : 'kingdomaward')
+                || !is_string($l['label'] ?? null)) {
+                continue;
+            }
+            $out[$cid] = $this->_crit($l['label'], self::LADDER_GROUP, 'number', [
+                'min'    => 0,
+                // Rank is 0, never NULL, for players with no award in the ladder, so
+                // there is no neg_note: ne / lt / lte include them.
+                'note'   => self::LADDER_NOTE,
+                'ladder' => ['kind' => $l['kind'], 'id' => $l['id']],
+            ]);
+        }
+        return $out;
     }
 
     private function _col(string $label, string $group, string $type, bool $default = false): array
@@ -167,7 +215,7 @@ class PopulationExplorer extends Ork3
     public function NormalizeTree(array $tree, ?array $known = null): array
     {
         $known = $known ?? $this->LoadKnown();
-        $registry = $this->_criteriaDefs(); // validation needs operands/param only, not the SQL closures
+        $registry = $this->_criteriaDefs($known); // validation needs operands/param only, not the SQL closures
         $leafCount = 0;
         $r = $this->_normNode($tree, 1, $leafCount, [], $registry, $known);
         if (isset($r['error'])) {
@@ -224,6 +272,9 @@ class PopulationExplorer extends Ork3
     {
         $c = $leaf['c'] ?? null;
         if (!is_string($c) || !isset($registry[$c])) {
+            if (is_string($c) && preg_match(self::LADDER_ID_RE, $c)) {
+                return $this->_err(self::LADDER_UNAVAILABLE_MESSAGE, $path);
+            }
             return $this->_err('Unknown criterion', $path);
         }
         $def = $registry[$c];
@@ -274,6 +325,13 @@ class PopulationExplorer extends Ork3
                         && checkdate((int)substr($x, 5, 2), (int)substr($x, 8, 2), (int)substr($x, 0, 4))) ? $x : null;
                 });
             case 'number':
+                if (isset($def['min'])) {
+                    $min = (int)$def['min'];
+                    return $this->_normScalar($v, $o, 'number', 'Value must be a whole number, ' . $min . ' or more', function ($x) use ($min) {
+                        $n = $this->_int($x, true);
+                        return $n !== null && $n >= $min ? $n : null;
+                    });
+                }
                 return $this->_normScalar($v, $o, 'number', 'Value must be a number', function ($x) {
                     return $this->_int($x, true);
                 });
@@ -636,6 +694,33 @@ class PopulationExplorer extends Ork3
         return "(m.suspended = 0 AND m.{$kind}_qualified = 1 AND COALESCE(m.{$kind}_qualified_until >= CURDATE(), 0))";
     }
 
+    /**
+     * A player's rank in a ladder: GREATEST(MAX(rank), COUNT(*)) over the HELD awards
+     * in that ladder (the Ladder Award Grid's rule; many rows carry no rank), 0 when
+     * there are none (MAX is NULL then, COUNT is 0). Global ladders match the resolved
+     * (alias-aware) award id; kingdom-only ladders match w.kingdomaward_id.
+     *
+     * @param array{kind:string, id:int} $ladder from the validated registry
+     */
+    private function _ladderRankExpr(array $ladder): string
+    {
+        $id = (int)($ladder['id'] ?? 0);
+        if ($id <= 0) {
+            throw new InvalidArgumentException('bad ladder');
+        }
+        switch ($ladder['kind'] ?? '') {
+            case 'award':
+                $from = $this->_heldAwardsFrom('AND aw.award_id = ' . $id);
+                break;
+            case 'kingdomaward':
+                $from = $this->_heldAwardsFrom('AND w.kingdomaward_id = ' . $id, false);
+                break;
+            default:
+                throw new InvalidArgumentException('bad ladder');
+        }
+        return '(SELECT GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*)) ' . $from . ')';
+    }
+
     private function _awardSetSql(string $o, $v, ?string $peerageFilter): string
     {
         // Peerage criteria only (has_award passes null): `is` takes yes|no.
@@ -662,6 +747,9 @@ class PopulationExplorer extends Ork3
     private function _criterionSql(string $id, array $def): callable
     {
         return function (string $o, $v, ?int $p, array $ctx) use ($id, $def): string {
+            if (isset($def['ladder'])) {
+                return $this->_cmp($this->_ladderRankExpr($def['ladder']), 'number', $o, $v);
+            }
             switch ($id) {
                 case 'last_signin':
                     return $this->_cmp($this->_lastSigninExpr(), 'date', $o, $v);
@@ -774,11 +862,13 @@ class PopulationExplorer extends Ork3
 
     /**
      * Compile a normalized tree (from NormalizeTree) into a SQL boolean over alias `m`.
-     * ctx['duesScope'] is a SQL boolean over alias `d` (ork_dues) for dues rules.
+     * ctx['duesScope'] is a SQL boolean over alias `d` (ork_dues) for dues rules;
+     * ctx['ladders'] is the scope's ladder set (LoadLadders), the same one the tree
+     * was validated against. A ladder rule outside it does not compile.
      */
     public function CompileTree(array $normalizedTree, array $ctx = []): string
     {
-        $registry = $this->_criteria();
+        $registry = $this->_criteria(['ladders' => $ctx['ladders'] ?? []]);
         if (empty($normalizedTree['children'])) {
             return '1=1';
         }
@@ -794,6 +884,9 @@ class PopulationExplorer extends Ork3
                 $parts[] = $this->_compileNode($child, $registry, $ctx);
             }
             return '(' . implode($node['op'] === 'OR' ? ' OR ' : ' AND ', $parts) . ')';
+        }
+        if (!isset($registry[$node['c']])) {
+            throw new InvalidArgumentException('unknown criterion');
         }
         $fn = $registry[$node['c']]['sql'];
         return '(' . $fn($node['o'], $node['v'], $node['p'] ?? null, $ctx) . ')';
@@ -882,8 +975,95 @@ class PopulationExplorer extends Ork3
     public function LoadKnownForScope(string $token, string $scopeType, int $scopeId): array
     {
         $known = $this->LoadKnown();
+        $known['ladders'] = $this->LoadLadders($scopeType, $scopeId);
         $known['officer'] = $this->IsScopeOfficer($token, $scopeType, $scopeId);
         return $known;
+    }
+
+    /**
+     * Kingdom-only ladders (kingdomaward ids). On master these are exactly
+     * Award::pseudoLadderKingdomAwardIds(): ork_kingdomaward has no is_ladder column
+     * yet. When it lands (feature/award-management's 2026-06-18-kingdomaward-ladder.sql
+     * backfills is_ladder = 1 for this same list), read `ka.is_ladder = 1` instead.
+     * A test seam.
+     *
+     * @return int[]
+     */
+    protected function _kingdomOnlyLadderIds(): array
+    {
+        return Award::pseudoLadderKingdomAwardIds();
+    }
+
+    /**
+     * The ranked ladders of a scope, keyed by criterion id and sorted by label:
+     * - `ladder_a<award_id>`: the 15 global ladders (ork_award.is_ladder = 1, Walker in
+     *   the Middle excluded, as in Report::GetLadderAwardGrid), labelled with the
+     *   scope kingdom's own ork_kingdomaward.name when it renames one (a Kingdom
+     *   scope's kingdom, which is the parent when principalities are included, or a
+     *   park's kingdom), else ork_award.name;
+     * - `ladder_k<kingdomaward_id>`: the kingdom-only ladders of every kingdom in
+     *   scope (the stats kingdoms, or the park's kingdom), labelled with ka.name; a
+     *   name two in-scope kingdoms share gets the kingdom's abbreviation appended.
+     * Throws RuntimeException when the database cannot be read.
+     *
+     * @return array<string, array{label:string, kind:string, id:int}>
+     */
+    public function LoadLadders(string $scopeType, int $scopeId): array
+    {
+        $scopeId = (int)$scopeId;
+        if ($scopeType === 'Park') {
+            $r = $this->_select('SELECT kingdom_id FROM ' . $this->_t('park') . ' WHERE park_id = ' . $scopeId);
+            $labelKingdom = $r->next() ? (int)$r->kingdom_id : 0;
+            $kingdoms = $labelKingdom > 0 ? [$labelKingdom] : [];
+        } elseif ($scopeType === 'Kingdom' && $scopeId > 0) {
+            $labelKingdom = $scopeId;
+            $kingdoms = $this->_scopeKingdomIds($scopeId);
+        } else {
+            $labelKingdom = 0;
+            $kingdoms = [];
+        }
+
+        $out = [];
+        $r = $this->_select('SELECT a.award_id, a.name,'
+            . ' (SELECT ka.name FROM ' . $this->_t('kingdomaward') . ' ka WHERE ka.kingdom_id = ' . (int)$labelKingdom
+            . ' AND ka.award_id = a.award_id ORDER BY ka.kingdomaward_id LIMIT 1) AS kingdom_name'
+            . ' FROM ' . $this->_t('award') . ' a WHERE a.is_ladder = 1 AND a.award_id <> ' . self::WALKER_AWARD_ID);
+        while ($r->next()) {
+            $id = (int)$r->award_id;
+            $own = trim((string)$r->kingdom_name);
+            $out['ladder_a' . $id] = ['label' => $own !== '' ? $own : (string)$r->name, 'kind' => 'award', 'id' => $id];
+        }
+        if (count($out) === 0) {
+            throw new RuntimeException('Could not read the ladder list');
+        }
+
+        $kaIds = array_values(array_filter(array_map('intval', $this->_kingdomOnlyLadderIds()), function ($i) {
+            return $i > 0;
+        }));
+        if (count($kingdoms) > 0 && count($kaIds) > 0) {
+            $r = $this->_select('SELECT ka.kingdomaward_id, ka.name, k.abbreviation, k.name AS kingdom_name'
+                . ' FROM ' . $this->_t('kingdomaward') . ' ka LEFT JOIN ' . $this->_t('kingdom') . ' k ON k.kingdom_id = ka.kingdom_id'
+                . ' WHERE ka.kingdomaward_id IN (' . implode(',', $kaIds) . ') AND ka.kingdom_id IN (' . implode(',', array_map('intval', $kingdoms)) . ')'
+                . ' ORDER BY ka.kingdomaward_id');
+            $local = [];
+            $seen = [];
+            while ($r->next()) {
+                $name = trim((string)$r->name);
+                $abbr = trim((string)$r->abbreviation);
+                $local[(int)$r->kingdomaward_id] = [$name, $abbr !== '' ? $abbr : trim((string)$r->kingdom_name)];
+                $key = strtolower($name);
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+            foreach ($local as $kaId => [$name, $kingdom]) {
+                $label = $seen[strtolower($name)] > 1 && $kingdom !== '' ? $name . ' (' . $kingdom . ')' : $name;
+                $out['ladder_k' . $kaId] = ['label' => $label, 'kind' => 'kingdomaward', 'id' => $kaId];
+            }
+        }
+
+        uksort($out, function ($a, $b) use ($out) {
+            return strnatcasecmp($out[$a]['label'], $out[$b]['label']) ?: strcmp($a, $b);
+        });
+        return $out;
     }
 
     /** @return int[] kingdom ids covered by a Kingdom scope (stats kingdoms, ints only) */
@@ -983,7 +1163,7 @@ class PopulationExplorer extends Ork3
             return ['Status' => InvalidParameter('That park could not be found in a kingdom, so it cannot be reported on.')];
         }
         list($scopeSql, $duesScope) = $clauses;
-        $ctx = ['duesScope' => $duesScope];
+        $ctx = ['duesScope' => $duesScope, 'ladders' => $known['ladders'] ?? []];
         try {
             $treeSql = $this->CompileTree($norm['tree'], $ctx);
             $selects = ['m.mundane_id AS mundane_id'];
@@ -1208,11 +1388,11 @@ class PopulationExplorer extends Ork3
     {
         $officer = ($known['officer'] ?? false) === true;
         $criteria = [];
-        foreach ($this->_criteriaDefs() as $id => $def) {
+        foreach ($this->_criteriaDefs($known) as $id => $def) {
             if (!empty($def['restricted']) && !$officer) {
                 continue;
             }
-            unset($def['sql']);
+            unset($def['sql'], $def['ladder']); // the ladder's SQL ids stay server-side
             $criteria[$id] = $def;
         }
         return $criteria;
@@ -1227,7 +1407,7 @@ class PopulationExplorer extends Ork3
      */
     public function PublicRegistry(string $scopeType, int $scopeId, bool $isOfficer = false): array
     {
-        $criteria = $this->PublicCriteria(['officer' => $isOfficer]);
+        $criteria = $this->PublicCriteria(['officer' => $isOfficer, 'ladders' => $this->LoadLadders($scopeType, $scopeId)]);
         $columns = [];
         foreach ($this->_columnDefs() as $id => $def) {
             $columns[$id] = $def;

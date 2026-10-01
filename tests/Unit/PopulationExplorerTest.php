@@ -519,4 +519,149 @@ final class PopulationExplorerTest extends TestCase
         }
         $this->assertSame(array_keys($this->pe->Registry()['criteria']), array_keys($shown));
     }
+
+    // ------------------------------------------------------------ ladder award ranks (spec §4)
+
+    /** The scope's ladders as LoadLadders() returns them. */
+    private function ladders(): array
+    {
+        return [
+            'ladder_k7070' => ['label' => 'Order of the Archer', 'kind' => 'kingdomaward', 'id' => 7070],
+            'ladder_a21'   => ['label' => 'Order of the Rose', 'kind' => 'award', 'id' => 21],
+        ];
+    }
+
+    private function withLadders(bool $officer = false): array
+    {
+        return ['ladders' => $this->ladders(), 'officer' => $officer] + $this->known;
+    }
+
+    private function ladderNorm($v, string $o = 'gte', string $c = 'ladder_a21'): array
+    {
+        return $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf($c, $o, $v)]], $this->withLadders());
+    }
+
+    public function testLadderCriteriaAreGeneratedFromTheScopesLadders(): void
+    {
+        $this->assertSame([], preg_grep('/^ladder_/', array_keys($this->pe->Registry()['criteria'])), 'the static registry is scope-free');
+
+        $crit = $this->pe->PublicCriteria($this->withLadders());
+        $ids = array_keys($crit);
+        $this->assertSame(['ladder_k7070', 'ladder_a21'], array_slice($ids, -2), 'appended in LoadLadders order (by label)');
+        foreach (['ladder_a21' => 'Order of the Rose', 'ladder_k7070' => 'Order of the Archer'] as $id => $label) {
+            $def = $crit[$id];
+            $this->assertSame($label, $def['label']);
+            $this->assertSame('Ladder Award Ranks', $def['group']);
+            $this->assertSame('number', $def['type']);
+            $this->assertSame(['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'], $def['operands']);
+            $this->assertSame(0, $def['min']);
+            $this->assertFalse($def['nullable'], 'rank is 0, never NULL');
+            $this->assertArrayNotHasKey('neg_note', $def, 'no "not matched" note: rank-0 players do match');
+            $this->assertSame('Players with no award in this ladder count as rank 0.', $def['note']);
+            $this->assertArrayNotHasKey('sql', $def);
+            $this->assertArrayNotHasKey('ladder', $def, 'SQL ids stay server-side');
+        }
+    }
+
+    public function testUnknownOrOutOfScopeLadderIsRejected(): void
+    {
+        foreach (['ladder_k999', 'ladder_a31', 'ladder_a22'] as $c) {
+            $r = $this->ladderNorm(1, 'gte', $c);
+            $this->assertFalse($r['ok'], $c);
+            $this->assertSame(PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE, $r['error'], $c);
+            $this->assertSame([0], $r['path']);
+        }
+        $this->assertSame("This ladder isn't available for this kingdom or park.", PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE);
+        // No ladders loaded (no scope): every ladder id is unavailable.
+        $r = $this->norm(['op' => 'AND', 'children' => [$this->leaf('ladder_a21', 'gte', 1)]]);
+        $this->assertSame(PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE, $r['error']);
+        // Not a ladder id at all.
+        $this->assertSame('Unknown criterion', $this->ladderNorm(1, 'gte', 'ladder_x1')['error']);
+        $this->assertTrue($this->ladderNorm(1, 'gte', 'ladder_k7070')['ok']);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badLadderValues')]
+    public function testLadderValuesMustBeWholeNumbersOfZeroOrMore(string $o, $v, string $needle): void
+    {
+        $r = $this->ladderNorm($v, $o);
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsStringIgnoringCase($needle, $r['error']);
+        $this->assertSame([0], $r['path']);
+    }
+
+    public static function badLadderValues(): array
+    {
+        return [
+            'negative'            => ['gte', -1, '0 or more'],
+            'negative string'     => ['eq', '-3', '0 or more'],
+            'decimal'             => ['gt', '2.5', '0 or more'],
+            'text'                => ['lt', 'abc', '0 or more'],
+            'empty'               => ['eq', '', '0 or more'],
+            'array for scalar'    => ['eq', [3], '0 or more'],
+            'between descending'  => ['between', [5, 2], 'ascending'],
+            'between negative'    => ['between', [-1, 3], '0 or more'],
+            'between single'      => ['between', [3], 'two values'],
+        ];
+    }
+
+    public function testValidLadderValuesNormalizeToInts(): void
+    {
+        $this->assertSame(0, $this->ladderNorm('0', 'eq')['tree']['children'][0]['v']);
+        $this->assertSame(7, $this->ladderNorm(7, 'ne')['tree']['children'][0]['v']);
+        $this->assertSame([0, 3], $this->ladderNorm(['0', 3], 'between')['tree']['children'][0]['v']);
+    }
+
+    public function testLadderSqlIsTheHeldRankExpressionWithIntIdsOnly(): void
+    {
+        $n = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [
+            $this->leaf('ladder_a21', 'gte', 2),
+            $this->leaf('ladder_k7070', 'ne', 0),
+        ]], $this->withLadders());
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $sql = $this->pe->CompileTree($n['tree'], ['ladders' => $this->ladders()]);
+
+        $this->assertSame(2, substr_count($sql, 'GREATEST(COALESCE(MAX(w.rank), 0), COUNT(*))'));
+        $this->assertStringContainsString('aw.award_id = 21', $sql, 'global ladder: resolved (alias-aware) award id');
+        $this->assertStringContainsString('COALESCE(NULLIF(w.alias_award_id, 0)', $sql);
+        $this->assertStringContainsString('w.kingdomaward_id = 7070', $sql, 'kingdom-only ladder');
+        $this->assertSame(2, substr_count($sql, 'w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'), 'held awards only');
+        $this->assertStringContainsString(') >= 2', $sql);
+        $this->assertStringContainsString(') <> 0', $sql);
+        // Only the registry's ints: no other digits than the ids, the values and the SQL's own 0s.
+        preg_match_all('/\d+/', $sql, $m);
+        $this->assertSame([], array_values(array_diff(array_unique($m[0]), ['0', '2', '21', '7070'])));
+    }
+
+    public function testLadderLeafCannotCompileWithoutTheScopesLadders(): void
+    {
+        $n = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf('ladder_a21', 'gte', 2)]], $this->withLadders());
+        $this->assertTrue($n['ok']);
+        $this->expectException(InvalidArgumentException::class);
+        $this->pe->CompileTree($n['tree'], ['ladders' => []]);
+    }
+
+    public function testMalformedLadderEntriesAreNeverOffered(): void
+    {
+        $known = ['ladders' => [
+            'ladder_a21) OR (1=1' => ['label' => 'x', 'kind' => 'award', 'id' => 21],
+            'ladder_a22'          => ['label' => 'Kind mismatch', 'kind' => 'kingdomaward', 'id' => 22],
+            'ladder_a23'          => ['label' => 'Id mismatch', 'kind' => 'award', 'id' => 24],
+            'ladder_a25'          => ['label' => 'Id not an int', 'kind' => 'award', 'id' => '25 OR 1=1'],
+            'ladder_k0'           => ['label' => 'Zero', 'kind' => 'kingdomaward', 'id' => 0],
+            'ladder_a26'          => ['label' => 'Fine', 'kind' => 'award', 'id' => 26],
+        ]] + $this->known;
+        $ladderIds = array_values(preg_grep('/^ladder_/', array_keys($this->pe->PublicCriteria($known))));
+        $this->assertSame(['ladder_a26'], $ladderIds);
+        $r = $this->pe->NormalizeTree(['op' => 'AND', 'children' => [$this->leaf('ladder_a25', 'gte', 1)]], $known);
+        $this->assertSame(PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE, $r['error']);
+    }
+
+    public function testLadderShareLinkRevalidatesAgainstTheScope(): void
+    {
+        $q = PopulationExplorer::EncodeLink(['tree' => ['op' => 'AND', 'children' => [$this->leaf('ladder_k7070', 'between', [1, 4])]], 'columns' => ['persona']]);
+        $this->assertTrue(PopulationExplorer::DecodeLink($q, $this->withLadders())['ok']);
+        $d = PopulationExplorer::DecodeLink($q, ['ladders' => []] + $this->known);
+        $this->assertFalse($d['ok']);
+        $this->assertStringContainsString(PopulationExplorer::LADDER_UNAVAILABLE_MESSAGE, (string) $d['error']);
+    }
 }
