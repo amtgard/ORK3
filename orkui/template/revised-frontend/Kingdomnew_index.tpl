@@ -828,6 +828,9 @@
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
+							<?php if (!empty($CanEditKingdom)): ?>
+							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<?php endif; ?>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -848,9 +851,6 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
 											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
-							<?php if (!empty($CanEditKingdom)): ?>
-							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
-							<?php endif; ?>
 							<?php endif; ?>
 						</ul>
 					</div>
