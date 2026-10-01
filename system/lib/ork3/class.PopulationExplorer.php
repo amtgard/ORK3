@@ -509,13 +509,20 @@ class PopulationExplorer extends Ork3
      * Custom Title aliased to a peerage award (awards.alias_award_id) counts as
      * its alias target, matching Report::PlayerAwards / BeltlineData
      * (COALESCE(alias.peerage, a.peerage)). Revoked and stripped awards never count.
+     *
+     * $needAward = false (award count / award date) skips the award joins entirely,
+     * the same as a LEFT JOIN on a primary key: kingdom-only orders
+     * (ork_kingdomaward.award_id = 0, no ork_award row) still count, as on the
+     * player profile. Peerage and award-id filters need the inner join to `aw`.
      */
-    private function _heldAwardsFrom(string $extraWhere = ''): string
+    private function _heldAwardsFrom(string $extraWhere = '', bool $needAward = true): string
     {
-        return 'FROM ' . $this->_t('awards') . ' w'
-            . ' LEFT JOIN ' . $this->_t('kingdomaward') . ' ka ON ka.kingdomaward_id = w.kingdomaward_id'
-            . ' JOIN ' . $this->_t('award') . ' aw ON aw.award_id = COALESCE(NULLIF(w.alias_award_id, 0), NULLIF(w.award_id, 0), ka.award_id)'
-            . ' WHERE w.mundane_id = m.mundane_id AND w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'
+        $from = 'FROM ' . $this->_t('awards') . ' w';
+        if ($needAward) {
+            $from .= ' LEFT JOIN ' . $this->_t('kingdomaward') . ' ka ON ka.kingdomaward_id = w.kingdomaward_id'
+                . ' JOIN ' . $this->_t('award') . ' aw ON aw.award_id = COALESCE(NULLIF(w.alias_award_id, 0), NULLIF(w.award_id, 0), ka.award_id)';
+        }
+        return $from . ' WHERE w.mundane_id = m.mundane_id AND w.revoked = 0 AND COALESCE(w.stripped_from, 0) = 0'
             . ($extraWhere !== '' ? ' ' . $extraWhere : '');
     }
 
@@ -610,9 +617,9 @@ class PopulationExplorer extends Ork3
                 case 'has_award':
                     return $this->_awardSetSql($o, $v, null);
                 case 'award_count':
-                    return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom() . ')', 'number', $o, $v);
+                    return $this->_cmp('(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')', 'number', $o, $v);
                 case 'award_date_any':
-                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $this->_cmp('w.date', 'date', $o, $v)) . ')';
+                    return 'EXISTS (SELECT 1 ' . $this->_heldAwardsFrom('AND ' . $this->_cmp('w.date', 'date', $o, $v), false) . ')';
                 case 'reeve_qualified':
                 case 'corpora_qualified':
                     $e = $this->_qualifiedExpr($id === 'reeve_qualified' ? 'reeve' : 'corpora');
@@ -664,7 +671,7 @@ class PopulationExplorer extends Ork3
                 return "(SELECT GROUP_CONCAT(DISTINCT aw.name ORDER BY aw.name SEPARATOR ', ') "
                     . $this->_heldAwardsFrom("AND aw.peerage = '$pe'") . ')';
             case 'award_count':
-                return '(SELECT COUNT(*) ' . $this->_heldAwardsFrom() . ')';
+                return '(SELECT COUNT(*) ' . $this->_heldAwardsFrom('', false) . ')';
             case 'reeve_qualified':
                 return 'CASE WHEN ' . $this->_qualifiedExpr('reeve') . ' THEN 1 ELSE 0 END';
             case 'corpora_qualified':

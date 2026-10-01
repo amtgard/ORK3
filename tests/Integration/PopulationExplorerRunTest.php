@@ -359,6 +359,33 @@ final class PopulationExplorerRunTest extends TestCase
         $this->assertContains($pl['mundane_id'], $this->ids($count));
     }
 
+    public function testKingdomOnlyAwardsCountAndDate(): void
+    {
+        $pl = $this->player('pe-ko');
+        $other = $this->player('pe-ko-none');
+        $kaId = $this->fixture->insertKingdomOnlyAward($this->kid, 'Order of the Test Raider');
+        $awardsId = $this->fixture->insertLadderAward($pl['mundane_id'], $this->parkId, $this->kid, $kaId, 0, 1);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['2024-05-05', $awardsId]);
+        [$knKa, $knAward] = $this->peerageAward('Knight');
+        $this->fixture->insertLadderAward($pl['mundane_id'], $this->parkId, $this->kid, $knKa, $knAward, 0);
+
+        // Hand count: both held awards, the kingdom-only one included.
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'award_count']));
+        $byId = array_column($r['Rows'], 'award_count', 'MundaneId');
+        $this->assertSame(2, $byId[$pl['mundane_id']]);
+        $this->assertSame(0, $byId[$other['mundane_id']]);
+
+        $gte2 = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('award_count', 'gte', 2))));
+        $this->assertContains($pl['mundane_id'], $this->ids($gte2));
+
+        // Only the kingdom-only award was given in 2024.
+        $in2024 = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree(
+            $this->leaf('award_date_any', 'between', ['2024-01-01', '2024-12-31'])
+        )));
+        $this->assertContains($pl['mundane_id'], $this->ids($in2024));
+        $this->assertNotContains($other['mundane_id'], $this->ids($in2024));
+    }
+
     public function testPeerageParityWithKnightsReport(): void
     {
         $knight = $this->player('pe-knight');

@@ -27,6 +27,9 @@ final class ReportsFixture
     /** @var list<int> */
     private array $authIds = [];
 
+    /** @var list<int> */
+    private array $kingdomAwardIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -284,6 +287,22 @@ final class ReportsFixture
         return $id;
     }
 
+    /**
+     * A kingdom-specific order with no ork_award row (ork_kingdomaward.award_id = 0),
+     * like the Order of the Raider. Returns the kingdomaward id; cleaned up.
+     */
+    public function insertKingdomOnlyAward(int $kingdomId, string $name): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (is_title, title_class, kingdom_id, award_id, name, reign_limit, month_limit)
+             VALUES (0, 0, ?, 0, ?, 0, 0)'
+        )->execute([$kingdomId, self::MARKER . ' ' . $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
     public function insertParkOfficer(int $kingdomId, int $parkId, int $mundaneId, string $role): int
     {
         $stmt = $this->pdo->prepare(
@@ -332,6 +351,13 @@ final class ReportsFixture
             $in = implode(',', array_map('intval', $this->awardIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "awards WHERE awards_id IN ({$in})");
             $this->awardIds = [];
+        }
+
+        if ($this->kingdomAwardIds !== []) {
+            $in = implode(',', array_map('intval', $this->kingdomAwardIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "awards WHERE kingdomaward_id IN ({$in})");
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "kingdomaward WHERE kingdomaward_id IN ({$in})");
+            $this->kingdomAwardIds = [];
         }
 
         if ($this->duesIds !== []) {
