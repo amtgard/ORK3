@@ -135,8 +135,15 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 
 		<!-- Filters -->
 		<section class="rp-filter-card pe-card" id="pe-filters-card">
-			<div class="rp-filter-card-header"><i class="fas fa-filter"></i> Filters</div>
-			<div class="rp-filter-card-body">
+			<div class="rp-filter-card-header pe-card-head">
+				<button type="button" class="pe-card-toggle" id="pe-filters-toggle" aria-expanded="true" aria-controls="pe-filters-body">
+					<i class="fas fa-filter" aria-hidden="true"></i>
+					<span class="pe-card-title">Filters</span>
+					<span class="pe-card-summary" id="pe-filters-summary"></span>
+					<i class="fas fa-chevron-down pe-card-chevron" aria-hidden="true"></i>
+				</button>
+			</div>
+			<div class="rp-filter-card-body" id="pe-filters-body">
 				<div id="pe-builder" class="pe-builder"></div>
 				<div class="pe-run-bar">
 					<button type="button" class="pe-btn-run" id="pe-run"><i class="fas fa-play"></i> <span>Run</span></button>
@@ -148,11 +155,16 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 
 		<!-- Columns -->
 		<section class="rp-filter-card pe-card" id="pe-columns-card">
-			<div class="rp-filter-card-header">
-				<i class="fas fa-table-columns"></i> Columns
+			<div class="rp-filter-card-header pe-card-head">
+				<button type="button" class="pe-card-toggle" id="pe-columns-toggle" aria-expanded="true" aria-controls="pe-columns-body">
+					<i class="fas fa-table-columns" aria-hidden="true"></i>
+					<span class="pe-card-title">Columns</span>
+					<span class="pe-card-summary" id="pe-columns-summary"></span>
+					<i class="fas fa-chevron-down pe-card-chevron" aria-hidden="true"></i>
+				</button>
 				<button type="button" class="pe-btn-link pe-card-header-link" id="pe-columns-reset">Reset</button>
 			</div>
-			<div class="rp-filter-card-body">
+			<div class="rp-filter-card-body" id="pe-columns-body">
 				<div id="pe-columns" class="pe-columns"></div>
 			</div>
 		</section>

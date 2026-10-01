@@ -189,6 +189,7 @@
 
     /* ── "changed since last run" hint ───────────────────── */
     var dirtyTimer = null;
+    var isDirty = false;
     function scheduleDirtyCheck() {
         clearTimeout(dirtyTimer);
         dirtyTimer = setTimeout(function () {
@@ -196,8 +197,57 @@
         }, 0);
     }
     function setDirty(on) {
+        isDirty = !!on;
         var h = $('pe-dirty');
         if (h) { h.hidden = !on; }
+        updateSummaries(); // every edit passes through here, so the folded summaries stay current
+    }
+
+    /* ── collapsible Filters / Columns cards ─────────────── */
+    // No persisted state: every page load starts expanded. A successful Run folds
+    // both (results move up); a rule error re-opens Filters (markRuleError).
+    var CARDS = {
+        filters: { card: 'pe-filters-card', toggle: 'pe-filters-toggle', body: 'pe-filters-body', summary: 'pe-filters-summary' },
+        columns: { card: 'pe-columns-card', toggle: 'pe-columns-toggle', body: 'pe-columns-body', summary: 'pe-columns-summary' }
+    };
+    function cardOpen(name) {
+        var t = $(CARDS[name].toggle);
+        return !t || t.getAttribute('aria-expanded') !== 'false';
+    }
+    function setCardOpen(name, on) {
+        var c = CARDS[name];
+        var card = $(c.card);
+        var t = $(c.toggle);
+        var b = $(c.body);
+        if (!card || !t || !b) { return; }
+        // Folding hides the focused control (Run, a rule, Reset): put focus on the
+        // card's toggle first so it never falls back to <body>.
+        if (!on && card.contains(document.activeElement) && document.activeElement !== t) { t.focus(); }
+        if (!on && name === 'filters') { closeAllChipLists(); }
+        t.setAttribute('aria-expanded', on ? 'true' : 'false');
+        b.hidden = !on;
+        card.classList.toggle('is-collapsed', !on);
+    }
+    function countTree(node, acc) {
+        node.children.forEach(function (ch) {
+            if (ch.kind === 'group') { acc.groups += 1; countTree(ch, acc); } else { acc.rules += 1; }
+        });
+        return acc;
+    }
+    // "· 3 rules (AND) · 1 group" / "· 4 selected": shown in a folded card's header.
+    function updateSummaries() {
+        var fs = $(CARDS.filters.summary);
+        var cs = $(CARDS.columns.summary);
+        if (fs) {
+            var n = countTree(root, { rules: 0, groups: 0 });
+            var txt = n.rules === 0
+                ? 'No rules — everyone in scope'
+                : n.rules + (n.rules === 1 ? ' rule' : ' rules') + ' (' + root.op + ')'
+                    + (n.groups ? ' · ' + n.groups + (n.groups === 1 ? ' group' : ' groups') : '');
+            if (isDirty) { txt += ' · changed since last run'; }
+            fs.textContent = '· ' + txt;
+        }
+        if (cs) { cs.textContent = '· ' + orderedColumns().length + ' selected'; }
     }
 
     /* ── screen-reader announcements (persistent live region) ── */
@@ -289,6 +339,7 @@
         var host = $('pe-builder');
         host.textContent = '';
         host.appendChild(renderGroup(root, 1));
+        updateSummaries();
     }
 
     function renderGroup(g, depth) {
@@ -872,6 +923,7 @@
     }
     // Highlight a rule with its message, inline and in the results banner.
     function markRuleError(node, msg) {
+        setCardOpen('filters', true); // a folded card cannot show the rule; Columns is left as it is
         errorRuleId = node.id;
         errorText = msg;
         render();
@@ -917,6 +969,7 @@
             groups[g].appendChild(lab);
         });
         order.forEach(function (g) { host.appendChild(groups[g]); });
+        updateSummaries();
     }
 
     /* ── run ─────────────────────────────────────────────── */
@@ -1038,6 +1091,8 @@
             updatePct(j.total, parseInt(j.scope_total, 10) || 0);
             setDirty(false);
             announceResults(j);
+            setCardOpen('filters', false);
+            setCardOpen('columns', false);
         }, function () {
             setRunning(false);
             handleError({ status: -1, error: 'Could not reach the server. Check your connection and try again.' });
@@ -1322,6 +1377,10 @@
         // Structural edits (add/remove/toggle/yes-no/chips) all happen inside the builder.
         ['click', 'change', 'input', 'keyup'].forEach(function (ev) {
             $('pe-builder').addEventListener(ev, scheduleDirtyCheck);
+        });
+        Object.keys(CARDS).forEach(function (name) {
+            var t = $(CARDS[name].toggle);
+            if (t) { t.addEventListener('click', function () { setCardOpen(name, !cardOpen(name)); }); }
         });
         $('pe-copy-link').addEventListener('click', onCopyLink);
         $('pe-export').addEventListener('click', onExport);
