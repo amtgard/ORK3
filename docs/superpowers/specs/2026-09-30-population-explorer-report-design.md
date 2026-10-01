@@ -141,7 +141,7 @@ Semantics fixed here:
 - **Export:** `Reports/population_explorer_export` re-runs the same compiled
   query server-side (POST, logged-in session required, scope re-derived server-side exactly as for Run) and streams an `.xlsx` (Excel only in v1; CSV is not offered, since Excel opens everywhere and avoids CSV quoting/encoding issues) built with `system/lib/vendor/SimpleXlsx.php`
   (pure-PHP writer; no `ZipArchive`). Same 5,000-row cap, with a note row when
-  truncated. Dates are real date cells.
+  truncated. Dates are written as ISO `YYYY-MM-DD` text (the pure-PHP `SimpleXlsx` writer has no date cell style). `SimpleXlsx.php` is vendored verbatim into `system/lib/vendor/` (it is not yet on master).
 
 ## 4. Catalog (v1)
 
