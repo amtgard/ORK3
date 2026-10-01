@@ -253,6 +253,18 @@ final class PopulationExplorerTest extends TestCase
         $this->assertTrue($this->norm(['op' => 'AND', 'children' => [$this->leaf('award_date_any', 'gt', '2025-01-01')]])['ok']);
     }
 
+    public function testNullableFlagMarksCriteriaWhoseValueCanBeMissing(): void
+    {
+        $nullable = [];
+        foreach ($this->pe->Registry()['criteria'] as $id => $def) {
+            if ($def['nullable']) {
+                $nullable[] = $id;
+            }
+        }
+        sort($nullable);
+        $this->assertSame(['dues_through', 'last_class', 'last_signin', 'last_signin_park', 'player_since'], $nullable);
+    }
+
     public function testLesserPeerageLabelNamesItsThreeOrders(): void
     {
         $crit = $this->pe->Registry()['criteria'];

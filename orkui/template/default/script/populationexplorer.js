@@ -14,8 +14,12 @@
     var COLS = REG.columns || {};
     var OPTS = REG.options || {};
     var UI_MAX_DEPTH = 3;        // server allows 6; the UI caps nesting at 3
-    var MAX_LINK = 8192;
+    var MAX_SHARE_URL = 7500;    // whole share URL; nginx answers 414 a little above 8 KB
     var DEFAULT_MONTHS = 6;
+    var MAX_MONTHS = 60;
+    var NEGATED = { ne: 1, is_not: 1, not_in: 1, has_none: 1 };
+    var TIP_NULL = 'Players with no value for this field are not matched.';
+    var TIP_NONE = 'Players with none at all are matched too.';
 
     var OP_LABEL = {
         eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', between: 'between',
@@ -121,11 +125,11 @@
     function yn(v) { return (v === 1 || v === '1' || v === true || v === 'yes') ? 'yes' : 'no'; }
 
     // Server-normalized tree -> internal state.
-    function fromWire(node, depth) {
+    function fromWire(node) {
         if (node && Array.isArray(node.children)) {
             var g = newGroup(node.op === 'OR' ? 'OR' : 'AND');
             node.children.forEach(function (ch) {
-                var n = fromWire(ch, depth + 1);
+                var n = fromWire(ch);
                 if (n) { g.children.push(n); }
             });
             return g;
@@ -182,6 +186,45 @@
     var fpInstances = [];
     var dt = null;
     var running = false;
+    var msgIsRuleError = false;  // #pe-results-msg currently holds "Fix the highlighted rule"
+    var idleHtml = '';           // the idle placeholder's original text
+
+    /* ── "changed since last run" hint ───────────────────── */
+    var dirtyTimer = null;
+    function scheduleDirtyCheck() {
+        clearTimeout(dirtyTimer);
+        dirtyTimer = setTimeout(function () {
+            setDirty(!!lastRun && JSON.stringify(currentState()) !== JSON.stringify(lastRun));
+        }, 0);
+    }
+    function setDirty(on) {
+        var h = $('pe-dirty');
+        if (h) { h.hidden = !on; }
+    }
+
+    /* ── screen-reader announcements (persistent live region) ── */
+    var liveTimer = null;
+    function announce(text) {
+        var n = $('pe-live');
+        if (!n) { return; }
+        n.textContent = '';
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(function () { n.textContent = text; }, 60);
+    }
+    function announceResults(j) {
+        var total = parseInt(j.total, 10) || 0;
+        var scopeTotal = parseInt(j.scope_total, 10) || 0;
+        var ms = parseInt(j.elapsed_ms, 10) || 0;
+        var parts = [fmtInt(total) + (total === 1 ? ' player' : ' players') + ' found'];
+        if (scopeTotal > 0) { parts[0] += ' (' + $('pe-stat-pct').textContent + ' of ' + (PE.scope.type === 'Park' ? 'park' : 'kingdom') + ')'; }
+        parts.push('in ' + (ms >= 1000 ? (ms / 1000).toFixed(1) + ' seconds' : ms + ' milliseconds'));
+        if (j.truncated) { parts.push('showing the first ' + fmtInt((j.rows || []).length)); }
+        announce(parts.join(' ') + '.');
+    }
+    function resetIdle() {
+        var p = $('pe-results-idle').querySelector('p');
+        if (p && idleHtml) { p.innerHTML = idleHtml; } // static template markup, not user text
+    }
 
     function defaultColumns() {
         var out = [];
@@ -215,14 +258,24 @@
         }
         return false;
     }
-    function findNode(group, id) {
-        if (group.id === id) { return group; }
+    // Parent group and index of a node, for putting focus back after a removal.
+    function locate(group, id) {
         for (var i = 0; i < group.children.length; i++) {
             var ch = group.children[i];
-            if (ch.id === id) { return ch; }
-            if (ch.kind === 'group') { var f = findNode(ch, id); if (f) { return f; } }
+            if (ch.id === id) { return { group: group, index: i }; }
+            if (ch.kind === 'group') { var f = locate(ch, id); if (f) { return f; } }
         }
         return null;
+    }
+    // Remove a node, re-render, then focus the previous sibling's first control,
+    // or the parent group's "+ Rule" when there is no previous sibling.
+    function removeAndRefocus(id) {
+        var at = locate(root, id);
+        removeNode(root, id);
+        render();
+        if (!at) { return; }
+        var prev = at.index > 0 ? at.group.children[at.index - 1] : null;
+        if (prev) { focusNode(prev.id); } else { focusNode(at.group.id, '.pe-btn-add'); }
     }
 
     /* ── builder render ──────────────────────────────────── */
@@ -253,7 +306,7 @@
             b.type = 'button';
             b.setAttribute('aria-pressed', g.op === op ? 'true' : 'false');
             b.setAttribute('data-tip', op === 'AND' ? 'Match players who meet ALL of these rules' : 'Match players who meet ANY of these rules');
-            b.addEventListener('click', function () { if (g.op !== op) { g.op = op; clearError(); render(); } });
+            b.addEventListener('click', function () { if (g.op !== op) { g.op = op; clearError(); render(); focusNode(g.id, '.pe-seg-btn.is-active'); } });
             seg.appendChild(b);
         });
         head.appendChild(seg);
@@ -300,7 +353,7 @@
             rm.innerHTML = '<i class="fas fa-xmark"></i>';
             rm.setAttribute('aria-label', 'Remove group');
             rm.setAttribute('data-tip', 'Remove this group and its rules');
-            rm.addEventListener('click', function () { removeNode(root, g.id); clearError(); render(); });
+            rm.addEventListener('click', function () { clearError(); removeAndRefocus(g.id); });
             actions.appendChild(rm);
         }
         head.appendChild(actions);
@@ -382,6 +435,8 @@
         });
         osel.addEventListener('change', function () { setOperand(r, osel.value); clearErrorFor(r); render(); focusNode(r.id, '.pe-op-select'); });
         opCell.appendChild(osel);
+        var tip = operandTip(def, r.o);
+        if (tip) { opCell.setAttribute('data-tip', tip); }
         row.appendChild(opCell);
 
         // Value
@@ -395,7 +450,7 @@
         rm.innerHTML = '<i class="fas fa-xmark"></i>';
         rm.setAttribute('aria-label', 'Remove rule');
         rm.setAttribute('data-tip', 'Remove this rule');
-        rm.addEventListener('click', function () { removeNode(root, r.id); clearErrorFor(r); render(); });
+        rm.addEventListener('click', function () { clearErrorFor(r); removeAndRefocus(r.id); });
         row.appendChild(rm);
 
         if (errorRuleId === r.id && errorText) {
@@ -404,6 +459,18 @@
             row.appendChild(er);
         }
         return row;
+    }
+
+    // Spec §3.2: negated operands never match a missing value; set-style criteria
+    // ("has none of") do match players who have none. Plus the criterion's own note.
+    function operandTip(def, o) {
+        var parts = [];
+        if (NEGATED[o]) {
+            if (def.nullable) { parts.push(TIP_NULL); }
+            else if (def.type === 'peerage_set' || def.set === 'award' || (def.type === 'enum_set' && def.param)) { parts.push(TIP_NONE); }
+        }
+        if (def.note) { parts.push(def.note); }
+        return parts.join(' ');
     }
 
     function renderValue(cell, r, def) {
@@ -649,6 +716,7 @@
     /* ── errors ──────────────────────────────────────────── */
     function clearError() { errorRuleId = null; errorText = ''; }
     function clearErrorFor(r) {
+        scheduleDirtyCheck();
         if (errorRuleId !== r.id) { return; }
         var n = document.querySelector('[data-node="' + r.id + '"]');
         if (n) {
@@ -657,6 +725,66 @@
             if (er) { er.remove(); }
         }
         clearError();
+        if (msgIsRuleError) { showMsg('', ''); } // the "Fix the highlighted rule" banner goes with it
+    }
+
+    // Client-side completeness check, shared by Run and Copy link. The server
+    // re-validates everything; this only catches unfinished rules early.
+    // Returns {node, msg} for the first incomplete rule, or null.
+    var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+    var INT = /^-?\d{1,9}$/;
+    function checkRule(r) {
+        var def = CRIT[r.c];
+        if (!def) { return 'Choose a criterion'; }
+        if (def.param) {
+            var p = String(r.p == null ? '' : r.p).trim();
+            if (!/^\d{1,2}$/.test(p) || +p < 1 || +p > MAX_MONTHS) { return 'Months must be 1 to ' + MAX_MONTHS; }
+        }
+        var v = r.v;
+        var between = r.o === 'between';
+        switch (def.type) {
+            case 'date':
+            case 'number':
+                var re = def.type === 'date' ? ISO_DATE : INT;
+                var vals = between ? (Array.isArray(v) ? v : ['', '']) : [v];
+                for (var i = 0; i < vals.length; i++) {
+                    var t = String(vals[i] == null ? '' : vals[i]).trim();
+                    if (t === '') { return def.type === 'date' ? (between ? 'Choose both dates' : 'Choose a date') : (between ? 'Enter both numbers' : 'Enter a number'); }
+                    if (!re.test(t)) { return def.type === 'date' ? 'Value must be a valid date' : 'Value must be a whole number'; }
+                }
+                if (between) {
+                    var a = def.type === 'date' ? String(vals[0]) : +vals[0];
+                    var b = def.type === 'date' ? String(vals[1]) : +vals[1];
+                    if (a > b) { return 'Between range must be in ascending order'; }
+                }
+                return null;
+            case 'enum_set':
+                return Array.isArray(v) && v.length ? null : 'Choose at least one';
+            case 'peerage_set':
+                if (r.o === 'is') { return null; }
+                return Array.isArray(v) && v.length ? null : 'Choose at least one';
+        }
+        return null;
+    }
+    function firstIncomplete(node) {
+        if (node.kind === 'rule') { var m = checkRule(node); return m ? { node: node, msg: m } : null; }
+        for (var i = 0; i < node.children.length; i++) {
+            var f = firstIncomplete(node.children[i]);
+            if (f) { return f; }
+        }
+        return null;
+    }
+    // Highlight a rule with its message, inline and in the results banner.
+    function markRuleError(node, msg) {
+        errorRuleId = node.id;
+        errorText = msg;
+        render();
+        var n = document.querySelector('[data-node="' + node.id + '"]');
+        if (n && n.scrollIntoView) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        focusNode(node.id);
+        showMsg('error', '<i class="fas fa-circle-exclamation"></i> <span>Fix the highlighted rule: ' + esc(msg) + '</span>');
+        msgIsRuleError = true;
+        announce('Fix the highlighted rule: ' + msg);
     }
 
     /* ── columns card ────────────────────────────────────── */
@@ -685,6 +813,7 @@
             cb.addEventListener('change', function () {
                 if (cb.checked) { if (selectedCols.indexOf(k) < 0) { selectedCols.push(k); } }
                 else { selectedCols = selectedCols.filter(function (c) { return c !== k; }); }
+                scheduleDirtyCheck();
             });
             lab.appendChild(cb);
             lab.appendChild(el('span', null, COLS[k].label));
@@ -702,10 +831,17 @@
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(payload)
         }).then(function (res) {
+            if (isLoginRedirect(res)) { return { status: 5, error: 'Not logged in' }; }
             return res.text().then(function (t) {
                 try { return JSON.parse(t); } catch (e) { return { status: -1, error: 'The server returned an unexpected response (HTTP ' + res.status + ').' }; }
             });
         });
+    }
+
+    // A replaced/expired session is redirected to Login by the base controller.
+    function isLoginRedirect(res) { return !!(res.redirected && /Route=Login/i.test(res.url || '')); }
+    function loginPromptHtml() {
+        return '<i class="fas fa-circle-exclamation"></i> <span>Your session has ended. <a href="' + esc(PE.urls.run.replace(/Reports\/population_explorer_json$/, 'Login/login')) + '">Log in again</a> and re-run.</span>';
     }
 
     function requestFor(state) {
@@ -724,17 +860,20 @@
     }
 
     function showMsg(kind, html) {
+        msgIsRuleError = false;
         var m = $('pe-results-msg');
         m.innerHTML = html ? '<div class="pe-banner pe-banner-' + kind + '" role="' + (kind === 'error' ? 'alert' : 'status') + '">' + html + '</div>' : '';
     }
 
     function run() {
         if (running) { return; }
+        var bad = firstIncomplete(root);
+        if (bad) { markRuleError(bad.node, bad.msg); if (!dt) { resetIdle(); $('pe-results-idle').hidden = false; } return; }
         var state = currentState();
-        clearError();
-        render();
+        if (errorRuleId) { clearError(); render(); } // re-render only to drop a stale rule error
         setRunning(true);
         showMsg('', '');
+        resetIdle();
         $('pe-results-idle').hidden = true;
         if (!dt) {
             $('pe-table-area').hidden = true;
@@ -747,6 +886,8 @@
             setExportEnabled(true);
             showResults(j);
             updatePct(j.total, parseInt(j.scope_total, 10) || 0);
+            setDirty(false);
+            announceResults(j);
         }, function () {
             setRunning(false);
             handleError({ status: -1, error: 'Could not reach the server. Check your connection and try again.' });
@@ -758,23 +899,20 @@
         // The endpoint joins a generic status sentence and the detail as "Generic.: Detail"; keep the detail.
         msg = msg.replace(/^[^:]*\.:\s+/, '');
         if (/not logged in/i.test(msg)) {
-            showMsg('error', '<i class="fas fa-circle-exclamation"></i> <span>Your session has ended. <a href="' + esc(PE.urls.run.replace(/Reports\/population_explorer_json$/, 'Login/login')) + '">Log in again</a> and re-run.</span>');
+            showMsg('error', loginPromptHtml());
+            announce('Your session has ended. Log in again and re-run.');
             return;
         }
         if (Array.isArray(j.rule_path)) {
             var node = findPath(root, j.rule_path);
             if (node) {
-                errorRuleId = node.id;
-                errorText = msg;
-                render();
-                var n = document.querySelector('[data-node="' + node.id + '"]');
-                if (n && n.scrollIntoView) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-                showMsg('error', '<i class="fas fa-circle-exclamation"></i> <span>Fix the highlighted rule: ' + esc(msg) + '</span>');
+                markRuleError(node, msg);
                 if (!dt) { $('pe-results-idle').hidden = false; }
                 return;
             }
         }
         showMsg('error', '<i class="fas fa-circle-exclamation"></i> <span>' + esc(msg) + '</span>');
+        announce(msg);
         if (!dt) { $('pe-results-idle').hidden = false; }
     }
 
@@ -884,9 +1022,10 @@
         return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
     function shareUrl() {
-        var q = b64url(JSON.stringify(currentState()));
-        if (q.length > MAX_LINK) { return null; }
-        return PE.urls.page + '&q=' + q;
+        var url = PE.urls.page + '&q=' + b64url(JSON.stringify(currentState()));
+        var full = url;
+        try { full = new URL(url, window.location.href).href; } catch (e) { /* relative URL: measure as is */ }
+        return full.length > MAX_SHARE_URL ? null : url;
     }
     function copyText(text) {
         if (navigator.clipboard && window.isSecureContext) {
@@ -921,6 +1060,13 @@
         }, 2800);
     }
     function onCopyLink() {
+        // Never encode unfinished rules: the recipient's page would reject the whole link.
+        var bad = firstIncomplete(root);
+        if (bad) {
+            markRuleError(bad.node, bad.msg);
+            toast('Finish or remove the highlighted rule before copying a link.', 'error');
+            return;
+        }
         var url = shareUrl();
         if (!url) { toast('This filter is too large to share as a link. Remove a few rules and try again.', 'error'); return; }
         try { window.history.replaceState(null, '', url); } catch (e) { /* cross-origin guard */ }
@@ -937,43 +1083,93 @@
         b.classList.toggle('is-disabled', !on);
         b.setAttribute('data-tip', on ? 'Download the last run as an Excel file' : 'Run the report first, then export the results to Excel');
     }
+    var exporting = false;
+    function setExportBusy(on) {
+        exporting = on;
+        var b = $('pe-export');
+        if (!b) { return; }
+        b.classList.toggle('is-busy', on);
+        b.setAttribute('aria-busy', on ? 'true' : 'false');
+        var i = b.querySelector('i');
+        if (i) { i.className = on ? 'fas fa-spinner fa-spin' : 'fas fa-file-excel'; }
+    }
+    function filenameFrom(disposition) {
+        var m = /filename="?([^";]+)"?/i.exec(disposition || '');
+        return m ? m[1] : '';
+    }
+    function saveBlob(blob, name) {
+        var url = URL.createObjectURL(blob);
+        var a = el('a');
+        a.href = url;
+        a.download = name;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 1000);
+    }
+    // fetch + blob, so a failed export shows an error here instead of replacing the page.
     function onExport() {
         if (!lastRun) { toast('Run the report first, then export.', 'error'); return; }
-        var f = el('form');
-        f.method = 'POST';
-        f.action = PE.urls.export;
-        f.style.display = 'none';
-        var inp = el('input');
-        inp.type = 'hidden';
-        inp.name = 'payload';
-        inp.value = JSON.stringify(requestFor(lastRun));
-        f.appendChild(inp);
-        document.body.appendChild(f);
-        f.submit();
-        setTimeout(function () { f.remove(); }, 1000);
-        toast('Preparing your Excel file…', 'ok');
+        if (exporting) { return; }
+        setExportBusy(true);
+        var body = new URLSearchParams();
+        body.set('payload', JSON.stringify(requestFor(lastRun)));
+        fetch(PE.urls.export, { method: 'POST', credentials: 'same-origin', body: body }).then(function (res) {
+            if (res.status === 401 || isLoginRedirect(res)) { return { login: true }; }
+            var type = res.headers.get('Content-Type') || '';
+            if (!res.ok || type.indexOf('spreadsheetml') < 0) {
+                return res.text().then(function (t) {
+                    var text = String(t || '').trim();
+                    return { error: res.ok || !text || text.charAt(0) === '<' ? 'The export could not be created (HTTP ' + res.status + ').' : text };
+                });
+            }
+            return res.blob().then(function (b) {
+                saveBlob(b, filenameFrom(res.headers.get('Content-Disposition')) || 'population-explorer.xlsx');
+                return { ok: true };
+            });
+        }).then(function (out) {
+            setExportBusy(false);
+            if (out.login) { showMsg('error', loginPromptHtml()); announce('Your session has ended. Log in again to export.'); return; }
+            if (out.error) { toast(out.error, 'error'); announce(out.error); return; }
+            toast('Excel file downloaded.', 'ok');
+        }, function () {
+            setExportBusy(false);
+            toast('Could not reach the server. Check your connection and try again.', 'error');
+        });
     }
 
     /* ── boot ────────────────────────────────────────────── */
     function init() {
         var initial = PE.initial;
         if (initial && initial.tree) {
-            var g = fromWire(initial.tree, 1);
+            var g = fromWire(initial.tree);
             if (g && g.kind === 'group') { root = g; }
             if (Array.isArray(initial.columns) && initial.columns.length) {
                 selectedCols = initial.columns.filter(function (c) { return COLS[c]; });
                 if (selectedCols.indexOf('persona') < 0) { selectedCols.unshift('persona'); }
             }
-        } else {
-            root.children.push(newRule());
         }
+        // A fresh page starts with zero rules: the empty-root hint explains Run lists everyone.
         render();
         renderColumns();
         setExportEnabled(false);
+        var idleP = $('pe-results-idle').querySelector('p');
+        idleHtml = idleP ? idleP.innerHTML : '';
 
         $('pe-run').addEventListener('click', run);
-        $('pe-clear').addEventListener('click', function () { root = newGroup('AND'); clearError(); render(); });
-        $('pe-columns-reset').addEventListener('click', function () { selectedCols = defaultColumns(); renderColumns(); });
+        $('pe-clear').addEventListener('click', function () {
+            root = newGroup('AND');
+            clearError();
+            if (msgIsRuleError) { showMsg('', ''); }
+            render();
+            focusNode(root.id, '.pe-btn-add');
+            scheduleDirtyCheck();
+        });
+        $('pe-columns-reset').addEventListener('click', function () { selectedCols = defaultColumns(); renderColumns(); scheduleDirtyCheck(); });
+        // Structural edits (add/remove/toggle/yes-no/chips) all happen inside the builder.
+        ['click', 'change', 'input', 'keyup'].forEach(function (ev) {
+            $('pe-builder').addEventListener(ev, scheduleDirtyCheck);
+        });
         $('pe-copy-link').addEventListener('click', onCopyLink);
         $('pe-export').addEventListener('click', onExport);
         $('pe-builder').addEventListener('keydown', function (e) {

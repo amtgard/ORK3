@@ -60,6 +60,9 @@ class PopulationExplorer extends Ork3
             'type'     => $type,
             'operands' => $this->_opsFor($type),
             'param'    => false,
+            // nullable: the value can be missing (never signed in, no dues). Negated
+            // operands then do not match those players (spec §3.2); the UI says so.
+            'nullable' => false,
             'sql'      => null,
         ], $extra);
     }
@@ -77,17 +80,17 @@ class PopulationExplorer extends Ork3
     private function _criteriaDefs(): array
     {
         return [
-            'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date'),
-            'player_since'          => $this->_crit('Player since', 'Activity', 'date'),
+            'last_signin'           => $this->_crit('Last sign-in', 'Activity', 'date', ['nullable' => true]),
+            'player_since'          => $this->_crit('Player since', 'Activity', 'date', ['nullable' => true]),
             'signins_last_n_months' => $this->_crit('Sign-ins in last N months', 'Activity', 'number', ['param' => true]),
             'total_signins'         => $this->_crit('Total sign-ins', 'Activity', 'number'),
-            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['set' => 'class']),
+            'last_class'            => $this->_crit('Last class played', 'Activity', 'enum_set', ['set' => 'class', 'nullable' => true]),
             'classes_last_n_months' => $this->_crit('Classes played in last N months', 'Activity', 'enum_set', ['set' => 'class', 'param' => true]),
             'home_kingdom'          => $this->_crit('Home kingdom', 'Location', 'enum_set', ['set' => 'kingdom']),
             'home_park'             => $this->_crit('Home park', 'Location', 'enum_set', ['set' => 'park']),
-            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park']),
+            'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park', 'nullable' => true]),
             'dues_paid'             => $this->_crit('Dues paid', 'Status', 'bool', ['note' => 'Same as the Dues report: dues paid to this scope that run through today or later, or lifetime dues.']),
-            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
+            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
             'suspended'             => $this->_crit('Suspended', 'Status', 'bool'),

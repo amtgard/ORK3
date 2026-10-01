@@ -132,6 +132,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 				<div class="pe-run-bar">
 					<button type="button" class="pe-btn-run" id="pe-run"><i class="fas fa-play"></i> <span>Run</span></button>
 					<button type="button" class="pe-btn-link" id="pe-clear">Clear all rules</button>
+					<span class="pe-dirty-hint" id="pe-dirty" hidden><i class="fas fa-circle-info" aria-hidden="true"></i> Filters changed since last run</span>
 				</div>
 			</div>
 		</section>
@@ -163,6 +164,8 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 	</div><!-- /rp-main -->
 
 	<div class="pe-toast" id="pe-toast" role="status" aria-live="polite" hidden></div>
+	<!-- Persistent live region: run results and errors are announced here. -->
+	<div class="pe-sr-only" id="pe-live" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <?php endif; ?>
 </div><!-- /rp-root -->
