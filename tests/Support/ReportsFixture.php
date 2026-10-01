@@ -25,12 +25,6 @@ final class ReportsFixture
     private array $officerIds = [];
 
     /** @var list<int> */
-    private array $splitIds = [];
-
-    /** @var list<int> */
-    private array $accountIds = [];
-
-    /** @var list<int> */
     private array $authIds = [];
 
     public function __construct(
@@ -199,41 +193,27 @@ final class ReportsFixture
         $stmt->execute([$memberSince, $mundaneId]);
     }
 
-    public function insertDues(int $mundaneId, int $parkId, int $kingdomId): int
-    {
+    /**
+     * A row in ork_dues (the live dues ledger Report::GetDuesPaidList reads).
+     * Defaults: paid through one year from today, not lifetime, not revoked.
+     */
+    public function insertDues(
+        int $mundaneId,
+        int $parkId,
+        int $kingdomId,
+        ?string $duesUntil = null,
+        bool $forLife = false,
+        bool $revoked = false,
+    ): int {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'dues
              (mundane_id, kingdom_id, park_id, created_on, created_by, dues_from, terms, dues_until,
               dues_for_life, revoked)
-             VALUES (?, ?, ?, CURDATE(), ?, CURDATE(), 6, DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 0, 0)'
+             VALUES (?, ?, ?, CURDATE(), ?, CURDATE(), 6, COALESCE(?, DATE_ADD(CURDATE(), INTERVAL 1 YEAR)), ?, ?)'
         );
-        $stmt->execute([$mundaneId, $kingdomId, $parkId, $mundaneId]);
+        $stmt->execute([$mundaneId, $kingdomId, $parkId, $mundaneId, $duesUntil, $forLife ? 1 : 0, $revoked ? 1 : 0]);
         $id = (int) $this->pdo->lastInsertId();
         $this->duesIds[] = $id;
-
-        return $id;
-    }
-
-    /**
-     * Dues the way the rosters read them: a dues split against an account
-     * scoped to the park/kingdom (ork_split.is_dues + dues_through).
-     * Returns the split id; the account is created per call and cleaned up.
-     */
-    public function insertDuesSplit(int $mundaneId, int $parkId, int $kingdomId, string $duesThrough): int
-    {
-        $this->pdo->prepare(
-            'INSERT INTO ' . DB_PREFIX . 'account (parent_id, type, name, kingdom_id, park_id, unit_id, event_id)
-             VALUES (0, \'Income\', ?, ?, ?, 0, 0)'
-        )->execute([self::MARKER . ' dues acct', $kingdomId, $parkId]);
-        $accountId = (int) $this->pdo->lastInsertId();
-        $this->accountIds[] = $accountId;
-
-        $this->pdo->prepare(
-            'INSERT INTO ' . DB_PREFIX . 'split (account_id, src_mundane_id, is_dues, dues_through, amount, transaction_id)
-             VALUES (?, ?, 1, ?, 10, 0)'
-        )->execute([$accountId, $mundaneId, $duesThrough]);
-        $id = (int) $this->pdo->lastInsertId();
-        $this->splitIds[] = $id;
 
         return $id;
     }
@@ -336,17 +316,6 @@ final class ReportsFixture
 
     public function cleanup(): void
     {
-        if ($this->splitIds !== []) {
-            $in = implode(',', array_map('intval', $this->splitIds));
-            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "split WHERE split_id IN ({$in})");
-            $this->splitIds = [];
-        }
-        if ($this->accountIds !== []) {
-            $in = implode(',', array_map('intval', $this->accountIds));
-            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "account WHERE account_id IN ({$in})");
-            $this->accountIds = [];
-        }
-
         if ($this->authIds !== []) {
             $in = implode(',', array_map('intval', $this->authIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "authorization WHERE authorization_id IN ({$in})");

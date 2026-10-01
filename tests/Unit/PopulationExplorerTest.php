@@ -136,7 +136,7 @@ final class PopulationExplorerTest extends TestCase
         $this->assertFalse($this->norm(['children' => 'x'])['ok']);
     }
 
-    private function sql(array $tree, array $ctx = ['accountScope' => 'ac.kingdom_id = 1']): string
+    private function sql(array $tree, array $ctx = ['duesScope' => 'd.kingdom_id = 1']): string
     {
         $n = $this->norm($tree);
         $this->assertTrue($n['ok'], $n['error'] ?? '');
@@ -211,17 +211,24 @@ final class PopulationExplorerTest extends TestCase
         $this->assertStringContainsString('stripped_from', $any);
     }
 
-    public function testDuesUsesAccountScope(): void
+    public function testDuesReadTheDuesLedgerInScope(): void
     {
-        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('dues_paid', 'is', 'yes')]], ['accountScope' => 'ac.park_id = 42']);
-        $this->assertStringContainsString('ac.park_id = 42', $s);
-        $this->assertStringContainsString('s.is_dues = 1', $s);
+        $s = $this->sql(['op' => 'AND', 'children' => [$this->leaf('dues_paid', 'is', 'yes')]], ['duesScope' => 'd.park_id = 42']);
+        $this->assertStringContainsString(DB_PREFIX . 'dues d', $s);
+        $this->assertStringContainsString('d.park_id = 42', $s);
+        $this->assertStringContainsString('d.revoked = 0', $s);
+        $this->assertStringContainsString('d.dues_for_life = 1', $s);
+        $this->assertStringNotContainsString('split', $s);
+
+        // No scope in ctx: dues never match (fail closed).
+        $closed = $this->sql(['op' => 'AND', 'children' => [$this->leaf('dues_paid', 'is', 'yes')]], []);
+        $this->assertStringContainsString('1=0', $closed);
     }
 
     public function testCompiledSqlNeverContainsUserText(): void
     {
         $n = $this->norm(['op' => 'AND', 'children' => [$this->leaf('last_signin', 'gte', '2025-01-01')]]);
-        $s = $this->pe->CompileTree($n['tree'], ['accountScope' => '1=1']);
+        $s = $this->pe->CompileTree($n['tree'], ['duesScope' => '1=1']);
         $this->assertDoesNotMatchRegularExpression('/DROP|--|;/', $s);
     }
 
@@ -229,7 +236,7 @@ final class PopulationExplorerTest extends TestCase
     {
         $cols = array_keys($this->pe->Registry()['columns']);
         foreach ($cols as $c) {
-            $expr = $this->pe->ColumnSelectSql($c, ['accountScope' => 'ac.kingdom_id = 1']);
+            $expr = $this->pe->ColumnSelectSql($c, ['duesScope' => 'd.kingdom_id = 1']);
             $this->assertNotSame('', $expr, $c);
         }
     }

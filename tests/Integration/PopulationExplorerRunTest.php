@@ -162,49 +162,108 @@ final class PopulationExplorerRunTest extends TestCase
         }
     }
 
-    public function testDuesPaidParityWithRoster(): void
+    /**
+     * Mundane ids Report::GetDuesPaidList (the Dues report) lists for each id in $ids
+     * of the given scope type, restricted to players whose home is inside $homeWhere.
+     *
+     * @param list<int> $ids
+     * @return list<int>
+     */
+    private function duesReportIds(string $type, array $ids, string $homeWhere): array
+    {
+        require_once DIR_UI . 'model/model.Kingdom.php';
+        require_once DIR_UI . 'model/model.Park.php';
+        $out = [];
+        foreach ($ids as $id) {
+            unset($_SESSION['is_authorized_mundane_id']);
+            $r = (new Report())->GetDuesPaidList(['Type' => $type, 'Id' => $id, 'Token' => $this->admin['token']]);
+            foreach ($r['DuesPaidList'] ?? [] as $row) {
+                $out[] = (int) $row['MundaneId'];
+            }
+        }
+        $out = array_values(array_unique($out));
+        if ($out === []) {
+            return [];
+        }
+        $home = array_map('intval', $this->fixture->pdo()->query(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id IN (' . implode(',', $out) . ") AND ($homeWhere)"
+        )->fetchAll(PDO::FETCH_COLUMN));
+        sort($home);
+
+        return $home;
+    }
+
+    public function testDuesPaidParityWithDuesReport(): void
     {
         $paid = $this->player('pe-dues-paid');
         $expired = $this->player('pe-dues-expired');
-        $this->player('pe-dues-none');
-        $this->fixture->insertDuesSplit($paid['mundane_id'], $this->parkId, $this->kid, date('Y-m-d', strtotime('+1 year')));
-        $this->fixture->insertDuesSplit($expired['mundane_id'], $this->parkId, $this->kid, date('Y-m-d', strtotime('-1 year')));
+        $life = $this->player('pe-dues-life');
+        $revoked = $this->player('pe-dues-revoked');
+        $none = $this->player('pe-dues-none');
+        $future = date('Y-m-d', strtotime('+1 year'));
+        $past = date('Y-m-d', strtotime('-1 year'));
+        $this->fixture->insertDues($paid['mundane_id'], $this->parkId, $this->kid, $future);
+        $this->fixture->insertDues($expired['mundane_id'], $this->parkId, $this->kid, $past);
+        // Lifetime dues count as paid even with a past dues_until.
+        $this->fixture->insertDues($life['mundane_id'], $this->parkId, $this->kid, '2001-01-01', true);
+        $this->fixture->insertDues($revoked['mundane_id'], $this->parkId, $this->kid, $future, false, true);
+        $mine = [$paid['mundane_id'], $expired['mundane_id'], $life['mundane_id'], $revoked['mundane_id'], $none['mundane_id']];
 
+        // Park scope: exactly the Dues report's park list (home park players).
         $r = $this->exec($this->req(
             $this->admin['token'],
             'Park',
             $this->parkId,
-            $this->tree($this->leaf('dues_paid', 'is', 'yes'))
+            $this->tree($this->leaf('dues_paid', 'is', 'yes')),
+            ['persona', 'dues_paid', 'dues_through']
         ));
         $this->assertSame(0, $r['Status']['Status']);
-
-        $expected = array_map(
-            static fn (array $x): int => (int) $x['MundaneId'],
-            $this->roster('Park', $this->parkId, ['DuesPaid' => true], $this->admin['token'])
-        );
-        sort($expected);
-        $this->assertSame([$paid['mundane_id']], array_values(array_intersect($expected, [$paid['mundane_id'], $expired['mundane_id']])));
+        $expected = $this->duesReportIds('Park', [$this->parkId], 'park_id = ' . $this->parkId);
+        $want = [$paid['mundane_id'], $life['mundane_id']];
+        sort($want);
+        $this->assertSame($want, array_values(array_intersect($expected, $mine)), 'fixture rows reach the Dues report');
         $this->assertSame($expected, $this->ids($r));
 
-        // "no" is the complement within the park
-        $no = $this->exec($this->req(
-            $this->admin['token'],
-            'Park',
-            $this->parkId,
-            $this->tree($this->leaf('dues_paid', 'is', 'no'))
-        ));
-        $this->assertContains($expired['mundane_id'], $this->ids($no));
-        $this->assertNotContains($paid['mundane_id'], $this->ids($no));
+        // Kingdom scope: the Dues report summed over the stats kingdoms.
+        $stats = array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($this->kid));
+        $k = $this->exec($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('dues_paid', 'is', 'yes'))));
+        $this->assertSame(0, $k['Status']['Status']);
+        $this->assertSame($this->duesReportIds('Kingdom', $stats, 'kingdom_id IN (' . implode(',', $stats) . ')'), $this->ids($k));
+
+        // Columns: Dues paid flag and Dues through (MAX dues_until; "Lifetime" for lifetime dues).
+        $all = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'dues_paid', 'dues_through']));
+        $byId = [];
+        foreach ($all['Rows'] as $row) {
+            $byId[$row['MundaneId']] = $row;
+        }
+        $this->assertSame([1, $future], [$byId[$paid['mundane_id']]['dues_paid'], $byId[$paid['mundane_id']]['dues_through']]);
+        $this->assertSame([0, $past], [$byId[$expired['mundane_id']]['dues_paid'], $byId[$expired['mundane_id']]['dues_through']]);
+        $this->assertSame([1, 'Lifetime'], [$byId[$life['mundane_id']]['dues_paid'], $byId[$life['mundane_id']]['dues_through']]);
+        $this->assertSame([0, null], [$byId[$revoked['mundane_id']]['dues_paid'], $byId[$revoked['mundane_id']]['dues_through']]);
+        $this->assertSame([0, null], [$byId[$none['mundane_id']]['dues_paid'], $byId[$none['mundane_id']]['dues_through']]);
+
+        // "no" is the complement within the park.
+        $no = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('dues_paid', 'is', 'no'))));
+        $got = array_values(array_intersect($this->ids($no), $mine));
+        $wantNo = [$expired['mundane_id'], $revoked['mundane_id'], $none['mundane_id']];
+        sort($wantNo);
+        $this->assertSame($wantNo, $got);
+
+        // Dues through criterion: lifetime sorts as the far future; NULL never matches.
+        $through = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('dues_through', 'gte', date('Y-m-d')))));
+        $this->assertSame($want, array_values(array_intersect($this->ids($through), $mine)));
+        $before = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('dues_through', 'lt', date('Y-m-d')))));
+        $this->assertSame([$expired['mundane_id']], array_values(array_intersect($this->ids($before), $mine)));
     }
 
-    public function testDuesFromAnotherParkAccountDoNotCount(): void
+    public function testDuesPaidToAnotherParkCountOnlyInKingdomScope(): void
     {
         $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
         if ($p2 <= 0) {
             $this->markTestSkipped('Needs a second park in the kingdom.');
         }
         $pl = $this->player('pe-dues-other');
-        $this->fixture->insertDuesSplit($pl['mundane_id'], $p2, $this->kid, date('Y-m-d', strtotime('+1 year')));
+        $this->fixture->insertDues($pl['mundane_id'], $p2, $this->kid, date('Y-m-d', strtotime('+1 year')));
 
         $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('dues_paid', 'is', 'yes'))));
         $this->assertNotContains($pl['mundane_id'], $this->ids($r));

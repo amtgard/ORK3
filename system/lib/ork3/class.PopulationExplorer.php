@@ -83,8 +83,8 @@ class PopulationExplorer extends Ork3
             'home_kingdom'          => $this->_crit('Home kingdom', 'Location', 'enum_set', ['set' => 'kingdom']),
             'home_park'             => $this->_crit('Home park', 'Location', 'enum_set', ['set' => 'park']),
             'last_signin_park'      => $this->_crit('Last sign-in park', 'Location', 'enum_set', ['set' => 'park']),
-            'dues_paid'             => $this->_crit('Dues paid', 'Status', 'bool'),
-            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date'),
+            'dues_paid'             => $this->_crit('Dues paid', 'Status', 'bool', ['note' => 'Same as the Dues report: dues paid to this scope that run through today or later, or lifetime dues.']),
+            'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
             'suspended'             => $this->_crit('Suspended', 'Status', 'bool'),
@@ -476,21 +476,32 @@ class PopulationExplorer extends Ork3
         return $this->_attSub('a.park_id', '', 'ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1');
     }
 
+    /** Lifetime dues sort and compare as this date; the column shows LIFETIME_LABEL. */
+    public const LIFETIME_DATE = '9999-12-31';
+    public const LIFETIME_LABEL = 'Lifetime';
+
+    /**
+     * Live dues rows for the player in alias `m`, exactly as Report::GetDuesPaidList
+     * reads them (ork_dues, not revoked), limited to the authorized scope:
+     * ctx['duesScope'] is a SQL boolean over alias `d` (d.park_id / d.kingdom_id).
+     */
     private function _duesFrom(array $ctx): string
     {
-        $scope = isset($ctx['accountScope']) && $ctx['accountScope'] !== '' ? $ctx['accountScope'] : '1=0';
-        return 'FROM ' . $this->_t('split') . ' s JOIN ' . $this->_t('account') . ' ac ON ac.account_id = s.account_id'
-            . ' WHERE s.src_mundane_id = m.mundane_id AND s.is_dues = 1 AND (' . $scope . ')';
+        $scope = isset($ctx['duesScope']) && $ctx['duesScope'] !== '' ? $ctx['duesScope'] : '1=0';
+        return 'FROM ' . $this->_t('dues') . ' d'
+            . ' WHERE d.mundane_id = m.mundane_id AND d.revoked = 0 AND (' . $scope . ')';
     }
 
+    /** Latest dues_until, or LIFETIME_DATE when any in-scope row is lifetime dues. */
     private function _duesThroughExpr(array $ctx): string
     {
-        return '(SELECT MAX(s.dues_through) ' . $this->_duesFrom($ctx) . ')';
+        return "(SELECT IF(MAX(d.dues_for_life) = 1, '" . self::LIFETIME_DATE . "', MAX(d.dues_until)) " . $this->_duesFrom($ctx) . ')';
     }
 
+    /** Paid = GetDuesPaidList's predicate: dues_until >= today, or lifetime dues. */
     private function _duesPaidExists(array $ctx): string
     {
-        return 'EXISTS (SELECT 1 ' . $this->_duesFrom($ctx) . ' AND s.dues_through >= CURDATE())';
+        return 'EXISTS (SELECT 1 ' . $this->_duesFrom($ctx) . ' AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1))';
     }
 
     /**
@@ -664,7 +675,7 @@ class PopulationExplorer extends Ork3
 
     /**
      * Compile a normalized tree (from NormalizeTree) into a SQL boolean over alias `m`.
-     * ctx['accountScope'] is a SQL boolean over alias `ac` (ork_account) for dues rules.
+     * ctx['duesScope'] is a SQL boolean over alias `d` (ork_dues) for dues rules.
      */
     public function CompileTree(array $normalizedTree, array $ctx = []): string
     {
@@ -738,21 +749,23 @@ class PopulationExplorer extends Ork3
         return $ids;
     }
 
-    /** @return array [mundane scope clause over m, account scope clause over ac] */
+    /**
+     * @return array [mundane scope clause over m, dues scope clause over d]. The dues
+     * clause matches Report::GetDuesPaidList's Type filter (d.park_id / d.kingdom_id),
+     * widened to the stats kingdoms for a Kingdom scope.
+     */
     private function _scopeClauses(string $scopeType, int $scopeId): array
     {
+        $scopeId = (int)$scopeId;
         if ($scopeType === 'Park') {
-            return ['m.park_id = ' . $scopeId, '(ac.park_id = ' . $scopeId . ')'];
+            return ['m.park_id = ' . $scopeId, 'd.park_id = ' . $scopeId];
         }
         $ids = $this->_scopeKingdomIds($scopeId);
         if (count($ids) === 0) {
-            return ['1=0', '(1=0)'];
+            return ['1=0', '1=0'];
         }
         $in = implode(',', $ids);
-        return [
-            "m.kingdom_id IN ($in)",
-            "(ac.kingdom_id IN ($in) OR ac.park_id IN (SELECT park_id FROM " . $this->_t('park') . " WHERE kingdom_id IN ($in)))",
-        ];
+        return ["m.kingdom_id IN ($in)", "d.kingdom_id IN ($in)"];
     }
 
     /**
@@ -803,8 +816,8 @@ class PopulationExplorer extends Ork3
             $cap = $reqCap;
         }
 
-        list($scopeSql, $accountScope) = $this->_scopeClauses($scopeType, $scopeId);
-        $ctx = ['accountScope' => $accountScope];
+        list($scopeSql, $duesScope) = $this->_scopeClauses($scopeType, $scopeId);
+        $ctx = ['duesScope' => $duesScope];
         try {
             $treeSql = $this->CompileTree($norm['tree'], $ctx);
             $selects = ['m.mundane_id AS mundane_id'];
@@ -836,7 +849,7 @@ class PopulationExplorer extends Ork3
                 $row = ['MundaneId' => (int)$r->mundane_id];
                 foreach ($colIds as $id) {
                     $field = 'c_' . $id;
-                    $row[$id] = $this->_cell($registryCols[$id]['type'], $r->$field);
+                    $row[$id] = $this->_cell($id, $registryCols[$id]['type'], $r->$field);
                 }
                 $rows[] = $row;
             }
@@ -938,14 +951,20 @@ class PopulationExplorer extends Ork3
         return ['Status' => Success(), 'Path' => $path, 'Filename' => 'population-explorer-' . date('Y-m-d') . '.xlsx'];
     }
 
-    /** Normalise a raw DB cell by column type: numbers/bools to ints, NULL stays null. */
-    private function _cell(string $type, $v)
+    /**
+     * Normalise a raw DB cell by column type: numbers/bools to ints, NULL stays null.
+     * Lifetime dues (LIFETIME_DATE) show as LIFETIME_LABEL in both JSON and xlsx.
+     */
+    private function _cell(string $id, string $type, $v)
     {
         if ($v === null) {
             return null;
         }
         if ($type === 'number' || $type === 'bool') {
             return (int)$v;
+        }
+        if ($id === 'dues_through' && (string)$v === self::LIFETIME_DATE) {
+            return self::LIFETIME_LABEL;
         }
         return (string)$v;
     }
