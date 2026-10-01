@@ -925,4 +925,233 @@ final class PopulationExplorerRunTest extends TestCase
         $live = (int) $this->fixture->pdo()->query('SELECT award_id FROM ' . DB_PREFIX . 'award WHERE deprecate = 0 ORDER BY award_id LIMIT 1')->fetchColumn();
         $this->assertStringNotContainsString('(retired)', $byId[$live][1]);
     }
+
+    /** @return list<array{0:int,1:int}> up to $n [kingdomaward_id, award_id] pairs of a peerage in the test kingdom */
+    private function peerageAwards(string $peerage, int $n): array
+    {
+        $st = $this->fixture->pdo()->prepare(
+            'SELECT ka.kingdomaward_id, ka.award_id FROM ' . DB_PREFIX . 'kingdomaward ka
+             JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+             WHERE ka.kingdom_id = ? AND a.peerage = ? GROUP BY ka.award_id ORDER BY ka.award_id LIMIT ' . (int) $n
+        );
+        $st->execute([$this->kid, $peerage]);
+        $rows = array_map(static fn (array $r): array => [(int) $r[0], (int) $r[1]], $st->fetchAll(PDO::FETCH_NUM));
+        if (count($rows) < $n) {
+            $this->markTestSkipped("Needs $n $peerage awards in kingdom {$this->kid}.");
+        }
+
+        return $rows;
+    }
+
+    /** Ids among $mine that the tree returns in the park scope. @param list<int> $mine @return list<int> */
+    private function matchAmong(array $tree, array $mine, string $type = 'Park', ?int $id = null): array
+    {
+        $r = $this->exec($this->req($this->admin['token'], $type, $id ?? ($type === 'Park' ? $this->parkId : $this->kid), $tree));
+        $this->assertSame(0, $r['Status']['Status'], json_encode($r['Status']));
+        $got = array_values(array_intersect($this->ids($r), $mine));
+        sort($got);
+
+        return $got;
+    }
+
+    /** @param list<int> $ids @return list<int> */
+    private function sorted(array $ids): array
+    {
+        sort($ids);
+
+        return $ids;
+    }
+
+    public function testHasAllHasAnyHasNoneOnKnighthoods(): void
+    {
+        [[$ka1, $aw1], [$ka2, $aw2]] = $this->peerageAwards('Knight', 2);
+        $both = $this->player('pe-hasall-both');
+        $one = $this->player('pe-hasall-one');
+        $none = $this->player('pe-hasall-none');
+        $this->fixture->insertLadderAward($both['mundane_id'], $this->parkId, $this->kid, $ka1, $aw1, 0);
+        $this->fixture->insertLadderAward($both['mundane_id'], $this->parkId, $this->kid, $ka2, $aw2, 0);
+        // a duplicate grant of the same order must not satisfy "has all" on its own
+        $this->fixture->insertLadderAward($one['mundane_id'], $this->parkId, $this->kid, $ka1, $aw1, 0);
+        $this->fixture->insertLadderAward($one['mundane_id'], $this->parkId, $this->kid, $ka1, $aw1, 0);
+        $mine = [$both['mundane_id'], $one['mundane_id'], $none['mundane_id']];
+
+        $this->assertSame([$both['mundane_id']], $this->matchAmong($this->tree($this->leaf('knighthood', 'has_all', [$aw1, $aw2])), $mine));
+        $this->assertSame($this->sorted([$both['mundane_id'], $one['mundane_id']]), $this->matchAmong($this->tree($this->leaf('knighthood', 'has_any', [$aw1, $aw2])), $mine));
+        $this->assertSame($this->sorted([$one['mundane_id'], $none['mundane_id']]), $this->matchAmong($this->tree($this->leaf('knighthood', 'has_none', [$aw2])), $mine));
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'knighthoods']));
+        $names = array_column($r['Rows'], 'knighthoods', 'MundaneId');
+        $this->assertSame(1, substr_count((string) $names[$one['mundane_id']], ',') + 1, 'duplicate grant listed once');
+        $this->assertSame(2, count(explode(', ', (string) $names[$both['mundane_id']])));
+        $this->assertNull($names[$none['mundane_id']]);
+    }
+
+    public function testClassesPlayedInLastNMonths(): void
+    {
+        $classId = (int) $this->fixture->pdo()->query('SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id LIMIT 1')->fetchColumn();
+        $recent = $this->player('pe-cls-recent');
+        $old = $this->player('pe-cls-old');
+        $never = $this->player('pe-cls-never');
+        $this->fixture->insertAttendance($recent['mundane_id'], $this->parkId, $this->kid, date('Y-m-d', strtotime('-1 month')));
+        $this->fixture->insertAttendance($old['mundane_id'], $this->parkId, $this->kid, date('Y-m-d', strtotime('-15 months')));
+        $mine = [$recent['mundane_id'], $old['mundane_id'], $never['mundane_id']];
+
+        $this->assertSame([$recent['mundane_id']], $this->matchAmong($this->tree($this->leaf('classes_last_n_months', 'in', [$classId], 6)), $mine));
+        $this->assertSame($this->sorted([$recent['mundane_id'], $old['mundane_id']]), $this->matchAmong($this->tree($this->leaf('classes_last_n_months', 'is', $classId, 24)), $mine));
+        // set semantics: "did not play X in the window" includes players with no sign-ins
+        $this->assertSame($this->sorted([$old['mundane_id'], $never['mundane_id']]), $this->matchAmong($this->tree($this->leaf('classes_last_n_months', 'not_in', [$classId], 6)), $mine));
+    }
+
+    public function testLastSigninParkUsesLatestSignInWithIdTieBreak(): void
+    {
+        $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
+        if ($p2 <= 0) {
+            $this->markTestSkipped('Needs a second park in the kingdom.');
+        }
+        $away = $this->player('pe-lsp-away');
+        $home = $this->player('pe-lsp-home');
+        $tie = $this->player('pe-lsp-tie');
+        $this->fixture->insertAttendance($away['mundane_id'], $this->parkId, $this->kid, '2024-01-01');
+        $this->fixture->insertAttendance($away['mundane_id'], $p2, $this->kid, '2024-06-01');
+        $this->fixture->insertAttendance($home['mundane_id'], $p2, $this->kid, '2024-01-01');
+        $this->fixture->insertAttendance($home['mundane_id'], $this->parkId, $this->kid, '2024-06-01');
+        // same date: the later attendance row wins
+        $this->fixture->insertAttendance($tie['mundane_id'], $this->parkId, $this->kid, '2024-07-07');
+        $this->fixture->insertAttendance($tie['mundane_id'], $p2, $this->kid, '2024-07-07');
+        $mine = [$away['mundane_id'], $home['mundane_id'], $tie['mundane_id']];
+
+        $this->assertSame($this->sorted([$away['mundane_id'], $tie['mundane_id']]), $this->matchAmong($this->tree($this->leaf('last_signin_park', 'is', $p2)), $mine));
+        $this->assertSame([$home['mundane_id']], $this->matchAmong($this->tree($this->leaf('last_signin_park', 'in', [$this->parkId])), $mine));
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'last_signin_park']));
+        $col = array_column($r['Rows'], 'last_signin_park', 'MundaneId');
+        $this->assertSame($this->fixture->parkName($p2), $col[$away['mundane_id']]);
+        $this->assertSame($this->fixture->parkName($this->parkId), $col[$home['mundane_id']]);
+    }
+
+    public function testPlayerSinceIsFirstSignInOrOverride(): void
+    {
+        $early = $this->player('pe-since-early');
+        $late = $this->player('pe-since-late');
+        $this->fixture->insertAttendance($early['mundane_id'], $this->parkId, $this->kid, '2019-03-01');
+        $this->fixture->insertAttendance($early['mundane_id'], $this->parkId, $this->kid, '2024-01-01');
+        $this->fixture->insertAttendance($late['mundane_id'], $this->parkId, $this->kid, '2021-05-05');
+        $mine = [$early['mundane_id'], $late['mundane_id']];
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, [], ['persona', 'player_since']));
+        $this->assertSame(0, $r['Status']['Status']);
+        $col = array_column($r['Rows'], 'player_since', 'MundaneId');
+        $this->assertSame('2019-03-01', $col[$early['mundane_id']]);
+        $this->assertSame('2021-05-05', $col[$late['mundane_id']]);
+        $this->assertSame([$early['mundane_id']], $this->matchAmong($this->tree($this->leaf('player_since', 'lt', '2020-01-01')), $mine));
+
+        // The override column only exists where its (unmerged) migration ran.
+        $hasColumn = (bool) $this->fixture->pdo()->query('SHOW COLUMNS FROM ' . DB_PREFIX . "mundane LIKE 'player_since_override'")->fetch();
+        $probe = new PopulationExplorerProbe();
+        $probe->override = true;
+        $this->assertStringContainsString('COALESCE(m.player_since_override, ', $probe->ColumnSelectSql('player_since', []));
+        $probe->override = false;
+        $this->assertStringNotContainsString('player_since_override', $probe->ColumnSelectSql('player_since', []));
+        if (!$hasColumn) {
+            return; // ork_test follows master's schema: first sign-in only (asserted above)
+        }
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET player_since_override = ? WHERE mundane_id = ?', ['2015-02-02', $late['mundane_id']]);
+        $this->assertSame($this->sorted($mine), $this->matchAmong($this->tree($this->leaf('player_since', 'lt', '2020-01-01')), $mine));
+    }
+
+    public function testReeveAndCorporaQualifiedParity(): void
+    {
+        $future = date('Y-m-d', strtotime('+6 months'));
+        $past = date('Y-m-d', strtotime('-6 months'));
+        $ok = $this->player('pe-q-ok');
+        $lapsed = $this->player('pe-q-lapsed');
+        $susp = $this->player('pe-q-susp');
+        $no = $this->player('pe-q-no');
+        $set = 'UPDATE ' . DB_PREFIX . 'mundane SET reeve_qualified = ?, reeve_qualified_until = ?, corpora_qualified = ?, corpora_qualified_until = ?, suspended = ? WHERE mundane_id = ?';
+        $this->sql($set, [1, $future, 1, $future, 0, $ok['mundane_id']]);
+        $this->sql($set, [1, $past, 1, $past, 0, $lapsed['mundane_id']]);
+        $this->sql($set, [1, $future, 1, $future, 1, $susp['mundane_id']]);
+        $this->sql($set, [0, null, 0, null, 0, $no['mundane_id']]);
+        $mine = [$ok['mundane_id'], $lapsed['mundane_id'], $susp['mundane_id'], $no['mundane_id']];
+
+        foreach (['reeve' => ['GetReeveQualified', 'ReeveQualified'], 'corpora' => ['GetCorporaQualified', 'CorporaQualified']] as $kind => [$fn, $key]) {
+            $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf($kind . '_qualified', 'is', 'yes'))));
+            $this->assertSame([$ok['mundane_id']], array_values(array_intersect($this->ids($r), $mine)), $kind);
+            unset($_SESSION['is_authorized_mundane_id']);
+            $report = (new Report())->$fn(['KingdomId' => 0, 'ParkId' => $this->parkId]);
+            $expected = array_map(static fn (array $x): int => (int) $x['MundaneId'], $report[$key] ?? []);
+            $this->assertSame($this->sorted(array_values(array_unique($expected))), $this->ids($r), "$kind parity with $fn");
+
+            $noRule = $this->matchAmong($this->tree($this->leaf($kind . '_qualified', 'is', 'no')), $mine);
+            $this->assertSame($this->sorted([$lapsed['mundane_id'], $susp['mundane_id'], $no['mundane_id']]), $noRule, $kind);
+        }
+    }
+
+    public function testBannedParityAndHomeKingdom(): void
+    {
+        $banned = $this->player('pe-banned');
+        $clean = $this->player('pe-clean');
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET penalty_box = 1 WHERE mundane_id = ?', [$banned['mundane_id']]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET penalty_box = 0 WHERE mundane_id = ?', [$clean['mundane_id']]);
+        $mine = [$banned['mundane_id'], $clean['mundane_id']];
+
+        $r = $this->exec($this->req($this->admin['token'], 'Park', $this->parkId, $this->tree($this->leaf('banned', 'is', 'yes'))));
+        $this->assertSame([$banned['mundane_id']], array_values(array_intersect($this->ids($r), $mine)));
+        $expected = array_map(static fn (array $x): int => (int) $x['MundaneId'], $this->roster('Park', $this->parkId, ['Banned' => true], $this->admin['token']));
+        $this->assertSame($this->sorted($expected), $this->ids($r), 'banned parity with GetPlayerRoster');
+        $this->assertSame([$clean['mundane_id']], $this->matchAmong($this->tree($this->leaf('banned', 'is', 'no')), $mine));
+
+        // Home kingdom within the kingdom scope: every scoped player whose home kingdom is the scope id.
+        $k = $this->exec($this->req($this->admin['token'], 'Kingdom', $this->kid, $this->tree($this->leaf('home_kingdom', 'is', $this->kid))));
+        $this->assertSame(0, $k['Status']['Status']);
+        $want = (int) $this->fixture->pdo()->query('SELECT COUNT(*) FROM ' . DB_PREFIX . 'mundane WHERE kingdom_id = ' . $this->kid)->fetchColumn();
+        $this->assertSame($want, $k['Total']);
+        $this->assertContains($banned['mundane_id'], $this->ids($k));
+        $this->assertSame([], $this->matchAmong($this->tree($this->leaf('home_kingdom', 'not_in', [$this->kid])), $mine, 'Kingdom'));
+    }
+
+    public function testMasterhoodParityWithMastersReport(): void
+    {
+        [[$kaId, $awardId]] = $this->peerageAwards('Master', 1);
+        $master = $this->player('pe-master');
+        $plain = $this->player('pe-master-plain');
+        $this->sql('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id IN (?, ?)', [$master['mundane_id'], $plain['mundane_id']]);
+        $this->fixture->insertLadderAward($master['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $report = (new Report())->PlayerAwards([
+            'KingdomId' => $this->kid, 'ParkId' => 0, 'IncludeKnights' => 0, 'IncludeMasters' => 1,
+        ]);
+        $this->assertSame(0, $report['Status']['Status']);
+        $expected = array_values(array_unique(array_map(static fn (array $a): int => (int) $a['MundaneId'], $report['Awards'])));
+        sort($expected);
+        $this->assertContains($master['mundane_id'], $expected);
+
+        $r = $this->exec($this->req(
+            $this->admin['token'],
+            'Kingdom',
+            $this->kid,
+            $this->tree($this->leaf('masterhood', 'is', 'yes'), $this->leaf('active', 'is', 'yes'))
+        ));
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame($expected, $this->ids($r));
+        $this->assertNotContains($plain['mundane_id'], $this->ids($r));
+    }
+
+    public function testAwardDateAnyRanges(): void
+    {
+        [$kaId, $awardId] = $this->peerageAward('Knight');
+        $a = $this->player('pe-ad-a');
+        $b = $this->player('pe-ad-b');
+        $aw = $this->fixture->insertLadderAward($a['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $bw = $this->fixture->insertLadderAward($b['mundane_id'], $this->parkId, $this->kid, $kaId, $awardId, 0);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['2020-06-15', $aw]);
+        $this->sql('UPDATE ' . DB_PREFIX . 'awards SET date = ? WHERE awards_id = ?', ['2023-06-15', $bw]);
+        $mine = [$a['mundane_id'], $b['mundane_id']];
+
+        $this->assertSame([$b['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'gt', '2020-06-15')), $mine));
+        $this->assertSame($this->sorted($mine), $this->matchAmong($this->tree($this->leaf('award_date_any', 'gte', '2020-06-15')), $mine));
+        $this->assertSame([$a['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'lte', '2020-06-15')), $mine));
+        $this->assertSame([$b['mundane_id']], $this->matchAmong($this->tree($this->leaf('award_date_any', 'between', ['2023-01-01', '2023-06-15'])), $mine));
+    }
 }
