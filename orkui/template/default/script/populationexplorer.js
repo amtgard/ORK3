@@ -187,6 +187,7 @@
     var dt = null;
     var running = false;
     var msgIsRuleError = false;  // #pe-results-msg currently holds "Fix the highlighted rule"
+    var preRun = null;           // the results area as it was when the current Run started
     var idleHtml = '';           // the idle placeholder's original text
 
     /* ── edit generation ─────────────────────────────────── */
@@ -1036,6 +1037,50 @@
         m.innerHTML = html ? '<div class="pe-banner pe-banner-' + kind + '" role="' + (kind === 'error' ? 'alert' : 'status') + '">' + html + '</div>' : '';
     }
 
+    // "Another run of yours is still in progress" (Run or Export) has its own slot
+    // above the results message, so it neither hides nor is hidden by that message.
+    // It stays until the next Run or Export request (shown again if that one is
+    // refused too) or until it is dismissed.
+    function showBusy(msg) {
+        $('pe-busy-msg').innerHTML = '<div class="pe-banner pe-banner-warn pe-banner-busy" role="status">'
+            + '<i class="fas fa-hourglass-half" aria-hidden="true"></i> <span>' + esc(msg) + '</span>'
+            + '<button type="button" class="pe-banner-dismiss" aria-label="Dismiss this notice" data-tip="Dismiss">'
+            + '<i class="fas fa-xmark" aria-hidden="true"></i></button></div>';
+    }
+    function clearBusy() {
+        var b = $('pe-busy-msg');
+        if (b) { b.innerHTML = ''; }
+    }
+
+    // Run() clears the results message and the idle placeholder as it starts. A busy
+    // refusal says nothing about the filter or the last results, so it puts them
+    // back exactly as they were: the table, its numbers, a "Showing 5,000 of N" note
+    // and any stale marker stay; nothing is dimmed or reset.
+    function captureResults() {
+        var idle = $('pe-results-idle');
+        var p = idle.querySelector('p');
+        return {
+            msg: msgIsRuleError ? '' : $('pe-results-msg').innerHTML, // Run clears a rule error for good
+            idleHidden: idle.hidden,
+            idleHtml: p ? p.innerHTML : '', // the page's own markup, read back from the DOM
+            areaHidden: $('pe-table-area').hidden
+        };
+    }
+    function restoreResults(r) {
+        if (!r) { return; }
+        msgIsRuleError = false;
+        $('pe-results-msg').innerHTML = r.msg;
+        var idle = $('pe-results-idle');
+        var p = idle.querySelector('p');
+        if (p) { p.innerHTML = r.idleHtml; }
+        idle.hidden = r.idleHidden;
+        $('pe-table-area').hidden = r.areaHidden;
+    }
+    function tableIsStale() {
+        var area = $('pe-table-area');
+        return !!(area && !area.hidden && area.classList.contains('is-stale'));
+    }
+
     // Re-render the builder and put focus back on the same control (Ctrl+Enter from a rule).
     // Controls are matched by position among the node's real, non-destructive controls:
     // Flatpickr's hidden source input does not count, and pickers are rebuilt in a
@@ -1090,6 +1135,8 @@
         var stateJson = JSON.stringify(state);
         seenState = stateJson;   // this run's state is the baseline for edits made while it runs
         var genAtStart = editGen;
+        preRun = captureResults();
+        clearBusy();
         if (errorRuleId) {
             clearError();
             renderKeepingFocus(origin); // re-render only to drop a stale rule error
@@ -1133,17 +1180,19 @@
         var msg = j.error ? String(j.error) : 'The report could not be run.';
         // The endpoint joins a generic status sentence and the detail as "Generic.: Detail"; keep the detail.
         msg = msg.replace(/^[^:]*\.:\s+/, '');
+        // Another run of this player's is still going (another tab, browser or device,
+        // or one started before a reload): nothing is wrong with this filter and the
+        // results on screen are as current as they were, so only add the notice.
+        if (j.busy) {
+            restoreResults(preRun);
+            showBusy(msg);
+            announce(msg + (tableIsStale() ? STALE_SAY : ''));
+            return;
+        }
         var stale = markStale();
         if (/not logged in/i.test(msg)) {
             showMsg('error', loginPromptHtml());
             announce('Your session has ended. Log in again and re-run.');
-            return;
-        }
-        // Another run of this player's is still going (another tab, or a reload while
-        // one ran): nothing is wrong with this filter, so say so as a notice, not an error.
-        if (j.busy) {
-            showMsg('warn', '<i class="fas fa-hourglass-half"></i> <span>' + esc(msg) + '</span>');
-            announce(msg + (stale ? STALE_SAY : ''));
             return;
         }
         if (Array.isArray(j.rule_path)) {
@@ -1357,6 +1406,7 @@
         if (!lastRun) { toast('Run the report first, then export.', 'error'); return; }
         if (exporting) { return; }
         setExportBusy(true);
+        clearBusy();
         var body = new URLSearchParams();
         body.set('payload', JSON.stringify(requestFor(lastRun)));
         fetch(PE.urls.export, { method: 'POST', credentials: 'same-origin', body: body }).then(function (res) {
@@ -1376,7 +1426,7 @@
         }).then(function (out) {
             setExportBusy(false);
             if (out.login) { showMsg('error', loginPromptHtml()); announce('Your session has ended. Log in again to export.'); return; }
-            if (out.busy) { toast(out.busy, 'warn'); announce(out.busy); return; }
+            if (out.busy) { showBusy(out.busy); announce(out.busy); return; }
             if (out.error) { toast(out.error, 'error'); announce(out.error); return; }
             toast('Excel file downloaded.', 'ok');
         }, function () {
@@ -1404,6 +1454,11 @@
         idleHtml = idleP ? idleP.innerHTML : '';
 
         $('pe-run').addEventListener('click', function () { run(); });
+        $('pe-busy-msg').addEventListener('click', function (e) {
+            if (!e.target.closest('.pe-banner-dismiss')) { return; }
+            clearBusy();
+            $('pe-run').focus(); // the dismissed button is gone; do not drop focus to <body>
+        });
         $('pe-clear').addEventListener('click', function () {
             root = newGroup('AND');
             clearError();

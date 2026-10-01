@@ -133,6 +133,24 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 .pe-banner-warn  { background: #fffbeb; border-color: #f6ad55; color: #7b341e; }
 .pe-banner-error { background: var(--pe-danger-soft); border-color: #fc8181; color: #9b2c2c; }
 .pe-banner-info  { background: var(--pe-accent-soft); border-color: #c3dafe; color: var(--pe-accent-text); }
+.pe-banner-busy > span { flex: 1 1 auto; min-width: 0; }
+.pe-banner-dismiss {
+    flex-shrink    : 0;
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 28px;
+    height         : 28px;
+    margin         : -4px -6px -4px 0;
+    padding        : 0;
+    border         : 0;
+    border-radius  : 4px;
+    background     : transparent;
+    color          : inherit;
+    cursor         : pointer;
+}
+.pe-banner-dismiss:hover { background: rgba(0,0,0,0.06); }
+.pe-banner-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 
 .pe-toast {
     position     : fixed;
@@ -156,7 +174,6 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 .pe-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .pe-toast-ok    { border-left: 4px solid #48bb78; }
 .pe-toast-error { border-left: 4px solid #fc8181; }
-.pe-toast-warn  { border-left: 4px solid #f6ad55; }
 
 /* ── Controls ────────────────────────────────────────────── */
 .pe-input {
@@ -660,7 +677,9 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 .pe-root .pe-group-actions [data-tip]:hover::after,
 .pe-root .pe-group-actions [data-tip]:focus-visible::after,
 .pe-root .pe-rule-remove[data-tip]:hover::after,
-.pe-root .pe-rule-remove[data-tip]:focus-visible::after {
+.pe-root .pe-rule-remove[data-tip]:focus-visible::after,
+.pe-root .pe-banner-dismiss[data-tip]:hover::after,
+.pe-root .pe-banner-dismiss[data-tip]:focus-visible::after {
     left : auto;
     right: 0;
 }
@@ -685,6 +704,7 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-input { font-size: 16px; }   /* stop iOS zooming on focus */
     .pe-chips input.pe-chip-input { font-size: 16px; height: 36px; }
     .pe-btn-remove { width: 44px; height: 44px; }
+    .pe-banner-dismiss { width: 40px; height: 40px; margin: -10px -10px -10px 0; }
     .pe-rule-remove { margin-top: 0; }
     .pe-btn-add { height: 44px; padding: 0 12px; }
     .pe-seg-btn { height: 44px; min-width: 56px; }
@@ -781,6 +801,7 @@ html[data-theme="dark"] .pe-btn-remove:hover { border-color: #9b2c2c; }
 html[data-theme="dark"] .pe-banner-warn  { background: #2e2810; border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pe-banner-error { background: #3b1515; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .pe-banner-info  { background: #1e2245; border-color: #4338ca; color: #c7d2fe; }
+html[data-theme="dark"] .pe-banner-dismiss:hover { background: rgba(255,255,255,0.08); }
 html[data-theme="dark"] .pe-toast { background: #4a5568; color: #f7fafc; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
 html[data-theme="dark"] .pe-root [data-tip]:hover::after,
 html[data-theme="dark"] .pe-root [data-tip]:focus-visible::after,
