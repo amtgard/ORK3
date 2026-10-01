@@ -189,13 +189,28 @@
     var msgIsRuleError = false;  // #pe-results-msg currently holds "Fix the highlighted rule"
     var idleHtml = '';           // the idle placeholder's original text
 
+    /* ── edit generation ─────────────────────────────────── */
+    // editGen goes up on every edit to the rules or columns: a change of the state
+    // itself (noteState), or any typing / change event in the builder or Columns card,
+    // even one not yet committed to the state (a date being typed, a chip search).
+    // run() captures it at the start and compares at completion (spec §5, review I1).
+    var editGen = 0;
+    var seenState = null;        // JSON of the state editGen last saw
+    function bumpEdit() { editGen += 1; }
+    function noteState() {
+        var s = JSON.stringify(currentState());
+        if (s !== seenState) { seenState = s; editGen += 1; }
+        return s;
+    }
+
     /* ── "changed since last run" hint ───────────────────── */
     var dirtyTimer = null;
     var isDirty = false;
     function scheduleDirtyCheck() {
         clearTimeout(dirtyTimer);
         dirtyTimer = setTimeout(function () {
-            setDirty(!!lastRun && JSON.stringify(currentState()) !== JSON.stringify(lastRun));
+            var s = noteState();
+            setDirty(!!lastRun && s !== JSON.stringify(lastRun));
         }, 0);
     }
     function setDirty(on) {
@@ -207,7 +222,9 @@
 
     /* ── collapsible Filters / Columns cards ─────────────── */
     // No persisted state: every page load starts expanded. A successful Run folds
-    // both (results move up); a rule error re-opens Filters (markRuleError).
+    // both (results move up) unless the rules or columns were edited while it ran;
+    // a rule error re-opens Filters (markRuleError). Run, Copy link and Export live in
+    // #pe-action-bar, outside both cards, so folding never hides them.
     var CARDS = {
         filters: { card: 'pe-filters-card', toggle: 'pe-filters-toggle', body: 'pe-filters-body', summary: 'pe-filters-summary' },
         columns: { card: 'pe-columns-card', toggle: 'pe-columns-toggle', body: 'pe-columns-body', summary: 'pe-columns-summary' }
@@ -222,8 +239,8 @@
         var t = $(c.toggle);
         var b = $(c.body);
         if (!card || !t || !b) { return; }
-        // Folding hides the focused control (Run, a rule, Reset): put focus on the
-        // card's toggle first so it never falls back to <body>.
+        // Folding hides the focused control (a rule, a column, Clear all rules, Reset):
+        // put focus on the card's toggle first so it never falls back to <body>.
         if (!on && card.contains(document.activeElement) && document.activeElement !== t) { t.focus(); }
         if (!on && name === 'filters') { closeAllChipLists(); }
         t.setAttribute('aria-expanded', on ? 'true' : 'false');
@@ -261,7 +278,7 @@
         clearTimeout(liveTimer);
         liveTimer = setTimeout(function () { n.textContent = text; }, 60);
     }
-    function announceResults(j) {
+    function announceResults(j, extra) {
         var total = parseInt(j.total, 10) || 0;
         var scopeTotal = parseInt(j.scope_total, 10) || 0;
         var ms = parseInt(j.elapsed_ms, 10) || 0;
@@ -269,7 +286,7 @@
         if (scopeTotal > 0) { parts[0] += ' (' + $('pe-stat-pct').textContent + ' of ' + (PE.scope.type === 'Park' ? 'park' : 'kingdom') + ')'; }
         parts.push('in ' + (ms >= 1000 ? (ms / 1000).toFixed(1) + ' seconds' : ms + ' milliseconds'));
         if (j.truncated) { parts.push('showing the first ' + fmtInt((j.rows || []).length)); }
-        announce(parts.join(' ') + '.');
+        announce(parts.join(' ') + '.' + (extra || ''));
     }
     function resetIdle() {
         var p = $('pe-results-idle').querySelector('p');
@@ -1070,6 +1087,9 @@
         var bad = firstIncomplete(root);
         if (bad) { markStale(); markRuleError(bad.node, bad.msg); return; }
         var state = currentState();
+        var stateJson = JSON.stringify(state);
+        seenState = stateJson;   // this run's state is the baseline for edits made while it runs
+        var genAtStart = editGen;
         if (errorRuleId) {
             clearError();
             renderKeepingFocus(origin); // re-render only to drop a stale rule error
@@ -1087,12 +1107,20 @@
         postJson(requestFor(state)).then(function (j) {
             setRunning(false);
             if (!j || j.status !== 0) { return handleError(j || {}); }
+            noteState(); // pick up a state change whose deferred dirty check has not run yet
+            var editedDuring = editGen !== genAtStart;
             lastRun = state;
             setExportEnabled(true);
             showResults(j);
             updatePct(j.total, parseInt(j.scope_total, 10) || 0);
+            announceResults(j, editedDuring ? ' Filters changed since this run started.' : '');
+            if (editedDuring) {
+                // The table is this run's, the builder is newer: keep the cards open, keep
+                // focus where the user is, and mark the results as out of date.
+                setDirty(true);
+                return;
+            }
             setDirty(false);
-            announceResults(j);
             setCardOpen('filters', false);
             setCardOpen('columns', false);
         }, function () {
@@ -1281,7 +1309,7 @@
         if (!url) { toast('This filter is too large to share as a link. Remove a few rules and try again.', 'error'); return; }
         try { window.history.replaceState(null, '', url); } catch (e) { /* cross-origin guard */ }
         copyText(url).then(function (ok) {
-            toast(ok ? 'Link copied. Anyone with access to this scope can open it.' : 'Could not copy automatically. The link is in your address bar.', ok ? 'ok' : 'error');
+            toast(ok ? 'Link copied. Anyone who is logged in can open it.' : 'Could not copy automatically. The link is in your address bar.', ok ? 'ok' : 'error');
         });
     }
 
@@ -1379,6 +1407,11 @@
         // Structural edits (add/remove/toggle/yes-no/chips) all happen inside the builder.
         ['click', 'change', 'input', 'keyup'].forEach(function (ev) {
             $('pe-builder').addEventListener(ev, scheduleDirtyCheck);
+        });
+        // Typing and changes count as edits for an in-flight run even before they reach the state.
+        ['input', 'change'].forEach(function (ev) {
+            $('pe-builder').addEventListener(ev, bumpEdit);
+            $('pe-columns').addEventListener(ev, bumpEdit);
         });
         Object.keys(CARDS).forEach(function (name) {
             var t = $(CARDS[name].toggle);

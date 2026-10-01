@@ -73,8 +73,6 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 		</div>
 <?php if ($pe_ready) : ?>
 		<div class="rp-header-actions">
-			<button type="button" class="rp-btn-ghost" id="pe-copy-link" data-tip="Copy a link that reopens this exact filter and column set"><i class="fas fa-link"></i> Copy link</button>
-			<button type="button" class="rp-btn-ghost" id="pe-export" aria-disabled="true" data-tip="Run the report first, then export the results to Excel"><i class="fas fa-file-excel"></i> Export</button>
 			<button type="button" class="rp-btn-ghost" id="pe-help-open" aria-haspopup="dialog" aria-controls="pe-help" aria-expanded="false"><i class="fas fa-circle-question" aria-hidden="true"></i> Help</button>
 		</div>
 <?php endif; ?>
@@ -146,10 +144,8 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 			</div>
 			<div class="rp-filter-card-body" id="pe-filters-body">
 				<div id="pe-builder" class="pe-builder"></div>
-				<div class="pe-run-bar">
-					<button type="button" class="pe-btn-run" id="pe-run"><i class="fas fa-play"></i> <span>Run</span></button>
+				<div class="pe-builder-foot">
 					<button type="button" class="pe-btn-link" id="pe-clear">Clear all rules</button>
-					<span class="pe-dirty-hint" id="pe-dirty" hidden><i class="fas fa-circle-info" aria-hidden="true"></i> Filters changed since last run</span>
 				</div>
 			</div>
 		</section>
@@ -169,6 +165,16 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 				<div id="pe-columns" class="pe-columns"></div>
 			</div>
 		</section>
+
+		<!-- Actions: outside both folding cards, so Run is always in reach (spec §5). -->
+		<div class="pe-action-bar" id="pe-action-bar" role="group" aria-label="Report actions">
+			<button type="button" class="pe-btn-run" id="pe-run"><i class="fas fa-play" aria-hidden="true"></i> <span>Run</span></button>
+			<span class="pe-dirty-hint" id="pe-dirty" hidden><i class="fas fa-circle-info" aria-hidden="true"></i> Filters changed since last run</span>
+			<div class="pe-action-bar-end">
+				<button type="button" class="pe-btn-action" id="pe-copy-link" data-tip="Copy a link that reopens this exact filter and column set"><i class="fas fa-link" aria-hidden="true"></i> Copy link</button>
+				<button type="button" class="pe-btn-action" id="pe-export" aria-disabled="true" data-tip="Run the report first, then export the results to Excel"><i class="fas fa-file-excel" aria-hidden="true"></i> Export</button>
+			</div>
+		</div>
 
 		<!-- Results -->
 		<section class="rp-filter-card pe-card" id="pe-results-card">
@@ -218,7 +224,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 				<h2 class="pe-help-title" id="pe-help-title" tabindex="-1"><i class="fas fa-circle-question" aria-hidden="true"></i> Population Explorer guide</h2>
 				<button type="button" class="pe-help-close" id="pe-help-close" aria-label="Close guide"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 			</div>
-			<div class="pe-help-body" id="pe-help-body">
+			<div class="pe-help-body" id="pe-help-body" tabindex="0" role="region" aria-label="Guide text">
 
 				<nav class="pe-help-toc" aria-label="Guide contents">
 					<ol>
@@ -256,10 +262,11 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<ol class="pe-help-steps">
 						<li><strong>Add a rule.</strong> In Filters, press <span class="pe-help-btn"><i class="fas fa-plus" aria-hidden="true"></i> Rule</span>, then choose a criterion, an operator and a value. Add as many rules as you need.</li>
 						<li><strong>Pick columns.</strong> Tick the columns you want in Columns. Persona is always included.</li>
-						<li><strong>Run.</strong> Press <strong>Run</strong>, or Ctrl+Enter (&#8984;+Enter on a Mac) while you are in a rule. The matching players appear under Results.</li>
+						<li><strong>Run.</strong> Press <strong>Run</strong>, below the Columns card, or Ctrl+Enter (&#8984;+Enter on a Mac) while you are in a rule. The matching players appear under Results.</li>
 					</ol>
 					<p>With no rules at all, Run lists everyone in this <?=$pe_word?>.</p>
-					<p>After a successful run, the Filters and Columns cards fold up so the results move up the page. Click a card&rsquo;s title to open it again. While a card is folded, its title shows a short summary, such as &ldquo;3 rules (AND)&rdquo;.</p>
+					<p>After a successful run, the Filters and Columns cards fold up so the results move up the page. Click a card&rsquo;s title to open it again. While a card is folded, its title shows a short summary, such as &ldquo;3 rules (AND)&rdquo;. Run, Copy link and Export stay in view between the cards and the results, folded or not.</p>
+					<p>If you change a rule or a column while a run is still working, the cards stay open when its results arrive, your cursor stays where it is, and the results are marked &ldquo;Filters changed since last run&rdquo;.</p>
 				</section>
 
 				<section class="pe-help-section" aria-labelledby="pe-help-rules">
@@ -336,7 +343,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<ul>
 						<li><strong>Classes played in last N months</strong> with <em>is not</em> or <em>is none of</em> means &ldquo;did not play these classes in that time&rdquo;, so it also matches players with no sign-ins in that time.</li>
 						<li><strong>Has award</strong>, <strong>Knighthood</strong>, <strong>Masterhood</strong>, <strong>Paragon</strong> and <strong>Squire / Page / Man-At-Arms held</strong> with <em>is not</em>, <em>is none of</em> or <em>has none of</em> also match players who hold none at all.</li>
-						<li><strong>Ladder award ranks</strong> count &ldquo;no award in this ladder&rdquo; as rank 0, so <em>&ne;</em>, <em>&lt;</em> and <em>&le;</em> include those players.</li>
+						<li><strong>Ladder award ranks</strong> count &ldquo;no award in this ladder&rdquo; as rank 0, so any rule that rank 0 satisfies includes those players, such as <em>&ne; 5</em>, <em>&lt; 3</em> or <em>= 0</em>.</li>
 					</ul>
 					<p>Counts (Total sign-ins, Sign-ins in last N months, Award count) are 0 for a player with none, so they are never empty.</p>
 				</section>
@@ -362,9 +369,13 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 						<dt>Any award received date</dt>
 						<dd>Award dates before 1980 (such as 0000-00-00) count as unknown and are ignored.</dd>
 						<dt>Ladder award ranks</dt>
-						<dd>One criterion per ladder award: the standard ladders, under this kingdom&rsquo;s own names where it renames them, plus the kingdom&rsquo;s own ladder awards. A player&rsquo;s rank is the highest rank recorded or the number of those awards they hold, whichever is larger, and 0 if they hold none.</dd>
+						<?php if ($pe_is_park) : ?>
+						<dd>One criterion per ladder award: the standard ladders, under the park&rsquo;s kingdom&rsquo;s own names where it renames them, plus the kingdom-specific ladders the ORK recognises for that kingdom. When a kingdom-specific ladder shares its name with another ladder, the kingdom&rsquo;s abbreviation is added to it, and its number too if that is still not enough. A player&rsquo;s rank is the highest rank recorded or the number of those awards they hold, whichever is larger, and 0 if they hold none.</dd>
+<?php else : ?>
+						<dd>One criterion per ladder award: the standard ladders, under this kingdom&rsquo;s own names where it renames them, plus the kingdom-specific ladders the ORK recognises for this kingdom (and for its principalities, when they are included). When a kingdom-specific ladder shares its name with another ladder, the kingdom&rsquo;s abbreviation is added to it, and its number too if that is still not enough. A player&rsquo;s rank is the highest rank recorded or the number of those awards they hold, whichever is larger, and 0 if they hold none.</dd>
+<?php endif; ?>
 						<dt>Reeve qualified and Corpora qualified</dt>
-						<dd>The same rule as the Reeve Qualified and Corpora Qualified reports: the qualification is recorded and its expiry date has not passed.</dd>
+						<dd>The same rule as the Reeve Qualified and Corpora Qualified reports: the qualification is recorded, its expiry date has not passed, and the player is in good standing in the ORK<?php if ($pe_officer) : ?> (not suspended)<?php endif; ?>. Anyone who misses one of these shows No.</dd>
 					</dl>
 				</section>
 
@@ -393,7 +404,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<h3 class="pe-help-h" id="pe-help-share" tabindex="-1">Share links</h3>
 					<ul>
 						<li><strong>Copy link</strong> copies a link holding your rules, your columns and this <?=$pe_word?>. It never holds the results. The link is also put in your address bar.</li>
-						<li>Whoever opens it must be logged in. The report runs straight away, with current data and that person&rsquo;s own access.</li>
+						<li>Whoever opens it must be logged in. The report runs straight away, with current data.</li>
 						<li>Finish or remove any unfinished rule first; Copy link highlights it.</li>
 						<li>A very large filter is too long for a link; remove a few rules and try again.</li>
 						<li>If a link holds a rule that is not valid here, such as another kingdom&rsquo;s ladder, the page opens with a warning and an empty builder.</li>
@@ -403,9 +414,9 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 
 				<section class="pe-help-section" aria-labelledby="pe-help-officer">
 					<h3 class="pe-help-h" id="pe-help-officer" tabindex="-1">Officer-only filters</h3>
-					<p>The <strong>Suspended</strong> and <strong>Banned</strong> filters are offered only to people with officer authority over the kingdom or park being viewed: for a kingdom, its kingdom officers (for a principality, its parent kingdom&rsquo;s officers too); for a park, its park officers and its kingdom&rsquo;s officers; and ORK administrators. Everyone else does not see them in the rule picker, and a link or export that uses them is refused.</p>
+					<p>The <strong>Suspended</strong> and <strong>Banned</strong> filters are offered only to people with officer authority over the kingdom or park being viewed: for a kingdom, its kingdom officers (for a principality, its parent kingdom&rsquo;s officers too); for a park, its park officers and its kingdom&rsquo;s officers (for a park in a principality, the parent kingdom&rsquo;s officers too); and ORK administrators. Everyone else does not see them in the rule picker, and a link or export that uses them is refused.</p>
 <?php if ($pe_officer) : ?>
-					<p>You have officer access here, so you will find them in the Status group.</p>
+					<p>You are an officer here, so you will find them in the Status group.</p>
 <?php else : ?>
 					<p>They are not in your rule picker here.</p>
 <?php endif; ?>
@@ -415,7 +426,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<h3 class="pe-help-h" id="pe-help-trouble" tabindex="-1">Troubleshooting</h3>
 					<dl class="pe-help-dl">
 						<dt>&ldquo;This query took too long — narrow your filter.&rdquo;</dt>
-						<dd>A run may take up to 10 seconds. Add a rule that cuts the list down early, such as a recent Last sign-in date, or run it for a park instead of the whole kingdom.</dd>
+						<dd>Each database query in a run is stopped after 10 seconds, and the run then ends with this message. A run uses up to three queries, so the message can take a little longer than 10 seconds to appear. Add a rule that cuts the list down early, such as a recent Last sign-in date, or run it for a park instead of the whole kingdom.</dd>
 						<dt>&ldquo;Fix the highlighted rule&rdquo;</dt>
 						<dd>The rule outlined in red says what is wrong under it. If the Filters card was folded, it opens and scrolls to that rule.</dd>
 						<dt>A yellow banner ending &ldquo;The builder has been reset.&rdquo;</dt>

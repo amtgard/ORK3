@@ -244,8 +244,6 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 }
 .pe-btn-remove:hover { color: var(--pe-danger); border-color: #feb2b2; background: var(--pe-danger-soft); }
 
-.pe-root .rp-btn-ghost.is-disabled { opacity: 0.55; cursor: not-allowed; }
-.pe-root .rp-btn-ghost.is-busy { opacity: 0.75; cursor: progress; }
 
 /* Visually hidden, still read by screen readers (the #pe-live region). */
 .pe-sr-only {
@@ -488,22 +486,61 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 .pe-chip-opt.is-active { background: var(--pe-accent-soft); color: var(--pe-accent-text); }
 .pe-chip-empty { padding: 7px 10px; font-size: 12px; font-style: italic; color: var(--rp-text-muted); }
 
-/* ── Run bar ─────────────────────────────────────────────── */
-.pe-run-bar {
+/* ── Builder foot (Clear all rules) ──────────────────────── */
+.pe-builder-foot {
     display    : flex;
     align-items: center;
-    gap        : 14px;
     margin-top : 14px;
     padding-top: 12px;
     border-top : 1px solid var(--ork-divider);
 }
+
+/* ── Action bar: Run, dirty hint, Copy link, Export ────────
+   Outside the folding cards (spec §5), so it is always visible. */
+.pe-action-bar {
+    display      : flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 10px 14px;
+    min-width    : 0;
+    padding      : 10px 14px;
+    background   : var(--rp-card-bg, var(--ork-card-bg));
+    border       : 1px solid var(--rp-border);
+    border-radius: 8px;
+    box-shadow   : var(--ork-shadow-card);
+}
+.pe-action-bar-end {
+    display    : flex;
+    flex-wrap  : wrap;
+    gap        : 8px;
+    margin-left: auto;
+}
+.pe-btn-action {
+    display      : inline-flex;
+    align-items  : center;
+    justify-content: center;
+    gap          : 6px;
+    min-height   : 38px;
+    padding      : 0 14px;
+    border       : 1px solid var(--rp-border-mid, var(--ork-input-border));
+    border-radius: 6px;
+    background   : var(--ork-input-bg);
+    color        : var(--rp-text-body);
+    font-size    : 13px;
+    font-weight  : 600;
+    cursor       : pointer;
+    transition   : background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pe-btn-action:hover:not(.is-disabled) { border-color: var(--pe-accent); color: var(--pe-accent-text); background: var(--pe-accent-soft); }
+.pe-btn-action:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; }
+.pe-btn-action.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.pe-btn-action.is-busy { opacity: 0.75; cursor: progress; }
 
 /* "Filters changed since last run" */
 .pe-dirty-hint {
     display    : inline-flex;
     align-items: center;
     gap        : 6px;
-    margin-left: auto;
     font-size  : 12px;
     font-weight: 600;
     color      : var(--pe-or-text);
@@ -617,6 +654,8 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
 /* Right-edge controls: anchor the tip to the right so it grows leftward and stays on screen. */
 .pe-root .rp-header-actions [data-tip]:hover::after,
 .pe-root .rp-header-actions [data-tip]:focus-visible::after,
+.pe-root .pe-action-bar-end [data-tip]:hover::after,
+.pe-root .pe-action-bar-end [data-tip]:focus-visible::after,
 .pe-root .pe-group-actions [data-tip]:hover::after,
 .pe-root .pe-group-actions [data-tip]:focus-visible::after,
 .pe-root .pe-rule-remove[data-tip]:hover::after,
@@ -656,10 +695,15 @@ html[data-theme="dark"] .pe-root h3.pe-empty-title {
     .pe-group-actions { margin-left: 0; width: 100%; }
     .pe-group-actions .pe-btn-add { flex: 1 1 0; justify-content: center; }
     .pe-connector { padding-left: 4px; }
-    .pe-run-bar { flex-direction: column; align-items: stretch; }
+    .pe-action-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
     .pe-btn-run { min-height: 44px; }
     .pe-btn-link { min-height: 44px; }
-    .pe-dirty-hint { margin-left: 0; justify-content: center; }
+    .pe-dirty-hint { justify-content: center; }
+    .pe-action-bar-end { margin-left: 0; }
+    .pe-btn-action { flex: 1 1 0; min-width: 0; min-height: 44px; }
+    /* Side by side at full width: the left button's tip grows rightward to stay on screen. */
+    .pe-root .pe-action-bar-end [data-tip]:first-child:hover::after,
+    .pe-root .pe-action-bar-end [data-tip]:first-child:focus-visible::after { left: 0; right: auto; }
     .pe-col-check { min-height: 44px; padding: 0; }
     .pe-col-check input { width: 20px; height: 20px; }
     .pe-columns { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
@@ -722,6 +766,10 @@ html[data-theme="dark"] .pe-btn-add:hover:not(.is-disabled) { border-color: #818
 html[data-theme="dark"] .pe-btn-link { color: #a5b4fc; }
 html[data-theme="dark"] .pe-btn-run { background: #4f46e5; }
 html[data-theme="dark"] .pe-btn-run:hover { background: #6366f1; }
+html[data-theme="dark"] .pe-action-bar { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pe-btn-action { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .pe-btn-action:hover:not(.is-disabled) { background: rgba(99,102,241,0.15); border-color: #818cf8; color: #c7d2fe; }
+html[data-theme="dark"] .pe-btn-action:focus-visible { outline-color: #818cf8; }
 html[data-theme="dark"] .pe-btn-remove:hover { border-color: #9b2c2c; }
 html[data-theme="dark"] .pe-banner-warn  { background: #2e2810; border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pe-banner-error { background: #3b1515; border-color: #9b2c2c; color: #feb2b2; }
@@ -768,6 +816,9 @@ html[data-theme="dark"] .pe-fp .flatpickr-day.selected { background: #4f46e5; bo
    declared on .pe-help-overlay above).
    ===================================================== */
 html.pe-help-lock { overflow: hidden; } /* <html> only: it is the one page scroller */
+/* Set only when the page had a classic (space-taking) scrollbar: keep its gutter so the
+   page behind does not shift sideways when the lock removes the scrollbar. */
+html.pe-help-lock.pe-help-lock-gutter { scrollbar-gutter: stable; }
 
 .pe-help-overlay {
     position       : fixed;
@@ -840,6 +891,8 @@ html.pe-help-lock { overflow: hidden; } /* <html> only: it is the one page scrol
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
 }
+.pe-help-body:focus { outline: none; }
+.pe-help-body:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: -2px; }
 .pe-help-body p { margin: 0 0 10px; text-align: left; }
 .pe-help-body ul,
 .pe-help-body ol { margin: 0 0 10px; padding-left: 22px; }

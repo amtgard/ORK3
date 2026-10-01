@@ -4,9 +4,13 @@
  * same registry the rule picker reads, so it cannot drift from the builder. Registry text
  * only ever goes in through textContent. Operator symbols come from PE.opLabel, which
  * populationexplorer.js sets (it loads first).
- * Dialog: focus moves in on open and is trapped; Esc, the close button and a backdrop
- * click close it; focus returns to the Help button; <html> is clamped so the page
- * behind does not scroll; the table of contents scrolls the dialog, never the URL hash.
+ * Dialog: focus moves in on open and is trapped (Tab and Shift+Tab; the tabbable list is
+ * read on every key, so generated content counts); the page behind is inert and
+ * aria-hidden while open; Esc, the close button and a backdrop click close it; focus
+ * returns to the Help button; <html> is clamped so the page behind does not scroll, and
+ * keeps its scrollbar gutter so it does not shift; the guide text is a focusable scroll
+ * region, and arrow / Page / Home / End keys pressed in the header scroll it too; the
+ * table of contents scrolls the dialog, never the URL hash.
  */
 (function () {
     'use strict';
@@ -158,12 +162,34 @@
         );
     }
 
+    // Everything else on the page: inert (no focus, no clicks) and aria-hidden while the
+    // dialog is open. Elements someone else already hid are left alone and not restored.
+    var madeInert = [];
+    function setBackgroundInert(on) {
+        if (!on) {
+            madeInert.forEach(function (n) { n.removeAttribute('inert'); n.removeAttribute('aria-hidden'); });
+            madeInert = [];
+            return;
+        }
+        Array.prototype.forEach.call(document.body.children, function (n) {
+            if (n === overlay || /^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(n.tagName)) { return; }
+            if (n.hasAttribute('inert') || n.getAttribute('aria-hidden') === 'true') { return; }
+            n.setAttribute('inert', '');
+            n.setAttribute('aria-hidden', 'true');
+            madeInert.push(n);
+        });
+    }
+
     function openHelp() {
         if (isOpen) { return; }
         buildReference();
         isOpen = true;
+        var root = document.documentElement;
+        // A classic scrollbar takes space: keep its gutter while locked so nothing shifts.
+        root.classList.toggle('pe-help-lock-gutter', window.innerWidth - root.clientWidth > 0);
         overlay.hidden = false;
-        document.documentElement.classList.add('pe-help-lock'); // <html> only: the one page scroller
+        root.classList.add('pe-help-lock'); // <html> only: the one page scroller
+        setBackgroundInert(true);
         opener.setAttribute('aria-expanded', 'true');
         void overlay.offsetWidth; // start the fade from the hidden state
         overlay.classList.add('is-open');
@@ -175,7 +201,8 @@
         isOpen = false;
         overlay.classList.remove('is-open');
         overlay.hidden = true;
-        document.documentElement.classList.remove('pe-help-lock');
+        setBackgroundInert(false); // before focusing the opener, which is in the background
+        document.documentElement.classList.remove('pe-help-lock', 'pe-help-lock-gutter');
         opener.setAttribute('aria-expanded', 'false');
         opener.focus();
     }
@@ -207,10 +234,30 @@
         if (e.target === overlay && downOnBackdrop) { closeHelp(); }
         downOnBackdrop = false;
     });
+    // Focus starts on the title, in the header, outside the scrolling body: scroll keys
+    // pressed there (or on the close button) scroll the guide text. Inside the body the
+    // browser scrolls it natively.
+    function scrollFromHeader(e) {
+        if (e.altKey || e.ctrlKey || e.metaKey || body.contains(document.activeElement)) { return false; }
+        var page = Math.max(body.clientHeight - 40, 40);
+        var to = null;
+        switch (e.key) {
+            case 'ArrowDown': to = body.scrollTop + 40; break;
+            case 'ArrowUp': to = body.scrollTop - 40; break;
+            case 'PageDown': to = body.scrollTop + page; break;
+            case 'PageUp': to = body.scrollTop - page; break;
+            case 'Home': to = 0; break;
+            case 'End': to = body.scrollHeight; break;
+        }
+        if (to === null) { return false; }
+        body.scrollTop = to;
+        return true;
+    }
     document.addEventListener('keydown', function (e) {
         if (!isOpen) { return; }
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeHelp(); return; }
-        if (e.key === 'Tab') { trapTab(e); }
+        if (e.key === 'Tab') { trapTab(e); return; }
+        if (scrollFromHeader(e)) { e.preventDefault(); }
     }, true);
     document.addEventListener('focusin', function (e) {
         if (isOpen && !box.contains(e.target)) { title.focus(); }
