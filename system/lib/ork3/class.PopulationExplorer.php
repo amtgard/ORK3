@@ -598,9 +598,13 @@ class PopulationExplorer extends Ork3
             . ($extraWhere !== '' ? ' AND ' . $extraWhere : '') . ($tail !== '' ? ' ' . $tail : '') . ')';
     }
 
+    /**
+     * MAX(a.date), read as the newest (mundane_id, date) index entry instead of all
+     * of them: a.date is NOT NULL, so the top row is the maximum, and no rows is NULL.
+     */
     private function _lastSigninExpr(): string
     {
-        return $this->_attSub('MAX(a.date)');
+        return $this->_attSub('a.date', '', 'ORDER BY a.date DESC LIMIT 1');
     }
 
     /**
@@ -624,7 +628,8 @@ class PopulationExplorer extends Ork3
      */
     private function _playerSinceExpr(): string
     {
-        return $this->_attSub('MIN(a.date)', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'");
+        // MIN(a.date) as the oldest index entry at or after the floor (see _lastSigninExpr).
+        return $this->_attSub('a.date', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'", 'ORDER BY a.date LIMIT 1');
     }
 
     private function _signinsInMonthsExpr(int $n): string

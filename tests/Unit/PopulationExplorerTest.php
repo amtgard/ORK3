@@ -903,4 +903,16 @@ final class PopulationExplorerTest extends TestCase
         $this->assertStringContainsString('LIMIT 1) IS NOT NULL', $s);
         $this->assertStringNotContainsString('EXISTS', $s);
     }
+
+    public function testLastSigninAndPlayerSinceReadOneIndexEntry(): void
+    {
+        // MAX / MIN over the player's sign-ins read every (mundane_id, date) entry;
+        // the newest / oldest row of that index is the same date (date is NOT NULL).
+        $last = $this->pe->ColumnSelectSql('last_signin', []);
+        $this->assertStringContainsString('SELECT a.date FROM ' . DB_PREFIX . 'attendance a WHERE a.mundane_id = m.mundane_id ORDER BY a.date DESC LIMIT 1', $last);
+        $this->assertStringNotContainsString('MAX(', $last);
+        $since = $this->pe->ColumnSelectSql('player_since', []);
+        $this->assertStringContainsString("a.date >= '1988-01-01' ORDER BY a.date LIMIT 1", $since);
+        $this->assertStringNotContainsString('MIN(', $since);
+    }
 }
