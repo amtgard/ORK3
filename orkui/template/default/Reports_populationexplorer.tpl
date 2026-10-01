@@ -188,7 +188,6 @@ window.PE = <?=json_encode([
 	'urls'     => [
 		'run'    => UIR . 'Reports/population_explorer_json',
 		'export' => UIR . 'Reports/population_explorer_export',
-		'page'   => $pe_page_url,
 		// Share links carry the filter in `pe`, never `q` (analytics logs `q` as a site search).
 		'share'  => $pe_page_url . '&' . $pe_link_param . '=',
 		'player' => UIR . 'Player/profile/',

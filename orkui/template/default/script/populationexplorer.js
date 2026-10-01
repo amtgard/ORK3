@@ -1,6 +1,6 @@
 /* Population Explorer — filter builder, columns, run, share link, export.
  * Reads only window.PE (set by Reports_populationexplorer.tpl):
- *   { registry:{criteria, columns, options}, scope:{type,id,name}, initial, urls:{run, export, page, share, player} }
+ *   { registry:{criteria, columns, options}, scope:{type,id,name}, initial, urls:{run, export, share, player} }
  * Vanilla JS. Never inject server/user text with innerHTML unless it went through esc().
  */
 (function () {
@@ -873,16 +873,29 @@
     }
 
     // Re-render the builder and put focus back on the same control (Ctrl+Enter from a rule).
-    function renderKeepingFocus() {
-        var a = document.activeElement;
+    // Controls are matched by position among the node's real, non-destructive controls:
+    // Flatpickr's hidden source input does not count, and pickers are rebuilt in a
+    // setTimeout(0) during render, so focus is restored after those timers have run.
+    // Fallback: the same node's first control, else Run; never a Remove button.
+    function focusableIn(n) {
+        return Array.prototype.filter.call(n.querySelectorAll('select, input, button, textarea'), function (e) {
+            return e.type !== 'hidden' && !e.disabled && e.getAttribute('aria-disabled') !== 'true'
+                && !e.classList.contains('pe-btn-remove');
+        });
+    }
+    function renderKeepingFocus(origin) {
+        var a = origin || document.activeElement;
         var host = a && a.closest ? a.closest('[data-node]') : null;
         var id = host ? host.getAttribute('data-node') : null;
-        var idx = host ? Array.prototype.indexOf.call(host.querySelectorAll('select, input, button'), a) : -1;
+        var idx = host ? focusableIn(host).indexOf(a) : -1;
         render();
-        if (id === null || idx < 0) { return; }
-        var n = document.querySelector('[data-node="' + id + '"]');
-        var f = n ? n.querySelectorAll('select, input, button')[idx] : null;
-        if (f) { f.focus(); }
+        if (id === null) { return; }
+        setTimeout(function () { // after the date pickers' own setTimeout(0) rebuilds
+            var n = document.querySelector('[data-node="' + id + '"]');
+            var list = n ? focusableIn(n) : [];
+            var f = (idx >= 0 && list[idx]) || list[0] || $('pe-run');
+            if (f) { f.focus(); }
+        }, 0);
     }
 
     // A failed run (incomplete rule, server error, network) must not leave the last
@@ -900,12 +913,21 @@
     }
     var STALE_SAY = ' The table below is from your last successful run.';
 
-    function run() {
+    // origin: the control Ctrl+Enter was pressed in. Flatpickr commits a typed date and
+    // blurs its input on Enter before the builder sees the key, so focus is put back
+    // on that control (re-render or not) instead of being left on <body>.
+    function run(origin) {
+        origin = origin && origin.nodeType === 1 ? origin : null;
         if (running) { return; }
         var bad = firstIncomplete(root);
         if (bad) { markStale(); markRuleError(bad.node, bad.msg); return; }
         var state = currentState();
-        if (errorRuleId) { clearError(); renderKeepingFocus(); } // re-render only to drop a stale rule error
+        if (errorRuleId) {
+            clearError();
+            renderKeepingFocus(origin); // re-render only to drop a stale rule error
+        } else if (origin && origin.isConnected && (document.activeElement === document.body || !document.activeElement)) {
+            origin.focus();
+        }
         setRunning(true);
         showMsg('', '');
         resetIdle();
@@ -1193,7 +1215,7 @@
         var idleP = $('pe-results-idle').querySelector('p');
         idleHtml = idleP ? idleP.innerHTML : '';
 
-        $('pe-run').addEventListener('click', run);
+        $('pe-run').addEventListener('click', function () { run(); });
         $('pe-clear').addEventListener('click', function () {
             root = newGroup('AND');
             clearError();
@@ -1210,7 +1232,7 @@
         $('pe-copy-link').addEventListener('click', onCopyLink);
         $('pe-export').addEventListener('click', onExport);
         $('pe-builder').addEventListener('keydown', function (e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(e.target); }
         });
 
         if (initial && initial.tree) { run(); }
