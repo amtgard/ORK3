@@ -793,7 +793,7 @@ final class PopulationExplorerRunTest extends TestCase
             $parts = $this->readXlsx($r['Path']);
             $sheet = $parts['xl/worksheets/sheet1.xml'] ?? '';
             $this->assertStringContainsString('Population Explorer', $parts['xl/workbook.xml']);
-            foreach (['Persona', 'Dues paid', 'Award count', 'Last sign-in'] as $label) {
+            foreach (['Persona', 'Dues paid', 'Award count', 'Last sign-in date'] as $label) {
                 $this->assertStringContainsString('>' . $label . '<', $sheet);
             }
             $this->assertStringContainsString('state="frozen"', $sheet);

@@ -727,12 +727,12 @@ final class PopulationExplorerTest extends TestCase
 
     // ------------------------------------------------------------ last sign-in date / days ago (spec §3.4, §4)
 
-    public function testLastSigninCriterionIsLabelledAsADateAndTheColumnIsUnchanged(): void
+    public function testLastSigninCriterionAndColumnAreBothLabelledAsADate(): void
     {
         $reg = $this->pe->Registry();
         $this->assertSame('Last sign-in date', $reg['criteria']['last_signin']['label']);
         $this->assertSame('date', $reg['criteria']['last_signin']['type']);
-        $this->assertSame('Last sign-in', $reg['columns']['last_signin']['label']);
+        $this->assertSame('Last sign-in date', $reg['columns']['last_signin']['label']);
     }
 
     public function testLastSigninDaysAgoDefinition(): void

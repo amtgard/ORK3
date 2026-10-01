@@ -197,7 +197,7 @@ class PopulationExplorer extends Ork3
             'persona'           => $this->_col('Persona', 'Player', 'text', true),
             'home_park'         => $this->_col('Home park', 'Location', 'text', true),
             'home_kingdom'      => $this->_col('Home kingdom', 'Location', 'text'),
-            'last_signin'       => $this->_col('Last sign-in', 'Activity', 'date', true),
+            'last_signin'       => $this->_col('Last sign-in date', 'Activity', 'date', true),
             'last_signin_park'  => $this->_col('Last sign-in park', 'Activity', 'text'),
             'last_class'        => $this->_col('Last class', 'Activity', 'text'),
             'signins_6m'        => $this->_col('Sign-ins (6 months)', 'Activity', 'number'),
