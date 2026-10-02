@@ -446,9 +446,18 @@
         return { ids: ids, nums: nums, aliases: aliases };
     }
 
+    // "On the roster" shows the most recently registered first, capped, so people just
+    // entered on the Participants tab are one keystroke away. participant_number is
+    // assigned MAX+1 per tournament, so it orders registrations.
+    var ROSTER_LIMIT = 8;
+
     function rosterItems(term) {
         var inB = bracketMundanes(), t = term.toLowerCase(), seen = {}, out = [];
-        (TnConfig.registrants || []).concat(_localRoster).forEach(function (r) {
+        var regs = (TnConfig.registrants || []).concat(_localRoster).slice().sort(function (a, b) {
+            return (parseInt(b.ParticipantNumber, 10) || 0) - (parseInt(a.ParticipantNumber, 10) || 0);
+        });
+        regs.forEach(function (r) {
+            if (out.length >= ROSTER_LIMIT) return;
             var num = parseInt(r.ParticipantNumber, 10) || 0, mid = parseInt(r.MundaneId, 10) || 0;
             var name = r.Alias || r.Persona || '';
             var key = mid > 0 ? 'm' + mid : 'a' + name.toLowerCase();
