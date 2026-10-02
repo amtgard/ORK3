@@ -9806,8 +9806,11 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 		return 0;
 	}
 
-	function tnRefreshAndRender(bracketId, lazyLoad) {
+	// force: paint even while a Quick Bracket editor is open on this bracket (the editor is
+	// reopened from its snapshot). Otherwise an open editor withholds the paint until it closes.
+	function tnRefreshAndRender(bracketId, lazyLoad, force) {
 		var tid = TnConfig.tournamentId;
+		var _qbHold = function() { return !force && window.TnQuickBracket && window.TnQuickBracket.holdRepaint(bracketId); };
 		// Invalidate any in-flight ironman fast-path fetch so it can't land after this fuller refresh.
 		if (_tnImInfoSeq) _tnImInfoSeq[bracketId] = (_tnImInfoSeq[bracketId] || 0) + 1;
 		var _reqTok = window.tnBvReqBegin(bracketId);
@@ -9825,7 +9828,7 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 					// The newer response may already have painted with older Participants
 					// (e.g. a fresh WD/DQ): repaint from the store, which holds the newest Matches.
 					var _sbd = TnConfig.bracketData[bracketId];
-					if (_sbd && _sbd.Matches !== undefined && !window.tnQrEntryOpen()) tnRenderBracketViz(bracketId);
+					if (_sbd && _sbd.Matches !== undefined && !window.tnQrEntryOpen() && !_qbHold()) tnRenderBracketViz(bracketId);
 					if (window.tnRefreshBracketCard) window.tnRefreshBracketCard(bracketId);
 					if (window.tnMarkStandingsDirty) window.tnMarkStandingsDirty();
 				}
@@ -9846,7 +9849,7 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 			if (pData && pData.status === 0 && TnConfig.bracketData[bracketId]) {
 				TnConfig.bracketData[bracketId].Participants = pData.participants || [];
 			}
-			tnRenderBracketViz(bracketId);
+			if (!_qbHold()) tnRenderBracketViz(bracketId);
 			// A real refresh (not the first lazy match load) follows a mutation: keep
 			// the Brackets-tab card, header stats and standings in step with the Run view.
 			if (!lazyLoad) {
@@ -9859,7 +9862,7 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 			// #52: remember the load failed so the renderer shows an explicit error state
 			// instead of masquerading as an empty bracket (enabled Generate + no wipe warning).
 			if (TnConfig.bracketData[bracketId]) TnConfig.bracketData[bracketId]._matchesLoadError = true;
-			tnRenderBracketViz(bracketId);
+			if (!_qbHold()) tnRenderBracketViz(bracketId);
 			if (window.tnShowStaleWarning) tnShowStaleWarning();
 		});
 	}
@@ -15492,7 +15495,8 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 			// Re-render the currently-selected bracket viz, if present.
 			var sel = document.getElementById('tn-bv-bracket-select');
 			var curBid = sel ? parseInt(sel.value) : 0;
-			if (curBid && TnConfig.bracketData[curBid] && isCur(curBid) && typeof tnRenderBracketViz === 'function') {
+			if (curBid && TnConfig.bracketData[curBid] && isCur(curBid) && typeof tnRenderBracketViz === 'function'
+				&& !(window.TnQuickBracket && window.TnQuickBracket.holdRepaint(curBid))) {
 				tnRenderBracketViz(curBid);
 			}
 			// Refresh the standings leaderboard if that fn exists.
@@ -15541,7 +15545,8 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 			if (window.tnMarkStandingsDirty) window.tnMarkStandingsDirty();
 			var sel = document.getElementById('tn-bv-bracket-select');
 			var curBid = sel ? parseInt(sel.value) : 0;
-			if (bid === curBid && typeof tnRenderBracketViz === 'function') tnRenderBracketViz(bid);
+			if (bid === curBid && typeof tnRenderBracketViz === 'function'
+				&& !(window.TnQuickBracket && window.TnQuickBracket.holdRepaint(bid))) tnRenderBracketViz(bid);
 			if (typeof tnRenderLeaderboard === 'function') tnRenderLeaderboard();
 		});
 	}
@@ -15714,6 +15719,9 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 						// deferring avoids destroying their in-progress entry. The poll loop
 						// flushes _tnPendingRerenderBid once the bar is closed.
 						window._tnPendingRerenderBid = bid;
+					} else if (window.TnQuickBracket && window.TnQuickBracket.holdRepaint(bid)) {
+						// Quick Bracket editor open on this draft: the data above is stored; the
+						// repaint is withheld and happens once when the editor closes.
 					} else {
 						tnRenderBracketViz(bid);
 					}

@@ -203,23 +203,29 @@
     }
 
     function renderDraft(container, bd, bracketId, renderTree) {
+        bracketId = parseInt(bracketId, 10) || 0;
         if (_ctx && _ctx.bracketId !== bracketId) teardown();   // switching drafts: drop A's editor, restore and swap mode
         if (_ed) closeEditor(true);
+        delete _held[bracketId];   // this paint is the one a held repaint was waiting for
         var b = bd.Bracket, parts = (bd.Participants || []).slice();
         var seats = seatEntrants(parts);
-        var maxSeat = 0;
-        Object.keys(seats).forEach(function (k) { maxSeat = Math.max(maxSeat, parseInt(k, 10)); });
-        var eff = Math.max(parseInt(b.DrawSize, 10) || 0, parts.length, maxSeat);
-        _ctx = { bracketId: bracketId, bd: bd, seats: seats, eff: eff, placed: parts.length,
-            canEdit: !!TnConfig.canManage, method: b.Method };
+        _ctx = { bracketId: bracketId, bd: bd, seats: seats, eff: drawExtent(b, parts, seats), placed: parts.length,
+            canEdit: !!TnConfig.canManage, method: b.Method, container: container };
 
         container.appendChild(buildToolbar(b, bracketId));
         if (b.Method === 'double') container.appendChild(el('p', 'tn-qb-note', 'Second Chance bracket builds automatically on Start.'));
         var pMap = {};
         parts.forEach(function (p) { pMap[p.ParticipantId] = p; });
-        renderTree(container, draftMatches(bracketId, Math.max(4, nextPow2(eff))), pMap);
+        renderTree(container, draftMatches(bracketId, Math.max(4, nextPow2(_ctx.eff))), pMap);
         if (_ctx.canEdit) afterRender(container, bracketId);
     }
+
+    function maxSeatOf(seats) {
+        var m = 0;
+        Object.keys(seats).forEach(function (k) { m = Math.max(m, parseInt(k, 10)); });
+        return m;
+    }
+    function drawExtent(b, parts, seats) { return Math.max(parseInt(b.DrawSize, 10) || 0, parts.length, maxSeatOf(seats)); }
 
     function buildToolbar(b, bracketId) {
         var bar = el('div', 'tn-qb-toolbar');
@@ -320,18 +326,91 @@
         return box;
     }
 
-    var _ed = null;          // open editor: { bracketId, seed, input, dd, items, hi, timer, req }
-    var _restore = null;     // { bracketId, seed, value } carried across a re-render
+    var _ed = null;          // open editor: { bracketId, seed, input, dd, items, hi, timer, req, players, ... }
+    var _restore = null;     // editor snapshot carried across a re-render (see snapshot())
     var _localRoster = [];   // fighters registered by this tab since load (TnConfig.registrants is a load-time snapshot)
+    // While an editor is open the draw is not repainted (a repaint rebuilds the input: lost highlight,
+    // re-armed Enter guard, dismissed iOS keyboard). Own writes patch lines in place and set _dirty
+    // (refetch from the server on close); other repaints (collab, late refreshes) set _held instead.
+    var _dirty = {};         // bracketId → true: a server refetch is owed once the editor closes
+    var _held = {};          // bracketId → true: a repaint was withheld while editing
+
+    function isEditing(bid) { return !!_ed && _ed.bracketId === (parseInt(bid, 10) || 0); }
+
+    // Page refresh paths ask before painting: true = withheld (the store is already updated and the
+    // close paints it). A bracket that stopped being a draft (peer started it) is never withheld.
+    function holdRepaint(bid) {
+        bid = parseInt(bid, 10) || 0;
+        if (!isEditing(bid) || !isDraft(TnConfig.bracketData && TnConfig.bracketData[bid])) return false;
+        _held[bid] = true;
+        return true;
+    }
+
+    function runBid() {
+        var sel = document.getElementById('tn-bv-bracket-select');
+        return sel ? (parseInt(sel.value, 10) || 0) : 0;
+    }
+
+    function itemKey(it) {
+        return it ? it.kind + ':' + (parseInt(it.MundaneId, 10) || 0) + ':' + String(it.Alias || '').toLowerCase() : '';
+    }
+    function indexOfKey(key) {
+        if (!key) return -1;
+        for (var i = 0; i < _ed.items.length; i++) if (itemKey(_ed.items[i]) === key) return i;
+        return -1;
+    }
+
+    // Everything needed to reopen the editor as it was: text, highlighted row (by identity),
+    // a waiting Enter, the original Enter-guard start, and the landed search results.
+    function snapshot() {
+        var e = _ed, term = e.input.value.trim();
+        return { bracketId: e.bracketId, seed: e.seed, value: e.input.value, hiKey: itemKey(e.items[e.hi]),
+            pendingEnter: !!e.pendingEnter, openedAt: e.openedAt,
+            players: (!e.searching && e.playersTerm === term) ? e.players : null };
+    }
 
     function closeEditor(keepRestore) {
         if (!_ed) return;
+        if (keepRestore) _restore = snapshot();
         clearTimeout(_ed.timer);
         if (_ed.dd && _ed.dd.parentNode) _ed.dd.parentNode.removeChild(_ed.dd);
         // Remove the input too, so an orphaned line can never keep a live (and wrong-seed) editor.
         if (_ed.input && _ed.input.parentNode) _ed.input.parentNode.removeChild(_ed.input);
         if (!keepRestore) _restore = null;
         _ed = null;
+    }
+
+    // The user closed the editor (Esc, blur): one repaint, then any refetch owed by own writes.
+    function finishEditing(bid) {
+        var dirty = !!_dirty[bid];
+        delete _dirty[bid];
+        delete _held[bid];
+        window.tnRenderBracketViz(bid);
+        if (dirty) window.tnRefreshAndRender(bid);
+    }
+
+    // After an own write settles: refetch now, or (editor open) patch the draw in place and refetch on close.
+    function settle(bid) {
+        if (isEditing(bid)) { _dirty[bid] = true; patchDraw(bid); }
+        else window.tnRefreshAndRender(bid);
+    }
+
+    // Rebuild the toolbar and every seat line except the one hosting the open editor.
+    function patchDraw(bid) {
+        var c = _ctx;
+        if (!c || c.bracketId !== bid || !c.container || !c.container.isConnected) { _held[bid] = true; return; }
+        var parts = c.bd.Participants || [], seats = seatEntrants(parts), eff = drawExtent(c.bd.Bracket, parts, seats);
+        if (Math.max(4, nextPow2(eff)) !== Math.max(4, nextPow2(c.eff))) { _held[bid] = true; return; }   // draw resized: repaint on close
+        c.seats = seats; c.eff = eff; c.placed = parts.length;
+        var bar = c.container.querySelector('.tn-qb-toolbar');
+        if (bar) bar.parentNode.replaceChild(buildToolbar(c.bd.Bracket, bid), bar);
+        c.container.querySelectorAll('.tn-qb-line').forEach(function (line) {
+            var seed = parseInt(line.dataset.seed, 10);
+            if (_ed && _ed.seed === seed) return;
+            var fresh = buildSeatLine(seed);
+            line.parentNode.replaceChild(fresh, line);
+            wireLine(fresh, bid);
+        });
     }
 
     function bracketMundanes() {
@@ -397,6 +476,8 @@
         });
         if (term) items.push({ kind: 'alias', label: term, MundaneId: 0, Alias: term });
         _ed.items = items;
+        _ed.players = players || [];
+        _ed.playersTerm = term;
         _ed.hi = 0;
         renderItems();
     }
@@ -407,6 +488,7 @@
         var req = ++ed.req;            // every call supersedes any in-flight response
         ed.searching = false;
         ed.pendingEnter = false;
+        ed.wantHi = '';
         setItems(term, []);            // roster + alias row immediately
         if (term.length < 2 || !(TnConfig.searchKingdomId > 0)) return;
         ed.searching = true;
@@ -418,6 +500,9 @@
                 if (_ed !== ed || ed.req !== req) return;   // stale response
                 ed.searching = false;
                 setItems(term, Array.isArray(data) ? data : []);
+                var w = indexOfKey(ed.wantHi);   // restored highlight that only exists among the results
+                ed.wantHi = '';
+                if (w >= 0) { ed.hi = w; renderItems(); }
                 if (ed.pendingEnter) { ed.pendingEnter = false; if (ed.items[ed.hi]) pick(ed.items[ed.hi]); }
             }).catch(function () {
                 if (_ed !== ed || ed.req !== req) return;
@@ -427,7 +512,9 @@
         }, 280);
     }
 
-    function openEditor(line, seed, value) {
+    // restore: a snapshot() when reopening after a re-render — keeps hi, pendingEnter and openedAt.
+    function openEditor(line, seed, value, restore) {
+        var r = restore || null;
         closeEditor();
         var hint = line.querySelector('.tn-qb-hint');
         if (hint) hint.parentNode.removeChild(hint);
@@ -442,7 +529,8 @@
         var dd = el('div', 'kn-ac-results tn-qb-ac');
         dd.setAttribute('role', 'listbox');
         document.body.appendChild(dd);
-        _ed = { bracketId: _ctx.bracketId, seed: seed, input: input, dd: dd, items: [], hi: 0, timer: null, req: 0, searching: false, pendingEnter: false, openedAt: Date.now() };
+        _ed = { bracketId: _ctx.bracketId, seed: seed, input: input, dd: dd, items: [], hi: 0, timer: null, req: 0, searching: false, pendingEnter: false,
+            openedAt: (r && r.openedAt) || Date.now(), players: [], playersTerm: '', wantHi: '' };
         // Remember the open editor so any re-render (own confirm refresh, peer change) reopens it.
         _restore = { bracketId: _ctx.bracketId, seed: seed, value: input.value };
         var bid = _ed.bracketId;
@@ -469,43 +557,64 @@
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeEditor();
-                window.tnRenderBracketViz(bid);
+                finishEditing(bid);
             }
         });
         input.addEventListener('blur', function () {
             setTimeout(function () {
                 if (input.isConnected && _ed && _ed.input === input && document.activeElement !== input) {
                     closeEditor();
-                    window.tnRenderBracketViz(bid);
+                    finishEditing(bid);
                 }
             }, 200);
         });
         input.focus();
         var len = input.value.length;
         input.setSelectionRange(len, len);
-        search(input.value.trim());
+        var term = input.value.trim();
+        if (r && r.players && r.value.trim() === term) setItems(term, r.players);   // results already landed: same list, no flash
+        else search(term);
+        if (r) {
+            if (r.pendingEnter && _ed.searching) _ed.pendingEnter = true;
+            var i = indexOfKey(r.hiKey);
+            if (i >= 0) { _ed.hi = i; renderItems(); }
+            else if (r.hiKey && _ed.searching && !_ed.pendingEnter) _ed.wantHi = r.hiKey;
+        }
     }
 
     function pick(item) {
         if (!_ed || !item || !item.Alias) return;
         var bid = _ed.bracketId, seed = _ed.seed, bd = _ctx.bd;
+        var owed = !!_dirty[bid];
+        delete _dirty[bid];
+        delete _held[bid];
         closeEditor();
         var temp = { ParticipantId: -seed, Seed: seed, Alias: item.Alias, Persona: item.kind === 'player' ? item.label : '',
             MundaneId: item.MundaneId || 0, _pending: true };
         bd.Participants = (bd.Participants || []).concat([temp]);
         _focusNext[bid] = true;
-        window.tnRenderBracketViz(bid);
+        window.tnRenderBracketViz(bid);   // placeholder + the next seat's editor
+        if (owed) window.tnRefreshAndRender(bid);   // its paint waits for that editor to close
         var fields = { TournamentId: TnConfig.tournamentId, Seed: seed, Alias: item.Alias };
         if (item.MundaneId > 0) fields.MundaneId = item.MundaneId;
         post('TournamentAjax/bracket/' + bid + '/quickplace', fields).then(function (d) {
             bd.Participants = (bd.Participants || []).filter(function (p) { return p !== temp; });
             if (!d || d.status !== 0) {
-                window.tnToast((d && d.error) || 'Could not place that fighter.');
-                window.tnRefreshAndRender(bid);
+                var err = (d && d.error) || 'Could not place that fighter.';
+                window.tnToast(err);
+                // A peer took the seat: refetch and repaint now (the restore path moves the open editor).
+                if (/^Seed \d+ was just filled/.test(err)) window.tnRefreshAndRender(bid, false, true);
+                else settle(bid);
                 return;
             }
             _localRoster.push({ ParticipantNumber: d.participantNumber, Alias: item.Alias, Persona: temp.Persona, MundaneId: temp.MundaneId, Status: 'active' });
-            window.tnRefreshAndRender(bid);
+            var pid = parseInt(d.participantId, 10) || 0;
+            var have = (bd.Participants || []).some(function (p) { return (parseInt(p.ParticipantId, 10) || 0) === pid; });
+            if (pid && !have) {
+                bd.Participants = (bd.Participants || []).concat([{ ParticipantId: pid, ParticipantNumber: d.participantNumber,
+                    Seed: seed, Alias: item.Alias, Persona: temp.Persona, MundaneId: temp.MundaneId }]);
+            }
+            settle(bid);
         });
     }
 
@@ -516,11 +625,11 @@
             var r = _restore;
             if (!_ctx.seats[r.seed] && r.seed <= _ctx.eff) {
                 var same = container.querySelector('.tn-qb-empty[data-seed="' + r.seed + '"]');
-                if (same) { openEditor(same, r.seed, r.value); return; }
+                if (same) { openEditor(same, r.seed, r.value, r); return; }
             } else {
                 window.tnToast('Seed ' + r.seed + ' was just filled.');
                 var s2 = lowestEmptySeat(), ln2 = s2 && container.querySelector('.tn-qb-empty[data-seed="' + s2 + '"]');
-                if (ln2) { openEditor(ln2, s2, r.value); return; }
+                if (ln2) { openEditor(ln2, s2, r.value, r); return; }
             }
             _restore = null;
         }
@@ -545,12 +654,13 @@
 
     function clearSeat(p) {
         var bid = _ctx.bracketId, bd = _ctx.bd;
-        bd.Participants = (bd.Participants || []).filter(function (q) { return q !== p; });
+        var pid = parseInt(p.ParticipantId, 10) || 0;
+        bd.Participants = (bd.Participants || []).filter(function (q) { return (parseInt(q.ParticipantId, 10) || 0) !== pid; });
         window.tnRenderBracketViz(bid);
-        post('TournamentAjax/bracket/' + bid + '/removeparticipant', { TournamentId: TnConfig.tournamentId, ParticipantId: p.ParticipantId })
+        post('TournamentAjax/bracket/' + bid + '/removeparticipant', { TournamentId: TnConfig.tournamentId, ParticipantId: pid })
             .then(function (d) {
-                if (!d || d.status !== 0) window.tnToast((d && d.error) || 'Could not remove that fighter.');
-                window.tnRefreshAndRender(bid);
+                if (!d || d.status !== 0) { window.tnToast((d && d.error) || 'Could not remove that fighter.'); window.tnRefreshAndRender(bid, false, true); }
+                else settle(bid);
             });
     }
 
@@ -566,8 +676,8 @@
         window.tnRenderBracketViz(bid);
         post('TournamentAjax/bracket/' + bid + '/reorder', { TournamentId: TnConfig.tournamentId, Order: JSON.stringify(order) })
             .then(function (d) {
-                if (!d || d.status !== 0) window.tnToast((d && d.error) || 'Could not change the seeds.');
-                window.tnRefreshAndRender(bid);
+                if (!d || d.status !== 0) { window.tnToast((d && d.error) || 'Could not change the seeds.'); window.tnRefreshAndRender(bid, false, true); }
+                else settle(bid);
             });
     }
 
@@ -593,52 +703,61 @@
     }
 
     // Called by the page whenever a non-draft paint replaces the draft: drop editor, dropdown and swap mode.
-    function teardown() { closeEditor(); _restore = null; _swapSrc = 0; _swapFresh = false; }
+    // A refetch owed to the current Run bracket still runs (server stays authoritative); one owed to a
+    // bracket the user left is dropped — its store already holds the patched own writes, and peer
+    // changes keep arriving through the collab refetch.
+    function teardown() {
+        closeEditor(); _restore = null; _swapSrc = 0; _swapFresh = false; _held = {};
+        var cur = runBid(), owed = Object.keys(_dirty);
+        _dirty = {};
+        owed.forEach(function (k) { if (parseInt(k, 10) === cur) window.tnRefreshAndRender(cur); });
+    }
 
     var _swapSrc = 0;   // touch: seat chosen by long-press, waiting for a tap on the target
     var _swapFresh = false;   // true from long-press arming until the next touchstart: swallows the release click
     function wireSwap(container, bid) {
-        var lines = container.querySelectorAll('.tn-qb-line:not(.tn-qb-fixed-bye)');
-        lines.forEach(function (line) {
-            var seed = parseInt(line.dataset.seed, 10);
-            if (_swapSrc && seed === _swapSrc) line.classList.add('tn-qb-swap-src');
-            // Mouse: HTML5 drag a filled line onto any line.
-            line.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', String(seed)); e.dataTransfer.effectAllowed = 'move'; });
-            line.addEventListener('dragover', function (e) { e.preventDefault(); line.classList.add('tn-qb-drop'); });
-            line.addEventListener('dragleave', function () { line.classList.remove('tn-qb-drop'); });
-            line.addEventListener('drop', function (e) {
-                e.preventDefault();
-                line.classList.remove('tn-qb-drop');
-                var from = parseInt(e.dataTransfer.getData('text/plain'), 10) || 0;
-                if (!from || !_ctx.seats[from]) return;   // not a filled seat of this draw
-                swapSeats(bid, from, seed);
-            });
-            // Touch: long-press a filled line (500ms) to pick it up, then tap the target line.
-            var timer = null;
-            line.addEventListener('touchstart', function () {
-                _swapFresh = false;   // a new touch sequence began: the previous release click is history
-                if (!line.classList.contains('tn-qb-filled')) return;
-                timer = setTimeout(function () {
-                    _swapSrc = seed;
-                    _swapFresh = true;
-                    line.classList.add('tn-qb-swap-src');
-                    window.tnToast('Tap another line to swap seeds');
-                }, 500);
-            }, { passive: true });
-            ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) {
-                line.addEventListener(ev, function () { clearTimeout(timer); }, { passive: true });
-            });
-            line.addEventListener('click', function (e) {
-                if (!_swapSrc) return;
-                e.stopPropagation();
-                e.preventDefault();
-                // The click synthesized by releasing the long-press must not cancel swap mode.
-                if (_swapFresh && seed === _swapSrc) { _swapFresh = false; return; }
-                var src = _swapSrc;
-                _swapSrc = 0;
-                if (src !== seed) swapSeats(bid, src, seed); else window.tnRenderBracketViz(bid);
-            }, true);
+        container.querySelectorAll('.tn-qb-line:not(.tn-qb-fixed-bye)').forEach(function (line) { wireLine(line, bid); });
+    }
+    function wireLine(line, bid) {
+        if (line.classList.contains('tn-qb-fixed-bye')) return;
+        var seed = parseInt(line.dataset.seed, 10);
+        if (_swapSrc && seed === _swapSrc) line.classList.add('tn-qb-swap-src');
+        // Mouse: HTML5 drag a filled line onto any line.
+        line.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', String(seed)); e.dataTransfer.effectAllowed = 'move'; });
+        line.addEventListener('dragover', function (e) { e.preventDefault(); line.classList.add('tn-qb-drop'); });
+        line.addEventListener('dragleave', function () { line.classList.remove('tn-qb-drop'); });
+        line.addEventListener('drop', function (e) {
+            e.preventDefault();
+            line.classList.remove('tn-qb-drop');
+            var from = parseInt(e.dataTransfer.getData('text/plain'), 10) || 0;
+            if (!from || !_ctx.seats[from]) return;   // not a filled seat of this draw
+            swapSeats(bid, from, seed);
         });
+        // Touch: long-press a filled line (500ms) to pick it up, then tap the target line.
+        var timer = null;
+        line.addEventListener('touchstart', function () {
+            _swapFresh = false;   // a new touch sequence began: the previous release click is history
+            if (!line.classList.contains('tn-qb-filled')) return;
+            timer = setTimeout(function () {
+                _swapSrc = seed;
+                _swapFresh = true;
+                line.classList.add('tn-qb-swap-src');
+                window.tnToast('Tap another line to swap seeds');
+            }, 500);
+        }, { passive: true });
+        ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) {
+            line.addEventListener(ev, function () { clearTimeout(timer); }, { passive: true });
+        });
+        line.addEventListener('click', function (e) {
+            if (!_swapSrc) return;
+            e.stopPropagation();
+            e.preventDefault();
+            // The click synthesized by releasing the long-press must not cancel swap mode.
+            if (_swapFresh && seed === _swapSrc) { _swapFresh = false; return; }
+            var src = _swapSrc;
+            _swapSrc = 0;
+            if (src !== seed) swapSeats(bid, src, seed); else window.tnRenderBracketViz(bid);
+        }, true);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -661,6 +780,8 @@
         _seatEntrants: seatEntrants,
         _seedOrder: seedOrder,
         teardown: teardown,
+        isEditing: isEditing,
+        holdRepaint: holdRepaint,
         _test: {
             setCtx: function (c) { _ctx = c; },
             rosterItems: rosterItems,
@@ -669,6 +790,9 @@
             openEditor: openEditor,
             getEd: function () { return _ed; },
             getRestore: function () { return _restore; },
+            getDirty: function () { return _dirty; },
+            getHeld: function () { return _held; },
+            pick: pick,
             getSwapSrc: function () { return _swapSrc; },
             setSwapSrc: function (v) { _swapSrc = v; }
         }
