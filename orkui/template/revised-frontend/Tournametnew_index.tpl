@@ -1536,7 +1536,7 @@ html[data-theme="dark"] .tn-bv-tbd-label { color:#718096; }
 @media (hover:none) { .tn-qb-clear { opacity:1; } }
 .tn-mobile .tn-qb-line { min-height:44px; }
 .tn-mobile .tn-qb-clear { opacity:1; min-width:44px; min-height:44px; }
-.tn-mobile .tn-qb-toolbar .tn-btn { min-height:44px; }
+.tn-mobile .tn-qb-toolbar .tn-btn, .tn-mobile .tn-qb-btnstack .tn-btn { min-height:44px; }
 html[data-theme="dark"] .tn-qb-field-label { color:#a0aec0; }
 html[data-theme="dark"] .tn-qb-chip { background:#2d3748; border-color:#4a5568; color:#e2e8f0; }
 html[data-theme="dark"] .tn-qb-chip[aria-checked="true"] { background:#3182ce; border-color:#3182ce; color:#fff; }
