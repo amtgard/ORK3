@@ -126,11 +126,17 @@ check "reorder emits event" "$(DB "SELECT type FROM ork_tournament_event WHERE t
 check "reorder swapped" "$(DB "SELECT GROUP_CONCAT(participant_id ORDER BY seed) FROM ork_participant WHERE bracket_id=$BRT")" "$RB,$RA"
 post "TournamentAjax/bracket/$BRT/removeparticipant" --data "TournamentId=$TID&ParticipantId=$RA&ActionId=qbtest-remove-$$" >/dev/null
 check "remove emits event" "$(DB "SELECT CONCAT_WS('|',type,bracket_id) FROM ork_tournament_event WHERE tournament_id=$TID AND action_id='qbtest-remove-$$'")" "participant_removed|$BRT"
+check "removed entrant row is gone" "$(DB "SELECT COUNT(*) FROM ork_participant WHERE participant_id=$RA")" "0"
 check "removed fighter stays registered" "$(DB "SELECT COUNT(*) FROM ork_participant WHERE tournament_id=$TID AND bracket_id IS NULL AND alias='QB$$ r1'")" "1"
 check "seq advanced" "$(DB "SELECT last_seq > $SEQ0 FROM ork_tournament_seq WHERE tournament_id=$TID")" "1"
 
 # Cleanup: delete every bracket this run created (registrations stay — the dev DB is disposable).
 for b in $BID $LB $B6 $B16 $BD $BR $AB $TB $BRT; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
+# Remove registered team created in this run
+TEAM_NUM=$(DB "SELECT team_number FROM ork_participant_teams WHERE tournament_id=$TID AND bracket_id IS NULL AND name='QB$$ team'" 2>/dev/null)
+if [ -n "$TEAM_NUM" ] && [ "$TEAM_NUM" -gt 0 ]; then
+  post "TournamentAjax/tournament/$TID/removeteam" --data "TeamNumber=$TEAM_NUM" >/dev/null
+fi
 
 rm -f "$JAR"
 echo "PASS=$PASS FAIL=$FAIL"
