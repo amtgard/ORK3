@@ -287,7 +287,8 @@
         }
         line.classList.add('tn-qb-empty');
         var hint = '';
-        if (c.placed === 0 && seed === 1) hint = 'Type to search for player';
+        if (!c.canEdit) line.classList.add('tn-qb-ro');   // spectator: no prompt, no pointer
+        else if (c.placed === 0 && seed === 1) hint = 'Type to search for player';
         else if (c.placed >= 2) hint = 'Bye fight or type to search';
         line.appendChild(el('span', 'tn-qb-hint', hint));
         if (c.canEdit) {
