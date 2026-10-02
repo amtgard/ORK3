@@ -112,10 +112,14 @@
             && (!b.Status || b.Status === 'setup');
     }
 
+    var _starting = {};    // bracketId → true while a quickstart is in flight (double-click guard)
     function start(bracketId, btn) {
+        if (_starting[bracketId]) return Promise.resolve();
+        _starting[bracketId] = true;
         if (btn) btn.disabled = true;
         return post('TournamentAjax/bracket/' + bracketId + '/quickstart', { TournamentId: TnConfig.tournamentId })
             .then(function (d) {
+                delete _starting[bracketId];
                 if (!d || d.status !== 0) {
                     if (btn) btn.disabled = false;
                     window.tnToast((d && d.error) || 'Could not start the bracket.');
