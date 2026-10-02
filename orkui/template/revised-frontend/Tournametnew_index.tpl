@@ -9864,6 +9864,13 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 		var container = document.getElementById('tn-bv-container');
 		if (!container) return;
 		container.innerHTML = '';
+		// Quick Bracket editor/swap state belongs to the draft render only. Decided up front, before
+		// any early return, so loading/error/non-draft paints never leave an orphan input or dropdown
+		// on <body>. A draft paint skips this: renderDraft closes the editor itself and keeps _restore.
+		if (window.TnQuickBracket) {
+			var _qbBd = TnConfig.bracketData[bracketId];
+			if (!(_qbBd && window.TnQuickBracket.isDraft(_qbBd))) window.TnQuickBracket.teardown();
+		}
 		// The wipe detaches any open quick-result bar; drop the stale pointers so
 		// tooltips and deferred peer repaints aren't suppressed forever.
 		_openQrBar = null; _openQrBox = null;
@@ -15494,6 +15501,14 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 		});
 	}
 
+	// Participants JSON for a bracket still in setup (null otherwise / on failure).
+	function _qbWantParticipants(bid) {
+		var b = TnConfig.bracketData[bid] && TnConfig.bracketData[bid].Bracket;
+		if (b && b.Status && b.Status !== 'setup') return Promise.resolve(null);
+		return fetch(TnConfig.uir + 'TournamentAjax/bracket/' + bid + '/participants')
+			.then(function(r) { return r.json(); }).catch(function() { return null; });
+	}
+
 	// Refetch a SINGLE bracket's matches + meta and re-render it if it's on screen.
 	// Mirrors refreshAll's per-bracket logic but for just one id (the delta target).
 	function refetchBracket(bid) {
@@ -15502,11 +15517,14 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 		var tok = window.tnBvReqBegin ? window.tnBvReqBegin(bid) : 0;
 		return Promise.all([
 			fetch(TnConfig.uir + 'TournamentAjax/bracket/' + bid + '/matches').then(function(r) { return r.json(); }),
-			fetch(TnConfig.uir + 'TournamentAjax/tournament/' + TnConfig.tournamentId + '/brackets').then(function(r) { return r.json(); })
+			fetch(TnConfig.uir + 'TournamentAjax/tournament/' + TnConfig.tournamentId + '/brackets').then(function(r) { return r.json(); }),
+			// Quick Bracket draft: Participants (seat map) is the whole state, so peers pull it too.
+			_qbWantParticipants(bid)
 		]).then(function(res) {
-			var md = res[0], bd = res[1];
+			var md = res[0], bd = res[1], pd = res[2];
 			// A newer fetch of this bracket supersedes this response.
 			if (TnConfig.bracketData[bid] && window.tnBvReqCurrent && !window.tnBvReqCurrent(bid, tok)) return;
+			if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 			if (bd && bd.status === 0 && bd.brackets) {
 				var br = bd.brackets.find(function(b) { return parseInt(b.BracketId) === bid; });
 				if (br) {
@@ -15644,6 +15662,14 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 		return false;
 	}
 
+	// Participants JSON for a bracket still in setup (null otherwise / on failure).
+	function _qbWantParticipants(bid) {
+		var b = TnConfig.bracketData[bid] && TnConfig.bracketData[bid].Bracket;
+		if (b && b.Status && b.Status !== 'setup') return Promise.resolve(null);
+		return fetch(TnConfig.uir + 'TournamentAjax/bracket/' + bid + '/participants')
+			.then(function(r) { return r.json(); }).catch(function() { return null; });
+	}
+
 	// Refetch a single bracket's matches + meta, then re-render if it's on screen.
 	function refetchBracket(bid) {
 		if (!bid) return Promise.resolve();
@@ -15652,12 +15678,15 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 		var tok = window.tnBvReqBegin ? window.tnBvReqBegin(bid) : 0;
 		return Promise.all([
 			fetch(TnConfig.uir + 'TournamentAjax/bracket/' + bid + '/matches').then(function(r) { return r.json(); }),
-			fetch(TnConfig.uir + 'TournamentAjax/tournament/' + tid + '/brackets').then(function(r) { return r.json(); })
+			fetch(TnConfig.uir + 'TournamentAjax/tournament/' + tid + '/brackets').then(function(r) { return r.json(); }),
+			// Quick Bracket draft: Participants (seat map) is the whole state, so peers pull it too.
+			_qbWantParticipants(bid)
 		]).then(function(res) {
-			var md = res[0], bd = res[1];
+			var md = res[0], bd = res[1], pd = res[2];
 			// A newer fetch of this bracket supersedes this response (it writes + paints).
 			var _stale = !!(TnConfig.bracketData[bid] && window.tnBvReqCurrent && !window.tnBvReqCurrent(bid, tok));
 			if (!_stale) {
+				if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 				// #26: a delta may reference a bracket another reeve just created. Seed a new
 				// entry from the bracket list instead of bailing into a dead-end no-op.
 				if (bd && bd.status === 0 && bd.brackets) {

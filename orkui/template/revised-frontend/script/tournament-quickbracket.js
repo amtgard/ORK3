@@ -322,6 +322,8 @@
         if (!_ed) return;
         clearTimeout(_ed.timer);
         if (_ed.dd && _ed.dd.parentNode) _ed.dd.parentNode.removeChild(_ed.dd);
+        // Remove the input too, so an orphaned line can never keep a live (and wrong-seed) editor.
+        if (_ed.input && _ed.input.parentNode) _ed.input.parentNode.removeChild(_ed.input);
         if (!keepRestore) _restore = null;
         _ed = null;
     }
@@ -394,18 +396,28 @@
     }
 
     function search(term) {
-        clearTimeout(_ed.timer);
-        setItems(term, []);   // roster + alias row immediately
+        var ed = _ed;
+        clearTimeout(ed.timer);
+        var req = ++ed.req;            // every call supersedes any in-flight response
+        ed.searching = false;
+        ed.pendingEnter = false;
+        setItems(term, []);            // roster + alias row immediately
         if (term.length < 2 || !(TnConfig.searchKingdomId > 0)) return;
-        var ed = _ed, req = ++ed.req;
+        ed.searching = true;
         ed.timer = setTimeout(function () {
             var url = TnConfig.uir + 'KingdomAjax/playersearch/' + TnConfig.searchKingdomId
                 + '&scope=tiered' + (TnConfig.parkId > 0 ? '&ParkId=' + TnConfig.parkId : '')
                 + '&q=' + encodeURIComponent(term);
             fetch(url).then(function (r) { return r.json(); }).then(function (data) {
                 if (_ed !== ed || ed.req !== req) return;   // stale response
+                ed.searching = false;
                 setItems(term, Array.isArray(data) ? data : []);
-            }).catch(function () {});
+                if (ed.pendingEnter) { ed.pendingEnter = false; if (ed.items[ed.hi]) pick(ed.items[ed.hi]); }
+            }).catch(function () {
+                if (_ed !== ed || ed.req !== req) return;
+                ed.searching = false;
+                if (ed.pendingEnter) { ed.pendingEnter = false; if (ed.items[ed.hi]) pick(ed.items[ed.hi]); }
+            });
         }, 280);
     }
 
@@ -417,40 +429,47 @@
         input.type = 'text';
         input.maxLength = 100;
         input.autocomplete = 'off';
-        input.placeholder = 'Search player or type a name';
+        input.placeholder = (_ctx.placed === 0 && seed === 1) ? 'Type to search for player' : 'Search player or type a name';
         input.setAttribute('aria-label', 'Seed ' + seed + ' fighter');
         input.value = value || '';
         line.appendChild(input);
         var dd = el('div', 'kn-ac-results tn-qb-ac');
         dd.setAttribute('role', 'listbox');
         document.body.appendChild(dd);
-        _ed = { bracketId: _ctx.bracketId, seed: seed, input: input, dd: dd, items: [], hi: 0, timer: null, req: 0 };
+        _ed = { bracketId: _ctx.bracketId, seed: seed, input: input, dd: dd, items: [], hi: 0, timer: null, req: 0, searching: false, pendingEnter: false, openedAt: Date.now() };
         // Remember the open editor so any re-render (own confirm refresh, peer change) reopens it.
         _restore = { bracketId: _ctx.bracketId, seed: seed, value: input.value };
+        var bid = _ed.bracketId;
         input.addEventListener('input', function () {
-            _restore = { bracketId: _ed.bracketId, seed: seed, value: input.value };
+            if (!_ed || _ed.input !== input) return;
+            _restore = { bracketId: bid, seed: seed, value: input.value };
             search(input.value.trim());
         });
         input.addEventListener('keydown', function (e) {
-            if (!_ed) return;
+            if (!_ed || _ed.input !== input) return;
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 if (_ed.items.length) { _ed.hi = (_ed.hi + (e.key === 'ArrowDown' ? 1 : -1) + _ed.items.length) % _ed.items.length; renderItems(); }
                 e.preventDefault();
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (input.value.trim() === '' && !_ed.items.length) return;
+                // Held/double Enter or IME commit must not auto-fill several seats from the roster.
+                if (e.repeat || e.isComposing || Date.now() - _ed.openedAt < 300) return;
+                var term = input.value.trim();
+                if (term === '' && !_ed.items.length) return;
+                // Persona search still pending/in flight: wait for it rather than adding an alias.
+                if (term.length >= 2 && _ed.searching) { _ed.pendingEnter = true; return; }
                 if (_ed.items[_ed.hi]) pick(_ed.items[_ed.hi]);
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeEditor();
-                window.tnRenderBracketViz(_ctx.bracketId);
+                window.tnRenderBracketViz(bid);
             }
         });
         input.addEventListener('blur', function () {
             setTimeout(function () {
-                if (_ed && _ed.input === input && document.activeElement !== input) {
+                if (input.isConnected && _ed && _ed.input === input && document.activeElement !== input) {
                     closeEditor();
-                    window.tnRenderBracketViz(_ctx.bracketId);
+                    window.tnRenderBracketViz(bid);
                 }
             }, 200);
         });
@@ -566,6 +585,9 @@
         commitSeats(bid, map);
     }
 
+    // Called by the page whenever a non-draft paint replaces the draft: drop editor, dropdown and swap mode.
+    function teardown() { closeEditor(); _swapSrc = 0; }
+
     var _swapSrc = 0;   // touch: seat chosen by long-press, waiting for a tap on the target
     function wireSwap(container, bid) {
         var lines = container.querySelectorAll('.tn-qb-line:not(.tn-qb-fixed-bye)');
@@ -579,7 +601,9 @@
             line.addEventListener('drop', function (e) {
                 e.preventDefault();
                 line.classList.remove('tn-qb-drop');
-                swapSeats(bid, parseInt(e.dataTransfer.getData('text/plain'), 10) || 0, seed);
+                var from = parseInt(e.dataTransfer.getData('text/plain'), 10) || 0;
+                if (!from || !_ctx.seats[from]) return;   // not a filled seat of this draw
+                swapSeats(bid, from, seed);
             });
             // Touch: long-press a filled line (500ms) to pick it up, then tap the target line.
             var timer = null;
@@ -624,6 +648,7 @@
         _post: post,
         _seatEntrants: seatEntrants,
         _seedOrder: seedOrder,
+        teardown: teardown,
         _test: {
             setCtx: function (c) { _ctx = c; },
             rosterItems: rosterItems,
