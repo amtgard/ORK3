@@ -227,6 +227,21 @@
     }
     function drawExtent(b, parts, seats) { return Math.max(parseInt(b.DrawSize, 10) || 0, parts.length, maxSeatOf(seats)); }
 
+    // What Start will actually run when it differs from the drawn seats (spec "close gaps").
+    // Start compacts the N placed fighters into nextPow2(N) slots with byes to the top seeds.
+    // Fighters in seats 1..N with nothing beyond (highest occupied seat = N) already ARE that
+    // draw — standard seed order nests, so the larger empty draw plays out identically.
+    function runNote() {
+        var n = _ctx.placed;
+        if (n < (_ctx.method === 'double' ? 3 : 2)) return '';
+        var gap = false;
+        for (var s = 1; s <= n; s++) if (!_ctx.seats[s]) { gap = true; break; }
+        var slots = nextPow2(Math.max(n, 2)), byes = slots - n;
+        if (!gap && nextPow2(maxSeatOf(_ctx.seats)) === slots) return '';
+        return 'Start seats ' + n + ' fighters in ' + (slots === 8 ? 'an ' : 'a ') + slots + '-slot draw'
+            + (byes === 1 ? ' \u2014 bye to seed 1' : byes > 1 ? ' \u2014 byes to seeds 1\u2013' + byes : '');
+    }
+
     function buildToolbar(b, bracketId) {
         var bar = el('div', 'tn-qb-toolbar');
         var badge = el('span', 'tn-qb-badge');
@@ -267,6 +282,8 @@
         }
         startBtn.onclick = function () { start(bracketId, startBtn); };
         bar.appendChild(startBtn);
+        var note = runNote();
+        if (note) bar.appendChild(el('p', 'tn-qb-runnote', note));
         return bar;
     }
 
@@ -793,6 +810,7 @@
             getDirty: function () { return _dirty; },
             getHeld: function () { return _held; },
             pick: pick,
+            runNote: runNote,
             getSwapSrc: function () { return _swapSrc; },
             setSwapSrc: function (v) { _swapSrc = v; }
         }
