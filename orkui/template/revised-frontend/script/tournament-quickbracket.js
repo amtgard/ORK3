@@ -631,6 +631,7 @@
                 return;
             }
             _localRoster.push({ ParticipantNumber: d.participantNumber, Alias: item.Alias, Persona: temp.Persona, MundaneId: temp.MundaneId, Status: 'active' });
+            if (window.tnRefreshRoster) window.tnRefreshRoster();   // Participants tab picks up a new registrant
             var pid = parseInt(d.participantId, 10) || 0;
             var have = (bd.Participants || []).some(function (p) { return (parseInt(p.ParticipantId, 10) || 0) === pid; });
             if (pid && !have) {
@@ -683,7 +684,7 @@
         post('TournamentAjax/bracket/' + bid + '/removeparticipant', { TournamentId: TnConfig.tournamentId, ParticipantId: pid })
             .then(function (d) {
                 if (!d || d.status !== 0) { window.tnToast((d && d.error) || 'Could not remove that fighter.'); window.tnRefreshAndRender(bid, false, true); }
-                else settle(bid);
+                else { settle(bid); if (window.tnRefreshRoster) window.tnRefreshRoster(); }   // their Brackets column changes
             });
     }
 

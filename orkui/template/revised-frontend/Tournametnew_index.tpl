@@ -7068,6 +7068,7 @@ function tnFixedAcPosition(inputEl, dropdownEl) {
 							Persona: (p && p.Persona) ? p.Persona : alias
 						});
 					}
+					if (window.tnRefreshRoster) window.tnRefreshRoster();
 					rowEl.classList.add('tn-quickadd-done');
 					if (qBtn) { qBtn.innerHTML = '<i class="fas fa-check"></i>'; qBtn.disabled = true; }
 					var card = document.getElementById('tn-bracket-' + bracketId);
@@ -7269,6 +7270,7 @@ function tnFixedAcPosition(inputEl, dropdownEl) {
 							});
 						}
 						tnShowFeedback('tn-addparticipant-feedback', 'Added! (' + _addedCount + ' so far) Keep adding, or close when done.', true);
+						if (window.tnRefreshRoster) window.tnRefreshRoster();
 						// Update bracket card DOM in-place
 						var card = document.getElementById('tn-bracket-' + bracketId);
 						if (card) {
@@ -7745,6 +7747,29 @@ window.tnOpenEditTeamModal   = function() {};
 <?php endif; ?>
 
 // ---- Participants Roster: render + Register modal ----
+// tnRefreshRoster() re-fetches the roster and re-renders it. Every bracket add
+// auto-registers the player server-side, so add paths (and peers' changes via
+// collab) call this to keep the Participants tab current without a reload.
+// Calls within 400ms coalesce into one fetch (e.g. typing a quick bracket).
+window.tnRefreshRoster = (function() {
+	var timer = null;
+	return function() {
+		if (!TnConfig.canManage) return; // the registrants endpoint needs a manager session
+		clearTimeout(timer);
+		timer = setTimeout(function() {
+			fetch(TnConfig.uir + 'TournamentAjax/tournament/' + TnConfig.tournamentId + '/registrants')
+				.then(function(r) { return r.json(); })
+				.then(function(rd) {
+					if (rd && rd.status === 0) {
+						TnConfig.registrants = rd.registrants || [];
+						tnRenderRoster();
+					}
+				})
+				.catch(function() {});
+		}, 400);
+	};
+})();
+
 // tnRenderRoster() rebuilds the Participants table from TnConfig.registrants.
 // Defined unconditionally so later tasks (assign-to-bracket, bulk modal) can
 // call it to refresh the roster without a full page reload.
@@ -9106,6 +9131,7 @@ function tnInitRosterTable() {
 					// (now-cleared) roster during the step-1 reset + refocus window.
 					document.getElementById('tn-addteam-submit').style.display = 'none';
 					_addedTeams++;
+					if (window.tnRefreshRoster) window.tnRefreshRoster();
 					tnShowFeedback('tn-addteam-feedback', 'Team "' + tnEsc(teamName) + '" saved! (' + _addedTeams + ' team' + (_addedTeams !== 1 ? 's' : '') + ' added) — add another or close when done.', true);
 					// Update local bracketData so assigned IDs are tracked for subsequent adds
 					if (TnConfig.bracketData[bracketId]) {
@@ -15795,10 +15821,13 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 		// in a tab whose registry was lost) still refetches, but isn't toasted as a peer's.
 		var selfId = parseInt(TnConfig.currentUserId, 10) || 0;
 		var peerTouched = false;
+		var rosterTouched = false;
 		events.forEach(function(ev) {
 			if (window.tnIsOwnAction && window.tnIsOwnAction(ev.ActionId, parseInt(ev.Seq, 10) || 0)) return; // echo — already applied locally
 			var _isPeer = !selfId || parseInt(ev.ActorId, 10) !== selfId;
 			if (_isPeer) peerTouched = true;
+			// A peer's placement/removal can add a registrant or change their brackets.
+			if (ev.Type === 'participant_placed' || ev.Type === 'participant_removed') rosterTouched = true;
 			// #10: a bracket-scoped event ('bracket_updated' etc.) refetches that
 			// bracket; a tournament-scoped 'tournament_updated' (no bracket id) does
 			// a light bracket-list refresh instead of a per-bracket refetch.
@@ -15807,6 +15836,7 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 			if (_isPeer && ev.ActorName) lastActor = ev.ActorName;
 		});
 		var bids = Object.keys(bracketsToRefetch);
+		if (rosterTouched && window.tnRefreshRoster) window.tnRefreshRoster();
 		// #25: no work to do (all echoes) is a successful sync — advance the cursor.
 		// When there IS work, advance ONLY after every refetch fulfills so a failed
 		// refetch leaves the cursor in place (and skips the success toast).
