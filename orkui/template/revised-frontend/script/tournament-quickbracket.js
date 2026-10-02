@@ -199,6 +199,7 @@
     }
 
     function renderDraft(container, bd, bracketId, renderTree) {
+        if (_ed) closeEditor(true);
         var b = bd.Bracket, parts = (bd.Participants || []).slice();
         var seats = seatEntrants(parts);
         var maxSeat = 0;
@@ -213,16 +214,6 @@
         parts.forEach(function (p) { pMap[p.ParticipantId] = p; });
         renderTree(container, draftMatches(bracketId, Math.max(4, nextPow2(eff))), pMap);
         if (_ctx.canEdit) afterRender(container, bracketId);
-    }
-
-    // Task 6 replaces this with editor restore + drag/swap wiring.
-    function afterRender(container, bracketId) {
-        if (_focusNext[bracketId]) {
-            delete _focusNext[bracketId];
-            var s = lowestEmptySeat();
-            var ln = s && container.querySelector('.tn-qb-empty[data-seed="' + s + '"]');
-            if (ln) openEditor(ln, s, '');
-        }
     }
 
     function buildToolbar(b, bracketId) {
@@ -323,10 +314,296 @@
         return box;
     }
 
-    // Placeholders implemented in Task 6.
-    function openEditor() {}
-    function decorateFilled() {}
-    function shuffleSeeds() {}
+    var _ed = null;          // open editor: { bracketId, seed, input, dd, items, hi, timer, req }
+    var _restore = null;     // { bracketId, seed, value } carried across a re-render
+    var _localRoster = [];   // fighters registered by this tab since load (TnConfig.registrants is a load-time snapshot)
+
+    function closeEditor(keepRestore) {
+        if (!_ed) return;
+        clearTimeout(_ed.timer);
+        if (_ed.dd && _ed.dd.parentNode) _ed.dd.parentNode.removeChild(_ed.dd);
+        if (!keepRestore) _restore = null;
+        _ed = null;
+    }
+
+    function bracketMundanes() {
+        var ids = {}, nums = {}, aliases = {};
+        (_ctx.bd.Participants || []).forEach(function (p) {
+            var mid = parseInt(p.MundaneId, 10) || 0;
+            if (mid > 0) ids[mid] = true; else aliases[String(p.Alias || '').toLowerCase()] = true;
+            if (parseInt(p.ParticipantNumber, 10) > 0) nums[parseInt(p.ParticipantNumber, 10)] = true;
+        });
+        return { ids: ids, nums: nums, aliases: aliases };
+    }
+
+    function rosterItems(term) {
+        var inB = bracketMundanes(), t = term.toLowerCase(), seen = {}, out = [];
+        (TnConfig.registrants || []).concat(_localRoster).forEach(function (r) {
+            var num = parseInt(r.ParticipantNumber, 10) || 0, mid = parseInt(r.MundaneId, 10) || 0;
+            var name = r.Alias || r.Persona || '';
+            var key = mid > 0 ? 'm' + mid : 'a' + name.toLowerCase();
+            if (!name || seen[key] || r.Status === 'withdrawn') return;
+            if ((num && inB.nums[num]) || (mid && inB.ids[mid]) || (!mid && inB.aliases[name.toLowerCase()])) return;
+            if (t && name.toLowerCase().indexOf(t) === -1 && String(r.Persona || '').toLowerCase().indexOf(t) === -1) return;
+            seen[key] = true;
+            out.push({ kind: 'roster', label: name, sub: 'On the roster', MundaneId: mid, Alias: name });
+        });
+        return out;
+    }
+
+    function renderItems() {
+        var dd = _ed.dd;
+        dd.innerHTML = '';
+        var lastKind = null;
+        _ed.items.forEach(function (it, i) {
+            if (it.kind === 'roster' && lastKind !== 'roster') dd.appendChild(el('div', 'tn-qb-ac-hdr', 'On the roster'));
+            lastKind = it.kind;
+            var row = el('div', 'kn-ac-item' + (it.kind === 'alias' ? ' tn-qb-ac-alias' : '') + (i === _ed.hi ? ' tn-qb-ac-hi' : ''));
+            row.setAttribute('role', 'option');
+            row.setAttribute('aria-selected', i === _ed.hi ? 'true' : 'false');
+            if (it.kind === 'alias') {
+                row.appendChild(el('b', '', it.label));
+                row.appendChild(document.createTextNode(' '));
+                row.appendChild(el('span', 'tn-qb-ac-sub', '(add without persona match)'));
+            } else {
+                row.appendChild(document.createTextNode(it.label));
+                if (it.sub && it.kind === 'player') { row.appendChild(document.createTextNode(' ')); row.appendChild(el('span', 'tn-qb-ac-sub', '(' + it.sub + ')')); }
+            }
+            row.addEventListener('mousedown', function (e) { e.preventDefault(); pick(it); });
+            dd.appendChild(row);
+        });
+        if (!_ed.items.length) { dd.classList.remove('kn-ac-open'); return; }
+        window.tnFixedAcPosition(_ed.input, dd);
+        dd.classList.add('kn-ac-open');
+    }
+
+    function setItems(term, players) {
+        var inB = bracketMundanes(), roster = rosterItems(term), rosterMids = {};
+        roster.forEach(function (r) { if (r.MundaneId) rosterMids[r.MundaneId] = true; });
+        var items = roster.slice();
+        (players || []).forEach(function (pl) {
+            var mid = parseInt(pl.MundaneId || pl.mundane_id, 10) || 0;
+            if (!mid || inB.ids[mid] || rosterMids[mid]) return;
+            var sub = pl.KAbbr ? pl.KAbbr + (pl.PAbbr ? ':' + pl.PAbbr : '') : '';
+            items.push({ kind: 'player', label: pl.Persona || pl.Name || '', sub: sub, MundaneId: mid, Alias: pl.Persona || pl.Name || '' });
+        });
+        if (term) items.push({ kind: 'alias', label: term, MundaneId: 0, Alias: term });
+        _ed.items = items;
+        _ed.hi = 0;
+        renderItems();
+    }
+
+    function search(term) {
+        clearTimeout(_ed.timer);
+        setItems(term, []);   // roster + alias row immediately
+        if (term.length < 2 || !(TnConfig.searchKingdomId > 0)) return;
+        var ed = _ed, req = ++ed.req;
+        ed.timer = setTimeout(function () {
+            var url = TnConfig.uir + 'KingdomAjax/playersearch/' + TnConfig.searchKingdomId
+                + '&scope=tiered' + (TnConfig.parkId > 0 ? '&ParkId=' + TnConfig.parkId : '')
+                + '&q=' + encodeURIComponent(term);
+            fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+                if (_ed !== ed || ed.req !== req) return;   // stale response
+                setItems(term, Array.isArray(data) ? data : []);
+            }).catch(function () {});
+        }, 280);
+    }
+
+    function openEditor(line, seed, value) {
+        closeEditor();
+        var hint = line.querySelector('.tn-qb-hint');
+        if (hint) hint.parentNode.removeChild(hint);
+        var input = el('input', 'tn-qb-input');
+        input.type = 'text';
+        input.maxLength = 100;
+        input.autocomplete = 'off';
+        input.placeholder = 'Search player or type a name';
+        input.setAttribute('aria-label', 'Seed ' + seed + ' fighter');
+        input.value = value || '';
+        line.appendChild(input);
+        var dd = el('div', 'kn-ac-results tn-qb-ac');
+        dd.setAttribute('role', 'listbox');
+        document.body.appendChild(dd);
+        _ed = { bracketId: _ctx.bracketId, seed: seed, input: input, dd: dd, items: [], hi: 0, timer: null, req: 0 };
+        // Remember the open editor so any re-render (own confirm refresh, peer change) reopens it.
+        _restore = { bracketId: _ctx.bracketId, seed: seed, value: input.value };
+        input.addEventListener('input', function () {
+            _restore = { bracketId: _ed.bracketId, seed: seed, value: input.value };
+            search(input.value.trim());
+        });
+        input.addEventListener('keydown', function (e) {
+            if (!_ed) return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if (_ed.items.length) { _ed.hi = (_ed.hi + (e.key === 'ArrowDown' ? 1 : -1) + _ed.items.length) % _ed.items.length; renderItems(); }
+                e.preventDefault();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (input.value.trim() === '' && !_ed.items.length) return;
+                if (_ed.items[_ed.hi]) pick(_ed.items[_ed.hi]);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeEditor();
+                window.tnRenderBracketViz(_ctx.bracketId);
+            }
+        });
+        input.addEventListener('blur', function () {
+            setTimeout(function () {
+                if (_ed && _ed.input === input && document.activeElement !== input) {
+                    closeEditor();
+                    window.tnRenderBracketViz(_ctx.bracketId);
+                }
+            }, 200);
+        });
+        input.focus();
+        var len = input.value.length;
+        input.setSelectionRange(len, len);
+        search(input.value.trim());
+    }
+
+    function pick(item) {
+        if (!_ed || !item || !item.Alias) return;
+        var bid = _ed.bracketId, seed = _ed.seed, bd = _ctx.bd;
+        closeEditor();
+        var temp = { ParticipantId: -seed, Seed: seed, Alias: item.Alias, Persona: item.kind === 'player' ? item.label : '',
+            MundaneId: item.MundaneId || 0, _pending: true };
+        bd.Participants = (bd.Participants || []).concat([temp]);
+        _focusNext[bid] = true;
+        window.tnRenderBracketViz(bid);
+        var fields = { TournamentId: TnConfig.tournamentId, Seed: seed, Alias: item.Alias };
+        if (item.MundaneId > 0) fields.MundaneId = item.MundaneId;
+        post('TournamentAjax/bracket/' + bid + '/quickplace', fields).then(function (d) {
+            bd.Participants = (bd.Participants || []).filter(function (p) { return p !== temp; });
+            if (!d || d.status !== 0) {
+                window.tnToast((d && d.error) || 'Could not place that fighter.');
+                window.tnRefreshAndRender(bid);
+                return;
+            }
+            _localRoster.push({ ParticipantNumber: d.participantNumber, Alias: item.Alias, Persona: temp.Persona, MundaneId: temp.MundaneId, Status: 'active' });
+            window.tnRefreshAndRender(bid);
+        });
+    }
+
+    function afterRender(container, bracketId) {
+        wireSwap(container, bracketId);
+        // An editor that was open when the draw re-rendered (own placement, peer change, refresh).
+        if (_restore && _restore.bracketId === bracketId) {
+            var r = _restore;
+            if (!_ctx.seats[r.seed] && r.seed <= _ctx.eff) {
+                var same = container.querySelector('.tn-qb-empty[data-seed="' + r.seed + '"]');
+                if (same) { openEditor(same, r.seed, r.value); return; }
+            } else {
+                window.tnToast('Seed ' + r.seed + ' was just filled.');
+                var s2 = lowestEmptySeat(), ln2 = s2 && container.querySelector('.tn-qb-empty[data-seed="' + s2 + '"]');
+                if (ln2) { openEditor(ln2, s2, r.value); return; }
+            }
+            _restore = null;
+        }
+        if (_focusNext[bracketId]) {
+            delete _focusNext[bracketId];
+            var s = lowestEmptySeat();
+            var ln = s && container.querySelector('.tn-qb-empty[data-seed="' + s + '"]');
+            if (ln) openEditor(ln, s, '');
+        }
+    }
+
+    function decorateFilled(line, p, seed) {
+        var x = el('button', 'tn-qb-clear', '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + (p.Alias || p.Persona || 'fighter') + ' from this bracket');
+        x.setAttribute('data-tip', 'Remove from bracket (stays on the roster)');
+        x.addEventListener('click', function (e) { e.stopPropagation(); clearSeat(p); });
+        line.appendChild(x);
+        line.setAttribute('draggable', 'true');
+        line.dataset.pid = p.ParticipantId;
+    }
+
+    function clearSeat(p) {
+        var bid = _ctx.bracketId, bd = _ctx.bd;
+        bd.Participants = (bd.Participants || []).filter(function (q) { return q !== p; });
+        window.tnRenderBracketViz(bid);
+        post('TournamentAjax/bracket/' + bid + '/removeparticipant', { TournamentId: TnConfig.tournamentId, ParticipantId: p.ParticipantId })
+            .then(function (d) {
+                if (!d || d.status !== 0) window.tnToast((d && d.error) || 'Could not remove that fighter.');
+                window.tnRefreshAndRender(bid);
+            });
+    }
+
+    // Persist a full seat map: Order[i] = participant id in seat i+1, 0 = empty seat.
+    function commitSeats(bid, seatToPid) {
+        var bd = _ctx.bd, max = 0;
+        Object.keys(seatToPid).forEach(function (s) { max = Math.max(max, parseInt(s, 10)); });
+        var order = [];
+        for (var s = 1; s <= max; s++) order.push(seatToPid[s] || 0);
+        (bd.Participants || []).forEach(function (p) {   // optimistic
+            for (var k = 1; k <= max; k++) if (seatToPid[k] === p.ParticipantId) p.Seed = k;
+        });
+        window.tnRenderBracketViz(bid);
+        post('TournamentAjax/bracket/' + bid + '/reorder', { TournamentId: TnConfig.tournamentId, Order: JSON.stringify(order) })
+            .then(function (d) {
+                if (!d || d.status !== 0) window.tnToast((d && d.error) || 'Could not change the seeds.');
+                window.tnRefreshAndRender(bid);
+            });
+    }
+
+    function hasPending() { return (_ctx.bd.Participants || []).some(function (p) { return p._pending; }); }
+
+    function shuffleSeeds(bid) {
+        if (hasPending()) return;
+        var pids = (_ctx.bd.Participants || []).map(function (p) { return p.ParticipantId; });
+        for (var i = pids.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = pids[i]; pids[i] = pids[j]; pids[j] = t; }
+        var map = {};
+        pids.forEach(function (pid, i) { map[i + 1] = pid; });
+        commitSeats(bid, map);
+    }
+
+    function swapSeats(bid, fromSeed, toSeed) {
+        if (fromSeed === toSeed || hasPending() || toSeed > _ctx.eff) return;
+        var map = {};
+        Object.keys(_ctx.seats).forEach(function (s) { map[s] = _ctx.seats[s].ParticipantId; });
+        var a = map[fromSeed], b = map[toSeed];
+        map[toSeed] = a;
+        if (b) map[fromSeed] = b; else delete map[fromSeed];
+        commitSeats(bid, map);
+    }
+
+    var _swapSrc = 0;   // touch: seat chosen by long-press, waiting for a tap on the target
+    function wireSwap(container, bid) {
+        var lines = container.querySelectorAll('.tn-qb-line:not(.tn-qb-fixed-bye)');
+        lines.forEach(function (line) {
+            var seed = parseInt(line.dataset.seed, 10);
+            if (_swapSrc && seed === _swapSrc) line.classList.add('tn-qb-swap-src');
+            // Mouse: HTML5 drag a filled line onto any line.
+            line.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', String(seed)); e.dataTransfer.effectAllowed = 'move'; });
+            line.addEventListener('dragover', function (e) { e.preventDefault(); line.classList.add('tn-qb-drop'); });
+            line.addEventListener('dragleave', function () { line.classList.remove('tn-qb-drop'); });
+            line.addEventListener('drop', function (e) {
+                e.preventDefault();
+                line.classList.remove('tn-qb-drop');
+                swapSeats(bid, parseInt(e.dataTransfer.getData('text/plain'), 10) || 0, seed);
+            });
+            // Touch: long-press a filled line (500ms) to pick it up, then tap the target line.
+            var timer = null;
+            line.addEventListener('touchstart', function () {
+                if (!line.classList.contains('tn-qb-filled')) return;
+                timer = setTimeout(function () {
+                    _swapSrc = seed;
+                    line.classList.add('tn-qb-swap-src');
+                    window.tnToast('Tap another line to swap seeds');
+                }, 500);
+            }, { passive: true });
+            ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) {
+                line.addEventListener(ev, function () { clearTimeout(timer); }, { passive: true });
+            });
+            line.addEventListener('click', function (e) {
+                if (!_swapSrc) return;
+                e.stopPropagation();
+                e.preventDefault();
+                var src = _swapSrc;
+                _swapSrc = 0;
+                if (src !== seed) swapSeats(bid, src, seed); else window.tnRenderBracketViz(bid);
+            }, true);
+        });
+    }
 
     document.addEventListener('DOMContentLoaded', function () {
         wireChips('tn-qb-method');
@@ -346,6 +623,14 @@
         buildDraftBox: buildDraftBox,
         _post: post,
         _seatEntrants: seatEntrants,
-        _seedOrder: seedOrder
+        _seedOrder: seedOrder,
+        _test: {
+            setCtx: function (c) { _ctx = c; },
+            rosterItems: rosterItems,
+            setItems: setItems,
+            swapSeats: swapSeats,
+            openEditor: openEditor,
+            getEd: function () { return _ed; }
+        }
     };
 })();
