@@ -15524,7 +15524,6 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 			var md = res[0], bd = res[1], pd = res[2];
 			// A newer fetch of this bracket supersedes this response.
 			if (TnConfig.bracketData[bid] && window.tnBvReqCurrent && !window.tnBvReqCurrent(bid, tok)) return;
-			if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 			if (bd && bd.status === 0 && bd.brackets) {
 				var br = bd.brackets.find(function(b) { return parseInt(b.BracketId) === bid; });
 				if (br) {
@@ -15533,6 +15532,7 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 				}
 			}
 			if (md && md.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Matches = md.matches;
+			if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 			if (window.tnMarkStandingsDirty) window.tnMarkStandingsDirty();
 			var sel = document.getElementById('tn-bv-bracket-select');
 			var curBid = sel ? parseInt(sel.value) : 0;
@@ -15686,7 +15686,6 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 			// A newer fetch of this bracket supersedes this response (it writes + paints).
 			var _stale = !!(TnConfig.bracketData[bid] && window.tnBvReqCurrent && !window.tnBvReqCurrent(bid, tok));
 			if (!_stale) {
-				if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 				// #26: a delta may reference a bracket another reeve just created. Seed a new
 				// entry from the bracket list instead of bailing into a dead-end no-op.
 				if (bd && bd.status === 0 && bd.brackets) {
@@ -15697,6 +15696,7 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 					}
 				}
 				if (md && md.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Matches = md.matches;
+				if (pd && pd.status === 0 && TnConfig.bracketData[bid]) TnConfig.bracketData[bid].Participants = pd.participants || [];
 			}
 			if (window.tnMarkStandingsDirty) window.tnMarkStandingsDirty();
 			// Re-render / leaderboard step, run after the optional points-standings fetch.

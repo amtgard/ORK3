@@ -199,6 +199,7 @@
     }
 
     function renderDraft(container, bd, bracketId, renderTree) {
+        if (_ctx && _ctx.bracketId !== bracketId) teardown();   // switching drafts: drop A's editor, restore and swap mode
         if (_ed) closeEditor(true);
         var b = bd.Bracket, parts = (bd.Participants || []).slice();
         var seats = seatEntrants(parts);
@@ -457,7 +458,8 @@
                 var term = input.value.trim();
                 if (term === '' && !_ed.items.length) return;
                 // Persona search still pending/in flight: wait for it rather than adding an alias.
-                if (term.length >= 2 && _ed.searching) { _ed.pendingEnter = true; return; }
+                var hl = _ed.items[_ed.hi];
+                if (term.length >= 2 && _ed.searching && hl && hl.kind === 'alias') { _ed.pendingEnter = true; return; }
                 if (_ed.items[_ed.hi]) pick(_ed.items[_ed.hi]);
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -586,7 +588,7 @@
     }
 
     // Called by the page whenever a non-draft paint replaces the draft: drop editor, dropdown and swap mode.
-    function teardown() { closeEditor(); _swapSrc = 0; }
+    function teardown() { closeEditor(); _restore = null; _swapSrc = 0; }
 
     var _swapSrc = 0;   // touch: seat chosen by long-press, waiting for a tap on the target
     function wireSwap(container, bid) {
@@ -655,7 +657,10 @@
             setItems: setItems,
             swapSeats: swapSeats,
             openEditor: openEditor,
-            getEd: function () { return _ed; }
+            getEd: function () { return _ed; },
+            getRestore: function () { return _restore; },
+            getSwapSrc: function () { return _swapSrc; },
+            setSwapSrc: function (v) { _swapSrc = v; }
         }
     };
 })();
