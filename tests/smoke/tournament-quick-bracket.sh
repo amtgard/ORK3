@@ -116,6 +116,24 @@ check "team add status" "$(echo "$TR" | J status)" "0"
 check "team record with number" "$(DB "SELECT COUNT(*) FROM ork_participant_teams WHERE bracket_id=$TB AND team_number>0")" "1"
 check "team has 2 members" "$(DB "SELECT COUNT(*) FROM ork_participant_team_members tm JOIN ork_participant_teams t ON t.team_id=tm.team_id WHERE t.bracket_id=$TB")" "2"
 
+echo "Final fixes: individual-only placement, persona-only alias fallback"
+# m3: a team bracket carrying draw_size is still not quick-placeable.
+DB "UPDATE ork_bracket SET draw_size=8 WHERE bracket_id=$TB"
+TQ=$(post "TournamentAjax/bracket/$TB/quickplace" --data-urlencode "Alias=QB$$ teamq" --data "TournamentId=$TID&Seed=2")
+check "team draft quickplace rejected" "$(echo "$TQ" | J error)" "Quick placement is for individual brackets."
+# m4: a player with no persona and no typed name is rejected (never their legal name).
+BNP=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=4" | J bracketId)
+NP=$(DB "SELECT mundane_id FROM ork_mundane WHERE (persona IS NULL OR TRIM(persona)='') AND park_id > 0 ORDER BY mundane_id LIMIT 1")
+if [ -n "$NP" ]; then
+  NR=$(post "TournamentAjax/bracket/$BNP/quickplace" --data "TournamentId=$TID&Seed=1&MundaneId=$NP")
+  check "no-persona player rejected" "$(echo "$NR" | J error)" "Player has no persona — type a name instead."
+  check "no-persona: nothing entered" "$(DB "SELECT COUNT(*) FROM ork_participant WHERE bracket_id=$BNP")" "0"
+else
+  echo "  (no persona-less player in this DB — m4 check skipped)"
+fi
+P5=$(post "TournamentAjax/bracket/$BNP/quickplace" --data "TournamentId=$TID&Seed=1&MundaneId=$M1")
+check "persona fallback still fills alias" "$(DB "SELECT p.alias = m.persona FROM ork_participant p JOIN ork_mundane m ON m.mundane_id=$M1 WHERE p.participant_id=$(echo "$P5" | J participantId)")" "1"
+
 echo "Task 3: realtime on remove/reorder"
 BRT=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=4" | J bracketId)
 RA=$(post "TournamentAjax/bracket/$BRT/quickplace" --data-urlencode "Alias=QB$$ r1" --data "TournamentId=$TID&Seed=1" | J participantId)
@@ -131,7 +149,7 @@ check "removed fighter stays registered" "$(DB "SELECT COUNT(*) FROM ork_partici
 check "seq advanced" "$(DB "SELECT last_seq > $SEQ0 FROM ork_tournament_seq WHERE tournament_id=$TID")" "1"
 
 # Cleanup: delete every bracket this run created (registrations stay — the dev DB is disposable).
-for b in $BID $LB $B6 $B16 $BD $BR $AB $TB $BRT; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
+for b in $BID $LB $B6 $B16 $BD $BR $AB $TB $BRT $BNP; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
 # Remove registered team created in this run
 TEAM_NUM=$(DB "SELECT team_number FROM ork_participant_teams WHERE tournament_id=$TID AND bracket_id IS NULL AND name='QB$$ team'" 2>/dev/null)
 if [ -n "$TEAM_NUM" ] && [ "$TEAM_NUM" -gt 0 ]; then

@@ -1362,10 +1362,15 @@ class Tournament extends Ork3
             return $r;
         }
         $bracket_id = (int)$r['Detail'];
-        $this->db->query(
+        // db->query never returns false: read the SQLSTATE. A missing draw_size column (migration
+        // not run) leaves a plain setup bracket behind; nothing is deleted.
+        $u = @$this->db->query(
             "UPDATE " . DB_PREFIX . "bracket SET draw_size = :ds WHERE bracket_id = :bid",
             [':ds' => $draw_size, ':bid' => $bracket_id]
         );
+        if ((string)($u->__ERROR[0][1] ?? '') !== '00000') {
+            return InvalidParameter(null, "Quick Bracket isn't available yet — run the draw_size migration.");
+        }
         return Success($bracket_id);
     }
 
@@ -1392,9 +1397,14 @@ class Tournament extends Ork3
             return InvalidParameter(null, 'Pick a player or type a name.');
         }
         if (valid_id($mid) && $alias === '') {
-            $alias = $this->tnActorName($mid);
+            // Persona only — never the player's legal name.
+            $pr = $this->db->query(
+                "SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = :m LIMIT 1",
+                [':m' => $mid]
+            );
+            $alias = ($pr && $pr->next()) ? trim((string)$pr->persona) : '';
             if ($alias === '') {
-                return InvalidParameter(null, 'Player not found.');
+                return InvalidParameter(null, 'Player has no persona — type a name instead.');
             }
         }
         $alias = mb_substr($alias, 0, 100);
@@ -1404,7 +1414,7 @@ class Tournament extends Ork3
         try {
             // Lock the bracket row: serializes concurrent placements into the same draft.
             $b = $this->db->query(
-                "SELECT status, draw_size FROM " . DB_PREFIX . "bracket WHERE bracket_id = :bid FOR UPDATE",
+                "SELECT status, draw_size, participants FROM " . DB_PREFIX . "bracket WHERE bracket_id = :bid FOR UPDATE",
                 [':bid' => $bid]
             );
             if (!$b || !$b->next()) {
@@ -1419,6 +1429,10 @@ class Tournament extends Ork3
             if ($draw_size <= 0) {
                 $this->db->query('ROLLBACK');
                 return InvalidParameter(null, 'Not a quick bracket.');
+            }
+            if ((string)$b->participants !== 'individual') {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'Quick placement is for individual brackets.');
             }
             $cnt = $this->db->query("SELECT COUNT(*) AS n FROM " . DB_PREFIX . "participant WHERE bracket_id = :bid", [':bid' => $bid]);
             $entrants = ($cnt && $cnt->next()) ? (int)$cnt->n : 0;
