@@ -3138,8 +3138,13 @@ $(document).ready(function() {
               && !!gid('kn-award-select').value
               && !!gid('kn-award-givenby-id').value
               && !!gid('kn-award-date').value;
-        gid('kn-award-save-new').disabled  = !ok;
-        gid('kn-award-save-same').disabled = !ok;
+        gid('kn-award-save-new').disabled   = !ok;
+        gid('kn-award-save-same').disabled  = !ok;
+        gid('kn-award-save-close').disabled = !ok;
+        // "Add Next Rank" only applies to a ladder award with room above the selected rank
+        var rank    = parseInt(gid('kn-award-rank-val').value, 10) || 0;
+        var maxRank = parseInt(gid('kn-rank-pills').dataset.rankMax, 10) || 0;
+        gid('kn-award-save-rank').disabled = !ok || !rank || rank >= maxRank;
     }
 
     var knTypeHTML = {
@@ -3188,11 +3193,12 @@ $(document).ready(function() {
         var wrap  = gid('kn-rank-pills');
         var input = gid('kn-award-rank-val');
         wrap.innerHTML = '';
+        wrap.dataset.rankMax = '';
         input.value = '';
         row.style.display = 'none';
-        if (!awardId) return;
+        if (!awardId) { checkRequired(); return; }
         var opt = gid('kn-award-select').querySelector('option[value="' + awardId + '"]');
-        if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+        if (!opt || opt.getAttribute('data-is-ladder') !== '1') { checkRequired(); return; }
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
@@ -3201,6 +3207,7 @@ $(document).ready(function() {
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        wrap.dataset.rankMax  = maxRank;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -3211,12 +3218,14 @@ $(document).ready(function() {
                 return function() {
                     input.value = rank;
                     tnRankPaint(wrap, 'kn', held, rank);
+                    checkRequired();
                 };
             })(r));
             wrap.appendChild(pill);
         }
         tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
+        checkRequired();
     }
 
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
@@ -3553,7 +3562,24 @@ $(document).ready(function() {
         if (gid('kn-award-alias-row')) gid('kn-award-alias-row').style.display = 'none';
         checkRequired();
     }
-    function knDoSave(onSuccess) {
+    // After a save, keep every field but bump the rank pill one step past the rank just
+    // given (2nd -> 3rd) and clear the note, so the next rank can be entered right away.
+    function knAdvanceRank() {
+        var sel     = gid('kn-award-select');
+        var opt     = sel.options[sel.selectedIndex];
+        var given   = parseInt(gid('kn-award-rank-val').value, 10) || 0;
+        var baseId  = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        if (baseId && given > (knPlayerRanks[baseId] || 0)) knPlayerRanks[baseId] = given;
+        buildRankPills(sel.value);
+        var pill = document.querySelector('#kn-rank-pills .kn-rank-pill[data-rank="' + (given + 1) + '"]');
+        if (pill) pill.click();
+        gid('kn-award-note').value = '';
+        gid('kn-award-char-count').textContent = AWARD_NOTE_MAX_CHARS + ' characters remaining';
+        gid('kn-award-char-count').classList.remove('kn-char-warn');
+        checkRequired();
+    }
+    var knSaveButtons = ['kn-award-save-rank', 'kn-award-save-same', 'kn-award-save-new', 'kn-award-save-close'];
+    function knDoSave(btn, onSuccess) {
         var errEl    = gid('kn-award-error');
         var playerId = gid('kn-award-player-id').value;
         var awardId  = gid('kn-award-select').value;
@@ -3582,11 +3608,9 @@ $(document).ready(function() {
         var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
         if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
-        var btnNew  = gid('kn-award-save-new');
-        var btnSame = gid('kn-award-save-same');
-        btnNew.disabled = btnSame.disabled = true;
-        btnNew.innerHTML  = '<i class="fas fa-spinner fa-spin"></i>';
-        btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        knSaveButtons.forEach(function(id) { gid(id).disabled = true; });
+        var btnHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
         fetch(saveUrl, { method: 'POST', body: fd })
@@ -3599,19 +3623,26 @@ $(document).ready(function() {
                 errEl.style.display = 'block';
             })
             .finally(function() {
-                btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
-                btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
+                btn.innerHTML = btnHTML;
                 checkRequired();
             });
     }
 
-    // "Add + New Player" — clear player + award/rank/note, keep date/giver/location
-    gid('kn-award-save-new').addEventListener('click', function() {
-        knDoSave(function() { knAutoDismissRec(); knShowSuccess(); knClearPlayer(); knClearAward(); gid('kn-award-player-text').focus(); });
+    // "Add Next Rank" — keep everything, advance the rank pill, clear the note
+    gid('kn-award-save-rank').addEventListener('click', function() {
+        knDoSave(this, function() { knAutoDismissRec(); knShowSuccess(); knAdvanceRank(); gid('kn-award-note').focus(); });
     });
-    // "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
+    // "Save and Close"
+    gid('kn-award-save-close').addEventListener('click', function() {
+        knDoSave(this, function() { knAutoDismissRec(); knCloseAwardModal(); });
+    });
+    // "Go to New Player" — clear player + award/rank/note, keep date/giver/location
+    gid('kn-award-save-new').addEventListener('click', function() {
+        knDoSave(this, function() { knAutoDismissRec(); knShowSuccess(); knClearPlayer(); knClearAward(); gid('kn-award-player-text').focus(); });
+    });
+    // "Add More Awards" — clear only award/rank/note, keep player + date/giver/location
     gid('kn-award-save-same').addEventListener('click', function() {
-        knDoSave(function() {
+        knDoSave(this, function() {
             knAutoDismissRec(); knShowSuccess(); knClearAward();
             var pid = gid('kn-award-player-id').value;
             if (pid) {
@@ -6871,8 +6902,13 @@ $(document).ready(function() {
               && !!gid('pk-award-select').value
               && !!gid('pk-award-givenby-id').value
               && !!gid('pk-award-date').value;
-        gid('pk-award-save-new').disabled  = !ok;
-        gid('pk-award-save-same').disabled = !ok;
+        gid('pk-award-save-new').disabled   = !ok;
+        gid('pk-award-save-same').disabled  = !ok;
+        gid('pk-award-save-close').disabled = !ok;
+        // "Add Next Rank" only applies to a ladder award with room above the selected rank
+        var rank    = parseInt(gid('pk-award-rank-val').value, 10) || 0;
+        var maxRank = parseInt(gid('pk-rank-pills').dataset.rankMax, 10) || 0;
+        gid('pk-award-save-rank').disabled = !ok || !rank || rank >= maxRank;
     }
 
     var pkTypeHTML = {
@@ -6921,11 +6957,12 @@ $(document).ready(function() {
         var wrap  = gid('pk-rank-pills');
         var input = gid('pk-award-rank-val');
         wrap.innerHTML = '';
+        wrap.dataset.rankMax = '';
         input.value = '';
         row.style.display = 'none';
-        if (!awardId) return;
+        if (!awardId) { checkRequired(); return; }
         var opt = gid('pk-award-select').querySelector('option[value="' + awardId + '"]');
-        if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+        if (!opt || opt.getAttribute('data-is-ladder') !== '1') { checkRequired(); return; }
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
@@ -6934,6 +6971,7 @@ $(document).ready(function() {
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        wrap.dataset.rankMax  = maxRank;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -6944,6 +6982,7 @@ $(document).ready(function() {
                 return function() {
                     input.value = rank;
                     tnRankPaint(wrap, 'pk', held, rank);
+                    checkRequired();
                 };
             })(r));
             wrap.appendChild(pill);
@@ -6951,6 +6990,7 @@ $(document).ready(function() {
         // Auto-select suggested rank
         tnRankPaint(wrap, 'pk', held, suggested);
         input.value = suggested;
+        checkRequired();
     }
 
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
@@ -7291,7 +7331,24 @@ $(document).ready(function() {
         if (gid('pk-award-alias-row')) gid('pk-award-alias-row').style.display = 'none';
         checkRequired();
     }
-    function pkDoSave(onSuccess) {
+    // After a save, keep every field but bump the rank pill one step past the rank just
+    // given (2nd -> 3rd) and clear the note, so the next rank can be entered right away.
+    function pkAdvanceRank() {
+        var sel     = gid('pk-award-select');
+        var opt     = sel.options[sel.selectedIndex];
+        var given   = parseInt(gid('pk-award-rank-val').value, 10) || 0;
+        var baseId  = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        if (baseId && given > (pkPlayerRanks[baseId] || 0)) pkPlayerRanks[baseId] = given;
+        buildRankPills(sel.value);
+        var pill = document.querySelector('#pk-rank-pills .pk-rank-pill[data-rank="' + (given + 1) + '"]');
+        if (pill) pill.click();
+        gid('pk-award-note').value = '';
+        gid('pk-award-char-count').textContent = AWARD_NOTE_MAX_CHARS + ' characters remaining';
+        gid('pk-award-char-count').classList.remove('pk-char-warn');
+        checkRequired();
+    }
+    var pkSaveButtons = ['pk-award-save-rank', 'pk-award-save-same', 'pk-award-save-new', 'pk-award-save-close'];
+    function pkDoSave(btn, onSuccess) {
         var errEl    = gid('pk-award-error');
         var playerId = gid('pk-award-player-id').value;
         var awardId  = gid('pk-award-select').value;
@@ -7320,11 +7377,9 @@ $(document).ready(function() {
         var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
         if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
-        var btnNew  = gid('pk-award-save-new');
-        var btnSame = gid('pk-award-save-same');
-        btnNew.disabled = btnSame.disabled = true;
-        btnNew.innerHTML  = '<i class="fas fa-spinner fa-spin"></i>';
-        btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        pkSaveButtons.forEach(function(id) { gid(id).disabled = true; });
+        var btnHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
         fetch(saveUrl, { method: 'POST', body: fd })
@@ -7337,19 +7392,26 @@ $(document).ready(function() {
                 errEl.style.display = 'block';
             })
             .finally(function() {
-                btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
-                btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
+                btn.innerHTML = btnHTML;
                 checkRequired();
             });
     }
 
-    // "Add + New Player" — clear player + award/rank/note, keep date/giver/location
-    gid('pk-award-save-new').addEventListener('click', function() {
-        pkDoSave(function() { pkAutoDismissRec(); pkShowSuccess(); pkClearPlayer(); pkClearAward(); gid('pk-award-player-text').focus(); });
+    // "Add Next Rank" — keep everything, advance the rank pill, clear the note
+    gid('pk-award-save-rank').addEventListener('click', function() {
+        pkDoSave(this, function() { pkAutoDismissRec(); pkShowSuccess(); pkAdvanceRank(); gid('pk-award-note').focus(); });
     });
-    // "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
+    // "Save and Close"
+    gid('pk-award-save-close').addEventListener('click', function() {
+        pkDoSave(this, function() { pkAutoDismissRec(); pkCloseAwardModal(); });
+    });
+    // "Go to New Player" — clear player + award/rank/note, keep date/giver/location
+    gid('pk-award-save-new').addEventListener('click', function() {
+        pkDoSave(this, function() { pkAutoDismissRec(); pkShowSuccess(); pkClearPlayer(); pkClearAward(); gid('pk-award-player-text').focus(); });
+    });
+    // "Add More Awards" — clear only award/rank/note, keep player + date/giver/location
     gid('pk-award-save-same').addEventListener('click', function() {
-        pkDoSave(function() {
+        pkDoSave(this, function() {
             pkAutoDismissRec(); pkShowSuccess(); pkClearAward();
             var pid = gid('pk-award-player-id').value;
             if (pid) {

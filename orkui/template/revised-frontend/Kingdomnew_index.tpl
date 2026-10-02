@@ -1180,16 +1180,23 @@ var KnBannerConfig = {
 				<span class="kn-char-count" id="kn-award-char-count">400 characters remaining</span>
 			</div>
 		</div>
-		<div class="kn-modal-footer">
-			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
-				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
+		<div class="kn-modal-footer award-save-footer">
+			<div class="award-save-heading">Save this award and&hellip;</div>
+			<div class="award-save-grid">
+				<button class="kn-btn kn-btn-secondary" id="kn-award-save-rank" disabled>
+					<i class="fas fa-save"></i> Add Next Rank
 				</button>
-				<button class="kn-btn kn-btn-primary" id="kn-award-save-new" disabled>
-					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
+				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
+					<i class="fas fa-save"></i> Add More Awards
+				</button>
+				<button class="kn-btn kn-btn-secondary" id="kn-award-save-new" disabled>
+					<i class="fas fa-save"></i> Go to New Player
+				</button>
+				<button class="kn-btn kn-btn-primary" id="kn-award-save-close" disabled>
+					<i class="fas fa-save"></i> Save and Close
 				</button>
 			</div>
+			<button class="kn-btn-ghost award-save-cancel" id="kn-award-cancel">Close Without Saving</button>
 		</div>
 	</div>
 </div>

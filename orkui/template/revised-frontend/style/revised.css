@@ -1517,6 +1517,19 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-award-info-line,
 #kn-award-overlay .kn-award-info-line,
 #pk-award-overlay .pk-award-info-line { margin-top: 4px; min-height: 18px; font-size: 12px; }
+/* Add Award modal footer (kingdom + park): "Save this award and…" 2x2 grid + close link */
+#kn-award-overlay .kn-modal-footer.award-save-footer,
+#pk-award-overlay .pk-modal-footer.award-save-footer { flex-direction: column; align-items: stretch; gap: 8px; }
+.award-save-heading { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ork-text-muted); }
+.award-save-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.award-save-grid .kn-btn,
+.award-save-grid .pk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; white-space: normal; text-align: center; }
+.award-save-cancel { align-self: center; }
+html[data-theme="dark"] .award-save-grid .kn-btn-secondary,
+html[data-theme="dark"] .award-save-grid .pk-btn-secondary { border: 1px solid var(--ork-border); }
+@media (max-width: 768px) {
+    .award-save-grid { grid-template-columns: 1fr; }
+}
 /* acct-field textarea style */
 .pn-acct-field textarea {
     width: 100%;
@@ -6656,7 +6669,6 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
     .pk-card { margin-bottom: 8px; }
     .pn-card { margin-bottom: 4px; }
     .pn-layout { gap: 10px; }
-    .award-btn-prefix { display: none; }
     .cp-layout { grid-template-columns: 1fr; }
     .cp-hero-content { flex-wrap: wrap; }
     .cp-hero-stats { width: 100%; justify-content: flex-start; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 14px; margin-top: 4px; }
