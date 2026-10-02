@@ -2333,6 +2333,9 @@ html[data-theme="dark"] .tn-mobile .tn-imd-empty { color:#718096; }
 				<button class="tn-btn tn-btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4)" onclick="tnOpenAddBracketModal()">
 					<i class="fas fa-plus"></i> Add Bracket
 				</button>
+				<button class="tn-btn tn-btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4)" onclick="TnQuickBracket.openModal()" data-tip="Empty seeded bracket — type names and start">
+					<i class="fas fa-bolt"></i> Quick Bracket
+				</button>
 			</div>
 		</div>
 		<?php endif; ?>
