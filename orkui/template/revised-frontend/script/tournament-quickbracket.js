@@ -592,9 +592,10 @@
     }
 
     // Called by the page whenever a non-draft paint replaces the draft: drop editor, dropdown and swap mode.
-    function teardown() { closeEditor(); _restore = null; _swapSrc = 0; }
+    function teardown() { closeEditor(); _restore = null; _swapSrc = 0; _swapFresh = false; }
 
     var _swapSrc = 0;   // touch: seat chosen by long-press, waiting for a tap on the target
+    var _swapFresh = false;   // true from long-press arming until the next touchstart: swallows the release click
     function wireSwap(container, bid) {
         var lines = container.querySelectorAll('.tn-qb-line:not(.tn-qb-fixed-bye)');
         lines.forEach(function (line) {
@@ -614,9 +615,11 @@
             // Touch: long-press a filled line (500ms) to pick it up, then tap the target line.
             var timer = null;
             line.addEventListener('touchstart', function () {
+                _swapFresh = false;   // a new touch sequence began: the previous release click is history
                 if (!line.classList.contains('tn-qb-filled')) return;
                 timer = setTimeout(function () {
                     _swapSrc = seed;
+                    _swapFresh = true;
                     line.classList.add('tn-qb-swap-src');
                     window.tnToast('Tap another line to swap seeds');
                 }, 500);
@@ -628,6 +631,8 @@
                 if (!_swapSrc) return;
                 e.stopPropagation();
                 e.preventDefault();
+                // The click synthesized by releasing the long-press must not cancel swap mode.
+                if (_swapFresh && seed === _swapSrc) { _swapFresh = false; return; }
                 var src = _swapSrc;
                 _swapSrc = 0;
                 if (src !== seed) swapSeats(bid, src, seed); else window.tnRenderBracketViz(bid);
