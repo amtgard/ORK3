@@ -1519,7 +1519,7 @@ html[data-theme="dark"] .tn-bv-tbd-label { color:#718096; }
 .tn-qb-line { position:relative; }
 .tn-qb-empty { cursor:pointer; }
 .tn-qb-empty:hover, .tn-qb-empty:focus-visible { background:#ebf8ff; outline:none; }
-.tn-qb-hint { color:#a0aec0; font-style:italic; font-size:12px; }
+.tn-qb-hint { color:#718096; font-style:italic; font-size:12px; }
 .tn-qb-input { flex:1; min-width:0; border:none; outline:none; background:transparent; font:inherit; font-size:13px; color:inherit; padding:0; }
 .tn-qb-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tn-qb-alias { font-style:italic; }
@@ -1539,14 +1539,15 @@ html[data-theme="dark"] .tn-bv-tbd-label { color:#718096; }
 .tn-mobile .tn-qb-toolbar .tn-btn, .tn-mobile .tn-qb-btnstack .tn-btn { min-height:44px; }
 html[data-theme="dark"] .tn-qb-field-label { color:#a0aec0; }
 html[data-theme="dark"] .tn-qb-chip { background:#2d3748; border-color:#4a5568; color:#e2e8f0; }
-html[data-theme="dark"] .tn-qb-chip[aria-checked="true"] { background:#3182ce; border-color:#3182ce; color:#fff; }
+html[data-theme="dark"] .tn-qb-chip[aria-checked="true"] { background:#2b6cb0; border-color:#4299e1; color:#fff; }
 html[data-theme="dark"] .tn-qb-toolbar { background:#1a202c; border-color:#4a5568; }
 html[data-theme="dark"] .tn-qb-badge { color:#f6e05e; }
 html[data-theme="dark"] .tn-qb-count, html[data-theme="dark"] .tn-qb-note { color:#a0aec0; }
 html[data-theme="dark"] .tn-qb-empty:hover, html[data-theme="dark"] .tn-qb-empty:focus-visible { background:#2a4365; }
-html[data-theme="dark"] .tn-qb-hint { color:#718096; }
+html[data-theme="dark"] .tn-qb-hint { color:#a0aec0; }
+html[data-theme="dark"] .tn-qb-input::placeholder { color:#a0aec0; opacity:1; }
 html[data-theme="dark"] .tn-qb-alias-tag { color:#a0aec0; border-color:#4a5568; }
-html[data-theme="dark"] .tn-qb-clear { color:#718096; }
+html[data-theme="dark"] .tn-qb-clear { color:#a0aec0; }
 html[data-theme="dark"] .tn-qb-filled:hover .tn-qb-clear, html[data-theme="dark"] .tn-qb-clear:focus-visible { color:#fc8181; }
 html[data-theme="dark"] .tn-qb-drop { box-shadow:inset 0 0 0 2px #63b3ed; }
 html[data-theme="dark"] .tn-qb-swap-src { background:#5f370e; }
