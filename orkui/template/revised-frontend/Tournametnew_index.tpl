@@ -1543,6 +1543,7 @@ html[data-theme="dark"] .tn-bv-tbd-label { color:#718096; }
 html[data-theme="dark"] .tn-qb-field-label { color:#a0aec0; }
 html[data-theme="dark"] .tn-qb-chip { background:#2d3748; border-color:#4a5568; color:#e2e8f0; }
 html[data-theme="dark"] .tn-qb-chip[aria-checked="true"] { background:#2b6cb0; border-color:#4299e1; color:#fff; }
+html[data-theme="dark"] .tn-qb-chip:focus-visible { outline-color:#90cdf4; }
 html[data-theme="dark"] .tn-qb-toolbar { background:#1a202c; border-color:#4a5568; }
 html[data-theme="dark"] .tn-qb-badge { color:#f6e05e; }
 html[data-theme="dark"] .tn-qb-count, html[data-theme="dark"] .tn-qb-note { color:#a0aec0; }
@@ -15671,7 +15672,12 @@ window.tnMethodAllowsTie = function(method) { return method === 'round-robin' ||
 	function anyActive() {
 		var bd = TnConfig.bracketData || {};
 		for (var k in bd) { if (bd[k] && bd[k].Bracket && bd[k].Bracket.Status === 'active') return true; }
-		return false;
+		// A Quick Bracket draft on screen is live too: peers fill seats seconds apart.
+		var sel = document.getElementById('tn-bv-bracket-select');
+		var cur = sel ? parseInt(sel.value, 10) : 0;
+		var box = document.getElementById('tn-bv-container');
+		return !!(cur && window.TnQuickBracket && window.TnQuickBracket.isDraftBracket(cur)
+			&& box && box.offsetParent !== null && box.querySelector('.tn-qb-toolbar'));
 	}
 
 	// Participants JSON for a bracket still in setup (null otherwise / on failure).

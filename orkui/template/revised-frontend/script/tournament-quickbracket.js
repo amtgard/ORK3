@@ -109,12 +109,14 @@
         var b  = bd && bd.Bracket;
         return !!b && (parseInt(b.DrawSize, 10) || 0) > 0
             && (b.Method === 'single' || b.Method === 'double')
+            && b.Participants === 'individual'
             && (!b.Status || b.Status === 'setup');
     }
 
     var _starting = {};    // bracketId → true while a quickstart is in flight (double-click guard)
     function start(bracketId, btn) {
         if (_starting[bracketId]) return Promise.resolve();
+        if (_ctx && _ctx.bracketId === (parseInt(bracketId, 10) || 0) && hasPending()) return Promise.resolve();   // placements still in flight
         _starting[bracketId] = true;
         if (btn) btn.disabled = true;
         return post('TournamentAjax/bracket/' + bracketId + '/quickstart', { TournamentId: TnConfig.tournamentId })
@@ -180,6 +182,7 @@
         var b = bd && bd.Bracket;
         return !!b && (parseInt(b.DrawSize, 10) || 0) > 0
             && (b.Method === 'single' || b.Method === 'double')
+            && b.Participants === 'individual'
             && (!b.Status || b.Status === 'setup')
             && Array.isArray(bd.Matches) && bd.Matches.length === 0;
     }
@@ -279,6 +282,9 @@
         if (_ctx.placed < min) {
             startBtn.disabled = true;
             startBtn.setAttribute('data-tip', 'Place at least ' + min + ' fighters to start');
+        } else if (hasPending()) {
+            startBtn.disabled = true;
+            startBtn.setAttribute('data-tip', 'Finishing placements\u2026');
         }
         startBtn.onclick = function () { start(bracketId, startBtn); };
         bar.appendChild(startBtn);
@@ -698,7 +704,7 @@
             });
     }
 
-    function hasPending() { return (_ctx.bd.Participants || []).some(function (p) { return p._pending; }); }
+    function hasPending() { return !!_ctx && (_ctx.bd.Participants || []).some(function (p) { return p._pending; }); }
 
     function shuffleSeeds(bid) {
         if (hasPending()) return;
