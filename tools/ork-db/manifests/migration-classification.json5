@@ -125,6 +125,7 @@
     "2026-08-07-orphaned-attendance-diagnostic.sql": { "class": "PB", "render": "skip", "notes": "Read-only diagnostic; never applied anywhere — product decision pending on the 4,978 orphans" },
     "README-2026-08-07-regression-fixes.md": { "class": "ES", "render": "skip", "notes": "Documentation for the 2026-08-07 regression-fix migrations; not a migration" },
     "2026-08-21-innodb-merge-tables.sql": { "class": "S", "render": "full", "notes": "Engine conversion so merge transactions actually roll back; idempotent ALTERs" },
-    "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" }
+    "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-10-02-bracket-draw-size.sql": { "class": "S", "render": "full", "notes": "Quick Bracket starting draw size; nullable column, idempotent ADD COLUMN IF NOT EXISTS" }
   }
 }

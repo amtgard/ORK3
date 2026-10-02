@@ -815,6 +815,7 @@ class Tournament extends Ork3
                     'PointRounds'    => (int)$r->point_rounds,
                     'PointMode'      => (string)$r->point_mode,
                     'PointScale'     => (string)$r->point_scale,
+                    'DrawSize'       => ($r->draw_size === null || $r->draw_size === '') ? null : (int)$r->draw_size,
                 ];
             }
         }
