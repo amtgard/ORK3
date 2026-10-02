@@ -1509,6 +1509,23 @@ class Tournament extends Ork3
                 $rows[] = ['ParticipantId' => (int)$r->participant_id, 'Seed' => (int)$r->seed];
             }
         }
+        // Pre-validate what GenerateMatches would reject, so a refused Start never renumbers seats.
+        $br = $this->db->query(
+            "SELECT status, method FROM " . DB_PREFIX . "bracket WHERE bracket_id = :bid LIMIT 1",
+            [':bid' => $bid]
+        );
+        if (!$br || !$br->next()) {
+            return InvalidParameter('Bracket not found');
+        }
+        if (!in_array((string)$br->status, ['setup', ''], true)) {
+            return InvalidParameter(null, 'This bracket has already started.');
+        }
+        if (count($rows) < 2) {
+            return InvalidParameter('Need at least 2 participant(s)');
+        }
+        if ((string)$br->method === 'double' && count($rows) < 3) {
+            return InvalidParameter('Double elimination requires at least 3 participants');
+        }
         $order = self::quick_seed_order($rows);
         if (count($order) > 0) {
             $ro = $this->ReorderSeeds([

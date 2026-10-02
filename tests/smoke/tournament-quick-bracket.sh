@@ -95,8 +95,29 @@ check "double still setup" "$(DB "SELECT status FROM ork_bracket WHERE bracket_i
 post "TournamentAjax/bracket/$BD/quickplace" --data-urlencode "Alias=QB$$ dbl 3" --data "TournamentId=$TID&Seed=3" >/dev/null
 check "double with 3 starts" "$(post "TournamentAjax/bracket/$BD/quickstart" --data "TournamentId=$TID" | J status)" "0"
 
+# Refused Start must not renumber seats: double/4 with 2 fighters at seeds 3 and 4.
+BR=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=double&DrawSize=4" | J bracketId)
+for s in 3 4; do post "TournamentAjax/bracket/$BR/quickplace" --data-urlencode "Alias=QB$$ refuse $s" --data "TournamentId=$TID&Seed=$s" >/dev/null; done
+rej "refused double start" "$(post "TournamentAjax/bracket/$BR/quickstart" --data "TournamentId=$TID" | J status)"
+check "refused start leaves seeds 3,4" "$(DB "SELECT GROUP_CONCAT(seed ORDER BY seed) FROM ork_participant WHERE bracket_id=$BR")" "3,4"
+check "refused start leaves setup" "$(DB "SELECT status FROM ork_bracket WHERE bracket_id=$BR")" "setup"
+
+# Long-way regression: alias-only add and team add.
+AB=$(post "TournamentAjax/tournament/$TID/addbracket" --data "Style=Open%20Weapons&Method=single&Participants=individual&Rings=1&Seeding=manual&BestOf=1" | J bracketId)
+AA="QB$$ aliasonly"
+AR=$(post "TournamentAjax/bracket/$AB/addparticipant" --data-urlencode "Alias=$AA" --data "TournamentId=$TID")
+APID=$(echo "$AR" | J participantId)
+check "alias-only add status" "$(echo "$AR" | J status)" "0"
+check "alias-only entrant has no player link" "$(DB "SELECT COUNT(*) FROM ork_participant p LEFT JOIN ork_participant_mundane pm ON pm.participant_id=p.participant_id WHERE p.participant_id=$APID AND pm.mundane_id IS NULL")" "1"
+check "alias-only registration row shares number" "$(DB "SELECT COUNT(*) FROM ork_participant e JOIN ork_participant r ON r.tournament_id=e.tournament_id AND r.bracket_id IS NULL AND r.alias=e.alias AND r.participant_number=e.participant_number WHERE e.participant_id=$APID AND e.participant_number>0")" "1"
+TB=$(post "TournamentAjax/tournament/$TID/addbracket" --data "Style=Open%20Weapons&Method=single&Participants=team&Rings=1&Seeding=manual&BestOf=1" | J bracketId)
+TR=$(post "TournamentAjax/bracket/$TB/addparticipant" --data-urlencode "Alias=QB$$ team" --data-urlencode "Members=[{\"MundaneId\":$M2},{\"MundaneId\":$M3}]" --data "TournamentId=$TID")
+check "team add status" "$(echo "$TR" | J status)" "0"
+check "team record with number" "$(DB "SELECT COUNT(*) FROM ork_participant_teams WHERE bracket_id=$TB AND team_number>0")" "1"
+check "team has 2 members" "$(DB "SELECT COUNT(*) FROM ork_participant_team_members tm JOIN ork_participant_teams t ON t.team_id=tm.team_id WHERE t.bracket_id=$TB")" "2"
+
 # Cleanup: delete every bracket this run created (registrations stay — the dev DB is disposable).
-for b in $BID $LB $B6 $B16 $BD; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
+for b in $BID $LB $B6 $B16 $BD $BR $AB $TB; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
 
 rm -f "$JAR"
 echo "PASS=$PASS FAIL=$FAIL"
