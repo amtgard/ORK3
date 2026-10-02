@@ -857,6 +857,54 @@ class Tournament extends Ork3
     }
 
     /**
+     * Shared core of a per-bracket add — the long-way AddParticipant and QuickPlace both run it,
+     * so a quick-placed fighter can't drift from a long-way one: auto-register at the tournament
+     * level (ensureRegistrant), insert the bracket entrant sharing that participant_number, and for
+     * a player link them and snapshot warrior/griffon levels. $person: ['MundaneId'=>int,
+     * 'Alias'=>string, 'UnitId'=>int, 'ParkId'=>int, 'KingdomId'=>int] with ParkId/KingdomId already
+     * resolved via resolveHomeScope. Caller owns the transaction.
+     * Returns ['ParticipantId'=>int, 'ParticipantNumber'=>int]; ParticipantId 0 = save failed.
+     */
+    private function insertBracketEntrant(int $tournament_id, int $bracket_id, array $person): array
+    {
+        $mid  = (int)($person['MundaneId'] ?? 0);
+        $reg  = $this->ensureRegistrant($tournament_id, $person);
+        $pnum = (int)$reg['ParticipantNumber'];
+
+        $this->Participant->clear();
+        $this->Participant->tournament_id      = $tournament_id;
+        $this->Participant->bracket_id         = $bracket_id;
+        $this->Participant->alias              = $person['Alias'] ?? '';
+        $this->Participant->unit_id            = (int)($person['UnitId'] ?? 0);
+        $this->Participant->park_id            = (int)($person['ParkId'] ?? 0);
+        $this->Participant->kingdom_id         = (int)($person['KingdomId'] ?? 0);
+        $this->Participant->participant_number = $pnum;
+        $this->Participant->save();
+        $pid = (int)$this->Participant->participant_id;
+        if (!valid_id($pid)) {
+            return ['ParticipantId' => 0, 'ParticipantNumber' => $pnum];
+        }
+
+        if (valid_id($mid)) {
+            $this->Player->clear();
+            $this->Player->participant_id = $pid;
+            $this->Player->mundane_id     = $mid;
+            $this->Player->tournament_id  = $tournament_id;
+            $this->Player->bracket_id     = $bracket_id;
+            $this->Player->save();
+            // Snapshot Order-of-the-Warrior level (0-12) at time of competition.
+            $awards_map = $this->fetchAwardsForMundanes([$mid]);
+            $lvl  = isset($awards_map[$mid]) ? $this->warriorLevelFromAwards($awards_map[$mid]) : 0;
+            $glvl = isset($awards_map[$mid]) ? $this->griffonLevelFromAwards($awards_map[$mid]) : 0;
+            $this->db->query(
+                "UPDATE " . DB_PREFIX . "participant SET warrior_level = :lvl, griffon_level = :glvl WHERE participant_id = :pid",
+                [':lvl' => (int)$lvl, ':glvl' => (int)$glvl, ':pid' => $pid]
+            );
+        }
+        return ['ParticipantId' => $pid, 'ParticipantNumber' => $pnum];
+    }
+
+    /**
      * Find-or-create the tournament-level registration row (bracket_id IS NULL)
      * for a person, keyed by the tournament-stable participant_number. Shared by
      * AddParticipant (per-bracket auto-register) and RegisterParticipant.
@@ -1163,50 +1211,21 @@ class Tournament extends Ork3
             );
             $this->db->query('START TRANSACTION');
             try {
-                // Ensure a tournament-level registration row exists (bracket_id IS NULL),
-                // then reuse its tournament-stable participant_number for the entrant row.
-                $reg = $this->ensureRegistrant($_tid, [
+                $ent = $this->insertBracketEntrant($_tid, (int)$request['BracketId'], [
                     'MundaneId' => $_mid,
                     'Alias'     => $request['Alias'] ?? '',
                     'UnitId'    => (int)($request['UnitId'] ?? 0),
                     'ParkId'    => $_park,
                     'KingdomId' => $_kingdom,
                 ]);
-                $_pnum = $reg['ParticipantNumber'];
-
-                $this->Participant->clear();
-                $this->Participant->tournament_id      = (int)$request['TournamentId'];
-                $this->Participant->bracket_id         = (int)$request['BracketId'];
-                $this->Participant->alias              = $request['Alias'];
-                $this->Participant->unit_id            = (int)($request['UnitId']     ?? 0);
-                $this->Participant->park_id            = $_park;
-                $this->Participant->kingdom_id         = $_kingdom;
-                $this->Participant->participant_number = $_pnum;
-                $this->Participant->save();
-                if (!valid_id($this->Participant->participant_id)) {
+                $_pnum = $ent['ParticipantNumber'];
+                if (!valid_id($ent['ParticipantId'])) {
                     $this->db->query('ROLLBACK');
                     return InvalidParameter('Participant save failed — check DB sql_mode and table constraints');
                 }
-                $_pid  = (int)$this->Participant->participant_id;
+                $_pid = $ent['ParticipantId'];
 
-                if (valid_id($request['MundaneId'])) {
-                    // Individual participant — link single player
-                    $this->Player->clear();
-                    $this->Player->participant_id = $this->Participant->participant_id;
-                    $this->Player->mundane_id     = $request['MundaneId'];
-                    $this->Player->tournament_id  = $request['TournamentId'];
-                    $this->Player->bracket_id     = $request['BracketId'];
-                    $this->Player->save();
-                    // Snapshot Order-of-the-Warrior level (0-12) at time of competition.
-                    $awards_map = $this->fetchAwardsForMundanes([(int)$request['MundaneId']]);
-                    $mid = (int)$request['MundaneId'];
-                    $lvl  = isset($awards_map[$mid]) ? $this->warriorLevelFromAwards($awards_map[$mid]) : 0;
-                    $glvl = isset($awards_map[$mid]) ? $this->griffonLevelFromAwards($awards_map[$mid]) : 0;
-                    $this->db->query(
-                        "UPDATE " . DB_PREFIX . "participant SET warrior_level = :lvl, griffon_level = :glvl WHERE participant_id = :pid",
-                        [':lvl' => (int)$lvl, ':glvl' => (int)$glvl, ':pid' => (int)$_pid]
-                    );
-                } elseif (!empty($request['Members'])) {
+                if (!valid_id($_mid) && !empty($request['Members'])) {
                     // Team participant — create durable team record then link members
                     $_tid2  = (int)$this->Participant->tournament_id;
                     $_bid2  = (int)$this->Participant->bracket_id;
@@ -1273,8 +1292,241 @@ class Tournament extends Ork3
                 throw $e;
             }
             $this->bustTournamentReportCache();
-            return Success(['ParticipantId' => (int)$this->Participant->participant_id, 'ParticipantNumber' => (int)$_pnum]);
+            return Success(['ParticipantId' => (int)$_pid, 'ParticipantNumber' => (int)$_pnum]);
         }
+    }
+
+    /**
+     * Quick Bracket final seed order. Seeded entrants keep their seat (a duplicate seed goes to
+     * the lower participant id); seed-0 entrants — added the long way — fill the lowest empty
+     * seats by participant id; then gaps close. $rows: list of ['ParticipantId'=>int,'Seed'=>int].
+     * Returns participant ids, top seed first. Mirrored by seatEntrants() in
+     * script/tournament-quickbracket.js — keep the two in step. Pure (no DB, no token), hence
+     * the underscore name: the JSON service refuses '_' methods.
+     */
+    public static function quick_seed_order(array $rows): array
+    {
+        usort($rows, fn ($a, $b) => (int)$a['ParticipantId'] <=> (int)$b['ParticipantId']);
+        $seats    = [];
+        $unseeded = [];
+        foreach ($rows as $row) {
+            $s = (int)$row['Seed'];
+            if ($s > 0 && !isset($seats[$s])) {
+                $seats[$s] = (int)$row['ParticipantId'];
+            } else {
+                $unseeded[] = (int)$row['ParticipantId'];
+            }
+        }
+        $s = 1;
+        foreach ($unseeded as $pid) {
+            while (isset($seats[$s])) {
+                $s++;
+            }
+            $seats[$s] = $pid;
+        }
+        ksort($seats);
+        return array_values($seats);
+    }
+
+    /** Quick Bracket starting sizes (spec 2026-10-02). */
+    private const QUICK_DRAW_SIZES = [4, 8, 12, 16, 24, 32];
+
+    /**
+     * Quick Bracket: an individual, manually seeded single/double-elim bracket with the defaults
+     * below plus draw_size, which makes the UI render it as an empty seeded draft draw.
+     * Request: Token, TournamentId, Method (single|double), DrawSize (4|8|12|16|24|32).
+     */
+    public function CreateQuickBracket($request)
+    {
+        $method    = (string)($request['Method'] ?? '');
+        $draw_size = (int)($request['DrawSize'] ?? 0);
+        if (!in_array($method, ['single', 'double'], true)) {
+            return InvalidParameter(null, 'Quick brackets are single or double elimination.');
+        }
+        if (!in_array($draw_size, self::QUICK_DRAW_SIZES, true)) {
+            return InvalidParameter(null, 'Invalid starting size.');
+        }
+        $r = $this->AddBracket([
+            'Token'           => $request['Token'] ?? '',
+            'TournamentId'    => (int)($request['TournamentId'] ?? 0),
+            'Style'           => 'Open Weapons',
+            'StyleNote'       => '',
+            'Method'          => $method,
+            'Rings'           => 1,
+            'Participants'    => 'individual',
+            'Seeding'         => 'manual',
+            'DurationMinutes' => 0,
+            'BestOf'          => 1,
+        ]);
+        if ($r['Status'] != 0) {
+            return $r;
+        }
+        $bracket_id = (int)$r['Detail'];
+        $this->db->query(
+            "UPDATE " . DB_PREFIX . "bracket SET draw_size = :ds WHERE bracket_id = :bid",
+            [':ds' => $draw_size, ':bid' => $bracket_id]
+        );
+        return Success($bracket_id);
+    }
+
+    /**
+     * Quick Bracket: place one fighter into one seat of a draft draw. Runs the same entrant core
+     * as the long-way AddParticipant (registration + entrant + player link + level snapshots),
+     * then sets the seed. Request: Token, TournamentId, BracketId, Seed, MundaneId and/or Alias,
+     * ActionId. A player with no Alias gets their persona.
+     */
+    public function QuickPlace($request)
+    {
+        if (!$this->check_auth($request)) {
+            return NoAuthorization();
+        }
+        $tid   = (int)($request['TournamentId'] ?? 0);
+        $bid   = (int)($request['BracketId'] ?? 0);
+        $seed  = (int)($request['Seed'] ?? 0);
+        $mid   = (int)($request['MundaneId'] ?? 0);
+        $alias = trim((string)($request['Alias'] ?? ''));
+        if (!$this->bracketBelongsTo($bid, $tid)) {
+            return InvalidParameter(null, 'Bracket does not belong to this tournament.');
+        }
+        if (!valid_id($mid) && $alias === '') {
+            return InvalidParameter(null, 'Pick a player or type a name.');
+        }
+        if (valid_id($mid) && $alias === '') {
+            $alias = $this->tnActorName($mid);
+            if ($alias === '') {
+                return InvalidParameter(null, 'Player not found.');
+            }
+        }
+        $alias = mb_substr($alias, 0, 100);
+        [$park, $kingdom] = $this->resolveHomeScope($mid, 0, 0);
+
+        $this->db->query('START TRANSACTION');
+        try {
+            // Lock the bracket row: serializes concurrent placements into the same draft.
+            $b = $this->db->query(
+                "SELECT status, draw_size FROM " . DB_PREFIX . "bracket WHERE bracket_id = :bid FOR UPDATE",
+                [':bid' => $bid]
+            );
+            if (!$b || !$b->next()) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'Bracket not found.');
+            }
+            if (!in_array((string)$b->status, ['setup', ''], true)) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'This bracket has already started.');
+            }
+            $draw_size = (int)$b->draw_size;
+            if ($draw_size <= 0) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'Not a quick bracket.');
+            }
+            $cnt = $this->db->query("SELECT COUNT(*) AS n FROM " . DB_PREFIX . "participant WHERE bracket_id = :bid", [':bid' => $bid]);
+            $entrants = ($cnt && $cnt->next()) ? (int)$cnt->n : 0;
+            if ($seed < 1 || $seed > max($draw_size, $entrants)) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'Invalid seed.');
+            }
+            $taken = $this->db->query(
+                "SELECT participant_id FROM " . DB_PREFIX . "participant WHERE bracket_id = :bid AND seed = :s LIMIT 1",
+                [':bid' => $bid, ':s' => $seed]
+            );
+            if ($taken && $taken->next()) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, 'Seed ' . $seed . ' was just filled.');
+            }
+            if (valid_id($mid)) {
+                $dup = $this->db->query(
+                    "SELECT participant_id FROM " . DB_PREFIX . "participant_mundane WHERE bracket_id = :bid AND mundane_id = :m LIMIT 1",
+                    [':bid' => $bid, ':m' => $mid]
+                );
+            } else {
+                $dup = $this->db->query(
+                    "SELECT p.participant_id FROM " . DB_PREFIX . "participant p
+					 LEFT JOIN " . DB_PREFIX . "participant_mundane pm ON pm.participant_id = p.participant_id
+					 WHERE p.bracket_id = :bid AND pm.mundane_id IS NULL AND p.alias = :a LIMIT 1",
+                    [':bid' => $bid, ':a' => $alias]
+                );
+            }
+            if ($dup && $dup->next()) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter(null, $alias . ' is already in this bracket.');
+            }
+
+            $ent = $this->insertBracketEntrant($tid, $bid, [
+                'MundaneId' => $mid,
+                'Alias'     => $alias,
+                'UnitId'    => 0,
+                'ParkId'    => $park,
+                'KingdomId' => $kingdom,
+            ]);
+            if (!valid_id($ent['ParticipantId'])) {
+                $this->db->query('ROLLBACK');
+                return InvalidParameter('Participant save failed — check DB sql_mode and table constraints');
+            }
+            $this->db->query(
+                "UPDATE " . DB_PREFIX . "participant SET seed = :s WHERE participant_id = :pid",
+                [':s' => $seed, ':pid' => $ent['ParticipantId']]
+            );
+
+            $actor_id  = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+            $action_id = substr(trim($request['ActionId'] ?? ''), 0, 36);
+            $seq = $this->tnEmitEvent($tid, $bid, 'participant_placed', [
+                'bracket_id' => $bid,
+                'seed'       => $seed,
+            ], $actor_id, $action_id !== '' ? $action_id : null);
+            $this->db->query('COMMIT');
+        } catch (\Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
+        }
+        $this->bustTournamentReportCache();
+        $this->tnPublishSeq($tid, $seq);
+        return Success(['ParticipantId' => $ent['ParticipantId'], 'ParticipantNumber' => $ent['ParticipantNumber'], 'Seq' => $seq]);
+    }
+
+    /**
+     * Quick Bracket Start: normalize seeds with quick_seed_order (seed-0 long-way adds take the
+     * lowest empty seats, gaps close) and run the normal generator, which sizes the draw to the
+     * fighters placed and gives byes to the top seeds. Request: Token, TournamentId, BracketId, ActionId.
+     */
+    public function StartQuickBracket($request)
+    {
+        if (!$this->check_auth($request)) {
+            return NoAuthorization();
+        }
+        $tid = (int)($request['TournamentId'] ?? 0);
+        $bid = (int)($request['BracketId'] ?? 0);
+        if (!$this->bracketBelongsTo($bid, $tid)) {
+            return InvalidParameter(null, 'Bracket does not belong to this tournament.');
+        }
+        $rows = [];
+        $r = $this->db->query(
+            "SELECT participant_id, seed FROM " . DB_PREFIX . "participant WHERE bracket_id = :bid",
+            [':bid' => $bid]
+        );
+        if ($r) {
+            while ($r->next()) {
+                $rows[] = ['ParticipantId' => (int)$r->participant_id, 'Seed' => (int)$r->seed];
+            }
+        }
+        $order = self::quick_seed_order($rows);
+        if (count($order) > 0) {
+            $ro = $this->ReorderSeeds([
+                'Token'        => $request['Token'] ?? '',
+                'TournamentId' => $tid,
+                'BracketId'    => $bid,
+                'Order'        => $order,
+            ]);
+            if ($ro['Status'] != 0) {
+                return $ro;
+            }
+        }
+        return $this->GenerateMatches([
+            'Token'        => $request['Token'] ?? '',
+            'TournamentId' => $tid,
+            'BracketId'    => $bid,
+            'ActionId'     => $request['ActionId'] ?? '',
+        ]);
     }
 
     public function GetParticipants($request)

@@ -46,6 +46,21 @@ class Model_Tournament extends Model
         return $this->Tournament->AddParticipant($request);
     }
 
+    public function create_quick_bracket($request)
+    {
+        return $this->Tournament->CreateQuickBracket($request);
+    }
+
+    public function quick_place($request)
+    {
+        return $this->Tournament->QuickPlace($request);
+    }
+
+    public function start_quick_bracket($request)
+    {
+        return $this->Tournament->StartQuickBracket($request);
+    }
+
     public function get_brackets($tournament_id)
     {
         return $this->Tournament->GetBrackets(['TournamentId' => $tournament_id]);

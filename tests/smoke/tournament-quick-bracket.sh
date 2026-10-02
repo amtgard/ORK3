@@ -27,6 +27,77 @@ check "draw_size column exists" "$COL" "1"
 
 # --- Task 2 and Task 3 sections are appended below this line ---
 
+echo "Task 2: create / place / start"
+read -r M1 M2 M3 <<<"$(DB "SELECT GROUP_CONCAT(mundane_id SEPARATOR ' ') FROM (SELECT mundane_id FROM ork_mundane WHERE persona <> '' AND active = 1 AND park_id > 0 ORDER BY mundane_id LIMIT 3) x")"
+QB=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=8")
+BID=$(echo "$QB" | J bracketId)
+check "quickbracket status" "$(echo "$QB" | J status)" "0"
+check "bracket defaults" "$(DB "SELECT CONCAT_WS('|',style,method,participants,seeding,rings,best_of,status,draw_size) FROM ork_bracket WHERE bracket_id=$BID")" "Open Weapons|single|individual|manual|1|1|setup|8"
+rej "bad size rejected" "$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=7" | J status)"
+rej "swiss rejected" "$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=swiss&DrawSize=8" | J status)"
+
+P1=$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=1&MundaneId=$M1")
+check "place persona" "$(echo "$P1" | J status)" "0"
+PID1=$(echo "$P1" | J participantId)
+check "persona entrant seed+link" "$(DB "SELECT CONCAT_WS('|',p.seed,pm.mundane_id,p.participant_number>0) FROM ork_participant p JOIN ork_participant_mundane pm ON pm.participant_id=p.participant_id WHERE p.participant_id=$PID1")" "1|$M1|1"
+check "persona registration row" "$(DB "SELECT COUNT(*) FROM ork_participant p JOIN ork_participant_mundane pm ON pm.participant_id=p.participant_id WHERE p.tournament_id=$TID AND p.bracket_id IS NULL AND pm.mundane_id=$M1")" "1"
+check "persona home scope" "$(DB "SELECT (p.park_id=m.park_id AND p.kingdom_id=m.kingdom_id) FROM ork_participant p JOIN ork_mundane m ON m.mundane_id=$M1 WHERE p.participant_id=$PID1")" "1"
+check "persona alias = persona" "$(DB "SELECT p.alias = m.persona FROM ork_participant p JOIN ork_mundane m ON m.mundane_id=$M1 WHERE p.participant_id=$PID1")" "1"
+
+ALIAS="Jynx Furfighter QB$$"
+P2=$(post "TournamentAjax/bracket/$BID/quickplace" --data-urlencode "Alias=$ALIAS" --data "TournamentId=$TID&Seed=2")
+PID2=$(echo "$P2" | J participantId)
+check "place alias" "$(echo "$P2" | J status)" "0"
+check "alias has no player link" "$(DB "SELECT COUNT(*) FROM ork_participant_mundane WHERE participant_id=$PID2")" "0"
+check "alias registration row" "$(DB "SELECT COUNT(*) FROM ork_participant WHERE tournament_id=$TID AND bracket_id IS NULL AND alias='$ALIAS'")" "1"
+
+rej "duplicate seed rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=1&MundaneId=$M2" | J status)"
+rej "duplicate player rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=3&MundaneId=$M1" | J status)"
+rej "duplicate alias rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data-urlencode "Alias=$ALIAS" --data "TournamentId=$TID&Seed=3" | J status)"
+rej "seed beyond size rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=9&MundaneId=$M2" | J status)"
+rej "seed 0 rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=0&MundaneId=$M2" | J status)"
+
+# Parity with the long way: same fighter added via addparticipant to a normal bracket.
+LB=$(post "TournamentAjax/tournament/$TID/addbracket" --data "Style=Open%20Weapons&Method=single&Participants=individual&Rings=1&Seeding=manual&BestOf=1" | J bracketId)
+LP=$(post "TournamentAjax/bracket/$LB/addparticipant" --data "TournamentId=$TID&MundaneId=$M1&Alias=x" | J participantId)
+check "parity: same participant_number" "$(DB "SELECT COUNT(DISTINCT participant_number) FROM ork_participant WHERE participant_id IN ($PID1,$LP)")" "1"
+check "parity: same scope+levels" "$(DB "SELECT COUNT(DISTINCT CONCAT_WS('|',park_id,kingdom_id,warrior_level,griffon_level)) FROM ork_participant WHERE participant_id IN ($PID1,$LP)")" "1"
+
+P3=$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=5&MundaneId=$M2")
+check "place seed 5" "$(echo "$P3" | J status)" "0"
+# A long-way add (seed 0) must take the lowest empty seat (3) at Start.
+P4=$(post "TournamentAjax/bracket/$BID/addparticipant" --data "TournamentId=$TID&MundaneId=$M3&Alias=y" | J participantId)
+ST=$(post "TournamentAjax/bracket/$BID/quickstart" --data "TournamentId=$TID")
+check "quickstart status" "$(echo "$ST" | J status)" "0"
+check "bracket active" "$(DB "SELECT status FROM ork_bracket WHERE bracket_id=$BID")" "active"
+check "seeds compacted 1..4" "$(DB "SELECT GROUP_CONCAT(participant_id ORDER BY seed) FROM ork_participant WHERE bracket_id=$BID")" "$PID1,$PID2,$P4,$(echo "$P3" | J participantId)"
+check "4 fighters -> 4-slot draw" "$(DB "SELECT COUNT(*) FROM ork_match WHERE bracket_id=$BID AND round=1")" "2"
+rej "place after start rejected" "$(post "TournamentAjax/bracket/$BID/quickplace" --data "TournamentId=$TID&Seed=6&MundaneId=$M2" | J status)"
+
+# 6 of 8: byes to seeds 1 and 2 (auto-advanced).
+B6=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=8" | J bracketId)
+for s in 1 2 3 4 5 6; do post "TournamentAjax/bracket/$B6/quickplace" --data-urlencode "Alias=QB$$ six $s" --data "TournamentId=$TID&Seed=$s" >/dev/null; done
+post "TournamentAjax/bracket/$B6/quickstart" --data "TournamentId=$TID" >/dev/null
+check "6/8: two auto-resolved byes" "$(DB "SELECT COUNT(*) FROM ork_match WHERE bracket_id=$B6 AND round=1 AND auto_resolved=1")" "2"
+check "6/8: byes are seeds 1,2" "$(DB "SELECT GROUP_CONCAT(p.seed ORDER BY p.seed) FROM ork_match m JOIN ork_participant p ON p.participant_id = IF(m.participant_1_id>0,m.participant_1_id,m.participant_2_id) WHERE m.bracket_id=$B6 AND m.round=1 AND m.auto_resolved=1")" "1,2"
+
+# 5 placed in a 16: an 8-slot draw.
+B16=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=16" | J bracketId)
+for s in 1 2 3 4 5; do post "TournamentAjax/bracket/$B16/quickplace" --data-urlencode "Alias=QB$$ sixteen $s" --data "TournamentId=$TID&Seed=$s" >/dev/null; done
+post "TournamentAjax/bracket/$B16/quickstart" --data "TournamentId=$TID" >/dev/null
+check "5 in 16 -> 8-slot draw" "$(DB "SELECT COUNT(*) FROM ork_match WHERE bracket_id=$B16 AND round=1")" "4"
+
+# Double: 2 rejected, 3 generates.
+BD=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=double&DrawSize=4" | J bracketId)
+for s in 1 2; do post "TournamentAjax/bracket/$BD/quickplace" --data-urlencode "Alias=QB$$ dbl $s" --data "TournamentId=$TID&Seed=$s" >/dev/null; done
+rej "double with 2 rejected" "$(post "TournamentAjax/bracket/$BD/quickstart" --data "TournamentId=$TID" | J status)"
+check "double still setup" "$(DB "SELECT status FROM ork_bracket WHERE bracket_id=$BD")" "setup"
+post "TournamentAjax/bracket/$BD/quickplace" --data-urlencode "Alias=QB$$ dbl 3" --data "TournamentId=$TID&Seed=3" >/dev/null
+check "double with 3 starts" "$(post "TournamentAjax/bracket/$BD/quickstart" --data "TournamentId=$TID" | J status)" "0"
+
+# Cleanup: delete every bracket this run created (registrations stay — the dev DB is disposable).
+for b in $BID $LB $B6 $B16 $BD; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
+
 rm -f "$JAR"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -313,6 +313,17 @@ class Controller_TournamentAjax extends Controller
                 ? json_encode(['status' => 0, 'bracketId' => (int)($r['Detail'] ?? 0)])
                 : $this->modelError($r);
 
+        } elseif ($action === 'quickbracket') {
+            $r = $this->Tournament->create_quick_bracket([
+                'Token'        => $this->session->token,
+                'TournamentId' => $tournament_id,
+                'Method'       => trim($_POST['Method'] ?? ''),
+                'DrawSize'     => (int)($_POST['DrawSize'] ?? 0),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'bracketId' => (int)($r['Detail'] ?? 0)])
+                : $this->modelError($r);
+
         } elseif ($action === 'generate') {
             $bracket_id = (int)($_POST['BracketId'] ?? 0);
             if (!valid_id($bracket_id)) {
@@ -838,6 +849,49 @@ class Controller_TournamentAjax extends Controller
             } else {
                 echo $this->modelError($r);
             }
+
+        } elseif ($action === 'quickplace') {
+            $tid = (int)($_POST['TournamentId'] ?? 0);
+            if (!valid_id($tid)) {
+                echo json_encode(['status' => 1, 'error' => 'TournamentId required.']);
+                exit;
+            }
+            $r = $this->Tournament->quick_place([
+                'Token'        => $this->session->token,
+                'TournamentId' => $tid,
+                'BracketId'    => $bracket_id,
+                'Seed'         => (int)($_POST['Seed'] ?? 0),
+                'MundaneId'    => (int)($_POST['MundaneId'] ?? 0),
+                'Alias'        => trim($_POST['Alias'] ?? ''),
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
+            ]);
+            if ($r['Status'] == 0) {
+                $d = is_array($r['Detail'] ?? null) ? $r['Detail'] : [];
+                echo json_encode([
+                    'status'            => 0,
+                    'participantId'     => (int)($d['ParticipantId'] ?? 0),
+                    'participantNumber' => (int)($d['ParticipantNumber'] ?? 0),
+                    'seq'               => (int)($d['Seq'] ?? 0),
+                ]);
+            } else {
+                echo $this->modelError($r);
+            }
+
+        } elseif ($action === 'quickstart') {
+            $tid = (int)($_POST['TournamentId'] ?? 0);
+            if (!valid_id($tid)) {
+                echo json_encode(['status' => 1, 'error' => 'TournamentId required.']);
+                exit;
+            }
+            $r = $this->Tournament->start_quick_bracket([
+                'Token'        => $this->session->token,
+                'TournamentId' => $tid,
+                'BracketId'    => $bracket_id,
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'bracketId' => $bracket_id])
+                : $this->modelError($r);
 
         } elseif ($action === 'removeparticipant') {
             $participant_id = (int)($_POST['ParticipantId'] ?? 0);
