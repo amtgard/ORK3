@@ -232,15 +232,15 @@
 
     // What Start will actually run when it differs from the drawn seats (spec "close gaps").
     // Start compacts the N placed fighters into nextPow2(N) slots with byes to the top seeds.
-    // Fighters in seats 1..N with nothing beyond (highest occupied seat = N) already ARE that
-    // draw — standard seed order nests, so the larger empty draw plays out identically.
+    // Shown when that slot count differs from the drawn one (e.g. 3 in an 8 shows seeds 2 and 3
+    // facing byes, but Start gives seed 1 the bye and pairs 2 v 3), or when seats 1..N have a gap.
     function runNote() {
         var n = _ctx.placed;
         if (n < (_ctx.method === 'double' ? 3 : 2)) return '';
         var gap = false;
         for (var s = 1; s <= n; s++) if (!_ctx.seats[s]) { gap = true; break; }
         var slots = nextPow2(Math.max(n, 2)), byes = slots - n;
-        if (!gap && nextPow2(maxSeatOf(_ctx.seats)) === slots) return '';
+        if (!gap && slots === Math.max(4, nextPow2(_ctx.eff))) return '';
         return 'Start seats ' + n + ' fighters in ' + (slots === 8 ? 'an ' : 'a ') + slots + '-slot draw'
             + (byes === 1 ? ' \u2014 bye to seed 1' : byes > 1 ? ' \u2014 byes to seeds 1\u2013' + byes : '');
     }
