@@ -116,8 +116,21 @@ check "team add status" "$(echo "$TR" | J status)" "0"
 check "team record with number" "$(DB "SELECT COUNT(*) FROM ork_participant_teams WHERE bracket_id=$TB AND team_number>0")" "1"
 check "team has 2 members" "$(DB "SELECT COUNT(*) FROM ork_participant_team_members tm JOIN ork_participant_teams t ON t.team_id=tm.team_id WHERE t.bracket_id=$TB")" "2"
 
+echo "Task 3: realtime on remove/reorder"
+BRT=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=4" | J bracketId)
+RA=$(post "TournamentAjax/bracket/$BRT/quickplace" --data-urlencode "Alias=QB$$ r1" --data "TournamentId=$TID&Seed=1" | J participantId)
+RB=$(post "TournamentAjax/bracket/$BRT/quickplace" --data-urlencode "Alias=QB$$ r2" --data "TournamentId=$TID&Seed=2" | J participantId)
+SEQ0=$(DB "SELECT last_seq FROM ork_tournament_seq WHERE tournament_id=$TID")
+post "TournamentAjax/bracket/$BRT/reorder" --data-urlencode "Order=[$RB,$RA]" --data "TournamentId=$TID&ActionId=qbtest-reorder-$$" >/dev/null
+check "reorder emits event" "$(DB "SELECT type FROM ork_tournament_event WHERE tournament_id=$TID AND action_id='qbtest-reorder-$$'")" "seeds_reordered"
+check "reorder swapped" "$(DB "SELECT GROUP_CONCAT(participant_id ORDER BY seed) FROM ork_participant WHERE bracket_id=$BRT")" "$RB,$RA"
+post "TournamentAjax/bracket/$BRT/removeparticipant" --data "TournamentId=$TID&ParticipantId=$RA&ActionId=qbtest-remove-$$" >/dev/null
+check "remove emits event" "$(DB "SELECT CONCAT_WS('|',type,bracket_id) FROM ork_tournament_event WHERE tournament_id=$TID AND action_id='qbtest-remove-$$'")" "participant_removed|$BRT"
+check "removed fighter stays registered" "$(DB "SELECT COUNT(*) FROM ork_participant WHERE tournament_id=$TID AND bracket_id IS NULL AND alias='QB$$ r1'")" "1"
+check "seq advanced" "$(DB "SELECT last_seq > $SEQ0 FROM ork_tournament_seq WHERE tournament_id=$TID")" "1"
+
 # Cleanup: delete every bracket this run created (registrations stay — the dev DB is disposable).
-for b in $BID $LB $B6 $B16 $BD $BR $AB $TB; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
+for b in $BID $LB $B6 $B16 $BD $BR $AB $TB $BRT; do post "TournamentAjax/tournament/$TID/deletebracket" --data "BracketId=$b" >/dev/null; done
 
 rm -f "$JAR"
 echo "PASS=$PASS FAIL=$FAIL"

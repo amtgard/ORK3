@@ -908,6 +908,7 @@ class Controller_TournamentAjax extends Controller
                 'Token'         => $this->session->token,
                 'TournamentId'  => $tid,
                 'ParticipantId' => $participant_id,
+                'ActionId'      => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0, 'participantId' => $participant_id])
@@ -992,6 +993,7 @@ class Controller_TournamentAjax extends Controller
                 'TournamentId' => $tid,
                 'BracketId'    => $bracket_id,
                 'Order'        => $order_arr,
+                'ActionId'     => trim($_POST['ActionId'] ?? ''),
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])

@@ -1938,6 +1938,15 @@ class Tournament extends Ork3
             $this->deleteTeamRows('participant_id', $participant_id);
             $this->db->query("DELETE FROM " . DB_PREFIX . "participant_mundane WHERE participant_id = $participant_id");
             $this->db->query("DELETE FROM " . DB_PREFIX . "participant WHERE participant_id = $participant_id AND tournament_id = $tournament_id");
+            $seq = 0;
+            if ($p_bid > 0) {
+                $actor_id  = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+                $action_id = substr(trim($request['ActionId'] ?? ''), 0, 36);
+                $seq = $this->tnEmitEvent($tournament_id, $p_bid, 'participant_removed', [
+                    'bracket_id'     => $p_bid,
+                    'participant_id' => $participant_id,
+                ], $actor_id, $action_id !== '' ? $action_id : null);
+            }
             $this->db->query('COMMIT');
         } catch (\Throwable $e) {
             $this->db->query('ROLLBACK');
@@ -1945,6 +1954,9 @@ class Tournament extends Ork3
         }
 
         $this->bustTournamentReportCache();
+        if ($seq > 0) {
+            $this->tnPublishSeq($tournament_id, $seq);
+        }
         return Success($participant_id);
     }
 
@@ -5791,12 +5803,19 @@ class Tournament extends Ork3
                     );
                 }
             }
+            $actor_id  = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+            $action_id = substr(trim($request['ActionId'] ?? ''), 0, 36);
+            $seq = $this->tnEmitEvent((int)$request['TournamentId'], $bracket_id, 'seeds_reordered', [
+                'bracket_id' => $bracket_id,
+            ], $actor_id, $action_id !== '' ? $action_id : null);
             $this->db->query('COMMIT');
         } catch (\Throwable $e) {
             $this->db->query('ROLLBACK');
             return ProcessingError('Failed to reorder seeds.');
         }
 
+        $this->bustTournamentReportCache();
+        $this->tnPublishSeq((int)$request['TournamentId'], $seq);
         return Success($bracket_id);
     }
 
