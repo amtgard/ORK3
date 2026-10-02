@@ -22,6 +22,7 @@ on, and re-seeded like any other.
 |---|---|
 | Unfilled slots at Start | **Close gaps, byes to top seeds.** Placed fighters keep relative seed order; the generator sizes the draw to the fighters actually placed (e.g. 6 of 8 → seeds 1–2 bye; 5 placed in a 16 → an 8-draw with 3 byes). |
 | Weapon style | **Silent default: Open Weapons.** Not in the modal; changeable via Edit bracket. |
+| Bouts | **Best of three** by default (user, after first build). Changeable via Edit bracket. |
 | Draw layout | **Standard seed order** (8: 1v8, 4v5, 3v6, 2v7 top→bottom; built by the existing `bracket_seed_order`). The empty draw is exactly the bracket that will run. |
 | Line prompts | Line 1 shows "Type to search for player" (clears on click). Once two fighters are placed, every empty line shows "Bye fight or type to search" until clicked or the bracket is started. |
 | v1 click-savers | Seed-order auto-advance, Enter-to-pick, **roster-first suggestions**, **Shuffle seeds**, **Clear × and drag-swap**. Paste-a-list is **out of scope**. |
@@ -70,7 +71,7 @@ addparticipant. Each accepts `ActionId` and returns `seq`.
 1. **`CreateQuickBracket`** — `POST TournamentAjax/tournament/{tid}/quickbracket`
    (`Method` ∈ {single, double}, `DrawSize` ∈ {4, 8, 12, 16, 24, 32}).
    Calls `AddBracket` with: Style `Open Weapons`, Participants `individual`, Seeding
-   `manual`, Rings 1, BestOf 1, DurationMinutes 0 (FirstRoundMode stays at its `byes`
+   `manual`, Rings 1, BestOf 3, DurationMinutes 0 (FirstRoundMode stays at its `byes`
    default); then sets `draw_size`. Like Add Bracket, it emits no realtime event (bracket
    creation is a lifecycle change the creator's page reloads for). Returns `bracketId`.
 2. **`QuickPlace`** — `POST TournamentAjax/bracket/{bid}/quickplace`

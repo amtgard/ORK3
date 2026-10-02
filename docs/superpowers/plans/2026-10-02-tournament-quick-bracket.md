@@ -16,7 +16,7 @@
 - Never stage `system/lib/ork3/class.Authorization.php`. Never `git add -A`; stage explicit paths and run `git diff --cached --stat` before every commit. Other uncommitted files in the tree (`controller.Kingdom.php`, `controller.Park.php`, `model.Reports.php`, `class.Report.php`, `Kingdomnew_index.tpl`, `Parknew_index.tpl`) belong to separate work — do not stage them.
 - Commit messages end with:
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01VGNQJ8uWsrtrs5kf1e2ECy`
-- Quick Bracket defaults: Style `Open Weapons`, Participants `individual`, Seeding `manual`, Rings 1, BestOf 1, DurationMinutes 0, FirstRoundMode `byes`.
+- Quick Bracket defaults: Style `Open Weapons`, Participants `individual`, Seeding `manual`, Rings 1, BestOf 3, DurationMinutes 0, FirstRoundMode `byes`.
 - Sizes: exactly `4, 8, 12, 16, 24, 32`. Methods: exactly `single`, `double`.
 - Copy (verbatim): line-1 prompt `Type to search for player`; empty-line prompt once ≥2 placed `Bye fight or type to search`; alias row `{typed text} (add without persona match)`; double-elim note `Second Chance bracket builds automatically on Start.`
 - No native `alert/confirm/prompt`; errors via `window.tnToast(msg)`. Tooltips via `data-tip`, never `title`.

@@ -32,7 +32,7 @@ read -r M1 M2 M3 <<<"$(DB "SELECT GROUP_CONCAT(mundane_id SEPARATOR ' ') FROM (S
 QB=$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=8")
 BID=$(echo "$QB" | J bracketId)
 check "quickbracket status" "$(echo "$QB" | J status)" "0"
-check "bracket defaults" "$(DB "SELECT CONCAT_WS('|',style,method,participants,seeding,rings,best_of,status,draw_size) FROM ork_bracket WHERE bracket_id=$BID")" "Open Weapons|single|individual|manual|1|1|setup|8"
+check "bracket defaults" "$(DB "SELECT CONCAT_WS('|',style,method,participants,seeding,rings,best_of,status,draw_size) FROM ork_bracket WHERE bracket_id=$BID")" "Open Weapons|single|individual|manual|1|3|setup|8"
 rej "bad size rejected" "$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=single&DrawSize=7" | J status)"
 rej "swiss rejected" "$(post "TournamentAjax/tournament/$TID/quickbracket" --data "Method=swiss&DrawSize=8" | J status)"
 

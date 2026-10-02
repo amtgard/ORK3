@@ -1356,7 +1356,7 @@ class Tournament extends Ork3
             'Participants'    => 'individual',
             'Seeding'         => 'manual',
             'DurationMinutes' => 0,
-            'BestOf'          => 1,
+            'BestOf'          => 3,
         ]);
         if ($r['Status'] != 0) {
             return $r;
