@@ -329,7 +329,6 @@
 				<li data-kntab="events">
 					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>
 					<span class="kn-tab-count">(<?= count($eventList) ?>)</span>
-					<?php $_tnN = count($tournamentList); if ($_tnN > 0): ?><span class="kn-tab-count kn-tab-count-tn">&middot; <?= $_tnN ?> tournament<?= $_tnN === 1 ? '' : 's' ?></span><?php endif; ?>
 				</li>
 				<li data-kntab="map">
 					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
@@ -800,7 +799,7 @@
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="kn-empty">No tournaments found</div>
+					<div class="kn-empty">No upcoming tournaments</div>
 				<?php endif; ?>
 			</div>
 

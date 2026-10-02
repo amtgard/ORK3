@@ -598,7 +598,6 @@
 				<li data-pktab="events" class="">
 					<i class="fas fa-flag"></i><span class="pk-tab-label"> Events</span>
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
-					<?php $_tnN = count($tournamentList); if ($_tnN > 0): ?><span class="pk-tab-count pk-tab-count-tn">&middot; <?= $_tnN ?> tournament<?= $_tnN === 1 ? '' : 's' ?></span><?php endif; ?>
 				</li>
 				<li data-pktab="players">
 					<i class="fas fa-users"></i><span class="pk-tab-label"> Players</span>
@@ -1008,7 +1007,7 @@
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="pk-empty">No tournaments found</div>
+					<div class="pk-empty">No upcoming tournaments</div>
 				<?php endif; ?>
 			</div>
 

@@ -261,7 +261,8 @@ class Controller_Kingdom extends Controller
             }
         }
         $this->data['PreloadOfficers']     = $preloadOfficers;
-        $this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
+        // Events tab: a week back through the future; history lives in the Tournament report.
+        $this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id, null, null, null, date('Y-m-d', strtotime('-7 days')));
 
         $rawParks = $this->Kingdom->get_parks($kingdom_id);
         $this->data['map_parks'] = is_array($rawParks['Parks'])

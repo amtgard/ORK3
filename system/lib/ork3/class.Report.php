@@ -204,6 +204,11 @@ class Report extends Ork3
             $where .= " and d.event_calendardetail_id = " . (int)$request['EventCalendarDetailId'];
         }
 
+        // Optional lower bound on the tournament date (Y-m-d) — profile tabs show recent/upcoming only.
+        if (isset($request['Since']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $request['Since'])) {
+            $where .= " and t.date_time >= '" . $request['Since'] . "'";
+        }
+
         if (valid_id($request['ParticipantMundaneId'])) {
             $where .= " and pm.mundane_id = " . (int)$request['ParticipantMundaneId'];
         }

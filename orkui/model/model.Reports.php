@@ -14,14 +14,15 @@ class Model_Reports extends Model
         return $this->Report->ReleaseFeatureUtilization();
     }
 
-    public function get_tournaments($limit = 10, $kingdom_id = null, $park_id = null, $event_id = null, $event_calendardetail_id = null)
+    public function get_tournaments($limit = 10, $kingdom_id = null, $park_id = null, $event_id = null, $event_calendardetail_id = null, $since = null)
     {
         return $this->Report->TournamentReport(array(
             'KingdomId' => $kingdom_id,
             'ParkId' => $park_id,
             'EventId' => $event_id,
             'EventCalendarDetailId' => $event_calendardetail_id,
-            'Limit' => $limit
+            'Limit' => $limit,
+            'Since' => $since
         ));
     }
 
