@@ -9917,6 +9917,11 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 		// Participant lookup by id
 		var pMap = {};
 		participants.forEach(function(p) { pMap[p.ParticipantId] = p; });
+		// Quick Bracket draft: an empty seeded draw filled in place (script/tournament-quickbracket.js).
+		if (window.TnQuickBracket && window.TnQuickBracket.isDraft(bd)) {
+			window.TnQuickBracket.renderDraft(container, bd, bracketId, function(c, ms, pm) { renderElimTree(c, ms, pm, method, bracketId); });
+			return;
+		}
 
 		// Generate button bar
 		if (TnConfig.canManage) {
@@ -10762,6 +10767,7 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 	function tnEscHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 	function buildMatchBox(m, pMap, sectionMatches) {
+		if (m._qbDraft && window.TnQuickBracket) return window.TnQuickBracket.buildDraftBox(m);
 		var p1Id = parseInt(m.Participant1Id) || 0;
 		var p2Id = parseInt(m.Participant2Id) || 0;
 		var p1   = p1Id ? (pMap[p1Id] || null) : null;
