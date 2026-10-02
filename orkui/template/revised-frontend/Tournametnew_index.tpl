@@ -1504,6 +1504,54 @@ html[data-theme="dark"] .tn-bv-progress-info { color:#a0aec0; }
 html[data-theme="dark"] .tn-bv-progress-info .tn-bv-pi-ready { color:#9ae6b4; }
 html[data-theme="dark"] .tn-bv-bout-row { background:#1a202c; border-top-color:#4a5568; }
 html[data-theme="dark"] .tn-bv-tbd-label { color:#718096; }
+/* ── Quick Bracket (spec 2026-10-02) ── */
+.tn-qb-btnstack { display:flex; flex-direction:column; align-items:stretch; gap:6px; }
+.tn-qb-field + .tn-qb-field { margin-top:18px; }
+.tn-qb-field-label { display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#4a5568; margin-bottom:8px; }
+.tn-qb-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.tn-qb-chip { min-width:52px; min-height:44px; padding:8px 14px; border:1px solid #cbd5e0; border-radius:8px; background:#fff; color:#2d3748; font-weight:600; font-size:14px; cursor:pointer; }
+.tn-qb-chip[aria-checked="true"] { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
+.tn-qb-chip:focus-visible { outline:2px solid #2b6cb0; outline-offset:2px; }
+.tn-qb-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 12px; margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#f7fafc; }
+.tn-qb-badge { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:#975a16; text-transform:uppercase; letter-spacing:.03em; }
+.tn-qb-count { flex:1; min-width:140px; font-size:13px; color:#4a5568; }
+.tn-qb-note { font-size:12px; color:#718096; margin:0 0 8px; }
+.tn-qb-line { position:relative; }
+.tn-qb-empty { cursor:pointer; }
+.tn-qb-empty:hover, .tn-qb-empty:focus-visible { background:#ebf8ff; outline:none; }
+.tn-qb-hint { color:#a0aec0; font-style:italic; font-size:12px; }
+.tn-qb-input { flex:1; min-width:0; border:none; outline:none; background:transparent; font:inherit; font-size:13px; color:inherit; padding:0; }
+.tn-qb-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tn-qb-alias { font-style:italic; }
+.tn-qb-alias-tag { flex-shrink:0; font-size:10px; font-weight:700; text-transform:uppercase; color:#718096; border:1px solid #cbd5e0; border-radius:4px; padding:0 4px; }
+.tn-qb-clear { flex-shrink:0; border:none; background:none; color:#a0aec0; cursor:pointer; padding:0 4px; font-size:16px; line-height:1; opacity:0; }
+.tn-qb-filled:hover .tn-qb-clear, .tn-qb-clear:focus-visible { opacity:1; color:#c53030; }
+.tn-qb-filled[draggable="true"] { cursor:grab; }
+.tn-qb-drop { box-shadow:inset 0 0 0 2px #3182ce; }
+.tn-qb-swap-src { background:#fefcbf; }
+.tn-qb-ac-hdr { padding:4px 10px; font-size:11px; font-weight:700; text-transform:uppercase; color:#718096; cursor:default; }
+.tn-qb-ac-alias { border-top:1px solid #e2e8f0; }
+.tn-qb-ac-alias .tn-qb-ac-sub, .tn-qb-ac-sub { color:#a0aec0; font-size:11px; }
+.kn-ac-item.tn-qb-ac-hi { background:#ebf8ff; }
+@media (hover:none) { .tn-qb-clear { opacity:1; } }
+.tn-mobile .tn-qb-line { min-height:44px; }
+.tn-mobile .tn-qb-clear { opacity:1; min-width:44px; min-height:44px; }
+html[data-theme="dark"] .tn-qb-field-label { color:#a0aec0; }
+html[data-theme="dark"] .tn-qb-chip { background:#2d3748; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .tn-qb-chip[aria-checked="true"] { background:#3182ce; border-color:#3182ce; color:#fff; }
+html[data-theme="dark"] .tn-qb-toolbar { background:#1a202c; border-color:#4a5568; }
+html[data-theme="dark"] .tn-qb-badge { color:#f6e05e; }
+html[data-theme="dark"] .tn-qb-count, html[data-theme="dark"] .tn-qb-note { color:#a0aec0; }
+html[data-theme="dark"] .tn-qb-empty:hover, html[data-theme="dark"] .tn-qb-empty:focus-visible { background:#2a4365; }
+html[data-theme="dark"] .tn-qb-hint { color:#718096; }
+html[data-theme="dark"] .tn-qb-alias-tag { color:#a0aec0; border-color:#4a5568; }
+html[data-theme="dark"] .tn-qb-clear { color:#718096; }
+html[data-theme="dark"] .tn-qb-filled:hover .tn-qb-clear, html[data-theme="dark"] .tn-qb-clear:focus-visible { color:#fc8181; }
+html[data-theme="dark"] .tn-qb-drop { box-shadow:inset 0 0 0 2px #63b3ed; }
+html[data-theme="dark"] .tn-qb-swap-src { background:#5f370e; }
+html[data-theme="dark"] .tn-qb-ac-hdr, html[data-theme="dark"] .tn-qb-ac-sub { color:#a0aec0; }
+html[data-theme="dark"] .tn-qb-ac-alias { border-top-color:#4a5568; }
+html[data-theme="dark"] .kn-ac-item.tn-qb-ac-hi { background:#2a4365; }
 
 /* Round-robin standings & matrix */
 html[data-theme="dark"] .tn-rr-standings caption { color:#a0aec0; }
@@ -2469,21 +2517,31 @@ html[data-theme="dark"] .tn-mobile .tn-imd-empty { color:#718096; }
 						<i class="fas fa-compress-arrows-alt"></i> <span>Collapse All</span>
 					</button>
 					<?php if ($canManage): ?>
+					<div class="tn-qb-btnstack">
 					<button class="tn-btn tn-btn-primary tn-btn-sm" onclick="tnOpenAddBracketModal()">
 						<i class="fas fa-plus"></i> Add Bracket
 					</button>
+					<button class="tn-btn tn-btn-outline tn-btn-sm" onclick="TnQuickBracket.openModal()" data-tip="Empty seeded bracket — type names and start">
+						<i class="fas fa-bolt"></i> Quick Bracket
+					</button>
+					</div>
 					<?php endif; ?>
 				</div>
 				<?php elseif ($canManage): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+					<div class="tn-qb-btnstack">
 					<button class="tn-btn tn-btn-primary tn-btn-sm" onclick="tnOpenAddBracketModal()">
 						<i class="fas fa-plus"></i> Add Bracket
 					</button>
+					<button class="tn-btn tn-btn-outline tn-btn-sm" onclick="TnQuickBracket.openModal()" data-tip="Empty seeded bracket — type names and start">
+						<i class="fas fa-bolt"></i> Quick Bracket
+					</button>
+					</div>
 				</div>
 				<?php endif; ?>
 
 				<?php if ($totalBrackets === 0): ?>
-				<div class="tn-empty">No brackets yet.<?= $canManage ? ' Use "Add Bracket" to create one.' : '' ?></div>
+				<div class="tn-empty">No brackets yet.<?= $canManage ? ' Use "Add Bracket" or "Quick Bracket" to create one.' : '' ?></div>
 				<?php else: ?>
 					<?php foreach ($bracketData as $bid => $bd): ?>
 					<?php $b = $bd['Bracket']; $pList = $bd['Participants']; $mList = $bd['Matches']; ?>
@@ -3257,6 +3315,42 @@ html[data-theme="dark"] .tn-mobile .tn-imd-empty { color:#718096; }
 		</div>
 	</div>
 </div>
+
+<?php if ($canManage): ?>
+<!-- =============================================
+     Quick Bracket Modal (spec 2026-10-02)
+     ============================================= -->
+<div class="tn-overlay" id="tn-quickbracket-overlay" role="dialog" aria-modal="true" aria-labelledby="tn-qb-title">
+	<div class="tn-modal-box" style="max-width:440px">
+		<div class="tn-modal-header">
+			<h3 class="tn-modal-title" id="tn-qb-title"><i class="fas fa-bolt" style="margin-right:8px;color:#b7791f"></i>Quick Bracket</h3>
+			<button class="tn-modal-close" type="button" aria-label="Close" onclick="tnCloseModal('tn-quickbracket-overlay')">&times;</button>
+		</div>
+		<div class="tn-modal-body">
+			<div class="tn-feedback" id="tn-qb-feedback" style="display:none"></div>
+			<div class="tn-qb-field">
+				<span class="tn-qb-field-label" id="tn-qb-method-lbl">Format</span>
+				<div class="tn-qb-chips" id="tn-qb-method" role="radiogroup" aria-labelledby="tn-qb-method-lbl">
+					<button type="button" class="tn-qb-chip" role="radio" data-value="single">Single Elimination</button>
+					<button type="button" class="tn-qb-chip" role="radio" data-value="double">Double Elimination</button>
+				</div>
+			</div>
+			<div class="tn-qb-field">
+				<span class="tn-qb-field-label" id="tn-qb-size-lbl">Starting Size</span>
+				<div class="tn-qb-chips" id="tn-qb-size" role="radiogroup" aria-labelledby="tn-qb-size-lbl">
+					<?php foreach ([4, 8, 12, 16, 24, 32] as $_qbs): ?>
+					<button type="button" class="tn-qb-chip" role="radio" data-value="<?= $_qbs ?>"><?= $_qbs ?></button>
+					<?php endforeach; ?>
+				</div>
+			</div>
+		</div>
+		<div class="tn-modal-footer">
+			<button class="tn-btn tn-btn-ghost" type="button" onclick="tnCloseModal('tn-quickbracket-overlay')">Cancel</button>
+			<button class="tn-btn tn-btn-primary" type="button" id="tn-qb-generate"><i class="fas fa-bolt"></i> Generate</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
 
 <!-- =============================================
      Edit Bracket Modal
@@ -9519,6 +9613,9 @@ function tnComputeByesAndRounds(method, pCount, bracket) {
 }
 window.tnGenerateMatches = function(bracketId, tournamentId, skipConfirm) {
 	if (!TnConfig.canManage) return;
+	// Quick Bracket drafts start through quickstart so long-way (seed 0) entrants take the lowest
+	// empty seats instead of sorting ahead of seed 1 (spec 2026-10-02).
+	if (window.TnQuickBracket && TnQuickBracket.isDraftBracket(bracketId)) { TnQuickBracket.start(bracketId); return; }
 
 	// Build pre-generate stats from TnConfig data
 	var bd = TnConfig.bracketData[bracketId];
@@ -16644,3 +16741,4 @@ window.tnFinalizePointsBracket = function(bid) {
 	});
 };
 </script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/tournament-quickbracket.js?v=<?= filemtime(__DIR__ . '/script/tournament-quickbracket.js') ?>"></script>
