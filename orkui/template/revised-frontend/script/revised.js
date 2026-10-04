@@ -54,26 +54,45 @@ function tnPositionAcFixed(inputEl, el, opts) {
     opts = opts || {};
     var rect   = inputEl.getBoundingClientRect();
     var vw     = window.innerWidth;
-    var vh     = window.innerHeight;
+    var frame  = tnFixedFrame(el);
     var w      = Math.min(rect.width || opts.width || 300, vw - 16);
     el.style.width = w + 'px';
-    el.style.left  = Math.max(8, Math.min(rect.left, vw - w - 8)) + 'px';
+    el.style.left  = (Math.max(8, Math.min(rect.left, vw - w - 8)) - frame.left) + 'px';
     el.style.right = 'auto';
 
-    var spaceBelow = vh - rect.bottom;
-    var spaceAbove = rect.top;
+    // An on-screen keyboard shrinks the visual viewport but not innerHeight, so
+    // measure the room against what is actually showing.
+    var vv         = window.visualViewport;
+    var viewTop    = vv ? vv.offsetTop : 0;
+    var viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    var spaceBelow = viewBottom - rect.bottom;
+    var spaceAbove = rect.top - viewTop;
     var flipAbove  = spaceBelow < 200 && spaceAbove > spaceBelow;
     var avail      = flipAbove ? spaceAbove : spaceBelow;
 
     if (flipAbove) {
         el.style.top    = 'auto';
-        el.style.bottom = (vh - rect.top + 2) + 'px';
+        el.style.bottom = (frame.bottom - rect.top + 2) + 'px';
     } else {
         el.style.bottom = 'auto';
-        el.style.top    = (rect.bottom + 2) + 'px';
+        el.style.top    = (rect.bottom + 2 - frame.top) + 'px';
     }
     el.style.maxHeight = Math.max(140, avail - 12) + 'px';
     el.style.overflowY = 'auto';
+}
+/* The box a position:fixed element is really measured from. That is the
+   viewport unless an ancestor has a transform (or filter/perspective), which
+   makes that ancestor the containing block instead -- .pn-modal-box keeps its
+   open-state transform, so fixed coordinates inside it start at the box. */
+function tnFixedFrame(el) {
+    for (var p = el.parentElement; p; p = p.parentElement) {
+        var cs = window.getComputedStyle(p);
+        if (cs.transform !== 'none' || cs.perspective !== 'none' || cs.filter !== 'none') {
+            var r = p.getBoundingClientRect();
+            return { left: r.left + p.clientLeft, top: r.top + p.clientTop, bottom: r.top + p.clientTop + p.clientHeight };
+        }
+    }
+    return { left: 0, top: 0, bottom: window.innerHeight };
 }
 if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
 
@@ -92,11 +111,11 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
 (function () {
     if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
 
-    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results';
+    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results, .pn-ac-results';
     var open = [];
 
     function isOpen(el) {
-        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open');
+        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open') || el.classList.contains('pn-ac-open');
     }
 
     /* Nearest preceding text input, else the first one in the same field. */
@@ -142,6 +161,8 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
         Array.prototype.forEach.call(document.querySelectorAll(AC_SELECTOR), watch);
         window.addEventListener('scroll', sync, true); // capture: inner scrolls do not bubble
         window.addEventListener('resize', sync);
+        // The keyboard sliding in or out resizes the visual viewport only.
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', sync);
     });
 })();
 

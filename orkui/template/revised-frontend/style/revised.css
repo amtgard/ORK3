@@ -1477,9 +1477,14 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
     display: none;
 }
 .pn-ac-results.pn-ac-open { display: block; }
+/* Fixed so the scrolling modal body cannot clip it. The observer in revised.js
+   supplies the coordinates whenever one opens; without them the list stays at
+   its unscrolled spot and lands off-screen once the body has scrolled. */
 .pn-overlay .pn-ac-results {
     position: fixed;
     z-index: var(--z-modal-top);
+    box-sizing: border-box;
+    margin-top: 0;
 }
 .pn-ac-item,
 .kn-ac-item,
