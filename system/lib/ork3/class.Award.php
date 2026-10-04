@@ -540,6 +540,19 @@ class Award extends Ork3
     }
 
     /**
+     * Kingdom-original awards that behave as ladders but have no backing
+     * ork_award row, so a.is_ladder can never be 1 for them. Membership here
+     * is the ONLY thing that makes the rank picker appear for such an award.
+     *
+     * This list is hardcoded kingdomaward_ids and therefore goes stale every
+     * time a kingdom invents (or re-creates) a ladder award -- it is why
+     * Painted Skies' Hunter (7513) silently lost its ranks. The replacement,
+     * reading ork_kingdomaward.is_ladder instead, is written but unmerged on
+     * Tobias/feature/kingdom-ladder-awards (be5c0314); note its migration
+     * re-adds the is_ladder column, which has existed since 2014, so it needs
+     * fixing before it runs. Until that lands, new ladder awards must be added
+     * here by hand.
+     *
      * @return list<int>
      */
     public static function pseudoLadderKingdomAwardIds(): array
@@ -548,6 +561,7 @@ class Award extends Ork3
             7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
             6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
             6577, 94, 7084, 6171, 6574, 7254,
+            7513, // Hunter (The Painted Skies) -- added 2026-10-04
         ];
     }
 }
