@@ -460,6 +460,7 @@ class Player extends Ork3
         if (!valid_id($mundaneId)) {
             return [];
         }
+        $pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
         $this->db->Clear();
         // Grouped by BOTH ids: kingdom-original ladders (Order of the Hunter and
         // friends) all carry award_id 0, so keying the map by award_id alone
@@ -476,10 +477,20 @@ class Player extends Ork3
         $ranks = [];
         while ($rs && $rs->Next()) {
             $awardId = (int) $rs->award_id;
+            $kaId = (int) $rs->kingdomaward_id;
             $rank = (int) $rs->max_rank;
-            // award_id > 0 can now arrive on several rows (one per kingdomaward
-            // pointing at it, e.g. a player who changed kingdoms), so fold to the max.
-            $key = $awardId > 0 ? $awardId : 'k' . (int) $rs->kingdomaward_id;
+            // Pseudo-ladder membership decides the key, NOT award_id > 0. Most of
+            // these point at award_id 94 ("Custom Award"), so keying on award_id
+            // would file them under 94 alongside every genuine Custom Award --
+            // the exact bleed 5d95f55f set out to avoid -- while the UI looks
+            // them up by kingdomaward_id and finds nothing. Checked first, the
+            // same order GetAwardOptionGroups() uses.
+            // Real award_ids can arrive on several rows (one per kingdomaward
+            // pointing at them, e.g. a player who changed kingdoms), so fold to max.
+            $key = in_array($kaId, $pseudoLadderIds, true) ? 'k' . $kaId : $awardId;
+            if ($key === 0) {
+                continue;
+            }
             if (!isset($ranks[$key]) || $rank > $ranks[$key]) {
                 $ranks[$key] = $rank;
             }
@@ -1200,6 +1211,7 @@ class Player extends Ork3
                         'KingdomAwardName' => $r->kingdom_awardname,
                         'CustomAwardName' => $r->custom_name,
                         'IsLadder' => $_isPseudoLadder ? 1 : $r->is_ladder,
+                        'IsPseudoLadder' => $_isPseudoLadder ? 1 : 0,
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,
