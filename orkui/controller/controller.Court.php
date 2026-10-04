@@ -189,6 +189,10 @@ class Controller_Court extends Controller
         $this->data['CourtNotes']   = $courtNotes;
         $this->data['PendingRecs']  = $pendingRecs;
         $this->data['AwardOptions'] = $awardOptions;
+        // Kingdom-original ladders are keyed "k<KingdomAwardId>" in the held-rank
+        // map (see Player::GetAwardMaxRanks). Membership of this list is the only
+        // reliable test -- most of them carry AwardId 94 ("Custom Award"), not 0.
+        $this->data['PseudoLadderKingdomAwardIds'] = Award::pseudoLadderKingdomAwardIds();
         $this->data['StatusFlow']   = $statusFlow;
         $this->data['CanManage']    = $canManage;
         $this->data['Uid']          = $uid;
