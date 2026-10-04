@@ -65,6 +65,74 @@ function tnPositionAcFixed(inputEl, el, opts) {
 }
 if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
 
+/* ============================================================
+   Keeps position:fixed autocomplete dropdowns anchored to their input.
+
+   The dropdowns listed in the position:fixed rule in revised.css are opened
+   from ~19 different places -- several shared helpers plus a handful of inline
+   handlers -- and every one of them does the same thing: add a
+   "<prefix>-ac-open" class. Rather than bolt a positioning call onto each
+   site, and miss the next one someone writes, watch for that class.
+
+   Only dropdowns that actually compute to position:fixed are touched;
+   absolutely-positioned ones already sit correctly under their input.
+   ============================================================ */
+(function () {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+
+    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results';
+    var open = [];
+
+    function isOpen(el) {
+        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open');
+    }
+
+    /* Nearest preceding text input, else the first one in the same field. */
+    function anchorFor(el) {
+        var sib = el.previousElementSibling;
+        while (sib) {
+            if (sib.tagName === 'INPUT' && sib.type === 'text') return sib;
+            sib = sib.previousElementSibling;
+        }
+        return el.parentElement ? el.parentElement.querySelector('input[type="text"]') : null;
+    }
+
+    function place(el) {
+        if (window.getComputedStyle(el).position !== 'fixed') return false;
+        var input = anchorFor(el);
+        if (!input) return false;
+        tnPositionAcFixed(input, el);
+        return true;
+    }
+
+    /* A fixed dropdown does not travel with the modal body it sits in, so
+       re-anchor whatever is open while that body scrolls. */
+    function sync() {
+        open = open.filter(function (el) {
+            if (!el.isConnected || !isOpen(el)) return false;
+            place(el);
+            return true;
+        });
+    }
+
+    function watch(el) {
+        new MutationObserver(function () {
+            if (isOpen(el)) {
+                if (place(el) && open.indexOf(el) === -1) open.push(el);
+            } else {
+                var i = open.indexOf(el);
+                if (i !== -1) open.splice(i, 1);
+            }
+        }).observe(el, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        Array.prototype.forEach.call(document.querySelectorAll(AC_SELECTOR), watch);
+        window.addEventListener('scroll', sync, true); // capture: inner scrolls do not bubble
+        window.addEventListener('resize', sync);
+    });
+})();
+
 /* ===========================
    HTML escape helper
    =========================== */
