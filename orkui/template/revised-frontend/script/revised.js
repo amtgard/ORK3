@@ -2738,14 +2738,19 @@ function knPageRange(current, total) {
 
 function knPaginate($table, page) {
     var pageSize = 25;
-    var $rows = $table.find('tbody tr').filter(function() { return $(this).css('display') !== 'none'; });
+    // Paging hides rows with a class and the type filters with inline display,
+    // so clearing the class first leaves only filtered-out rows reading as
+    // hidden. Sharing inline display dropped every row past page 1 from the
+    // list the next time this ran.
+    var $rows = $table.find('tbody tr').removeClass('kn-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
     var total = $rows.length;
     if (total === 0) { $table.next('.kn-pagination').empty().hide(); return; }
     var totalPages = Math.max(1, Math.ceil(total / pageSize));
     page = Math.max(1, Math.min(page, totalPages));
     $table.data('kn-page', page);
     $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+        $(this).toggleClass('kn-page-hidden', i < (page - 1) * pageSize || i >= page * pageSize);
     });
     var $pg = $table.next('.kn-pagination');
     if ($pg.length === 0) $pg = $('<div class="kn-pagination"></div>').insertAfter($table);
@@ -4056,6 +4061,8 @@ $(document).ready(function() {
         row.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
         row.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
         if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), jQuery('#kn-events-table').data('kn-page') || 1);
         return true;
     }
 
@@ -6484,6 +6491,7 @@ function pkToggleFilter(btn, type) {
     var isOn = pkFilters[type];
     $(btn).toggleClass('pk-filter-on', isOn);
     $('#pk-events-table').find('tr[data-type="' + type + '"]').css('display', isOn ? '' : 'none');
+    pkPaginate($('#pk-events-table'), 1);
     if (pkCalendar) pkCalendar.refetchEvents();
 }
 
@@ -6604,11 +6612,15 @@ function pkRenderPagination($table, current, total, containerId) {
 
 function pkPaginate($table, page) {
     var perPage = 10;
-    var $rows = $table.find('tbody tr');
-    var total = Math.ceil($rows.length / perPage);
-    if (total <= 1) return;
-    $rows.hide();
-    $rows.slice((page-1)*perPage, page*perPage).show();
+    // Paging hides rows with a class and the type filters with inline display,
+    // so a page turn neither reveals a filtered-out row nor counts it.
+    var $rows = $table.find('tbody tr').removeClass('pk-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
+    var total = Math.max(1, Math.ceil($rows.length / perPage));
+    page = Math.max(1, Math.min(page, total));
+    $rows.each(function(i) {
+        $(this).toggleClass('pk-page-hidden', i < (page - 1) * perPage || i >= page * perPage);
+    });
     var containerId = $table.attr('id') + '-pages';
     pkRenderPagination($table, page, total, containerId);
     $table.data('pk-page', page);
@@ -7827,6 +7839,8 @@ $(document).ready(function() {
         row.className = pkCiClassName(officerOnly, localsOnly);
         row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
         if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), jQuery('#pk-events-table').data('pk-page') || 1);
         return true;
     }
 
@@ -8066,8 +8080,12 @@ $(document).ready(function() {
 
         function evAttendedIds() {
             var ids = {};
-            document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]').forEach(function(tr) {
-                ids[parseInt(tr.dataset.mundaneId, 10)] = true;
+            // DataTables only keeps the current page in the DOM — ask it for every row.
+            var trs = window._evAttDt
+                ? window._evAttDt.rows().nodes().toArray()
+                : document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]');
+            Array.prototype.forEach.call(trs, function(tr) {
+                if (tr.dataset.mundaneId) ids[parseInt(tr.dataset.mundaneId, 10)] = true;
             });
             return ids;
         }
