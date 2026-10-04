@@ -2162,16 +2162,20 @@ $_total_awards = count($courtAwards ?? []);
     // player Add Award modal uses. Flattened to {id,name,ladder,title,group},
     // preserving canonical group + within-group order; the search renders these
     // under .cp-ac-group headers per the modal's mode (award vs title).
-    var cpAwardOptions = <?= json_encode((function ($groups) {
+    var cpAwardOptions = <?= json_encode((function ($groups, $pseudoIds) {
         $flat = [];
         foreach (($groups ?? []) as $g) {
             foreach (($g['options'] ?? []) as $o) {
                 $flat[] = [
                     'id'     => (int)$o['KingdomAwardId'],
-                    // The ledger's held-rank map is keyed by the BASE award_id, not the
-                    // kingdom's own row, so the pill painter needs both. Already 0 for
-                    // pseudo-ladders, which have no ledger award to look up.
+                    // The ledger's held-rank map is keyed by the BASE award_id for
+                    // ordinary awards, so the pill painter needs both ids.
                     'awardId' => (int)($o['AwardId'] ?? 0),
+                    // Kingdom-original ladders are keyed "k<KingdomAwardId>" in the
+                    // held-rank map instead. Membership of the pseudo-ladder list is
+                    // the only reliable test: most carry AwardId 94 ("Custom Award"),
+                    // NOT 0, so awardId alone would read a stranger's Custom Award rank.
+                    'pseudo' => in_array((int)$o['KingdomAwardId'], $pseudoIds, true),
                     'name'   => $o['Name'],
                     'ladder' => (bool)$o['IsLadder'],
                     'title'  => (bool)$o['IsTitle'],
@@ -2180,7 +2184,7 @@ $_total_awards = count($courtAwards ?? []);
             }
         }
         return $flat;
-    })($awardOpts)) ?>;
+    })($awardOpts, is_array($PseudoLadderKingdomAwardIds ?? null) ? $PseudoLadderKingdomAwardIds : [])) ?>;
     // Group sets per modal mode, in canonical display order (skip-empty at render).
     var CP_AWARD_GROUPS = ['Ladder Awards', 'Other', 'Custom Award'];
     var CP_TITLE_GROUPS = ['Knighthoods', 'Masterhoods', 'Paragons', 'Noble Titles', 'Associate Titles', 'Custom Title'];
@@ -3771,6 +3775,7 @@ $_total_awards = count($courtAwards ?? []);
         input.dataset.ladder = cpIsLadder(o) ? '1' : '0';
         gid('cp-adhoc-award-id').value = o.id;
         input.dataset.awardId = o.awardId || 0;
+        input.dataset.pseudo  = o.pseudo ? '1' : '0';
         var drop = gid('cp-adhoc-award-ac');
         drop.style.display = 'none';
         drop.innerHTML = '';
@@ -3815,10 +3820,22 @@ $_total_awards = count($courtAwards ?? []);
     };
     function cpAdhocLedgerRank() {
         var mid = gid('cp-adhoc-mundane-id').value;
-        var awardId = gid('cp-adhoc-award-search').dataset.awardId || 0;
-        if (!mid || !awardId) { return 0; }
+        var input = gid('cp-adhoc-award-search');
+        if (!mid || !input) { return 0; }
+        // Kingdom-original ladders are keyed "k<KingdomAwardId>" (see
+        // Player::GetAwardMaxRanks); everything else by base award_id. No
+        // falling back between the two: most of these carry AwardId 94
+        // ("Custom Award"), so a miss would read the player's Custom Award rank.
+        var key;
+        if (input.dataset.pseudo === '1') {
+            key = 'k' + (gid('cp-adhoc-award-id').value || 0);
+        } else {
+            var awardId = input.dataset.awardId || 0;
+            if (!awardId || awardId === '0') { return 0; }
+            key = String(awardId);
+        }
         var map = cpAdhocHeldRanks[String(mid)] || {};
-        return parseInt(map[String(awardId)], 10) || 0;
+        return parseInt(map[key], 10) || 0;
     }
     // Highest rank of this same award already queued on this court for this player.
     function cpAdhocPlannedRank() {
