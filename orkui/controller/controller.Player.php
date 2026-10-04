@@ -647,6 +647,12 @@ class Controller_Player extends Controller
             exit;
         }
         $this->data['canEditAdmin'] = $canEditAdmin;
+        // Moving a player is a park CREATE power, not EDIT -- see the park
+        // permission help (Admin_permissions.tpl) and Player::MovePlayer, which
+        // checks AUTH_CREATE over either end. canEditAdmin is AUTH_EDIT and is
+        // too loose to gate the Move Player modal with.
+        $this->data['canMovePlayer'] = $uid > 0
+            && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
 
         $this->load_model('Kingdom');
         $preloadOfficers = [];

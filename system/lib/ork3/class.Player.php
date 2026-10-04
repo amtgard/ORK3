@@ -2467,42 +2467,49 @@ class Player extends Ork3
         }
 
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $_srcKingdom = (int)$this->mundane->kingdom_id;
-        $_dstKingdom = (int)$park->kingdom_id;
-
         // Park-level authority over EITHER end is enough to move a player. The
         // OR is deliberate and the source comments say so: recruitment normally
         // means the destination park's officer pulls a player in, and a park
         // losing a member should be able to push them out. That stays.
+        //
+        // AUTH_CREATE, not AUTH_EDIT, is the level: the park permission help
+        // (orkui/template/default/Admin_permissions.tpl) tells officers that
+        // "Add, move, and merge players within the park" is a CREATE power and
+        // that EDIT covers attendance and record edits only. This check read
+        // AUTH_EDIT for years and quietly contradicted that; corrected 2026-10-04
+        // (Ken) so the code matches the published contract. HasAuthority passes
+        // the requested role up the tree, so this also means a kingdom officer
+        // needs kingdom CREATE, which is what the kingdom help text says too.
         $_parkAuthority =
-               Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)          // destination
-            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT); // source
+               Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_CREATE)          // destination
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_CREATE); // source
 
-        // What was NOT deliberate is that ONE park-level grant also rewrites the
-        // player's KINGDOM: a park officer in one kingdom could pull any player
-        // in the world across a kingdom boundary with no authority of any kind
-        // over the kingdom they were taken from. A move that changes the kingdom
-        // therefore needs more than a single park grant.
+        // NO separate cross-kingdom gate. $_parkAuthority above is the whole
+        // test: the officer of either park may move the player, and the move
+        // carries the kingdom with it.
         //
-        // It does NOT need kingdom-level authority, though. Requiring that broke
-        // the ordinary relocation: a player moves house, the receiving park's
-        // Prime Minister transfers them in from the park page's Move Player
-        // modal, and that PM holds park authority only. Holding AUTH_PARK EDIT
-        // over BOTH ends is the real-world "both PMs agree" transfer and is
-        // accepted here. What stays blocked is the one-sided pull -- authority
-        // over the destination alone, or the source alone, across a kingdom
-        // boundary.
+        // HISTORY. F003 (2026-08-07) found that one park grant silently rewrote
+        // the player's KINGDOM as well as their park. The first fix demanded
+        // kingdom-level authority, which broke ordinary relocation -- the park
+        // page's Move Player modal is gated on park authority, so a receiving PM
+        // was offered a transfer the library then refused. The follow-up added an
+        // AUTH_PARK-over-BOTH-ends clause called the "both PMs agree" transfer,
+        // but && means ONE person holding both grants: 22 people out of the 1,653
+        // with park authority. It never fired for the case it was written for.
         //
-        // HasAuthority traverses upward (a kingdom grant satisfies a park check)
-        // but never downward, so a kingdom officer passes the both-ends test for
-        // any park in their kingdom, and an unscoped ORK admin passes everything.
-        $_crossKingdomAuthority = ($_srcKingdom === $_dstKingdom)
-            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_dstKingdom, AUTH_EDIT)
-            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_srcKingdom, AUTH_EDIT)
-            || (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT));
+        // DECISION (Ken + Avery, 2026-10-04): the guard cost more than it bought
+        // and was over-zealous. The people who do this work are park PMs with the
+        // player standing in front of them -- joining or leaving -- and neither
+        // could act. Player::MovePlayer has been audited since 2016 (19,053
+        // entries carrying by_whom_id, the timestamp and the player's full prior
+        // state), so a wrongful move is attributable and reversible. Detection is
+        // the control here, not prevention.
+        //
+        // This is the revert named in db-migrations/README-2026-08-07-regression-
+        // fixes.md under F003. To reinstate a gate, add a $_crossKingdomAuthority
+        // term back and AND it into the condition below.
 
-        if ($mundane_id > 0 && $_parkAuthority && $_crossKingdomAuthority) {
+        if ($mundane_id > 0 && $_parkAuthority) {
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
@@ -2519,8 +2526,6 @@ class Player extends Ork3
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
             return Success();
-        } elseif ($mundane_id > 0 && $_parkAuthority && !$_crossKingdomAuthority) {
-            return NoAuthorization('Moving a player between kingdoms requires authority over both the park they are leaving and the park they are joining, or kingdom-level authority over either kingdom.');
         } else {
             return NoAuthorization();
         }

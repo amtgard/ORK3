@@ -96,6 +96,33 @@ a single park grant are unaffected.
 **To revert:** delete the `$_crossKingdomAuthority` term in
 `Player::MovePlayer`.
 
+> **REVERTED 2026-10-04 (Ken + Avery).** The guard was over-zealous and the
+> both-ends clause never worked: `&&` requires *one person* holding park
+> authority at both ends, which is 22 people out of the 1,653 with park
+> authority — not the two-PM agreement it was named for. Receiving PMs, the
+> people actually doing this work with the player in front of them, stayed
+> blocked, and so did PMs moving a member out. `$_crossKingdomAuthority` is
+> gone; `$_parkAuthority` (either end) is again the whole test.
+>
+> The control is now detection, not prevention: `Player::MovePlayer` has been
+> audited since 2016 — 19,053 entries carrying `by_whom_id`, the timestamp and
+> the player's full prior state — so a wrongful move is attributable and
+> reversible. F003's underlying observation was sound; the judgement about which
+> control to use was the part that changed.
+>
+> **Same change, second correction (2026-10-04, Ken).** Auditing the modal gating
+> afterwards turned up a separate, older drift: `$_parkAuthority` asked for
+> `AUTH_EDIT`, but the park permission help shown to officers
+> (`orkui/template/default/Admin_permissions.tpl`) lists "Add, move, and merge
+> players within the park" under **CREATE** and says EDIT covers attendance and
+> record edits only. The library has been looser than its own published contract
+> for years. Both `$_parkAuthority` terms are now `AUTH_CREATE`, as are
+> `KingdomProfile::AuthorizeMovePlayer`'s two kingdom checks and the Move Player
+> gate on the player profile page (new `canMovePlayer`, replacing `canEditAdmin`).
+> This does not narrow the revert above: park PMs hold CREATE, so they keep moving
+> players in and out across kingdom lines. Only EDIT-only holders lose the action,
+> and per the help text they never had it.
+
 ### F013 — the 228 blank unit roles
 
 The rows silently blanked by the missing enum value span Household (174),
