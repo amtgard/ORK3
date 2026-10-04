@@ -461,16 +461,28 @@ class Player extends Ork3
             return [];
         }
         $this->db->Clear();
+        // Grouped by BOTH ids: kingdom-original ladders (Order of the Hunter and
+        // friends) all carry award_id 0, so keying the map by award_id alone
+        // collapses every one of them into a single bucket. Those are keyed
+        // "k<kingdomaward_id>" instead; real awards keep their numeric award_id
+        // key, so existing callers are unaffected.
         $rs = $this->db->DataSet(
-            'SELECT ka.award_id, MAX(aw.rank) AS max_rank
+            'SELECT ka.award_id, ka.kingdomaward_id, MAX(aw.rank) AS max_rank
              FROM ' . DB_PREFIX . 'awards aw
              INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
              WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0
-             GROUP BY ka.award_id'
+             GROUP BY ka.award_id, ka.kingdomaward_id'
         );
         $ranks = [];
         while ($rs && $rs->Next()) {
-            $ranks[(int) $rs->award_id] = (int) $rs->max_rank;
+            $awardId = (int) $rs->award_id;
+            $rank = (int) $rs->max_rank;
+            // award_id > 0 can now arrive on several rows (one per kingdomaward
+            // pointing at it, e.g. a player who changed kingdoms), so fold to the max.
+            $key = $awardId > 0 ? $awardId : 'k' . (int) $rs->kingdomaward_id;
+            if (!isset($ranks[$key]) || $rank > $ranks[$key]) {
+                $ranks[$key] = $rank;
+            }
         }
 
         return $ranks;
