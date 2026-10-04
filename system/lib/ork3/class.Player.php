@@ -337,9 +337,13 @@ class Player extends Ork3
             }
         }
 
-        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
+        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable.
+        // AwardId > 0 is required too: reconciliation groups and suggests ranks by
+        // AwardId, and kingdom-original pseudo-ladders have AwardId 0, so they would
+        // all collapse into one bogus group. They were excluded before only because
+        // IsLadder read 0 for them; now that it reports correctly, say so explicitly.
         $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
-            return (int)($a['IsLadder'] ?? 0) === 1;
+            return (int)($a['IsLadder'] ?? 0) === 1 && (int)($a['AwardId'] ?? 0) > 0;
         }));
 
         // Sort: AwardId ASC, date ASC (missing last)
@@ -1157,7 +1161,14 @@ class Player extends Ork3
         if ($r === false) {
             $response['Status'] = InvalidParameter(null, 'Problem processing request.');
         } elseif ($r->size() > 0) {
+            // Kingdom-original ladders have no ork_award row, so a.is_ladder is
+            // NULL for them and IsLadder would read 0 -- which hides the rank
+            // row in the edit modal AND makes a save post an empty Rank, wiping
+            // the rank the grant was given with. Same list the award dropdown
+            // uses to decide whether to offer ranks in the first place.
+            $_pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
             while ($r->next()) {
+                $_isPseudoLadder = in_array((int) $r->kingdomaward_id, $_pseudoLadderIds, true);
                 $response['Awards'][] = array(
                         'AwardsId' => $r->awards_id,
                         'AwardId' => $r->award_id,
@@ -1176,7 +1187,7 @@ class Player extends Ork3
                         'Name' => $r->name,
                         'KingdomAwardName' => $r->kingdom_awardname,
                         'CustomAwardName' => $r->custom_name,
-                        'IsLadder' => $r->is_ladder,
+                        'IsLadder' => $_isPseudoLadder ? 1 : $r->is_ladder,
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,
