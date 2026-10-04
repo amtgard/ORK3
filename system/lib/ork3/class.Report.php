@@ -7122,12 +7122,14 @@ class Report extends Ork3
         $this->db->Clear();
         $awardResult = $this->db->DataSet($kSql);
         $awardCols = [];
+        $realAwardIds = [];
         if ($awardResult) {
             while ($awardResult->Next()) {
                 if (!$awardResult->award_id) {
                     continue;
                 }
                 $name = $awardResult->award_name;
+                $realAwardIds[] = (int) $awardResult->award_id;
                 $awardCols[(int) $awardResult->award_id] = [
                     'Name' => $name,
                     'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
@@ -7136,11 +7138,61 @@ class Report extends Ork3
             }
         }
 
+        // Kingdom-original ladders (Order of the Hunter and friends) have no
+        // ork_award row at all, so the join above cannot reach them and
+        // a.is_ladder is never 1 for them. They were silently absent from this
+        // grid -- Northern Lights showed 15 columns and no Hunter, against 455
+        // grants. Add them as their own columns, keyed "k<kingdomaward_id>"
+        // because they all share award_id 0 and would otherwise collide.
+        // The template keys columns opaquely and already has an ungrouped
+        // (KnightGroup = '') bucket, so it needs no change.
+        $pseudoKaIds = [];
+        $pseudoScopeKingdomId = $kingdomId;
+        if ($pseudoScopeKingdomId <= 0 && $parkId > 0) {
+            $this->db->Clear();
+            $pkr = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
+            );
+            if ($pkr && $pkr->Next()) {
+                $pseudoScopeKingdomId = (int) $pkr->kingdom_id;
+            }
+        }
+        $pseudoCandidates = Award::pseudoLadderKingdomAwardIds();
+        if ($pseudoScopeKingdomId > 0 && $pseudoCandidates !== []) {
+            $this->db->Clear();
+            $pseudoResult = $this->db->DataSet(
+                'SELECT ka.kingdomaward_id, ka.name AS award_name
+                 FROM ' . DB_PREFIX . 'kingdomaward ka
+                 WHERE ka.kingdom_id = ' . $pseudoScopeKingdomId . '
+                   AND ka.kingdomaward_id IN (' . implode(',', array_map('intval', $pseudoCandidates)) . ')
+                 ORDER BY ka.name'
+            );
+            if ($pseudoResult) {
+                while ($pseudoResult->Next()) {
+                    $kaId = (int) $pseudoResult->kingdomaward_id;
+                    if (!$kaId) {
+                        continue;
+                    }
+                    $name = $pseudoResult->award_name;
+                    $pseudoKaIds[] = $kaId;
+                    $awardCols['k' . $kaId] = [
+                        'Name' => $name,
+                        'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
+                        'KnightGroup' => $knightGroupMap[$name] ?? '',
+                    ];
+                }
+            }
+        }
+
         if ($awardCols === []) {
             return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
         }
 
-        $awardIds = implode(',', array_keys($awardCols));
+        $realIdList = $realAwardIds !== [] ? implode(',', $realAwardIds) : '0';
+        $pseudoIdList = $pseudoKaIds !== [] ? implode(',', $pseudoKaIds) : '0';
+        // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
+        // would keep serving the old grid.
+        $awardIds = $realIdList . '|k' . $pseudoIdList;
         $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
@@ -7155,18 +7207,32 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
+        // LEFT JOIN to ork_award, not JOIN: a kingdom-original ladder may have no
+        // row there at all. col_key matches the $awardCols keys built above --
+        // "k<kingdomaward_id>" for pseudo-ladders, the numeric award_id otherwise.
+        //
+        // The pseudo-ladder test comes FIRST and is membership-based, not
+        // "award_id = 0": 12 of the 25 point at award_id 94 ("Custom Award"), so
+        // testing award_id would file Order of the Sharpshooter and friends under
+        // column 94 -- which is not even a column here, so they would vanish again.
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
+                           CASE WHEN ka.kingdomaward_id IN ({$pseudoIdList})
+                                THEN CONCAT('k', ka.kingdomaward_id)
+                                ELSE CAST(a.award_id AS CHAR) END AS col_key,
                            GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
                     JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND a.is_ladder = 1
-                      AND a.award_id IN (' . $awardIds . ")
+                    LEFT JOIN ' . DB_PREFIX . "award a ON a.award_id = ka.award_id
+                    WHERE m.active = 1
+                      AND (
+                            (a.is_ladder = 1 AND a.award_id IN ({$realIdList}))
+                         OR ka.kingdomaward_id IN ({$pseudoIdList})
+                          )
                       AND (ma.revoked = 0 OR ma.revoked IS NULL)
                       {$locationClause}
-                    GROUP BY m.mundane_id, a.award_id
+                    GROUP BY m.mundane_id, col_key
                     ORDER BY m.persona";
 
         $this->db->Clear();
@@ -7175,8 +7241,10 @@ class Report extends Ork3
         if ($dataResult) {
             while ($dataResult->Next()) {
                 $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
+                // Keep as-is: PHP casts "25" to int 25 on array write, while
+                // "k7513" stays a string, matching $awardCols.
+                $aid = $dataResult->col_key;
+                if (!$mid || $aid === null || $aid === '' || $aid === '0') {
                     continue;
                 }
                 if (!isset($playerData[$mid])) {

@@ -337,9 +337,13 @@ class Player extends Ork3
             }
         }
 
-        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
+        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable.
+        // AwardId > 0 is required too: reconciliation groups and suggests ranks by
+        // AwardId, and kingdom-original pseudo-ladders have AwardId 0, so they would
+        // all collapse into one bogus group. They were excluded before only because
+        // IsLadder read 0 for them; now that it reports correctly, say so explicitly.
         $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
-            return (int)($a['IsLadder'] ?? 0) === 1;
+            return (int)($a['IsLadder'] ?? 0) === 1 && (int)($a['AwardId'] ?? 0) > 0;
         }));
 
         // Sort: AwardId ASC, date ASC (missing last)
@@ -456,17 +460,40 @@ class Player extends Ork3
         if (!valid_id($mundaneId)) {
             return [];
         }
+        $pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
         $this->db->Clear();
+        // Grouped by BOTH ids: kingdom-original ladders (Order of the Hunter and
+        // friends) all carry award_id 0, so keying the map by award_id alone
+        // collapses every one of them into a single bucket. Those are keyed
+        // "k<kingdomaward_id>" instead; real awards keep their numeric award_id
+        // key, so existing callers are unaffected.
         $rs = $this->db->DataSet(
-            'SELECT ka.award_id, MAX(aw.rank) AS max_rank
+            'SELECT ka.award_id, ka.kingdomaward_id, MAX(aw.rank) AS max_rank
              FROM ' . DB_PREFIX . 'awards aw
              INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
              WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0
-             GROUP BY ka.award_id'
+             GROUP BY ka.award_id, ka.kingdomaward_id'
         );
         $ranks = [];
         while ($rs && $rs->Next()) {
-            $ranks[(int) $rs->award_id] = (int) $rs->max_rank;
+            $awardId = (int) $rs->award_id;
+            $kaId = (int) $rs->kingdomaward_id;
+            $rank = (int) $rs->max_rank;
+            // Pseudo-ladder membership decides the key, NOT award_id > 0. Most of
+            // these point at award_id 94 ("Custom Award"), so keying on award_id
+            // would file them under 94 alongside every genuine Custom Award --
+            // the exact bleed 5d95f55f set out to avoid -- while the UI looks
+            // them up by kingdomaward_id and finds nothing. Checked first, the
+            // same order GetAwardOptionGroups() uses.
+            // Real award_ids can arrive on several rows (one per kingdomaward
+            // pointing at them, e.g. a player who changed kingdoms), so fold to max.
+            $key = in_array($kaId, $pseudoLadderIds, true) ? 'k' . $kaId : $awardId;
+            if ($key === 0) {
+                continue;
+            }
+            if (!isset($ranks[$key]) || $rank > $ranks[$key]) {
+                $ranks[$key] = $rank;
+            }
         }
 
         return $ranks;
@@ -1157,7 +1184,14 @@ class Player extends Ork3
         if ($r === false) {
             $response['Status'] = InvalidParameter(null, 'Problem processing request.');
         } elseif ($r->size() > 0) {
+            // Kingdom-original ladders have no ork_award row, so a.is_ladder is
+            // NULL for them and IsLadder would read 0 -- which hides the rank
+            // row in the edit modal AND makes a save post an empty Rank, wiping
+            // the rank the grant was given with. Same list the award dropdown
+            // uses to decide whether to offer ranks in the first place.
+            $_pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
             while ($r->next()) {
+                $_isPseudoLadder = in_array((int) $r->kingdomaward_id, $_pseudoLadderIds, true);
                 $response['Awards'][] = array(
                         'AwardsId' => $r->awards_id,
                         'AwardId' => $r->award_id,
@@ -1176,7 +1210,8 @@ class Player extends Ork3
                         'Name' => $r->name,
                         'KingdomAwardName' => $r->kingdom_awardname,
                         'CustomAwardName' => $r->custom_name,
-                        'IsLadder' => $r->is_ladder,
+                        'IsLadder' => $_isPseudoLadder ? 1 : $r->is_ladder,
+                        'IsPseudoLadder' => $_isPseudoLadder ? 1 : 0,
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,

@@ -3820,6 +3820,17 @@ if (is_array($Details['Awards'])) {
 		$kaid = (int)($a['KingdomAwardId'] ?? 0);
 		if ($kaid > 0) {
 			$playerHeldKingdomAwardIds[$kaid] = true;
+			// Pseudo-ladder membership decides the key, NOT AwardId === 0: most of
+			// these point at AwardId 94 ("Custom Award"), so keying on AwardId would
+			// file them alongside every genuine Custom Award while the UI looks them
+			// up by KingdomAwardId. Key them "k<KingdomAwardId>", matching
+			// Player::GetAwardMaxRanks() and tnHeldRank() in revised.js.
+			if (!empty($a['IsPseudoLadder']) && $rank > 0) {
+				$_k = 'k' . $kaid;
+				if (!isset($playerAwardRanks[$_k]) || $rank > $playerAwardRanks[$_k]) {
+					$playerAwardRanks[$_k] = $rank;
+				}
+			}
 		}
 	}
 }
