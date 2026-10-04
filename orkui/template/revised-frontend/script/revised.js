@@ -885,7 +885,7 @@ if (PnConfig.recError) {
         var opt = pnRecSelectedOpt();
         if (!opt) return 0;
         var baseAwardId = parseInt(opt.getAttribute('data-award-id'), 10) || 0;
-        return (PnConfig.awardRanks && PnConfig.awardRanks[baseAwardId]) || 0;
+        return tnHeldRank(PnConfig.awardRanks, opt, baseAwardId);
     }
     function pnRecWarnEl() { return document.getElementById('pn-rec-warn'); }
     function pnRecShowWarn(msg) {
@@ -974,7 +974,7 @@ if (PnConfig.recError) {
         var hint = document.getElementById('pn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = pnAwardRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -3745,7 +3745,7 @@ $(document).ready(function() {
         var hint = gid('kn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = knRecRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7503,7 +7503,7 @@ $(document).ready(function() {
         var hint = gid('pk-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held     = pkRecRanks[baseAwardId] || 0;
+        var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
