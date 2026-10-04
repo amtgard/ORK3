@@ -28,6 +28,18 @@ function tnRankPillInner(prefix, r) {
 }
 if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
 
+/* Highest rank this player already holds of the award behind `opt`.
+   Kingdom-original ladders (Order of the Hunter and friends) all carry
+   award_id 0, so the ranks map keys them "k<kingdomaward_id>" -- which is the
+   option's own value. Keyed by award_id alone they would either all collide or,
+   as before, silently miss and every grant would suggest rank 1. */
+function tnHeldRank(ranks, opt, baseAwardId) {
+    if (!ranks || !opt) return 0;
+    var key = (parseInt(baseAwardId, 10) || 0) > 0 ? baseAwardId : 'k' + opt.value;
+    return parseInt(ranks[key], 10) || 0;
+}
+if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
+
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
    Anchors `el` to `inputEl`, but (a) clamps width + left so the list
@@ -64,6 +76,74 @@ function tnPositionAcFixed(inputEl, el, opts) {
     el.style.overflowY = 'auto';
 }
 if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
+
+/* ============================================================
+   Keeps position:fixed autocomplete dropdowns anchored to their input.
+
+   The dropdowns listed in the position:fixed rule in revised.css are opened
+   from ~19 different places -- several shared helpers plus a handful of inline
+   handlers -- and every one of them does the same thing: add a
+   "<prefix>-ac-open" class. Rather than bolt a positioning call onto each
+   site, and miss the next one someone writes, watch for that class.
+
+   Only dropdowns that actually compute to position:fixed are touched;
+   absolutely-positioned ones already sit correctly under their input.
+   ============================================================ */
+(function () {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+
+    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results';
+    var open = [];
+
+    function isOpen(el) {
+        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open');
+    }
+
+    /* Nearest preceding text input, else the first one in the same field. */
+    function anchorFor(el) {
+        var sib = el.previousElementSibling;
+        while (sib) {
+            if (sib.tagName === 'INPUT' && sib.type === 'text') return sib;
+            sib = sib.previousElementSibling;
+        }
+        return el.parentElement ? el.parentElement.querySelector('input[type="text"]') : null;
+    }
+
+    function place(el) {
+        if (window.getComputedStyle(el).position !== 'fixed') return false;
+        var input = anchorFor(el);
+        if (!input) return false;
+        tnPositionAcFixed(input, el);
+        return true;
+    }
+
+    /* A fixed dropdown does not travel with the modal body it sits in, so
+       re-anchor whatever is open while that body scrolls. */
+    function sync() {
+        open = open.filter(function (el) {
+            if (!el.isConnected || !isOpen(el)) return false;
+            place(el);
+            return true;
+        });
+    }
+
+    function watch(el) {
+        new MutationObserver(function () {
+            if (isOpen(el)) {
+                if (place(el) && open.indexOf(el) === -1) open.push(el);
+            } else {
+                var i = open.indexOf(el);
+                if (i !== -1) open.splice(i, 1);
+            }
+        }).observe(el, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        Array.prototype.forEach.call(document.querySelectorAll(AC_SELECTOR), watch);
+        window.addEventListener('scroll', sync, true); // capture: inner scrolls do not bubble
+        window.addEventListener('resize', sync);
+    });
+})();
 
 /* ===========================
    HTML escape helper
@@ -805,7 +885,7 @@ if (PnConfig.recError) {
         var opt = pnRecSelectedOpt();
         if (!opt) return 0;
         var baseAwardId = parseInt(opt.getAttribute('data-award-id'), 10) || 0;
-        return (PnConfig.awardRanks && PnConfig.awardRanks[baseAwardId]) || 0;
+        return tnHeldRank(PnConfig.awardRanks, opt, baseAwardId);
     }
     function pnRecWarnEl() { return document.getElementById('pn-rec-warn'); }
     function pnRecShowWarn(msg) {
@@ -894,7 +974,7 @@ if (PnConfig.recError) {
         var hint = document.getElementById('pn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = pnAwardRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -1954,7 +2034,7 @@ if (PnConfig.recError) {
 
             if (isLadder && this.value) {
                 gid('pn-award-rank-row').style.display = '';
-                buildRankPills(awardId);
+                buildRankPills(opt);
             } else {
                 gid('pn-award-rank-row').style.display = 'none';
                 gid('pn-award-rank-val').value = '';
@@ -1963,10 +2043,15 @@ if (PnConfig.recError) {
         });
 
         // ---- Rank Pills ----
-        function buildRankPills(awardId) {
-            var opt      = document.querySelector('#pn-award-select option[data-award-id="' + awardId + '"]');
+        /* Takes the selected <option> itself. It used to take the AwardId and
+           re-find the option by [data-award-id], which is ambiguous: every
+           kingdom-original ladder carries data-award-id="0", so that lookup
+           returned whichever such option came first in the list -- the wrong
+           award's name (hence max rank) and the wrong held-rank key. */
+        function buildRankPills(opt) {
+            var awardId  = parseInt(opt ? opt.getAttribute('data-award-id') : 0, 10) || 0;
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
-            var held      = playerRanks[awardId] || 0;
+            var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
@@ -3203,7 +3288,7 @@ $(document).ready(function() {
         var hint = gid('kn-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = knPlayerRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(knPlayerRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -3665,7 +3750,7 @@ $(document).ready(function() {
         var hint = gid('kn-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = knRecRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -6943,7 +7028,7 @@ $(document).ready(function() {
         var hint = gid('pk-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = pkPlayerRanks[baseAwardId] || 0;
+        var held      = tnHeldRank(pkPlayerRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7430,7 +7515,7 @@ $(document).ready(function() {
         var hint = gid('pk-rec-rank-hint');
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held     = pkRecRanks[baseAwardId] || 0;
+        var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
