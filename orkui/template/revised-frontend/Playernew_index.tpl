@@ -3866,6 +3866,7 @@ $ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterM
     btn.addEventListener('blur',       hide);
 })();
 
+<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',
@@ -3905,6 +3906,7 @@ var PnConfig = {
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	recsHiddenNotice: <?= json_encode(htmlspecialchars(ork_recs_hidden_notice(isset($this->__session->user_id)))) ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
 	aboutStory:     <?= json_encode($Player['AboutStory'] ?? '') ?>,
@@ -7676,7 +7678,14 @@ $(function() {
 			var recList = PnConfig.showRecsTab ? allRecs : myRecs;
 			var countEl = document.getElementById('pn-recs-tab-count');
 			if (countEl) countEl.textContent = '(' + recList.length + ')';
-			if (!recList.length) { body.innerHTML = '<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.</div>'; return; }
+			if (!recList.length) {
+				// showRecsTab is off when the kingdom keeps recommendations private and
+				// the viewer can't manage this player, so "none" would be a guess.
+				body.innerHTML = '<div class="pn-empty">' + (PnConfig.showRecsTab
+					? 'There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.'
+					: PnConfig.recsHiddenNotice) + '</div>';
+				return;
+			}
 			var hasActions = PnConfig.loggedInUserId > 0;
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
 			var attr = function(s) { return esc(s).replace(/"/g, '&quot;'); };

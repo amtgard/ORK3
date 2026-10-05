@@ -148,6 +148,8 @@ class Controller_Kingdom extends Controller
         // Variables the partial template expects in scope:
         $IsLoggedIn       = $uid > 0;
         $CanManageKingdom = $canManageKingdom;
+        // An empty list here may only mean the viewer isn't allowed to see it.
+        $RecsHiddenBySetting = !$recsPublic && !$canManageKingdom;
         $kingdom_name     = $this->Kingdom->get_kingdom_name($kingdom_id);
 
         // "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
@@ -435,11 +437,13 @@ class Controller_Kingdom extends Controller
             $this->data['ShowRecsTab'] = true;
             $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id]);
         } elseif ($uid > 0) {
-            // Logged-in non-admin on a private-recs kingdom — tab is shown only if
-            // the user has their own recs. Cheap COUNT query, no row hydration.
+            // Logged-in non-admin on a private-recs kingdom — the tab lists only
+            // their own recs, and when they have none it says why it is empty
+            // and still offers the Recommend button. Cheap COUNT query, no row
+            // hydration.
             $n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid]);
             $this->data['AwardRecommendationsCount'] = $n;
-            $this->data['ShowRecsTab'] = $n > 0;
+            $this->data['ShowRecsTab'] = true;
         } else {
             $this->data['ShowRecsTab'] = false;
         }

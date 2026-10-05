@@ -298,6 +298,8 @@ class Controller_Park extends Controller
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;
+        // An empty list may only mean the viewer isn't allowed to see it.
+        $this->data['RecsHiddenBySetting'] = !$recsPublic && !$canManagePark;
         if ($recsPublic || $canManagePark) {
             $this->data['ShowRecsTab'] = true;
             $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
@@ -309,7 +311,9 @@ class Controller_Park extends Controller
                 return (int)$r['RecommendedById'] === $uid;
             }));
             $this->data['AwardRecommendations'] = $myRecs;
-            $this->data['ShowRecsTab'] = !empty($myRecs);
+            // Shown even with none of their own: the tab then says why it is
+            // empty and still offers the Recommend button.
+            $this->data['ShowRecsTab'] = true;
         } else {
             $this->data['ShowRecsTab'] = false;
         }

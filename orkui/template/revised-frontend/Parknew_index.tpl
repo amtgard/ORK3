@@ -1316,7 +1316,10 @@
 					</button>
 				</div>
 				<?php endif; ?>
-				<?php if (empty($AwardRecommendations)): ?>
+				<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
+				<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+				<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+				<?php elseif (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
