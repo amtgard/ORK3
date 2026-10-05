@@ -4,6 +4,8 @@ Branch: `feature/idp-send-claim-ork-code`
 
 Design reference: `amtgard-idp` → `agent/cursor/ork-link-possession/flow-a-ork-mail-plan.md`.
 
+Local IDP ↔ ORK Docker: use `docker-compose.local-idp.yml` overlay (shared network `amtgard-idp-shared` only — not in default dev compose).
+
 ## ORK env
 
 | Variable | Purpose |
@@ -32,3 +34,17 @@ Success JSON includes `Email` and `MundaneId`. Wrong codes increment `attempts`.
 ## IDP env
 
 Set `ORK_CLAIM_MAIL_VIA_ORK=1` on the IDP to use this path from the profile Email Code button.
+
+## Production / staging rollout
+
+ORK has **no** Phinx-style migration runner and **`greenblue.sh` does not apply SQL**. Deploy is: build the inactive color with `docker-compose.php8-app.{green|blue}`, health-check, flip nginx, tear down the old container — same as today.
+
+Before or after deploy (operator choice), apply the branch migration **by hand** against the live MariaDB (see root `README.md` → *Applying migrations*):
+
+```bash
+mariadb … ork < db-migrations/2026-10-05-ork-idp-mailbox-challenge.sql
+```
+
+Then **restart the ORK app container** so APCu schema cache picks up `ork_idp_mailbox_challenge`.
+
+Configure server env for `IDP_*` and `AMAZON_SES_*` (prod uses host/env wiring, not `.dev.env`). Staging follows the same manual DB ritual (`staging/README.md`).
