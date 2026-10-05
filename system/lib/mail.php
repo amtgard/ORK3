@@ -109,15 +109,15 @@ final class Mail {
 		$header .= 'Reply-To: ' . $this->sender . '<' . $this->from . '>' . $eol;   
 		$header .= 'Return-Path: ' . $this->from . $eol;
 		//$header .= 'X-Mailer: PHP/' . phpversion() . $eol; 
-		//$header .= 'MIME-Version: 1.0' . $eol;
-//		$header .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . $eol; 
-	
 		if (!$this->html) {
-			$message  = '--' . $boundary . $eol; 
-			$message .= 'Content-Type: text/plain; charset="utf-8"' . $eol;
-			$message .= 'Content-Transfer-Encoding: 8bit' . $eol . $eol;
-			$message .= $this->text . $eol;
+			$header .= 'MIME-Version: 1.0' . $eol;
+			$header .= 'Content-Type: text/plain; charset="utf-8"' . $eol;
+			$header .= 'Content-Transfer-Encoding: 8bit' . $eol;
+			$message = $this->text;
 		} else {
+			$header .= 'MIME-Version: 1.0' . $eol;
+			$header .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . $eol;
+			$message  = '--' . $boundary . $eol;
 			//$message  = '--' . $boundary . $eol;
 			//$message .= 'Content-Type: multipart/alternative; boundary="' . $boundary . '_alt"' . $eol . $eol;
 			//$message .= '--' . $boundary . '_alt' . $eol;
@@ -152,7 +152,11 @@ final class Mail {
 			$message .= 'Content-Disposition: attachment; filename="' . $filename . '"' . $eol;
 			$message .= 'Content-ID: <' . $filename . '>' . $eol . $eol;
 			$message .= chunk_split(base64_encode($content));
-		} 
+		}
+
+		if ($this->html) {
+			$message .= '--' . $boundary . '--' . $eol;
+		}
 	
 		if ($this->protocol == 'mail') {
 			ini_set('sendmail_from', $this->from);
