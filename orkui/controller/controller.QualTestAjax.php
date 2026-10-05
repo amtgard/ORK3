@@ -268,13 +268,15 @@ class Controller_QualTestAjax extends Controller
 
     // -----------------------------------------------------------------------
     // reportquestion
-    // POST: QuestionId, Reason — requires login only (any player can report)
+    // POST: QuestionId, Reason, Comment (required when Reason is "other") —
+    // requires login only (any player can report)
     // -----------------------------------------------------------------------
     public function reportquestion($p = null)
     {
         $uid         = $this->requireLogin();
         $question_id = (int)($_POST['QuestionId'] ?? 0);
         $reason      = $_POST['Reason'] ?? '';
+        $comment     = trim((string)($_POST['Comment'] ?? ''));
 
         if (!valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
@@ -284,6 +286,9 @@ class Controller_QualTestAjax extends Controller
         if (!in_array($reason, $valid_reasons, true)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid reason.']);
         }
+        if ($reason === 'other' && $comment === '') {
+            $this->jsonOut(['status' => 1, 'error' => 'Please describe the problem with this question.']);
+        }
 
         // Verify the question exists
         $q = $this->QualTest->question($question_id);
@@ -291,7 +296,9 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        $this->QualTest->report_question($question_id, $uid, $reason);
+        if (!$this->QualTest->report_question($question_id, $uid, $reason, $comment)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Failed to submit report.']);
+        }
 
         $this->jsonOut(['status' => 0]);
     }

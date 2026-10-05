@@ -536,6 +536,22 @@
 	max-width: 100%;
 }
 .qt-report-select:focus { background: var(--ork-card-bg); }
+/* Shown only for "Other", which says nothing without the reporter's own words. */
+.qt-report-comment {
+	flex: 1 1 100%;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 480px;
+	padding: 6px 8px;
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
+	border-radius: 4px;
+	font: inherit;
+	font-size: 0.85rem;
+	resize: vertical;
+}
+.qt-report-comment[hidden] { display: none; }
+.qt-report-comment:focus { background: var(--ork-card-bg); }
 .qt-report-submit {
 	padding: 5px 12px;
 	background: #e53e3e;
@@ -795,6 +811,7 @@ html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
 	/* Report form: stack, and 16px on the select so iOS doesn't zoom on focus. */
 	.qt-report-form { flex-direction: column; align-items: stretch; }
 	.qt-report-select { width: 100%; font-size: 16px; }
+	.qt-report-comment { flex: 0 0 auto; max-width: none; font-size: 16px; }
 	/* Touch targets */
 	.qt-nav-btn, #qt-multi-submit-btn { padding: 13px 26px; min-height: 48px; }
 	.qt-report-toggle-btn, .qt-report-submit, .qt-report-cancel, .qt-review-toggle {
@@ -811,6 +828,7 @@ html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
 /* A coarse pointer on a wider screen (tablet) hits the same iOS zoom threshold. */
 @media (pointer: coarse) {
 	.qt-report-select { font-size: 16px; min-height: 44px; }
+	.qt-report-comment { font-size: 16px; }
 }
 /* Landscape phones: the static page chrome eats 30% of a 390px-tall viewport and
    the action row sits below the fold on every question. */
@@ -975,7 +993,8 @@ html[data-theme="dark"] .qt-report-cancel { color: var(--ork-text-secondary, #cb
 html[data-theme="dark"] .qt-report-cancel { border-color: var(--ork-border, #4a5568); }
 html[data-theme="dark"] .qt-report-submit { color: #fff; }
 html[data-theme="dark"] .qt-report-thanks { color: #68d391; }
-html[data-theme="dark"] .qt-report-select {
+html[data-theme="dark"] .qt-report-select,
+html[data-theme="dark"] .qt-report-comment {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
@@ -1253,6 +1272,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 									<option value="outdated">This has not been updated for recent changes</option>
 									<option value="other">Other</option>
 								</select>
+								<textarea class="qt-report-comment" id="qt-report-comment" rows="2" maxlength="500" placeholder="What's wrong with this question?" aria-label="Describe the problem with this question" hidden></textarea>
 								<button class="qt-report-submit" id="qt-report-submit">Submit</button>
 								<button class="qt-report-cancel" id="qt-report-cancel">Cancel</button>
 							</div>
@@ -1411,6 +1431,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	var reportForm      = document.getElementById('qt-report-form');
 	var reportReason    = document.getElementById('qt-report-reason');
 	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportComment   = document.getElementById('qt-report-comment');
 	var reportSubmit    = document.getElementById('qt-report-submit');
 	var reportCancel    = document.getElementById('qt-report-cancel');
 	var reportThanks    = document.getElementById('qt-report-thanks');
@@ -1611,6 +1632,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			reportBtn.style.display  = 'inline-flex';
 			reportThanks.style.display = 'none';
 			reportReason.value = '';
+			reportComment.value = '';
+			syncReportComment();
 			if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 
 			var isMulti = (q.AnswerMode === 'multi');
@@ -1881,9 +1904,18 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	}
 
 	// Report question handlers
+	// The text box follows the select's value rather than its change event: a
+	// browser that restores "Other" on reload or back fires no change, so the
+	// form re-checks whenever it opens too.
+	function syncReportComment() {
+		reportComment.hidden = reportReason.value !== 'other';
+	}
+	reportReason.addEventListener('change', syncReportComment);
+	reportReason.addEventListener('input', syncReportComment);
 	reportBtn.addEventListener('click', function() {
 		reportForm.style.display = 'flex';
 		reportBtn.style.display  = 'none';
+		syncReportComment();
 	});
 	reportCancel.addEventListener('click', function() {
 		reportForm.style.display = 'none';
@@ -1892,9 +1924,17 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	reportSubmit.addEventListener('click', function() {
 		var reason = reportReason.value;
 		if (!reason) { showError('Please select a reason.'); return; }
+		var comment = reason === 'other' ? reportComment.value.trim() : '';
+		if (reason === 'other' && !comment) {
+			syncReportComment();
+			showError('Please describe the problem with this question.');
+			reportComment.focus();
+			return;
+		}
 		var fd = new FormData();
 		fd.append('QuestionId', reportBtn.dataset.questionId);
 		fd.append('Reason', reason);
+		fd.append('Comment', comment);
 		fetch(BASE_URL + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -1906,6 +1946,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				}
 				reportForm.style.display   = 'none';
 				reportThanks.style.display = 'inline';
+				showError('');
 			})
 			.catch(function() {
 				reportForm.style.display = 'none';

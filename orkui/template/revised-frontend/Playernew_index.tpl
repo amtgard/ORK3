@@ -3866,6 +3866,7 @@ $ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterM
     btn.addEventListener('blur',       hide);
 })();
 
+<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',
@@ -3905,6 +3906,7 @@ var PnConfig = {
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	recsHiddenNotice: <?= json_encode(htmlspecialchars(ork_recs_hidden_notice(isset($this->__session->user_id)))) ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
 	aboutStory:     <?= json_encode($Player['AboutStory'] ?? '') ?>,
@@ -5738,10 +5740,18 @@ html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-tex
 #pn-quiz-report-reason { padding: 5px 8px; background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 4px; font-size: 0.85rem;
                          max-width: 100%; min-width: 0; box-sizing: border-box; }
 #pn-quiz-report-reason:focus { background: var(--ork-card-bg); }
+/* Shown only for "Other", which says nothing without the reporter's own words. */
+#pn-quiz-report-comment { display: block; box-sizing: border-box; width: 100%; max-width: 480px; margin: 8px 0; padding: 6px 8px;
+                          background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 4px;
+                          font: inherit; font-size: 0.85rem; resize: vertical; }
+#pn-quiz-report-comment[hidden] { display: none; }
+#pn-quiz-report-comment:focus { background: var(--ork-card-bg); }
+#pn-quiz-report-comment:not([hidden]) + #pn-quiz-report-submit { margin-left: 0; }
 #pn-quiz-report-submit { margin-left: 6px; font-size: 0.82rem; }
 #pn-quiz-report-cancel { margin-left: 4px; font-size: 0.82rem; }
 #pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; }
-html[data-theme="dark"] #pn-quiz-report-reason {
+html[data-theme="dark"] #pn-quiz-report-reason,
+html[data-theme="dark"] #pn-quiz-report-comment {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
@@ -5752,6 +5762,7 @@ html[data-theme="dark"] #pn-quiz-report-thanks { color: #68d391; }
 	/* Report form — a native select takes its width from its longest option, which
 	   ran 105px past the modal on a 320px viewport; 16px also stops iOS zooming on focus. */
 	#pn-quiz-report-reason { width: 100%; font-size: 16px; min-height: 44px; }
+	#pn-quiz-report-comment { max-width: none; margin-bottom: 0; font-size: 16px; }
 	#pn-quiz-report-submit,
 	#pn-quiz-report-cancel { margin: 8px 6px 0 0; min-height: 44px; }
 }
@@ -6077,6 +6088,8 @@ function pnOpenTestChooser() {
 							<option value="outdated">This has not been updated for recent changes</option>
 							<option value="other">Other</option>
 						</select>
+						<label class="pn-quiz-sr-only" for="pn-quiz-report-comment">Describe the problem with this question</label>
+						<textarea id="pn-quiz-report-comment" rows="2" maxlength="500" placeholder="What's wrong with this question?" hidden></textarea>
 						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit">Submit</button>
 						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel">Cancel</button>
 					</div>
@@ -6142,6 +6155,7 @@ function pnOpenTestChooser() {
 	var reportForm     = document.getElementById('pn-quiz-report-form');
 	var reportReason   = document.getElementById('pn-quiz-report-reason');
 	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportComment  = document.getElementById('pn-quiz-report-comment');
 	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
 	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
 	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
@@ -6284,6 +6298,8 @@ function pnOpenTestChooser() {
 		// A report submitted on the previous question leaves the button hidden.
 		reportBtn.style.display  = 'inline-block';
 		reportReason.value = '';
+		reportComment.value = '';
+		syncReportComment();
 		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 		reportThanks.style.display = 'none';
 
@@ -6550,9 +6566,18 @@ function pnOpenTestChooser() {
 	function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 	function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
+	// The text box follows the select's value rather than its change event: a
+	// browser that restores "Other" on reload or back fires no change, so the
+	// form re-checks whenever it opens too.
+	function syncReportComment() {
+		reportComment.hidden = reportReason.value !== 'other';
+	}
+	reportReason.addEventListener('change', syncReportComment);
+	reportReason.addEventListener('input', syncReportComment);
 	reportBtn.addEventListener('click', function() {
 		reportForm.style.display = 'block';
 		reportBtn.style.display  = 'none';
+		syncReportComment();
 	});
 	reportCancel.addEventListener('click', function() {
 		reportForm.style.display = 'none';
@@ -6561,9 +6586,17 @@ function pnOpenTestChooser() {
 	reportSubmit.addEventListener('click', function() {
 		var reason = reportReason.value;
 		if (!reason) { showError('Please select a reason.'); return; }
+		var comment = reason === 'other' ? reportComment.value.trim() : '';
+		if (reason === 'other' && !comment) {
+			syncReportComment();
+			showError('Please describe the problem with this question.');
+			reportComment.focus();
+			return;
+		}
 		var fd = new FormData();
 		fd.append('QuestionId', reportBtn.dataset.questionId);
 		fd.append('Reason', reason);
+		fd.append('Comment', comment);
 		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -6575,6 +6608,7 @@ function pnOpenTestChooser() {
 				}
 				reportForm.style.display   = 'none';
 				reportThanks.style.display = 'inline';
+				errorMsg.style.display = 'none';
 			})
 			.catch(function() {
 				reportForm.style.display = 'none';
@@ -7644,7 +7678,14 @@ $(function() {
 			var recList = PnConfig.showRecsTab ? allRecs : myRecs;
 			var countEl = document.getElementById('pn-recs-tab-count');
 			if (countEl) countEl.textContent = '(' + recList.length + ')';
-			if (!recList.length) { body.innerHTML = '<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.</div>'; return; }
+			if (!recList.length) {
+				// showRecsTab is off when the kingdom keeps recommendations private and
+				// the viewer can't manage this player, so "none" would be a guess.
+				body.innerHTML = '<div class="pn-empty">' + (PnConfig.showRecsTab
+					? 'There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.'
+					: PnConfig.recsHiddenNotice) + '</div>';
+				return;
+			}
 			var hasActions = PnConfig.loggedInUserId > 0;
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
 			var attr = function(s) { return esc(s).replace(/"/g, '&quot;'); };

@@ -4,8 +4,9 @@
  * tab activation — kept out of the initial profile() page load because rendering
  * thousands of <tr> rows inline blew up the browser's DOMContentLoaded handler.
  * Expects $AwardRecommendations, $IsLoggedIn, $CanManageKingdom, $kingdom_name,
- * $kingdom_id to be in scope.
- */ ?>
+ * $kingdom_id, $RecsHiddenBySetting to be in scope.
+ */
+include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
 			<?php if ($IsLoggedIn): ?>
 			<div class="pk-tab-toolbar">
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
@@ -13,7 +14,9 @@
 				</button>
 			</div>
 			<?php endif; ?>
-			<?php if (empty($AwardRecommendations)): ?>
+			<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+			<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+			<?php elseif (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
 			<?php else: ?>
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>

@@ -1477,9 +1477,14 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
     display: none;
 }
 .pn-ac-results.pn-ac-open { display: block; }
+/* Fixed so the scrolling modal body cannot clip it. The observer in revised.js
+   supplies the coordinates whenever one opens; without them the list stays at
+   its unscrolled spot and lands off-screen once the body has scrolled. */
 .pn-overlay .pn-ac-results {
     position: fixed;
     z-index: var(--z-modal-top);
+    box-sizing: border-box;
+    margin-top: 0;
 }
 .pn-ac-item,
 .kn-ac-item,
@@ -2303,6 +2308,8 @@ html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link:hover {
 }
 
 /* Pagination */
+/* !important: the mobile table layouts set display on rows. */
+.kn-table tr.kn-page-hidden { display: none !important; }
 .kn-pagination {
     display: flex;
     align-items: center;
@@ -3420,6 +3427,8 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .pk-date-col { white-space: nowrap; color: #718096; }
 
 /* ---- Pagination ---- */
+/* !important: the mobile table layouts set display on rows. */
+.pk-table tr.pk-page-hidden { display: none !important; }
 .pk-pagination {
     display: flex;
     align-items: center;

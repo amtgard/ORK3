@@ -3236,16 +3236,23 @@ function evPrintSection(contentHtml, title) {
 	w.document.close();
 	setTimeout(function() { w.print(); }, 250);
 }
+var evAttCols = ['Player','Kingdom','Park','Class','Credits'];
+// DataTables only keeps the current page's rows in the DOM, so anything that needs
+// every attendee must ask the API. filtered=true honours the search box and sort order.
+function evAttRowNodes(filtered) {
+	if (window._evAttDt) {
+		return window._evAttDt.rows(filtered ? { search: 'applied', order: 'applied' } : {}).nodes().toArray();
+	}
+	return Array.prototype.slice.call(document.querySelectorAll('#ev-attendance-table tbody tr[data-att-id]'));
+}
 function evPrintAttendance() {
-	var tbl = document.querySelector('#ev-attendance-table');
+	var trs = evAttRowNodes(true);
 	var tblHtml = '<p>No attendance recorded.</p>';
-	if (tbl) {
-		var clone = tbl.cloneNode(true);
-		clone.querySelectorAll('tr').forEach(function(tr) {
-			var last = tr.lastElementChild;
-			if (last) last.remove();
-		});
-		tblHtml = clone.outerHTML;
+	if (trs.length) {
+		tblHtml = '<table><thead><tr>' + evAttCols.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+			trs.map(function(tr) {
+				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? tr.cells[i].innerHTML : '') + '</td>'; }).join('') + '</tr>';
+			}).join('') + '</tbody></table>';
 	}
 	var sub = EvConfig.eventDate || '';
 	var header = '<h2>' + (EvConfig.eventName || 'Event') + ' — Attendance</h2>' + (sub ? '<p class="ev-print-sub">' + sub + '</p>' : '');
@@ -3264,12 +3271,10 @@ function evCsvSlug() {
 	return (date ? date + '-' : '') + name;
 }
 function evExportAttendanceCsv() {
-	var rows = [];
-	document.querySelectorAll('#ev-attendance-table tbody tr').forEach(function(tr) {
-		var c = tr.querySelectorAll('td');
-		rows.push([c[0]?c[0].textContent.trim():'', c[1]?c[1].textContent.trim():'', c[2]?c[2].textContent.trim():'', c[3]?c[3].textContent.trim():'', c[4]?c[4].textContent.trim():'']);
+	var rows = evAttRowNodes(true).map(function(tr) {
+		return evAttCols.map(function(_, i) { return tr.cells[i] ? tr.cells[i].textContent.trim() : ''; });
 	});
-	evExportCsv(evCsvSlug() + '-attendance.csv', ['Player','Kingdom','Park','Class','Credits'], rows);
+	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols, rows);
 }
 function evExportRsvpCsv() {
 	var rows = [];

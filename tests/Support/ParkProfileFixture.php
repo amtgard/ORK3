@@ -73,15 +73,15 @@ final class ParkProfileFixture
     /**
      * @return array{event_id: int, detail_id: int, park_id: int, kingdom_id: int, mundane_id: int}
      */
-    public function createPublishedEvent(int $parkId, string $suffix = 'pub', string $status = 'published'): array
+    public function createPublishedEvent(int $parkId, string $suffix = 'pub', string $status = 'published', string $startsIn = '+14 days'): array
     {
         $kingdomId = $this->kingdomIdForPark($parkId);
         $owner = $this->createPlayer($parkId, $suffix . '-owner');
         $eventId = $this->insertEvent($kingdomId, $parkId, $owner['mundane_id'], $suffix, $status);
         $detailId = $this->insertDetail(
             $eventId,
-            date('Y-m-d H:i:s', strtotime('+14 days')),
-            date('Y-m-d H:i:s', strtotime('+14 days +6 hours')),
+            date('Y-m-d H:i:s', strtotime($startsIn)),
+            date('Y-m-d H:i:s', strtotime($startsIn . ' +6 hours')),
         );
 
         return [
