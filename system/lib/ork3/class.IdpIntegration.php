@@ -118,18 +118,14 @@ class IdpIntegration extends Ork3
      */
     private function validateSendNonceWithIdp(string $sendNonce): ?array
     {
-        $url = getenv('IDP_VALIDATE_SEND_NONCE_URL');
-        if (!is_string($url) || $url === '') {
-            $base = getenv('IDP_APP_URL');
-            if (!is_string($base) || $base === '') {
-                return null;
-            }
-            $url = rtrim($base, '/') . '/resources/ork/validate-send-nonce';
+        if (!defined('IDP_API_URL') || !defined('IDP_CLIENT_ID') || !defined('IDP_CLIENT_SECRET')) {
+            return null;
         }
 
-        $clientId = getenv('IDP_LINK_CLIENT_ID');
-        $clientSecret = getenv('IDP_LINK_CLIENT_SECRET');
-        if (!is_string($clientId) || $clientId === '' || !is_string($clientSecret) || $clientSecret === '') {
+        $url = rtrim((string) IDP_API_URL, '/') . '/resources/ork/validate-send-nonce';
+        $clientId = (string) IDP_CLIENT_ID;
+        $clientSecret = (string) IDP_CLIENT_SECRET;
+        if ($clientId === '' || $clientSecret === '') {
             return null;
         }
 
@@ -315,13 +311,9 @@ class IdpIntegration extends Ork3
 
     private function sendClaimMail(string $email, string $code): void
     {
-        $profileUrl = getenv('IDP_PROFILE_URL');
-        if (!is_string($profileUrl) || $profileUrl === '') {
-            $base = getenv('IDP_APP_URL');
-            $profileUrl = is_string($base) && $base !== ''
-                ? rtrim($base, '/') . '/resources/profile'
-                : 'https://idp.amtgard.com/resources/profile';
-        }
+        $profileUrl = defined('IDP_BASE_URL')
+            ? rtrim((string) IDP_BASE_URL, '/') . '/resources/profile'
+            : 'https://idp.amtgard.com/resources/profile';
 
         $from = trim((string) AMAZON_SES_FROM_EMAIL);
         if ($from === '') {

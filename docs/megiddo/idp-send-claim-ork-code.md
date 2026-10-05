@@ -6,14 +6,15 @@ Design reference: `amtgard-idp` → `agent/cursor/ork-link-possession/flow-a-ork
 
 Local IDP ↔ ORK Docker: use `docker-compose.local-idp.yml` overlay (shared network `amtgard-idp-shared` only — not in default dev compose).
 
-## ORK env
+## ORK config
 
-| Variable | Purpose |
+Uses existing IDP integration constants (same OAuth client as ORK login):
+
+| Constant | Purpose |
 |----------|---------|
-| `IDP_VALIDATE_SEND_NONCE_URL` | Optional full URL; default `{IDP_APP_URL}/resources/ork/validate-send-nonce` |
-| `IDP_APP_URL` | IDP base (e.g. `https://idp.amtgard.com`) |
-| `IDP_LINK_CLIENT_ID` / `IDP_LINK_CLIENT_SECRET` | HTTP Basic for IDP server routes (same as link mirror) |
-| `IDP_PROFILE_URL` | Optional; mailed link target |
+| `IDP_API_URL` | Server base; `BeginClaimOrkMail` POSTs `{IDP_API_URL}/resources/ork/validate-send-nonce` with HTTP Basic |
+| `IDP_CLIENT_ID` / `IDP_CLIENT_SECRET` | Basic auth (must be listed in IDP `LINK_ORK_PROFILE_ALLOWED_CLIENT_IDS`) |
+| `IDP_BASE_URL` | Browser base; claim mail links to `{IDP_BASE_URL}/resources/profile` |
 
 ## `BeginClaimOrkMail`
 
@@ -47,4 +48,4 @@ mariadb … ork < db-migrations/2026-10-05-ork-idp-mailbox-challenge.sql
 
 Then **restart the ORK app container** so APCu schema cache picks up `ork_idp_mailbox_challenge`.
 
-Configure server env for `IDP_*` and `AMAZON_SES_*` (prod uses host/env wiring, not `.dev.env`). Staging follows the same manual DB ritual (`staging/README.md`).
+Ensure prod `config.php` already defines `IDP_*` and add `AMAZON_SES_*` for outbound mail (Docker dev: `.dev.env` + `heartbeat.sh`). Staging follows the same manual DB ritual (`staging/README.md`).
