@@ -360,7 +360,7 @@ final class Mail {
 					echo_error('Error: DATA not accepted from server! ' . $reply . ' ' . __LINE__);
 				}
 			
-				fputs($handle, $header . $message . $eol);
+				fputs($handle, $header . $eol . $message . $eol);
 				fputs($handle, '.' . $eol);
 			
 				$reply = '';
