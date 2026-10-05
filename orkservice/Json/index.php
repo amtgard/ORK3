@@ -29,6 +29,7 @@ $J = new JsonServer(array(
     'Event',
     'Game',
     'Heraldry',
+    'IdpIntegration',
     'Kingdom',
     'LiveService',
     'Map',

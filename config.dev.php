@@ -137,6 +137,17 @@ define('BEHOLD_KEY', '');
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
 
+// Amazon SES SMTP — same env var names as Amtgard IDP (.env / ORK .dev.env).
+// heartbeat.sh passes these into php-fpm when set on the container.
+define('AMAZON_SES_HOST', getenv('AMAZON_SES_HOST') ?: '');
+define('AMAZON_SES_USERNAME', getenv('AMAZON_SES_USERNAME') ?: '');
+define('AMAZON_SES_PASSWORD', getenv('AMAZON_SES_PASSWORD') ?: '');
+define('AMAZON_SES_FROM_EMAIL', getenv('AMAZON_SES_FROM_EMAIL') ?: '');
+$amazonSesPort = getenv('AMAZON_SES_PORT');
+define('AMAZON_SES_PORT', ($amazonSesPort !== false && trim((string) $amazonSesPort) !== '')
+    ? (int) $amazonSesPort
+    : 587);
+
 // CARTO basemap tile key (Live Attendance + Weather maps) — keep empty in
 // committed config.dev.php; set the real value in an untracked local
 // override if you need working maps locally.
