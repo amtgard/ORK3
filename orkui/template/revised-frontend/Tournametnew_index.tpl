@@ -2658,12 +2658,16 @@ html[data-theme="dark"] .tn-mobile .tn-imd-empty { color:#718096; }
 									// neither applies (the server refuses) — Run Bracket covers them.
 									$_isRegen = $b['Status'] === 'active' && count($mList) > 0;
 									$_isSetup = in_array($b['Status'] ?? '', ['setup', ''], true);
+									// A points bracket has no draw: "generating" it just opens scoring, and one participant is enough.
+									$_isPoints = ($b['Method'] ?? '') === 'points';
+									$_genMin   = $_isPoints ? 1 : 2;
+									$_genLabel = $_isPoints ? 'Start Scoring' : 'Generate';
 								?>
-								<?php if (count($pList) >= 2 && ($_isSetup || $_isRegen)): ?>
+								<?php if (count($pList) >= $_genMin && ($_isSetup || $_isRegen)): ?>
 								<button
 									class="tn-btn tn-btn-primary tn-btn-sm<?= $_isRegen ? ' tn-regen-btn' : '' ?>"
 									<?php if ($_isRegen): ?>data-bid="<?= $bid ?>" data-tid="<?= $tid ?>" data-match-count="<?= count($mList) ?>" onclick="tnRegenArm(this, event)"<?php else: ?>onclick="tnGenerateMatches(<?= $bid ?>, <?= $tid ?>)"<?php endif; ?>>
-									<i class="fas fa-play"></i> <?= $_isRegen ? 'Re-generate' : 'Generate' ?>
+									<i class="fas fa-play"></i> <?= $_isRegen ? 'Re-generate' : $_genLabel ?>
 								</button>
 								<?php endif; ?>
 								<?php if (($b['Method'] ?? '') === 'points' && ($b['Status'] ?? '') === 'active'): ?>
@@ -2680,14 +2684,14 @@ html[data-theme="dark"] .tn-mobile .tn-imd-empty { color:#718096; }
 								// Desktop cluster above is hidden under .tn-mobile; this bar is shown.
 								$_mIsTeam = ($b['Participants'] ?? 'individual') === 'team';
 								$_mIsRegen = $b['Status'] === 'active' && count($mList) > 0;
-								$_mCanGen = count($pList) >= 2 && (in_array($b['Status'] ?? '', ['setup', ''], true) || $_mIsRegen);
+								$_mCanGen = count($pList) >= $_genMin && (in_array($b['Status'] ?? '', ['setup', ''], true) || $_mIsRegen);
 								$_mEditJson = htmlspecialchars(json_encode(['style'=>$b['Style'],'styleNote'=>$b['StyleNote'],'method'=>$b['Method'],'rings'=>(int)$b['Rings'],'participants'=>$b['Participants'],'seeding'=>$b['Seeding'],'durationMinutes'=>(int)($b['DurationMinutes']??0),'bestOf'=>(int)($b['BestOf']??1),'pointRounds'=>(int)($b['PointRounds']??3),'pointMode'=>($b['PointMode']??'fixed'),'pointScale'=>($b['PointScale']??'5,3,1,0')], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT), ENT_QUOTES); // JS object literal for tnOpenEditBracketModal
 							?>
 							<div class="tn-bracket-actions-mobile">
 								<?php if ($_mCanGen): ?>
 								<button type="button" class="tn-btn tn-btn-primary tn-bracket-gen-mobile"
 									onclick="tnMobileGenerate(<?= $bid ?>, <?= $tid ?>, <?= $_mIsRegen ? 'true' : 'false' ?>, <?= count($mList) ?>)">
-									<i class="fas fa-play"></i> <?= $_mIsRegen ? 'Re-generate' : 'Generate' ?>
+									<i class="fas fa-play"></i> <?= $_mIsRegen ? 'Re-generate' : $_genLabel ?>
 								</button>
 								<?php endif; ?>
 								<button type="button" class="tn-btn tn-btn-outline tn-bracket-more-mobile"
@@ -9676,16 +9680,20 @@ window.tnGenerateMatches = function(bracketId, tournamentId, skipConfirm) {
 		body += '<li>Participants: ' + pCount + '</li>';
 		if (byes > 0) body += '<li>First-round byes: ' + byes + '</li>';
 		if (rounds) body += '<li>' + (method === 'swiss' ? 'Swiss rounds' : 'Rounds') + ': ' + rounds + '</li>';
+		// Points brackets have no matches: starting one just opens the scoring grid.
+		var isPoints = (method === 'points');
+		if (isPoints && parseInt(bracket.PointRounds) > 0) body += '<li>Scoring rounds: ' + parseInt(bracket.PointRounds) + '</li>';
 		if (method !== 'swiss' && parseInt(bracket.Rings) > 1) body += '<li>Concurrent rings: ' + bracket.Rings + '</li>';
 		body += '</ul>';
+		if (isPoints) body += '<p style="margin:10px 0 0">Participants are locked once scoring starts.</p>';
 		var isRegen = (status === 'active' && hasMatches);
 		if (isRegen) {
 			body += '<p class="tn-confirm-warn">\u26a0\ufe0f This bracket is currently ACTIVE with existing match data. Re-generating will DELETE all current matches and results.</p>';
 		}
 		tnConfirm({
-			title: 'Generate matches?',
+			title: isPoints ? 'Start scoring?' : 'Generate matches?',
 			body: body,
-			confirmLabel: 'Generate',
+			confirmLabel: isPoints ? 'Start Scoring' : 'Generate',
 			danger: false,
 			onConfirm: function() { tnGenerateMatches(bracketId, tournamentId, true); }
 		});
@@ -9771,8 +9779,10 @@ window.tnMobileGenerate = function(bracketId, tournamentId, isRegen, matchCount)
 		var sub = pCount + ' fighters';
 		if (byes > 0) sub += ' → ' + byes + ' bye' + (byes === 1 ? '' : 's');
 		if (rounds) sub += ' · ' + rounds + (typeof rounds === 'number' ? ' rounds' : '');
+		// Points brackets have no matches: starting one just opens the scoring grid.
+		var isPoints = !!(bd && bd.Bracket && bd.Bracket.Method === 'points');
 		items.push({
-			label: 'Generate matches (' + sub + ')',
+			label: (isPoints ? 'Start scoring (' : 'Generate matches (') + sub + ')',
 			onTap: function() { tnGenerateMatches(bracketId, tournamentId, true); }
 		});
 	}
@@ -10001,7 +10011,16 @@ window.tnMobileBracketMore = function(bracketId, tournamentId, isTeam, editData)
 				}
 				bar.appendChild(progInfo);
 			}
-			// No Generate/Regenerate for points brackets (no draw) or once the bracket is
+			// Points brackets have no draw, but they still have to be started: the server
+			// only accepts scores once the bracket leaves setup. One participant is enough.
+			if (method === 'points' && participants.length >= 1 && (!bracket.Status || bracket.Status === 'setup')) {
+				var startBtn = document.createElement('button');
+				startBtn.className = 'tn-btn tn-btn-primary tn-btn-sm';
+				startBtn.innerHTML = '<i class="fas fa-play"></i> Start Scoring';
+				startBtn.onclick = function() { tnGenerateMatches(bracketId, TnConfig.tournamentId); };
+				bar.appendChild(startBtn);
+			}
+			// No Regenerate for points brackets (no draw) or once the bracket is
 			// complete/finalized — matches the Brackets-tab card's server-side gate.
 			// Generate only in setup; Regenerate only for an active bracket with a draw.
 			if (participants.length >= 2 && method !== 'ironman' && method !== 'points'
