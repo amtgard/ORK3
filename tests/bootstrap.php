@@ -59,6 +59,19 @@ if (!class_exists('Memcached', false)) {
 
 require_once ORK3_ROOT . '/startup.php';
 
+// Survey image files written and unlinked by the tests live in their own folder
+// (config.test.php: assets/survey-test/), never the dev site's assets/survey/.
+// Refuse to run against the shared folder; create the test folder if missing.
+if (defined('DIR_SURVEY_IMAGE')) {
+    if (rtrim(DIR_SURVEY_IMAGE, '/') === rtrim(DIR_ASSETS, '/') . '/survey') {
+        fwrite(STDERR, "config.test.php points DIR_SURVEY_IMAGE at the dev assets/survey/ folder; use assets/survey-test/.\n");
+        exit(1);
+    }
+    if (!is_dir(DIR_SURVEY_IMAGE)) {
+        mkdir(DIR_SURVEY_IMAGE, 0775, true);
+    }
+}
+
 require_once __DIR__ . '/Support/EventRsvpFixture.php';
 require_once __DIR__ . '/Support/AuthorizationAddFixture.php';
 require_once __DIR__ . '/Support/BannerFixture.php';
@@ -71,6 +84,7 @@ require_once __DIR__ . '/Support/ReportsFixture.php';
 require_once __DIR__ . '/Support/SearchFixture.php';
 require_once __DIR__ . '/Support/AttendanceFixture.php';
 require_once __DIR__ . '/Support/InfrastructureFixture.php';
+require_once __DIR__ . '/Support/SurveyOrgFixture.php';
 require_once DIR_UI . 'model/model.Event.php';
 require_once DIR_UI . 'model/model.Attendance.php';
 require_once DIR_UI . 'model/model.Player.php';

@@ -67,3 +67,7 @@ htmlcov/
 .pytest_cache/
 test-results/
 ga-service-account.json
+assets/survey/*
+!assets/survey/.gitkeep
+# PHPUnit's survey image folder (config.test.php) — created by tests/bootstrap.php
+assets/survey-test/

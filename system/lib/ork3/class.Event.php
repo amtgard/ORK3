@@ -901,6 +901,11 @@ class Event extends Ork3
         //     AND ork_event.park_id = 0). Park-owned events at parks within the
         //     kingdom are not surfaced here; the caller queries park scope for those.
         // Ordered by event_start ASC. Drafts excluded.
+        // Survey credit events are excluded too: SurveyCredit generates a one-day
+        // "Survey Credit - {title}" event dated the survey's start, which covers
+        // today on the day it is made, but nobody attends it in person, so the
+        // attendance pages must never steer an officer to it (sharing-and-credits
+        // spec §3.4). They are the occurrences an ork_survey_credit config points at.
         $scope    = strtolower((string)($request['Scope'] ?? ''));
         $scopeId  = (int)($request['ScopeId'] ?? 0);
         $date     = (string)($request['Date'] ?? '');
@@ -931,6 +936,8 @@ class Event extends Ork3
 			  AND COALESCE(e.status, 'published') = 'published'
 			  AND cd.event_start <= '{$dEnd}'
 			  AND cd.event_end   >= '{$dStart}'
+			  AND NOT EXISTS (SELECT 1 FROM ork_survey_credit sc
+			                  WHERE sc.event_calendardetail_id = cd.event_calendardetail_id)
 			ORDER BY cd.event_start ASC, e.event_id ASC";
         $this->db->Clear();
         $rs = $this->db->DataSet($sql);

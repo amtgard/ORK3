@@ -155,6 +155,7 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 
 	/* Dark mode global overrides */
 	html[data-theme="dark"] body { background-color: #1a202c; color: #e2e8f0; }
+	#theme_container:focus { outline: none; }
 	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
 	html[data-theme="dark"] .information-table { background-color: #2d3748; border-color: #4a5568; }
 	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
@@ -162,6 +163,32 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
+
+	/* Survey promotion banner (site-wide, dismissable) */
+	#ork-survey-banner { display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; background:#ebf8ff; border-bottom:1px solid #bee3f8; color:#2b6cb0; padding:10px 16px; font-size:0.85rem; }
+	.svb-icon { font-size:16px; flex-shrink:0; }
+	.svb-text { flex:1; min-width:200px; }
+	.svb-title { font-weight:700; }
+	.svb-desc { font-weight:400; opacity:0.9; }
+	/* box-sizing is load-bearing: the <=600px rule below sets width:100% and the
+	   18px padding + 1px border would otherwise push the CTA 16px past the
+	   viewport. The id-scoped selectors are load-bearing too: the banner lives
+	   inside #theme_container, where the dark rule above repaints every <a>
+	   #63b3ed - 1.94:1 on the CTA's own blue fill. */
+	#ork-survey-banner .svb-cta { flex-shrink:0; box-sizing:border-box; background:#2b6cb0; color:#fff; border:1px solid #2b6cb0; border-radius:7px; padding:9px 18px; min-height:44px; display:inline-flex; align-items:center; font-size:0.85rem; font-weight:600; text-decoration:none; }
+	#ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
+	#ork-survey-banner .svb-close { flex-shrink:0; box-sizing:border-box; background:none; border:none; color:#2b6cb0; font-size:20px; line-height:1; cursor:pointer; padding:10px; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+	#ork-survey-banner .svb-close:hover { color:#1a4971; }
+	/* Phones: the close button is a 44px corner icon, not a full-width row; the
+	   side padding keeps the centred text clear of it. */
+	@media (max-width:600px) { #ork-survey-banner { position:relative; flex-direction:column; align-items:stretch; text-align:center; padding:10px 52px; } #ork-survey-banner .svb-cta { width:100%; justify-content:center; } #ork-survey-banner .svb-close { position:absolute; top:0; right:0; width:44px; height:44px; padding:0; } }
+	html[data-theme="dark"] #ork-survey-banner { background:#1e3a5f; border-color:#2c5282; color:#bee3f8; }
+	html[data-theme="dark"] #ork-survey-banner .svb-close { color:#bee3f8; }
+	html[data-theme="dark"] #ork-survey-banner .svb-close:hover { color:#fff; }
+	/* #2b6cb0 rather than #3182ce: white on #3182ce is 4.03:1, under AA for this
+	   13.6px label; #2b6cb0 is 5.43:1. */
+	html[data-theme="dark"] #ork-survey-banner .svb-cta { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
+	html[data-theme="dark"] #ork-survey-banner .svb-cta:hover { background:#2c5282; border-color:#2c5282; color:#fff; }
 
 	/* Site footer: sits on the page ground in light; keeps its band in dark. */
 	.ork-site-footer { background: transparent; color: var(--ork-text-on-ground, #5f6b7a); }
@@ -190,6 +217,41 @@ $downtime_note  = 'Database maintenance — likely only a few minutes';
 		<div id="ork-env-banner" style="background:<?= $ork_env_label === 'STAGING' ? '#6d28d9' : '#0f766e' ?>;color:#fff;text-align:center;padding:5px 12px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;">
 			<i class="fas fa-flask" style="margin-right:6px;opacity:0.85"></i><?= $ork_env_label ?> &mdash; test copy of the ORK; nothing here affects the real site
 		</div>
+<?php endif; ?>
+<?php
+	// No banner on the runner (Survey/take, Survey/s) for the very survey it promotes.
+	$_svbPath = $this->__data['path'] ?? [];
+	$_svbOnRunner = !empty($SurveyBanner)
+		&& ($_svbPath[0] ?? '') === 'Controller_Survey'
+		&& in_array($_svbPath[1] ?? '', ['take', 's'], true)
+		&& (int) ($this->__data['SurveyId'] ?? 0) === (int) $SurveyBanner['survey_id'];
+?>
+<?php if (!empty($SurveyBanner) && !$_svbOnRunner): ?>
+		<div id="ork-survey-banner" data-survey-id="<?= (int)$SurveyBanner['survey_id'] ?>">
+			<i class="fas fa-poll svb-icon" aria-hidden="true"></i>
+			<span class="svb-text"><span class="svb-title"><?= htmlspecialchars($SurveyBanner['title']) ?></span><?php if (!empty($SurveyBanner['description'])): ?> <span class="svb-desc">&mdash; <?= htmlspecialchars($SurveyBanner['description']) ?></span><?php endif; ?></span>
+			<a class="svb-cta" href="<?= UIR ?>Survey/take/<?= (int)$SurveyBanner['survey_id'] ?>"><?= !empty($SurveyBanner['in_progress']) ? 'Continue' : 'Take survey' ?></a>
+			<button type="button" class="svb-close" aria-label="Dismiss" onclick="svBannerDismiss(<?= (int)$SurveyBanner['survey_id'] ?>)">&times;</button>
+		</div>
+		<div id="ork-survey-banner-status" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;"></div>
+		<script>
+		function svBannerDismiss(surveyId) {
+			var el = document.getElementById('ork-survey-banner');
+			if (el) {
+				// Move focus to a stable ancestor BEFORE removing the banner, otherwise
+				// the focused close button disappears and focus collapses to <body>.
+				var container = document.getElementById('theme_container');
+				if (container && el.contains(document.activeElement)) {
+					container.setAttribute('tabindex', '-1');
+					container.focus();
+				}
+				el.remove();
+				var status = document.getElementById('ork-survey-banner-status');
+				if (status) status.textContent = 'Survey banner dismissed.';
+			}
+			$.post('<?=UIR?>SurveyAjax/dismiss_banner', { SurveyId: surveyId });
+		}
+		</script>
 <?php endif; ?>
 <?php if (!empty($downtime_start)): ?>
 		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >

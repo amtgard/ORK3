@@ -1,0 +1,1789 @@
+/* ==========================================================================
+   ORK3 Surveys — base stylesheet  (.sv-*)
+
+   Shared by the runner (Survey_take), the builder canvas (Survey_build) and
+   the results page's question previews. Surface-specific rules live in
+   survey-build.css (.svb-*) and survey-results.css (.svr-*) — nothing in this
+   file is duplicated there, and nothing here is copied from reports.css.
+
+   Structure rendered by script/survey-render.js — see the block comment at the
+   top of that file for the exact markup of every question type.
+
+   Tokens: everything derives from the global --ork-* set in tokens.css and
+   orkui.css. Local --sv-* tokens are declared on .sv-root / .sv-scope so a
+   survey can be re-accented at runtime: the runner sets
+   `style="--sv-accent: #….; --sv-accent-contrast: #…"` from accent_color.
+
+   Type scale (spec §7 "Density", 2026-09-10): the app's own scale from
+   tokens.css / reports.css — 13px base (--ork-font-size-base), 12px meta
+   (--ork-font-size-sm), 11px uppercase section labels, 14px prompts and card
+   titles, 20px page/survey titles. Nothing in this module is bigger than the
+   equivalent control elsewhere in the ORK.
+
+   Desktop-first sizing with one accessibility exception: the RUNNER (.sv-root)
+   gets its 44px tap targets and 16px real form controls back in the
+   `(max-width: 700px), (pointer: coarse)` block near the bottom — 16px so iOS
+   does not zoom on focus. Labels around those controls stay on the 13px base.
+   Breakpoints: 700px (matrix collapses, runner touch sizing) and 420px.
+   ========================================================================== */
+
+/* ── Surface ladder (L0 → L3) ─────────────────────────────────────────────
+   Light mode used to paint every layer the same #fff: ground, page card,
+   question card and control all measured rgb(255,255,255) with a single
+   #e2e8f0 hairline between them, so a survey read as one flat sheet. The
+   four L-tokens below alternate instead — grey ground, white page, tinted
+   question, white control — with the radius stepping 8 → 6 → 4 and a shadow
+   only on L1 (plus the one question card the builder has selected, which
+   lifts back to white). L2 stays flat on purpose: the tint IS its edge.
+
+   Declared on :root rather than on .sv-scope because the runner paints its
+   ground on <body> (`body:has(#sv-root)` near the bottom of this file) and a
+   token scoped to .sv-scope would be out of reach there. survey.css is linked
+   by the four Survey_*.tpl templates and by nothing else in the app, so :root
+   here is already scoped to a survey page.
+
+   Dark mode keeps every value it already computed, with one deliberate
+   exception: L2 used to equal the page card (#2d3748 on #2d3748), so it now
+   steps one shade darker and the nesting reads in both themes. */
+:root {
+    --sv-l0: #eef2f7;   /* ground   — behind the page cards               */
+    --sv-l1: #ffffff;   /* page     — page card, sidebar cards, rail      */
+    --sv-l2: #f5f8fb;   /* question — one question card                   */
+    --sv-l3: #ffffff;   /* control  — choice row, scale face, rank row    */
+
+    --sv-line-1: #d5dde8;
+    --sv-line-2: #e2e8f0;
+    --sv-line-3: #cbd5e0;
+
+    /* The selected builder card lifts off L2 rather than tinting further. */
+    --sv-l2-lift:   #ffffff;
+    --sv-l3-hover:  var(--ork-surface-hover);
+
+    /* The runner's accent header is a translucent wash, so whatever sits
+       behind it changes the composite. On light's new L0 ground it dropped
+       .sv-progress-text to 4.16:1; an opaque L1 base restores the 4.66:1 it
+       had on white. Dark mode wants the opposite — the ground there is
+       already darker than the card, and an L1 base would LIFT the header to
+       3.98:1 — so dark keeps the ground and stays exactly where it was. */
+    --sv-header-base: var(--sv-l1);
+
+    --sv-radius-l1: var(--ork-radius-lg);
+    --sv-radius-l2: var(--ork-radius-md);
+    --sv-radius-l3: var(--ork-radius-sm);
+}
+
+html[data-theme="dark"] {
+    --sv-l0: var(--ork-bg);                 /* #1a202c — unchanged */
+    --sv-l1: var(--ork-card-bg);            /* #2d3748 — unchanged */
+    --sv-l2: #26303f;                       /* one step under the page card */
+    --sv-l3: var(--ork-card-bg);            /* #2d3748 — unchanged */
+
+    --sv-line-1: var(--ork-border);         /* #4a5568 — unchanged */
+    --sv-line-2: var(--ork-border);
+    --sv-line-3: var(--ork-border);
+
+    --sv-l2-lift:  var(--ork-card-bg);      /* #2d3748 + the accent edge */
+    --sv-l3-hover: var(--ork-surface-hover);/* #374151 — unchanged */
+
+    --sv-header-base: transparent;          /* the ground — unchanged */
+}
+
+.sv-root,
+.sv-scope {
+    --sv-accent:          var(--ork-blue-primary);
+    --sv-accent-contrast: #fff;
+    --sv-accent-soft:     rgba(44, 82, 130, 0.10);
+    --sv-header-wash:     rgba(44, 82, 130, 0.05);   /* lighter than accent-soft: a 10% wash on white reads as a disabled panel */
+
+    --sv-bg:              var(--ork-bg);
+    --sv-card-bg:         var(--ork-card-bg);
+    --sv-border:          var(--ork-border);
+    --sv-border-strong:   var(--ork-border-dark);
+    --sv-text:            var(--ork-text);
+    --sv-text-body:       var(--ork-text-secondary);
+    /* --ork-text-muted (#718096) is only 4.02:1 on white and 3.83:1 on the
+       #f7fafc builder rail — under AA for the 11-13px meta text this module
+       uses. Surveys carry their own darker muted so every caption passes; the
+       dark-mode value below hands the job back to the global token. */
+    --sv-text-muted:      #5f6b7a;
+    --sv-danger:          var(--ork-red-danger);
+    --sv-danger-bg:       var(--ork-alert-danger-bg);
+    --sv-input-bg:        var(--ork-input-bg);
+    --sv-star-off:        #7b8ba0;               /* 3.3:1 on the L2 tint, 3.5:1 on white (non-text 3:1 floor) */
+    --sv-star-on:         #d69e2e;
+    --sv-warn-text:       #975a16;               /* >5:1 on the header wash — "Couldn't save" */
+    /* Pairwise progress (pairwise spec §6): red → yellow → yellow-green → green → dark green. */
+    --sv-pw-0:            #e53e3e;
+    --sv-pw-1:            #ecc94b;
+    --sv-pw-2:            #9ae66e;
+    --sv-pw-3:            #38a169;
+    --sv-pw-4:            #276749;
+    --sv-pw-track:        var(--sv-line-2);
+    /* The ticks are drawn ON TOP of the fill, so they need contrast with the
+       FILL, not with the card: a muted-text tick composited to ~1.35:1 on the
+       dark-mode fill and vanished as the respondent advanced. Ink at .55 keeps
+       ≥2.5:1 on every light fill and 3.6:1 on the unfilled track. */
+    --sv-pw-tick:         rgba(26, 32, 44, 0.55);
+    --sv-radius:          var(--ork-radius-lg);
+    --sv-gap:             16px;
+
+    font-family: var(--ork-font-body);
+    color: var(--sv-text);
+}
+
+html[data-theme="dark"] .sv-root,
+html[data-theme="dark"] .sv-scope {
+    --sv-accent-soft: rgba(99, 179, 237, 0.16);
+    /* --sv-accent follows --ork-blue-primary, which dark swaps to #63b3ed:
+       white on it is ~2.3:1, so every accent fill (the primary button, a
+       checked numeric/NPS face) takes dark ink instead. */
+    --sv-accent-contrast: #1a202c;
+    --sv-header-wash: rgba(99, 179, 237, 0.16);
+    --sv-star-on:     #f6ad55;
+    /* --ork-border-dark is #374151 in dark mode - 1.16:1 on the #2d3748 card,
+       which makes an unanswered rating question read as blank. Empty stars are
+       a meaningful graphic, so they get their own 3.8:1 grey here. */
+    --sv-star-off:    #8592a5;
+    --sv-text-muted:  var(--ork-text-muted);
+    --sv-warn-text:   #fbd38d;
+    --sv-pw-0:        #f56565;
+    --sv-pw-1:        #ecc94b;
+    --sv-pw-2:        #b5e48c;
+    --sv-pw-3:        #68d391;
+    --sv-pw-4:        #38a169;
+    --sv-pw-track:    #1f2733;
+    /* Dark lightens every fill, so the tick goes darker still to hold ~6:1
+       across it. Ahead of the fill it reads as part of the track. */
+    --sv-pw-tick:     rgba(26, 32, 44, 0.7);
+}
+
+/* Native controls (the radios and checkboxes that ARE the answer surface on a
+   phone) keep the browser's LIGHT chrome unless the page says otherwise — an
+   unchecked radio painted as a solid white disc that reads as selected, on the
+   screen where the choice decides data sharing. */
+html[data-theme="dark"] :where(.sv-root, .sv-scope, .sv-modal) { color-scheme: dark; }
+
+/* orkui.css carries a global `p { text-align: justify }` (orkui.css:786). That
+   is the documented global-element-selector trap: it leaks into every survey
+   surface and opens rivers in the narrow sidebar and card copy. Survey prose is
+   ragged-right everywhere. This reset stays inside the .sv-* namespace — a
+   survey surface built on the .rp-* shell opts in by putting .sv-scope on the
+   wrapper that holds its copy (Survey_results, Survey_build, Survey_index all
+   do), so this file never restyles a class reports.css owns. */
+.sv-root p,
+.sv-scope p {
+    text-align: left;
+}
+
+/* ── The .rp-* shell, re-grounded ─────────────────────────────────────────
+   reports.css is shared by a dozen report pages and is not edited from this
+   module. The three survey surfaces that wear its shell (builder, results,
+   list) all carry .sv-scope on their .rp-body, so the overrides below reach
+   those pages and nothing else: the shell's content row becomes the L0
+   ground, and its cards become L1 on top of it.
+
+   .rp-table-area keeps its own fill on purpose — dark mode gives it a
+   deliberately deeper well (#1e2433) that L1 would flatten — so only its
+   hairline joins the ladder. */
+.rp-body.sv-scope {
+    background: var(--sv-l0);
+}
+
+.sv-scope .rp-filter-card,
+.sv-scope .rp-chart-card {
+    background: var(--sv-l1);
+    border-color: var(--sv-line-1);
+}
+
+.sv-scope .rp-table-area {
+    border-color: var(--sv-line-1);
+}
+
+/* ── Page column ──────────────────────────────────────────────────────── */
+
+.sv-root {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 64px;
+    box-sizing: border-box;
+}
+
+/* The runner shows and hides by the `hidden` attribute (show-if question
+   roots, the Keep-this-order button, the progress row, error boxes). Any of
+   those that carries its own `display` would outrank the UA's [hidden] rule,
+   so the runner root makes `hidden` authoritative. Runner-only: the builder
+   deliberately lets a display rule beat [hidden] on its lock bar. */
+.sv-root [hidden] { display: none !important; }
+
+.sv-card {
+    background: var(--sv-l1);
+    border: 1px solid var(--sv-line-1);
+    border-radius: var(--sv-radius-l1);
+    box-shadow: var(--ork-shadow-card);
+    padding: var(--ork-space-card);
+    margin-bottom: var(--sv-gap);
+    box-sizing: border-box;
+}
+
+/* Headings inside a survey card: orkui.css gives every global h1–h6 a grey
+   pill box, so every heading we own resets it — in BOTH themes. The reset is
+   (0,0,1), tying orkui's bare h1–h6 and winning by source order, so any
+   component heading rule (a class or more) still sets its own margin, colour
+   and line-height the same way in both themes. */
+:where(.sv-root, .sv-scope) :is(h1, h2, h3, h4) {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin: 0 0 8px;
+    color: var(--sv-text);
+    font-family: var(--ork-font-heading);
+    line-height: 1.25;
+    /* orkui.css also gives every h1–h6 a white text-shadow in light mode. */
+    text-shadow: none;
+    box-shadow: none;
+}
+
+/* orkui.css's dark h1–h6 rule is (0,1,2) and repaints background, border,
+   colour and text-shadow — only those. Undo exactly that, at the same
+   specificity and later in the cascade; margin, line-height and font stay
+   with the light reset above so layout never differs between themes. */
+html[data-theme="dark"] :where(.sv-root, .sv-scope) :is(h1, h2, h3, h4) {
+    background: none;
+    border: 0;
+    text-shadow: none;
+    color: var(--sv-text);
+}
+
+.sv-title {
+    font-size: 20px;
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.sv-intro {
+    color: var(--sv-text-body);
+    font-size: var(--ork-font-size-base);
+    line-height: 1.55;
+}
+
+.sv-intro p:first-child { margin-top: 0; }
+.sv-intro p:last-child { margin-bottom: 0; }
+
+/* ── Notices ──────────────────────────────────────────────────────────── */
+
+.sv-notice {
+    background: var(--ork-alert-info-bg);
+    border: 1px solid var(--ork-alert-info-border);
+    color: var(--ork-alert-info-text);
+    border-radius: var(--ork-radius-md);
+    padding: 10px 12px;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.5;
+    margin-bottom: var(--sv-gap);
+}
+
+.sv-notice-warn {
+    background: var(--ork-alert-warning-bg);
+    border-color: var(--ork-alert-warning-border);
+    color: var(--ork-alert-warning-text);
+}
+
+.sv-notice-error {
+    background: var(--ork-alert-danger-bg);
+    border-color: var(--ork-alert-danger-border);
+    color: var(--ork-alert-danger-text);
+}
+
+/* "Log in again" / "Reload the page" inside a notice or the final-screen
+   error: the notice's own colour (already AA on its tint), underlined. */
+.sv-notice-link {
+    color: inherit;
+    font-weight: var(--ork-font-weight-semibold);
+    text-decoration: underline;
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────── */
+
+.sv-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--ork-bg-tertiary);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+/* Painted with transform, not width: headerPaint() runs on every answer (show-if
+   rebuilds re-measure the header), and a pairwise question fires one per pick —
+   animating `width` relaid the header out each time. scaleX only composites. */
+.sv-progress-bar {
+    display: block;
+    height: 100%;
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background: var(--sv-accent);
+    border-radius: 999px;
+    transition: transform 0.25s ease;
+}
+
+.sv-progress-text {
+    font-size: 12px;
+    color: var(--sv-text-muted);
+    margin-bottom: var(--sv-gap);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.sv-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 14px;
+    border: 1px solid var(--sv-border-strong);
+    border-radius: var(--ork-radius-md);
+    background: var(--sv-card-bg);
+    color: var(--sv-text);
+    font-family: inherit;
+    font-size: var(--ork-font-size-base);
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+    box-sizing: border-box;
+    transition: var(--ork-transition-base);
+}
+
+.sv-btn:hover { background: var(--ork-surface-hover); }
+.sv-btn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.sv-btn[disabled], .sv-btn.sv-is-busy { opacity: 0.55; cursor: not-allowed; }
+
+.sv-btn-primary {
+    background: var(--sv-accent);
+    border-color: var(--sv-accent);
+    color: var(--sv-accent-contrast);
+}
+
+.sv-btn-primary:hover { filter: brightness(1.08); background: var(--sv-accent); }
+
+.sv-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--sv-accent);
+}
+
+.sv-btn-ghost:hover { background: var(--sv-accent-soft); }
+
+.sv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: var(--sv-gap);
+}
+
+.sv-actions-end { margin-left: auto; }
+
+/* ── Question shell ───────────────────────────────────────────────────── */
+
+/* L2. Flat by design — the tint is the edge, so no shadow here. */
+.sv-q {
+    background: var(--sv-l2);
+    border: 1px solid var(--sv-line-2);
+    border-radius: var(--sv-radius-l2);
+    padding: var(--ork-space-card);
+    margin-bottom: var(--sv-gap);
+    box-sizing: border-box;
+}
+
+.sv-q-invalid { border-color: var(--sv-danger); }
+
+.sv-q-preview { pointer-events: none; user-select: none; }
+
+/* Author-entered copy: a single unbreakable token (a pasted URL) would be
+   clipped unreachably, because orkui.css clamps html/body with
+   `overflow-x: hidden` and no survey surface is a scroll container. Every
+   selector that renders user content breaks anywhere — same treatment as
+   .sv-choice-label / .sv-rank-label / .sv-matrix-echo below. */
+.sv-title,
+.sv-page-title,
+.sv-card-title,
+.sv-block-title,
+.sv-q-prompt {
+    overflow-wrap: anywhere;
+}
+
+.sv-q-prompt {
+    font-size: 14px;
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1.4;
+    color: var(--sv-text);
+    margin-bottom: 4px;
+}
+
+.sv-q-required {
+    color: var(--sv-danger);
+    margin-left: 4px;
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.sv-q-help {
+    font-size: var(--ork-font-size-sm);
+    line-height: 1.5;
+    color: var(--sv-text-muted);
+    margin-bottom: 10px;
+}
+
+.sv-q-help p:first-child { margin-top: 0; }
+.sv-q-help p:last-child { margin-bottom: 0; }
+
+.sv-q-image { margin: 10px 0; }
+
+.sv-q-image-img,
+.sv-figure-img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--ork-radius-md);
+    display: block;
+}
+
+.sv-q-body { margin-top: 10px; }
+
+.sv-q-error {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: var(--ork-radius-sm);
+    background: var(--sv-danger-bg);
+    color: var(--ork-alert-danger-text);
+    border: 1px solid var(--ork-alert-danger-border);
+    font-size: var(--ork-font-size-base);
+    line-height: 1.4;
+}
+
+/* ── Blocks: section and image ────────────────────────────────────────── */
+
+.sv-block { background: transparent; border-style: dashed; }
+
+.sv-block-title { font-size: 14px; font-weight: var(--ork-font-weight-bold); }
+
+.sv-block-body {
+    font-size: var(--ork-font-size-base);
+    line-height: 1.6;
+    color: var(--sv-text-body);
+}
+
+.sv-figure { margin: 0; }
+
+.sv-figure-caption {
+    margin-top: 6px;
+    font-size: var(--ork-font-size-sm);
+    color: var(--sv-text-muted);
+    text-align: center;
+}
+
+.sv-figure-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--sv-text-muted);
+    border: 1px dashed var(--sv-border-strong);
+    border-radius: var(--ork-radius-md);
+    font-size: var(--ork-font-size-sm);
+}
+
+/* ── Text controls ────────────────────────────────────────────────────── */
+
+.sv-input,
+.sv-textarea,
+.sv-select {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.4;
+    color: var(--sv-text);
+    background: var(--sv-input-bg);
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    transition: var(--ork-transition-base);
+}
+
+.sv-textarea { min-height: 84px; resize: vertical; }
+
+.sv-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 36px;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+.sv-input:focus,
+.sv-textarea:focus,
+.sv-select:focus {
+    outline: none;
+    border-color: var(--sv-accent);
+    box-shadow: var(--ork-shadow-focus);
+}
+/* orkui.css repaints every text control inside #theme_container in dark mode
+   at (1,2,2), which beats the focus border above; without this the only focus
+   cue left in dark is a 12%-alpha ring. */
+html[data-theme="dark"] #theme_container :is(.sv-input, .sv-textarea, .sv-select):focus {
+    border-color: var(--sv-accent);
+}
+
+.sv-input::placeholder,
+.sv-textarea::placeholder { color: var(--ork-text-hint); }
+
+.sv-number-wrap { display: flex; align-items: center; gap: 8px; }
+.sv-number-wrap .sv-input-number { max-width: 180px; }
+.sv-unit { font-size: var(--ork-font-size-sm); color: var(--sv-text-muted); }
+
+/* ── Choices: single / multi / yesno ──────────────────────────────────── */
+
+.sv-choice-hint {
+    font-size: var(--ork-font-size-sm);
+    color: var(--sv-text-muted);
+    margin-bottom: 8px;
+}
+
+.sv-choices { display: flex; flex-direction: column; gap: 6px; }
+
+.sv-choices-inline { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.sv-choices-inline .sv-choice-wrap { flex: 1 1 160px; }
+
+.sv-choice-wrap { display: block; }
+
+.sv-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 32px;
+    padding: 5px 10px;
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-l3);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: var(--ork-transition-base);
+}
+
+.sv-choice:hover { background: var(--sv-l3-hover); border-color: var(--sv-border-strong); }
+
+.sv-choice-input {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    margin: 0;
+    accent-color: var(--sv-accent);
+    cursor: pointer;
+}
+
+.sv-choice-label {
+    font-size: var(--ork-font-size-base);
+    line-height: 1.4;
+    color: var(--sv-text);
+    overflow-wrap: anywhere;
+}
+
+.sv-choice-wrap:has(.sv-choice-input:checked) .sv-choice {
+    border-color: var(--sv-accent);
+    background: var(--sv-accent-soft);
+}
+
+.sv-other-input { margin-top: 6px; }
+
+/* Hide an "Other" write-in until its option is chosen. Browsers without
+   :has() simply show it always, which is still usable. */
+.sv-choice-wrap-other:not(:has(.sv-choice-input:checked)) .sv-other-input { display: none; }
+.sv-q-dropdown .sv-q-body:not(:has(.sv-opt-other:checked)) .sv-other-input { display: none; }
+
+/* ── Scale: rating and NPS ────────────────────────────────────────────── */
+
+.sv-scale-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+.sv-scale {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.sv-scale-opt {
+    flex: 0 0 auto;
+    position: relative;
+    cursor: pointer;
+}
+
+.sv-scale-input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.sv-scale-face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-l3);
+    color: var(--sv-text-body);
+    font-size: 14px;
+    font-weight: var(--ork-font-weight-semibold);
+    transition: var(--ork-transition-base);
+}
+
+.sv-scale-opt:hover .sv-scale-face { border-color: var(--sv-accent); }
+.sv-scale-input:focus-visible + .sv-scale-face { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+
+.sv-scale-number .sv-scale-input:checked + .sv-scale-face {
+    background: var(--sv-accent);
+    border-color: var(--sv-accent);
+    color: var(--sv-accent-contrast);
+}
+
+/* Stars: hide the number, and light every star up to the chosen one. An
+   option is lit when it is checked or a LATER sibling is checked — which is
+   why .sv-scale-opt elements must stay direct siblings. */
+.sv-scale-star .sv-scale-num {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.sv-scale-star .sv-scale-face {
+    border-color: transparent;
+    background: transparent;
+    color: var(--sv-star-off);
+    font-size: 20px;
+    padding: 0 3px;
+    min-width: 30px;
+}
+
+.sv-scale-star .sv-scale-input:checked + .sv-scale-face,
+.sv-scale-star .sv-scale-opt:has(~ .sv-scale-opt .sv-scale-input:checked) .sv-scale-face {
+    color: var(--sv-star-on);
+}
+
+.sv-scale-ends {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--sv-text-muted);
+}
+
+.sv-scale-end-max { text-align: right; }
+
+.sv-scale-clear {
+    align-self: flex-start;
+    min-height: 28px;
+    min-width: 28px;
+    padding: 0 8px;
+    border: 0;
+    background: none;
+    color: var(--sv-accent);
+    font-family: inherit;
+    font-size: var(--ork-font-size-sm);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* ── Matrix ───────────────────────────────────────────────────────────── */
+
+.sv-matrix-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.sv-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--ork-font-size-base);
+}
+
+/* L3: the answer grid is the control surface, so its body rows carry the
+   control fill and the L2 card tint shows through the header strip. */
+.sv-matrix tbody tr { background: var(--sv-l3); }
+
+.sv-matrix th,
+.sv-matrix td {
+    border-bottom: 1px solid var(--sv-line-3);
+    padding: 6px 6px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.sv-matrix-col {
+    font-size: 12px;
+    font-weight: var(--ork-font-weight-semibold);
+    color: var(--sv-text-muted);
+    line-height: 1.3;
+}
+
+.sv-matrix-rowlabel {
+    text-align: left;
+    font-weight: var(--ork-font-weight-semibold);
+    color: var(--sv-text);
+    min-width: 120px;
+}
+
+.sv-matrix-opt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    cursor: pointer;
+}
+
+.sv-matrix-input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--sv-accent);
+    cursor: pointer;
+}
+
+.sv-matrix-echo { display: none; }
+
+.sv-matrix-row:has(.sv-matrix-input:checked) .sv-matrix-rowlabel { color: var(--sv-accent); }
+
+/* ── Ranking ──────────────────────────────────────────────────────────── */
+
+.sv-rank {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sv-rank-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 4px 8px;
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-l3);
+    box-sizing: border-box;
+}
+
+.sv-rank-handle { color: var(--ork-text-hint); cursor: grab; font-size: var(--ork-font-size-sm); }
+
+.sv-rank-pos {
+    flex: 0 0 auto;
+    min-width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--sv-accent-soft);
+    color: var(--sv-accent);
+    font-size: var(--ork-font-size-sm);
+    font-weight: var(--ork-font-weight-bold);
+}
+
+/* min-width: 0 is load-bearing: without it a flex item's min-content floor is
+   one glyph, and a narrow row squeezed the label to 10px — every option set
+   vertically, one character per line. */
+.sv-rank-label { flex: 1 1 auto; min-width: 0; font-size: var(--ork-font-size-base); line-height: 1.35; overflow-wrap: anywhere; }
+
+.sv-rank-btns { display: flex; gap: 4px; flex: 0 0 auto; }
+
+.sv-rank-btn {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--sv-border);
+    border-radius: var(--ork-radius-sm);
+    background: var(--sv-card-bg);
+    color: var(--sv-text-body);
+    cursor: pointer;
+    font-size: var(--ork-font-size-sm);
+}
+
+.sv-rank-btn:hover { background: var(--sv-l3-hover); border-color: var(--sv-border-strong); }
+.sv-rank-btn[aria-disabled="true"],
+.sv-rank-first .sv-rank-up,
+.sv-rank-last .sv-rank-down { opacity: 0.35; cursor: default; }
+.sv-rank-btn[aria-disabled="true"]:hover { background: var(--sv-card-bg); border-color: var(--sv-border); }
+
+.sv-rank .sortable-ghost { opacity: 0.45; }
+
+/* Until the respondent touches the list its order is not an answer, so the
+   position badges read as provisional: an outline instead of a filled pill. */
+.sv-rank:not([data-touched]) .sv-rank-pos {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--sv-line-3);
+    color: var(--sv-text-muted);
+}
+
+.sv-rank:focus { outline: none; }
+.sv-rank:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+
+.sv-rank-keep { margin-top: 8px; }
+
+/* .sv-btn is inline-flex, which outranks the UA's [hidden] rule — without
+   this, "Keep this order" would stay on screen after the list is touched. */
+.sv-rank-keep[hidden] { display: none; }
+
+/* No SortableJS on the page (blocked CDN): the grip would be a dead control.
+   Three classes, so it also beats the touch-width `.sv-root .sv-rank-handle`
+   rule further down that turns the grip into a 44px inline-flex target. */
+.sv-root .sv-nodrag .sv-rank-handle { display: none; }
+
+/* ── Pairwise ─────────────────────────────────────────────────────────── */
+
+.sv-pw { display: flex; flex-direction: column; gap: 12px; }
+
+.sv-pw-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+}
+/* The grid outranks the UA's [hidden] rule, and the builder canvas (.sv-scope)
+   has no .sv-root to make `hidden` authoritative: a preview with fewer than
+   two options is already "complete" and must not show an empty matchup. */
+.sv-pw-stage[hidden] { display: none; }
+.sv-pw-pick {
+    min-height: 88px;
+    padding: 12px 14px;
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-l3);
+    color: var(--sv-text);
+    font: inherit;
+    font-size: var(--ork-font-size-base);
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: border-color .12s, background-color .12s, transform .12s;
+}
+.sv-pw-tie {
+    align-self: center;
+    min-height: 44px;
+    min-width: 64px;
+    padding: 0 14px;
+    border: 1px dashed var(--sv-line-3);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sv-text-body);
+    font: inherit;
+    font-size: var(--ork-font-size-sm);
+    cursor: pointer;
+}
+/* Hover only where a pointer hovers: the widget keeps its buttons and swaps
+   their labels, so on a touch screen the sticky :hover of the side just tapped
+   made the next matchup's option on that side look already picked. */
+@media (hover: hover) {
+    .sv-pw-pick:hover { border-color: var(--sv-accent); background: var(--sv-l3-hover); }
+    .sv-pw-tie:hover { border-style: solid; border-color: var(--sv-accent); color: var(--sv-text); }
+}
+.sv-pw-pick:focus-visible,
+.sv-pw-tie:focus-visible,
+.sv-pw-undo:focus-visible,
+.sv-pw-done:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+
+.sv-pw-stage[data-chose="a"] .sv-pw-a,
+.sv-pw-stage[data-chose="b"] .sv-pw-b,
+.sv-pw-stage[data-chose="tie"] .sv-pw-pick {
+    border-color: var(--sv-accent);
+    background: var(--sv-accent-soft);
+    transform: scale(.98);
+}
+
+/* Two classes: `.sv-root p` / `.sv-scope p` (text-align: left) would beat one. */
+.sv-pw .sv-pw-done {
+    margin: 0;
+    padding: 14px;
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-accent-soft);
+    color: var(--sv-text);
+    font-weight: 600;
+    text-align: center;
+}
+.sv-pw-done .fa-trophy { color: var(--sv-star-on); }
+
+.sv-pw-bar {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--sv-pw-track);
+    overflow: visible;
+}
+.sv-pw-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--sv-pw-0);
+    /* Colour only: animating `width` relaid out the bar on every frame of every
+       pick, and a pairwise question is 36-78 picks. The step itself is small
+       enough (one matchup) that it does not need easing. */
+    transition: background-color .2s ease;
+}
+.sv-pw-bar[data-level="1"] .sv-pw-fill { background: var(--sv-pw-1); }
+.sv-pw-bar[data-level="2"] .sv-pw-fill { background: var(--sv-pw-2); }
+.sv-pw-bar[data-level="3"] .sv-pw-fill { background: var(--sv-pw-3); }
+.sv-pw-bar[data-level="4"] .sv-pw-fill { background: var(--sv-pw-4); }
+.sv-pw-tick {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--sv-pw-tick);
+}
+
+/* The bar, the count row and the message are spaced by the column gap (the
+   ticks reach 3px under the bar), and the count row is always as tall as Undo,
+   so the first pick, which shows Undo, moves nothing below it. */
+.sv-pw-progress { display: flex; flex-direction: column; gap: 6px; }
+.sv-pw-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.sv-pw-count { font-size: var(--ork-font-size-sm); color: var(--sv-text-muted); font-variant-numeric: tabular-nums; }
+.sv-pw-undo {
+    min-height: 32px;
+    padding: 0 6px;
+    border: 0;
+    background: none;
+    color: var(--sv-accent);
+    font: inherit;
+    font-size: var(--ork-font-size-sm);
+    cursor: pointer;
+}
+.sv-pw-msg { margin: 0; min-height: 1.4em; font-size: var(--ork-font-size-sm); color: var(--sv-text-body); }
+
+@media (max-width: 480px) {
+    .sv-pw-stage { grid-template-columns: minmax(0, 1fr); }
+    .sv-pw-pick { min-height: 64px; }
+    .sv-pw-tie { justify-self: center; }
+}
+@media (pointer: coarse) {
+    .sv-pw-undo { min-height: 44px; padding: 0 10px; }
+    .sv-pw-meta { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sv-pw-pick, .sv-pw-fill, .sv-progress-bar { transition: none; }
+    .sv-pw-stage[data-chose] .sv-pw-pick { transform: none; }
+}
+
+/* ── Consent (data gate) ──────────────────────────────────────────────── */
+
+.sv-consent { display: flex; flex-direction: column; gap: 10px; }
+
+.sv-consent-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    min-height: 32px;
+    border: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3);
+    background: var(--sv-l3);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: var(--ork-transition-base);
+}
+
+.sv-consent-opt:hover { border-color: var(--sv-border-strong); background: var(--sv-l3-hover); }
+
+.sv-consent-opt:has(input:checked) {
+    border-color: var(--sv-accent);
+    background: var(--sv-accent-soft);
+}
+
+.sv-consent-input {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    margin: 2px 0 0;
+    accent-color: var(--sv-accent);
+    cursor: pointer;
+}
+
+/* The three choices are one flowing sentence each — "Label — explanation" —
+   because the spec §2 copy is fixed and its explanation continues the label. */
+.sv-consent-copy {
+    display: block;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.5;
+    color: var(--sv-text-muted);
+}
+
+.sv-consent-title {
+    font-weight: var(--ork-font-weight-semibold);
+    color: var(--sv-text);
+}
+
+.sv-consent-desc {
+    color: inherit;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+    /* The matrix stops being a table: every row becomes a stacked card and the
+       column label is repeated inside each cell (.sv-matrix-echo). */
+    .sv-matrix-wrap { overflow-x: visible; }
+
+    .sv-matrix,
+    .sv-matrix tbody,
+    .sv-matrix tr,
+    .sv-matrix td,
+    .sv-matrix th { display: block; width: auto; }
+
+    .sv-matrix thead { display: none; }
+
+    .sv-matrix-row {
+        border: 1px solid var(--sv-line-3);
+        border-radius: var(--sv-radius-l3);
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+
+    .sv-matrix th,
+    .sv-matrix td { border-bottom: 0; padding: 0; text-align: left; }
+
+    .sv-matrix-rowlabel { margin-bottom: 6px; min-width: 0; }
+
+    .sv-matrix-cell + .sv-matrix-cell { border-top: 1px solid var(--sv-line-3); }
+
+    .sv-matrix-opt { justify-content: flex-start; gap: 12px; padding: 0 4px; }
+
+    .sv-matrix-echo {
+        display: inline;
+        font-size: var(--ork-font-size-base);
+        color: var(--sv-text);
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: 420px) {
+    .sv-root { padding: 14px 12px 56px; }
+    .sv-title { font-size: 20px; }
+
+    .sv-scale { gap: 4px; }
+    .sv-scale-face { padding: 0 4px; font-size: var(--ork-font-size-base); }
+
+    .sv-choices-inline { flex-direction: column; }
+    .sv-choices-inline .sv-choice-wrap { flex: 1 1 auto; }
+
+    .sv-actions .sv-btn { flex: 1 1 100%; }
+    .sv-actions-end { margin-left: 0; }
+}
+
+/* ── Dark mode ────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] .sv-notice {
+    background: rgba(66, 153, 225, 0.12);
+    border-color: #2c5282;
+    color: #bee3f8;
+}
+
+html[data-theme="dark"] .sv-notice-warn {
+    background: rgba(214, 158, 46, 0.14);
+    border-color: #975a16;
+    color: #fbd38d;
+}
+
+html[data-theme="dark"] .sv-notice-error,
+html[data-theme="dark"] .sv-q-error {
+    background: rgba(229, 62, 62, 0.14);
+    border-color: #9b2c2c;
+    color: #feb2b2;
+}
+
+html[data-theme="dark"] .sv-progress { background: var(--ork-bg-tertiary); }
+
+/* An uploaded figure is most often a transparent PNG of dark line art — a
+   heraldic badge, a scroll — which disappears into the dark card. Give it a
+   white sheet to sit on, with enough padding that the art is not flush to the
+   edge of its own backdrop. */
+html[data-theme="dark"] .sv-figure-img {
+    background: #fff;
+    padding: 6px;
+    box-sizing: border-box;   /* the padding must come out of the 100%, not add to it */
+}
+
+/* Dark ink on the accent fill is --sv-accent-contrast's job now (see the dark
+   token block). A link still needs saying twice: an <a class="sv-btn
+   sv-btn-primary"> (the thank-you screen's "Back to My Amtgard") also matches
+   default.theme's `html[data-theme="dark"] #theme_container a` (1,1,2) and its
+   :hover (1,2,2), which outrank .sv-btn-primary and paint the label link-blue
+   on the accent fill — invisible. The same #theme_container qualifier
+   .sv-preview-link uses below restores it. */
+html[data-theme="dark"] #theme_container a.sv-btn-primary,
+html[data-theme="dark"] #theme_container a.sv-btn-primary:hover { color: var(--sv-accent-contrast); }
+
+html[data-theme="dark"] .sv-figure-empty { color: var(--ork-text-muted); }
+
+/* ── Runner chrome (Survey_take) ──────────────────────────────────────────
+   The take page is the only survey surface that loads no .rp-* shell, so its
+   frame — accent header, preview strip, page headings, consent/thanks cards —
+   lives here with the rest of the base vocabulary. Nothing below is copied
+   from reports.css. */
+
+/* The wash rides on --sv-header-base so the composite behind
+   .sv-progress-text stays AA in both themes — see that token's note above. */
+.sv-header {
+    border-left: 4px solid var(--sv-accent);
+    background: linear-gradient(var(--sv-header-wash), var(--sv-header-wash)), var(--sv-header-base);
+    border-radius: var(--sv-radius-l1);
+    padding: 14px 16px;
+    margin-bottom: var(--sv-gap);
+    box-sizing: border-box;
+}
+
+.sv-header .sv-title { margin: 0; }
+
+/* "12 questions · 3 pages · Closes September 30, 2026" under the title. */
+.sv-meta {
+    margin: 4px 0 0;
+    font-size: var(--ork-font-size-sm);
+    line-height: 1.4;
+    color: var(--sv-text-muted);
+}
+
+.sv-header .sv-progress { margin-top: 12px; margin-bottom: 0; }
+
+.sv-header .sv-progress-text { margin-bottom: 0; }
+
+/* The page caption and the quiet autosave line share one row. */
+.sv-header-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+}
+
+.sv-header-foot:has(.sv-progress-text:not([hidden])),
+.sv-header-foot:has(.sv-save-status:not(:empty)) { margin-top: 6px; }
+
+.sv-save-status {
+    margin-left: auto;
+    font-size: var(--ork-font-size-sm);
+    line-height: 1.4;
+    color: var(--sv-text-muted);
+}
+
+.sv-save-status:empty { display: none; }
+
+.sv-save-status.sv-save-failed { color: var(--sv-warn-text); }
+
+/* Welcome card: survey length and close date, then the data-gate heads-up. */
+.sv-welcome-meta {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin: 14px 0 0;
+    padding: 0;
+    font-size: var(--ork-font-size-sm);
+    color: var(--sv-text-muted);
+}
+
+.sv-welcome-meta i { color: var(--sv-accent); margin-right: 2px; }
+
+.sv-gate-note {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--sv-line-2);
+    font-size: var(--ork-font-size-base);
+    line-height: 1.5;
+    color: var(--sv-text-body);
+}
+
+.sv-gate-note i,
+.sv-gate-note-inline i { color: var(--sv-accent); margin-right: 4px; }
+
+.sv-gate-note-inline { margin: 0; }
+
+.sv-preview-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    background: var(--ork-alert-warning-bg);
+    border: 1px solid var(--ork-alert-warning-border);
+    color: var(--ork-alert-warning-text);
+    border-radius: var(--ork-radius-md);
+    padding: 8px 12px;
+    margin-bottom: var(--sv-gap);
+    font-size: var(--ork-font-size-base);
+    line-height: 1.4;
+}
+
+.sv-preview-text { flex: 1 1 200px; }
+.sv-preview-link-abbr { display: none; }
+
+.sv-preview-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 12px;
+    color: inherit;
+    font-weight: var(--ork-font-weight-semibold);
+    text-decoration: underline;
+}
+
+/* The runner ground (L0). The take page is a standalone document with no
+   .rp-* shell, so its ground is the page itself — scoped by :has() to the
+   runner's own root, which no other surface in the app has. */
+body:has(#sv-root) { background: var(--sv-l0); }
+
+.sv-stage { display: block; }
+
+/* L1. The stage used to be transparent, which put the question cards
+   straight onto the ground with nothing between them; the page is now the
+   white card the questions nest inside. .sv-actions stays outside it, on the
+   ground, so Back/Next still read as page chrome rather than page content. */
+.sv-page {
+    display: block;
+    background: var(--sv-l1);
+    border: 1px solid var(--sv-line-1);
+    border-radius: var(--sv-radius-l1);
+    box-shadow: var(--ork-shadow-card);
+    padding: var(--ork-space-card);
+    margin-bottom: var(--sv-gap);
+    box-sizing: border-box;
+}
+
+/* The card's own padding closes the column, so the last question inside it
+   does not also carry the between-questions gap. */
+.sv-page > .sv-q:last-child,
+.sv-page > .sv-q:not(:has(~ .sv-q:not([hidden]))) { margin-bottom: 0; }
+
+.sv-page-title {
+    font-size: 14px;
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.sv-page-desc { margin-bottom: var(--sv-gap); }
+
+/* Welcome / thank-you card heading — the one place the module goes above the
+   14px card title, and 18px is its ceiling (spec §7 Density). */
+.sv-card-title {
+    font-size: 18px;
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.sv-final .sv-intro { margin-bottom: 12px; }
+
+.sv-thanks .sv-card-title { color: var(--sv-accent); }
+
+.sv-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 30px;
+    padding: 6px 0;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.45;
+    color: var(--sv-text-body);
+    cursor: pointer;
+}
+
+.sv-check-input {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    margin: 0;
+    accent-color: var(--sv-accent);
+    cursor: pointer;
+}
+
+/* ── Rendered markdown (help guides) ──────────────────────────────────────
+   SurveyAjax/help hands back Parsedown output that gets injected into a modal.
+   orkui.css gives every global h1–h6 a grey pill box (and a different one in
+   dark mode, with more type selectors than a bare class — so the reset is
+   repeated for both themes), and nothing in the codebase styles a bare
+   <table>. Any surface that shows a guide adds .sv-md to the container. */
+.sv-md h1, .sv-md h2, .sv-md h3, .sv-md h4, .sv-md h5, .sv-md h6,
+html[data-theme="dark"] .sv-md h1, html[data-theme="dark"] .sv-md h2,
+html[data-theme="dark"] .sv-md h3, html[data-theme="dark"] .sv-md h4,
+html[data-theme="dark"] .sv-md h5, html[data-theme="dark"] .sv-md h6 {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    text-shadow: none;
+    margin: 16px 0 6px;
+    color: var(--sv-text);
+    font-family: var(--ork-font-heading);
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.sv-md h1 { font-size: 18px; }
+.sv-md h2 { font-size: 14px; }
+.sv-md h3, .sv-md h4, .sv-md h5, .sv-md h6 { font-size: var(--ork-font-size-base); }
+
+.sv-md > :first-child { margin-top: 0; }
+.sv-md p { margin: 0 0 10px; }
+.sv-md ul, .sv-md ol { margin: 8px 0; padding-left: 20px; }
+.sv-md li { margin-bottom: 4px; }
+.sv-md a { color: var(--sv-accent); }
+
+.sv-md table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: var(--ork-font-size-sm);
+}
+
+.sv-md th,
+.sv-md td {
+    border: 1px solid var(--sv-border);
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.sv-md th {
+    background: var(--ork-bg-secondary);
+    color: var(--sv-text);
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.sv-md code {
+    background: var(--ork-bg-secondary);
+    padding: 1px 4px;
+    border-radius: var(--ork-radius-sm);
+}
+
+.sv-md pre {
+    background: var(--ork-bg-secondary);
+    padding: 10px;
+    border-radius: var(--ork-radius-md);
+    overflow-x: auto;
+}
+
+/* Screen-reader-only live region for validation announcements. */
+.sv-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ── Runner touch sizing (spec §7 "Density", added 2026-09-10) ───────────
+   Everything above is the app's own compact scale — 13px base, 32px controls
+   — which is what the builder canvas and the results page want. The RUNNER is
+   the documented exception: a survey is filled in by players on phones, so at
+   touch widths (and on any coarse pointer) .sv-root puts back its 44px tap
+   targets and 16px real form controls, 16px being the size below which iOS
+   zooms the page on focus. Labels and helper text around those controls stay
+   on the 13/12px scale — only the controls themselves grow.
+
+   Scoped to .sv-root, so the builder's .sv-scope previews and the results
+   page keep the compact scale at every width. */
+@media (max-width: 700px), (pointer: coarse) {
+    .sv-root .sv-input,
+    .sv-root .sv-textarea,
+    .sv-root .sv-select {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 16px;
+    }
+
+    .sv-root .sv-textarea { min-height: 110px; }
+    .sv-root .sv-select { padding-right: 36px; }
+
+    .sv-root .sv-btn {
+        min-height: 44px;
+        padding: 10px 20px;
+        font-size: var(--ork-font-size-base);
+    }
+
+    .sv-root .sv-choice { min-height: 44px; padding: 8px 12px; gap: 12px; }
+    .sv-root .sv-choice-input { width: 22px; height: 22px; min-width: 22px; }
+    .sv-root .sv-choice-label { font-size: var(--ork-font-size-base); }
+
+    .sv-root .sv-scale-face { min-width: 44px; min-height: 44px; font-size: 16px; }
+    /* The glyph steps up over the 16px numeric face so a star is still legible,
+       but the 44px tap target above is what makes it reachable — not the size
+       of the character. 20px keeps it on the app's scale (spec §7 Density). */
+    .sv-root .sv-scale-star .sv-scale-face { font-size: 20px; padding: 0 4px; }
+    .sv-root .sv-scale-clear { min-height: 44px; min-width: 44px; }
+
+    .sv-root .sv-matrix-opt { min-height: 44px; }
+    .sv-root .sv-matrix-input { width: 22px; height: 22px; }
+
+    .sv-root .sv-rank-item { min-height: 48px; padding: 6px 8px; }
+    /* The grip is the drag handle: give a thumb something to hold, and stop the
+       page scrolling out from under a drag that starts on it. */
+    .sv-root .sv-rank-handle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        margin: -6px 0;
+        touch-action: none;
+    }
+    .sv-root .sv-rank-btn { width: 44px; height: 44px; font-size: var(--ork-font-size-base); }
+    /* The 44px grip, the badge and two 44px arrows are 158px of fixed chrome:
+       on a 320px phone that left the label 10px and set "Court and awards"
+       vertically. Give the label its own full-width line ABOVE the control
+       strip — drag (the grip) and the arrows are untouched. */
+    .sv-root .sv-rank-item { flex-wrap: wrap; }
+    /* 180px basis, not 100%: the label takes its own line only where it would
+       otherwise be squeezed (below ~450px). A 600-700px tablet or a coarse
+       laptop keeps the one-line row it always had. */
+    .sv-root .sv-rank-label {
+        flex: 1 1 180px;
+        min-width: 0;
+        order: -1;
+        font-size: var(--ork-font-size-base);
+    }
+    .sv-root .sv-rank-btns { margin-left: auto; }
+
+    .sv-root .sv-consent-opt { min-height: 44px; padding: 14px; gap: 12px; }
+    .sv-root .sv-consent-input { width: 22px; height: 22px; min-width: 22px; }
+    .sv-root .sv-consent-copy { font-size: var(--ork-font-size-base); }
+
+    .sv-root .sv-check { min-height: 44px; padding: 10px 0; }
+    .sv-root .sv-check-input { width: 22px; height: 22px; min-width: 22px; }
+
+    .sv-root .sv-preview-link { min-height: 44px; }
+}
+
+/* NPS 0-10 at phone widths. Eleven 44px faces need ~524px, so below this
+   width the flex row used to wrap 5/5/1 (and at <=420px the orphan "10"
+   stretched the full width), breaking the scale's continuum. Two even rows
+   (0-5 over 6-10) keep every face at the runner's 44px touch height and
+   ≥44px wide down to a 375px phone (~47px at 390px; a 3px gap, not 4px, is
+   what buys the 375px case). Scoped to .sv-root: the builder preview is
+   unaffected. */
+@media (max-width: 660px) {
+    .sv-root .sv-scale-nps {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 3px;
+    }
+
+    .sv-root .sv-scale-nps .sv-scale-face { min-width: 0; width: 100%; }
+}
+
+/* Six columns only reach the 44px floor at about 390px: measured 34px faces at
+   320 and 44-45px at 390, so 360 (standard Android) and 375 (iPhone SE/mini)
+   sat at roughly 40-42px, 3px apart — eleven of them, and a mis-tap silently
+   changes the answer. Four columns (4/4/3) buy ~76px faces at 320 and ~90px at
+   389. The 390px+ grid above is untouched. */
+@media (max-width: 389px) {
+    .sv-root .sv-scale-nps {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+    }
+}
+
+@media (max-width: 420px) {
+    .sv-header { padding: 12px 14px; }
+
+    /* Previewing is a step in the creation flow, and the notice plus its link
+       were eating ~39% of a 568px screen before the survey even started. One
+       line: the caveat sentence drops to its short form and "Back to builder"
+       folds into the same row as an icon + "Builder" (still 44px tall). */
+    .sv-preview-strip {
+        flex-wrap: nowrap;
+        gap: 8px;
+        padding: 4px 10px;
+        font-size: var(--ork-font-size-sm);
+    }
+    .sv-preview-text { flex: 1 1 auto; min-width: 0; }
+    .sv-preview-text-more { display: none; }
+    .sv-preview-link { flex: 0 0 auto; padding: 0 8px; }
+    .sv-preview-link-text { display: none; }
+    .sv-preview-link-abbr { display: inline; }
+}
+
+html[data-theme="dark"] .sv-preview-strip {
+    background: rgba(214, 158, 46, 0.14);
+    border-color: #975a16;
+    color: #fbd38d;
+}
+/* default.theme's `html[data-theme="dark"] #theme_container a` (1,1,2) and its
+   :hover (1,2,2) outrank the plain `.sv-preview-link { color: inherit }`, so
+   "Back to builder" turned link-blue (#63b3ed) on the amber strip. The same
+   #theme_container qualifier the header ghost buttons use below outranks both
+   and hands the link the strip's own colour; the underline still marks it. */
+html[data-theme="dark"] #theme_container a.sv-preview-link,
+html[data-theme="dark"] #theme_container a.sv-preview-link:hover {
+    color: inherit;
+}
+
+
+/* ── Reports header actions (shared by every .rp-* survey page) ──────────
+   The survey list, the builder and the results page all wear the Reports
+   shell and all three crowd four-to-six long-labelled ghost buttons into one
+   .rp-header-actions row, so both corrections below are declared ONCE here —
+   survey.css is loaded by all three — rather than copied into
+   survey-build.css, survey-results.css and Survey_index.tpl.
+
+   reports.css paints .rp-btn-ghost at 7px 14px / 13px, which is a 34px
+   button; on a fine pointer these headers trim to the 30px / 12px scale spec
+   §7 Density asks for. Touch widths keep the bigger target.
+
+   All three sheets load AFTER reports.css and this selector carries three
+   classes to reports.css's one, so it wins on both counts. */
+@media (min-width: 601px) and (pointer: fine) {
+    .rp-root .rp-header-actions .rp-btn-ghost {
+        min-height: 30px;
+        box-sizing: border-box;
+        padding   : 5px 12px;
+        font-size : var(--ork-font-size-sm);
+    }
+}
+
+/* Touch: reports.css only restores the 44px floor under 600px, so a tablet
+   (601px and up on a coarse pointer) got its unscaled ~31px ghost button.
+   Hold every width of a coarse pointer to the tap-target floor. */
+@media (pointer: coarse) {
+    .rp-root .rp-header-actions .rp-btn-ghost {
+        min-height : 44px;
+        box-sizing : border-box;
+    }
+}
+
+/* Under 600px reports.css gives every .rp-btn-ghost `flex: 1; min-width: 0`,
+   which squeezes these long labels below their own min-content width and
+   paints them over each other. Let them size to their content and wrap onto
+   as many rows as they need. */
+@media (max-width: 600px) {
+    .rp-root .rp-header-actions .rp-btn-ghost {
+        flex     : 0 1 auto;
+        min-width: fit-content;
+    }
+}
+
+/* Dark mode: the header mixes <a> and <button> ghost buttons (builder
+   Preview / Results, results Export CSV / Builder / Preview). default.theme's
+   `html[data-theme="dark"] #theme_container a` (1,1,2) outranks reports.css's
+   `html[data-theme="dark"] .rp-btn-ghost` (0,2,1), so only the anchors turned
+   link-blue (#63b3ed) beside their white <button> siblings. Qualifying with
+   #theme_container outranks it and restores reports.css's dark ghost colours. */
+html[data-theme="dark"] #theme_container .rp-header-actions a.rp-btn-ghost {
+    color: rgba(255,255,255,0.7);
+}
+html[data-theme="dark"] #theme_container .rp-header-actions a.rp-btn-ghost:hover {
+    color: #fff;
+}
+
+/* ---- Modal (shared: list page, builder credit panel) ----
+   Non-native modal shell (no alert/confirm/prompt anywhere). Moved verbatim
+   from Survey_index.tpl's inline <style> so the builder's Attendance credit
+   panel (_survey_credit_modal.tpl) wears the same box. z-index comes from the
+   shared --z-* scale in tokens.css, so these sit above the site-wide overlays
+   (nav 9999, What's New 10000) like every other modal. */
+.sv-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: var(--z-modal-backdrop, 10040); align-items: center; justify-content: center; padding: 16px; }
+.sv-overlay.sv-open { display: flex; }
+.sv-modal { position: relative; z-index: var(--z-modal, 10100); background: var(--sv-l1); border-radius: 8px; padding: 18px 20px; box-sizing: border-box; max-width: 440px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.18); max-height: 82vh; overflow-y: auto; }
+/* .sv-scope on the panel already resets the global h1–h6 pill box and
+   text-shadow in both themes (above); this only re-states the type scale. */
+.sv-modal > .sv-modal-title { margin: 0 0 12px; font-size: 14px; font-weight: 700; color: var(--sv-text); }
+.sv-modal-body { font-size: var(--ork-font-size-base); color: var(--sv-text-body); line-height: 1.5; }
+.sv-modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+.sv-modal-btn { padding: 6px 16px; min-height: 32px; border-radius: 5px; font-size: var(--ork-font-size-base); font-weight: 600; cursor: pointer; border: none; }
+.sv-modal-btn[disabled], .sv-modal-btn.sv-is-busy { opacity: 0.55; cursor: not-allowed; }
+.sv-modal-btn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.sv-modal-cancel { background: var(--ork-border); color: var(--sv-text); }
+.sv-modal-cancel:hover { background: #cbd5e0; }
+.sv-modal-ok { background: #2b6cb0; color: #fff; }
+.sv-modal-ok:hover { background: #2c5282; }
+/* White 13px/600 text on #e53e3e is ~4.1:1, under AA; #c53030 is 5.9:1. */
+.sv-modal-ok.sv-modal-danger { background: #c53030; }
+.sv-modal-ok.sv-modal-danger:hover { background: #9b2c2c; }
+.sv-modal-error { color: #c53030; font-size: 12px; margin-top: 4px; display: none; }
+/* #c53030 is 2.19:1 on the dark panel — the same swap this file makes for
+   .sv-notice-error / .sv-q-error. */
+html[data-theme="dark"] .sv-modal-error { color: #feb2b2; }
+html[data-theme="dark"] .sv-modal-cancel:hover { background: #718096; }
+/* Touch and phone width: the modal buttons go back to a 44px tap target
+   (same breakpoint as the list page's other touch rules). */
+@media (pointer: coarse), (max-width: 640px) {
+    .sv-modal-btn { min-height: 44px; padding: 9px 18px; }
+}
+
+/* ---- Attendance credit modal (sharing-and-credits spec §3.6) ----
+   Surfaces come from the L-ladder tokens, which already swap in dark mode
+   (--sv-l3 is the control face, --sv-line-3 its hairline); the warning uses
+   the global alert-warning tokens, softened in dark mode the same way
+   .sv-notice-warn is. */
+.sv-credit-modal { max-width: 560px; overflow-wrap: anywhere; }
+.sv-credit-lead { margin: 0 0 8px; font-size: 14px; }
+.sv-credit-sub { margin: 10px 0 4px; font-size: var(--ork-font-size-sm); color: var(--ork-text-secondary); }
+.sv-credit-list { margin: 0 0 12px; padding-left: 18px; font-size: var(--ork-font-size-base); line-height: 1.5; }
+/* The event link: orkui.css's bare `a { color: #333; text-decoration: none }`
+   made it darker than the text around it and not read as a link in light
+   mode. --ork-link swaps in dark mode on its own. */
+.sv-credit-list a { color: var(--ork-link); text-decoration: underline; }
+/* A status message holds focus only so a re-render never drops it behind the
+   dialog (survey-credit.js keepFocusInside); it is not a control, so no ring. */
+.sv-credit-modal .sv-notice[tabindex="-1"]:focus { outline: none; }
+.sv-credit-modes { border: 0; margin: 8px 0; padding: 0; min-width: 0; }
+.sv-credit-modes legend { font-size: var(--ork-font-size-base); margin-bottom: 6px; padding: 0; }
+/* The module's radio card (.sv-consent-opt): hover firms the edge, and the
+   picked mode takes the accent edge and soft fill, so an irreversible choice
+   never rests on a 16px radio dot alone. */
+.sv-credit-mode { display: flex; gap: 8px; align-items: flex-start; min-height: 32px; padding: 6px 8px; border: 1px solid var(--sv-line-3); border-radius: var(--sv-radius-l3); margin-bottom: 6px; background: var(--sv-l3); cursor: pointer; font-size: var(--ork-font-size-base); box-sizing: border-box; transition: var(--ork-transition-base); }
+.sv-credit-mode:hover { border-color: var(--sv-border-strong); background: var(--sv-l3-hover); }
+.sv-credit-mode:has(input:checked) { border-color: var(--sv-accent); background: var(--sv-accent-soft); }
+.sv-credit-mode input { margin-top: 2px; flex: 0 0 auto; accent-color: var(--sv-accent); }
+.sv-credit-mode span { min-width: 0; }
+.sv-credit-warning { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--ork-alert-warning-border); background: var(--ork-alert-warning-bg); font-size: var(--ork-font-size-sm); line-height: 1.5; }
+html[data-theme="dark"] .sv-credit-warning { background: rgba(214, 158, 46, 0.12); color: var(--ork-text); }
+@media (max-width: 700px), (pointer: coarse) {
+    .sv-credit-mode { min-height: 44px; align-items: center; }
+    .sv-credit-mode input { margin-top: 0; width: 20px; height: 20px; }
+    .sv-credit-confirm { min-height: 44px; align-items: center; }
+    .sv-credit-confirm .sv-check-input { width: 22px; height: 22px; min-width: 22px; }
+}
+
+/* ---- Attendance credit (runner: data gate, consent card, thank-you — spec §3.7) ----
+   --sv-l2 and --sv-accent already swap under html[data-theme="dark"] (see the
+   :root / html[data-theme="dark"] blocks above), so these need no dark twin. */
+.sv-credit-note { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; padding: 8px 10px;
+    border-radius: var(--sv-radius-l3); background: var(--sv-l2); font-size: var(--ork-font-size-base); line-height: 1.5; }
+.sv-credit-note i { flex: 0 0 auto; margin-top: 3px; color: var(--sv-accent); }
+/* survey-take.js wraps the text in ONE <span>: in a flex row, bare text and a
+   <strong> each become their own flex item and break into side-by-side columns. */
+.sv-credit-note > span { flex: 1 1 auto; min-width: 0; }
+.sv-chip-credit { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px;
+    font-size: var(--ork-font-size-sm); font-weight: 600; background: var(--sv-l2); border: 1px solid var(--sv-border); }
+
+/* ── data-tip tooltip (every survey page; placed by script/survey-tip.js) ──
+   One position:fixed node on <body>. A pseudo-element tip would be clipped by
+   the scrolling table areas (and, laid out at opacity 0, grow their scroll
+   height). */
+.sv-tip {
+    position: fixed; z-index: var(--z-modal-top, 10200);
+    width: max-content; max-width: 260px; padding: 6px 9px; border-radius: 5px;
+    background: #1a202c; color: #fff; font-size: 12px; font-weight: 500;
+    line-height: 1.35; text-align: left; white-space: normal;
+    pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+html[data-theme="dark"] .sv-tip { background: #0f1420; color: #e2e8f0; border: 1px solid #4a5568; }
+@media print { .sv-tip { display: none !important; } }
+
+/* ── Flatpickr dark palette (builder, results and runner pages) ─────────
+   Flatpickr hangs its calendar off <body>, so the dark palette cannot be
+   scoped to .sv-scope. revised.css already carries these rules for the event
+   pages, but no .rp-* page loads that sheet (it is a whole-frontend
+   stylesheet and would restyle this one), so the calendar's dark palette is
+   restated here against the same tokens. The time-picker rules only reach
+   the builder's date-time fields; the results filter and the runner's date
+   questions are date-only. The runner's visible date field is Flatpickr's
+   altInput, which carries .sv-input, so it takes the text-control rules above
+   in both themes. */
+html[data-theme="dark"] .flatpickr-calendar {
+    background: var(--ork-card-bg);
+    border-color: var(--ork-border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="dark"] .flatpickr-months,
+html[data-theme="dark"] .flatpickr-month {
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] .flatpickr-months .flatpickr-prev-month,
+html[data-theme="dark"] .flatpickr-months .flatpickr-next-month { fill: var(--ork-text-secondary); }
+html[data-theme="dark"] .flatpickr-months .flatpickr-prev-month svg,
+html[data-theme="dark"] .flatpickr-months .flatpickr-next-month svg { fill: var(--ork-text-secondary); }
+html[data-theme="dark"] .flatpickr-months .flatpickr-prev-month:hover svg,
+html[data-theme="dark"] .flatpickr-months .flatpickr-next-month:hover svg { fill: var(--ork-text); }
+
+html[data-theme="dark"] .flatpickr-current-month .flatpickr-monthDropdown-months {
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] .flatpickr-current-month input.cur-year { color: var(--ork-text); }
+
+html[data-theme="dark"] .flatpickr-weekdays { background: var(--ork-bg-secondary); }
+
+html[data-theme="dark"] span.flatpickr-weekday {
+    color: var(--ork-text-muted);
+    background: var(--ork-bg-secondary);
+}
+
+html[data-theme="dark"] .flatpickr-day { color: var(--ork-text); }
+
+html[data-theme="dark"] .flatpickr-day:hover {
+    background: var(--ork-bg-tertiary);
+    border-color: var(--ork-bg-tertiary);
+}
+
+html[data-theme="dark"] .flatpickr-day.today { border-color: #63b3ed; }
+
+html[data-theme="dark"] .flatpickr-day.today:hover {
+    background: rgba(99, 179, 237, 0.15);
+    border-color: #63b3ed;
+    color: #63b3ed;
+}
+
+html[data-theme="dark"] .flatpickr-day.selected,
+html[data-theme="dark"] .flatpickr-day.selected:hover {
+    background: #2b6cb0;
+    border-color: #2b6cb0;
+    color: #fff;
+}
+
+html[data-theme="dark"] .flatpickr-day.prevMonthDay,
+html[data-theme="dark"] .flatpickr-day.nextMonthDay,
+html[data-theme="dark"] .flatpickr-day.flatpickr-disabled { color: var(--ork-text-lighter); }
+
+html[data-theme="dark"] .flatpickr-time {
+    background: var(--ork-card-bg);
+    border-top-color: var(--ork-border);
+}
+
+html[data-theme="dark"] .flatpickr-time input,
+html[data-theme="dark"] .flatpickr-time .numInputWrapper,
+html[data-theme="dark"] .flatpickr-time .flatpickr-am-pm {
+    background: var(--ork-card-bg);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] .flatpickr-time input:hover,
+html[data-theme="dark"] .flatpickr-time input:focus,
+html[data-theme="dark"] .flatpickr-time .flatpickr-am-pm:hover,
+html[data-theme="dark"] .flatpickr-time .flatpickr-am-pm:focus { background: var(--ork-bg-tertiary); }
+
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp:after { border-bottom-color: var(--ork-text-secondary); }
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:after { border-top-color: var(--ork-text-secondary); }

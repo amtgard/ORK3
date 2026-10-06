@@ -24,6 +24,10 @@ define('HTTP_TEMPLATE', HTTP_UI . 'template/');
 define('HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/');
 define('HTTP_WAIVERS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/waivers/');
 define('HTTP_HERALDRY', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/heraldry/');
+// Tests get their own image folder: the integration suite unlinks image files
+// during cleanup and its sandbox image_id sequence overlaps the dev site's, so
+// sharing assets/survey/ deleted dev uploads.
+define('HTTP_SURVEY_IMAGE', HTTP_ASSETS . 'survey-test/');
 define('HTTP_PLAYER_IMAGE', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/players/');
 define('HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/');
 define('HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/');
@@ -55,6 +59,7 @@ define('DIR_ASSETS', DIR_BASENAME . "assets/");
 define('DIR_TMP', DIR_ASSETS . 'tmp/');
 define('DIR_WAIVERS', DIR_ASSETS . "waivers/");
 define('DIR_HERALDRY', DIR_ASSETS . "heraldry/");
+define('DIR_SURVEY_IMAGE', DIR_ASSETS . "survey-test/");
 define('DIR_PLAYER_IMAGE', DIR_ASSETS . "players/");
 define('DIR_PLAYER_HERALDRY', DIR_HERALDRY . "player/");
 define('DIR_PARK_HERALDRY', DIR_HERALDRY . "park/");

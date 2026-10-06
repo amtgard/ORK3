@@ -1,0 +1,2136 @@
+/* ==========================================================================
+   ORK3 Surveys — builder surface  (.svb-*)
+
+   LAYOUT AND CHROME ONLY. Question markup, form controls, buttons, notices and
+   every --sv-* token come from survey.css; the page frame, header, context
+   strip and scope chip come from reports.css. Nothing in this file is copied
+   from either.
+
+   The canvas is the editor (spec §7 "Builder"): one centred column of page
+   cards, and the card you click swaps its SvRender preview for inline editors.
+   There is no palette and no content inspector; survey-level settings are the
+   page's LEFT SIDEBAR — a stack of collapsible reports.css .rp-filter-card
+   sections that survey-build.js paints into .rp-sidebar#svb-settings.
+
+   Structure:
+     .rp-body > .rp-sidebar.svb-settings   (Basics … About This Tool)
+              > .rp-main.svb-canvas > .svb-page > .svb-items > .svb-item
+     .svb-item                →  .svb-grip (⋮⋮ + keyboard reorder, 16px)
+     .svb-item.svb-selected   →  .svb-edit
+                                   .svb-card-top  (prompt, image, type picker)
+                                   .svb-typeedit  (options / scale / limits)
+                                   .svb-more      (⋯ menu, hidden)
+                                   .svb-card-foot (duplicate, delete, switch, ⋯)
+
+   DENSITY (spec §7 "Density"): the rules below are the DESKTOP scale, and it
+   is the app's own scale, not a larger one — 13px base (--ork-font-size-base),
+   12px meta (--ork-font-size-sm), 11px uppercase section labels, 14px prompts
+   and card titles, 20px survey title (.rp-header-title). Geometry: 32px option
+   rows, a 36px card footer, a 34px type picker, 28px inline settings controls
+   and 30–32px sidebar/header controls. The `(pointer: coarse),
+   (max-width: 900px)` block near the bottom puts every one of those controls
+   back to a 44px tap target, so anything sized under 44px here has to be
+   listed there too.
+
+   Dark mode: html[data-theme="dark"] block at the bottom.
+   Breakpoints: 900px (single column chrome, drawer becomes a sheet) and 420px.
+   ========================================================================== */
+
+/* ── Header pieces ────────────────────────────────────────────────────── */
+
+.svb-title-input {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--ork-radius-md);
+    color: inherit;
+    font: inherit;
+    font-size: 20px;
+    font-weight: var(--ork-font-weight-bold);
+    padding: 3px 8px;
+    margin: -3px 0 -3px -8px;
+    width: min(420px, 60vw);
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 32px;
+}
+
+.svb-title-input::placeholder { color: rgba(255, 255, 255, 0.6); }
+
+.svb-title-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.svb-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.svb-status-open     { background: rgba(72, 187, 120, 0.28); border-color: rgba(72, 187, 120, 0.6); }
+.svb-status-closed   { background: rgba(237, 137, 54, 0.28); border-color: rgba(237, 137, 54, 0.6); }
+.svb-status-archived { background: rgba(160, 174, 192, 0.25); }
+
+.svb-savestate {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
+.svb-savestate-saving::before,
+.svb-savestate-saved::before,
+.svb-savestate-error::before {
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    content: "\f0c7";
+}
+
+.svb-savestate-saving::before { content: "\f110"; animation: svb-spin 1.1s linear infinite; }
+.svb-savestate-error::before  { content: "\f071"; }
+.svb-savestate-saved { color: #9ae6b4; }
+.svb-savestate-error { color: #feb2b2; }
+
+@keyframes svb-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .svb-savestate-saving::before { animation: none; }
+}
+
+/* ── Strips under the header ──────────────────────────────────────────── */
+
+/* :not([hidden]) is load-bearing: a bare `display:flex` on a class selector
+   outranks the UA's `[hidden] { display:none }`, which would pin the lock bar
+   and the confirm strip open on every draft survey. Both are toggled through
+   the `hidden` attribute (survey-build.js askConfirm/hideConfirm). */
+.svb-lockbar:not([hidden]),
+.svb-confirm:not([hidden]) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border-radius: var(--ork-radius-md);
+    font-size: var(--ork-font-size-base);
+    line-height: 1.45;
+}
+
+.svb-lockbar {
+    background: var(--ork-alert-warning-bg);
+    border: 1px solid var(--ork-alert-warning-border);
+    color: var(--ork-alert-warning-text);
+}
+
+.svb-confirm {
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-border-dark);
+    box-shadow: var(--ork-shadow-card);
+    color: var(--ork-text);
+}
+
+.svb-confirm-text { flex: 1 1 260px; }
+
+/* The confirm strip is a role="alertdialog" that has to stay in view wherever
+   the author has scrolled (a Delete at the bottom of a long canvas used to
+   jump the page to the top). It pins 8px under #newmenu, the 48px fixed site
+   bar, the same offset the outline rail uses. Sticky binds to the viewport
+   because `body:has(#svb-toc) { overflow-x: clip }` (below) keeps body from
+   becoming a scrollport. Opaque card fill in both themes, so nothing on the
+   canvas shows through it. */
+.svb-confirm:not([hidden]) {
+    position: sticky;
+    top: 56px;
+    z-index: var(--z-dropdown);
+    box-shadow: var(--ork-shadow-dropdown);
+}
+
+.svb-notice-slot { margin-bottom: 12px; }
+
+/* Every notice carries its own Dismiss button beside the message. */
+.svb-notice-slot:not([hidden]) {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.svb-notice-text { flex: 1 1 auto; min-width: 0; }
+
+.svb-notice-close {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: -4px -6px -4px 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--ork-radius-sm);
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.svb-notice-close:hover { background: rgba(0, 0, 0, 0.06); }
+
+/* An error notice ("could not be saved", "security token expired") pins
+   under the site bar like the confirm strip, so it is never scrolled away
+   from the author it is talking to. One step under the confirm strip. */
+.svb-notice-slot.sv-notice-error:not([hidden]) {
+    position: sticky;
+    top: 56px;
+    z-index: calc(var(--z-dropdown) - 1);
+    box-shadow: var(--ork-shadow-dropdown);
+}
+
+/* default.theme colours every #theme_container link; the Reload link keeps
+   the notice's own (already AA) colour, underlined by .sv-notice-link. */
+#theme_container .svb-notice-link { color: inherit; }
+
+/* ── Held / refused field marks ───────────────────────────────────────── */
+
+/* survey-build.js fieldError(): a value the builder is holding back (a blank
+   prompt, title or option label) or one the server refused gets a line of
+   text right beside it, and the control carries aria-invalid + an
+   aria-describedby that points at this line. .svb-field-note is the neutral
+   variant (no aria-invalid) — e.g. "Press Enter to switch to …". */
+.svb-field-err {
+    display: block;
+    margin: 3px 0 0;
+    font-size: var(--ork-font-size-sm);
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1.4;
+    color: #c53030;   /* 5.9:1 on white; --sv-danger (#e53e3e) is 4.0:1, under AA at 12px */
+}
+
+.svb-field-err::before {
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    content: "\f06a";
+    margin-right: 5px;
+}
+
+.svb-field-note {
+    font-weight: normal;
+    color: var(--sv-text-muted, var(--ork-text-muted));
+}
+
+.svb-field-note::before { content: "\f05a"; }
+
+/* An option row wraps so its hint sits on its own line under the label,
+   indented past the 18px glyph + 4px gap. */
+.svb-optrow.svb-has-err { flex-wrap: wrap; }
+
+.svb-optrow > .svb-field-err {
+    flex: 1 1 100%;
+    order: 99;
+    margin-top: 0;
+    padding-left: 22px;
+}
+
+.svb-page-head > .svb-field-err { flex: 1 1 100%; margin-top: 0; }
+
+/* The survey title's hint sits on the navy .rp-header. */
+.rp-header .svb-field-err { color: #feb2b2; margin-top: 4px; }
+
+.svb-prompt[aria-invalid="true"],
+.svb-optrow .svb-optlabel[aria-invalid="true"],
+.svb-page-title[aria-invalid="true"] { border-bottom-color: #c53030; }
+
+.svb-title-input[aria-invalid="true"] { border-color: #feb2b2; }
+
+.svb-settings .sv-input[aria-invalid="true"],
+.svb-settings .sv-select[aria-invalid="true"],
+.svb-settings .sv-textarea[aria-invalid="true"],
+.svb-more .sv-input[aria-invalid="true"],
+.svb-more .sv-select[aria-invalid="true"] { border-color: #c53030; }
+
+/* ── Narrow-width chrome (#13) ────────────────────────────────────────── */
+
+/* Under 900px the canvas and the settings sidebar are two views behind a
+   Questions | Settings switch (survey-build.js setView writes
+   data-svb-view on .svb-root), and Results / Copy link / Help fold into one
+   "More" disclosure. Above 900px neither control exists. */
+.svb-viewseg,
+.svb-overflow { display: none; }
+
+.svb-overflow { position: relative; }
+
+.svb-overflow-menu:not([hidden]) {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: var(--z-dropdown);
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 4px;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    box-shadow: var(--ork-shadow-dropdown);
+}
+
+/* On a phone the header actions wrap and More can land at the LEFT of its
+   row, where a right-anchored menu would open past the viewport edge.
+   survey-build.js alignOverflow() measures on open and flips the anchor. */
+.svb-overflow-menu[data-align="start"]:not([hidden]) { left: 0; right: auto; }
+
+/* #theme_container outranks default.theme's link colour on the Results <a>. */
+#theme_container .svb-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--ork-radius-sm);
+    background: transparent;
+    color: var(--ork-text);
+    font: inherit;
+    font-size: var(--ork-font-size-base);
+    font-weight: var(--ork-font-weight-semibold);
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#theme_container .svb-overflow-item:hover,
+#theme_container .svb-overflow-item:focus-visible { background: var(--ork-surface-hover); }
+
+.svb-overflow-item i { width: 16px; text-align: center; color: var(--ork-text-muted); }
+
+.svb-danger {
+    border-color: var(--sv-danger);
+    color: var(--sv-danger);
+    background: transparent;
+}
+
+.svb-danger:hover:not([disabled]) { background: var(--sv-danger-bg); }
+
+/* ── Canvas column ────────────────────────────────────────────────────── */
+
+/* The app's base scale (13px, tokens.css) for every builder surface. The
+   prompt and card titles step up to 14px; meta, hints and settings lines drop
+   to 12px; section labels are 11px uppercase. Nothing here is larger than the
+   equivalent control elsewhere in the app. Spec §7 Density, "Typography". */
+.rp-root .rp-body,
+.svb-modal-panel { font-size: var(--ork-font-size-base); }
+
+/* reports.css owns .rp-body/.rp-sidebar; the canvas is the right-hand column,
+   which reports.css has no rule for, so its own flex sizing lives here. */
+.svb-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 860px;
+    padding-bottom: 48px;
+}
+
+
+/* ── Outline (right rail) ─────────────────────────────────────────────── */
+
+/* orkui.css:739 clamps `html, body { overflow-x: hidden }`. On BODY that makes
+   overflow-y compute to auto, so the body becomes the nearest scrollport — one
+   that never scrolls, because it grows with its content. A position:sticky
+   element resolved against it can therefore never pin, which is exactly what
+   the rail below does. `clip` is the one non-visible value that does NOT
+   establish a scroll container, so overflow-y stays visible and the rail binds
+   to the viewport instead. :has() keeps this to the builder page and to
+   browsers that would honour the sticky anyway; the horizontal clamp itself is
+   unchanged. Measured, not assumed: without this the rail's top runs to
+   -617px at scrollY 900; with it, it holds at 60px. */
+body:has(#svb-toc) { overflow-x: clip; }
+
+/* A table of contents for the canvas: type icon + title, nothing else. It is
+   the .rp-body's third column, so it only appears when there is room for the
+   canvas to keep its full 860px — see the 1449px rule below. Chrome is the
+   Reports sidebar's: a card with an 11px uppercase header, 13px rows.
+
+   #newmenu is a 48px fixed bar, so the rail pins 12px under it and caps its
+   own height at whatever is left of the viewport. */
+.svb-toc {
+    flex: 0 0 220px;
+    width: 220px;
+    margin-left: 16px;
+    position: sticky;
+    top: 60px;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.svb-toc-card {
+    background: var(--sv-l1);
+    border: 1px solid var(--sv-line-1);
+    border-radius: var(--sv-radius-l1);
+    box-shadow: var(--ork-shadow-card);
+    overflow: hidden;
+}
+
+/* Every muted tone in the rail is --sv-text-muted, not --ork-text-muted: at
+   11-12px on white the global token is 4.02:1, under AA. survey.css carries
+   the darker survey value for exactly this, and hands the job back to the
+   global token in dark mode. */
+.svb-toc-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    background: var(--ork-bg-secondary);
+    border-bottom: 1px solid var(--ork-border);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sv-text-muted);
+}
+
+.svb-toc-body { padding: 4px 0 8px; }
+
+.svb-toc-page {
+    padding: 10px 12px 4px;
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sv-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* One row. A real <a>, so Tab reaches it and Enter follows it; the click
+   handler turns that into a smooth scroll plus a selection. */
+.svb-toc .svb-toc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 4px 12px 4px 10px;
+    border-left: 2px solid transparent;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.5;
+    color: var(--ork-text-secondary);
+    text-decoration: none;
+}
+
+.svb-toc .svb-toc-item:hover {
+    background: var(--ork-surface-hover);
+    color: var(--ork-text);
+    text-decoration: none;
+}
+
+.svb-toc .svb-toc-item:focus-visible {
+    outline: 2px solid var(--sv-accent);
+    outline-offset: -2px;
+}
+
+.svb-toc-icon {
+    flex: 0 0 14px;
+    width: 14px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--sv-text-muted);
+}
+
+.svb-toc-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The open card. */
+.svb-toc .svb-toc-item[aria-current="true"] {
+    background: var(--sv-accent-soft);
+    border-left-color: var(--sv-accent);
+    color: var(--sv-accent);
+    font-weight: var(--ork-font-weight-bold);
+}
+
+.svb-toc .svb-toc-item[aria-current="true"] .svb-toc-icon { color: var(--sv-accent); }
+
+/* Scroll spy: where you are reading, when that is not where you are editing. */
+.svb-toc .svb-toc-item.svb-toc-near {
+    border-left-color: var(--ork-border-dark);
+    color: var(--ork-text);
+}
+
+.svb-toc-empty,
+.svb-toc-none {
+    margin: 0;
+    padding: 4px 12px 6px;
+    font-size: var(--ork-font-size-sm);
+    font-style: italic;
+    color: var(--sv-text-muted);
+}
+
+.svb-toc-empty { padding: 10px 12px; }
+
+/* The rail pins under the fixed navbar, so an anchored card has to clear it. */
+.svb-item { scroll-margin-top: 64px; }
+
+/* ── Page card ────────────────────────────────────────────────────────── */
+
+/* L1 — see the surface-ladder block at the top of survey.css. */
+.svb-page {
+    background: var(--sv-l1);
+    border: 1px solid var(--sv-line-1);
+    border-radius: var(--sv-radius-l1);
+    box-shadow: var(--ork-shadow-card);
+    margin-bottom: 18px;
+    overflow: hidden;
+}
+
+.svb-page-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 5px 10px;
+    /* Transparent, not a fill: a tinted strip here sat at roughly the same
+       value as the L2 question cards below it and the two read as one
+       surface. The rule alone is enough to separate title from canvas. */
+    background: transparent;
+    border-bottom: 1px solid var(--sv-line-2);
+}
+
+.svb-page-handle,
+.svb-handle,
+.svb-opthandle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    min-height: 20px;
+    border: 0;
+    background: none;
+    color: var(--ork-text-hint);
+    cursor: grab;
+    padding: 0;
+    flex: 0 0 auto;
+}
+
+.svb-page-handle.svb-handle-locked { cursor: not-allowed; opacity: 0.4; }
+.svb-page-handle:active,
+.svb-handle:active,
+.svb-opthandle:active { cursor: grabbing; }
+
+.svb-page-num {
+    font-family: var(--ork-font-heading);
+    font-size: 12px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    /* --sv-text-muted, not --ork-text-muted: the rail is #f7fafc, where the
+       global muted grey lands at 3.83:1. Declared on .sv-scope in survey.css. */
+    color: var(--sv-text-muted);
+    white-space: nowrap;
+}
+
+.svb-page-title {
+    flex: 1 1 180px;
+    min-width: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--ork-radius-sm);
+    color: var(--ork-text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: var(--ork-font-weight-semibold);
+    padding: 4px 8px;
+    min-height: 30px;
+    box-sizing: border-box;
+}
+
+.svb-page-title:hover { border-color: var(--ork-border); }
+
+.svb-page-title:focus {
+    outline: none;
+    background: var(--ork-input-bg);
+    border-color: var(--sv-accent);
+    box-shadow: var(--ork-shadow-focus);
+}
+
+.svb-page-count {
+    font-size: 12px;
+    color: var(--sv-text-muted);
+    white-space: nowrap;
+}
+
+.svb-page-actions { margin-left: auto; display: flex; gap: 2px; flex: 0 0 auto; }
+
+.svb-page-more {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+
+.svb-items { padding: 8px 10px 2px; min-height: 40px; }
+
+.svb-page-empty {
+    margin: 4px 0 10px;
+    padding: 14px;
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: var(--ork-radius-md);
+    text-align: center;
+    color: var(--sv-text-muted);
+    font-size: 13px;
+}
+
+.svb-page-foot { padding: 0 10px 10px; }
+
+/* ── Add controls ─────────────────────────────────────────────────────── */
+
+.svb-addbtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 14px;
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: var(--ork-radius-md);
+    background: transparent;
+    color: var(--sv-accent);
+    font-family: inherit;
+    font-size: var(--ork-font-size-base);
+    font-weight: var(--ork-font-weight-semibold);
+    cursor: pointer;
+}
+
+.svb-addbtn:hover:not([disabled]) { background: var(--sv-accent-soft); border-style: solid; }
+.svb-addbtn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.svb-addbtn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* The small "+" between cards: quiet until the row is hovered or focused. */
+.svb-addinline {
+    display: flex;
+    justify-content: center;
+    height: 12px;
+    margin: -2px 0;
+    position: relative;
+    z-index: 1;
+}
+
+.svb-addinline-btn {
+    width: 28px;
+    height: 28px;
+    margin-top: -8px;
+    border-radius: 50%;
+    border: 1px solid var(--ork-border-dark);
+    background: var(--ork-card-bg);
+    color: var(--sv-accent);
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s;
+    padding: 0;
+}
+
+.svb-addinline:hover .svb-addinline-btn,
+.svb-addinline-btn:focus-visible,
+.svb-item.svb-selected + .svb-addinline .svb-addinline-btn { opacity: 1; }
+
+.svb-addinline-btn[disabled] { display: none; }
+
+.svb-pagediv {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 8px;
+}
+
+.svb-addpage { font-size: var(--ork-font-size-base); }
+
+/* ── Item card ────────────────────────────────────────────────────────── */
+
+/* L2 — flat and tinted, so a closed card reads as content sitting IN the
+   page card rather than as another card floating on it. */
+.svb-item {
+    position: relative;
+    border: 1px solid var(--sv-line-2);
+    border-left: 4px solid transparent;
+    border-radius: var(--sv-radius-l2);
+    background: var(--sv-l2);
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.svb-item:hover { border-color: var(--ork-border-dark); }
+.svb-item:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+
+/* The card being edited lifts off the tint: white, a heavier shadow and the
+   accent left edge it already had. */
+.svb-item.svb-selected {
+    background: var(--sv-l2-lift);
+    border-color: var(--sv-line-3);
+    border-left-color: var(--sv-accent);
+    box-shadow: var(--ork-shadow-card-hover);
+    cursor: default;
+}
+
+/* The grip strip: a 16px band across the top of every card holding the
+   centred ⋮⋮ handle and the keyboard reorder pair at its right. It is
+   invisible until the card is hovered, focused or selected, so a closed card
+   reads as pure preview while SortableJS still has a handle to drag by. */
+.svb-grip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 16px;
+}
+
+.svb-grip-keys {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 2px;
+}
+
+.svb-grip .svb-handle,
+.svb-grip-keys {
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.svb-item:hover .svb-grip .svb-handle,
+.svb-item:focus-within .svb-grip .svb-handle,
+.svb-item.svb-selected .svb-grip .svb-handle,
+.svb-item:hover .svb-grip-keys,
+.svb-item:focus-within .svb-grip-keys,
+.svb-item.svb-selected .svb-grip-keys { opacity: 1; }
+
+/* The shared .svb-handle box is 20px, which is 4px taller than the strip it
+   sits in: it overhangs the card's top border by 2px and pushes 2px down into
+   the prompt row. Spec §7 Density asks for "a centred ⋮⋮ drag handle 16px
+   tall in its top margin", so the visible box is clamped to the strip and the
+   comfortable pointer target is restored by a ::after that costs no layout.
+   The touch block below puts the real 44px target back. */
+.svb-grip .svb-handle {
+    position: relative;
+    height: 16px;
+    min-height: 16px;
+}
+
+.svb-grip .svb-handle::after {
+    content: "";
+    position: absolute;
+    inset: -5px -8px;
+}
+
+/* A closed conditional card keeps one 16px marker — skip logic is the only
+   thing a SvRender preview cannot show on its own. */
+.svb-flag {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--sv-accent);
+}
+
+.svb-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--ork-border-dark);
+    background: var(--ork-bg-secondary);
+    font-size: 11px;
+    color: var(--ork-text-secondary);
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.svb-chip-showif i { color: var(--sv-accent); }
+
+.svb-item-body { padding: 0 16px 16px; }
+
+/* SvRender draws its own card; inside a builder item that frame is redundant. */
+.svb-item-body .sv-q {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.svb-ghost { opacity: 0.45; }
+
+/* ── Icon buttons ─────────────────────────────────────────────────────── */
+
+.svb-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--ork-radius-sm);
+    background: transparent;
+    color: var(--ork-text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    flex: 0 0 auto;
+}
+
+.svb-icon-btn:hover:not([disabled]) {
+    background: var(--ork-surface-hover);
+    border-color: var(--ork-border);
+    color: var(--ork-text);
+}
+
+.svb-icon-btn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 1px; }
+.svb-icon-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
+.svb-icon-btn.svb-icon-on { background: var(--sv-accent-soft); color: var(--sv-accent); border-color: var(--sv-accent); }
+.svb-icon-danger:hover:not([disabled]) { color: var(--sv-danger); border-color: var(--sv-danger); }
+
+/* The keyboard reorder pair. Narrower than a normal icon button so the two of
+   them together take about the room the grip they sit beside does. */
+.svb-move-btn { width: 18px; height: 18px; font-size: 10px; }
+
+/* ── Inline text links ────────────────────────────────────────────────── */
+
+.svb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 3px 6px;
+    border: 0;
+    background: none;
+    color: var(--sv-accent);
+    font-family: inherit;
+    font-size: var(--ork-font-size-base);
+    font-weight: var(--ork-font-weight-semibold);
+    cursor: pointer;
+}
+
+.svb-link:hover:not([disabled]) { text-decoration: underline; }
+.svb-link:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.svb-link[disabled] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
+.svb-link-danger { color: var(--sv-danger); }
+
+/* ── The in-place editor ──────────────────────────────────────────────── */
+
+.svb-edit { display: block; }
+
+/* Top row: prompt, the small image button, and the Type picker hard right. */
+.svb-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.svb-prompt {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    background: var(--sv-l3);
+    border: 0;
+    border-bottom: 1px solid var(--sv-line-3);
+    border-radius: var(--sv-radius-l3) var(--sv-radius-l3) 0 0;
+    color: var(--ork-text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1.35;
+    padding: 6px 10px;
+    resize: none;
+    overflow: hidden;
+    min-height: 32px;
+}
+
+.svb-prompt:focus {
+    outline: none;
+    border-bottom-color: var(--sv-accent);
+    box-shadow: 0 1px 0 0 var(--sv-accent);
+}
+
+.svb-prompt::placeholder { color: var(--ork-text-hint); font-weight: 400; }
+
+.svb-top-img { margin-top: 2px; }
+
+/* The Type picker. The <select> stays the real control (onCanvasChange binds
+   to .svb-typesel); the icon and caret are painted around it here. */
+.svb-typepick {
+    position: relative;
+    flex: 0 0 auto;
+    width: 178px;
+    max-width: 46%;
+    display: block;
+}
+
+.svb-typepick-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--sv-accent);
+    pointer-events: none;
+}
+
+.svb-typepick::after {
+    content: "";
+    position: absolute;
+    right: 11px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    margin-top: -4px;
+    border-right: 1.5px solid var(--ork-text-muted);
+    border-bottom: 1.5px solid var(--ork-text-muted);
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+.svb-typesel {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 34px;
+    box-sizing: border-box;
+    padding: 0 26px 0 27px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-sm);
+    background: var(--ork-card-bg);
+    color: var(--ork-text);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.svb-typesel:hover:not([disabled]) { border-color: var(--ork-border-dark); }
+.svb-typesel:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 1px; }
+.svb-typesel[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.svb-help-add { margin: 2px 0 0; min-height: 26px; padding: 3px 2px; font-size: var(--ork-font-size-base); }
+
+.svb-cardimg {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 10px 0;
+}
+
+.svb-cardimg-thumb {
+    width: 84px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: var(--ork-radius-sm);
+    border: 1px solid var(--ork-border);
+}
+
+.svb-typeedit { margin-top: 10px; }
+
+/* A live SvRender control shown for reference, not for answering. */
+.svb-preview-lock {
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.92;
+}
+
+/* An unselected card draws the whole question through SvRender, whose touch
+   sizing is .sv-root-scoped — so a preview handed the canvas ~70 live 16px
+   checkboxes and radios a thumb could land on instead of the card. The card
+   itself must still be selectable, so only the CONTROLS go dead: the tap falls
+   through to the card. survey-build.js takes them out of the tab order. */
+.svb-canvas .svb-q-preview :is(input, select, textarea, button, a) { pointer-events: none; }
+
+/* ── Option rows ──────────────────────────────────────────────────────── */
+
+.svb-opts + .svb-opts { margin-top: 14px; }
+
+.svb-optlist { display: flex; flex-direction: column; gap: 2px; }
+
+.svb-optrow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* The 36px density grid (spec §7): 20px glyph, 14px label, the × and the
+   reorder pair quiet until the row is hovered or holds focus. */
+.svb-opt { min-height: 32px; }
+
+.svb-opt .svb-opthandle,
+.svb-opt .svb-move-btn,
+.svb-opt > .svb-icon-btn {
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.svb-opt:hover .svb-opthandle,
+.svb-opt:focus-within .svb-opthandle,
+.svb-opt:hover .svb-move-btn,
+.svb-opt:focus-within .svb-move-btn,
+.svb-opt:hover > .svb-icon-btn,
+.svb-opt:focus-within > .svb-icon-btn,
+.svb-opt .svb-icon-btn:focus-visible { opacity: 1; }
+
+.svb-opt > .svb-icon-btn { width: 18px; height: 18px; font-size: 12px; }
+
+.svb-glyph {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    border: 2px solid var(--ork-border-dark);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--sv-text-muted);
+}
+
+.svb-glyph-dot { border-radius: 50%; }
+/* Keeps the "Add option or add 'Other'" line on the same left rail. */
+.svb-glyph-ghost { border-color: transparent; }
+.svb-glyph-box { border-radius: 3px; }
+.svb-glyph-num { border-radius: 3px; border-style: dashed; }
+
+.svb-optrow .svb-optlabel {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    /* Borderless in BOTH themes: .sv-input paints --sv-input-bg, which is
+       invisible on a white card but a distinct dark fill under
+       html[data-theme="dark"] — the row would read as a boxed field instead
+       of the plain label spec §7 Density asks for. */
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+    font-size: var(--ork-font-size-base);
+    min-height: 26px;
+    padding: 3px 4px;
+}
+
+.svb-optrow .svb-optlabel:hover { border-bottom-color: var(--ork-border); }
+
+.svb-optrow .svb-optlabel:focus {
+    background: transparent;
+    border-bottom-color: var(--sv-accent);
+    box-shadow: none;
+}
+
+.svb-optrow .svb-optweight {
+    flex: 0 0 70px;
+    min-height: 26px;
+    font-size: var(--ork-font-size-sm);
+    padding: 3px 6px;
+}
+
+.svb-other-tag {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--sv-accent-soft);
+    color: var(--sv-accent);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-semibold);
+    cursor: help;
+}
+
+.svb-optadd { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.svb-optadd-line { font-size: var(--ork-font-size-base); color: var(--sv-text-muted); }
+
+.svb-optadd-link {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: var(--sv-accent);
+    font-weight: var(--ork-font-weight-semibold);
+    cursor: pointer;
+}
+
+.svb-optadd-link:hover:not([disabled]) { text-decoration: underline; }
+.svb-optadd-link:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.svb-optadd-link[disabled] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
+
+/* ── Matrix ───────────────────────────────────────────────────────────── */
+
+.svb-mx { display: block; }
+
+.svb-mx-caption {
+    display: block;
+    font-family: var(--ork-font-heading);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sv-text-muted);
+    margin-bottom: 4px;
+}
+
+.svb-mx-colstrip {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+/* A column card wraps onto two lines: the label owns the first one, and the
+   weight field plus the reorder/remove controls sit under it. Inline, the
+   label was squeezed to three characters at the compact scale — and spec §7
+   puts the weight "under each column header" in any case. */
+.svb-mx-colstrip .svb-optrow-col {
+    flex: 0 0 190px;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    padding: 4px 6px;
+    background: var(--ork-bg-secondary);
+}
+
+.svb-mx-colstrip .svb-optlabel { flex: 1 1 100%; min-width: 0; }
+.svb-mx-colstrip .svb-optweight { flex: 0 0 62px; }
+
+/* The column strip is a row of little cards, not a list: its controls have no
+   quiet gutter to hide in, so they stay put. */
+.svb-mx-colstrip .svb-opt .svb-opthandle,
+.svb-mx-colstrip .svb-opt .svb-move-btn,
+.svb-mx-colstrip .svb-opt > .svb-icon-btn { opacity: 1; }
+
+/* ── Setting lines ────────────────────────────────────────────────────── */
+
+.svb-settingline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--ork-border);
+    font-size: var(--ork-font-size-sm);
+}
+
+/* Inline settings: 28px controls at the 13px base (spec §7 Density). */
+.svb-settingline .sv-input,
+.svb-settingline .sv-select {
+    min-height: 28px;
+    font-size: var(--ork-font-size-base);
+    padding: 3px 8px;
+}
+
+.svb-settingline .sv-select { padding-right: 30px; }
+.svb-settingline .svb-check { min-height: 28px; font-size: var(--ork-font-size-sm); }
+
+.svb-settingline .svb-field { margin-bottom: 0; flex: 1 1 150px; min-width: 0; }
+.svb-settingline .svb-field-check { flex: 1 1 100%; }
+
+.svb-scale-ends {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.svb-endlabel { flex: 1 1 0; min-width: 0; display: block; }
+.svb-endlabel-max .sv-input { text-align: right; }
+
+.svb-endlabel .sv-input {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px dashed var(--ork-border-dark);
+    border-radius: 0;
+    font-size: var(--ork-font-size-base);
+    padding: 3px 2px;
+    min-height: 28px;
+}
+
+.svb-endlabel .sv-input:focus { border-bottom-style: solid; border-bottom-color: var(--sv-accent); box-shadow: none; }
+
+/* ── ⋯ menu and card footer ───────────────────────────────────────────── */
+
+.svb-more {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    background: var(--ork-bg-secondary);
+}
+
+/* Two classes: the dark heading reset in survey.css is (0,1,2) and would
+   otherwise repaint this muted label the full text colour in dark mode. */
+.svb-more .svb-sub {
+    font-family: var(--ork-font-heading);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sv-text-muted);
+    margin: 14px 0 6px;
+}
+
+.svb-more > .svb-sub:first-child { margin-top: 0; }
+
+/* 36px, right-aligned, nothing bordered in it (spec §7 Density). */
+.svb-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    height: 36px;
+    margin-top: 6px;
+    border-top: 1px solid var(--ork-border);
+}
+
+.svb-card-foot .svb-icon-btn { width: 18px; height: 18px; font-size: 12px; }
+
+.svb-foot-div {
+    width: 1px;
+    align-self: stretch;
+    margin: 7px 2px;
+    background: var(--ork-border);
+}
+
+.svb-switchwrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.svb-switchlabel { font-size: var(--ork-font-size-sm); color: var(--ork-text-secondary); }
+
+.svb-switch { position: relative; display: inline-block; width: 32px; height: 18px; flex: 0 0 auto; }
+
+.svb-switch input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.svb-switch-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--ork-border-dark);
+    transition: background 0.15s;
+    pointer-events: none;
+}
+
+.svb-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: var(--ork-shadow-card);
+    transition: transform 0.15s;
+}
+
+.svb-switch input:checked + .svb-switch-track { background: var(--sv-accent); }
+.svb-switch input:checked + .svb-switch-track::after { transform: translateX(14px); }
+.svb-switch input:focus-visible + .svb-switch-track { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.svb-switch input[disabled] { cursor: not-allowed; }
+.svb-switch input[disabled] + .svb-switch-track { opacity: 0.5; }
+
+/* ── Generic fields (cards, ⋯ menu and sidebar share these) ──────────── */
+
+.svb-field { margin-bottom: 10px; }
+
+/* Sidebar and ⋯-menu controls: 32px at the 13px base (spec §7 Density). */
+.svb-more .sv-input,
+.svb-more .sv-select,
+.svb-more .sv-btn,
+.svb-settings .sv-input,
+.svb-settings .sv-select,
+.svb-settings .sv-btn {
+    min-height: 32px;
+    font-size: var(--ork-font-size-base);
+    padding: 5px 10px;
+}
+
+.svb-more .sv-select,
+.svb-settings .sv-select { padding-right: 32px; }
+
+.svb-more .sv-textarea,
+.svb-settings .sv-textarea { font-size: var(--ork-font-size-base); padding: 6px 10px; }
+
+.svb-label {
+    display: block;
+    font-family: var(--ork-font-heading);
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--sv-text-muted);
+    margin-bottom: 4px;
+}
+
+.svb-label-wrap > span {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.svb-hint { margin: 3px 0 0; font-size: var(--ork-font-size-sm); line-height: 1.45; color: var(--sv-text-muted); }
+
+.svb-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    font-size: var(--ork-font-size-base);
+    color: var(--ork-text);
+    cursor: pointer;
+}
+
+.svb-check input[type="checkbox"],
+.svb-check input[type="radio"] { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--sv-accent); }
+.svb-check input[disabled] { cursor: not-allowed; }
+
+/* A sidebar radio group (radioRow): one option per line, long labels wrap
+   beside the dot instead of being cut short like a closed select. */
+.svb-radios { border: 0; margin-inline: 0; padding: 0; min-width: 0; }
+.svb-radios > legend { padding: 0; }
+.svb-radio { display: flex; align-items: flex-start; }
+.svb-radio input[type="radio"] { margin: 2px 0 0; }
+.svb-radio > span { min-width: 0; line-height: 1.4; }
+/* A radio group that does not apply yet (sharing timing while nothing is
+   shared): muted label, no pointer. --ork-text-secondary swaps per theme. */
+.svb-radio:has(input:disabled) { cursor: not-allowed; }
+.svb-radio input:disabled + span { color: var(--ork-text-secondary); opacity: 0.55; }
+
+.svb-multi { min-height: 132px; padding: 6px; }
+
+.svb-color { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.svb-color-input {
+    width: 48px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid var(--ork-input-border);
+    border-radius: var(--ork-radius-md);
+    background: var(--ork-input-bg);
+    cursor: pointer;
+}
+
+.svb-showif { margin-top: 4px; }
+
+/* ── Markdown editor ──────────────────────────────────────────────────── */
+
+.svb-md-tools { display: flex; gap: 2px; margin-bottom: 4px; flex-wrap: wrap; }
+
+.svb-md-btn {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-sm);
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+}
+
+.svb-md-btn:hover { background: var(--ork-surface-hover); border-color: var(--ork-border-dark); }
+.svb-md-btn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 1px; }
+
+.svb-md-input { min-height: 72px; }
+
+.svb-md-preview {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px dashed var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    background: var(--ork-bg-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ork-text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.svb-md-preview:empty { display: none; }
+.svb-md-preview > :first-child { margin-top: 0; }
+.svb-md-preview > :last-child { margin-bottom: 0; }
+.svb-md-preview img { max-width: 100%; height: auto; border-radius: var(--ork-radius-sm); }
+
+/* ── Image picker ─────────────────────────────────────────────────────── */
+
+.svb-imgpick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.svb-imgpick-thumb {
+    width: 96px;
+    height: 68px;
+    object-fit: cover;
+    border-radius: var(--ork-radius-sm);
+    border: 1px solid var(--ork-border);
+}
+
+.svb-imgpick-empty {
+    width: 96px;
+    height: 68px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: var(--ork-radius-sm);
+    color: var(--ork-text-hint);
+    font-size: 11px;
+}
+
+.svb-imgpick-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── Settings sidebar ─────────────────────────────────────────────────── */
+
+/* The shell — .rp-sidebar, .rp-filter-card, .rp-filter-card-header and
+   .rp-filter-card-body — is reports.css's, and none of it is re-declared here.
+   What follows is only what a *collapsible* card needs: the header has to
+   become a real <button> without looking like one, and it grows a caret. */
+
+.svb-settings { padding-bottom: 48px; }
+
+.svb-sec-head {
+    width: 100%;
+    box-sizing: border-box;
+    /* .rp-filter-card-header is authored for a <div>; a <button> brings its own
+       font, border-radius and centring that would fight it. */
+    font-family: inherit;
+    text-align: left;
+    border-width: 0 0 1px 0;
+    border-style: solid;
+    border-radius: 0;
+    cursor: pointer;
+}
+
+.svb-sec-head:hover { background: var(--ork-surface-hover); }
+
+.svb-sec-head:focus-visible {
+    outline: 2px solid var(--sv-accent);
+    outline-offset: -2px;
+}
+
+.svb-sec-title { flex: 1 1 auto; min-width: 0; }
+
+.svb-sec-caret {
+    flex: 0 0 auto;
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+
+.svb-sec-head[aria-expanded="false"] .svb-sec-caret { transform: rotate(-90deg); }
+
+/* A collapsed card is a lone header, so it must not keep a dangling border. */
+.svb-sec-head[aria-expanded="false"] { border-bottom-width: 0; }
+
+/* Separates the welcome screen from the thank-you screen inside one section. */
+.svb-sec-rule {
+    border: 0;
+    border-top: 1px solid var(--ork-border);
+    margin: 12px 0;
+}
+
+/* The sidebar's own scope chip. reports.css's .rp-scope-chip cannot be reused
+   here — it paints white-on-translucent for the navy header and disappears on
+   a light card. Same shape, page-surface colours. */
+.svb-scope-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 2px;
+    padding: 3px 8px;
+    border: 1px solid var(--ork-border);
+    border-radius: 999px;
+    background: var(--ork-surface-light);
+    color: var(--ork-text);
+    font-size: var(--ork-font-size-sm);
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1.4;
+}
+
+.svb-scope-chip i { color: var(--sv-accent); font-size: 10px; }
+
+/* The fixed data-gate wording, quoted for reference — read-only, so it is set
+   at the 12px meta size rather than the 13px base of the live controls. */
+.svb-consent-quote {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--ork-border);
+    background: var(--ork-surface-light);
+    border-radius: 0 var(--ork-radius-sm) var(--ork-radius-sm) 0;
+    font-size: var(--ork-font-size-sm);
+    color: var(--sv-text-muted);
+}
+
+.svb-consent-quote p { margin: 0 0 6px; }
+.svb-consent-quote ul { margin: 0; padding-left: 16px; }
+.svb-consent-quote li { margin-bottom: 4px; }
+.svb-consent-quote li:last-child { margin-bottom: 0; }
+/* The conditional credit line sits after the option list: a rule and a gap
+   keep it from reading as part of the last option. Three classes (0,3,0) so
+   the dark-mode `.svb-label` pill-box reset below (0,2,1: border 0,
+   padding 0) cannot strip the rule in dark mode. */
+.svb-consent-quote .svb-label.svb-consent-credit-label {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--ork-border);
+}
+
+.svb-sharelink { display: flex; gap: 6px; align-items: stretch; }
+.svb-sharelink .sv-input { flex: 1 1 auto; min-width: 0; }
+.svb-sharelink .sv-btn { flex: 0 0 auto; }
+
+/* ── Schedule pickers ─────────────────────────────────────────────────── */
+
+/* The Opens/Closes fields are Flatpickr pickers with altInput on, so the real
+   input is hidden and the visible box is Flatpickr's readable twin (see
+   survey-build.js initSchedulePickers). Unlike the share-link row above, the
+   clear button sits on its own line underneath rather than beside the field:
+   "December 24, 2026  5:30 PM" needs the whole 220px sidebar column, and a
+   trailing button would truncate the date it is there to clear. */
+.svb-daterow { display: flex; flex-wrap: wrap; align-items: center; }
+.svb-daterow .sv-input {
+    flex: 1 1 100%;
+    min-width: 0;
+    /* The readable format is long ("December 24, 2026  5:30 PM") and the
+       Reports sidebar is 220px, so the field trades 6px of side padding for
+       6px of date. */
+    padding-left: 7px;
+    padding-right: 7px;
+    text-overflow: ellipsis;
+}
+
+.svb-date-clear { margin: 2px 0 0 -6px; font-size: var(--ork-font-size-sm); }
+.svb-date-clear .fa-xmark { font-size: 11px; }
+
+/* ── Help modal ───────────────────────────────────────────────────────── */
+
+.svb-modal { position: fixed; inset: 0; z-index: var(--z-modal); }
+
+.svb-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    border: 0;
+    width: 100%;
+    padding: 0;
+}
+
+.svb-modal-panel {
+    position: relative;
+    max-width: 720px;
+    width: calc(100% - 32px);
+    /* 100dvh, not 100vh: on mobile Safari/Chrome 100vh is the LARGE viewport,
+       so with the toolbars shown the panel ran past the visible area and the
+       bottom of its own scroller could not be reached. vh stays as the
+       fallback for anything that does not know dvh. */
+    max-height: calc(100vh - 64px);
+    max-height: calc(100dvh - 64px);
+    margin: 32px auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-lg);
+    box-shadow: var(--ork-shadow-dropdown);
+    overflow: hidden;
+}
+
+.svb-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+    flex: 0 0 auto;
+}
+
+.svb-modal-title,
+.svb-modal-body h1,
+.svb-modal-body h2,
+.svb-modal-body h3,
+.svb-modal-body h4 {
+    font-family: var(--ork-font-heading);
+    color: var(--ork-text);
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.svb-modal-title { font-size: 14px; font-weight: var(--ork-font-weight-bold); }
+.svb-modal-close { margin-left: auto; }
+
+.svb-modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    font-size: var(--ork-font-size-base);
+    line-height: 1.6;
+    color: var(--ork-text-secondary);
+}
+
+.svb-modal-body h1, .svb-modal-body h2, .svb-modal-body h3, .svb-modal-body h4 { margin: 16px 0 6px; }
+.svb-modal-body > :first-child { margin-top: 0; }
+.svb-modal-body table { border-collapse: collapse; width: 100%; }
+.svb-modal-body th, .svb-modal-body td { border: 1px solid var(--ork-border); padding: 6px 8px; text-align: left; }
+.svb-modal-body pre { overflow-x: auto; background: var(--ork-bg-secondary); padding: 10px; border-radius: var(--ork-radius-md); }
+
+/* ── Outline: only when the canvas can still have its full width ──────── */
+
+/* The rail may never cost the canvas a pixel — it exists to use space the
+   canvas was already leaving empty. The chrome around the canvas is 488px
+   (220 sidebar + 16 gap + 16 margin + 220 rail + 16 gap), so the canvas keeps
+   its full 860px only once #theme_container (95% of the viewport, less its
+   12px padding and the ~15px scrollbar) is 1348px wide — that is a 1450px
+   viewport. Measured, not derived: at 1450px the canvas is 860.0, at 1440px it
+   is 850.5. So the rail shows from 1450px up and steps out below, where the
+   canvas needs the whole row. It is an aid, not a control — nothing on the
+   page is reachable only through it. */
+@media (max-width: 1449px) {
+    .svb-toc { display: none; }
+}
+
+/* ── Touch: every control the rule cares about reaches 44px ───────────── */
+
+/* The density pass above is the DESKTOP scale. Every control it shrank comes
+   back to a 44px tap target here — this block is the accessibility contract,
+   so anything sized under 44px above must appear in it. */
+@media (pointer: coarse), (max-width: 900px) {
+    .svb-icon-btn,
+    .svb-card-foot .svb-icon-btn,
+    .svb-opt > .svb-icon-btn,
+    .svb-md-btn,
+    .svb-page-handle,
+    .svb-handle,
+    .svb-opthandle,
+    .svb-move-btn,
+    .svb-addinline-btn {
+        min-width: 44px;
+        min-height: 44px;
+        width: auto;
+        height: auto;
+    }
+
+    /* No hover on touch: nothing may hide behind it. */
+    .svb-grip .svb-handle,
+    .svb-grip-keys,
+    .svb-opt .svb-opthandle,
+    .svb-opt .svb-move-btn,
+    .svb-opt > .svb-icon-btn { opacity: 1; }
+
+    .svb-grip { height: 44px; }
+
+    /* Undo the 16px desktop clamp above — on touch the handle is the 44px
+       target, and the pointer-target pseudo-element is no longer needed. */
+    .svb-grip .svb-handle { height: auto; min-height: 44px; }
+    .svb-grip .svb-handle::after { content: none; }
+
+    .svb-opt { min-height: 44px; }
+    .svb-optrow .svb-optlabel { min-height: 44px; font-size: 16px; padding: 8px 4px; }
+    .svb-optrow .svb-optweight { min-height: 44px; font-size: 16px; }
+    .svb-optadd-line { font-size: var(--ork-font-size-base); }
+    .svb-prompt { min-height: 44px; font-size: 16px; padding: 10px 12px; }
+    .svb-typesel { height: 44px; font-size: 16px; }
+    .svb-typepick { max-width: 100%; }
+    .svb-title-input { min-height: 44px; font-size: 20px; }
+    .svb-page-title { min-height: 44px; font-size: 16px; }
+    .svb-addbtn { min-height: 44px; font-size: var(--ork-font-size-base); }
+    .svb-link { min-height: 44px; padding: 8px 6px; }
+    /* "Add option" / "add 'Other'" are the builder's most-used controls: give them a real tap target. */
+    .svb-optadd-link { min-height: 44px; padding: 8px 6px; display: inline-flex; align-items: center; }
+    .svb-help-add { min-height: 44px; font-size: var(--ork-font-size-base); }
+    .svb-card-foot { height: auto; min-height: 52px; flex-wrap: wrap; padding: 4px 0; }
+    .svb-switch { width: 44px; height: 24px; }
+    .svb-switch-track::after { width: 20px; height: 20px; }
+    .svb-switch input:checked + .svb-switch-track::after { transform: translateX(20px); }
+    .svb-switchlabel { font-size: var(--ork-font-size-base); }
+    .svb-check { min-height: 44px; }
+    .svb-check input[type="checkbox"],
+    .svb-check input[type="radio"] { width: 20px; height: 20px; }
+    .svb-radio { align-items: center; }
+    .svb-radio input[type="radio"] { margin: 0; }
+    .svb-color-input { height: 44px; }
+    .svb-settingline .sv-input,
+    .svb-settingline .sv-select,
+    .svb-endlabel .sv-input,
+    .svb-more .sv-input,
+    .svb-more .sv-select,
+    .svb-more .sv-btn,
+    .svb-settings .sv-input,
+    .svb-settings .sv-select,
+    .svb-settings .sv-btn { min-height: 44px; font-size: 16px; }
+
+    /* The confirm strip was the one card control still at 32px, and its pair
+       wrapped with Delete leading — the destructive button first under the
+       thumb. The message takes its own line, then Cancel comes first. */
+    .svb-confirm .sv-btn { min-height: 44px; padding-inline: 14px; }
+    .svb-confirm-text { flex: 0 0 100%; }
+    /* Cancel leads by DOM order (Survey_build.tpl); `order` here would reorder
+       the whole strip and float a button above the sentence it answers. */
+
+    /* Flatpickr's calendar hangs off <body>, so it is reached through the class
+       survey-build.js stamps on this module's own instances (initSchedulePickers)
+       — never through a bare .flatpickr-day that would resize every other ORK
+       date field on the site. */
+    .svb-fp .flatpickr-day { height: 44px; line-height: 44px; max-width: 44px; }
+    .svb-fp .flatpickr-prev-month,
+    .svb-fp .flatpickr-next-month { min-width: 44px; }
+    .svb-fp .numInputWrapper input { min-height: 44px; font-size: 16px; }
+
+    /* The share-link copy button is icon-only, so nothing else gives it width. */
+    .svb-sharelink .sv-btn { min-width: 44px; }
+
+    .svb-sec-head { min-height: 44px; }
+    .svb-notice-close { width: 44px; height: 44px; margin: -12px -10px -12px 0; }
+
+    .svb-addinline { height: 16px; }
+    .svb-addinline-btn { width: 44px; height: 44px; margin-top: -14px; border-radius: 50%; }
+
+    /* The outline is a pointer convenience on a wide screen; on touch or in a
+       stacked layout it would just be another screen of links above the
+       questions. It has no control of its own, so it simply goes. */
+    .svb-toc { display: none; }
+}
+
+/* ── Narrow ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    /* reports.css stacks .rp-header with align-items:flex-start, so the header
+       column is shrink-to-fit and the input's width:100% resolved against its
+       own content — the title was cut mid-word with dead space beside it.
+       Stretching the chain lets the field actually claim the row. */
+    .svb-root .rp-header-left { flex: 1 1 auto; align-self: stretch; min-width: 0; }
+    .svb-root .rp-header-icon-title { flex-wrap: wrap; min-width: 0; }
+    .svb-root .rp-header-title { flex: 1 1 180px; min-width: 0; }
+    /* The 420px cap stays: between 601 and 900 the header is still one row, and
+       without it the stretched chain would run the field the whole way across. */
+    .svb-title-input { width: 100%; max-width: 420px; }
+
+    /* The matrix column editor was a 900px horizontal scroller inside a 265px
+       window, and an overlay scrollbar paints nothing at rest — column 2 was
+       cut mid-word with no cue that 3–5 existed. Below the rail's width the
+       columns stack full-width exactly as the row list already does. */
+    .svb-mx-colstrip { flex-wrap: wrap; overflow-x: visible; }
+    .svb-mx-colstrip .svb-optrow-col { flex: 1 1 100%; }
+
+    /* Wrapped option rows put each row's own controls 4px under its label and
+       only 2px from the NEXT option's field, so proximity pointed at the wrong
+       owner. Space the units apart (the card treatment that binds each row's
+       two lines is in the 420px block, where the wrap happens). */
+    .svb-optlist { gap: 12px; }
+
+    /* The Questions | Settings switch: one of the two at a time, Questions
+       first, so the first question sits right under the header instead of
+       ~1,000px down behind seven settings sections. */
+    .svb-viewseg {
+        display: flex;
+        gap: 4px;
+        margin: 10px 0;
+        padding: 3px;
+        background: var(--sv-l1);
+        border: 1px solid var(--sv-line-1);
+        border-radius: var(--ork-radius-lg);
+        /* The canvas is thousands of pixels tall (one 9-option card is 828px at
+           320), and this switch was the only way back to Settings. It pins just
+           under #newmenu, the 48px site bar. Only the switch, not the whole
+           header row: that band would cost ~90px of a 568px viewport. Opaque
+           fill and one step below the confirm strip, which still stacks over
+           it. */
+        position: sticky;
+        top: 48px;
+        z-index: calc(var(--z-dropdown) - 2);
+    }
+
+    .svb-viewseg-btn {
+        flex: 1 1 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 44px;
+        margin: 0;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--ork-radius-md);
+        background: transparent;
+        color: var(--ork-text-secondary);
+        font: inherit;
+        font-size: var(--ork-font-size-base);
+        font-weight: var(--ork-font-weight-semibold);
+        cursor: pointer;
+    }
+
+    .svb-viewseg-btn:hover { background: var(--ork-surface-hover); }
+
+    .svb-viewseg-btn[aria-pressed="true"],
+    .svb-viewseg-btn[aria-pressed="true"]:hover {
+        background: var(--rp-accent-dark);
+        color: #fff;
+    }
+
+    .svb-root[data-svb-view="questions"] .svb-settings,
+    .svb-root[data-svb-view="settings"] .svb-canvas { display: none; }
+
+    /* Its guidance repeats in Settings → About This Tool; on a phone it was
+       one more strip between the header and the first question. */
+    .svb-root > .rp-context { display: none; }
+
+    /* Results / Copy link / Help live in the More menu at this width. */
+    .rp-root .rp-header-actions .svb-wide-only { display: none; }
+    .svb-overflow { display: block; }
+
+    /* The settings are their own view now, so they no longer need the old
+       60vh cap that kept them from burying the canvas. */
+    .svb-settings { padding-bottom: 0; }
+
+    /* reports.css gives the stacked .rp-sidebar width:100%; the canvas is this
+       file's own column, so it has to claim the row for itself or flex-start
+       shrinks it to its widest card. */
+    .svb-canvas { width: 100%; max-width: 100%; box-sizing: border-box; }
+
+    /* Touch has no hover, so the between-card "+" is always available. */
+    .svb-addinline-btn { opacity: 1; }
+}
+
+@media (max-width: 420px) {
+    /* The title takes the rest of its own line (past the 18px icon and the
+       10px gap) and the status pill drops below it, instead of the field being
+       squeezed to 174px and cut mid-word. */
+    .svb-root .rp-header-title { flex: 1 1 calc(100% - 28px); }
+
+    .svb-items { padding: 8px 8px 4px; }
+    .svb-item-body { padding: 0 10px 10px; }
+    .svb-page-head { padding: 8px; }
+    .svb-page-num { flex: 1 1 100%; }
+    .svb-page-title { flex: 1 1 100%; }
+    .svb-card-top { flex-wrap: wrap; }
+    .svb-typepick { flex: 1 1 100%; width: 100%; }
+    .svb-settingline .svb-field { flex: 1 1 100%; }
+    /* Four 44px controls (grip, up, down, ×) leave a ~275px row about 60px of
+       label, and nothing at all beside an "Other" tag. The label keeps the
+       first line (the 18px glyph + 4px gap stay beside it); the controls drop
+       to a second line together, right-aligned under it. The basis leaves 8px
+       of slack past the glyph so sub-pixel rounding cannot bump the label off
+       its own glyph's line, yet far less than any 44px control needs. */
+    .svb-optrow:not(.svb-optrow-col) { flex-wrap: wrap; justify-content: flex-end; }
+    .svb-optrow:not(.svb-optrow-col) .svb-optlabel { flex-basis: calc(100% - 30px); }
+    /* Wrapped, the label and its control strip are two lines that have to read
+       as ONE option. A tinted panel spanning both says which controls belong to
+       which field; the 12px list gap above keeps the next option well clear. */
+    .svb-optlist .svb-optrow:not(.svb-optrow-col) {
+        /* L2, not L1: the selected card is already L1-lift, so an L1 panel
+           painted nothing at all. */
+        background: var(--sv-l2);
+        border: 1px solid var(--sv-line-2);
+        border-radius: var(--ork-radius-md);
+        padding: 2px 4px;
+    }
+    .svb-scale-ends { flex-direction: column; gap: 4px; }
+    .svb-endlabel-max .sv-input { text-align: left; }
+    .svb-modal-panel { width: 100%; margin: 0; max-height: 100vh; max-height: 100dvh; border-radius: 0; border: 0; }
+}
+
+/* ── Dark mode ────────────────────────────────────────────────────────── */
+
+html[data-theme="dark"] .svb-confirm {
+    background: var(--ork-card-bg);
+    border-color: var(--ork-border);
+    color: var(--ork-text);
+}
+
+/* survey.css paints the dark error notice as a 14% red wash — translucent,
+   which a pinned notice cannot be (the canvas would scroll through it). The
+   same wash laid over the page ground keeps the colour and goes opaque. */
+html[data-theme="dark"] .svb-notice-slot.sv-notice-error {
+    background: linear-gradient(rgba(229, 62, 62, 0.14), rgba(229, 62, 62, 0.14)), var(--ork-bg);
+}
+
+html[data-theme="dark"] .svb-notice-close:hover { background: rgba(255, 255, 255, 0.10); }
+
+html[data-theme="dark"] #theme_container .svb-notice-link { color: inherit; }
+
+/* A transparent PNG drawn in dark ink disappears against the dark card, so the
+   thumbnails carry their own white backdrop the way a print proof would. */
+html[data-theme="dark"] :where(.svb-cardimg-thumb, .svb-imgpick-thumb) { background: #fff; }
+
+html[data-theme="dark"] .svb-field-err { color: #feb2b2; }
+html[data-theme="dark"] .svb-field-note { color: var(--ork-text-muted); }
+
+html[data-theme="dark"] .svb-prompt[aria-invalid="true"],
+html[data-theme="dark"] .svb-optrow .svb-optlabel[aria-invalid="true"],
+html[data-theme="dark"] .svb-page-title[aria-invalid="true"] { border-bottom-color: #fc8181; }
+
+html[data-theme="dark"] .svb-settings .sv-input[aria-invalid="true"],
+html[data-theme="dark"] .svb-settings .sv-select[aria-invalid="true"],
+html[data-theme="dark"] .svb-settings .sv-textarea[aria-invalid="true"],
+html[data-theme="dark"] .svb-more .sv-input[aria-invalid="true"],
+html[data-theme="dark"] .svb-more .sv-select[aria-invalid="true"] { border-color: #fc8181; }
+
+html[data-theme="dark"] .svb-overflow-menu {
+    background: var(--ork-card-bg);
+    border-color: var(--ork-border);
+}
+
+html[data-theme="dark"] #theme_container .svb-overflow-item { color: var(--ork-text); }
+
+html[data-theme="dark"] #theme_container .svb-overflow-item:hover,
+html[data-theme="dark"] #theme_container .svb-overflow-item:focus-visible { background: var(--ork-surface-hover); }
+
+html[data-theme="dark"] .svb-viewseg {
+    background: var(--sv-l1);
+    border-color: var(--sv-line-1);
+}
+
+html[data-theme="dark"] .svb-viewseg-btn { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .svb-viewseg-btn:hover { background: var(--ork-surface-hover); }
+
+html[data-theme="dark"] .svb-viewseg-btn[aria-pressed="true"],
+html[data-theme="dark"] .svb-viewseg-btn[aria-pressed="true"]:hover {
+    background: var(--rp-accent-dark);
+    color: #fff;
+}
+
+/* .svb-page, .svb-item and .svb-page-head used to be re-stated here; they now
+   paint from the L1/L2 tokens in survey.css, which already carry their dark
+   values (page #2d3748, item #26303f, head transparent over the page card),
+   so re-stating them would flatten the ladder back to one colour. */
+html[data-theme="dark"] .svb-modal-panel,
+html[data-theme="dark"] .svb-addinline-btn {
+    background: var(--ork-card-bg);
+    border-color: var(--ork-border);
+}
+
+html[data-theme="dark"] .svb-page-more,
+html[data-theme="dark"] .svb-more,
+html[data-theme="dark"] .svb-modal-head,
+html[data-theme="dark"] .svb-md-btn,
+html[data-theme="dark"] .svb-md-preview,
+html[data-theme="dark"] .svb-chip,
+html[data-theme="dark"] .svb-mx-colstrip .svb-optrow-col,
+html[data-theme="dark"] .svb-modal-body pre {
+    background: var(--ork-bg-secondary);
+    border-color: var(--ork-border);
+}
+
+html[data-theme="dark"] .svb-icon-btn:hover:not([disabled]),
+html[data-theme="dark"] .svb-md-btn:hover,
+html[data-theme="dark"] .svb-addbtn:hover:not([disabled]) { background: var(--ork-surface-hover); }
+
+html[data-theme="dark"] .svb-item:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .svb-item.svb-selected { border-left-color: var(--sv-accent); }
+
+html[data-theme="dark"] .svb-page-title:focus,
+html[data-theme="dark"] .svb-color-input,
+html[data-theme="dark"] .svb-multi { background: var(--ork-input-bg); border-color: var(--ork-border); }
+
+/* --ork-surface-light collapses onto --ork-card-bg in dark mode, so the
+   filled prompt would vanish into the card. It gets its own fill and the
+   picker/switch get the dark card colours. */
+html[data-theme="dark"] .svb-prompt {
+    background: var(--ork-bg-secondary);
+    border-bottom-color: var(--ork-text-muted);
+}
+
+html[data-theme="dark"] .svb-typesel {
+    background: var(--ork-bg-secondary);
+    border-color: var(--ork-border);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] .svb-typesel:hover:not([disabled]) { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .svb-typepick::after { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .svb-switch-track { background: var(--ork-text-muted); }
+html[data-theme="dark"] .svb-switch-track::after { background: var(--ork-card-bg); }
+html[data-theme="dark"] .svb-switch input:checked + .svb-switch-track { background: var(--sv-accent); }
+html[data-theme="dark"] .svb-switch input:checked + .svb-switch-track::after { background: #fff; }
+html[data-theme="dark"] .svb-foot-div { background: var(--ork-border); }
+
+/* orkui.css gives every global h1–h6 a grey pill box, and its dark-mode rule
+   carries more type selectors than a bare class — so the reset is repeated
+   here for both themes. Verified against computed styles, not by eye. */
+html[data-theme="dark"] .svb-page-num,
+html[data-theme="dark"] .svb-sub,
+html[data-theme="dark"] .svb-mx-caption,
+html[data-theme="dark"] .svb-label,
+html[data-theme="dark"] .svb-modal-title,
+html[data-theme="dark"] .svb-modal-body h1,
+html[data-theme="dark"] .svb-modal-body h2,
+html[data-theme="dark"] .svb-modal-body h3,
+html[data-theme="dark"] .svb-modal-body h4 {
+    background: none;
+    border: 0;
+    padding: 0;
+}
+
+html[data-theme="dark"] .svb-modal-title,
+html[data-theme="dark"] .svb-modal-body h1,
+html[data-theme="dark"] .svb-modal-body h2,
+html[data-theme="dark"] .svb-modal-body h3,
+html[data-theme="dark"] .svb-modal-body h4 { color: var(--ork-text); }
+
+/* Sidebar sections. reports.css already paints .rp-filter-card and its header
+   dark; only the pieces this file added need a dark rule of their own. */
+html[data-theme="dark"] .svb-sec-head:hover { background: var(--ork-border); }
+
+html[data-theme="dark"] .svb-scope-chip {
+    background: var(--ork-surface-hover);
+    border-color: var(--ork-border);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] .svb-sec-rule { border-top-color: var(--ork-border); }
+
+/* Outline. --ork-card-bg and --ork-bg-secondary both collapse onto #2d3748 in
+   dark mode, so the card header needs the one step lighter that still reads as
+   a header — the same --ork-surface-hover reports.css gives .rp-filter-card-header.
+   Confirmed against computed styles, not by eye. */
+html[data-theme="dark"] .svb-toc-card {
+    background: var(--ork-card-bg);
+    border-color: var(--ork-border);
+}
+
+html[data-theme="dark"] .svb-toc-head {
+    background: var(--ork-surface-hover);
+    border-bottom-color: var(--ork-border);
+}
+
+/* Every row colour below is qualified with #theme_container so it outranks
+   default.theme's `html[data-theme="dark"] #theme_container a` (1,1,2) — the
+   same trap reports.css documents for .rp-scope-chip. A bare class pair is
+   (0,2,0) and loses, which repaints every row link-blue. Read off computed
+   styles: without the id the rows compute to #63b3ed, with it to #cbd5e0. */
+html[data-theme="dark"] #theme_container .svb-toc .svb-toc-item {
+    color: var(--ork-text-secondary);
+}
+
+html[data-theme="dark"] #theme_container .svb-toc .svb-toc-item:hover {
+    background: var(--ork-surface-hover);
+    color: var(--ork-text);
+}
+
+html[data-theme="dark"] #theme_container .svb-toc .svb-toc-item[aria-current="true"] {
+    background: var(--sv-accent-soft);
+    border-left-color: var(--sv-accent);
+    color: var(--sv-accent);
+}
+
+html[data-theme="dark"] #theme_container .svb-toc .svb-toc-item.svb-toc-near { color: var(--ork-text); }
+
+/* --ork-surface-light, --ork-bg-secondary and --ork-card-bg all collapse onto
+   #2d3748 in dark mode, so the quote would vanish into the card it sits on.
+   --ork-surface-hover (#374151) is the one step lighter that still reads as
+   inset — the same tone reports.css gives the filter-card header. Confirmed
+   against computed styles, not by eye. */
+html[data-theme="dark"] .svb-consent-quote {
+    background: var(--ork-surface-hover);
+    border-left-color: var(--ork-border);
+}
+
+/* ── Print ────────────────────────────────────────────────────────────── */
+
+@media print {
+    .svb-page-actions,
+    .svb-move-btn,
+    .svb-grip,
+    .svb-page-handle,
+    .svb-addbtn,
+    .svb-addinline,
+    .svb-pagediv,
+    .svb-card-foot,
+    .svb-more,
+    .svb-settings,
+    .svb-toc,
+    .svb-modal,
+    .svb-viewseg,
+    .svb-overflow,
+    .svb-notice-close,
+    .svb-confirm { display: none !important; }
+
+    .svb-page, .svb-item { box-shadow: none; break-inside: avoid; }
+}
+
+/* Header actions: the .rp-btn-ghost sizing every survey .rp-* page needs is
+   declared once in survey.css, which this page also loads. */
+
+/* ------------------------------------------------ pairwise option entry */
+
+.svb-pw { display: flex; flex-direction: column; gap: 6px; }
+.svb-pw-lines { width: 100%; min-height: 96px; line-height: 1.5; box-sizing: border-box; }
+.svb-pw-foot { display: flex; align-items: flex-start; gap: 6px; }
+.svb-pw-readout { flex: 1 1 auto; margin: 0; }
+.svb-pw-warn {
+    margin: 0;
+    font-size: var(--ork-font-size-sm);
+    color: var(--sv-warn-text);
+}
+/* :not([hidden]) as at the top of this file: a bare display:flex would beat
+   the UA's [hidden] rule and draw an empty warning on every normal card. */
+.svb-pw-warn:not([hidden]) { display: flex; gap: 6px; align-items: baseline; }
+
+/* The (?) modal. Its h3s already drop orkui.css's pill box via .svb-modal-body h3. */
+.svb-pw-helpbody { display: flex; flex-direction: column; gap: 10px; font-size: var(--ork-font-size-base); line-height: 1.5; }
+.svb-pw-helpbody p { margin: 0; text-align: left; }
+.svb-pw-helpbody h3 { font-size: var(--ork-font-size-base); margin-top: 6px; }
+.svb-pw-tablewrap { overflow-x: auto; scrollbar-width: thin; }
+.svb-pw-bands { width: 100%; border-collapse: collapse; font-size: var(--ork-font-size-sm); font-variant-numeric: tabular-nums; }
+/* border: 0 first: .svb-modal-body th/td draw a full grid; this table keeps row rules only. */
+.svb-pw-bands th,
+.svb-pw-bands td { padding: 6px 8px; border: 0; border-bottom: 1px solid var(--sv-line-2); text-align: left; }
+/* Only the band ranges ("1,001–5,000") and the percentages may not break. The
+   column labels and the prose cell in the first body row wrap, so the table
+   reflows inside the 288px sheet instead of hiding its last column behind an
+   overlay scrollbar that paints nothing at rest. */
+.svb-pw-bands tbody th[scope="row"],
+.svb-pw-bands tbody td:not([colspan]) { white-space: nowrap; }
+.svb-pw-bands thead th { color: var(--sv-text-muted); font-weight: 600; }
+.svb-pw-bands tr.svb-pw-here > * { background: var(--sv-accent-soft); font-weight: 600; }
+.svb-pw-stages { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.svb-pw-stages li { display: flex; gap: 8px; align-items: baseline; }
+.svb-pw-swatch { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 3px; background: var(--sv-pw-0); transform: translateY(1px); }
+.svb-pw-stages li[data-level="1"] .svb-pw-swatch { background: var(--sv-pw-1); }
+.svb-pw-stages li[data-level="2"] .svb-pw-swatch { background: var(--sv-pw-2); }
+.svb-pw-stages li[data-level="3"] .svb-pw-swatch { background: var(--sv-pw-3); }
+.svb-pw-stages li[data-level="4"] .svb-pw-swatch { background: var(--sv-pw-4); }

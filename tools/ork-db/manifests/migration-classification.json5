@@ -90,6 +90,10 @@
     "2026-08-21-innodb-merge-tables.sql": { "class": "S", "render": "full", "notes": "Engine conversion so merge transactions actually roll back; idempotent ALTERs" },
     "2026-07-14-qualification-tests.sql": { "class": "S+RC", "render": "full", "notes": "Qualification test schema plus idempotent per-kingdom config defaults" },
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
-    "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" }
+    "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-09-09-survey-module.sql": { "class": "S", "render": "full", "notes": "Survey module tables; CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-09-10-survey-review-fixes.sql": { "class": "S", "render": "full", "notes": "Survey review fixes: activity log, start tracking, audience rules, image token; guarded partial-consent backfill (WHERE consent='partial' AND not already banded/scrubbed) folds tenure onto band floors and nulls duration/started_at, idempotent and a no-op on synthetic data, so it rides with the DDL as S" },
+    "2026-09-11-survey-sharing-credits.sql": { "class": "S", "render": "full", "notes": "Survey results sharing + attendance credits: results_share, response.park_id with a guarded full-consent backfill (WHERE park_id IS NULL), response.credit_notice (DDL only, default 0, no backfill), two credit tables, append-only entry_method ENUM ('survey'); idempotent" },
+    "2026-09-11-survey-pairwise.sql": { "class": "S", "render": "full", "notes": "Survey pairwise question type: adds 'pairwise' to ork_survey_question.type ENUM (DDL only, no data); idempotent" }
   }
 }
