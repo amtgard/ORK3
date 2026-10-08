@@ -95,3 +95,45 @@ docker exec ork3-php8-db mariadb-dump -uroot -proot ork > ork-backup.sql
 
 5. You should be able to connect to the running PHP server now and can access from local at: `http://localhost:19080/orkui/`
 
+**Logging in.** The redacted database contains no live sessions, so you log in
+normally with the test accounts set up for you. Whoever sent you the dump will
+have given you the password; one of the accounts is a full **ORK admin**, and
+from there you can grant yourself anything else you need. To see (or re-set)
+the accounts at any time:
+```
+docker exec -i ork3-php8-app php /var/www/ork.amtgard.com/db-migrations/dev-set-test-logins.php
+```
+It prints a table of Tier / Persona / Username and refuses to run against
+anything but the local container.
+
+## Producing a redacted database (maintainers)
+
+The redacted dump handed to new developers is built with `tools/dev-dump/`,
+which replaces doing it by hand. Run it against a **local** container only —
+it refuses anything whose name looks like production.
+
+```
+./tools/dev-dump/make-dev-dump.sh park                     # save your current local DB first
+./tools/dev-dump/make-dev-dump.sh load ~/Downloads/ork-YYYY-MM-DD-HH-MM.sql
+./tools/dev-dump/make-dev-dump.sh redact                   # applies redact.sql, then verifies
+./tools/dev-dump/make-dev-dump.sh logins                   # known passwords incl. an ORK admin
+./tools/dev-dump/make-dev-dump.sh export                   # the file you hand over
+./tools/dev-dump/make-dev-dump.sh restore ~/ork-db-snapshots/ork-local-....sql.gz
+```
+
+`logins` must run **before** `export`, or the dump ships with no way in.
+
+Snapshots of your real data go to `~/ork-db-snapshots`; the shareable dump goes
+to `~/ork-db-redacted`. Separate trees on purpose, so the file that must never
+leave the machine is never sitting next to the one being sent.
+
+What gets removed, and what deliberately does not, is documented at the top of
+`tools/dev-dump/redact.sql`. In short: names, emails and stored credentials go,
+along with the audit log and every **live** token — sessions, OAuth, attendance
+links and self-reg links, all of which authenticate against *production*.
+Usernames and free-text notes stay, which is a judgement call appropriate to a
+dump for someone getting started; revisit it if the audience changes.
+
+`verify` is read-only and can be run at any time; every count it prints must be
+zero. `export` additionally scans the finished file for email-shaped strings, so
+a mistake surfaces before the file reaches anyone.
