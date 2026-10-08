@@ -47,15 +47,7 @@ This runs the client *inside* the container, over a local socket, so you do **no
 
 The `-i` flag is required — it keeps stdin open so the file actually reaches the client.
 
-This will take a while. After it completes, run:
-```
-docker exec ork3-php8-db mariadb -uroot -proot -e "SET GLOBAL sql_mode = '';"
-```
-This is needed to allow the database to accept certain values sent by the PHP APIs. If you find that even though you are logged into the ORK as an admin you cannot change values locally, redo this step, log out and log back in.
-
-> **Note:** `SET GLOBAL sql_mode` does not survive a database restart. If you `docker-compose down` and back up, run it again.
-
-Finally, restart PHP so it picks up the imported schema (see *Restart PHP* below for why):
+This will take a while. After it completes, restart PHP so it picks up the imported schema (see *Restart PHP* below for why):
 ```
 docker restart ork3-php8-app
 ```
