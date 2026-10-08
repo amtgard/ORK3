@@ -52,7 +52,8 @@ interface.
 
 ```bash
 # from the instance; backup file however you get it there (scp via apps-aws)
-awk 'BEGIN{print "SET autocommit=0;"} {print} NR%100000==0{print "COMMIT;"} END{print "COMMIT;"}' seed-backup.sql \
+awk 'BEGIN{print "SET autocommit=0;"; n=0} {print; n++} \
+     n>=100000 && /;[ \t]*$/ {print "COMMIT;"; n=0} END{print "COMMIT;"}' seed-backup.sql \
   | sudo docker exec -i ork3-stage-db sh -c 'mariadb -u ork -p"$MARIADB_PASSWORD" ork'
 ```
 
@@ -61,7 +62,23 @@ one straight into `mariadb` commits (and fsyncs) every row — a prod-size seed
 took ~28× longer that way (measured 2026-08-24: ~26 KB/s vs ~726 KB/s, an
 overnight import vs ~40 minutes). Batching 100k rows per COMMIT is the fix;
 the cap keeps any one transaction from bloating the undo log on the 4 GB box.
-On a dump that already uses multi-row INSERTs the wrapper is harmless.
+
+**Only break on a statement boundary.** An earlier version of this note said
+the wrapper was "harmless" on a dump that already uses multi-row INSERTs. That
+is wrong, and it cost a restore on 2026-10-08. It is harmless only when
+statements are one per line — true of prod backups, which are written with
+`--skip-extended-insert` (~4,175 `INSERT` lines per 400 KB), but NOT of a dump
+taken with `mariadb-dump`'s defaults, where a single `INSERT` spans thousands
+of lines (~2 `INSERT` statements and ~5,928 continuation lines in the same
+span). Counting lines alone drops a `COMMIT;` inside a `VALUES` list:
+
+```
+ERROR 1064 (42000) at line 90460: ... check the manual ... near 'COMMIT'
+```
+
+The command above counts lines but only emits the `COMMIT` once the current
+line ends in `;`. That form is correct for both dump shapes — verified across a full 8.5M-line
+dump: 190 COMMITs, every one at a statement boundary. `tools/dev-dump/` uses it.
 
 Optional extra headroom for the duration of an import (both revert on
 container restart; nothing pins them):
