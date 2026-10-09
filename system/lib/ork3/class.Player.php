@@ -4048,6 +4048,68 @@ class Player extends Ork3
         }
     }
 
+    /**
+     * Look up a player's current standing in a ladder award so callers (e.g. the
+     * tournament standings "Recommend" modal) can pre-select the nearest rank up.
+     * Params: MundaneId, AwardId (the global ladder award_id, e.g. 27 Warrior / 33 Griffin).
+     * Returns: CurrentRank, NextRank (capped at MaxRank), MaxRank, ToppedOut, LadderName.
+     */
+    public function GetLadderStanding($request) {
+        $mundane_id = (int)($request['MundaneId'] ?? 0);
+        $award_id   = (int)($request['AwardId'] ?? 0);
+        if (!valid_id($mundane_id) || !valid_id($award_id)) {
+            return InvalidParameter('MundaneId and AwardId are required.');
+        }
+
+        $ladderMap = Award::GetLadderMasterMap();
+        if (!isset($ladderMap[$award_id])) {
+            // Not a recognized ladder award — no rank guidance available.
+            return Success([
+                'IsLadder'    => false,
+                'CurrentRank' => 0,
+                'NextRank'    => 1,
+                'MaxRank'     => 0,
+                'ToppedOut'   => false,
+                'LadderName'  => '',
+            ]);
+        }
+
+        $info    = $ladderMap[$award_id];
+        $maxRank = (int)$info['MaxRank'];
+
+        // Master peerage already held => topped out.
+        $masterIdsCsv = implode(',', array_map('intval', (array)$info['MasterAwardIds']));
+        $this->db->clear();
+        $masterHeld = $this->db->query(
+            "select a.awards_id from " . DB_PREFIX . "awards a
+             where a.mundane_id = {$mundane_id} and a.award_id in ({$masterIdsCsv}) limit 1"
+        );
+        $hasMaster = ($masterHeld !== false && $masterHeld->size() > 0);
+
+        // Current highest rank held in this ladder.
+        $currentRank = 0;
+        $this->db->clear();
+        $topResult = $this->db->query(
+            "select max(a.rank) as max_rank from " . DB_PREFIX . "awards a
+             where a.mundane_id = {$mundane_id} and a.award_id = {$award_id}"
+        );
+        if ($topResult !== false && $topResult->size() > 0 && $topResult->next()) {
+            $currentRank = (int)$topResult->max_rank;
+        }
+
+        $toppedOut = $hasMaster || $currentRank >= $maxRank;
+        $nextRank  = $toppedOut ? $maxRank : min($currentRank + 1, $maxRank);
+
+        return Success([
+            'IsLadder'    => true,
+            'CurrentRank' => $currentRank,
+            'NextRank'    => $nextRank,
+            'MaxRank'     => $maxRank,
+            'ToppedOut'   => $toppedOut,
+            'LadderName'  => $info['LadderName'],
+        ]);
+    }
+
     public function AddAwardRecommendation($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {

@@ -34,7 +34,7 @@
 				</ul>
 		</li>
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
-		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
+		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>'>Create Tournament</a></li>	</ul>
 </div>
 <?php if (!empty($CanEditKingdomReports)) : ?>
 <div class='info-container'>

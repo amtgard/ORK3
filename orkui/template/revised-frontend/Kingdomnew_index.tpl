@@ -6,7 +6,7 @@
 	$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
 	$parkCounts       = []; // loaded via AJAX (park_averages_json)
 	$eventList        = is_array($event_summary) ? $event_summary : array();
-	// [TOURNAMENTS HIDDEN] $tournamentList = [];
+	$tournamentList   = is_array($kingdom_tournaments['Tournaments']) ? $kingdom_tournaments['Tournaments'] : array();
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
 	$prinzParks       = is_array($principality_parks ?? null) ? $principality_parks : [];
 	$prinzMapParks    = is_array($prinz_map_parks ?? null) ? $prinz_map_parks : [];
@@ -763,7 +763,44 @@
 				</div>
 				</div><!-- /kn-events-list-view -->
 
-				<?php /* [TOURNAMENTS HIDDEN] */ ?>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid var(--ork-border,#e2e8f0);padding-top:16px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--ork-text-secondary,#4a5568);"><i class="fas fa-trophy" style="margin-right:6px;color:var(--ork-text-muted,#a0aec0)"></i>Tournaments</h4>
+					<?php if ($CanManageKingdom): ?>
+					<button onclick="knOpenAddTournamentModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
+						<i class="fas fa-plus"></i> Add Tournament
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php if (count($tournamentList) > 0): ?>
+					<table class="kn-table" id="kn-tournaments-table">
+						<thead>
+							<tr>
+								<th>Date</th>
+								<th>Tournament</th>
+								<th>Park</th>
+								<th>Event</th>
+								<th>Brackets</th>
+								<th>Participants</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($tournamentList as $t): ?>
+								<tr class="kn-row-link" data-type="<?= (int)($t['ParkId'] ?? 0) > 0 ? 'park-event' : 'kingdom-event' ?>" onclick="window.location.href='<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>'">
+									<td class="kn-col-nowrap" data-order="<?= (int)strtotime($t['DateTime']) ?>"><?= date("M j, Y", strtotime($t['DateTime'])) ?></td>
+									<td>
+										<a href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a>
+									</td>
+									<td><?= htmlspecialchars($t['ParkName']) ?></td>
+									<td><?= htmlspecialchars($t['EventName']) ?></td>
+									<td><?= $t['BracketCount'] ?></td>
+									<td><?= $t['ParticipantCount'] ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else: ?>
+					<div class="kn-empty">No upcoming tournaments</div>
+				<?php endif; ?>
 			</div>
 
 
@@ -848,6 +885,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
 											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/tournaments&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-trophy"></i> Tournament Report</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -2467,7 +2505,39 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 </div>
 
 
-<!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+<div id="kn-addtournament-overlay">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#276749"></i>Add Tournament</h3>
+			<button class="kn-modal-close-btn" id="kn-addtournament-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-addtournament-feedback" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;"></div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-name">Name <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-addtournament-name" placeholder="e.g. Bear Pit" maxlength="128" />
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-addtournament-when" autocomplete="off" placeholder="Select date…" />
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-desc">Description <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<textarea id="kn-addtournament-desc" rows="3" placeholder="Brief description..."></textarea>
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-url">URL <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<input type="url" id="kn-addtournament-url" placeholder="https://..." maxlength="255" />
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-addtournament-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-addtournament-submit">
+				<i class="fas fa-plus"></i> Create Tournament
+			</button>
+		</div>
+	</div>
+</div>
 
 <!-- QR Code Modal -->
 <div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top)" onclick="if(event.target===this)knCloseQrModal()">

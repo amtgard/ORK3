@@ -169,6 +169,142 @@ class Controller_Reports extends Controller
         $this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
     }
 
+    // Resolve the Kingdom/Park scope + date window shared by the full report and its
+    // lazy per-tab section loads. Enforces the same admin-only rule for an unscoped
+    // report and returns [type, id, scope-array, dateFrom, dateTo, isAllTime].
+    private function _tournament_report_scope()
+    {
+        $type = '';
+        $id = 0;
+        if (isset($this->request->KingdomId)) {
+            $type = 'Kingdom';
+            $id = (int)$this->request->KingdomId;
+        }
+        if (isset($this->request->ParkId)) {
+            $type = 'Park';
+            $id = (int)$this->request->ParkId;
+        }
+
+        // Require a Kingdom or Park scope: an unscoped/AllTime report fans placement
+        // resolution across every bracket in the program and is admin-only.
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        if ($type === '' && !$_isOrkAdmin) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
+        $dateFrom = isset($this->request->DateFrom) ? preg_replace('/[^0-9-]/', '', $this->request->DateFrom) : '';
+        $dateTo   = isset($this->request->DateTo) ? preg_replace('/[^0-9-]/', '', $this->request->DateTo) : '';
+        // Default to the last six months on a fresh load, open-ended so upcoming
+        // tournaments are included. An explicit AllTime flag (set by the "All time"
+        // link) opts out so the full history can be shown.
+        $isAllTime = isset($this->request->AllTime);
+        if (!$isAllTime && $dateFrom === '' && $dateTo === '') {
+            $dateFrom = date('Y-m-d', strtotime('-6 months'));
+        }
+
+        $scope = [
+            'KingdomId' => $type === 'Kingdom' ? $id : 0,
+            'ParkId'    => $type === 'Park' ? $id : 0,
+            'DateFrom'  => $dateFrom,
+            'DateTo'    => $dateTo,
+        ];
+        return [$type, $id, $scope, $dateFrom, $dateTo, $isAllTime];
+    }
+
+    public function tournaments($params = null)
+    {
+        $this->data['page_title'] = "Tournament Report";
+        [$type, $id, $scope, $dateFrom, $dateTo, $isAllTime] = $this->_tournament_report_scope();
+        if ($type === 'Kingdom') {
+            $this->data['page_title'] = "Kingdom Tournament Report";
+        } elseif ($type === 'Park') {
+            $this->data['page_title'] = "Park Tournament Report";
+        }
+
+        $this->data['ScopeType']    = strtolower($type);
+        $this->data['ScopeId']      = $id;
+        // Scope chip (name + profile link) for the rp- report header.
+        $scopeName = '';
+        $scopeIcon = 'fa-globe';
+        $scopeLink = '';
+        if ($type === 'Kingdom') {
+            $this->load_model('Kingdom');
+            $scopeName = $this->Kingdom->get_kingdom_name($id);
+            $scopeIcon = 'fa-flag';
+            $scopeLink = UIR . 'Kingdom/profile/' . $id;
+        } elseif ($type === 'Park') {
+            $this->load_model('Park');
+            $scopeName = $this->Park->get_park_name($id);
+            $scopeIcon = 'fa-tree';
+            $scopeLink = UIR . 'Park/profile/' . $id;
+        }
+        $this->data['ScopeName'] = $scopeName;
+        $this->data['ScopeIcon'] = $scopeIcon;
+        $this->data['ScopeLink'] = $scopeLink;
+        $this->data['DateFrom']  = $dateFrom;
+        $this->data['DateTo']    = $dateTo;
+        $this->data['IsAllTime'] = $isAllTime;
+        // Only the Overview tab renders on first paint. The Tournaments / Fighters /
+        // Awards / Parks / Team-Champions bodies load lazily via tournament_section()
+        // on first activation, so their (heavier) queries are deferred until requested.
+        $this->data['ProgramStats'] = $this->Reports->tournament_program_stats($scope);
+        // Team-Champions tab visibility is part of first paint, so probe once here; the
+        // result is GhettoCache-memoized, so the lazy body fetch reuses it (no recompute).
+        $this->data['HasTeamChampions'] = !empty($this->Reports->team_champions($scope)['Detail'] ?? []);
+        $this->template = 'Reports_tournaments.tpl';
+    }
+
+    // Renders ONE tab body of the tournament report for lazy client-side loading. Reuses
+    // the exact TournamentReport methods + partial as the full page so output is identical.
+    public function tournament_section($params = null)
+    {
+        [$type, $id, $scope, $dateFrom, $dateTo, $isAllTime] = $this->_tournament_report_scope();
+        $section = isset($this->request->Section) ? preg_replace('/[^a-z]/', '', strtolower($this->request->Section)) : '';
+
+        $this->data['ScopeType'] = strtolower($type);
+        $this->data['ScopeId']   = $id;
+        $this->data['DateFrom']  = $dateFrom;
+        $this->data['DateTo']    = $dateTo;
+
+        switch ($section) {
+            case 'overview':
+                $this->data['ProgramStats'] = $this->Reports->tournament_program_stats($scope);
+                break;
+            case 'tournaments':
+                $this->data['TournamentList'] = $this->Reports->tournament_list($scope);
+                break;
+            case 'fighters':
+                $this->data['Leaderboard'] = $this->Reports->tournament_fighter_leaderboard($scope);
+                break;
+            case 'awards':
+                // Reuse the leaderboard rather than letting the candidates method recompute it.
+                $board = $this->Reports->tournament_fighter_leaderboard($scope);
+                $this->data['AwardCandidates'] = $this->Reports->tournament_award_candidates($scope, $board);
+                break;
+            case 'parks':
+                $this->data['ParkComparison'] = $type === 'Kingdom'
+                    ? $this->Reports->tournament_park_comparison(['KingdomId' => $id, 'DateFrom' => $dateFrom, 'DateTo' => $dateTo])
+                    : ['Parks' => []];
+                break;
+            case 'teams':
+                $this->data['TeamChampions'] = $this->Reports->team_champions($scope)['Detail'] ?? [];
+                break;
+            default:
+                header('HTTP/1.1 400 Bad Request');
+                exit;
+        }
+
+        $this->data['Section'] = $section;
+        $partial = DIR_TEMPLATE . $this->settings->theme . '/Reports_tournaments_section.tpl';
+        ob_start();
+        extract($this->data);
+        include $partial;
+        echo ob_get_clean();
+        exit;
+    }
+
     public function custom_awards($params = null)
     {
         $this->data['page_title'] = "Custom Awards";

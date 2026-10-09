@@ -435,13 +435,16 @@ class Controller_KingdomAjax extends Controller
             $this->load_model('Player');
             $mundane_id = (int)($_POST['MundaneId']       ?? 0);
             $award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
+            // Global award id (e.g. the tournament Recommend modal): the model resolves
+            // it to the recipient's own kingdom award, as Player/profile/addrecommendation does.
+            $global_award_id = (int)($_POST['AwardId'] ?? 0);
             $rank       = (int)($_POST['Rank']            ?? 0);
             $reason     = trim($_POST['Reason']           ?? '');
             if (!valid_id($mundane_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
                 exit;
             }
-            if (!valid_id($award_id)) {
+            if (!valid_id($award_id) && !valid_id($global_award_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
                 exit;
             }
@@ -452,6 +455,7 @@ class Controller_KingdomAjax extends Controller
             $r = $this->Player->add_player_recommendation([
                 'Token'          => $this->session->token,
                 'MundaneId'      => $mundane_id,
+                'AwardId'        => valid_id($global_award_id) ? $global_award_id : 0,
                 'KingdomAwardId' => $award_id,
                 'Rank'           => $rank > 0 ? $rank : null,
                 'GivenById'      => $this->session->user_id,
@@ -542,7 +546,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo (!isset($r['Status']) || $r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (trim((string)($r['Detail'] ?? '')) !== '' ? ': ' . $r['Detail'] : '')]);
 
         } elseif ($action === 'deletetournament') {
             $this->load_model('Tournament');
@@ -557,7 +561,7 @@ class Controller_KingdomAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (trim((string)($r['Detail'] ?? '')) !== '' ? ': ' . $r['Detail'] : '')]);
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;
@@ -729,8 +733,9 @@ class Controller_KingdomAjax extends Controller
         }
 
         $q                = trim($_GET['q']               ?? '');
-        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
+        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all' | 'tiered'
         $park_id          = (int)($_GET['park_id']        ?? 0);
+        $tier_park        = (int)($_GET['ParkId']         ?? 0); // tiered-scope park ranking
         $include_inactive  = !empty($_GET['include_inactive']);
         $include_suspended = !empty($_GET['include_suspended']);
         if (strlen($q) < 2) {
@@ -743,6 +748,10 @@ class Controller_KingdomAjax extends Controller
             $scopeKey = 'kingdom_exclude';
         } elseif ($scope === 'all') {
             $scopeKey = 'kingdom_all';
+        } elseif ($scope === 'tiered') {
+            // Non-exclusionary: include every kingdom, but rank by proximity to the
+            // event (same-park first when supplied, then same-kingdom, then everyone).
+            $scopeKey = $tier_park > 0 ? 'park_all' : 'kingdom_all';
         }
 
         $this->load_model('Search');
@@ -750,6 +759,8 @@ class Controller_KingdomAjax extends Controller
             'Query'            => $q,
             'Scope'            => $scopeKey,
             'KingdomId'        => $kingdom_id,
+            'ParkId'           => $tier_park,
+            'Prioritize'       => ($scope === 'tiered' && $tier_park > 0),
             'ScopeParkId'      => $park_id,
             'IncludeInactive'  => $include_inactive,
             'IncludeSuspended' => $include_suspended,

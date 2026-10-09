@@ -434,7 +434,7 @@ class Controller_ParkAjax extends Controller
             ]);
             echo (!isset($r['Status']) || $r['Status'] == 0)
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (trim((string)($r['Detail'] ?? '')) !== '' ? ': ' . $r['Detail'] : '')]);
 
         } elseif ($action === 'selfreg_link') {
             $this->load_model('Player');

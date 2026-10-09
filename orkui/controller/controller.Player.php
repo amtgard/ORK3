@@ -294,6 +294,7 @@ class Controller_Player extends Controller
         $this->load_model('Unit');
         $this->load_model('Kingdom');
         $this->load_model('Event');
+        $this->load_model('Tournament');
         $action    = $params[1] ?? '';
         $roastbeef = $params[2] ?? '';
         // Missing row → bail rather than render a mostly-blank profile with
@@ -362,6 +363,7 @@ class Controller_Player extends Controller
                         $r = $this->Player->add_player_recommendation([
                             'Token'          => $this->session->token,
                             'MundaneId'      => $id,
+                            'AwardId'        => $this->request->Player_profile->AwardId,
                             'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
@@ -516,6 +518,7 @@ class Controller_Player extends Controller
         $this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
         $this->data['IsOwnProfile']    = $uid === (int)$id;
         $this->data['Player']['ParkName'] = $this->session->park_name;
+        $this->data['PlayerTournaments'] = $this->Tournament->get_player_history((int)$id);
 
 
         // Beltline peers, associates, and title list (domain aggregate)

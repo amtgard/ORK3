@@ -29,7 +29,7 @@
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
 	$eventList      = (array)($event_summary              ?? []);
-	// [TOURNAMENTS HIDDEN] $tournamentList = [];
+	$tournamentList = $park_tournaments['Tournaments']    ?? [];
 
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
@@ -979,7 +979,36 @@
 				<?php endif; ?>
 				</div><!-- /pk-events-list-view -->
 
-				<?php /* [TOURNAMENTS HIDDEN] */ ?>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid var(--ork-border,#e2e8f0);padding-top:16px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:var(--ork-text-secondary,#4a5568);"><i class="fas fa-trophy" style="margin-right:6px;color:var(--ork-text-muted,#a0aec0)"></i>Tournaments</h4>
+					<?php if ($CanManagePark): ?>
+					<button onclick="pkOpenAddTournamentModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
+						<i class="fas fa-plus"></i> Add Tournament
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php if (count($tournamentList) > 0): ?>
+					<table class="pk-table pk-tournaments-dt" id="pk-tournaments-table">
+						<thead>
+							<tr>
+								<th>Tournament</th>
+								<th>Event</th>
+								<th>Date</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($tournamentList as $t): ?>
+							<tr onclick='window.location.href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"'>
+								<td><a href="<?= UIR ?>Tournament/profile/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a></td>
+								<td><?= htmlspecialchars($t['EventName']) ?></td>
+								<td class="pk-date-col" data-order="<?= (int)strtotime($t['DateTime']) ?>"><?= date('M j, Y', strtotime($t['DateTime'])) ?></td>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else: ?>
+					<div class="pk-empty">No upcoming tournaments</div>
+				<?php endif; ?>
 			</div>
 
 
@@ -1246,6 +1275,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Park&id=<?= $park_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
+							<li><a href="<?= UIR ?>Reports/tournaments&ParkId=<?= $park_id ?>"><i class="fas fa-trophy"></i> Tournament Report</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1826,7 +1856,7 @@ var PkBannerConfig = {
 				<div class="pk-att-section-label">
 					<?php // The ORK now loads Font Awesome 7, where fa-tasks is kept as an
 					      // alias of fa-list-check, so this name still resolves. ?>
-					<i class="fas fa-tasks" style="margin-right:6px;color:#a0aec0"></i>Attendance
+					<i class="fas fa-tasks" style="margin-right:6px;color:var(--ork-text-muted,#a0aec0)"></i>Attendance
 					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
 				</div>
 				<div id="pk-att-entered-empty" class="pk-att-qa-empty">No entries yet for this date.</div>
@@ -1910,9 +1940,13 @@ var PkBannerConfig = {
 	</div>
 </div>
 
-<?php if ($CanAdminPark ?? false): ?>
+<?php if (!empty($CanManagePark)): ?>
+<?php /* Flatpickr: event modal (CanAdminPark) + Add Tournament date (CanManagePark, a superset) */ ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<?php endif; ?>
+
+<?php if ($CanAdminPark ?? false): ?>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
@@ -2260,6 +2294,10 @@ tr:hover .pk-copy-link { opacity: 1; }
 @keyframes pkCopiedFade {
 	0%,70% { opacity: 1; } 100% { opacity: 0; }
 }
+/* Tournaments list: real row links (keyboard / middle-click), styled like the Kingdom table */
+#pk-tournaments-table a { color: var(--pk-accent-mid, #0e7490); text-decoration: none; }
+#pk-tournaments-table a:hover { text-decoration: underline; }
+html[data-theme="dark"] #pk-tournaments-table a { color: var(--ork-link-bright); }
 </style>
 
 <?php if ($CanAdminPark ?? false): ?>
@@ -3088,8 +3126,40 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 </div>
 
 <?php endif; ?>
-<!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<div id="pk-addtournament-overlay">
+	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#276749"></i>Add Tournament</h3>
+			<button class="pk-modal-close-btn" id="pk-addtournament-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-addtournament-feedback" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;"></div>
+			<div class="pk-addday-field">
+				<label for="pk-addtournament-name">Name <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-addtournament-name" placeholder="e.g. Bear Pit" maxlength="128" />
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-addtournament-when" autocomplete="off" placeholder="Select date…" />
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-addtournament-desc">Description <span style="color:var(--ork-text-muted,#a0aec0);font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<textarea id="pk-addtournament-desc" rows="3" placeholder="Brief description..."></textarea>
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-addtournament-url">URL <span style="color:var(--ork-text-muted,#a0aec0);font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<input type="url" id="pk-addtournament-url" placeholder="https://..." maxlength="255" />
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-ghost" id="pk-addtournament-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-addtournament-submit">
+				<i class="fas fa-plus"></i> Create Tournament
+			</button>
+		</div>
+	</div>
+</div>
 <?php if ($CanAdminPark ?? false): ?>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <?php endif; ?>

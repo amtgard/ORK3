@@ -47,6 +47,50 @@ class Ghettocache
         $this->memcache->delete("{$this->prefix}.$call.$key");
     }
 
+    /**
+     * Raw prefixed get for simple scalar counters (e.g. the tournament seq
+     * cursor). Returns the stored value, or false on miss. Distinct from get(),
+     * which is a memoization wrapper with inverted-lifetime bookkeeping.
+     */
+    public function counterGet($name)
+    {
+        return $this->memcache->get("{$this->prefix}.counter.$name");
+    }
+
+    /** Raw prefixed set for simple scalar counters, with explicit TTL seconds. */
+    public function counterSet($name, $value, $ttl)
+    {
+        $this->memcache->set("{$this->prefix}.counter.$name", $value, $ttl);
+        return $value;
+    }
+
+    /**
+     * Atomically bump a scalar counter and return the new value.
+     *
+     * Uses Memcached::increment(), which is atomic server-side, so concurrent
+     * callers (e.g. two reeves bumping the tournament realtime seq at once)
+     * never lose an update. On a cold cache the key does not yet exist, so we
+     * seed it with add() (which fails harmlessly if a racing caller already
+     * seeded it) and then increment again to fold both bumps in. TTL is applied
+     * on the seeding add(); Memcached::increment() cannot set a TTL, so the
+     * lifetime is refreshed whenever the key is (re)seeded.
+     */
+    public function counterIncrement($name, $ttl)
+    {
+        $key = "{$this->prefix}.counter.$name";
+        $new = $this->memcache->increment($key, 1);
+        if ($new === false) {
+            // Key missing (cold start or expired): seed at 1, then account for
+            // any concurrent increment that lost the seeding race.
+            if ($this->memcache->add($key, 1, $ttl)) {
+                $new = 1;
+            } else {
+                $new = $this->memcache->increment($key, 1);
+            }
+        }
+        return $new;
+    }
+
     public function key($request)
     {
         if (!is_array($request)) {

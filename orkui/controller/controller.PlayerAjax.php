@@ -625,6 +625,32 @@ class Controller_PlayerAjax extends Controller
         exit;
     }
 
+    // Returns a player's current standing in a ladder award (current rank, suggested
+    // next rank, max rank, topped-out flag). Used by the tournament standings Recommend
+    // modal to pre-select the nearest rank up. GET ?MundaneId=&AwardId=
+    public function ladderstanding($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $mundane_id = (int)($_GET['MundaneId'] ?? 0);
+        $award_id   = (int)($_GET['AwardId'] ?? 0);
+        if (!valid_id($mundane_id) || !valid_id($award_id)) {
+            echo json_encode(['status' => 1, 'error' => 'MundaneId and AwardId are required']);
+            exit;
+        }
+        $this->load_model('Player');
+        $r = $this->Player->get_ladder_standing(['MundaneId' => $mundane_id, 'AwardId' => $award_id]);
+        if ((int)($r['Status'] ?? 1) === 0 && is_array($r['Detail'] ?? null)) {
+            echo json_encode(array_merge(['status' => 0], $r['Detail']));
+        } else {
+            echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? 'Lookup failed']);
+        }
+        exit;
+    }
+
     public function recommendations($p = null)
     {
         header('Content-Type: application/json');

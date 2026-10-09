@@ -165,9 +165,8 @@
 		}
 	}
 
-	// [TOURNAMENTS HIDDEN]
-	$tournaments  = [];
-	$tourneyCount = 0;
+	$tournaments    = $Tournaments['Tournaments'] ?? [];
+	$tourneyCount   = count($tournaments);
 	$attendanceList = $AttendanceReport['Attendance'] ?? [];
 	$checkedInIds   = array_flip(array_column($attendanceList, 'MundaneId'));
 	$attendanceForm = $Attendance_event ?? [];
@@ -1136,7 +1135,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<i class="fas fa-clipboard-list"></i><span class="ev-tab-label"> Attendance</span>
 					<span class="ev-tab-count">(<?= $attendeeCount ?>)</span>
 				</li>
-				<?php /* [TOURNAMENTS HIDDEN] tab */ ?>
+				<li data-tab="ev-tab-tournaments" onclick="evShowTab(this,'ev-tab-tournaments')">
+					<i class="fas fa-trophy"></i><span class="ev-tab-label"> Tournaments</span>
+					<span class="ev-tab-count">(<?= $tourneyCount ?>)</span>
+				</li>
 				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
 					<i class="fas fa-calendar-check"></i><span class="ev-tab-label"> RSVPs</span>
 					<span class="ev-tab-count">(<?= $rsvpCount ?>)</span>
@@ -1882,7 +1884,36 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 
 			</div><!-- /.ev-tab-panel -->
 
-			<?php /* [TOURNAMENTS HIDDEN] tab panel */ ?>
+			<?php // ---- Tournaments Tab ---- ?>
+			<div class="ev-tab-panel" id="ev-tab-tournaments">
+				<?php if ($tourneyCount > 0): ?>
+				<table class="ev-table" id="ev-tournaments-table">
+					<thead>
+						<tr>
+							<th>Tournament</th>
+							<th>Date</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($tournaments as $t): ?>
+						<tr>
+							<td>
+								<a href="<?= UIR ?>Tournament/profile/<?= (int)$t['TournamentId'] ?>">
+									<?= htmlspecialchars($t['Name'] ?? 'Tournament') ?>
+								</a>
+							</td>
+							<?php $_tnTs = !empty($t['DateTime']) ? strtotime($t['DateTime']) : false; ?>
+							<td data-order="<?= (int)$_tnTs ?>"><?= $_tnTs ? date('M j, Y', $_tnTs) : '—' ?></td>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<?php else: ?>
+				<div class="ev-empty">
+					<i class="fas fa-trophy" style="margin-right:6px"></i>No tournaments recorded
+				</div>
+				<?php endif; ?>
+			</div><!-- /.ev-tab-panel -->
 
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
@@ -2846,6 +2877,7 @@ var EvConfig = {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 <style>
 html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button,
 html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button:hover {
@@ -3073,6 +3105,15 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		});
 		window._evAttDt = _evAttDt;
 	}
+	// Tournaments tab → shared ORK DataTables init (same as the Kingdom/Park tournament tables).
+	var _evTnDt = null;
+	function initEvTnDt() {
+		if (_evTnDt || !$.fn || !$.fn.DataTable || typeof window.orkInitDataTable !== 'function') return;
+		_evTnDt = window.orkInitDataTable($('#ev-tournaments-table'), {
+			order: [[1, 'desc']],
+			csvName: 'Event Tournaments'
+		});
+	}
 	// Keep the address bar in sync with the visible tab so a copied URL reopens here.
 	// The schedule tab contributes its own view/day suffix via evScheduleHashSuffix.
 	window.evWriteHash = function(tabId) {
@@ -3088,6 +3129,9 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		if (tabId === 'ev-tab-attendance') {
 			setTimeout(function() { initEvAttDt(); }, 0);
 		}
+		if (tabId === 'ev-tab-tournaments') {
+			setTimeout(function() { initEvTnDt(); }, 0);
+		}
 		if (tabId === 'ev-tab-rsvp') {
 			evPulseRsvpCredits();
 		}
@@ -3096,6 +3140,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 	// Init now if the attendance tab is already visible on page load
 	$(function() {
 		if (document.querySelector('#ev-tab-attendance.ev-tab-visible')) initEvAttDt();
+		if (document.querySelector('#ev-tab-tournaments.ev-tab-visible')) initEvTnDt();
 	});
 	window.evInitAttDt = initEvAttDt;
 })();
