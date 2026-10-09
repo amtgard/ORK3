@@ -126,6 +126,26 @@ The ORK caches each table's schema (`DESCRIBE` / `SHOW KEYS`) in APCu for 24 hou
 
 Do this after importing a database as well as after a migration.
 
+### Blank API keys, and what they turn off
+
+`config.dev.php` is committed with every external service key empty, on purpose. Nothing in the [Quick start](#quick-start) needs one — but a few features then look broken when they are only unconfigured:
+
+| key | what stops working |
+|---|---|
+| `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_ACCESS_API_KEY` | Geocoding a park's address into coordinates. Parks that already have coordinates still map fine. |
+| `CARTO_API_KEY` | Basemap tiles on the Weather and Live Attendance maps. The map frame draws; the tiles stay blank. |
+| `AMAZON_SES_HOST`, `AMAZON_SES_USERNAME`, `AMAZON_SES_PASSWORD` | Password reset. It refuses with "outbound mail is not configured" rather than resetting a password nobody can receive. |
+| `SENDGRID_API_KEY` | Sending the weekly recap. |
+| `BEHOLD_KEY` | The social media feed. |
+| `CF_API_TOKEN`, `CF_ZONE_ID` | The Cloudflare figures in the weekly recap and on Platform Trends. Those sections are simply omitted. |
+| `GA4_SA_KEY_PATH` | Human-visitor counts in the recap. Also omitted. |
+
+Weather needs no key at all — it comes from [Open-Meteo](https://open-meteo.com/), which is free and unauthenticated.
+
+**Amtgard single sign-on does not work locally.** `IDP_API_URL` points at `host.docker.internal:37080`, an identity provider you almost certainly aren't running, so the "log in with Amtgard" button will fail. Ordinary username and password login doesn't touch the IDP and works normally — which is what the credentials you were given are for.
+
+If you do need a real key locally, there is no separate override file: edit `config.dev.php`, which **is tracked by git**, so take care not to commit it. Two of them can come from the environment instead, which avoids that — `CF_API_TOKEN` and `GA4_SA_KEY_PATH` fall back to `getenv()`, so you can pass them to the container with `-e`.
+
 ### Starting over with a clean database
 
 If you're re-importing — refreshing from a newer dump, say — drop and recreate first so the new data isn't merged into the old:
