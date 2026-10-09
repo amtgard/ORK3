@@ -6115,6 +6115,394 @@ class Report extends Ork3
             ),
         );
 
+        // ====================================================================
+        // RELEASE 3.5.6 — Crown  (Court Planner + Recommendations workflow)
+        // ====================================================================
+        // Every Crown table/column below is new this release, so these are pure
+        // post-launch adoption counts. A before/after activity-impact pass is
+        // deferred for the same reason as Rose: with ~0 days of "after" window
+        // the comparison would be noise, not signal.
+        //
+        // ork_court has no creation timestamp (only `modified`), so nothing here
+        // is windowed by when a court was made. The one time axis available is
+        // court_date — the day the ceremony is held.
+        $activeParks = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}park` WHERE active = 'Active'"
+        );
+        // Share of an arbitrary base, for KPIs that are not player-scoped.
+        $share = function ($value, $of) {
+            if ($of <= 0) {
+                return null;
+            }
+            return round(($value / $of) * 100, 1);
+        };
+
+        // --- Court Planner ----------------------------------------------------
+        $courts        = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court`");
+        $courtsKingdom = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE park_id = 0");
+        $courtsPark    = $courts - $courtsKingdom;
+        // A park court carries its kingdom_id too, so this is "kingdoms where a
+        // court has been planned at either level". Joined to active kingdoms so
+        // the numerator can never exceed the denominator.
+        $courtKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT c.kingdom_id) AS c
+               FROM `{$p}court` c
+               JOIN `{$p}kingdom` k ON k.kingdom_id = c.kingdom_id AND k.active = 'Active'"
+        );
+        $courtParks = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT c.park_id) AS c
+               FROM `{$p}court` c
+               JOIN `{$p}park` pk ON pk.park_id = c.park_id AND pk.active = 'Active'
+              WHERE c.park_id > 0"
+        );
+        $courtAwards = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id"
+        );
+        $courtAwardAvg = ($courts > 0) ? round($courtAwards / $courts, 1) : 0;
+        $courtFromRec  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.recommendations_id IS NOT NULL AND ca.recommendations_id > 0"
+        );
+        $courtPlanners = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT created_by) AS c FROM `{$p}court` WHERE created_by > 0"
+        );
+        $courtStatusBreak = $this->_rfuBreakdown(
+            "SELECT CASE status
+                        WHEN 'draft'     THEN 'Planning (draft)'
+                        WHEN 'published' THEN 'Published'
+                        ELSE 'Complete'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}court`
+              GROUP BY status ORDER BY FIELD(status, 'draft', 'published', 'complete')"
+        );
+        $courtMonthBreak = $this->_rfuBreakdown(
+            "SELECT DATE_FORMAT(MIN(court_date), '%b %Y') AS k, COUNT(*) AS c
+               FROM `{$p}court`
+              WHERE court_date IS NOT NULL
+                AND court_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+              GROUP BY DATE_FORMAT(court_date, '%Y-%m') ORDER BY MIN(court_date) ASC"
+        );
+        $featCourtPlanner = array(
+            'key'         => 'court_planner',
+            'title'       => 'Court Planner',
+            'description' => 'Kingdom and park officers plan a court as an ordered list of awards — drawn from recommendations or added directly — before it is held.',
+            'kpis' => array(
+                $this->_rfuKpi('Courts planned', $courts, null, null, $courtsKingdom . ' kingdom courts, ' . $courtsPark . ' park courts — every court created, whatever its status'),
+                $this->_rfuKpi('Kingdoms with a court planned', $courtKingdoms, $activeKingdoms, $kPct($courtKingdoms), 'active kingdoms where at least one court has been planned, at kingdom or park level', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Parks with a court planned', $courtParks, $activeParks, $share($courtParks, $activeParks), 'active parks with at least one park-level court', null, null, 'of active parks'),
+                $this->_rfuKpi('Officers planning courts', $courtPlanners, null, null, 'distinct players who have created a court'),
+                $this->_rfuKpi('Awards placed on a court', $courtAwards, null, null, 'award lines across every court, in any state'),
+                $this->_rfuKpi('Average awards per court', $courtAwardAvg, null, null, 'award lines ÷ courts planned', null, null, null, null, 1),
+                $this->_rfuKpi('Court awards drawn from a recommendation', $courtFromRec, $courtAwards, $share($courtFromRec, $courtAwards), 'lines added from a pending recommendation rather than as a walk-on award or title', null, null, 'of court awards'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-court-status', 'bar', 'Courts by status', $courtStatusBreak, 'Courts'),
+                $this->_rfuChartFromBreakdown('rfu-court-month', 'column', 'Courts by court date (last 12 months and upcoming)', $courtMonthBreak, 'Courts'),
+            ),
+            'links' => array(
+                $this->_rfuKingdomTileFromSql(
+                    'Kingdoms with a court planned',
+                    "SELECT k.kingdom_id, k.name, COUNT(*) AS c
+                       FROM `{$p}court` c
+                       JOIN `{$p}kingdom` k ON k.kingdom_id = c.kingdom_id AND k.active = 'Active'
+                      GROUP BY k.kingdom_id, k.name ORDER BY k.name ASC",
+                    'court',
+                    'courts'
+                ),
+            ),
+        );
+
+        // --- Running & recording court ---------------------------------------
+        // Granting at court only STAGES a line; nothing reaches the permanent
+        // award record until the court is finalized. 'given' is therefore the
+        // honest "awarded through a court" count, and 'staged' is reported
+        // beside it rather than folded in.
+        $courtsComplete = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE status = 'complete'");
+        $courtsPrinted  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE last_printed_at IS NOT NULL");
+        $courtsOverdue  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}court`
+              WHERE status = 'published' AND court_date IS NOT NULL AND court_date < CURDATE()"
+        );
+        $awardsGiven    = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'given'"
+        );
+        $awardsStaged   = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'staged'"
+        );
+        $awardsSkipped  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'cancelled'"
+        );
+        $recordReminders = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'court_awaiting_record'"
+        );
+        $courtLineBreak = $this->_rfuBreakdown(
+            "SELECT CASE ca.status
+                        WHEN 'planned'   THEN 'Planned'
+                        WHEN 'announced' THEN 'Announced'
+                        WHEN 'staged'    THEN 'Granted, awaiting finalize'
+                        WHEN 'given'     THEN 'Given (on the record)'
+                        ELSE 'Skipped'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              GROUP BY ca.status
+              ORDER BY FIELD(ca.status, 'planned', 'announced', 'staged', 'given', 'cancelled')"
+        );
+        // Mode is chosen when a court is published, so drafts (which only carry
+        // the column default) are left out.
+        $courtModeBreak = $this->_rfuBreakdown(
+            "SELECT CASE mode WHEN 'plan' THEN 'Plan (record afterwards)' ELSE 'Run at Court (live)' END AS k,
+                    COUNT(*) AS c
+               FROM `{$p}court`
+              WHERE status IN ('published', 'complete')
+              GROUP BY mode ORDER BY c DESC"
+        );
+        $recentCourtRows = array();
+        $this->db->Clear();
+        $r = $this->db->query(
+            "SELECT court_id, name, court_date
+               FROM `{$p}court`
+              WHERE status = 'complete' AND name <> ''
+              ORDER BY court_date DESC, court_id DESC LIMIT 5"
+        );
+        if ($r !== false) {
+            while ($r->next()) {
+                $recentCourtRows[] = array(
+                    'label' => $r->name,
+                    'route' => 'Reports/court&CourtId=' . (int)$r->court_id,
+                    'sub'   => $this->_rfuNiceDate($r->court_date),
+                );
+            }
+        }
+        $featCourtRun = array(
+            'key'         => 'court_run',
+            'title'       => 'Running & Recording Court',
+            'description' => 'A published court is run live or recorded afterwards from the printed packet. Grants are staged at court and written to the permanent award record when the court is completed.',
+            'kpis' => array(
+                $this->_rfuKpi('Courts completed', $courtsComplete, $courts, $share($courtsComplete, $courts), 'finalized — every grant on them is on the permanent award record', null, null, 'of courts planned'),
+                $this->_rfuKpi('Awards granted through a court', $awardsGiven, null, null, 'court lines committed to a player\'s award record at Finalize; ' . $awardsStaged . ' more granted at court and awaiting Finalize'),
+                $this->_rfuKpi('Awards skipped at court', $awardsSkipped, $courtAwards, $share($awardsSkipped, $courtAwards), 'planned lines marked skipped rather than given', null, null, 'of court awards'),
+                $this->_rfuKpi('Court packets printed', $courtsPrinted, $courts, $share($courtsPrinted, $courts), 'courts whose Order of Court / Court Record / Prep Sheet packet has been printed at least once', null, null, 'of courts planned'),
+                $this->_rfuKpi('Published courts past their date', $courtsOverdue, null, null, 'published, dated before today and not yet completed — held but still waiting to be recorded'),
+                $this->_rfuKpi('Unrecorded-court reminders sent', $recordReminders, null, null, 'in-app nudges sent to a court\'s recorder when a published court has nothing recorded'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-court-lines', 'bar', 'Court award lines by status', $courtLineBreak, 'Award lines'),
+                $this->_rfuChartFromBreakdown('rfu-court-mode', 'pie', 'Published courts: run live vs record afterwards', $courtModeBreak),
+            ),
+            'links' => array(
+                $this->_rfuLinkTile('Most recent completed courts (public Court Report)', $recentCourtRows),
+            ),
+        );
+
+        // --- Scrolls, regalia & artisan credit --------------------------------
+        // Tracking status: 0 = not tracked, 1 = in progress, 2 = done.
+        $scrollTracked  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status > 0");
+        $scrollDone     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 2");
+        $regaliaTracked = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status > 0");
+        $regaliaDone    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 2");
+        $scrollMakers   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_maker_id > 0");
+        $regaliaMakers  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_maker_id > 0");
+        $artisanCredits = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award_artisan` WHERE mundane_id > 0");
+        $artisanPeople  = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT who) AS c FROM (
+                    SELECT scroll_maker_id AS who FROM `{$p}court_award` WHERE scroll_maker_id > 0
+                    UNION
+                    SELECT regalia_maker_id FROM `{$p}court_award` WHERE regalia_maker_id > 0
+                    UNION
+                    SELECT mundane_id FROM `{$p}court_award_artisan` WHERE mundane_id > 0
+                ) credited"
+        );
+        $featCourtArtisans = array(
+            'key'         => 'court_artisans',
+            'title'       => 'Scrolls, Regalia & Artisans',
+            'description' => 'Each court award can track whether its scroll and regalia are ready, and credit the people who made them — credit the herald reads out and the public Court Report prints.',
+            'kpis' => array(
+                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with a scroll maker credited', $scrollMakers, $courtAwards, $share($scrollMakers, $courtAwards), 'court awards naming the scribe who made the scroll', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with a regalia maker credited', $regaliaMakers, $courtAwards, $share($regaliaMakers, $courtAwards), 'court awards naming who made the belt, medallion or other regalia', null, null, 'of court awards'),
+                $this->_rfuKpi('Contributing artisan credits', $artisanCredits, null, null, 'additional "artisans to thank" entries beyond the scroll and regalia makers'),
+                $this->_rfuKpi('Artisans credited', $artisanPeople, $denom, $pct($artisanPeople), 'distinct players credited as a scroll maker, regalia maker or contributing artisan'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-court-tracking',
+                    'type'       => 'column',
+                    'title'      => 'Scroll and regalia readiness on tracked awards',
+                    'categories' => array('In progress', 'Done'),
+                    'series'     => array(
+                        array('name' => 'Scrolls', 'data' => array($scrollTracked - $scrollDone, $scrollDone)),
+                        array('name' => 'Regalia', 'data' => array($regaliaTracked - $regaliaDone, $regaliaDone)),
+                    ),
+                ),
+            ),
+        );
+
+        // --- Recommendations Manager workflow --------------------------------
+        // All four counts are of OPEN recommendations (deleted_at IS NULL): a
+        // recommendation that has since been granted or dismissed is resolved,
+        // so its flags no longer describe anything an officer is working with.
+        // The base is the same open-recommendation total the page header shows.
+        $recsPassed = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND passed_to_local = 1"
+        );
+        $recsPassedKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT m.kingdom_id) AS c
+               FROM `{$p}recommendations` recs
+               JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+               JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id AND k.active = 'Active'
+              WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1"
+        );
+        // snoozed_by_id is the mark that an officer snoozed a recommendation; only
+        // an explicit un-snooze clears it. A snooze stops hiding the recommendation
+        // on its own once the throne it was taken against changes hands, and a
+        // scope with a vacant throne stores no snoozed_monarch_id at all — so this
+        // is "open recommendations an officer has snoozed", lapsed ones included.
+        // A usage count, not a count of what is hidden right now.
+        $recsSnoozed = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND snoozed_by_id > 0"
+        );
+        $recsSnoozers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT snoozed_by_id) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND snoozed_by_id > 0"
+        );
+        // Skipped court lines do not count: the recommendation is no longer
+        // actually queued for a court.
+        $recsOnCourt = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT ca.recommendations_id) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}recommendations` recs
+                 ON recs.recommendations_id = ca.recommendations_id AND recs.deleted_at IS NULL
+              WHERE ca.status <> 'cancelled'"
+        );
+        $recsGrantedAtCourt = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'given'
+                AND ca.recommendations_id IS NOT NULL AND ca.recommendations_id > 0"
+        );
+        $recsAnonymous = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND mask_giver = 1"
+        );
+        $recsPassedByKingdom = $this->_rfuBreakdown(
+            "SELECT k.name AS k, COUNT(*) AS c
+               FROM `{$p}recommendations` recs
+               JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+               JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id
+              WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1
+              GROUP BY k.kingdom_id, k.name ORDER BY c DESC, k.name ASC LIMIT 10"
+        );
+        $featRecsWorkflow = array(
+            'key'         => 'recs_workflow',
+            'title'       => 'Recommendations Manager',
+            'description' => 'Officers work the recommendation queue from one page: pass a recommendation down to the recipient\'s park, snooze it until the next monarchy, put it on a court, or grant it directly.',
+            'kpis' => array(
+                $this->_rfuKpi('Recommendations passed to a local park', $recsPassed, $activeRecommendations, $share($recsPassed, $activeRecommendations), 'open recommendations a kingdom has approved and handed down for the recipient\'s park to give', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Kingdoms passing recommendations down', $recsPassedKingdoms, $activeKingdoms, $kPct($recsPassedKingdoms), 'active kingdoms with at least one open passed-down recommendation', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Recommendations snoozed', $recsSnoozed, $activeRecommendations, $share($recsSnoozed, $activeRecommendations), 'open recommendations an officer has set aside until the next monarchy — includes snoozes that have since lapsed with a change of throne', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Officers who have snoozed', $recsSnoozers, null, null, 'distinct officers behind those snoozes'),
+                $this->_rfuKpi('Recommendations on a court plan', $recsOnCourt, $activeRecommendations, $share($recsOnCourt, $activeRecommendations), 'open recommendations currently queued on a court (skipped lines excluded)', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Recommendations granted through a court', $recsGrantedAtCourt, $awardsGiven, $share($recsGrantedAtCourt, $awardsGiven), 'finalized court awards that began as a recommendation', null, null, 'of awards granted through a court'),
+                $this->_rfuKpi('Anonymous recommendations', $recsAnonymous, $activeRecommendations, $share($recsAnonymous, $activeRecommendations), 'open recommendations submitted with the recommender\'s name hidden', null, null, 'of open recommendations'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-recs-actions',
+                    'type'       => 'bar',
+                    'title'      => 'Open recommendations by workflow state',
+                    'categories' => array('Passed to local park', 'Snoozed', 'On a court plan', 'Anonymous'),
+                    'series'     => array(
+                        array('name' => 'Recommendations', 'data' => array($recsPassed, $recsSnoozed, $recsOnCourt, $recsAnonymous)),
+                    ),
+                ),
+                $this->_rfuChartFromBreakdown('rfu-recs-passed-kingdom', 'bar', 'Passed-down recommendations by kingdom (top 10)', $recsPassedByKingdom, 'Recommendations'),
+            ),
+            'links' => array(
+                $this->_rfuKingdomTileFromSql(
+                    'Kingdoms passing recommendations down',
+                    "SELECT k.kingdom_id, k.name, COUNT(*) AS c
+                       FROM `{$p}recommendations` recs
+                       JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+                       JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id AND k.active = 'Active'
+                      WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1
+                      GROUP BY k.kingdom_id, k.name ORDER BY k.name ASC",
+                    'passed down',
+                    'passed down'
+                ),
+            ),
+        );
+
+        // --- Grant notifications ---------------------------------------------
+        // ork_notification is a general store, so every count is pinned to the
+        // two types this release writes when a recommendation is granted.
+        $notifRecommender = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'rec_granted'"
+        );
+        $notifSeconder = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'second_granted'"
+        );
+        $notifPlayers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}notification`
+              WHERE type IN ('rec_granted', 'second_granted')"
+        );
+        $notifRead = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification`
+              WHERE type IN ('rec_granted', 'second_granted') AND read_at IS NOT NULL"
+        );
+        $notifSent = $notifRecommender + $notifSeconder;
+        $featRecNotifications = array(
+            'key'         => 'rec_notifications',
+            'title'       => 'Grant Notifications',
+            'description' => 'When a recommendation is granted — at court or straight from the manager — the people who recommended and seconded it are told on their own profile.',
+            'kpis' => array(
+                $this->_rfuKpi('Recommenders told their recommendation was granted', $notifRecommender, null, null, 'notifications to the player who wrote the recommendation'),
+                $this->_rfuKpi('Seconders told the recommendation was granted', $notifSeconder, null, null, 'notifications to players who seconded it'),
+                $this->_rfuKpi('Players notified', $notifPlayers, $denom, $pct($notifPlayers), 'distinct players who have received at least one grant notification'),
+                $this->_rfuKpi('Grant notifications read', $notifRead, $notifSent, $share($notifRead, $notifSent), 'marked read by opening the Notifications card on the player\'s own profile', null, null, 'of grant notifications sent'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-rec-notif',
+                    'type'       => 'pie',
+                    'title'      => 'Grant notifications by recipient',
+                    'categories' => array('Recommenders', 'Seconders'),
+                    'data'       => array($notifRecommender, $notifSeconder),
+                ),
+            ),
+        );
+
+        $release356 = array(
+            'version' => '3.5.6',
+            'name'    => 'Crown',
+            'date'    => '2026-10-09',
+            'blurb'   => 'Court Planner and the Recommendations Manager: plan a court, run it or record it from the printed packet, credit the artisans, and work the recommendation queue — pass down, snooze, queue for court or grant — from one page.',
+            'features' => array(
+                $featCourtPlanner,
+                $featCourtRun,
+                $featCourtArtisans,
+                $featRecsWorkflow,
+                $featRecNotifications,
+            ),
+        );
+
         $release355 = array(
             'version' => '3.5.5',
             'name'    => 'Hydra',
@@ -7039,7 +7427,7 @@ class Report extends Ork3
                 'players_with_design'    => (int)$playersWithDesign,
                 'active_recommendations' => (int)$activeRecommendations,
             ),
-            'releases' => array($release355, $release354, $release353, $release352, $release351, $release350),
+            'releases' => array($release356, $release355, $release354, $release353, $release352, $release351, $release350),
         );
     }
 
@@ -7298,6 +7686,33 @@ class Report extends Ork3
                 $rows[] = array(
                     'label' => $r->name,
                     'route' => 'Kingdom/index/' . (int)$r->kingdom_id,
+                );
+            }
+        }
+        return $this->_rfuLinkTile($title, $rows);
+    }
+
+    /**
+     * Build a link tile listing kingdoms from a caller-supplied query. The query
+     * must select kingdom_id, name and a count aliased `c`; each tile row links to
+     * the kingdom and carries "<c> <noun>" as its subtitle. $sql is assembled from
+     * code constants by the caller, never from user input.
+     *
+     * @param string $singular Subtitle noun when c is 1 (e.g. 'court').
+     * @param string $plural   Subtitle noun otherwise (e.g. 'courts').
+     */
+    private function _rfuKingdomTileFromSql($title, $sql, $singular, $plural)
+    {
+        $this->db->Clear();
+        $rows = array();
+        $r = $this->db->query($sql);
+        if ($r !== false) {
+            while ($r->next()) {
+                $count  = (int)$r->c;
+                $rows[] = array(
+                    'label' => $r->name,
+                    'route' => 'Kingdom/index/' . (int)$r->kingdom_id,
+                    'sub'   => number_format($count) . ' ' . ($count === 1 ? $singular : $plural),
                 );
             }
         }
